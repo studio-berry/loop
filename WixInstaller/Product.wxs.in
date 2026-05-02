@@ -169,7 +169,7 @@
         <File Id="fvcredist9" KeyPath="yes" Source="$(var.MyInstallDir)\vcruntime140_1.dll" />
       </Component>
       <Component Id="czlib1" Directory="INSTALLFOLDER" Guid="{EE4B59A0-62B3-462A-B059-6D8792BF33BE}">
-        <File Id="fzlib1" KeyPath="yes" Source="$(var.MyInstallDir)\zlib1.dll" />
+        <File Id="fzlib1" KeyPath="yes" Source="$(var.MyInstallDir)\z.dll" />
       </Component>
       <Component Id="cQt6Multimedia" Directory="INSTALLFOLDER" Guid="{726B6B8D-04F0-46A2-9716-E6FFCEEB00B7}">
         <File Id="fQt6Multimedia" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Multimedia.dll" />
