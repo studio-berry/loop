@@ -120,6 +120,42 @@ static constexpr std::array S_FONT_REPLACEMENTS
     PDF_Font_Replacement{"Utopia", "Georgia"}
 };
 
+static bool isMicrosoftSymbolCharmap(FT_CharMap charMap)
+{
+    return charMap && charMap->platform_id == 3 && charMap->encoding_id == 0;
+}
+
+static bool selectMicrosoftSymbolCharmap(FT_Face face)
+{
+    for (FT_Int i = 0; i < face->num_charmaps; ++i)
+    {
+        FT_CharMap charMap = face->charmaps[i];
+        if (isMicrosoftSymbolCharmap(charMap) && !FT_Set_Charmap(face, charMap))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static FT_UInt getMicrosoftSymbolGlyphIndex(FT_Face face, FT_ULong characterCode)
+{
+    FT_UInt glyphIndex = FT_Get_Char_Index(face, characterCode);
+
+    if (!glyphIndex && characterCode <= 0xFF)
+    {
+        glyphIndex = FT_Get_Char_Index(face, characterCode + 0xF000);
+    }
+
+    if (!glyphIndex && characterCode <= 0xFF)
+    {
+        glyphIndex = FT_Get_Char_Index(face, characterCode + 0xF100);
+    }
+
+    return glyphIndex;
+}
+
 struct SystemFontData
 {
     QByteArray data;
@@ -2136,8 +2172,23 @@ PDFFontPointer PDFFont::createFont(const PDFObject& object, QByteArray fontId, c
                             }
                         }
 
-                        // Fill the glyph index array from unicode, if we have unicode mapping
-                        if (!FT_Select_Charmap(face, FT_ENCODING_UNICODE))
+                        bool hasSymbolicTrueTypeCMap = false;
+                        if (fontType == FontType::TrueType && fontDescriptor.isSymbolic() && selectMicrosoftSymbolCharmap(face))
+                        {
+                            hasSymbolicTrueTypeCMap = true;
+                            for (size_t i = 0; i < glyphIndexArray.size(); ++i)
+                            {
+                                const FT_UInt glyphIndex = getMicrosoftSymbolGlyphIndex(face, static_cast<FT_ULong>(i));
+                                if (glyphIndex > 0)
+                                {
+                                    glyphIndexArray[i] = glyphIndex;
+                                }
+                            }
+                        }
+
+                        // Fill the glyph index array from unicode, if we have unicode mapping.
+                        // Symbolic TrueType fonts use the font program's symbolic cmap directly.
+                        if (!hasSymbolicTrueTypeCMap && !FT_Select_Charmap(face, FT_ENCODING_UNICODE))
                         {
                             for (size_t i = 0; i < simpleFontEncodingTable.size(); ++i)
                             {
