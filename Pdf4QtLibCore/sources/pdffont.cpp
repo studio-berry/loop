@@ -125,12 +125,22 @@ static bool isMicrosoftSymbolCharmap(FT_CharMap charMap)
     return charMap && charMap->platform_id == 3 && charMap->encoding_id == 0;
 }
 
-static bool selectMicrosoftSymbolCharmap(FT_Face face)
+static bool isAppleRomanCharmap(FT_CharMap charMap)
+{
+    return charMap && charMap->platform_id == 1 && charMap->encoding_id == 0;
+}
+
+static bool isUnicodeCharmap(FT_CharMap charMap)
+{
+    return charMap && charMap->encoding == FT_ENCODING_UNICODE;
+}
+
+template<typename Predicate>
+static bool hasCharmap(FT_Face face, Predicate predicate)
 {
     for (FT_Int i = 0; i < face->num_charmaps; ++i)
     {
-        FT_CharMap charMap = face->charmaps[i];
-        if (isMicrosoftSymbolCharmap(charMap) && !FT_Set_Charmap(face, charMap))
+        if (predicate(face->charmaps[i]))
         {
             return true;
         }
@@ -139,16 +149,52 @@ static bool selectMicrosoftSymbolCharmap(FT_Face face)
     return false;
 }
 
-static FT_UInt getMicrosoftSymbolGlyphIndex(FT_Face face, FT_ULong characterCode)
+template<typename Predicate>
+static FT_CharMap selectCharmap(FT_Face face, Predicate predicate)
+{
+    for (FT_Int i = 0; i < face->num_charmaps; ++i)
+    {
+        FT_CharMap charMap = face->charmaps[i];
+        if (predicate(charMap) && !FT_Set_Charmap(face, charMap))
+        {
+            return charMap;
+        }
+    }
+
+    return nullptr;
+}
+
+static bool shouldUseSymbolicTrueTypeCMap(const FontDescriptor& fontDescriptor, FT_Face face)
+{
+    return fontDescriptor.isSymbolic() ||
+           (!fontDescriptor.isNonSymbolic() && hasCharmap(face, isMicrosoftSymbolCharmap) && !hasCharmap(face, isUnicodeCharmap));
+}
+
+static FT_CharMap selectSymbolicTrueTypeCMap(FT_Face face)
+{
+    if (FT_CharMap charMap = selectCharmap(face, isMicrosoftSymbolCharmap))
+    {
+        return charMap;
+    }
+
+    if (FT_CharMap charMap = selectCharmap(face, isAppleRomanCharmap))
+    {
+        return charMap;
+    }
+
+    return selectCharmap(face, [](FT_CharMap charMap) { return !isUnicodeCharmap(charMap); });
+}
+
+static FT_UInt getSymbolicTrueTypeGlyphIndex(FT_Face face, FT_CharMap charMap, FT_ULong characterCode)
 {
     FT_UInt glyphIndex = FT_Get_Char_Index(face, characterCode);
 
-    if (!glyphIndex && characterCode <= 0xFF)
+    if (isMicrosoftSymbolCharmap(charMap) && !glyphIndex && characterCode <= 0xFF)
     {
         glyphIndex = FT_Get_Char_Index(face, characterCode + 0xF000);
     }
 
-    if (!glyphIndex && characterCode <= 0xFF)
+    if (isMicrosoftSymbolCharmap(charMap) && !glyphIndex && characterCode <= 0xFF)
     {
         glyphIndex = FT_Get_Char_Index(face, characterCode + 0xF100);
     }
@@ -2173,21 +2219,24 @@ PDFFontPointer PDFFont::createFont(const PDFObject& object, QByteArray fontId, c
                         }
 
                         bool hasSymbolicTrueTypeCMap = false;
-                        if (fontType == FontType::TrueType && fontDescriptor.isSymbolic() && selectMicrosoftSymbolCharmap(face))
+                        if (fontType == FontType::TrueType && shouldUseSymbolicTrueTypeCMap(fontDescriptor, face))
                         {
-                            hasSymbolicTrueTypeCMap = true;
-                            for (size_t i = 0; i < glyphIndexArray.size(); ++i)
+                            if (FT_CharMap charMap = selectSymbolicTrueTypeCMap(face))
                             {
-                                const FT_UInt glyphIndex = getMicrosoftSymbolGlyphIndex(face, static_cast<FT_ULong>(i));
-                                if (glyphIndex > 0)
+                                hasSymbolicTrueTypeCMap = true;
+                                for (size_t i = 0; i < glyphIndexArray.size(); ++i)
                                 {
-                                    glyphIndexArray[i] = glyphIndex;
+                                    const FT_UInt glyphIndex = getSymbolicTrueTypeGlyphIndex(face, charMap, static_cast<FT_ULong>(i));
+                                    if (glyphIndex > 0)
+                                    {
+                                        glyphIndexArray[i] = glyphIndex;
+                                    }
                                 }
                             }
                         }
 
                         // Fill the glyph index array from unicode, if we have unicode mapping.
-                        // Symbolic TrueType fonts use the font program's symbolic cmap directly.
+                        // Symbolic TrueType fonts use the font program's own cmap directly.
                         if (!hasSymbolicTrueTypeCMap && !FT_Select_Charmap(face, FT_ENCODING_UNICODE))
                         {
                             for (size_t i = 0; i < simpleFontEncodingTable.size(); ++i)
