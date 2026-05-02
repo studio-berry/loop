@@ -1153,12 +1153,7 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
             for (const PDFFontCMap::MappedCode& mappedCode : mappedCodes)
             {
                 const CID cid = mappedCode.cid;
-                QChar character = toUnicode->getToUnicode(mappedCode.code);
-                if (character.isNull())
-                {
-                    // Compatibility fallback for older code paths and malformed ToUnicode CMaps.
-                    character = toUnicode->getToUnicode(cid);
-                }
+                QChar character = toUnicode->getToUnicode(mappedCode.code, mappedCode.byteCount);
                 if (character.isNull() && !m_isEmbedded)
                 {
                     character = cmap->getUnicodeFromCode(mappedCode.code);
@@ -3175,9 +3170,17 @@ QByteArray PDFFontCMap::encode(CID cid) const
 
 QChar PDFFontCMap::getToUnicode(CID cid) const
 {
+    return getToUnicode(cid, 0);
+}
+
+QChar PDFFontCMap::getToUnicode(CID cid, unsigned int byteCount) const
+{
     if (isValid())
     {
-        auto it = std::find_if(m_entries.cbegin(), m_entries.cend(), [cid](const Entry& entry) { return entry.from <= cid && entry.to >= cid; });
+        auto it = std::find_if(m_entries.cbegin(), m_entries.cend(), [cid, byteCount](const Entry& entry) {
+            const bool byteCountMatches = byteCount == 0 || entry.byteCount == byteCount;
+            return byteCountMatches && entry.from <= cid && entry.to >= cid;
+        });
         if (it != m_entries.cend())
         {
             const Entry& entry = *it;

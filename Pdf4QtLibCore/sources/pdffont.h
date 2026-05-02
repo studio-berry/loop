@@ -612,6 +612,9 @@ public:
     /// Converts CID to QChar, use only on ToUnicode CMaps
     QChar getToUnicode(CID cid) const;
 
+    /// Converts character code with a known byte length to QChar, use only on ToUnicode CMaps
+    QChar getToUnicode(CID cid, unsigned int byteCount) const;
+
     /// Converts QChar to CID, use only on ToUnicode CMaps
     CID getFromUnicode(QChar character) const;
 
