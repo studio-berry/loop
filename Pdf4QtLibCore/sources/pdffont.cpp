@@ -1148,16 +1148,36 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
             const PDFFontCMap* toUnicode = font->getToUnicode();
             const PDFCIDtoGIDMapper* CIDtoGIDmapper = font->getCIDtoGIDMapper();
 
-            std::vector<CID> cids = cmap->interpret(byteArray);
-            textSequence.items.reserve(textSequence.items.size() + cids.size());
-            for (CID cid : cids)
+            std::vector<PDFFontCMap::MappedCode> mappedCodes = cmap->interpretWithCode(byteArray);
+            textSequence.items.reserve(textSequence.items.size() + mappedCodes.size());
+            for (const PDFFontCMap::MappedCode& mappedCode : mappedCodes)
             {
-                const GID glyphIndex = CIDtoGIDmapper->map(cid);
+                const CID cid = mappedCode.cid;
+                QChar character = toUnicode->getToUnicode(mappedCode.code);
+                if (character.isNull())
+                {
+                    // Compatibility fallback for older code paths and malformed ToUnicode CMaps.
+                    character = toUnicode->getToUnicode(cid);
+                }
+                if (character.isNull() && !m_isEmbedded)
+                {
+                    character = cmap->getUnicodeFromCode(mappedCode.code);
+                }
+
+                GID glyphIndex = 0;
+                if (!m_isEmbedded && !character.isNull() && m_face->charmap && m_face->charmap->encoding == FT_ENCODING_UNICODE)
+                {
+                    glyphIndex = FT_Get_Char_Index(m_face, character.unicode());
+                }
+                if (!glyphIndex)
+                {
+                    glyphIndex = CIDtoGIDmapper->map(cid);
+                }
+
                 const PDFReal glyphWidth = font->getGlyphAdvance(cid);
 
                 if (glyphIndex)
                 {
-                    QChar character = toUnicode->getToUnicode(cid);
                     const Glyph& glyph = getGlyph(glyphIndex);
                     textSequence.items.emplace_back(&glyph.glyph, character, glyph.advance, cid);
                 }
@@ -2766,7 +2786,9 @@ PDFFontCMap PDFFontCMap::createFromName(const QByteArray& name)
             file.close();
         }
 
-        return createFromData(data);
+        PDFFontCMap result = createFromData(data);
+        result.m_unicodeEncoded = name.contains("-UCS2-");
+        return result;
     }
 
     throw PDFException(PDFTranslationContext::tr("Can't load CID font mapping named '%1'.").arg(QString::fromLatin1(name)));
@@ -2966,18 +2988,63 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
         previousToken = token;
     }
 
-    std::sort(entries.begin(), entries.end());
-    entries = optimize(entries);
-
     if (!additionalMappings.empty())
     {
+        const Entries overridingEntries = entries;
         for (const PDFFontCMap& map : additionalMappings)
         {
-            entries.insert(entries.cend(), map.m_entries.cbegin(), map.m_entries.cend());
+            for (const Entry& inheritedEntry : map.m_entries)
+            {
+                std::vector<std::pair<unsigned int, unsigned int>> ranges{ { inheritedEntry.from, inheritedEntry.to } };
+
+                for (const Entry& overridingEntry : overridingEntries)
+                {
+                    if (overridingEntry.byteCount != inheritedEntry.byteCount)
+                    {
+                        continue;
+                    }
+
+                    std::vector<std::pair<unsigned int, unsigned int>> updatedRanges;
+                    for (const auto& range : ranges)
+                    {
+                        const unsigned int rangeFrom = range.first;
+                        const unsigned int rangeTo = range.second;
+
+                        if (overridingEntry.to < rangeFrom || overridingEntry.from > rangeTo)
+                        {
+                            updatedRanges.emplace_back(range);
+                            continue;
+                        }
+
+                        if (overridingEntry.from > rangeFrom)
+                        {
+                            updatedRanges.emplace_back(rangeFrom, overridingEntry.from - 1);
+                        }
+                        if (overridingEntry.to < rangeTo)
+                        {
+                            updatedRanges.emplace_back(overridingEntry.to + 1, rangeTo);
+                        }
+                    }
+                    ranges = qMove(updatedRanges);
+
+                    if (ranges.empty())
+                    {
+                        break;
+                    }
+                }
+
+                for (const auto& range : ranges)
+                {
+                    entries.emplace_back(range.first, range.second, inheritedEntry.byteCount, inheritedEntry.cid + range.first - inheritedEntry.from);
+                }
+            }
         }
     }
 
-    return PDFFontCMap(qMove(entries), vertical);
+    std::sort(entries.begin(), entries.end());
+    entries = optimize(entries);
+
+    return PDFFontCMap(qMove(entries), vertical, false);
 }
 
 QByteArray PDFFontCMap::serialize() const
@@ -2988,6 +3055,7 @@ QByteArray PDFFontCMap::serialize() const
         QDataStream stream(&result, QIODevice::WriteOnly);
         stream << m_maxKeyLength;
         stream << m_vertical;
+        stream << m_unicodeEncoded;
         stream << m_entries.size();
         for (const Entry& entry : m_entries)
         {
@@ -3008,6 +3076,7 @@ PDFFontCMap PDFFontCMap::deserialize(const QByteArray& byteArray)
     QDataStream stream(&decompressed, QIODevice::ReadOnly);
     stream >> result.m_maxKeyLength;
     stream >> result.m_vertical;
+    stream >> result.m_unicodeEncoded;
 
     Entries::size_type size = 0;
     stream >> size;
@@ -3028,6 +3097,20 @@ PDFFontCMap PDFFontCMap::deserialize(const QByteArray& byteArray)
 std::vector<CID> PDFFontCMap::interpret(const QByteArray& byteArray) const
 {
     std::vector<CID> result;
+    const std::vector<MappedCode> mappedCodes = interpretWithCode(byteArray);
+    result.reserve(mappedCodes.size());
+
+    for (const MappedCode& mappedCode : mappedCodes)
+    {
+        result.push_back(mappedCode.cid);
+    }
+
+    return result;
+}
+
+std::vector<PDFFontCMap::MappedCode> PDFFontCMap::interpretWithCode(const QByteArray& byteArray) const
+{
+    std::vector<MappedCode> result;
     result.reserve(byteArray.size() / m_maxKeyLength);
 
     unsigned int value = 0;
@@ -3044,7 +3127,7 @@ std::vector<CID> PDFFontCMap::interpret(const QByteArray& byteArray) const
         {
             const Entry& entry = *it;
             const CID cid = value - entry.from + entry.cid;
-            result.push_back(cid);
+            result.push_back(MappedCode{ cid, value, scannedBytes });
 
             value = 0;
             scannedBytes = 0;
@@ -3052,7 +3135,7 @@ std::vector<CID> PDFFontCMap::interpret(const QByteArray& byteArray) const
         else if (scannedBytes == m_maxKeyLength)
         {
             // This means error occured - fill empty CID
-            result.push_back(0);
+            result.push_back(MappedCode{ 0, value, scannedBytes });
             value = 0;
             scannedBytes = 0;
         }
@@ -3129,10 +3212,16 @@ CID PDFFontCMap::getFromUnicode(QChar character) const
     return CID();
 }
 
-PDFFontCMap::PDFFontCMap(Entries&& entries, bool vertical) :
+QChar PDFFontCMap::getUnicodeFromCode(unsigned int code) const
+{
+    return m_unicodeEncoded ? QChar(code) : QChar();
+}
+
+PDFFontCMap::PDFFontCMap(Entries&& entries, bool vertical, bool unicodeEncoded) :
     m_entries(qMove(entries)),
     m_maxKeyLength(0),
-    m_vertical(vertical)
+    m_vertical(vertical),
+    m_unicodeEncoded(unicodeEncoded)
 {
     m_maxKeyLength = std::accumulate(m_entries.cbegin(), m_entries.cend(), 0, [](unsigned int a, const Entry& b) { return qMax(a, b.byteCount); });
 }

@@ -522,7 +522,7 @@ public:
         }
         else if ((2 * cid + 1) < CID(m_mapping.size()))
         {
-            return (GID(m_mapping[2 * cid]) << 8) + GID(m_mapping[2 * cid + 1]);
+            return (GID(static_cast<unsigned char>(m_mapping[2 * cid])) << 8) + GID(static_cast<unsigned char>(m_mapping[2 * cid + 1]));
         }
 
         // This should occur only in case of bad (damaged) PDF file - because in this case,
@@ -565,6 +565,23 @@ class PDF4QTLIBCORESHARED_EXPORT PDFFontCMap
 public:
     explicit PDFFontCMap() = default;
 
+    struct MappedCode
+    {
+        /// CID produced by applying this CMap to the original PDF character code.
+        /// This value is used with CIDFont metrics and CIDToGIDMap.
+        CID cid = 0;
+
+        /// Original PDF character code read from the content stream before CMap
+        /// translation. This is not generally a CID. ToUnicode CMaps map this
+        /// value, and predefined UCS2 CMaps can also treat it as Unicode.
+        unsigned int code = 0;
+
+        /// Number of bytes consumed from the content stream to form code.
+        /// This preserves variable-width CMap information and distinguishes
+        /// equal numeric code values that came from different code lengths.
+        unsigned int byteCount = 0;
+    };
+
     /// Returns true, if mapping is valid
     bool isValid() const { return !m_entries.empty(); }
 
@@ -586,6 +603,9 @@ public:
     /// Converts byte array to array of CIDs
     std::vector<CID> interpret(const QByteArray& byteArray) const;
 
+    /// Converts byte array to mapped CIDs with original character codes
+    std::vector<MappedCode> interpretWithCode(const QByteArray& byteArray) const;
+
     /// Encodes character to byte array
     QByteArray encode(CID cid) const;
 
@@ -594,6 +614,9 @@ public:
 
     /// Converts QChar to CID, use only on ToUnicode CMaps
     CID getFromUnicode(QChar character) const;
+
+    /// Converts original character code to Unicode for Unicode predefined CMaps
+    QChar getUnicodeFromCode(unsigned int code) const;
 
 private:
 
@@ -629,7 +652,7 @@ private:
 
     using Entries = std::vector<Entry>;
 
-    explicit PDFFontCMap(Entries&& entries, bool vertical);
+    explicit PDFFontCMap(Entries&& entries, bool vertical, bool unicodeEncoded);
 
     /// Optimizes the entries - merges entries, which can be merged. This function
     /// requires, that entries are sorted.
@@ -638,6 +661,7 @@ private:
     Entries m_entries;
     unsigned int m_maxKeyLength = 0;
     bool m_vertical = false;
+    bool m_unicodeEncoded = false;
 };
 
 class PDFType3Font : public PDFFont
