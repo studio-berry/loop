@@ -40,10 +40,13 @@
 #include <QPainterPath>
 #include <QDataStream>
 
+#include <limits>
+
 #include "pdfdbgheap.h"
 
 #if defined(Q_OS_WIN)
 #include "Windows.h"
+#include <dwrite.h>
 #elif defined(Q_OS_UNIX)
 #include <fontconfig/fontconfig.h>
 #endif
@@ -117,6 +120,66 @@ static constexpr std::array S_FONT_REPLACEMENTS
     PDF_Font_Replacement{"Utopia", "Georgia"}
 };
 
+struct SystemFontData
+{
+    QByteArray data;
+    FT_Long faceIndex = 0;
+
+    bool isEmpty() const { return data.isEmpty(); }
+};
+
+#if defined(Q_OS_WIN)
+template<typename T>
+static void releaseComObject(T*& object)
+{
+    if (object)
+    {
+        object->Release();
+        object = nullptr;
+    }
+}
+
+static DWRITE_FONT_STRETCH getDirectWriteFontStretch(QFont::Stretch stretch)
+{
+    switch (stretch)
+    {
+        case QFont::UltraCondensed:
+            return DWRITE_FONT_STRETCH_ULTRA_CONDENSED;
+        case QFont::ExtraCondensed:
+            return DWRITE_FONT_STRETCH_EXTRA_CONDENSED;
+        case QFont::Condensed:
+            return DWRITE_FONT_STRETCH_CONDENSED;
+        case QFont::SemiCondensed:
+            return DWRITE_FONT_STRETCH_SEMI_CONDENSED;
+        case QFont::SemiExpanded:
+            return DWRITE_FONT_STRETCH_SEMI_EXPANDED;
+        case QFont::Expanded:
+            return DWRITE_FONT_STRETCH_EXPANDED;
+        case QFont::ExtraExpanded:
+            return DWRITE_FONT_STRETCH_EXTRA_EXPANDED;
+        case QFont::UltraExpanded:
+            return DWRITE_FONT_STRETCH_ULTRA_EXPANDED;
+        case QFont::Unstretched:
+        case QFont::AnyStretch:
+        default:
+            return DWRITE_FONT_STRETCH_NORMAL;
+    }
+}
+
+static bool matchesDirectWriteFontName(const QString& fontName, const QString& candidate)
+{
+    QString adjustedCandidate = candidate;
+    for (const char* string : { "PS", "MT", "Regular", "Bold", "Italic", "Oblique" })
+    {
+        adjustedCandidate.remove(QLatin1String(string), Qt::CaseInsensitive);
+    }
+    adjustedCandidate = adjustedCandidate.remove(QChar(' ')).remove(QChar('-')).remove(QChar(',')).trimmed();
+
+    return candidate.compare(fontName, Qt::CaseInsensitive) == 0 ||
+           adjustedCandidate.compare(fontName, Qt::CaseInsensitive) == 0;
+}
+#endif
+
 /// Storage class for system fonts
 class PDFSystemFontInfoStorage
 {
@@ -127,20 +190,20 @@ public:
 
     /// Loads font from descriptor
     /// \param descriptor Descriptor describing the font
-    QByteArray loadFont(const CIDSystemInfo* cidSystemInfo,
-                        const FontDescriptor* descriptor,
-                        StandardFontType standardFontType,
-                        PDFRenderErrorReporter* reporter) const;
+    SystemFontData loadFont(const CIDSystemInfo* cidSystemInfo,
+                            const FontDescriptor* descriptor,
+                            StandardFontType standardFontType,
+                            PDFRenderErrorReporter* reporter) const;
 
 private:
     explicit PDFSystemFontInfoStorage();
 
     /// Loads font from descriptor
     /// \param descriptor Descriptor describing the font
-    QByteArray loadFontImpl(const FontDescriptor* descriptor,
-                            QString fontName,
-                            StandardFontType standardFontType,
-                            PDFRenderErrorReporter* reporter) const;
+    SystemFontData loadFontImpl(const FontDescriptor* descriptor,
+                                QString fontName,
+                                StandardFontType standardFontType,
+                                PDFRenderErrorReporter* reporter) const;
 
 #ifdef Q_OS_UNIX
     static void checkFontConfigError(FcBool result);
@@ -155,6 +218,9 @@ private:
 
     /// Retrieves font data for desired font
     static QByteArray getFontData(const LOGFONT* font, HDC hdc);
+
+    /// Retrieves font data for desired font using DirectWrite
+    static SystemFontData getDirectWriteFontData(const FontDescriptor* descriptor, const QString& fontName);
 
     struct FontInfo
     {
@@ -181,10 +247,10 @@ const PDFSystemFontInfoStorage* PDFSystemFontInfoStorage::getInstance()
     return &instance;
 }
 
-QByteArray PDFSystemFontInfoStorage::loadFont(const CIDSystemInfo* cidSystemInfo,
-                                              const FontDescriptor* descriptor,
-                                              StandardFontType standardFontType,
-                                              PDFRenderErrorReporter* reporter) const
+SystemFontData PDFSystemFontInfoStorage::loadFont(const CIDSystemInfo* cidSystemInfo,
+                                                  const FontDescriptor* descriptor,
+                                                  StandardFontType standardFontType,
+                                                  PDFRenderErrorReporter* reporter) const
 {
     QString fontName;
     QString standardFontSubstituteFileName;
@@ -258,7 +324,7 @@ QByteArray PDFSystemFontInfoStorage::loadFont(const CIDSystemInfo* cidSystemInfo
 
             if (!data.isEmpty())
             {
-                return data;
+                return SystemFontData{ data, 0 };
             }
         }
     }
@@ -307,7 +373,7 @@ QByteArray PDFSystemFontInfoStorage::loadFont(const CIDSystemInfo* cidSystemInfo
         }
     }
 
-    QByteArray fontData = loadFontImpl(descriptor, fontName, standardFontType, reporter);
+    SystemFontData fontData = loadFontImpl(descriptor, fontName, standardFontType, reporter);
 
     if (fontData.isEmpty() && cidSystemInfo->registry == "Adobe")
     {
@@ -368,16 +434,22 @@ QByteArray PDFSystemFontInfoStorage::loadFont(const CIDSystemInfo* cidSystemInfo
     return fontData;
 }
 
-QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descriptor,
-                                                  QString fontName,
-                                                  StandardFontType standardFontType,
-                                                  PDFRenderErrorReporter* reporter) const
+SystemFontData PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descriptor,
+                                                      QString fontName,
+                                                      StandardFontType standardFontType,
+                                                      PDFRenderErrorReporter* reporter) const
 {
-    QByteArray result;
+    SystemFontData result;
 
 #if defined(Q_OS_WIN)
 
     Q_UNUSED(standardFontType);
+    result = getDirectWriteFontData(descriptor, fontName);
+    if (!result.isEmpty())
+    {
+        return result;
+    }
+
     HDC hdc = GetDC(NULL);
     const BYTE lfItalic = (descriptor->italicAngle != 0.0 ? TRUE : FALSE);
     if (!fontName.isEmpty())
@@ -388,7 +460,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
                 fontInfo.logFont.lfWeight == descriptor->fontWeight &&
                 fontInfo.logFont.lfItalic == lfItalic)
             {
-                result = getFontData(&fontInfo.logFont, hdc);
+                result = SystemFontData{ getFontData(&fontInfo.logFont, hdc), 0 };
 
                 if (!result.isEmpty())
                 {
@@ -407,7 +479,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
                     LOGFONT logFont = fontInfo.logFont;
                     logFont.lfWeight = descriptor->fontWeight;
                     logFont.lfItalic = lfItalic;
-                    result = getFontData(&logFont, hdc);
+                    result = SystemFontData{ getFontData(&logFont, hdc), 0 };
 
                     if (!result.isEmpty())
                     {
@@ -430,7 +502,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
                 fontInfo.logFont.lfWeight == descriptor->fontWeight &&
                 fontInfo.logFont.lfItalic == lfItalic)
             {
-                result = getFontData(&fontInfo.logFont, hdc);
+                result = SystemFontData{ getFontData(&fontInfo.logFont, hdc), 0 };
 
                 if (!result.isEmpty())
                 {
@@ -450,7 +522,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
                     LOGFONT logFont = fontInfo.logFont;
                     logFont.lfWeight = descriptor->fontWeight;
                     logFont.lfItalic = lfItalic;
-                    result = getFontData(&logFont, hdc);
+                    result = SystemFontData{ getFontData(&logFont, hdc), 0 };
 
                     if (!result.isEmpty())
                     {
@@ -472,7 +544,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
                 LOGFONT logFont = fontInfo.logFont;
                 logFont.lfWeight = descriptor->fontWeight;
                 logFont.lfItalic = lfItalic;
-                result = getFontData(&logFont, hdc);
+                result = SystemFontData{ getFontData(&logFont, hdc), 0 };
 
                 if (!result.isEmpty())
                 {
@@ -537,7 +609,7 @@ QByteArray PDFSystemFontInfoStorage::loadFontImpl(const FontDescriptor* descript
             QFile f(QString::fromUtf8(reinterpret_cast<char*>(s)));
             if ( f.open(QIODevice::ReadOnly) )
             {
-                result = f.readAll();
+                result.data = f.readAll();
                 f.close();
             }
         }
@@ -605,6 +677,215 @@ int PDFSystemFontInfoStorage::enumerateFontProc(const LOGFONT* font, const TEXTM
     return TRUE;
 }
 
+SystemFontData PDFSystemFontInfoStorage::getDirectWriteFontData(const FontDescriptor* descriptor, const QString& fontName)
+{
+    SystemFontData result;
+
+    const QString descriptorFontFamily = QString::fromLatin1(descriptor->fontFamily);
+    if (fontName.isEmpty() && descriptorFontFamily.isEmpty())
+    {
+        return result;
+    }
+
+    using DWriteCreateFactoryFunction = HRESULT(WINAPI*)(DWRITE_FACTORY_TYPE, REFIID, IUnknown**);
+
+    HMODULE dwriteModule = ::LoadLibraryW(L"dwrite.dll");
+    if (!dwriteModule)
+    {
+        return result;
+    }
+
+    DWriteCreateFactoryFunction createFactory = reinterpret_cast<DWriteCreateFactoryFunction>(::GetProcAddress(dwriteModule, "DWriteCreateFactory"));
+    if (!createFactory)
+    {
+        ::FreeLibrary(dwriteModule);
+        return result;
+    }
+
+    IDWriteFactory* factory = nullptr;
+    IDWriteFontCollection* fontCollection = nullptr;
+    IDWriteFontFamily* matchedFamily = nullptr;
+    IDWriteFont* matchedFont = nullptr;
+    IDWriteFontFace* fontFace = nullptr;
+    IDWriteFontFile* fontFile = nullptr;
+    IDWriteFontFileLoader* fontFileLoader = nullptr;
+    IDWriteLocalFontFileLoader* localFontFileLoader = nullptr;
+
+    auto cleanup = [&]()
+    {
+        releaseComObject(localFontFileLoader);
+        releaseComObject(fontFileLoader);
+        releaseComObject(fontFile);
+        releaseComObject(fontFace);
+        releaseComObject(matchedFont);
+        releaseComObject(matchedFamily);
+        releaseComObject(fontCollection);
+        releaseComObject(factory);
+        ::FreeLibrary(dwriteModule);
+    };
+
+    HRESULT hr = createFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&factory));
+    if (FAILED(hr) || !factory)
+    {
+        cleanup();
+        return result;
+    }
+
+    hr = factory->GetSystemFontCollection(&fontCollection, FALSE);
+    if (FAILED(hr) || !fontCollection)
+    {
+        cleanup();
+        return result;
+    }
+
+    const UINT32 familyCount = fontCollection->GetFontFamilyCount();
+    for (UINT32 familyIndex = 0; familyIndex < familyCount && !matchedFamily; ++familyIndex)
+    {
+        IDWriteFontFamily* family = nullptr;
+        IDWriteLocalizedStrings* familyNames = nullptr;
+
+        if (SUCCEEDED(fontCollection->GetFontFamily(familyIndex, &family)) &&
+            family &&
+            SUCCEEDED(family->GetFamilyNames(&familyNames)) &&
+            familyNames)
+        {
+            const UINT32 nameCount = familyNames->GetCount();
+            for (UINT32 nameIndex = 0; nameIndex < nameCount; ++nameIndex)
+            {
+                UINT32 nameLength = 0;
+                if (FAILED(familyNames->GetStringLength(nameIndex, &nameLength)))
+                {
+                    continue;
+                }
+
+                std::vector<wchar_t> nameBuffer(nameLength + 1, wchar_t());
+                if (SUCCEEDED(familyNames->GetString(nameIndex, nameBuffer.data(), static_cast<UINT32>(nameBuffer.size()))))
+                {
+                    const QString candidateName = QString::fromWCharArray(nameBuffer.data());
+                    if (matchesDirectWriteFontName(fontName, candidateName) ||
+                        (!descriptorFontFamily.isEmpty() && matchesDirectWriteFontName(descriptorFontFamily, candidateName)))
+                    {
+                        matchedFamily = family;
+                        family = nullptr;
+                        break;
+                    }
+                }
+            }
+        }
+
+        releaseComObject(familyNames);
+        releaseComObject(family);
+    }
+
+    if (!matchedFamily)
+    {
+        cleanup();
+        return result;
+    }
+
+    const int requestedWeight = qBound(1, qRound(descriptor->fontWeight), 999);
+    const DWRITE_FONT_WEIGHT fontWeight = static_cast<DWRITE_FONT_WEIGHT>(requestedWeight);
+    const DWRITE_FONT_STRETCH fontStretch = getDirectWriteFontStretch(descriptor->fontStretch);
+    const DWRITE_FONT_STYLE fontStyle = descriptor->italicAngle != 0.0 ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL;
+
+    hr = matchedFamily->GetFirstMatchingFont(fontWeight, fontStretch, fontStyle, &matchedFont);
+    if (FAILED(hr) || !matchedFont)
+    {
+        cleanup();
+        return result;
+    }
+
+    hr = matchedFont->CreateFontFace(&fontFace);
+    if (FAILED(hr) || !fontFace)
+    {
+        cleanup();
+        return result;
+    }
+
+    UINT32 fileCount = 0;
+    hr = fontFace->GetFiles(&fileCount, nullptr);
+    if (FAILED(hr) || fileCount == 0)
+    {
+        cleanup();
+        return result;
+    }
+
+    std::vector<IDWriteFontFile*> fontFiles(fileCount, nullptr);
+    hr = fontFace->GetFiles(&fileCount, fontFiles.data());
+    if (FAILED(hr) || fileCount == 0)
+    {
+        for (IDWriteFontFile* file : fontFiles)
+        {
+            if (file)
+            {
+                file->Release();
+            }
+        }
+        cleanup();
+        return result;
+    }
+
+    fontFile = fontFiles.front();
+    fontFiles.front() = nullptr;
+    for (IDWriteFontFile* file : fontFiles)
+    {
+        if (file)
+        {
+            file->Release();
+        }
+    }
+
+    const void* referenceKey = nullptr;
+    UINT32 referenceKeySize = 0;
+    hr = fontFile->GetReferenceKey(&referenceKey, &referenceKeySize);
+    if (FAILED(hr))
+    {
+        cleanup();
+        return result;
+    }
+
+    hr = fontFile->GetLoader(&fontFileLoader);
+    if (FAILED(hr) || !fontFileLoader)
+    {
+        cleanup();
+        return result;
+    }
+
+    hr = fontFileLoader->QueryInterface(__uuidof(IDWriteLocalFontFileLoader), reinterpret_cast<void**>(&localFontFileLoader));
+    if (FAILED(hr) || !localFontFileLoader)
+    {
+        cleanup();
+        return result;
+    }
+
+    UINT32 pathLength = 0;
+    hr = localFontFileLoader->GetFilePathLengthFromKey(referenceKey, referenceKeySize, &pathLength);
+    if (FAILED(hr))
+    {
+        cleanup();
+        return result;
+    }
+
+    std::vector<wchar_t> pathBuffer(pathLength + 1, wchar_t());
+    hr = localFontFileLoader->GetFilePathFromKey(referenceKey, referenceKeySize, pathBuffer.data(), static_cast<UINT32>(pathBuffer.size()));
+    if (FAILED(hr))
+    {
+        cleanup();
+        return result;
+    }
+
+    QFile file(QString::fromWCharArray(pathBuffer.data()));
+    if (file.open(QFile::ReadOnly))
+    {
+        result.data = file.readAll();
+        result.faceIndex = static_cast<FT_Long>(fontFace->GetIndex());
+        file.close();
+    }
+
+    cleanup();
+    return result;
+}
+
 QByteArray PDFSystemFontInfoStorage::getFontData(const LOGFONT* font, HDC hdc)
 {
     QByteArray byteArray;
@@ -614,10 +895,15 @@ QByteArray PDFSystemFontInfoStorage::getFontData(const LOGFONT* font, HDC hdc)
         HGDIOBJ oldFont = ::SelectObject(hdc, fontHandle);
 
         DWORD size = ::GetFontData(hdc, 0, 0, nullptr, 0);
-        if (size != GDI_ERROR)
+        if (size != GDI_ERROR && size <= DWORD((std::numeric_limits<int>::max)()))
         {
             byteArray.resize(static_cast<int>(size));
-            ::GetFontData(hdc, 0, 0, byteArray.data(), byteArray.size());
+
+            const DWORD readSize = ::GetFontData(hdc, 0, 0, byteArray.data(), size);
+            if (readSize == GDI_ERROR || readSize != size)
+            {
+                byteArray.clear();
+            }
         }
 
         ::SelectObject(hdc, oldFont);
@@ -753,6 +1039,9 @@ private:
     /// For system fonts, this byte array contains system font data
     QByteArray m_systemFontData;
 
+    /// Face index for system font collections
+    FT_Long m_systemFontFaceIndex;
+
     /// Instance of FreeType library assigned to this font
     FT_Library m_library;
 
@@ -778,6 +1067,7 @@ private:
 PDFRealizedFontImpl::PDFRealizedFontImpl() :
     m_library(nullptr),
     m_face(nullptr),
+    m_systemFontFaceIndex(0),
     m_pixelSize(0.0),
     m_parentFont(nullptr),
     m_isEmbedded(false),
@@ -1269,7 +1559,9 @@ PDFRealizedFontPointer PDFRealizedFont::createRealizedFont(PDFFontPointer font, 
             }
 
             const PDFSystemFontInfoStorage* fontStorage = PDFSystemFontInfoStorage::getInstance();
-            impl->m_systemFontData = fontStorage->loadFont(font->getCIDSystemInfo(), descriptor, standardFontType, reporter);
+            const SystemFontData systemFontData = fontStorage->loadFont(font->getCIDSystemInfo(), descriptor, standardFontType, reporter);
+            impl->m_systemFontData = systemFontData.data;
+            impl->m_systemFontFaceIndex = systemFontData.faceIndex;
 
             if (impl->m_systemFontData.isEmpty())
             {
@@ -1277,7 +1569,11 @@ PDFRealizedFontPointer PDFRealizedFont::createRealizedFont(PDFFontPointer font, 
             }
 
             PDFRealizedFontImpl::checkFreeTypeError(FT_Init_FreeType(&impl->m_library));
-            PDFRealizedFontImpl::checkFreeTypeError(FT_New_Memory_Face(impl->m_library, reinterpret_cast<const FT_Byte*>(impl->m_systemFontData.constData()), impl->m_systemFontData.size(), 0, &impl->m_face));
+            if (impl->m_systemFontData.size() > (std::numeric_limits<FT_Long>::max)())
+            {
+                throw PDFException(PDFTranslationContext::tr("System font '%1' is too large to be loaded by FreeType.").arg(QString::fromLatin1(descriptor->fontName)));
+            }
+            PDFRealizedFontImpl::checkFreeTypeError(FT_New_Memory_Face(impl->m_library, reinterpret_cast<const FT_Byte*>(impl->m_systemFontData.constData()), static_cast<FT_Long>(impl->m_systemFontData.size()), impl->m_systemFontFaceIndex, &impl->m_face));
             FT_Select_Charmap(impl->m_face, FT_ENCODING_UNICODE); // We try to select unicode encoding, but if it fails, we don't do anything (use glyph indices instead)
             PDFRealizedFontImpl::checkFreeTypeError(FT_Set_Pixel_Sizes(impl->m_face, 0, qRound(pixelSize * PDFRealizedFontImpl::PIXEL_SIZE_MULTIPLIER)));
             impl->m_isVertical = cmap ? cmap->isVertical() : false;
@@ -3057,7 +3353,7 @@ QByteArray PDFSystemFont::getFontData(const QByteArray& fontName)
     FontDescriptor descriptor;
     descriptor.fontName = fontName;
 
-    return storage->loadFont(&systemInfo, &descriptor, StandardFontType::Invalid, &reporter);
+    return storage->loadFont(&systemInfo, &descriptor, StandardFontType::Invalid, &reporter).data;
 }
 
 }   // namespace pdf
