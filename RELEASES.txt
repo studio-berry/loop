@@ -1,4 +1,5 @@
 CURRENT:
+ - Issue #380: Ability to run app with custom settings directory - executable parameter with path
  - Issue #379: Advanced Find - Wildcard Mode
  - Issue #378: Advanced Find - Should start searching if Enter key is pressed
  - Issue #376: Deleting a note jumps to Outline

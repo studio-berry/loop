@@ -22,12 +22,14 @@
 
 #include "launchdialog.h"
 #include "launchapplicationwidget.h"
+#include "pdfsettings.h"
 #include "ui_launchdialog.h"
 
 #include <QLabel>
 #include <QPushButton>
 #include <QProcess>
 #include <QMessageBox>
+#include <QStringList>
 
 LaunchDialog::LaunchDialog(QWidget* parent)
     : QDialog(parent, Qt::WindowStaysOnTopHint | Qt::Window | Qt::Dialog)
@@ -105,6 +107,13 @@ void LaunchDialog::startDiff()
 
 void LaunchDialog::startProgram(const QString& program)
 {
+    QStringList arguments;
+    const QString settingsPath = pdf::PDFSettings::getSettingsPath();
+    if (!settingsPath.isEmpty())
+    {
+        arguments << QString("--config=%1").arg(settingsPath);
+    }
+
 #ifndef Q_OS_WIN
     QString appDir = qgetenv("APPDIR");
 #if defined(PDF4QT_FLATPAK_BUILD)
@@ -128,12 +137,12 @@ void LaunchDialog::startProgram(const QString& program)
     }
 
     qint64 pid = 0;
-    if (!QProcess::startDetached(internalToolPath, {}, QString(), &pid))
+    if (!QProcess::startDetached(internalToolPath, arguments, QString(), &pid))
     {
         QMessageBox::critical(this, tr("Error"), tr("Failed to start process '%1'").arg(internalToolPath));
     }
 #else
-    QProcess::startDetached(program);
+    QProcess::startDetached(program, arguments);
 #endif
     close();
 }

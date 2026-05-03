@@ -166,6 +166,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfpagecontenteditorcontentstreambuilder.cpp
     sources/pdfapplicationtranslator.h
     sources/pdfapplicationtranslator.cpp
+    sources/pdfsettings.h
+    sources/pdfsettings.cpp
     fonts.qrc
 )
 

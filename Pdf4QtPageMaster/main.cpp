@@ -24,6 +24,7 @@
 #include "pdfsecurityhandler.h"
 #include "pdfwidgetutils.h"
 #include "pdfapplicationtranslator.h"
+#include "pdfsettings.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -42,16 +43,19 @@ int main(int argc, char *argv[])
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");
     QCommandLineOption darkGui("theme-dark", "Use a dark theme for the GUI.");
+    QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QCoreApplication::applicationName());
     parser.addOption(noDrm);
     parser.addOption(lightGui);
     parser.addOption(darkGui);
+    parser.addOption(configPath);
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addPositionalArgument("file", "The PDF file to open.");
     parser.process(application);
+    pdf::PDFSettings::applyCommandLineSettingsPath(parser);
 
     if (parser.isSet(noDrm))
     {

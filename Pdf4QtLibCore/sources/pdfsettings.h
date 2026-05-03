@@ -20,38 +20,28 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "launchdialog.h"
-#include "pdfapplicationtranslator.h"
-#include "pdfsettings.h"
+#ifndef PDFSETTINGS_H
+#define PDFSETTINGS_H
 
-#include <QApplication>
-#include <QCommandLineParser>
+#include "pdfglobal.h"
 
-int main(int argc, char *argv[])
+#include <QCommandLineOption>
+#include <QString>
+
+class QCommandLineParser;
+
+namespace pdf
 {
-    QApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
-    QApplication application(argc, argv);
 
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("PDF4QT LaunchPad");
-    QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT LaunchPad"));
+class PDF4QTLIBCORESHARED_EXPORT PDFSettings
+{
+public:
+    static QCommandLineOption getConfigPathOption();
+    static void applyCommandLineSettingsPath(const QCommandLineParser& parser);
+    static void setSettingsPath(const QString& path);
+    static QString getSettingsPath();
+};
 
-    QCommandLineParser parser;
-    QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
-    parser.setApplicationDescription(QCoreApplication::applicationName());
-    parser.addOption(configPath);
-    parser.addHelpOption();
-    parser.process(application);
-    pdf::PDFSettings::applyCommandLineSettingsPath(parser);
+}   // namespace
 
-    pdf::PDFApplicationTranslator translator;
-    translator.installTranslator();
-
-    QIcon appIcon(":/app-icon.svg");
-    QApplication::setWindowIcon(appIcon);
-
-    LaunchDialog mainWindow(nullptr);
-    mainWindow.show();
-
-    return application.exec();
-}
+#endif // PDFSETTINGS_H
