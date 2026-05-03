@@ -123,6 +123,7 @@ private:
     void onPageButtonClicked();
     void onOutlineItemClicked(const QModelIndex& index);
     void onThumbnailsSizeChanged(int size);
+    void onAttachmentDoubleClicked(const QModelIndex& index);
     void onAttachmentCustomContextMenuRequested(const QPoint& pos);
     void onThumbnailClicked(const QModelIndex& index);
     void onSignatureCustomContextMenuRequested(const QPoint& pos);
@@ -139,6 +140,9 @@ private:
         QToolButton* button = nullptr;
         QWidget* page = nullptr;
     };
+
+    bool saveAttachmentToFile(const pdf::PDFFileSpecification* fileSpecification, const QString& fileName);
+    void openAttachment(const pdf::PDFFileSpecification* fileSpecification);
 
     Ui::PDFSidebarWidget* ui;
     pdf::PDFDrawWidgetProxy* m_proxy;

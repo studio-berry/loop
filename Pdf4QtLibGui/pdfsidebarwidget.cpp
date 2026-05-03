@@ -44,6 +44,7 @@
 #include <QAction>
 #include <QFileDialog>
 #include <QStandardPaths>
+#include <QDesktopServices>
 #include <QMessageBox>
 #include <QPainter>
 #include <QTextToSpeech>
@@ -51,8 +52,13 @@
 #include <QHBoxLayout>
 #include <QDialog>
 #include <QPushButton>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>
+#include <QUrl>
+#include <QUuid>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -144,6 +150,7 @@ PDFSidebarWidget::PDFSidebarWidget(pdf::PDFDrawWidgetProxy* proxy,
     ui->attachmentsTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->attachmentsTreeView->setSelectionBehavior(QAbstractItemView::SelectItems);
     ui->attachmentsTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->attachmentsTreeView, &QTreeView::doubleClicked, this, &PDFSidebarWidget::onAttachmentDoubleClicked);
     connect(ui->attachmentsTreeView, &QTreeView::customContextMenuRequested, this, &PDFSidebarWidget::onAttachmentCustomContextMenuRequested);
 
     // Bookmarks
@@ -920,12 +927,24 @@ void PDFSidebarWidget::onThumbnailsSizeChanged(int size)
     m_thumbnailsModel->setThumbnailsSize(thumbnailsSize);
 }
 
+void PDFSidebarWidget::onAttachmentDoubleClicked(const QModelIndex& index)
+{
+    openAttachment(m_attachmentsTreeModel->getFileSpecification(index));
+}
+
 void PDFSidebarWidget::onAttachmentCustomContextMenuRequested(const QPoint& pos)
 {
     if (const pdf::PDFFileSpecification* fileSpecification = m_attachmentsTreeModel->getFileSpecification(ui->attachmentsTreeView->indexAt(pos)))
     {
         QMenu menu(this);
-        QAction* action = new QAction(QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton, nullptr, ui->attachmentsTreeView), tr("Save to File..."), &menu);
+        QAction* openAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_DialogOpenButton, nullptr, ui->attachmentsTreeView), tr("Open Attachment"), &menu);
+        QAction* saveAction = new QAction(QApplication::style()->standardIcon(QStyle::SP_DialogSaveButton, nullptr, ui->attachmentsTreeView), tr("Save to File..."), &menu);
+
+        auto onOpenTriggered = [this, fileSpecification]()
+        {
+            openAttachment(fileSpecification);
+        };
+        connect(openAction, &QAction::triggered, this, onOpenTriggered);
 
         auto onSaveTriggered = [this, fileSpecification]()
         {
@@ -936,25 +955,7 @@ void PDFSidebarWidget::onAttachmentCustomContextMenuRequested(const QPoint& pos)
                 QString saveFileName = QFileDialog::getSaveFileName(this, tr("Save attachment"), defaultFileName);
                 if (!saveFileName.isEmpty())
                 {
-                    try
-                    {
-                        QByteArray data = m_document->getDecodedStream(platformFile->getStream());
-
-                        QFile file(saveFileName);
-                        if (file.open(QFile::WriteOnly | QFile::Truncate))
-                        {
-                            file.write(data);
-                            file.close();
-                        }
-                        else
-                        {
-                            QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(file.errorString()));
-                        }
-                    }
-                    catch (const pdf::PDFException &e)
-                    {
-                        QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(e.getMessage()));
-                    }
+                    saveAttachmentToFile(fileSpecification, saveFileName);
                 }
             }
             else
@@ -962,10 +963,94 @@ void PDFSidebarWidget::onAttachmentCustomContextMenuRequested(const QPoint& pos)
                 QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. Attachment is corrupted."));
             }
         };
-        connect(action, &QAction::triggered, this, onSaveTriggered);
+        connect(saveAction, &QAction::triggered, this, onSaveTriggered);
 
-        menu.addAction(action);
+        menu.addAction(openAction);
+        menu.addAction(saveAction);
         menu.exec(ui->attachmentsTreeView->viewport()->mapToGlobal(pos));
+    }
+}
+
+bool PDFSidebarWidget::saveAttachmentToFile(const pdf::PDFFileSpecification* fileSpecification, const QString& fileName)
+{
+    const pdf::PDFEmbeddedFile* platformFile = fileSpecification ? fileSpecification->getPlatformFile() : nullptr;
+    if (!platformFile || !platformFile->isValid())
+    {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. Attachment is corrupted."));
+        return false;
+    }
+
+    try
+    {
+        QByteArray data = m_document->getDecodedStream(platformFile->getStream());
+
+        QFile file(fileName);
+        if (file.open(QFile::WriteOnly | QFile::Truncate))
+        {
+            file.write(data);
+            file.close();
+            return true;
+        }
+
+        QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(file.errorString()));
+    }
+    catch (const pdf::PDFException &e)
+    {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(e.getMessage()));
+    }
+
+    return false;
+}
+
+void PDFSidebarWidget::openAttachment(const pdf::PDFFileSpecification* fileSpecification)
+{
+    if (!fileSpecification)
+    {
+        return;
+    }
+
+    if (!m_settings->getSettings().m_allowLaunchApplications)
+    {
+        QMessageBox::warning(this, tr("Open Attachment"), tr("Opening attachments is disabled by application launch security settings."));
+        return;
+    }
+
+    QString fileName = QFileInfo(fileSpecification->getPlatformFileName()).fileName();
+    if (fileName.isEmpty())
+    {
+        fileName = tr("attachment");
+    }
+
+    const QString message = tr("Would you like to open attachment '%1' using the associated application?").arg(fileName);
+    if (QMessageBox::question(this, tr("Open Attachment"), message) != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    QString tempPath = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (tempPath.isEmpty())
+    {
+        tempPath = QDir::tempPath();
+    }
+
+    const QString attachmentDirectoryName = QString("%1/PDF4QT/Attachments/%2").arg(tempPath, QUuid::createUuid().toString(QUuid::Id128));
+    QDir attachmentDirectory;
+    if (!attachmentDirectory.mkpath(attachmentDirectoryName))
+    {
+        QMessageBox::critical(this, tr("Open Attachment"), tr("Failed to create temporary directory for attachment."));
+        return;
+    }
+
+    attachmentDirectory.setPath(attachmentDirectoryName);
+    const QString attachmentFileName = attachmentDirectory.filePath(fileName);
+    if (!saveAttachmentToFile(fileSpecification, attachmentFileName))
+    {
+        return;
+    }
+
+    if (!QDesktopServices::openUrl(QUrl::fromLocalFile(attachmentFileName)))
+    {
+        QMessageBox::warning(this, tr("Open Attachment"), tr("Opening attachment '%1' failed.").arg(fileName));
     }
 }
 
