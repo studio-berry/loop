@@ -33,6 +33,7 @@
 #include <QSharedPointer>
 
 #include <set>
+#include <optional>
 #include <unordered_map>
 
 class QPainterPath;
@@ -512,8 +513,8 @@ class PDFCIDtoGIDMapper
 public:
     explicit inline PDFCIDtoGIDMapper(QByteArray&& mapping) : m_mapping(qMove(mapping)) { }
 
-    /// Maps CID to GID (glyph identifier)
-    GID map(CID cid) const
+    /// Maps CID to GID (glyph identifier). Nullopt means no valid mapping exists.
+    std::optional<GID> tryMap(CID cid) const
     {
         if (m_mapping.isEmpty())
         {
@@ -526,8 +527,8 @@ public:
         }
 
         // This should occur only in case of bad (damaged) PDF file - because in this case,
-        // encoding is missing. Return invalid glyph index.
-        return 0;
+        // encoding is missing.
+        return std::nullopt;
     }
 
     /// Maps GID to CID (inverse mapping)
@@ -543,7 +544,7 @@ public:
             CID lastCid = CID(m_mapping.size() / 2);
             for (CID i = 0; i < lastCid; ++i)
             {
-                if (map(i) == gid)
+                if (tryMap(i) == gid)
                 {
                     return i;
                 }

@@ -1106,6 +1106,10 @@ private:
     /// Get glyph for glyph index
     const Glyph& getGlyph(unsigned int glyphIndex);
 
+    /// Returns true if glyph index can be rendered. Glyph index 0 is usually
+    /// .notdef, but some embedded PDF fonts use it as a real glyph.
+    bool canRenderGlyphIndex(GID glyphIndex, QChar character) const;
+
     /// Function checks, if error occured, and if yes, then exception is thrown
     static void checkFreeTypeError(FT_Error error);
 
@@ -1241,21 +1245,29 @@ void PDFRealizedFontImpl::fillTextSequence(const QByteArray& byteArray, TextSequ
                     character = cmap->getUnicodeFromCode(mappedCode.code);
                 }
 
-                GID glyphIndex = 0;
+                std::optional<GID> glyphIndex;
                 if (!m_isEmbedded && !character.isNull() && m_face->charmap && m_face->charmap->encoding == FT_ENCODING_UNICODE)
                 {
-                    glyphIndex = FT_Get_Char_Index(m_face, character.unicode());
+                    const GID unicodeGlyphIndex = FT_Get_Char_Index(m_face, character.unicode());
+                    if (unicodeGlyphIndex)
+                    {
+                        glyphIndex = unicodeGlyphIndex;
+                    }
                 }
                 if (!glyphIndex)
                 {
-                    glyphIndex = CIDtoGIDmapper->map(cid);
+                    const std::optional<GID> mappedGlyphIndex = CIDtoGIDmapper->tryMap(cid);
+                    if (mappedGlyphIndex && canRenderGlyphIndex(*mappedGlyphIndex, character))
+                    {
+                        glyphIndex = mappedGlyphIndex;
+                    }
                 }
 
                 const PDFReal glyphWidth = font->getGlyphAdvance(cid);
 
                 if (glyphIndex)
                 {
-                    const Glyph& glyph = getGlyph(glyphIndex);
+                    const Glyph& glyph = getGlyph(*glyphIndex);
                     textSequence.items.emplace_back(&glyph.glyph, character, glyph.advance, cid);
                 }
                 else
@@ -1356,18 +1368,24 @@ CharacterInfos PDFRealizedFontImpl::getCharacterInfos() const
                 // We will try all reasonable high CIDs
                 for (CID cid = 0; cid < QChar::LastValidCodePoint; ++cid)
                 {
-                    const GID gid = CIDtoGIDmapper->map(cid);
+                    const std::optional<GID> gid = CIDtoGIDmapper->tryMap(cid);
 
                     if (!gid)
                     {
                         continue;
                     }
 
-                    if (!FT_Load_Glyph(m_face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING))
+                    const QChar character = toUnicode->getToUnicode(cid);
+                    if (!canRenderGlyphIndex(*gid, character))
+                    {
+                        continue;
+                    }
+
+                    if (!FT_Load_Glyph(m_face, *gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING))
                     {
                         CharacterInfo info;
-                        info.gid = gid;
-                        info.character = toUnicode->getToUnicode(cid);
+                        info.gid = *gid;
+                        info.character = character;
                         result.emplace_back(qMove(info));
                     }
                 }
@@ -1521,46 +1539,64 @@ int PDFRealizedFontImpl::outlineCubicTo(const FT_Vector* control1, const FT_Vect
 
 const PDFRealizedFontImpl::Glyph& PDFRealizedFontImpl::getGlyph(unsigned int glyphIndex)
 {
-    if (glyphIndex)
     {
-        {
-            QReadLocker readLock(&m_readWriteLock);
+        QReadLocker readLock(&m_readWriteLock);
 
-            // First look into cache
-            auto it = m_glyphCache.find(glyphIndex);
-            if (it != m_glyphCache.cend())
-            {
-                return it->second;
-            }
-        }
-
-        QWriteLocker writeLock(&m_readWriteLock);
-        Glyph glyph;
-
-        FT_Outline_Funcs glyphOutlineInterface;
-        glyphOutlineInterface.delta = 0;
-        glyphOutlineInterface.shift = 0;
-        glyphOutlineInterface.move_to = PDFRealizedFontImpl::outlineMoveTo;
-        glyphOutlineInterface.line_to = PDFRealizedFontImpl::outlineLineTo;
-        glyphOutlineInterface.conic_to = PDFRealizedFontImpl::outlineConicTo;
-        glyphOutlineInterface.cubic_to = PDFRealizedFontImpl::outlineCubicTo;
-
-        checkFreeTypeError(FT_Load_Glyph(m_face, glyphIndex, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING));
-        checkFreeTypeError(FT_Outline_Decompose(&m_face->glyph->outline, &glyphOutlineInterface, &glyph));
-        glyph.glyph.closeSubpath();
-        glyph.advance = !m_isVertical ? m_face->glyph->advance.x : m_face->glyph->advance.y;
-        glyph.advance *= FONT_MULTIPLIER;
-
+        // First look into cache
         auto it = m_glyphCache.find(glyphIndex);
-        if (it == m_glyphCache.cend())
+        if (it != m_glyphCache.cend())
         {
-            it = m_glyphCache.insert(std::make_pair(glyphIndex, qMove(glyph))).first;
+            return it->second;
         }
-        return it->second;
     }
 
-    static Glyph dummy;
-    return dummy;
+    QWriteLocker writeLock(&m_readWriteLock);
+    Glyph glyph;
+
+    FT_Outline_Funcs glyphOutlineInterface;
+    glyphOutlineInterface.delta = 0;
+    glyphOutlineInterface.shift = 0;
+    glyphOutlineInterface.move_to = PDFRealizedFontImpl::outlineMoveTo;
+    glyphOutlineInterface.line_to = PDFRealizedFontImpl::outlineLineTo;
+    glyphOutlineInterface.conic_to = PDFRealizedFontImpl::outlineConicTo;
+    glyphOutlineInterface.cubic_to = PDFRealizedFontImpl::outlineCubicTo;
+
+    checkFreeTypeError(FT_Load_Glyph(m_face, glyphIndex, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING));
+    checkFreeTypeError(FT_Outline_Decompose(&m_face->glyph->outline, &glyphOutlineInterface, &glyph));
+    glyph.glyph.closeSubpath();
+    glyph.advance = !m_isVertical ? m_face->glyph->advance.x : m_face->glyph->advance.y;
+    glyph.advance *= FONT_MULTIPLIER;
+
+    auto it = m_glyphCache.find(glyphIndex);
+    if (it == m_glyphCache.cend())
+    {
+        it = m_glyphCache.insert(std::make_pair(glyphIndex, qMove(glyph))).first;
+    }
+    return it->second;
+}
+
+bool PDFRealizedFontImpl::canRenderGlyphIndex(GID glyphIndex, QChar character) const
+{
+    if (glyphIndex != 0)
+    {
+        return true;
+    }
+
+    if (character.isNull())
+    {
+        return false;
+    }
+
+    if (m_face && FT_Has_PS_Glyph_Names(m_face))
+    {
+        char glyphName[128] = { };
+        if (!FT_Get_Glyph_Name(m_face, glyphIndex, glyphName, static_cast<FT_ULong>(std::size(glyphName))))
+        {
+            return qstrcmp(glyphName, ".notdef") != 0;
+        }
+    }
+
+    return m_isEmbedded;
 }
 
 void PDFRealizedFontImpl::checkFreeTypeError(FT_Error error)
