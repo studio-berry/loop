@@ -26,6 +26,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfpainterutils.h"
 #include "pdfcms.h"
+#include "pdfwidgetannotation.h"
 
 #include <QLabel>
 #include <QAction>
@@ -1616,7 +1617,18 @@ void PDFPickTool::buildSnapData()
     else
     {
         // Snap points
-        m_snapper.buildSnapPoints(getProxy()->getSnapshot());
+        PDFWidgetSnapshot snapshot = getProxy()->getSnapshot();
+        m_snapper.buildSnapPoints(snapshot);
+
+        if (PDFWidgetAnnotationManager* annotationManager = getProxy()->getAnnotationManager())
+        {
+            for (const PDFWidgetSnapshot::SnapshotItem& snapshotItem : snapshot.items)
+            {
+                m_snapper.addSnapInfo(snapshotItem.pageIndex,
+                                      snapshotItem.pageToDeviceMatrix,
+                                      annotationManager->getSnapInfo(snapshotItem.pageIndex));
+            }
+        }
     }
 }
 

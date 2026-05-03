@@ -26,6 +26,7 @@
 #include "pdfwidgetsglobal.h"
 #include "pdfannotation.h"
 #include "pdfdocumentdrawinterface.h"
+#include "pdfsnapper.h"
 
 #include <QPixmap>
 
@@ -82,6 +83,10 @@ public:
 
     bool canAcceptAnnotationDrag(const QMimeData* data) const;
     bool handleAnnotationDrop(const QMimeData* data, const QPoint& widgetPos, Qt::DropAction action);
+
+    /// Returns snap information generated from editable annotation geometry on a page.
+    /// \param pageIndex Page index
+    PDFSnapInfo getSnapInfo(PDFInteger pageIndex) const;
 
 signals:
     void actionTriggered(const PDFAction* action);

@@ -23,6 +23,7 @@ CURRENT:
  - Issue #282: editor outline view: always zooms to around 50%
  - Issue #256: PDF4QT cannot show some specific fonts correctly
  - Issue #253: undo/redo doesn't work in "edit page content" mode
+ - Issue #250: snapping
  - Issue #242: Full screen
  - Issue #234: setting font , font size and area of text annotations
  - Issue #230: I got some garbled characters when I open pdf with pdf4qt

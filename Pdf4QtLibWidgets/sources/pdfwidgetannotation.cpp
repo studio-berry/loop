@@ -503,6 +503,84 @@ bool PDFWidgetAnnotationManager::handleAnnotationDrop(const QMimeData* data, con
     return true;
 }
 
+PDFSnapInfo PDFWidgetAnnotationManager::getSnapInfo(PDFInteger pageIndex) const
+{
+    PDFSnapInfo result;
+
+    if (!m_document || pageIndex < 0)
+    {
+        return result;
+    }
+
+    auto addQuadrilaterals = [&result](const PDFAnnotationQuadrilaterals& quadrilaterals)
+    {
+        for (const PDFAnnotationQuadrilaterals::Quadrilateral& quadrilateral : quadrilaterals.getQuadrilaterals())
+        {
+            for (size_t i = 0; i < quadrilateral.size(); ++i)
+            {
+                result.addAnnotationLine(quadrilateral[i], quadrilateral[(i + 1) % quadrilateral.size()]);
+            }
+        }
+    };
+
+    const PageAnnotations& pageAnnotations = getPageAnnotations(pageIndex);
+    for (const PageAnnotation& pageAnnotation : pageAnnotations.annotations)
+    {
+        const PDFAnnotation* annotation = pageAnnotation.annotation.data();
+        if (!annotation || !PDFAnnotation::isTypeEditable(annotation->getType()))
+        {
+            continue;
+        }
+
+        if (const PDFLineAnnotation* lineAnnotation = dynamic_cast<const PDFLineAnnotation*>(annotation))
+        {
+            result.addAnnotationLine(lineAnnotation->getLine().p1(), lineAnnotation->getLine().p2());
+            continue;
+        }
+
+        if (const PDFPolygonalGeometryAnnotation* polygonalAnnotation = dynamic_cast<const PDFPolygonalGeometryAnnotation*>(annotation))
+        {
+            const std::vector<QPointF>& vertices = polygonalAnnotation->getVertices();
+            if (vertices.size() == 1)
+            {
+                result.addAnnotationPoint(vertices.front());
+            }
+
+            const size_t lineCount = vertices.size() >= 2 ? (annotation->getType() == AnnotationType::Polygon ? vertices.size() : vertices.size() - 1) : 0;
+            for (size_t i = 0; i < lineCount; ++i)
+            {
+                result.addAnnotationLine(vertices[i], vertices[(i + 1) % vertices.size()]);
+            }
+            continue;
+        }
+
+        if (const PDFHighlightAnnotation* highlightAnnotation = dynamic_cast<const PDFHighlightAnnotation*>(annotation))
+        {
+            addQuadrilaterals(highlightAnnotation->getHiglightArea());
+            continue;
+        }
+
+        if (const PDFRedactAnnotation* redactAnnotation = dynamic_cast<const PDFRedactAnnotation*>(annotation))
+        {
+            addQuadrilaterals(redactAnnotation->getRedactionRegion());
+            continue;
+        }
+
+        if (const PDFSimpleGeometryAnnotation* geometryAnnotation = dynamic_cast<const PDFSimpleGeometryAnnotation*>(annotation))
+        {
+            if (geometryAnnotation->getGeometryRectangle().isValid())
+            {
+                result.addAnnotationRectangle(geometryAnnotation->getGeometryRectangle());
+                continue;
+            }
+        }
+
+        result.addAnnotationRectangle(annotation->getRectangle());
+    }
+
+    return result;
+}
+
 void PDFWidgetAnnotationManager::mouseReleaseEvent(QWidget* widget, QMouseEvent* event)
 {
     Q_UNUSED(widget);
