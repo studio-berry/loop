@@ -59,6 +59,7 @@ PDFCreateStickyNoteTool::PDFCreateStickyNoteTool(PDFDrawWidgetProxy* proxy, PDFT
     m_icon(pdf::TextAnnotationIcon::Comment)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Points, this);
+    m_pickTool->setSnapToAnnotations(true);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::pointPicked, this, &PDFCreateStickyNoteTool::onPointPicked);
     connect(m_actionGroup, &QActionGroup::triggered, this, &PDFCreateStickyNoteTool::onActionTriggered);
@@ -125,6 +126,7 @@ PDFCreateHyperlinkTool::PDFCreateHyperlinkTool(PDFDrawWidgetProxy* proxy, PDFToo
     m_pickTool(nullptr)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Rectangles, this);
+    m_pickTool->setSnapToAnnotations(true);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::rectanglePicked, this, &PDFCreateHyperlinkTool::onRectanglePicked);
 
@@ -170,6 +172,7 @@ PDFCreateFreeTextTool::PDFCreateFreeTextTool(PDFDrawWidgetProxy* proxy, PDFToolM
     m_pickTool(nullptr)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Rectangles, this);
+    m_pickTool->setSnapToAnnotations(true);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::rectanglePicked, this, &PDFCreateFreeTextTool::onRectanglePicked);
 
@@ -312,6 +315,7 @@ PDFCreateLineTypeTool::PDFCreateLineTypeTool(PDFDrawWidgetProxy* proxy, PDFToolM
 {
     PDFPickTool::Mode mode = (type != Type::Rectangle) ? PDFPickTool::Mode::Points : PDFPickTool::Mode::Rectangles;
     m_pickTool = new PDFPickTool(proxy, mode, this);
+    m_pickTool->setSnapToAnnotations(true);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::pointPicked, this, &PDFCreateLineTypeTool::onPointPicked);
     connect(m_pickTool, &PDFPickTool::rectanglePicked, this, &PDFCreateLineTypeTool::onRectanglePicked);
@@ -711,6 +715,7 @@ PDFCreateEllipseTool::PDFCreateEllipseTool(PDFDrawWidgetProxy* proxy, PDFToolMan
     m_fillColor(Qt::yellow)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Rectangles, this);
+    m_pickTool->setSnapToAnnotations(true);
     m_pickTool->setDrawSelectionRectangle(false);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::rectanglePicked, this, &PDFCreateEllipseTool::onRectanglePicked);
@@ -983,6 +988,7 @@ PDFCreateStampTool::PDFCreateStampTool(PDFDrawWidgetProxy* proxy, PDFToolManager
     m_pickTool(nullptr)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Points, this);
+    m_pickTool->setSnapToAnnotations(true);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::pointPicked, this, &PDFCreateStampTool::onPointPicked);
     connect(m_actionGroup, &QActionGroup::triggered, this, &PDFCreateStampTool::onActionTriggered);
@@ -1355,6 +1361,7 @@ PDFCreateRedactRectangleTool::PDFCreateRedactRectangleTool(PDFDrawWidgetProxy* p
     m_pickTool(nullptr)
 {
     m_pickTool = new PDFPickTool(proxy, PDFPickTool::Mode::Rectangles, this);
+    m_pickTool->setSnapToAnnotations(true);
     m_pickTool->setSelectionRectangleColor(Qt::black);
     addTool(m_pickTool);
     connect(m_pickTool, &PDFPickTool::rectanglePicked, this, &PDFCreateRedactRectangleTool::onRectanglePicked);

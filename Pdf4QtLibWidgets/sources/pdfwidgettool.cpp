@@ -1282,7 +1282,8 @@ PDFPickTool::PDFPickTool(PDFDrawWidgetProxy* proxy, PDFPickTool::Mode mode, QObj
     m_pageIndex(-1),
     m_drawSelectionRectangle(true),
     m_selectionRectangleColor(Qt::blue),
-    m_hideLargeCross(false)
+    m_hideLargeCross(false),
+    m_snapToAnnotations(false)
 {
     switch (m_mode)
     {
@@ -1573,6 +1574,15 @@ void PDFPickTool::setCustomSnapPoints(PDFInteger pageIndex, const std::vector<QP
     }
 }
 
+void PDFPickTool::setSnapToAnnotations(bool snapToAnnotations)
+{
+    if (m_snapToAnnotations != snapToAnnotations)
+    {
+        m_snapToAnnotations = snapToAnnotations;
+        buildSnapData();
+    }
+}
+
 void PDFPickTool::setActiveImpl(bool active)
 {
     BaseClass::setActiveImpl(active);
@@ -1620,13 +1630,16 @@ void PDFPickTool::buildSnapData()
         PDFWidgetSnapshot snapshot = getProxy()->getSnapshot();
         m_snapper.buildSnapPoints(snapshot);
 
-        if (PDFWidgetAnnotationManager* annotationManager = getProxy()->getAnnotationManager())
+        if (m_snapToAnnotations)
         {
-            for (const PDFWidgetSnapshot::SnapshotItem& snapshotItem : snapshot.items)
+            if (PDFWidgetAnnotationManager* annotationManager = getProxy()->getAnnotationManager())
             {
-                m_snapper.addSnapInfo(snapshotItem.pageIndex,
-                                      snapshotItem.pageToDeviceMatrix,
-                                      annotationManager->getSnapInfo(snapshotItem.pageIndex));
+                for (const PDFWidgetSnapshot::SnapshotItem& snapshotItem : snapshot.items)
+                {
+                    m_snapper.addSnapInfo(snapshotItem.pageIndex,
+                                          snapshotItem.pageToDeviceMatrix,
+                                          annotationManager->getSnapInfo(snapshotItem.pageIndex));
+                }
             }
         }
     }

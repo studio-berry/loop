@@ -388,6 +388,10 @@ public:
     /// \param snapPoints Custom snap points
     void setCustomSnapPoints(PDFInteger pageIndex, const std::vector<QPointF>& snapPoints);
 
+    /// Enables snapping to annotation geometry.
+    /// \param snapToAnnotations Snap to annotation geometry
+    void setSnapToAnnotations(bool snapToAnnotations);
+
     void resetTool();
 
     /// Turns on/off drawing of selection rectangle, if rectangle picking
@@ -420,6 +424,7 @@ private:
     bool m_drawSelectionRectangle;
     QColor m_selectionRectangleColor;
     bool m_hideLargeCross;
+    bool m_snapToAnnotations;
 };
 
 /// Tool for selection of table in document. Rows and columns
