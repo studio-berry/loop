@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${FRISKET_FUZZ_BUILD_DIR:-${REPO_ROOT}/build-fuzz}"
+BUILD_DIR="${LOUPE_FUZZ_BUILD_DIR:-${REPO_ROOT}/build-fuzz}"
 SECONDS_PER_TARGET="${1:-120}"
 shift || true
 
@@ -22,7 +22,7 @@ else
     TARGETS=(fuzz_pdf_parser fuzz_stream_filters fuzz_content_stream fuzz_images)
 fi
 
-SEED_DIR="${REPO_ROOT}/frisket-preflight/testdata/fixtures"
+SEED_DIR="${REPO_ROOT}/loupe-preflight/testdata/fixtures"
 FUZZ_ARGS=(-max_total_time="${SECONDS_PER_TARGET}" -print_final_stats=1)
 if [[ -d "${SEED_DIR}" ]]; then
     FUZZ_ARGS+=("${SEED_DIR}")

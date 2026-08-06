@@ -293,10 +293,10 @@ public:
         Diff                            = 0x01000000,       ///< Diff settings (compare documents)
         Redact                          = 0x02000000,       ///< Settings for Redact tool
         AddBleed                        = 0x04000000,       ///< Settings for add-bleed tool
-        PreflightProfile                = 0x08000000,       ///< Frisket preflight profile path
+        PreflightProfile                = 0x08000000,       ///< Loupe preflight profile path
         VerifyRedaction                 = 0x10000000,       ///< Settings for verify-redaction tool
         DestructiveWrite                = 0x20000000,       ///< Shared --dry-run/--report/--force for overwrite commands
-        OcrOptions                      = 0x40000000,       ///< Frisket OCR sidecar settings
+        OcrOptions                      = 0x40000000,       ///< Loupe OCR sidecar settings
     };
     Q_DECLARE_FLAGS(Options, Option)
 

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Generates THIRD_PARTY_NOTICES.txt for a Frisket-PDF release.
+    Generates THIRD_PARTY_NOTICES.txt for a Loupe-PDF release.
 
 .DESCRIPTION
     Resolves each vcpkg dependency to a concrete version and license text, preferring
@@ -138,7 +138,7 @@ if (-not [string]::IsNullOrWhiteSpace($VcpkgInstalledDir)) {
 }
 
 $lines = @(
-    "Frisket-PDF Third-Party Notices",
+    "Loupe-PDF Third-Party Notices",
     "Generated: $(Get-Date -Format o)",
     "Source manifest: vcpkg.json ($($manifest.'version-string'))",
     "",

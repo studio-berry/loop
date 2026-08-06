@@ -1,6 +1,6 @@
 # V1 operator acceptance (MIC-300)
 
-Phase C acceptance for the first sellable Frisket operator loop: open a PDF, run the default profile, inspect findings, navigate visual regions, apply a confirmed bleed fix to a new file, and re-run preflight.
+Phase C acceptance for the first sellable Loupe operator loop: open a PDF, run the default profile, inspect findings, navigate visual regions, apply a confirmed bleed fix to a new file, and re-run preflight.
 
 Automated coverage lives in `UnitTests/tst_operatoracceptance.cpp` (`ctest -R UnitTestsOperatorAcceptance`). The manual checklist below covers Editor UI behavior that headless PdfTool tests cannot exercise.
 
@@ -19,7 +19,7 @@ Additional stress fixtures (`ai-art-*.pdf`) are exercised by `UnitTestsBleedStre
 
 ## Automated checks (`UnitTestsOperatorAcceptance`)
 
-- Runs `PdfTool preflight` on each corpus file with `profiles/frisket-default.json`
+- Runs `PdfTool preflight` on each corpus file with `profiles/loupe-default.json`
 - Validates normalized report contract (`preflightsidecarutils.h`)
 - Full operator loop on `bleed-missing.pdf`: preflight → `add-bleed` (params from `fixups_available`) → re-preflight pass with plugin report validation
 - Verifies the source PDF SHA-256 is unchanged after fixup (save-as semantics)
@@ -33,12 +33,12 @@ Additional stress fixtures (`ai-art-*.pdf`) are exercised by `UnitTestsBleedStre
 
 ## Manual operator checklist (Editor)
 
-Run on a supported Windows or Linux machine with a release or dev build that bundles `PdfTool`, `FrisketPreflightPlugin`, and `share/frisket/profiles/frisket-default.json` (see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)).
+Run on a supported Windows or Linux machine with a release or dev build that bundles `PdfTool`, `LoupePreflightPlugin`, and `share/loupe/profiles/loupe-default.json` (see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)).
 
 ### Open and preflight
 
-1. Launch **Pdf4QtEditor** and open `frisket-preflight/testdata/fixtures/bleed-missing.pdf`.
-2. **Frisket Preflight → Run Preflight**.
+1. Launch **Pdf4QtEditor** and open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
+2. **Loupe Preflight → Run Preflight**.
 3. Confirm the report panel opens with profile name, pass/fail summary, and at least one `bleed` error.
 4. Confirm `add-bleed` appears under advertised fixups.
 

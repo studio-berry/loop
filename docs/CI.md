@@ -1,7 +1,7 @@
 # CI and diagnostic artifacts
 
 Pull requests to `master` run the **Linux** and **Windows** build-and-test jobs.
-These are the two platforms Frisket V1 supports; **macOS** CI is a **post-V1**
+These are the two platforms Loupe V1 supports; **macOS** CI is a **post-V1**
 track under [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are produced
 only for `master` pushes and manual workflow runs.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run clang-tidy against Frisket-PDF sources using compile_commands.json.
+# Run clang-tidy against Loupe-PDF sources using compile_commands.json.
 #
 # Prerequisites:
 #   - clang-tidy-18 (or set CLANG_TIDY)
@@ -12,14 +12,14 @@
 #   ./scripts/run-clang-tidy.sh --all             # all project .cpp under repo
 #
 # Environment:
-#   FRISKET_BUILD_DIR   build directory (default: ./build)
+#   LOUPE_BUILD_DIR   build directory (default: ./build)
 #   CLANG_TIDY          clang-tidy binary (default: clang-tidy-18)
 #   CLANG_TIDY_JOBS     parallel jobs (default: nproc)
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${FRISKET_BUILD_DIR:-${REPO_ROOT}/build}"
+BUILD_DIR="${LOUPE_BUILD_DIR:-${REPO_ROOT}/build}"
 CLANG_TIDY="${CLANG_TIDY:-clang-tidy-18}"
 JOBS="${CLANG_TIDY_JOBS:-$(nproc)}"
 FIX=0

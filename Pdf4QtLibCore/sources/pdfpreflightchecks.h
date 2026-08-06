@@ -23,7 +23,7 @@
 #ifndef PDFPREFLIGHTCHECKS_H
 #define PDFPREFLIGHTCHECKS_H
 
-// Pure geometry math for the Frisket preflight checks (bleed, trim, page-size).
+// Pure geometry math for the Loupe preflight checks (bleed, trim, page-size).
 // Header-only and free of any PDF/document dependency so the engine, the PdfTool
 // command, and the unit tests can share the exact same logic. Page-box
 // extraction stays in the engine; only rectangle math lives here.

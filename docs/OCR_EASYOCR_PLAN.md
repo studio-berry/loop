@@ -1,8 +1,8 @@
 # EasyOCR V1 — Design Plan (M0)
 
 Status: **locked for V1 implementation** (2026-07-22).
-Scope: Frisket-pdf / PDF4QT 1.6.0.0. Read-only OCR intake (JSON report + Editor panel).
-Engine: **EasyOCR (CPU)** in bundled `FrisketOcrService` sidecar under `frisket-ocr/`.
+Scope: Loupe-pdf / PDF4QT 1.6.0.0. Read-only OCR intake (JSON report + Editor panel).
+Engine: **EasyOCR (CPU)** in bundled `LoupeOcrService` sidecar under `loupe-ocr/`.
 Epic: [MIC-123](https://linear.app/mbx2/issue/MIC-123). Page gate: [MIC-124](https://linear.app/mbx2/issue/MIC-124).
 
 ## Goal
@@ -25,13 +25,13 @@ Add **read-only OCR** for scanned or image-only PDF pages: classify pages, raste
 | **Core** `PDFOcrReport` | Report struct + `toJson()` matching schema |
 | **PdfTool** `ocr` | Gate → render @ DPI → long-lived sidecar → stdout JSON |
 | **Editor** `OcrPlugin` | `QProcess` → `PdfTool ocr`; dock widget for results |
-| **Sidecar** `FrisketOcrService` | EasyOCR stdio JSON-line service (PyInstaller bundle) |
+| **Sidecar** `LoupeOcrService` | EasyOCR stdio JSON-line service (PyInstaller bundle) |
 
 ```text
 PdfTool ocr scan.pdf --console-format json
     -> PDFOcrPageGate per page
     -> render PNG for NeedsOcr pages
-    -> FrisketOcrService (stdin/stdout JSON lines)
+    -> LoupeOcrService (stdin/stdout JSON lines)
     -> PDFOcrReport -> stdout
 ```
 
@@ -44,8 +44,8 @@ PdfTool ocr scan.pdf --console-format json
 | Gate threshold | ≥ 20 non-whitespace chars from `PDFDocumentTextFlow` → skip |
 | Image-only heuristic | No live text + page has image XObject (graphic piece `Image`) → OCR |
 | Sidecar IPC | stdio JSON lines: one request per page image path, one response line |
-| Schema | `frisket-ocr/schemas/ocr-report.schema.json` v1 |
-| Install layout | `<bindir>/FrisketOcrService/FrisketOcrService.exe`; models under `%ProgramData%/Frisket/ocr-models` on first run |
+| Schema | `loupe-ocr/schemas/ocr-report.schema.json` v1 |
+| Install layout | `<bindir>/LoupeOcrService/LoupeOcrService.exe`; models under `%ProgramData%/Loupe/ocr-models` on first run |
 | Exit codes | 0 success; 1 partial page failures; 2 usage/contract; 3 sidecar unavailable |
 
 ## Report contract
@@ -64,7 +64,7 @@ Y-flip: image origin top-left; PDF origin bottom-left per MediaBox.
 ## Surface order
 
 1. M0 contract (this doc + schema)
-2. Python `FrisketOcrService` + PyInstaller spec
+2. Python `LoupeOcrService` + PyInstaller spec
 3. Core gate + report types
 4. `PdfTool ocr`
 5. `OcrPlugin` + dock UI

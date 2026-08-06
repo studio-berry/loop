@@ -64,10 +64,10 @@ if(PDF4QT_ENABLE_SENTRY)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Pdf4QtSentry.cmake)
 endif()
 
-# Frisket slim release profile: disable apps/plugins without deleting upstream sources.
-option(PDF4QT_FRISKET_DISTRIBUTION "Slim Frisket release (disable non-product apps and plugins)" OFF)
+# Loupe slim release profile: disable apps/plugins without deleting upstream sources.
+option(PDF4QT_LOUPE_DISTRIBUTION "Slim Loupe release (disable non-product apps and plugins)" OFF)
 
-if(PDF4QT_FRISKET_DISTRIBUTION)
+if(PDF4QT_LOUPE_DISTRIBUTION)
     set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT OFF)
     set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT OFF)
     set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
@@ -103,7 +103,7 @@ option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCAN
 # The Editor OCR UI plugin is not part of the V1 release surface, but stays buildable
 # for local/developer use. Release packaging workflows pass -DPDF4QT_PLUGIN_OCR=OFF
 # explicitly; PdfTool's OCR subcommand is unaffected. (PDF4QT_BUNDLE_OCR_SERVICE, the
-# other half of the V1 CLI-only OCR surface, is declared in frisket-ocr/tools/CMakeLists.txt.)
+# other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
 option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ON)
 
 if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
@@ -252,8 +252,8 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         add_subdirectory(PdfExampleGenerator)
     endif()
     add_subdirectory(PdfTool)
-    add_subdirectory(frisket-preflight/tools)
-    add_subdirectory(frisket-ocr/tools)
+    add_subdirectory(loupe-preflight/tools)
+    add_subdirectory(loupe-ocr/tools)
     add_subdirectory(Pdf4QtLibGui)
     add_subdirectory(Pdf4QtEditorPlugins)
     add_subdirectory(Pdf4QtEditor)
@@ -344,24 +344,24 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        install(FILES Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.desktop
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.desktop
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.desktop
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.desktop
-                      Desktop/io.github.mberrys.Frisket-pdf.desktop
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.desktop
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-        install(FILES Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.svg
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.svg
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.svg
-                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.svg
-                      Desktop/io.github.mberrys.Frisket-pdf.svg
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.svg
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
-        install(FILES Desktop/io.github.mberrys.Frisket-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        install(FILES Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.png
-                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.png
-                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.png
-                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.png
-                      Desktop/128x128/io.github.mberrys.Frisket-pdf.png
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
+        install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.png
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
     endif()
 

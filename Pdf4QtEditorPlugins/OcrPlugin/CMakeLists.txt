@@ -29,7 +29,7 @@ add_library(OcrPlugin SHARED ${OCR_PLUGIN_SOURCES})
 
 target_link_libraries(OcrPlugin PRIVATE Pdf4QtLibCore Pdf4QtLibWidgets Qt6::Core Qt6::Gui Qt6::Widgets)
 
-target_compile_definitions(OcrPlugin PRIVATE FRISKET_OCR_SCHEMA_VERSION=1)
+target_compile_definitions(OcrPlugin PRIVATE LOUPE_OCR_SCHEMA_VERSION=1)
 
 set_target_properties(OcrPlugin PROPERTIES
                       VERSION ${PDF4QT_VERSION}

@@ -22,8 +22,8 @@ relations on the issues.
 
 ## Context
 
-Cycle 1 delivered Frisket V1 (operator loop, MIC-300) and stabilized CI. The four
-High-priority Frisket tickets filed from the Dev Issue Tracker (MIC-306–309) all target
+Cycle 1 delivered Loupe V1 (operator loop, MIC-300) and stabilized CI. The four
+High-priority Loupe tickets filed from the Dev Issue Tracker (MIC-306–309) all target
 PageMaster export robustness. The export job in `Pdf4QtPageMaster/mainwindow.cpp:464-584`
 assembles all outputs into `assembledDocumentStorage` before optimizing and writing any
 (unbounded peak memory), has no cancellation contract (`~MainWindow` blocks on
@@ -79,4 +79,4 @@ the three behaviors land as increments on the new service.
 - MIC-309: killing the process mid-batch leaves no torn PDFs; manifest identifies
   completed vs. pending outputs on restart.
 - MIC-319: golden-corpus white-overprint fixture produces the new finding; snapshot
-  added under `frisket-preflight/testdata/`.
+  added under `loupe-preflight/testdata/`.

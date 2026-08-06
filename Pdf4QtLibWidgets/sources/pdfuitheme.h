@@ -32,7 +32,7 @@
 namespace pdf
 {
 
-/// Shared semantic colors and palette helpers for Frisket PDF surfaces.
+/// Shared semantic colors and palette helpers for Loupe PDF surfaces.
 class PDF4QTLIBWIDGETSSHARED_EXPORT PDFUITheme
 {
 public:

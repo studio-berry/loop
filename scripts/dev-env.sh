@@ -1,11 +1,11 @@
-# Frisket-PDF development environment variables.
+# Loupe-PDF development environment variables.
 # Usage (bash/zsh):
 #   source scripts/dev-env.sh
 #
 # Optional overrides before sourcing:
-#   export FRISKET_QT_VERSION=6.11.1
-#   export FRISKET_VCPKG_ROOT=/path/to/vcpkg
-#   export FRISKET_REPO_ROOT=/path/to/Frisket-pdf
+#   export LOUPE_QT_VERSION=6.11.1
+#   export LOUPE_VCPKG_ROOT=/path/to/vcpkg
+#   export LOUPE_REPO_ROOT=/path/to/Loupe-pdf
 
 if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" == "${0}" ]]; then
     echo "Source this file instead of executing it:" >&2
@@ -13,17 +13,17 @@ if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" == "${0}" ]]; then
     exit 1
 fi
 
-_frisket_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export FRISKET_REPO_ROOT="${FRISKET_REPO_ROOT:-${_frisket_repo_root}}"
+_loupe_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export LOUPE_REPO_ROOT="${LOUPE_REPO_ROOT:-${_loupe_repo_root}}"
 
-export FRISKET_QT_VERSION="${FRISKET_QT_VERSION:-6.11.1}"
-export PDF4QT_QT_ROOT="${PDF4QT_QT_ROOT:-/opt/Qt/${FRISKET_QT_VERSION}/gcc_64}"
+export LOUPE_QT_VERSION="${LOUPE_QT_VERSION:-6.11.1}"
+export PDF4QT_QT_ROOT="${PDF4QT_QT_ROOT:-/opt/Qt/${LOUPE_QT_VERSION}/gcc_64}"
 export QT_ROOT_DIR="${QT_ROOT_DIR:-${PDF4QT_QT_ROOT}}"
 export CMAKE_PREFIX_PATH="${PDF4QT_QT_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
 
 export VCPKG_ROOT="${VCPKG_ROOT:-/opt/vcpkg}"
 export VCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR:-/opt/vcpkg_installed}"
-export VCPKG_OVERLAY_PORTS="${VCPKG_OVERLAY_PORTS:-${FRISKET_REPO_ROOT}/vcpkg/overlays/linux:${FRISKET_REPO_ROOT}/vcpkg/overlays/general}"
+export VCPKG_OVERLAY_PORTS="${VCPKG_OVERLAY_PORTS:-${LOUPE_REPO_ROOT}/vcpkg/overlays/linux:${LOUPE_REPO_ROOT}/vcpkg/overlays/general}"
 
 # GCC build (avoid misconfigured /usr/bin/c++ on some cloud images).
 export CC="${CC:-gcc}"
@@ -39,7 +39,7 @@ if [[ -d "${PDF4QT_QT_ROOT}/lib" ]]; then
     esac
 fi
 
-export FRISKET_BUILD_DIR="${FRISKET_BUILD_DIR:-${FRISKET_REPO_ROOT}/build}"
-export PATH="${FRISKET_BUILD_DIR}/usr/bin:${PATH}"
+export LOUPE_BUILD_DIR="${LOUPE_BUILD_DIR:-${LOUPE_REPO_ROOT}/build}"
+export PATH="${LOUPE_BUILD_DIR}/usr/bin:${PATH}"
 
-unset _frisket_repo_root
+unset _loupe_repo_root

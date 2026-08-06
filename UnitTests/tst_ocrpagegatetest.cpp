@@ -43,7 +43,7 @@ namespace
 
 QString fixturePath(const char* name)
 {
-    return QString(FRISKET_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/") + QString::fromUtf8(name);
+    return QString(LOUPE_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/") + QString::fromUtf8(name);
 }
 
 pdf::PDFDocument readFixture(const char* name)

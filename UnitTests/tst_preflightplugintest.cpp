@@ -105,7 +105,7 @@ QJsonObject scopeFixtureReport(const QJsonObject& finding, bool pass)
     return QJsonObject{
         { QStringLiteral("schema_version"), 2 },
         { QStringLiteral("pass"), pass },
-        { QStringLiteral("profile"), QStringLiteral("Frisket Default") },
+        { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
         { QStringLiteral("errors"), errors },
         { QStringLiteral("warnings"), warnings },
         { QStringLiteral("fixups_available"), QJsonArray() }
@@ -116,8 +116,8 @@ QJsonObject scopeFixtureReport(const QJsonObject& finding, bool pass)
 
 void PreflightPluginTest::resolveBundlePath_combinesApplicationAndRelativePaths()
 {
-    QCOMPARE(pdfplugin::preflight::resolveBundlePath(QStringLiteral("/bundle/app"), QStringLiteral("../share/frisket/profiles/frisket-default.json")),
-             QStringLiteral("/bundle/share/frisket/profiles/frisket-default.json"));
+    QCOMPARE(pdfplugin::preflight::resolveBundlePath(QStringLiteral("/bundle/app"), QStringLiteral("../share/loupe/profiles/loupe-default.json")),
+             QStringLiteral("/bundle/share/loupe/profiles/loupe-default.json"));
 }
 
 void PreflightPluginTest::isExpectedPreflightExitCode_acceptsPassAndFindings()
@@ -132,7 +132,7 @@ void PreflightPluginTest::isNormalizedReport_requiresTheSidecarContract()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 1);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Frisket Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
@@ -148,7 +148,7 @@ void PreflightPluginTest::isNormalizedReport_acceptsFixupParams()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 1);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Frisket Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
 
@@ -182,7 +182,7 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncomplete
     report.insert(QStringLiteral("schema_version"), 3);
     report.insert(QStringLiteral("inspection_complete"), false);
     report.insert(QStringLiteral("pass"), false);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Frisket Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
