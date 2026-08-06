@@ -22,6 +22,7 @@
 
 #include "pdftoolabstractapplication.h"
 #include "pdfconstants.h"
+#include "pdfsentry.h"
 
 #include <QGuiApplication>
 #include <QCommandLineParser>
@@ -32,6 +33,9 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("MelkaJ");
     QCoreApplication::setApplicationName("PdfTool");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
+
+    pdf::PDFFSentry::initialize();
+    qAddPostRoutine([]() { pdf::PDFFSentry::shutdown(); });
 
     QStringList arguments = QCoreApplication::arguments();
 

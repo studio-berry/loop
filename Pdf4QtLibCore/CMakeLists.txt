@@ -170,6 +170,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfapplicationtranslator.cpp
     sources/pdfsettings.h
     sources/pdfsettings.cpp
+    sources/pdfsentry.h
+    sources/pdfsentry.cpp
     fonts.qrc
 )
 
@@ -197,9 +199,14 @@ if(MINGW)
 endif()
 
 target_include_directories(Pdf4QtLibCore INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+target_include_directories(Pdf4QtLibCore PRIVATE ${CMAKE_BINARY_DIR})
 target_include_directories(Pdf4QtLibCore PUBLIC ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
 target_link_libraries(Pdf4QtLibCore PRIVATE blend2d::blend2d)
+
+if(PDF4QT_ENABLE_SENTRY)
+    target_link_libraries(Pdf4QtLibCore PRIVATE sentry::sentry)
+endif()
 
 set_target_properties(Pdf4QtLibCore PROPERTIES
                       VERSION ${PDF4QT_VERSION}
