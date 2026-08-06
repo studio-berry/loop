@@ -25,6 +25,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfapplicationtranslator.h"
 #include "pdfsettings.h"
+#include "pdfsentry.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -72,6 +73,9 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("PDF4QT PageMaster");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT PageMaster"));
+
+    pdf::PDFFSentry::initialize();
+    qAddPostRoutine([]() { pdf::PDFFSentry::shutdown(); });
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");

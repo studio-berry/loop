@@ -48,6 +48,10 @@ endif()
 
 option(PDF4QT_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
 option(PDF4QT_BUILD_TESTS "Build UnitTests" ON)
+option(PDF4QT_ENABLE_SENTRY "Enable Sentry crash reporting" ON)
+
+set(PDF4QT_SENTRY_DSN "https://44f65b76ce476befdfb321ca361921fe@o4511731410337792.ingest.de.sentry.io/4511866328449104"
+    CACHE STRING "Sentry DSN for crash reporting")
 
 set(PDF4QT_QT_ROOT "" CACHE PATH "Qt root directory")
 
@@ -113,6 +117,10 @@ endif()
 
 if (LINUX_GCC)
     find_package(TBB REQUIRED)
+endif()
+
+if(PDF4QT_ENABLE_SENTRY)
+    find_package(sentry CONFIG REQUIRED)
 endif()
 
 option(PDF4QT_INSTALL_TO_USR "Install to usr directory" ${VCPKG_TOOLCHAIN})
