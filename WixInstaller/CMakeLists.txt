@@ -28,12 +28,12 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
     endif()
     file(TO_NATIVE_PATH "${CMAKE_BINARY_DIR}/WixInstaller" PDF4QT_WIX_DIR)
 
-    if(PDF4QT_FRISKET_DISTRIBUTION)
-        set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor: Frisket preflight, signatures, soft-proofing, dimensions, object inspector, and redaction.")
+    if(PDF4QT_LOUPE_DISTRIBUTION)
+        set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor: Loupe preflight, signatures, soft-proofing, dimensions, object inspector, and redaction.")
     elseif(PDF4QT_PLUGIN_AUDIOBOOK)
         set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains additional editing features, such as audio book conversion, signatures, soft-proofing, dimensions, object inspector, redaction etc.")
     else()
-        set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains signatures, soft-proofing, dimensions, object inspector, redaction, and Frisket preflight.")
+        set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains signatures, soft-proofing, dimensions, object inspector, redaction, and Loupe preflight.")
     endif()
 
     if(PDF4QT_BUILD_VIEWER)
@@ -156,14 +156,14 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
         set(PDF4QT_WIX_FRAGMENT_OCR_SERVICE [=[
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_FrisketOcrService" Name="FrisketOcrService" />
+      <Directory Id="dir_LoupeOcrService" Name="LoupeOcrService" />
     </DirectoryRef>
   </Fragment>
 
   <Fragment>
     <ComponentGroup Id="PDF4QT_Ocr_Service">
-      <Component Id="cmpFrisketOcrServiceExe" Directory="dir_FrisketOcrService" Guid="{D9A6C3E4-5F7B-4A02-9C3D-4E0F9A8B7C62}">
-        <File Id="filFrisketOcrServiceExe" KeyPath="yes" Source="$(var.MyInstallDir)\FrisketOcrService\FrisketOcrService.exe" />
+      <Component Id="cmpLoupeOcrServiceExe" Directory="dir_LoupeOcrService" Guid="{D9A6C3E4-5F7B-4A02-9C3D-4E0F9A8B7C62}">
+        <File Id="filLoupeOcrServiceExe" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeOcrService\LoupeOcrService.exe" />
       </Component>
     </ComponentGroup>
   </Fragment>
@@ -196,7 +196,7 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
             math(EXPR _pdf4qt_icu_index "${_pdf4qt_icu_index}+1")
             # Deterministic GUID namespace from the DLL basename so reconfigure is stable.
             string(UUID _pdf4qt_icu_guid NAMESPACE "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-                   NAME "frisket-wix-icu-${_pdf4qt_icu_name}" TYPE SHA1 UPPER)
+                   NAME "loupe-wix-icu-${_pdf4qt_icu_name}" TYPE SHA1 UPPER)
             string(APPEND PDF4QT_WIX_ICU_COMPONENTS
 "      <Component Id=\"cmp${_pdf4qt_icu_id}\" Directory=\"INSTALLFOLDER\" Guid=\"{${_pdf4qt_icu_guid}}\">
         <File Id=\"fil${_pdf4qt_icu_id}\" KeyPath=\"yes\" Source=\"$(var.MyInstallDir)\\${_pdf4qt_icu_name}\" />

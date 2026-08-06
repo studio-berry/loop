@@ -1,6 +1,6 @@
 # Planning related multi-surface features
 
-Short process notes for Frisket work that spans Core, PdfTool, PageMaster, and/or Editor — especially when several Linear issues share one API.
+Short process notes for Loupe work that spans Core, PdfTool, PageMaster, and/or Editor — especially when several Linear issues share one API.
 
 ## When this applies
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Validates a Frisket-PDF AppImage on a clean machine (MIC-301 Linux half).
+# Validates a Loupe-PDF AppImage on a clean machine (MIC-301 Linux half).
 #
 # Usage:
-#   scripts/smoke-test-appimage.sh /path/to/Frisket-pdf-VERSION-x86_64.AppImage [test.pdf]
+#   scripts/smoke-test-appimage.sh /path/to/Loupe-pdf-VERSION-x86_64.AppImage [test.pdf]
 #
 # Asserts the shipped layout resolves, runs PdfTool preflight against a fixture,
 # and scans the tree for payloads the default V1 bundle must not ship (MIC-343).
@@ -25,7 +25,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 TEST_PDF="${2:-}"
 if [[ -z "$TEST_PDF" ]]; then
-    TEST_PDF="${REPO_ROOT}/frisket-preflight/testdata/fixtures/bleed-adequate.pdf"
+    TEST_PDF="${REPO_ROOT}/loupe-preflight/testdata/fixtures/bleed-adequate.pdf"
 fi
 if [[ ! -f "$TEST_PDF" ]]; then
     echo "Test PDF not found: $TEST_PDF" >&2
@@ -53,7 +53,7 @@ fi
 BIN_DIR="${ROOT}/usr/bin"
 LIB_DIR="${ROOT}/usr/lib"
 PLUGINS_DIR="${ROOT}/usr/lib/pdf4qt"
-PROFILES_DIR="${ROOT}/usr/share/frisket/profiles"
+PROFILES_DIR="${ROOT}/usr/share/loupe/profiles"
 
 assert_file() {
     local path="$1"
@@ -69,8 +69,8 @@ echo "Smoke-testing AppImage at ${APPIMAGE_PATH}"
 
 assert_file "${BIN_DIR}/Pdf4QtEditor" "Editor"
 assert_file "${BIN_DIR}/PdfTool" "PdfTool"
-assert_file "${PLUGINS_DIR}/libFrisketPreflightPlugin.so" "Frisket preflight plugin"
-assert_file "${PROFILES_DIR}/frisket-default.json" "Default preflight profile"
+assert_file "${PLUGINS_DIR}/libLoupePreflightPlugin.so" "Loupe preflight plugin"
+assert_file "${PROFILES_DIR}/loupe-default.json" "Default preflight profile"
 assert_file "${PROFILES_DIR}/schemas/profile.schema.json" "Profile schema"
 assert_file "${PROFILES_DIR}/schemas/report.schema.json" "Report schema"
 
@@ -85,7 +85,7 @@ export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 export LD_LIBRARY_PATH="${LIB_DIR}:${LIB_DIR}/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 
 PDF_TOOL="${BIN_DIR}/PdfTool"
-PROFILE_PATH="${PROFILES_DIR}/frisket-default.json"
+PROFILE_PATH="${PROFILES_DIR}/loupe-default.json"
 
 set +e
 PREFLIGHT_OUTPUT="$("$PDF_TOOL" preflight "$TEST_PDF" --profile "$PROFILE_PATH" --console-format text 2>&1)"

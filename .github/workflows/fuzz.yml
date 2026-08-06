@@ -103,7 +103,7 @@ jobs:
 
       - name: Run fuzz harnesses
         run: |
-          SEED_DIR="${GITHUB_WORKSPACE}/frisket-preflight/testdata/fixtures"
+          SEED_DIR="${GITHUB_WORKSPACE}/loupe-preflight/testdata/fixtures"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             FUZZ_SECONDS=120
           else

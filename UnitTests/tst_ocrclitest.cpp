@@ -45,9 +45,9 @@ private:
 
 void OcrCliTest::initTestCase()
 {
-    if (!qEnvironmentVariableIsEmpty("FRISKET_OCR_SKIP"))
+    if (!qEnvironmentVariableIsEmpty("LOUPE_OCR_SKIP"))
     {
-        QSKIP("FRISKET_OCR_SKIP is set");
+        QSKIP("LOUPE_OCR_SKIP is set");
     }
 }
 
@@ -60,13 +60,13 @@ QString OcrCliTest::mockSidecarPath() const
 {
     // Drive the Python mock directly so CI does not depend on +x bits or
     // shebang/CRLF behavior of the thin .sh/.cmd wrappers.
-    return QDir(QStringLiteral(FRISKET_OCR_SOURCE_DIR))
+    return QDir(QStringLiteral(LOUPE_OCR_SOURCE_DIR))
         .filePath(QStringLiteral("tools/mock_ocr_sidecar.py"));
 }
 
 QString OcrCliTest::fixturePdfPath() const
 {
-    return QDir(QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR))
+    return QDir(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR))
         .filePath(QStringLiteral("testdata/fixtures/image-dpi-low.pdf"));
 }
 

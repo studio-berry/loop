@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time (or idempotent) Frisket-PDF Linux dev environment bootstrap.
+# One-time (or idempotent) Loupe-PDF Linux dev environment bootstrap.
 #
 # Installs system packages, vcpkg, Qt 6.11.1, manifest dependencies, and
 # configures the Ninja build directory at ./build.
@@ -11,11 +11,11 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QT_VERSION="${FRISKET_QT_VERSION:-6.11.1}"
-QT_INSTALL_DIR="${FRISKET_QT_INSTALL_DIR:-/opt/Qt}"
+QT_VERSION="${LOUPE_QT_VERSION:-6.11.1}"
+QT_INSTALL_DIR="${LOUPE_QT_INSTALL_DIR:-/opt/Qt}"
 VCPKG_ROOT="${VCPKG_ROOT:-/opt/vcpkg}"
 VCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR:-/opt/vcpkg_installed}"
-BUILD_DIR="${FRISKET_BUILD_DIR:-${REPO_ROOT}/build}"
+BUILD_DIR="${LOUPE_BUILD_DIR:-${REPO_ROOT}/build}"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/dev-env.sh"
@@ -125,10 +125,10 @@ cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}" -G Ninja \
     -DPDF4QT_QT_ROOT="${PDF4QT_QT_ROOT}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-log "Writing ~/.bashrc Frisket dev block..."
+log "Writing ~/.bashrc Loupe dev block..."
 BASHRC="${HOME}/.bashrc"
-MARKER_START="# >>> frisket-pdf dev env >>>"
-MARKER_END="# <<< frisket-pdf dev env <<<"
+MARKER_START="# >>> loupe-pdf dev env >>>"
+MARKER_END="# <<< loupe-pdf dev env <<<"
 if ! grep -qF "${MARKER_START}" "${BASHRC}" 2>/dev/null; then
     cat >> "${BASHRC}" <<EOF
 
@@ -143,7 +143,7 @@ fi
 log "Done."
 cat <<EOF
 
-Frisket-PDF dev environment is ready.
+Loupe-PDF dev environment is ready.
 
 Next steps:
   1. Open a new shell, or run:  source scripts/dev-env.sh
@@ -155,6 +155,6 @@ Key variables (see scripts/dev-env.sh):
   PDF4QT_QT_ROOT=${PDF4QT_QT_ROOT}
   VCPKG_ROOT=${VCPKG_ROOT}
   VCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}
-  FRISKET_BUILD_DIR=${BUILD_DIR}
+  LOUPE_BUILD_DIR=${BUILD_DIR}
 
 EOF

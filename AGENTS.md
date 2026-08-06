@@ -1,12 +1,12 @@
 # Agent Instructions
 
-Frisket-PDF is a fork of PDF4QT — a Qt6 / C++20 PDF toolkit (core library, widgets, GUI apps, CLI tools, editor plugins). Prefer minimal, local changes that match nearby code.
+Loupe-PDF is a fork of PDF4QT — a Qt6 / C++20 PDF toolkit (core library, widgets, GUI apps, CLI tools, editor plugins). Prefer minimal, local changes that match nearby code.
 
-## Frisket / project facts
+## Loupe / project facts
 
 | Item | Value |
 |------|-------|
-| **Fork** | [mberrys/Frisket-pdf](https://github.com/mberrys/Frisket-pdf) ← [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
+| **Fork** | [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf) ← [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
 | **Version** | `1.6.0.0` (`PDF4QT_VERSION` in root `CMakeLists.txt`) |
 | **Language** | C++20 |
 | **Qt** | **6.11.1 minimum** (CI installs **6.11.1** via `jurplel/install-qt-action`; older versions are blocked because of Qt SVG security fixes) |
@@ -41,22 +41,22 @@ Plugins are built from `Pdf4QtEditorPlugins/` (AudioBook, Dimensions, Editor, Ob
 | `verify-signatures` | Check digital signatures |
 | `attachments` | List/save embedded files |
 | `statistics` | Document statistics |
-| `preflight` | Run Frisket preflight checks | `frisket-preflight/README.md` |
+| `preflight` | Run Loupe preflight checks | `loupe-preflight/README.md` |
 
 Shared options on most commands: `--pswd`, page range flags (`--page-first`, `--page-last`, `--page-select`), and `--console-format text|xml|html`.
 
 ## Application architecture (confirmed)
 
-Frisket uses a **split surface** model — one core library (`Pdf4QtLibCore`), multiple apps tuned for different jobs. Do not collapse these roles into a single shell.
+Loupe uses a **split surface** model — one core library (`Pdf4QtLibCore`), multiple apps tuned for different jobs. Do not collapse these roles into a single shell.
 
 | App | Path | Role | Use when |
 |-----|------|------|----------|
 | **Pdf4QtEditor** | `Pdf4QtEditor/` + `Pdf4QtLibGui/` | **Primary interactive shell** | Daily work, preflight UI, inspection, editing, **all new editor plugins** |
 | **PdfTool** | `PdfTool/` | **Headless automation companion** | CI, batch pipelines, render/optimize/info/diff/redact without GUI |
 | **Pdf4QtPageMaster** | `Pdf4QtPageMaster/` | **Batch geometry / assembly** | Multi-document page workspaces, crop/assemble/export, bleed/trim/media box batch apply |
-| **Pdf4QtViewer** | `Pdf4QtViewer/` + `Pdf4QtLibGui/` | Lighter read-only viewer | Quick viewing only — **not** the Frisket product shell |
+| **Pdf4QtViewer** | `Pdf4QtViewer/` + `Pdf4QtLibGui/` | Lighter read-only viewer | Quick viewing only — **not** the Loupe product shell |
 
-**Editor is the only plugin host.** `PDFProgramController` loads plugins only when the `Plugins` feature flag is set. Editor initializes with `AllFeatures`; Viewer initializes with `TextToSpeech | Tools` only (no plugins). New Frisket capabilities (preflight, ObjectInspector extensions, future Ocr/Bleed plugins) belong in `Pdf4QtEditorPlugins/` and are loaded from `PDF4QT_PLUGINS_DIR`.
+**Editor is the only plugin host.** `PDFProgramController` loads plugins only when the `Plugins` feature flag is set. Editor initializes with `AllFeatures`; Viewer initializes with `TextToSpeech | Tools` only (no plugins). New Loupe capabilities (preflight, ObjectInspector extensions, future Ocr/Bleed plugins) belong in `Pdf4QtEditorPlugins/` and are loaded from `PDF4QT_PLUGINS_DIR`.
 
 **PageMaster is not a plugin host.** It uses its own `MainWindow` / workspace model (`pageitemmodel`, assembly export). It already persists page-geometry settings (including `applyBleedBox`) in export JSON — note `applyBleedBox` is **box rewrite only**, not artwork bleed generation. Keep batch page/bleed/imposition work here, not in Editor plugins.
 
@@ -101,7 +101,7 @@ Process detail: [docs/PLANNING.md](docs/PLANNING.md).
 ## Editing hygiene
 
 - Preserve CRLF line endings when creating or editing source and text files.
-- Preflight contract: profile + report schemas live under `frisket-preflight/` (see that README). Do not invent alternate report shapes in the Qt plugin.
+- Preflight contract: profile + report schemas live under `loupe-preflight/` (see that README). Do not invent alternate report shapes in the Qt plugin.
 - Match existing include order, naming, brace style, and file layout; do not reformat unrelated code or run mass clang-format.
 - Prefer minimal diffs: no drive-by cleanups, renames, header reshuffles, or “modernization” of untouched code.
 - Keep the MIT license header on new `.h` / `.cpp` files, matching neighboring files.

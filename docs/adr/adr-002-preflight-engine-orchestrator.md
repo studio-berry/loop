@@ -16,7 +16,7 @@ CLI) and eventually from Editor (in-process via plugin) and PageMaster (batch).
 - **Construction:** `PreflightEngine(PDFDocumentSession*)`. The engine borrows
   the session; the caller manages session lifetime.
 - **API:** `QJsonObject run(const QJsonObject& profile)`. Returns a normalized
-  report conforming to `frisket-preflight/schemas/report.schema.json`.
+  report conforming to `loupe-preflight/schemas/report.schema.json`.
 - **Check registry:** Checks are registered by string ID → callable. The engine
   includes the existing checks (`bleed`, `trim`, `page-size`) plus stubs for
   `color-mode`, `image-resolution`, `embedded-fonts` (pending MIC-148/149/150).

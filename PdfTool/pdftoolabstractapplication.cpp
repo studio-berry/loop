@@ -219,12 +219,12 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(PreflightProfile))
     {
-        parser->addOption(QCommandLineOption("profile", "Frisket preflight profile (JSON).", "profile"));
+        parser->addOption(QCommandLineOption("profile", "Loupe preflight profile (JSON).", "profile"));
     }
 
     if (optionFlags.testFlag(OcrOptions))
     {
-        parser->addOption(QCommandLineOption("sidecar", "Path to FrisketOcrService executable.", "path"));
+        parser->addOption(QCommandLineOption("sidecar", "Path to LoupeOcrService executable.", "path"));
         parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for OCR pages.", "dpi", "300"));
         parser->addOption(QCommandLineOption("languages", "Comma-separated EasyOCR language codes.", "codes", "en"));
         parser->addOption(QCommandLineOption("min-text-chars", "Skip OCR when page has at least this many non-whitespace characters.", "n", "20"));

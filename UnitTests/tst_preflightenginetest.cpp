@@ -409,7 +409,7 @@ void PreflightEngineTest::run_contentBleedRasterConfirm_emitsBleedMarginEmptyAnd
 
 void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverprint()
 {
-    const QString fixturePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
@@ -438,7 +438,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverpr
 
 void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
 {
-    const QString fixturePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-ok.pdf");
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-ok.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
@@ -465,7 +465,7 @@ void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
 
 void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
 {
-    const QString fixturePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-form.pdf");
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-form.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
@@ -494,7 +494,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
 {
-    const QString fixturePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);

@@ -27,8 +27,8 @@
 #include <QDir>
 #include <QJsonObject>
 
-#ifndef FRISKET_OCR_SCHEMA_VERSION
-#define FRISKET_OCR_SCHEMA_VERSION 1
+#ifndef LOUPE_OCR_SCHEMA_VERSION
+#define LOUPE_OCR_SCHEMA_VERSION 1
 #endif
 
 namespace pdfplugin::ocr
@@ -64,7 +64,7 @@ inline bool validateOcrReport(const QJsonObject& report, QString* errorMessage =
         return false;
     }
 
-    if (report.value(QStringLiteral("schema_version")).toInt() != FRISKET_OCR_SCHEMA_VERSION)
+    if (report.value(QStringLiteral("schema_version")).toInt() != LOUPE_OCR_SCHEMA_VERSION)
     {
         if (errorMessage)
         {
