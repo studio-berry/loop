@@ -25,6 +25,7 @@
 #include "pdfapplicationtranslator.h"
 #include "pdfsettings.h"
 #include "pdfwidgetutils.h"
+#include "pdfsentry.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -42,8 +43,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("PDF4QT LaunchPad");
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT LaunchPad"));
 
-    pdf::PDFFSentry::initialize();
-    qAddPostRoutine([]() { pdf::PDFFSentry::shutdown(); });
+    const pdf::PDFSentrySession sentrySession(QStringLiteral("launchpad"));
 
     QCommandLineParser parser;
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
