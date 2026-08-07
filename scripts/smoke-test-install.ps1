@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Validates an installed Frisket-PDF tree on a clean machine (MIC-301).
+    Validates an installed Loupe-PDF tree on a clean machine (MIC-301).
 
 .DESCRIPTION
     Asserts the shipped layout resolves, runs PdfTool preflight against a fixture,
@@ -21,7 +21,7 @@
     matched -- that resolution is itself a MIC-301 finding worth recording.
 
 .PARAMETER AllowOcrSidecar
-    Permit the FrisketOcrService bundle (which carries a Python runtime) to be
+    Permit the LoupeOcrService bundle (which carries a Python runtime) to be
     present. docs/PACKAGING_LICENSING.md requires the *default* bundle to be
     C++/Qt only, so this is off by default and the scan fails when it is found.
 
@@ -51,8 +51,8 @@ function Assert-FileExists {
 
 function Resolve-ProfilesDir {
     <#
-        FRISKET_PREFLIGHT_PROFILES_DIR is ${PDF4QT_INSTALL_SHARE_DIR}/frisket/profiles
-        (Pdf4QtEditorPlugins/FrisketPreflightPlugin/CMakeLists.txt). PDF4QT_INSTALL_TO_USR=ON
+        LOUPE_PREFLIGHT_PROFILES_DIR is ${PDF4QT_INSTALL_SHARE_DIR}/loupe/profiles
+        (Pdf4QtEditorPlugins/LoupePreflightPlugin/CMakeLists.txt). PDF4QT_INSTALL_TO_USR=ON
         -- used by the Windows CI and MSI builds -- prefixes that with usr/, so the share
         tree can sit beside the bin directory or one level above it depending on how the
         installer flattens the staged prefix. Probe rather than assume.
@@ -62,25 +62,25 @@ function Resolve-ProfilesDir {
     $parent = Split-Path -Parent $InstallDir
 
     $candidates = @(
-        (Join-Path $InstallDir "share\frisket\profiles"),
-        (Join-Path $InstallDir "usr\share\frisket\profiles"),
+        (Join-Path $InstallDir "share\loupe\profiles"),
+        (Join-Path $InstallDir "usr\share\loupe\profiles"),
         # Pre-MIC-301 assumption, kept so an old layout still resolves.
-        (Join-Path $env:ProgramFiles "share\frisket\profiles")
+        (Join-Path $env:ProgramFiles "share\loupe\profiles")
     )
 
     # $InstallDir can be a drive root, in which case there is no parent to probe.
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
-        $candidates += (Join-Path $parent "share\frisket\profiles")
-        $candidates += (Join-Path $parent "usr\share\frisket\profiles")
+        $candidates += (Join-Path $parent "share\loupe\profiles")
+        $candidates += (Join-Path $parent "usr\share\loupe\profiles")
     }
 
     foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath (Join-Path $candidate "frisket-default.json")) {
+        if (Test-Path -LiteralPath (Join-Path $candidate "loupe-default.json")) {
             return $candidate
         }
     }
 
-    throw ("Could not locate frisket-default.json. Probed:`n  " + ($candidates -join "`n  ") +
+    throw ("Could not locate loupe-default.json. Probed:`n  " + ($candidates -join "`n  ") +
            "`nIf the installer lays profiles down elsewhere, pass -ProfilesDir and update" +
            " docs/PLATFORM_SUPPORT.md to match what actually ships.")
 }
@@ -122,7 +122,7 @@ function Test-ForbiddenPayload {
             foreach ($pattern in $rule.Patterns) {
                 $hits = @(Get-ChildItem -LiteralPath $resolved -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue)
                 foreach ($hit in $hits) {
-                    $isOcrSidecar = $hit.FullName -like "*\FrisketOcrService\*"
+                    $isOcrSidecar = $hit.FullName -like "*\LoupeOcrService\*"
                     if ($isOcrSidecar -and $AllowOcr) {
                         continue
                     }
@@ -140,7 +140,7 @@ function Test-ForbiddenPayload {
         $message = "Forbidden payload found in the installed tree (docs/PACKAGING_LICENSING.md):`n  " +
                    ($violations -join "`n  ")
         if (-not $AllowOcr) {
-            $message += "`nIf these come from an intentional FrisketOcrService bundle, re-run with -AllowOcrSidecar."
+            $message += "`nIf these come from an intentional LoupeOcrService bundle, re-run with -AllowOcrSidecar."
         }
         throw $message
     }
@@ -159,8 +159,8 @@ Write-Host "Resolved preflight profiles to $ProfilesDir"
 $requiredFiles = @(
     @{ Path = (Join-Path $InstallDir "Pdf4QtEditor.exe"); Label = "Editor" },
     @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
-    @{ Path = (Join-Path $pluginsDir "FrisketPreflightPlugin.dll"); Label = "Frisket preflight plugin" },
-    @{ Path = (Join-Path $ProfilesDir "frisket-default.json"); Label = "Default preflight profile" },
+    @{ Path = (Join-Path $pluginsDir "LoupePreflightPlugin.dll"); Label = "Loupe preflight plugin" },
+    @{ Path = (Join-Path $ProfilesDir "loupe-default.json"); Label = "Default preflight profile" },
     @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
     @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
 )
@@ -189,7 +189,7 @@ if (Test-Path -LiteralPath $ocrPlugin) {
 
 if ([string]::IsNullOrWhiteSpace($TestPdf)) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $candidate = Join-Path $repoRoot "frisket-preflight\testdata\fixtures\bleed-adequate.pdf"
+    $candidate = Join-Path $repoRoot "loupe-preflight\testdata\fixtures\bleed-adequate.pdf"
     if (Test-Path -LiteralPath $candidate) {
         $TestPdf = $candidate
     }
@@ -199,7 +199,7 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
     throw "Test PDF not found. Pass -TestPdf pointing at a sample document."
 }
 
-$profilePath = Join-Path $ProfilesDir "frisket-default.json"
+$profilePath = Join-Path $ProfilesDir "loupe-default.json"
 $pdfTool = Join-Path $InstallDir "PdfTool.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
@@ -233,11 +233,11 @@ if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
 }
 Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
 
-$ocrSidecar = Join-Path $InstallDir "FrisketOcrService\FrisketOcrService.exe"
+$ocrSidecar = Join-Path $InstallDir "LoupeOcrService\LoupeOcrService.exe"
 if (Test-Path -LiteralPath $ocrSidecar) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $mockSidecar = Join-Path $repoRoot "frisket-ocr\tools\mock_ocr_sidecar.cmd"
-    $scanFixture = Join-Path $repoRoot "frisket-preflight\testdata\fixtures\image-dpi-low.pdf"
+    $mockSidecar = Join-Path $repoRoot "loupe-ocr\tools\mock_ocr_sidecar.cmd"
+    $scanFixture = Join-Path $repoRoot "loupe-preflight\testdata\fixtures\image-dpi-low.pdf"
     if ((Test-Path -LiteralPath $mockSidecar) -and (Test-Path -LiteralPath $scanFixture)) {
         $ocrOutput = & $pdfTool ocr $scanFixture --console-format json --sidecar $mockSidecar 2>&1
         $ocrExit = $LASTEXITCODE
@@ -246,7 +246,7 @@ if (Test-Path -LiteralPath $ocrSidecar) {
         }
         Write-Host "OK: PdfTool ocr completed with mock sidecar (exit $ocrExit)"
     }
-    Write-Host "OK: FrisketOcrService bundle present"
+    Write-Host "OK: LoupeOcrService bundle present"
 }
 
 # Run the bundle-policy gate before the editor launch: it is a packaging

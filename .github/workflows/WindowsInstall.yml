@@ -206,8 +206,8 @@ jobs:
           $version = $version.Trim()  # Odstraní případné prázdné znaky kolem verze
           Write-Host "Version: $version"
           echo "pdf4qt_version=$version" >> $env:GITHUB_ENV
-          echo "msipackagefilename=mberrys.Frisket-pdf_${version}.msi" >> $env:GITHUB_ENV
-          Write-Host "MSI package file name: mberrys.Frisket-pdf_${version}.msi"
+          echo "msipackagefilename=mberrys.Loupe-pdf_${version}.msi" >> $env:GITHUB_ENV
+          Write-Host "MSI package file name: mberrys.Loupe-pdf_${version}.msi"
 
       - name: Find WiXUIExtension.dll
         id: find_wixui_extension
@@ -259,20 +259,20 @@ jobs:
 
       - name: Create MSIX Package
         run: |
-          MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\mberrys.Frisket-pdf_${{ env.pdf4qt_version }}.msix"
+          MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix"
           
       - name: Upload ZIP directory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'Frisket-pdf-Windows-${{ env.pdf4qt_version }}.zip'
+          name: 'Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip'
           path: .\pdf4qt\build\install\usr\bin
           retention-days: 30
 
       - name: Upload MSIX package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'mberrys.Frisket-pdf_${{ env.pdf4qt_version }}.msix'
-          path: .\pdf4qt\build\install\mberrys.Frisket-pdf_${{ env.pdf4qt_version }}.msix
+          name: 'mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix'
+          path: .\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix
           retention-days: 30
           compression-level: 0
           

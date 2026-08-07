@@ -98,9 +98,9 @@ Section 14: Issues
  - 14.9 Accessibility support not implemented
  - 14.10 Web capture not implemented
  - 14.11 Prepress support is still incomplete: output intents
-   and page boxes are available, and Frisket adds a raster
+   and page boxes are available, and Loupe adds a raster
    bleed fixup (PDFBleedFixup / PdfTool add-bleed) for mirror,
-    pixel-repeat, and stretch edge fills. Frisket also supports
+    pixel-repeat, and stretch edge fills. Loupe also supports
     two-tier bleed preflight (box check + content-aware artwork
     check) via PdfTool preflight, with dynamic add-bleed fixup
     surfacing. Full PDF/X prepress

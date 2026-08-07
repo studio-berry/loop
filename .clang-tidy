@@ -1,5 +1,5 @@
 ---
-# Frisket-PDF clang-tidy defaults (C++20 / Qt6).
+# Loupe-PDF clang-tidy defaults (C++20 / Qt6).
 # Run via: scripts/run-clang-tidy.sh
 #
 # Start conservative; tighten checks once baseline noise is understood.

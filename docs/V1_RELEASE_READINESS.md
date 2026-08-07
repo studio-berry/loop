@@ -1,7 +1,7 @@
 # V1 release readiness audit
 
 Audit date: **2026-07-23**, revised **2026-07-24**, corrected **2026-07-25**, signing gate struck **2026-08-02**, gates 1–4 evidence pass **2026-08-03**, fuzz evidence returned **2026-08-03**
-Product: **Frisket PDF 1.6.0.0** (Qt6 desktop PDF toolkit)
+Product: **Loupe PDF 1.6.0.0** (Qt6 desktop PDF toolkit)
 Scope: operational, security, reliability, data-integrity, compatibility, and release-readiness for first public launch.
 Platforms: **Windows and Linux** (macOS is not a V1 platform — see `docs/PLATFORM_SUPPORT.md`).
 
@@ -15,10 +15,10 @@ regression corpus. The gate is green on the commit containing both.
 
 | Gate | Status | Evidence (2026-08-03) |
 |------|--------|------------------------|
-| `ci.yml` build + `ctest` | **Pass** | [Run 30792705447](https://github.com/mberrys/Frisket-pdf/actions/runs/30792705447) on `master` |
-| Fuzz on `master` (MIC-326) | **Pass** | [Run 30937285025](https://github.com/mberrys/Frisket-pdf/actions/runs/30937285025) — green on `9ed6a8e2` at the full 600 s/target budget. That commit contains both PR #63 (overflow + first budget) and PR #65 (`accountDecodeWork` + regression corpus), which together close the two findings from [run 30803378370](https://github.com/mberrys/Frisket-pdf/actions/runs/30803378370) |
-| Windows MSI smoke (MIC-301 / MIC-327) | **Pass** | [Run 30792705392](https://github.com/mberrys/Frisket-pdf/actions/runs/30792705392) — green after the WiX ICU/harvest fixes (`7127f65`, `29b553f`) |
-| Linux AppImage smoke (MIC-301) | **Pass** | [Run 30787629154](https://github.com/mberrys/Frisket-pdf/actions/runs/30787629154) with `scripts/smoke-test-appimage.sh` |
+| `ci.yml` build + `ctest` | **Pass** | [Run 30792705447](https://github.com/mberrys/Loupe-pdf/actions/runs/30792705447) on `master` |
+| Fuzz on `master` (MIC-326) | **Pass** | [Run 30937285025](https://github.com/mberrys/Loupe-pdf/actions/runs/30937285025) — green on `9ed6a8e2` at the full 600 s/target budget. That commit contains both PR #63 (overflow + first budget) and PR #65 (`accountDecodeWork` + regression corpus), which together close the two findings from [run 30803378370](https://github.com/mberrys/Loupe-pdf/actions/runs/30803378370) |
+| Windows MSI smoke (MIC-301 / MIC-327) | **Pass** | [Run 30792705392](https://github.com/mberrys/Loupe-pdf/actions/runs/30792705392) — green after the WiX ICU/harvest fixes (`7127f65`, `29b553f`) |
+| Linux AppImage smoke (MIC-301) | **Pass** | [Run 30787629154](https://github.com/mberrys/Loupe-pdf/actions/runs/30787629154) with `scripts/smoke-test-appimage.sh` |
 | Overprint disclosure (MIC-330) | **Pass** | `overprintDisclosureText()` always shown; README + runbook R-002; `tst_preflightplugintest.cpp` |
 | Unsigned installer disclosure (MIC-342) | **Pass** | README Install section + runbook R-016 + `SHA256SUMS.txt` via `CreateReleaseDraft.yml` |
 
@@ -39,8 +39,8 @@ the engine emitted `schema_version: 3` while the plugin validator capped at `2`,
 That was not true at the time of writing, and is not true now:
 
 - `Pdf4QtLibCore/sources/preflightengine.h:42` → `PREFLIGHT_REPORT_SCHEMA_VERSION = 3`
-- `Pdf4QtEditorPlugins/FrisketPreflightPlugin/preflightsidecarutils.h:38` →
-  `FRISKET_PREFLIGHT_SCHEMA_VERSION 3`, with `isSupportedSchemaVersion` accepting 1–3
+- `Pdf4QtEditorPlugins/LoupePreflightPlugin/preflightsidecarutils.h:38` →
+  `LOUPE_PREFLIGHT_SCHEMA_VERSION 3`, with `isSupportedSchemaVersion` accepting 1–3
 - The fix is commit `c515bfa3`, merged to `master` via `ba428f1b` (PR #54) at
   2026-07-24 10:58 PDT
 - The revision asserting it was unmerged is commit `d43a70ec` (PR #56) at 11:59 PDT —
@@ -55,8 +55,8 @@ status must be re-derived rather than inherited from this document.
 | ID | Risk | Status | Linear | Mitigation required |
 |----|------|--------|--------|---------------------|
 | ~~R-000~~ | ~~Preflight report schema contract broken on `master`~~ | **Struck 2026-07-25** | — | Not a defect. Engine and validator are both at schema 3 on `master` |
-| ~~R-003~~ | ~~JBIG2 decoder: signed-integer overflow + unbounded decode (DoS)~~ | **Pass 2026-08-04** | [MIC-326](https://linear.app/mbx2/issue/MIC-326) | Fuzz CI now runs and found two real defects on the first workflow run that executed. Both fixed in `pdfjbig2decoder.cpp` (PR #63, completed by PR #65; see §3 R-003 and §4). [Run 30937285025](https://github.com/mberrys/Frisket-pdf/actions/runs/30937285025) is green on `master` at the full budget — MIC-326 can be closed |
-| ~~R-001~~ | ~~MIC-301 — installer / clean-machine validation~~ | **Pass 2026-08-03** | [MIC-301](https://linear.app/mbx2/issue/MIC-301), [MIC-327](https://linear.app/mbx2/issue/MIC-327) | Windows: `Invoke-MsiSmokeTest.ps1` in `WindowsInstall.yml` — [Run 30792705392](https://github.com/mberrys/Frisket-pdf/actions/runs/30792705392) green. Linux: `smoke-test-appimage.sh` in `LinuxInstall.yml` — [Run 30787629154](https://github.com/mberrys/Frisket-pdf/actions/runs/30787629154) green. `.deb` remains out of scope (broken; not on releases) |
+| ~~R-003~~ | ~~JBIG2 decoder: signed-integer overflow + unbounded decode (DoS)~~ | **Pass 2026-08-04** | [MIC-326](https://linear.app/mbx2/issue/MIC-326) | Fuzz CI now runs and found two real defects on the first workflow run that executed. Both fixed in `pdfjbig2decoder.cpp` (PR #63, completed by PR #65; see §3 R-003 and §4). [Run 30937285025](https://github.com/mberrys/Loupe-pdf/actions/runs/30937285025) is green on `master` at the full budget — MIC-326 can be closed |
+| ~~R-001~~ | ~~MIC-301 — installer / clean-machine validation~~ | **Pass 2026-08-03** | [MIC-301](https://linear.app/mbx2/issue/MIC-301), [MIC-327](https://linear.app/mbx2/issue/MIC-327) | Windows: `Invoke-MsiSmokeTest.ps1` in `WindowsInstall.yml` — [Run 30792705392](https://github.com/mberrys/Loupe-pdf/actions/runs/30792705392) green. Linux: `smoke-test-appimage.sh` in `LinuxInstall.yml` — [Run 30787629154](https://github.com/mberrys/Loupe-pdf/actions/runs/30787629154) green. `.deb` remains out of scope (broken; not on releases) |
 | ~~R-016~~ | ~~V1 MSI ships unsigned; no certificate held~~ | **Not a V1 gate — reaffirmed 2026-08-02** | [MIC-342](https://linear.app/mbx2/issue/MIC-342) disclosure · [MIC-345](https://linear.app/mbx2/issue/MIC-345) procurement (post-V1) | **Ship unsigned for 1.0.** Signing never blocks launch. Disclosure (SmartScreen + `SHA256SUMS.txt`) is a marketing/docs obligation in **V1 release documentation**, not an engineering gate. Procurement stays in **Commercial / paid distribution (post-V1)** |
 | **R-002** | MIC-320 — overprint not simulated in standard page rendering | **Accepted — mitigation complete** | [MIC-330](https://linear.app/mbx2/issue/MIC-330) | Documented limitation + in-app disclosure. **Trigger corrected:** the report panel now shows the general "page view does not simulate overprint" notice unconditionally once a report is loaded, with an additional specific warning appended only when a `white-overprint` finding is present — see §3. Deferral of MIC-320 is now recorded in Linear (project description + MIC-306), not only here |
 | ~~R-015~~ | ~~macOS declared supported without CI, packaging or notarization~~ | **Resolved** | [MIC-336](https://linear.app/mbx2/issue/MIC-336) | macOS restated as post-V1; V1 ships Windows + Linux. MIC-336 reopened — it had been closed Done with its acceptance unmet |
@@ -104,7 +104,7 @@ first *paid* distribution, not this launch. See §5 and `docs/PACKAGING_LICENSIN
 
 | Role | Surface | Notes |
 |------|---------|-------|
-| **Operator** | Pdf4QtEditor + FrisketPreflightPlugin | Primary V1 sellable loop |
+| **Operator** | Pdf4QtEditor + LoupePreflightPlugin | Primary V1 sellable loop |
 | **Automation / CI** | PdfTool CLI | `preflight`, `add-bleed`, `ocr` (optional) |
 | **Power user** | PageMaster, Diff, Viewer, LaunchPad | Adjacent; not V1 contract |
 | **Maintainer** | GitHub Actions, packaging scripts | Release engineering |
@@ -119,7 +119,7 @@ There are **no** tenant roles, admin consoles, or hosted user accounts.
 | Windows CI | `.github/workflows/ci.yml` | Build + zip artifact |
 | Windows MSI | `.github/workflows/WindowsInstall.yml` | `WixInstaller/` |
 | Linux AppImage | `.github/workflows/LinuxInstall.yml` | Manual dispatch |
-| Linux Flatpak | `.github/workflows/LinuxFlatpak.yml` | `Flatpak/io.github.mberrys.Frisket-pdf.json` |
+| Linux Flatpak | `.github/workflows/LinuxFlatpak.yml` | `Flatpak/io.github.mberrys.Loupe-pdf.json` |
 | Draft release | `.github/workflows/CreateReleaseDraft.yml` | Aggregates AppImage + MSI |
 
 **Not in CI:** macOS builds.
@@ -129,7 +129,7 @@ There are **no** tenant roles, admin consoles, or hosted user accounts.
 | Service | Required? | Opt-in mechanism |
 |---------|-----------|-------------------|
 | **Sentry** crash telemetry | No | `SENTRY_DSN` env; Windows default build flag `PDF4QT_ENABLE_SENTRY` |
-| **OCR Python sidecar** | No | `FRISKET_OCR_SIDECAR` / bundled `FrisketOcrService` |
+| **OCR Python sidecar** | No | `LOUPE_OCR_SIDECAR` / bundled `LoupeOcrService` |
 | **GitHub / Sponsor links** | No | `QDesktopServices::openUrl` from Help menu only |
 
 No payment processors, identity providers, or document cloud APIs.
@@ -140,7 +140,7 @@ No payment processors, identity providers, or document cloud APIs.
 |------------|-------|----------|
 | Qt 6.11.1 runtime | Yes | User must install/bundle Qt (installers do) |
 | Pdf4QtLibCore PDF engine | Yes | None — core product |
-| Bundled `PdfTool` + `frisket-default.json` | Yes for Editor preflight | Actionable error if missing from bundle |
+| Bundled `PdfTool` + `loupe-default.json` | Yes for Editor preflight | Actionable error if missing from bundle |
 | vcpkg third-party libs (OpenJPEG, zlib, …) | Build-time | Static link in release builds |
 | Tesseract/EasyOCR (OCR only) | Yes for OCR feature | OCR disabled if sidecar missing |
 
@@ -174,8 +174,8 @@ Logging: stderr/stdout for PdfTool; no centralized log shipping in product
 | A9 | Manifest/PDF consistency | Roll back output if manifest persist fails | **Pass** (this audit) | `pdfpagemasterexport.cpp` fix |
 | A10 | Sentry privacy | No default PII | **Pass, scope corrected** | Desktop sentry-native 0.15.x defaults to no PII; NX-only setter not used. That covers SDK-attached identifiers **only** — crashpad minidumps can still contain PDF content and paths, and no SDK hook can scrub them. The former "no PDF content by design" claim was unenforced by any code; it is now stated as a disclosed property of opting in (R-008) |
 | A0 | Preflight report contract | Engine schema version accepted by plugin validator | **Pass** (corrected 2026-07-25) | Both at 3: `preflightengine.h:42`, `preflightsidecarutils.h:38` (`isSupportedSchemaVersion` accepts 1–3). Fix `c515bfa3` merged in `ba428f1b` |
-| A11 | CI build | Ubuntu + Windows compile + test | **Pass** | [Run 30779926245](https://github.com/mberrys/Frisket-pdf/actions/runs/30779926245) — Ubuntu + Windows `ctest` including `UnitTestsPreflightCorpus` (PR #61) |
-| A12 | Installer | Clean-machine install (**Windows + Linux**) | **Pass** (2026-08-03) | Windows: `Invoke-MsiSmokeTest.ps1` wired in `WindowsInstall.yml` — [Run 30792705392](https://github.com/mberrys/Frisket-pdf/actions/runs/30792705392) green. Linux: `scripts/smoke-test-appimage.sh` wired in `LinuxInstall.yml` — [Run 30787629154](https://github.com/mberrys/Frisket-pdf/actions/runs/30787629154) green. `.deb` built by `ci.yml` but non-functional — not a release artifact |
+| A11 | CI build | Ubuntu + Windows compile + test | **Pass** | [Run 30779926245](https://github.com/mberrys/Loupe-pdf/actions/runs/30779926245) — Ubuntu + Windows `ctest` including `UnitTestsPreflightCorpus` (PR #61) |
+| A12 | Installer | Clean-machine install (**Windows + Linux**) | **Pass** (2026-08-03) | Windows: `Invoke-MsiSmokeTest.ps1` wired in `WindowsInstall.yml` — [Run 30792705392](https://github.com/mberrys/Loupe-pdf/actions/runs/30792705392) green. Linux: `scripts/smoke-test-appimage.sh` wired in `LinuxInstall.yml` — [Run 30787629154](https://github.com/mberrys/Loupe-pdf/actions/runs/30787629154) green. `.deb` built by `ci.yml` but non-functional — not a release artifact |
 | A13 | Overprint rendering | Correct overprint compositing in standard page view | **Deferred — mitigation complete** | MIC-320 deferred post-V1. `overprintDisclosureText()` always shown once a report loads; additional white-overprint warning when finding present (MIC-330). README + runbook R-002 published |
 | A14 | Packaging SBOM / license evidence | MIC-140 checklist complete | **Partial — gates paid distribution, not V1** | Notices generator now resolves versions + license text; artifact SBOM and counsel sign-off outstanding |
 | A15 | macOS build | Supported platform | **N/A** | Not a V1 platform; no CI, no package, no notarization |
@@ -185,7 +185,7 @@ Logging: stderr/stdout for PdfTool; no centralized log shipping in product
 | A17 | CSP / CORS / cookies | Web security headers | **N/A** | No web app |
 | A18 | Browser compatibility | Supported browsers | **N/A** | No embedded browser |
 | A19 | OCR product gate | Required for V1 | **N/A — CLI-only** (decided 2026-07-25) | OCR is merged to `master` but V1 ships **CLI-only**: `PdfTool ocr` present; `OcrPlugin.dll` and the bundled sidecar service excluded. `PdfTool ocr` is inert without a user-supplied sidecar. **Enforced (MIC-343):** `OcrPlugin` is gated behind `-DPDF4QT_PLUGIN_OCR` (default ON for dev builds, explicitly `OFF` in `WindowsInstall.yml`/`LinuxInstall.yml`/the Flatpak manifest); the WIX component that had unconditionally bundled `OcrPlugin.dll` into the MSI is now gated the same way. `PDF4QT_BUNDLE_OCR_SERVICE` defaults `OFF`. `scripts/smoke-test-install.ps1` fails the scan if `OcrPlugin.dll` is found in an installed tree, closing the drift the plugin/service inclusion previously had no assertion against |
-| A20 | Fuzz regression | Weekly fuzz CI | **Pass** (2026-08-04) | `fuzz.yml` fixed (single `permissions:`) and executing. [Run 30803378370](https://github.com/mberrys/Frisket-pdf/actions/runs/30803378370) failed with two real JBIG2 findings (see R-003); both fixed in `pdfjbig2decoder.cpp`, and [run 30937285025](https://github.com/mberrys/Frisket-pdf/actions/runs/30937285025) is green on `master` at the full 600 s/target budget (MIC-326) |
+| A20 | Fuzz regression | Weekly fuzz CI | **Pass** (2026-08-04) | `fuzz.yml` fixed (single `permissions:`) and executing. [Run 30803378370](https://github.com/mberrys/Loupe-pdf/actions/runs/30803378370) failed with two real JBIG2 findings (see R-003); both fixed in `pdfjbig2decoder.cpp`, and [run 30937285025](https://github.com/mberrys/Loupe-pdf/actions/runs/30937285025) is green on `master` at the full 600 s/target budget (MIC-326) |
 | A23 | Manifest rollback coverage | Failure path is tested, not just implemented | **Pass** (2026-08-04) | `UnitTests/tst_pagemasterexporttest.cpp` — `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` force a real manifest-persist failure (resume run against a manifest in a write-denied directory) and assert both rollback branches. Skipped, not silently passed, where directory permissions are unenforceable (Windows, root) — MIC-335 |
 
 ---
@@ -217,8 +217,8 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 | **R-007** | Resume batch after manifest failure | PageMaster power users | Disk full during manifest write | Was: PDF written, manifest stale | **Fixed:** remove a PDF this run created when manifest persist fails; keep it (and report the inconsistency) when the write had replaced a pre-existing file, since removing it would destroy user data | **Tested (2026-08-04).** Both branches covered by `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` in `UnitTests/tst_pagemasterexporttest.cpp` — MIC-335 | Core |
 | **R-008** | Sentry crash minidumps can contain PDF content and file paths | Opt-in telemetry users | Crash with `SENTRY_DSN` set | Crashpad captures thread stacks and referenced heap memory out-of-process. A crash in the parser or content processor therefore has document bytes live in the dump. `before_send` cannot filter this — it applies to events, not the minidump upload | **Disclosure, not enforcement.** `SENTRY_DSN` is unset by default and must stay unset when handling confidential documents. Do not restate "no PDF content by design" — nothing implements it | `PdfTool sentry-verify`; confirm `SENTRY_DSN` unset in shipped configs | Release |
 | **R-009** | Theme/scheme requires restart | All GUI users | Change color scheme in settings | Settings read only at startup | Document in release notes | Manual | UX |
-| **R-010** | OCR sidecar supply chain | OCR users | Point `FRISKET_OCR_SIDECAR` at unknown binary | External Python/PyInstaller bundle | Ship only signed/bundled sidecar; document env var | OCR README | Release |
-| ~~R-011~~ | ~~README links upstream releases~~ | — | — | Fork branding drift | **Resolved.** Every install link in `README.md` points at `mberrys/Frisket-pdf/releases`; the only upstream link left is the PDF4QT attribution in the License section, which is correct and stays | README review 2026-08-04 | Docs |
+| **R-010** | OCR sidecar supply chain | OCR users | Point `LOUPE_OCR_SIDECAR` at unknown binary | External Python/PyInstaller bundle | Ship only signed/bundled sidecar; document env var | OCR README | Release |
+| ~~R-011~~ | ~~README links upstream releases~~ | — | — | Fork branding drift | **Resolved.** Every install link in `README.md` points at `mberrys/Loupe-pdf/releases`; the only upstream link left is the PDF4QT attribution in the License section, which is correct and stays | README review 2026-08-04 | Docs |
 
 ### Low
 
@@ -282,7 +282,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 |--------|------|-----------|
 | Roll back written PDF when batch manifest persist fails | `Pdf4QtLibCore/sources/pdfpagemasterexport.cpp` | Prevents resume/state inconsistency (R-007) — tested as of 2026-08-04, see A23 |
 | Disable Sentry default PII | `pdfsentry.cpp` / docs | Confirmed desktop 0.15.x has no PII setter (NX-only); default remains off (R-008) |
-| Set preflight `QProcess` working directory to app bundle dir | `frisketpreflightplugin.cpp` | Predictable sidecar resolution |
+| Set preflight `QProcess` working directory to app bundle dir | `loupepreflightplugin.cpp` | Predictable sidecar resolution |
 
 Prior commits on `Pre-P3-sanitize` also addressed bug sanitization and visual polish (see PR #54).
 

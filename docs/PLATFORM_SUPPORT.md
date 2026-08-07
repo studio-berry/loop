@@ -1,6 +1,6 @@
 # Platform support (Windows, Linux)
 
-Frisket PDF V1 ships on **two** desktop platforms: Windows and Linux. This
+Loupe PDF V1 ships on **two** desktop platforms: Windows and Linux. This
 document is the source of truth for supported OS, install layouts, and the
 **cross-platform compatibility pass** over modules that are already
 feature-complete.
@@ -32,23 +32,23 @@ are best-effort only and produce no official release artifacts.
 
 | Platform | Binaries | Plugins (`PDF4QT_PLUGINS_DIR`) | Preflight profiles |
 |----------|----------|--------------------------------|--------------------|
-| Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/frisket/profiles/` in bundle |
-| Linux | `<prefix>/bin` | `<prefix>/lib/pdf4qt` | `/usr/share/frisket/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
+| Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/loupe/profiles/` in bundle |
+| Linux | `<prefix>/bin` | `<prefix>/lib/pdf4qt` | `/usr/share/loupe/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
 
-Editor must resolve **PdfTool** and **FrisketPreflightPlugin** without a
+Editor must resolve **PdfTool** and **LoupePreflightPlugin** without a
 developer toolchain on PATH.
 
-The profile directory is set by `FRISKET_PREFLIGHT_PROFILES_DIR` in
-`Pdf4QtEditorPlugins/FrisketPreflightPlugin/CMakeLists.txt`, derived from
+The profile directory is set by `LOUPE_PREFLIGHT_PROFILES_DIR` in
+`Pdf4QtEditorPlugins/LoupePreflightPlugin/CMakeLists.txt`, derived from
 `PDF4QT_INSTALL_SHARE_DIR`. Note that `-DPDF4QT_INSTALL_TO_USR=ON` (used by the
 Windows CI and MSI builds) prefixes that with `usr/`, so the shipped path is
-`usr/share/frisket/profiles/`. Any smoke test must derive this from the install
+`usr/share/loupe/profiles/`. Any smoke test must derive this from the install
 prefix rather than assuming a fixed absolute location.
 
 ## V1 slim distribution
 
-When `PDF4QT_FRISKET_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
-(FrisketPreflight and required inspection plugins). PageMaster / Diff / Viewer /
+When `PDF4QT_LOUPE_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
+(LoupePreflight and required inspection plugins). PageMaster / Diff / Viewer /
 LaunchPad may ship in full packages; still build them in CI on both supported OS.
 
 ## Cross-platform compatibility pass
@@ -63,12 +63,12 @@ bundling** and **installer packaging** for modules that are already complete.
 | Pdf4QtLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
 | Pdf4QtLibWidgets / Pdf4QtLibGui | Yes | ☐ | ☐ | Plugin relative path; settings paths |
 | PdfTool (`preflight`, `add-bleed`, …) | Yes | ☐ | ☐ | Bundled next to Editor; working directory; offscreen CI |
-| FrisketPreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `frisket-default.json`; `.dll` / `.so` |
+| LoupePreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `loupe-default.json`; `.dll` / `.so` |
 | Pdf4QtEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
 | Other Editor plugins | Yes | ☐ | ☐ | Present in intended bundle set; load without system Qt |
 | Pdf4QtPageMaster export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
 | Pdf4QtViewer / Diff / LaunchPad | Adjacent | ☐ | ☐ | Build in CI; optional in slim package |
-| frisket-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
+| loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
 | UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
 | Windows MSI | In review (MIC-301) | ☐ | — | Clean VM smoke; redist. **V1 ships unsigned** (MIC-342 / MIC-345) |
 | Linux AppImage / Flatpak | Exists | — | ☐ | Smoke; Flatpak `--filesystem=host` documented. **`.deb` builds but doesn't run** (missing Qt runtime, glibc mismatch) — do not gate on it until fixed |
@@ -79,7 +79,7 @@ bundling** and **installer packaging** for modules that are already complete.
 ### Bundling rules (all OS)
 
 1. Ship Qt runtime and required Qt plugins (`platforms`, `imageformats`, …) inside the package — do not require a system Qt install.
-2. Co-locate PdfTool, FrisketPreflightPlugin, and `frisket-default.json` per the layout table.
+2. Co-locate PdfTool, LoupePreflightPlugin, and `loupe-default.json` per the layout table.
 3. Keep the default bundle C++/Qt only (see `docs/PACKAGING_LICENSING.md`); scan for forbidden Ghostscript / JRE / Python payloads.
 4. **V1 ships unsigned** on Windows (no Authenticode). Publish `SHA256SUMS.txt` and disclose SmartScreen (MIC-342). Code signing is post-V1 / paid-distribution (MIC-345) — not a V1 bundling gate.
 5. Document upgrade, uninstall, and binary rollback (no cloud DB).
@@ -90,7 +90,7 @@ bundling** and **installer packaging** for modules that are already complete.
 1. Clean machine (no Qt / MSVC required at runtime).
 2. Install the platform package.
 3. Launch Pdf4QtEditor.
-4. Open a sample PDF; run Frisket Preflight; confirm findings JSON.
+4. Open a sample PDF; run Loupe Preflight; confirm findings JSON.
 5. Confirm PdfTool exists beside the app and profiles resolve.
 
 Windows automation for steps 2–5 lives in `scripts/smoke-test-install.ps1`; the full
@@ -103,12 +103,12 @@ PowerShell. Build the MSI first via the `Windows_MSI` workflow (`workflow_dispat
 
 ```powershell
 # Fresh install -> smoke -> uninstall
-.\scripts\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Frisket-pdf_<version>.msi
+.\scripts\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_<version>.msi
 
 # Add upgrade coverage when a previous MSI is available
 .\scripts\Invoke-MsiSmokeTest.ps1 `
-    -MsiPath .\mberrys.Frisket-pdf_<new>.msi `
-    -PreviousMsiPath .\mberrys.Frisket-pdf_<old>.msi
+    -MsiPath .\mberrys.Loupe-pdf_<new>.msi `
+    -PreviousMsiPath .\mberrys.Loupe-pdf_<old>.msi
 ```
 
 The wrapper asserts install, layout resolution, preflight execution, Editor launch,

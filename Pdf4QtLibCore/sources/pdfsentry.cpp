@@ -80,7 +80,7 @@ QString databasePath()
 
 QString releaseName(const QString& applicationId)
 {
-    return QStringLiteral("frisket-%1@%2").arg(applicationId, QString::fromUtf8(PDF4QT_PROJECT_VERSION));
+    return QStringLiteral("loupe-%1@%2").arg(applicationId, QString::fromUtf8(PDF4QT_PROJECT_VERSION));
 }
 
 double tracesSampleRate()

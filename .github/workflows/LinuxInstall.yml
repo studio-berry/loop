@@ -86,20 +86,20 @@ jobs:
         run: |
           version=$(cat "pdf4qt/build/version.txt")
           echo "Version: $version"
-          echo "appimagefilename=Frisket-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
-          echo "appimage_update_info=gh-releases-zsync|mberrys|Frisket-pdf|latest|Frisket-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
-          echo "AppImage file name: Frisket-pdf-$version-x86_64.AppImage"
+          echo "appimagefilename=Loupe-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
+          echo "appimage_update_info=gh-releases-zsync|mberrys|Loupe-pdf|latest|Loupe-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
+          echo "AppImage file name: Loupe-pdf-$version-x86_64.AppImage"
         env:
           appimagefilename: ${{ env.appimagefilename }}
           
       - name: 'Linux Deploy Qt'
         working-directory: pdf4qt/build
         run: |
-          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Frisket-pdf.svg install/io.github.mberrys.Frisket-pdf.svg
+          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
           wget -O deploy.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           echo "${LINUXDEPLOYQT_SHA256}  deploy.AppImage" | sha256sum -c -
           chmod +x deploy.AppImage
-          ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Frisket-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
+          ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
           
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'

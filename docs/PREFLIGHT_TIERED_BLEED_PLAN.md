@@ -1,7 +1,7 @@
 # Tiered Bleed Preflight — Design Plan (M0)
 
 Status: **implemented** (Tier-1/Tier-2 shipped; residual raster golden = Linear MIC-325). M0 locks below remain authoritative.
-Scope: Frisket-pdf / PDF4QT 1.6.0.0. Phase 1 — CLI engine.
+Scope: Loupe-pdf / PDF4QT 1.6.0.0. Phase 1 — CLI engine.
 Primary API names: **`PDFDocumentSession`** (`pdfdocumentsession.*`), **`PDFBleedMarginProbe`** (`pdfbleedmarginprobe.*`), **`PreflightEngine`** (PdfTool orchestrator).
 Finding types: **`content-bleed`**, **`bleed-margin-empty`**, **`needs-auto-bleed`**.
 Profile params: **`raster_confirm`** (bool), **`raster_confirm_dpi`** (default 150), **`raster_white_threshold`** (default 0.9975) — per-check.
@@ -21,7 +21,7 @@ This mirrors Acrobat/Sinalite behavior: flag most bleed gaps structurally, escal
 ### Non-goals
 
 - **Generating** bleed artwork. That is `PDFBleedFixup` / `PdfTool add-bleed` (MIC-121/122) — see [MIRROR_BLEED_PLAN.md](MIRROR_BLEED_PLAN.md). This feature *detects* and may *advertise* `add-bleed` as a fixup; it never paints.
-- Changing the shipped `frisket-default` profile's pass/fail behavior. Without `raster_confirm`, Tier 2 never runs and the default profile stays exactly as fast as today.
+- Changing the shipped `loupe-default` profile's pass/fail behavior. Without `raster_confirm`, Tier 2 never runs and the default profile stays exactly as fast as today.
 - Async / GUI page compilation. The engine path is synchronous and headless (`PDFRenderer::compile`), not the Editor's `PDFAsynchronousPageCompiler`.
 - New toolchains or dependencies. This stays on Pdf4QtLibCore (MIT) + QPDF (Apache-2.0); no JRE, Ghostscript, PDFBox, or PikePDF (per the hybrid sidecar plan).
 
@@ -198,7 +198,7 @@ Locked here (not in AGENTS.md) per `docs/PLANNING.md`. All reviewable in this M0
 | `raster_confirm_dpi` | **150** (was 72) | 72 DPI makes a 9pt bleed strip only **~6px** deep (0.125in × 72) — too coarse to distinguish faint content from noise. 150 DPI gives **~19px**, still ¼ the pixels of a 300-DPI probe, but enough to compute a meaningful coverage ratio. |
 | `raster_white_threshold` | **0.9975** (was 0.95) | Fraction of an edge strip that must be background/white before that edge is called empty. 0.95 (the old default) would call a strip "empty" even with **5% ink coverage** — large enough to be genuine bleed content, not noise. 0.9975 (⇔ ≤0.25% non-background) only fires on strips that are *actually* blank within antialiasing/compression noise (~0.01–0.05%), while still clearing faint-but-real bleed (light gradients, watermarks, thin rules) that a laxer 0.95 bar would already have passed anyway — so the practical gap between the two thresholds is at the *strict* end, not the lax end: 0.95 was simply too permissive to catch much of anything. |
 | Coverage scope | **per-edge** (4 independent strips: top/bottom/left/right) | Not an aggregate over the whole perimeter (see below) — that gap in the original MIC-155/160 wording ("strip rects" / no scope stated) is closed here. |
-| Bleed reach | `amount_pt` = **9** | Existing `frisket-default` value (9 pt ≈ 0.125 in). |
+| Bleed reach | `amount_pt` = **9** | Existing `loupe-default` value (9 pt ≈ 0.125 in). |
 | Bleed/content tolerance | `tolerance_pt` = **0.25** when unset | Promotes today's hard-coded `isBleedAdequate` value to a profile param. |
 | Render features | `ClipToCropBox` off, annotations off | Match `pdfbleedfixup.cpp` strip render; probe the full bleed margin, not the crop. |
 
@@ -227,7 +227,7 @@ All three `raster_*` params fit `profile.schema.json`'s check objects (which all
 
 - The Editor's de-facto session is spread across `PDFDrawSpaceController` (owns `PDFFontCache`, holds document + `PDFOptionalContentActivity`) and `PDFDrawWidgetProxy` (owns the `PDFAsynchronousPageCompiler` with its `QCache<PDFInteger, PDFPrecompiledPage>`, exposes `getCMSManager`).
 - `PDFDocumentSession` mirrors that getter surface (`document()`, `fontCache()`, `cms()`, `compiledPage()`) so `PDFDrawWidgetProxy` could hold or delegate to a session without changing its callers.
-- The Frisket Preflight plugin (MIC-137, done) currently only displays report JSON produced by the CLI. Once the session exists, an in-process preflight run in the Editor could share the already-compiled pages of the open document instead of recompiling — the payoff of putting the cache in Core.
+- The Loupe Preflight plugin (MIC-137, done) currently only displays report JSON produced by the CLI. Once the session exists, an in-process preflight run in the Editor could share the already-compiled pages of the open document instead of recompiling — the payoff of putting the cache in Core.
 - **Actual Editor wiring is the P2 stretch (MIC-156 / issue 8), not this epic's core.** This doc only locks the session's shape so that reuse stays possible.
 
 ## Related code
@@ -242,8 +242,8 @@ All three `raster_*` params fit `profile.schema.json`'s check objects (which all
 | Editor session split | `Pdf4QtLibWidgets/sources/pdfdrawspacecontroller.h`, `pdfcompiler.h` |
 | Preflight command | `PdfTool/pdftoolpreflight.cpp` |
 | Preflight box math | `PdfTool/pdftoolpreflightchecks.h` |
-| Report / profile schema | `frisket-preflight/schemas/report.schema.json`, `profile.schema.json` |
-| Default profile | `frisket-preflight/profiles/frisket-default.{yaml,json}` |
+| Report / profile schema | `loupe-preflight/schemas/report.schema.json`, `profile.schema.json` |
+| Default profile | `loupe-preflight/profiles/loupe-default.{yaml,json}` |
 | Sibling fixup plan | `docs/MIRROR_BLEED_PLAN.md` |
 | Prepress note | `NOTES.txt` §14.11 |
 | Planning process | `docs/PLANNING.md` |

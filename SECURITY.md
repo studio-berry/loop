@@ -2,26 +2,26 @@
 
 ## Supported versions
 
-Frisket-PDF is released from the `master` branch of [mberrys/Frisket-pdf](https://github.com/mberrys/Frisket-pdf).
+Loupe-PDF is released from the `master` branch of [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf).
 
 | Version | Supported |
 | ------- | --------- |
 | 1.6.x (current `PDF4QT_VERSION`) | Yes — security fixes land here |
 | Older fork tags / unreleased branches | Best effort only |
 
-Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Frisket-specific.
+Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Loupe-specific.
 
 ## Reporting a vulnerability
 
 Please report security issues privately:
 
-1. Open a **private** vulnerability report on GitHub for `mberrys/Frisket-pdf` (Security advisories), **or**
+1. Open a **private** vulnerability report on GitHub for `mberrys/Loupe-pdf` (Security advisories), **or**
 2. Email the maintainer listed on the GitHub profile for this fork.
 
 Include:
 
 - Affected binary/surface (PdfTool, Editor, PageMaster, library)
-- Frisket version / commit hash
+- Loupe version / commit hash
 - Minimal PDF or steps to reproduce
 - Crash / DoS / info-disclosure impact
 

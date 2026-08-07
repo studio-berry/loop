@@ -28,14 +28,14 @@
     script bug. Record it on MIC-301 and fix the WiX arch before sign-off.
 
 .EXAMPLE
-    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Frisket-pdf_1.6.0.0.msi
+    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_1.6.0.0.msi
 #>
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,
     [string]$PreviousMsiPath = "",
     [string]$InstallDir = "${env:ProgramFiles}\PDF4QT",
     [string]$TestPdf = "",
-    [string]$LogDir = "$env:TEMP\frisket-msi-smoke",
+    [string]$LogDir = "$env:TEMP\loupe-msi-smoke",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar
 )
@@ -104,9 +104,9 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
 Write-Host "=== Uninstalling ==="
 Invoke-Msi -Arguments "/x `"$MsiPath`"" -LogName "uninstall"
 
-# The installer also writes a sibling share\frisket tree under ProgramFilesFolder;
+# The installer also writes a sibling share\loupe tree under ProgramFilesFolder;
 # checking only $InstallDir would miss profile/schema files left behind.
-$shareLeftoverRoot = Join-Path (Split-Path -Parent $InstallDir) "share\frisket"
+$shareLeftoverRoot = Join-Path (Split-Path -Parent $InstallDir) "share\loupe"
 if (Test-Path -LiteralPath $shareLeftoverRoot) {
     $shareLeftovers = @(Get-ChildItem -LiteralPath $shareLeftoverRoot -Recurse -File -ErrorAction SilentlyContinue)
     if ($shareLeftovers.Count -gt 0) {
