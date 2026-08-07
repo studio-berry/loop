@@ -208,7 +208,7 @@ private:
 };
 
 /// Parsing context. Used for example to detect cyclic reference errors.
-class PDFParsingContext
+class PDF4QTLIBCORESHARED_EXPORT PDFParsingContext
 {
     Q_DECLARE_TR_FUNCTIONS(pdf::PDFParsingContext)
 
@@ -332,6 +332,8 @@ private:
     void shift();
 
     PDFLexicalAnalyzer::Token fetch();
+
+    PDFObject getObject(int nestingDepth);
 
     /// Functor for fetching tokens
     std::function<PDFLexicalAnalyzer::Token(void)> m_tokenFetcher;

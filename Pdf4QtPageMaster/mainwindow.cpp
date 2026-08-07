@@ -34,23 +34,26 @@
 
 #include "pdfaction.h"
 #include "pdfwidgetutils.h"
+#include "pdfuitheme.h"
 #include "pdfdocumentreader.h"
-#include "pdfdocumentwriter.h"
-#include "pdfimageoptimizer.h"
+#include "pdfpagemasterexport.h"
 #include "pdfoutline.h"
 #include "pdfprogress.h"
 #include "pdfutils.h"
 
 #include <QFileDialog>
+#include <QCheckBox>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QBuffer>
 #include <QComboBox>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QEventLoop>
 #include <QFormLayout>
 #include <QToolBar>
 #include <QDesktopServices>
@@ -71,6 +74,7 @@
 #include <QAbstractScrollArea>
 #include <QAbstractItemView>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QDate>
 #include <QDir>
@@ -80,6 +84,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMenuBar>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QJsonArray>
@@ -94,6 +99,28 @@
 
 namespace pdfpagemaster
 {
+
+namespace
+{
+
+bool waitForExportFinishedBounded(QFutureWatcherBase* watcher, int timeoutMs)
+{
+    if (!watcher || watcher->isFinished())
+    {
+        return true;
+    }
+
+    QEventLoop loop;
+    QObject::connect(watcher, &QFutureWatcherBase::finished, &loop, &QEventLoop::quit);
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(timeoutMs);
+    loop.exec();
+    return watcher->isFinished();
+}
+
+} // namespace
 
 class MainWindowRecentHelper final
 {
@@ -284,6 +311,93 @@ pdf::PDFPageGeometrySettings pageGeometrySettingsFromJson(const QJsonObject& obj
     return settings;
 }
 
+
+QString bleedFixupModeToString(pdf::PDFBleedFixupMode mode)
+{
+    switch (mode)
+    {
+        case pdf::PDFBleedFixupMode::Mirror: return QStringLiteral("mirror");
+        case pdf::PDFBleedFixupMode::PixelRepeat: return QStringLiteral("pixel-repeat");
+        case pdf::PDFBleedFixupMode::Stretch: return QStringLiteral("stretch");
+    }
+    return QStringLiteral("mirror");
+}
+
+pdf::PDFBleedFixupMode bleedFixupModeFromString(const QString& text)
+{
+    const QString value = text.trimmed().toLower();
+    if (value == QStringLiteral("pixel-repeat") || value == QStringLiteral("repeat"))
+    {
+        return pdf::PDFBleedFixupMode::PixelRepeat;
+    }
+    if (value == QStringLiteral("stretch"))
+    {
+        return pdf::PDFBleedFixupMode::Stretch;
+    }
+    return pdf::PDFBleedFixupMode::Mirror;
+}
+
+QString bleedFixupReferenceBoxToString(pdf::PDFBleedFixupSettings::ReferenceBox box)
+{
+    switch (box)
+    {
+        case pdf::PDFBleedFixupSettings::ReferenceBox::CropBox: return QStringLiteral("crop");
+        case pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox: return QStringLiteral("media");
+        case pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox:
+        default: return QStringLiteral("trim");
+    }
+}
+
+pdf::PDFBleedFixupSettings::ReferenceBox bleedFixupReferenceBoxFromString(const QString& text)
+{
+    const QString value = text.trimmed().toLower();
+    if (value == QStringLiteral("crop"))
+    {
+        return pdf::PDFBleedFixupSettings::ReferenceBox::CropBox;
+    }
+    if (value == QStringLiteral("media"))
+    {
+        return pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox;
+    }
+    return pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox;
+}
+
+QJsonObject bleedFixupSettingsToJson(const pdf::PDFBleedFixupSettings& settings)
+{
+    QJsonObject object;
+    object["mode"] = bleedFixupModeToString(settings.mode);
+    object["pageRange"] = settings.pageRange;
+    object["referenceBox"] = bleedFixupReferenceBoxToString(settings.referenceBox);
+    object["bleedMM"] = marginsToJson(settings.bleedMM);
+    object["expandMediaBox"] = settings.expandMediaBox;
+    object["expandCropBox"] = settings.expandCropBox;
+    object["expandBleedBox"] = settings.expandBleedBox;
+    object["expandTrimBox"] = settings.expandTrimBox;
+    object["dpi"] = settings.dpi;
+    object["samplePixels"] = settings.samplePixels;
+    object["skipIfAlreadyBleeding"] = settings.skipIfAlreadyBleeding;
+    object["force"] = settings.force;
+    return object;
+}
+
+pdf::PDFBleedFixupSettings bleedFixupSettingsFromJson(const QJsonObject& object)
+{
+    pdf::PDFBleedFixupSettings settings;
+    settings.mode = bleedFixupModeFromString(object["mode"].toString(bleedFixupModeToString(settings.mode)));
+    settings.pageRange = object["pageRange"].toString(settings.pageRange);
+    settings.referenceBox = bleedFixupReferenceBoxFromString(object["referenceBox"].toString(bleedFixupReferenceBoxToString(settings.referenceBox)));
+    settings.bleedMM = marginsFromJson(object["bleedMM"].toObject(), settings.bleedMM);
+    settings.expandMediaBox = object["expandMediaBox"].toBool(settings.expandMediaBox);
+    settings.expandCropBox = object["expandCropBox"].toBool(settings.expandCropBox);
+    settings.expandBleedBox = object["expandBleedBox"].toBool(settings.expandBleedBox);
+    settings.expandTrimBox = object["expandTrimBox"].toBool(settings.expandTrimBox);
+    settings.dpi = object["dpi"].toInt(settings.dpi);
+    settings.samplePixels = object["samplePixels"].toInt(settings.samplePixels);
+    settings.skipIfAlreadyBleeding = object["skipIfAlreadyBleeding"].toBool(settings.skipIfAlreadyBleeding);
+    settings.force = object["force"].toBool(settings.force);
+    return settings;
+}
+
 void replaceInString(QString& templateString, QChar character, int number)
 {
     int index = templateString.indexOf(character, 0, Qt::CaseSensitive);
@@ -332,152 +446,6 @@ QString createOutputFileName(QString fileNameTemplate,
     fileNameTemplate = sanitizeOutputFileName(fileNameTemplate);
     QDir outputDirectory(directory);
     return outputDirectory.filePath(fileNameTemplate);
-}
-
-struct ExportJob
-{
-    std::map<int, DocumentItem> documents;
-    std::map<int, ImageItem> images;
-    std::vector<std::vector<pdf::PDFDocumentManipulator::AssembledPage>> assembledDocuments;
-    std::vector<QString> outputFileNames;
-    bool overwriteFiles = false;
-    pdf::PDFDocumentManipulator::OutlineMode outlineMode = pdf::PDFDocumentManipulator::OutlineMode::DocumentParts;
-    bool optimizeImages = false;
-    pdf::PDFImageOptimizer::Settings imageOptimizationSettings;
-    bool hasPageGeometrySettings = false;
-    pdf::PDFPageGeometrySettings pageGeometrySettings;
-    pdf::PDFProgress* progress = nullptr;
-};
-
-ExportResult createExportError(QString message)
-{
-    ExportResult result;
-    result.success = false;
-    result.errorMessage = qMove(message);
-    return result;
-}
-
-ExportResult runExportJob(ExportJob job)
-{
-    pdf::PDFDocumentManipulator manipulator;
-    manipulator.setOutlineMode(job.outlineMode);
-
-    for (const auto& documentItem : job.documents)
-    {
-        manipulator.addDocument(documentItem.first, &documentItem.second.document);
-    }
-    for (const auto& imageItem : job.images)
-    {
-        manipulator.addImage(imageItem.first, imageItem.second.image);
-    }
-
-    std::vector<std::pair<QString, pdf::PDFDocument>> assembledDocumentStorage;
-    assembledDocumentStorage.reserve(job.assembledDocuments.size());
-
-    if (job.progress && !job.assembledDocuments.empty())
-    {
-        pdf::ProgressStartupInfo info;
-        info.showDialog = true;
-        info.text = QCoreApplication::translate("pdfpagemaster::MainWindow", "Assembling documents...");
-        job.progress->start(job.assembledDocuments.size(), qMove(info));
-    }
-
-    for (size_t index = 0; index < job.assembledDocuments.size(); ++index)
-    {
-        pdf::PDFOperationResult currentResult = manipulator.assemble(job.assembledDocuments[index]);
-        if (!currentResult)
-        {
-            if (job.progress)
-            {
-                job.progress->finish();
-            }
-            return createExportError(currentResult.getErrorMessage());
-        }
-
-        pdf::PDFDocument assembledDocument = manipulator.takeAssembledDocument();
-        if (job.hasPageGeometrySettings)
-        {
-            const pdf::PDFOperationResult geometryResult = pdf::PDFPageGeometry::apply(&assembledDocument, job.pageGeometrySettings);
-            if (!geometryResult)
-            {
-                if (job.progress)
-                {
-                    job.progress->finish();
-                }
-                return createExportError(geometryResult.getErrorMessage());
-            }
-        }
-
-        assembledDocumentStorage.emplace_back(std::make_pair(job.outputFileNames[index], std::move(assembledDocument)));
-        if (job.progress)
-        {
-            job.progress->step();
-        }
-    }
-
-    if (job.progress && !job.assembledDocuments.empty())
-    {
-        job.progress->finish();
-    }
-
-    if (job.optimizeImages)
-    {
-        pdf::PDFImageOptimizer imageOptimizer;
-        for (auto& assembledDocumentItem : assembledDocumentStorage)
-        {
-            assembledDocumentItem.second = imageOptimizer.optimize(&assembledDocumentItem.second, job.imageOptimizationSettings, {}, job.progress);
-        }
-    }
-
-    ExportResult result;
-    result.success = true;
-    result.writtenFiles.reserve(int(assembledDocumentStorage.size()));
-
-    if (job.progress && !assembledDocumentStorage.empty())
-    {
-        pdf::ProgressStartupInfo info;
-        info.showDialog = true;
-        info.text = QCoreApplication::translate("pdfpagemaster::MainWindow", "Writing documents...");
-        job.progress->start(assembledDocumentStorage.size(), qMove(info));
-    }
-
-    for (const auto& assembledDocumentItem : assembledDocumentStorage)
-    {
-        const QString& fileName = assembledDocumentItem.first;
-        const pdf::PDFDocument* document = &assembledDocumentItem.second;
-        const bool isDocumentFileAlreadyExisting = QFile::exists(fileName);
-        if (!job.overwriteFiles && isDocumentFileAlreadyExisting)
-        {
-            if (job.progress)
-            {
-                job.progress->finish();
-            }
-            return createExportError(QCoreApplication::translate("pdfpagemaster::MainWindow", "Document with filename '%1' already exists.").arg(fileName));
-        }
-
-        pdf::PDFDocumentWriter writer(nullptr);
-        pdf::PDFOperationResult writeResult = writer.write(fileName, document, isDocumentFileAlreadyExisting);
-        if (!writeResult)
-        {
-            if (job.progress)
-            {
-                job.progress->finish();
-            }
-            return createExportError(writeResult.getErrorMessage());
-        }
-        result.writtenFiles << fileName;
-        if (job.progress)
-        {
-            job.progress->step();
-        }
-    }
-
-    if (job.progress && !assembledDocumentStorage.empty())
-    {
-        job.progress->finish();
-    }
-
-    return result;
 }
 
 bool resolveOutlinePageIndex(const pdf::PDFDocument* document, const pdf::PDFOutlineItem* item, pdf::PDFInteger* pageIndex)
@@ -782,6 +750,7 @@ MainWindow::MainWindow(QWidget* parent) :
     m_exportProgress(new pdf::PDFProgress(this)),
     m_exportProgressBar(new QProgressBar(this)),
     m_exportProgressLabel(new QLabel(this)),
+    m_exportCancelButton(new QPushButton(tr("Cancel"), this)),
     m_exportWatcher(nullptr),
     m_dropFeedbackLabel(new QLabel(this)),
     m_dropInsertionMarker(new QFrame(this)),
@@ -798,11 +767,15 @@ MainWindow::MainWindow(QWidget* parent) :
     m_exportProgressBar->setValue(0);
     m_exportProgressBar->setMaximumWidth(pdf::PDFWidgetUtils::scaleDPI_x(this, 180));
     m_exportProgressBar->hide();
+    m_exportCancelButton->hide();
+    m_exportCancelButton->setEnabled(false);
     statusBar()->addPermanentWidget(m_exportProgressLabel);
     statusBar()->addPermanentWidget(m_exportProgressBar);
+    statusBar()->addPermanentWidget(m_exportCancelButton);
     connect(m_exportProgress, &pdf::PDFProgress::progressStarted, this, &MainWindow::onExportProgressStarted, Qt::QueuedConnection);
     connect(m_exportProgress, &pdf::PDFProgress::progressStep, this, &MainWindow::onExportProgressStep, Qt::QueuedConnection);
     connect(m_exportProgress, &pdf::PDFProgress::progressFinished, this, &MainWindow::onExportProgressFinished, Qt::QueuedConnection);
+    connect(m_exportCancelButton, &QPushButton::clicked, this, &MainWindow::onExportCancelClicked);
 
     ui->documentItemsView->setModel(m_filterModel);
     ui->documentItemsView->setItemDelegate(m_delegate);
@@ -872,6 +845,8 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->actionInsert_Empty_Page->setData(int(Operation::InsertEmptyPage));
     ui->actionInsert_PDF->setData(int(Operation::InsertPDF));
     ui->actionPageGeometry->setData(int(Operation::ConfigurePageGeometry));
+    m_actionBleedFixup = new QAction(tr("Bleed Fixup..."), this);
+    m_actionBleedFixup->setData(int(Operation::ConfigureBleedFixup));
     ui->actionGet_Source->setData(int(Operation::GetSource));
     ui->actionBecomeASponsor->setData(int(Operation::BecomeSponsor));
     ui->actionAbout->setData(int(Operation::About));
@@ -985,6 +960,7 @@ MainWindow::MainWindow(QWidget* parent) :
     mainToolbar->addActions({ ui->actionGroup, ui->actionUngroup });
     mainToolbar->addSeparator();
     mainToolbar->addAction(ui->actionPageGeometry);
+    mainToolbar->addAction(m_actionBleedFixup);
     mainToolbar->addAction(ui->actionCropPages);
     mainToolbar->addAction(ui->actionProperties);
     QToolBar* insertToolbar = addToolBar(tr("&Insert"));
@@ -1075,12 +1051,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
 MainWindow::~MainWindow()
 {
-    if (m_exportWatcher)
-    {
-        m_exportWatcher->waitForFinished();
-        delete m_exportWatcher;
-        m_exportWatcher = nullptr;
-    }
+    stopExportWatcherBounded();
     saveSettings();
     delete ui;
 }
@@ -1106,6 +1077,23 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
     if (!dropView)
     {
         return QMainWindow::eventFilter(watched, event);
+    }
+
+    if (m_isExporting)
+    {
+        switch (event->type())
+        {
+            case QEvent::DragEnter:
+            case QEvent::DragMove:
+            case QEvent::Drop:
+            {
+                hideWorkspaceDropFeedback();
+                event->ignore();
+                return true;
+            }
+            default:
+                break;
+        }
     }
 
     switch (event->type())
@@ -1238,6 +1226,11 @@ void MainWindow::on_actionClose_triggered()
 
 void MainWindow::on_actionAddDocuments_triggered()
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     QStringList fileNames = QFileDialog::getOpenFileNames(this, tr("Select PDF document(s)"), m_settings.directory, tr("PDF document (*.pdf)"));
     if (!fileNames.isEmpty())
     {
@@ -1266,6 +1259,11 @@ void MainWindow::onPreviewUpdated()
 
 void MainWindow::onWorkspaceCustomContextMenuRequested(const QPoint& point)
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     QWidget* sourceWidget = qobject_cast<QWidget*>(sender());
     if (QAbstractScrollArea* scrollArea = qobject_cast<QAbstractScrollArea*>(sourceWidget))
     {
@@ -1322,6 +1320,10 @@ void MainWindow::updateActions()
     ui->actionUndo->setToolTip(undoLabel.isEmpty() ? tr("Undo") : tr("Undo %1").arg(undoLabel));
     ui->actionRedo->setToolTip(redoLabel.isEmpty() ? tr("Redo") : tr("Redo %1").arg(redoLabel));
 
+    // actionAddDocuments is auto-connected (not Operation-mapped); gate it
+    // explicitly now that setEnabled(false) is no longer used during export.
+    ui->actionAddDocuments->setEnabled(!m_isExporting);
+
     QList<QAction*> actions = findChildren<QAction*>();
     for (QAction* action : actions)
     {
@@ -1344,6 +1346,12 @@ void MainWindow::onExportProgressStarted(pdf::ProgressStartupInfo info)
     m_exportProgressBar->setValue(0);
     m_exportProgressLabel->show();
     m_exportProgressBar->show();
+    m_exportCancelButton->show();
+    // Keep Cancel disabled if the user already requested cancellation.
+    if (!m_exportCancelToken.cancel->load(std::memory_order_acquire))
+    {
+        m_exportCancelButton->setEnabled(true);
+    }
 }
 
 void MainWindow::onExportProgressStep(int percentage)
@@ -1370,7 +1378,8 @@ void MainWindow::onExportProgressFinished()
     }
 
     m_exportProgressBar->setValue(100);
-    hideExportProgress();
+    // Do not call hideExportProgress() here: the combined export phase may
+    // still be running, and hiding would remove Cancel mid-batch.
 }
 
 void MainWindow::onExportFinished()
@@ -1380,24 +1389,55 @@ void MainWindow::onExportFinished()
         return;
     }
 
-    const ExportResult result = m_exportWatcher->result();
+    const pdf::PDFPageMasterExportResult result = m_exportWatcher->result();
     m_exportWatcher->deleteLater();
     m_exportWatcher = nullptr;
 
     setExportInProgress(false);
     hideExportProgress();
 
+    if (result.cancelled)
+    {
+        if (result.writtenFiles.isEmpty())
+        {
+            statusBar()->showMessage(tr("Export cancelled."), 5000);
+        }
+        else
+        {
+            statusBar()->showMessage(tr("Export cancelled. %1 document(s) written.").arg(result.writtenFiles.size()), 5000);
+        }
+        return;
+    }
+
     if (!result.success)
     {
-        QMessageBox::critical(this, tr("Error"), result.errorMessage);
+        QString message = result.errorMessage;
+        if (!result.writtenFiles.isEmpty())
+        {
+            message += QLatin1Char('\n');
+            message += tr("%1 document(s) were exported before the error.").arg(result.writtenFiles.size());
+        }
+        QMessageBox::critical(this, tr("Error"), message);
         return;
     }
 
     statusBar()->showMessage(tr("%1 document(s) exported.").arg(result.writtenFiles.size()), 5000);
 }
 
+void MainWindow::onExportCancelClicked()
+{
+    requestExportCancel();
+    m_exportProgressLabel->setText(tr("Cancelling export..."));
+    m_exportCancelButton->setEnabled(false);
+}
+
 void MainWindow::onClearRecentTriggered()
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     m_settings.recentSourceFiles.clear();
     m_settings.recentWorkspaceFiles.clear();
     m_settings.recentDirectories.clear();
@@ -1407,6 +1447,11 @@ void MainWindow::onClearRecentTriggered()
 
 void MainWindow::onRecentSourceFileTriggered()
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     QAction* action = qobject_cast<QAction*>(sender());
     if (!action)
     {
@@ -1448,6 +1493,11 @@ void MainWindow::onRecentSourceFileTriggered()
 
 void MainWindow::onRecentWorkspaceFileTriggered()
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     QAction* action = qobject_cast<QAction*>(sender());
     if (!action)
     {
@@ -1470,6 +1520,11 @@ void MainWindow::onRecentWorkspaceFileTriggered()
 
 void MainWindow::onRecentDirectoryTriggered()
 {
+    if (m_isExporting)
+    {
+        return;
+    }
+
     QAction* action = qobject_cast<QAction*>(sender());
     if (!action)
     {
@@ -1949,7 +2004,8 @@ void MainWindow::updateWorkspaceDropFeedback(QAbstractItemView* view, const QPoi
         m_dropFeedbackViewport = viewport;
     }
 
-    const QColor markerColor = accepted ? viewport->palette().color(QPalette::Active, QPalette::Highlight) : QColor(180, 60, 60);
+    const QColor markerColor = accepted ? viewport->palette().color(QPalette::Active, QPalette::Highlight)
+                                      : pdf::PDFUITheme::severityErrorColor();
     m_dropInsertionMarker->setStyleSheet(QStringLiteral("background:%1; border:0px;").arg(markerColor.name()));
 
     if (view == m_detailsView)
@@ -1995,7 +2051,7 @@ void MainWindow::updateWorkspaceDropFeedback(QAbstractItemView* view, const QPoi
     m_dropInsertionMarker->raise();
 
     m_dropFeedbackLabel->setText(message);
-    m_dropFeedbackLabel->setStyleSheet(QStringLiteral("QLabel { background: rgba(30, 30, 30, 210); color: white; border-radius: 4px; padding: 6px 10px; }"));
+    m_dropFeedbackLabel->setStyleSheet(pdf::PDFUITheme::overlayLabelStyleSheet(viewport->palette()));
     m_dropFeedbackLabel->adjustSize();
     const QSize labelSize = m_dropFeedbackLabel->sizeHint();
     const int x = qBound(8, viewportPosition.x() - labelSize.width() / 2, qMax(8, viewport->width() - labelSize.width() - 8));
@@ -2174,14 +2230,44 @@ void MainWindow::setExportInProgress(bool inProgress)
 
     if (inProgress)
     {
-        m_wasEnabledBeforeExport = isEnabled();
         m_isExporting = true;
-        setEnabled(false);
+        // Keep the window/chrome enabled so Cancel and window-close work.
+        // Disable workspace chrome so non-Operation actions (recent files,
+        // search, toolbars) cannot mutate state mid-export.
+        if (QWidget* central = centralWidget())
+        {
+            central->setEnabled(false);
+        }
+        if (QMenuBar* bar = menuBar())
+        {
+            bar->setEnabled(false);
+        }
+        const auto toolbars = findChildren<QToolBar*>();
+        for (QToolBar* toolbar : toolbars)
+        {
+            toolbar->setEnabled(false);
+        }
+        m_exportCancelButton->show();
+        m_exportCancelButton->setEnabled(true);
     }
     else
     {
         m_isExporting = false;
-        setEnabled(m_wasEnabledBeforeExport);
+        if (QWidget* central = centralWidget())
+        {
+            central->setEnabled(true);
+        }
+        if (QMenuBar* bar = menuBar())
+        {
+            bar->setEnabled(true);
+        }
+        const auto toolbars = findChildren<QToolBar*>();
+        for (QToolBar* toolbar : toolbars)
+        {
+            toolbar->setEnabled(true);
+        }
+        m_exportCancelButton->hide();
+        m_exportCancelButton->setEnabled(false);
     }
 
     updateActions();
@@ -2192,6 +2278,101 @@ void MainWindow::hideExportProgress()
     m_exportProgressLabel->hide();
     m_exportProgressBar->hide();
     m_exportProgressBar->setValue(0);
+    m_exportCancelButton->hide();
+    m_exportCancelButton->setEnabled(false);
+}
+
+void MainWindow::requestExportCancel()
+{
+    m_exportCancelToken.requestCancel();
+}
+
+void MainWindow::detachExportWatcher()
+{
+    if (!m_exportWatcher)
+    {
+        return;
+    }
+
+    disconnect(m_exportWatcher, nullptr, this, nullptr);
+    m_exportWatcher->setParent(nullptr);
+    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
+            m_exportWatcher, &QObject::deleteLater);
+    m_exportWatcher = nullptr;
+}
+
+void MainWindow::stopExportWatcherBounded()
+{
+    if (!m_exportWatcher)
+    {
+        return;
+    }
+
+    m_exportCancelToken.requestCancelAndInvalidateProgress();
+
+    // Disconnect before the nested wait loop so onExportFinished cannot re-enter
+    // during closeEvent / ~MainWindow (UI / QMessageBox during teardown).
+    disconnect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
+               this, &MainWindow::onExportFinished);
+    if (m_exportProgress)
+    {
+        disconnect(m_exportProgress, nullptr, this, nullptr);
+    }
+
+    if (waitForExportFinishedBounded(m_exportWatcher, pdf::PDFPageMasterExport::DefaultCancelWaitMs))
+    {
+        delete m_exportWatcher;
+        m_exportWatcher = nullptr;
+        return;
+    }
+
+    // Worker still running past the bounded wait (or finished in the gap below).
+    // Keep PDFProgress alive until the future finishes: progressAlive skips new
+    // callbacks, but a stage that already holds the raw pointer
+    // (e.g. PDFImageOptimizer::optimize) must not observe a destroyed QObject
+    // after MainWindow teardown.
+    disconnect(m_exportWatcher, nullptr, this, nullptr);
+    m_exportWatcher->setParent(nullptr);
+
+    if (m_exportWatcher->isFinished())
+    {
+        delete m_exportWatcher;
+        m_exportWatcher = nullptr;
+        return;
+    }
+
+    if (m_exportProgress)
+    {
+        m_exportProgress->setParent(nullptr);
+        QObject* progressKeeper = m_exportProgress;
+        m_exportProgress = nullptr;
+        QFutureWatcher<pdf::PDFPageMasterExportResult>* watcher = m_exportWatcher;
+        m_exportWatcher = nullptr;
+        connect(watcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
+                watcher, [watcher, progressKeeper]() {
+                    progressKeeper->deleteLater();
+                    watcher->deleteLater();
+                });
+    }
+    else
+    {
+        detachExportWatcher();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (m_exportWatcher && !m_exportWatcher->isFinished())
+    {
+        m_exportProgressLabel->setText(tr("Cancelling export..."));
+        m_exportProgressLabel->show();
+        m_exportCancelButton->setEnabled(false);
+        stopExportWatcherBounded();
+        setExportInProgress(false);
+        hideExportProgress();
+    }
+
+    event->accept();
 }
 
 bool MainWindow::canPerformOperation(Operation operation) const
@@ -2286,6 +2467,7 @@ bool MainWindow::canPerformOperation(Operation operation) const
         case Operation::InsertPDF:
         case Operation::InsertPDFPages:
         case Operation::ConfigurePageGeometry:
+        case Operation::ConfigureBleedFixup:
         case Operation::GetSource:
         case Operation::BecomeSponsor:
         case Operation::About:
@@ -2498,9 +2680,15 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
         ++validationOutputIndex;
     }
 
-    ExportJob job;
-    job.documents = m_model->getDocuments();
-    job.images = m_model->getImages();
+    pdf::PDFPageMasterExportJob job;
+    for (const auto& documentItem : m_model->getDocuments())
+    {
+        job.documents.emplace(documentItem.first, documentItem.second.document);
+    }
+    for (const auto& imageItem : m_model->getImages())
+    {
+        job.images.emplace(imageItem.first, imageItem.second.image);
+    }
     job.assembledDocuments = std::move(assembledDocuments);
     job.outputFileNames = std::move(outputFileNames);
     job.overwriteFiles = isOverwriteEnabled;
@@ -2509,7 +2697,33 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     job.imageOptimizationSettings = imageOptimizationSettings;
     job.hasPageGeometrySettings = m_hasPageGeometrySettings;
     job.pageGeometrySettings = m_pageGeometrySettings;
+    job.hasBleedFixupSettings = m_hasBleedFixupSettings;
+    job.bleedFixupSettings = m_bleedFixupSettings;
+    job.hasPreflightGate = m_hasPreflightGate;
+    job.preflightProfilePath = m_preflightProfilePath;
+    job.forcePreflight = m_forcePreflight;
     job.progress = m_exportProgress;
+    m_exportCancelToken.cancel->store(false, std::memory_order_release);
+    m_exportCancelToken.progressAlive->store(true, std::memory_order_release);
+    job.cancelFlag = m_exportCancelToken.cancel.get();
+    job.progressAlive = m_exportCancelToken.progressAlive.get();
+
+    if (m_hasBleedFixupSettings)
+    {
+        if (m_hasPageGeometrySettings && m_pageGeometrySettings.applyBleedBox)
+        {
+            QMessageBox::warning(this, tr("Bleed Fixup"),
+                                 tr("Page geometry is set to rewrite BleedBox. Bleed fixup will run after geometry and may expand boxes again."));
+        }
+
+        const auto answer = QMessageBox::question(this, tr("Bleed Fixup"),
+                                                  tr("Bleed fixup will rewrite page content by rasterizing and extending page edges. Continue?"),
+                                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+        {
+            return;
+        }
+    }
 
     setExportInProgress(true);
     m_exportProgressLabel->setText(tr("Preparing export..."));
@@ -2517,11 +2731,13 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     m_exportProgressBar->setValue(0);
     m_exportProgressBar->show();
 
-    m_exportWatcher = new QFutureWatcher<ExportResult>(this);
-    connect(m_exportWatcher, &QFutureWatcher<ExportResult>::finished, this, &MainWindow::onExportFinished);
-    m_exportWatcher->setFuture(QtConcurrent::run([job = std::move(job)]() mutable
+    m_exportWatcher = new QFutureWatcher<pdf::PDFPageMasterExportResult>(this);
+    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished, this, &MainWindow::onExportFinished);
+    auto cancelToken = m_exportCancelToken;
+    m_exportWatcher->setFuture(QtConcurrent::run([job = std::move(job), cancelToken]() mutable
     {
-        return runExportJob(std::move(job));
+        Q_UNUSED(cancelToken);
+        return pdf::PDFPageMasterExport::run(std::move(job));
     }));
 }
 
@@ -3091,6 +3307,15 @@ QJsonObject MainWindow::createProjectJson() const
     pageGeometryObject["enabled"] = m_hasPageGeometrySettings;
     pageGeometryObject["settings"] = pageGeometrySettingsToJson(m_pageGeometrySettings);
     settingsObject["pageGeometry"] = pageGeometryObject;
+    QJsonObject bleedFixupObject;
+    bleedFixupObject["enabled"] = m_hasBleedFixupSettings;
+    bleedFixupObject["settings"] = bleedFixupSettingsToJson(m_bleedFixupSettings);
+    settingsObject["bleedFixup"] = bleedFixupObject;
+    QJsonObject preflightObject;
+    preflightObject["enabled"] = m_hasPreflightGate;
+    preflightObject["profile"] = m_preflightProfilePath;
+    preflightObject["force"] = m_forcePreflight;
+    settingsObject["preflight"] = preflightObject;
     project["settings"] = settingsObject;
 
     return project;
@@ -3234,6 +3459,16 @@ bool MainWindow::loadProjectJson(const QJsonObject& project, QString* errorMessa
     {
         m_pageGeometrySettings = pageGeometrySettingsFromJson(pageGeometryObject["settings"].toObject());
     }
+    const QJsonObject bleedFixupObject = settingsObject["bleedFixup"].toObject();
+    m_hasBleedFixupSettings = bleedFixupObject["enabled"].toBool(false);
+    if (bleedFixupObject.contains("settings"))
+    {
+        m_bleedFixupSettings = bleedFixupSettingsFromJson(bleedFixupObject["settings"].toObject());
+    }
+    const QJsonObject preflightObject = settingsObject["preflight"].toObject();
+    m_hasPreflightGate = preflightObject["enabled"].toBool(false);
+    m_preflightProfilePath = preflightObject["profile"].toString();
+    m_forcePreflight = preflightObject["force"].toBool(false);
 
     updateActions();
     return true;
@@ -3521,6 +3756,110 @@ void MainWindow::performOperation(Operation operation)
         case Operation::InsertEmptyPage:
             m_model->insertEmptyPage(getSelectedRows());
             break;
+
+        case Operation::ConfigureBleedFixup:
+        {
+            QDialog dialog(this);
+            dialog.setWindowTitle(tr("Bleed Fixup"));
+            QVBoxLayout* layout = new QVBoxLayout(&dialog);
+            QFormLayout* form = new QFormLayout();
+
+            QComboBox* modeCombo = new QComboBox(&dialog);
+            modeCombo->addItem(tr("Mirror"), QStringLiteral("mirror"));
+            modeCombo->addItem(tr("Pixel repeat"), QStringLiteral("pixel-repeat"));
+            modeCombo->addItem(tr("Stretch"), QStringLiteral("stretch"));
+            modeCombo->setCurrentIndex(qMax(0, modeCombo->findData(bleedFixupModeToString(m_bleedFixupSettings.mode))));
+            form->addRow(tr("Mode"), modeCombo);
+
+            QComboBox* referenceCombo = new QComboBox(&dialog);
+            referenceCombo->addItem(tr("Trim box"), QStringLiteral("trim"));
+            referenceCombo->addItem(tr("Crop box"), QStringLiteral("crop"));
+            referenceCombo->addItem(tr("Media box"), QStringLiteral("media"));
+            referenceCombo->setCurrentIndex(qMax(0, referenceCombo->findData(bleedFixupReferenceBoxToString(m_bleedFixupSettings.referenceBox))));
+            form->addRow(tr("Reference box"), referenceCombo);
+
+            QDoubleSpinBox* bleedLeftSpin = new QDoubleSpinBox(&dialog);
+            bleedLeftSpin->setRange(0.0, 50.0);
+            bleedLeftSpin->setDecimals(2);
+            bleedLeftSpin->setSuffix(tr(" mm"));
+            bleedLeftSpin->setValue(m_bleedFixupSettings.bleedMM.left());
+            form->addRow(tr("Bleed left"), bleedLeftSpin);
+
+            QDoubleSpinBox* bleedTopSpin = new QDoubleSpinBox(&dialog);
+            bleedTopSpin->setRange(0.0, 50.0);
+            bleedTopSpin->setDecimals(2);
+            bleedTopSpin->setSuffix(tr(" mm"));
+            bleedTopSpin->setValue(m_bleedFixupSettings.bleedMM.top());
+            form->addRow(tr("Bleed top"), bleedTopSpin);
+
+            QDoubleSpinBox* bleedRightSpin = new QDoubleSpinBox(&dialog);
+            bleedRightSpin->setRange(0.0, 50.0);
+            bleedRightSpin->setDecimals(2);
+            bleedRightSpin->setSuffix(tr(" mm"));
+            bleedRightSpin->setValue(m_bleedFixupSettings.bleedMM.right());
+            form->addRow(tr("Bleed right"), bleedRightSpin);
+
+            QDoubleSpinBox* bleedBottomSpin = new QDoubleSpinBox(&dialog);
+            bleedBottomSpin->setRange(0.0, 50.0);
+            bleedBottomSpin->setDecimals(2);
+            bleedBottomSpin->setSuffix(tr(" mm"));
+            bleedBottomSpin->setValue(m_bleedFixupSettings.bleedMM.bottom());
+            form->addRow(tr("Bleed bottom"), bleedBottomSpin);
+
+            QSpinBox* dpiSpin = new QSpinBox(&dialog);
+            dpiSpin->setRange(72, 1200);
+            dpiSpin->setValue(m_bleedFixupSettings.dpi);
+            form->addRow(tr("DPI"), dpiSpin);
+
+            QSpinBox* sampleSpin = new QSpinBox(&dialog);
+            sampleSpin->setRange(1, 32);
+            sampleSpin->setValue(m_bleedFixupSettings.samplePixels);
+            form->addRow(tr("Sample pixels"), sampleSpin);
+
+            QCheckBox* skipCheck = new QCheckBox(tr("Skip sides that already have enough BleedBox"), &dialog);
+            skipCheck->setChecked(m_bleedFixupSettings.skipIfAlreadyBleeding);
+            form->addRow(QString(), skipCheck);
+
+            QCheckBox* enableCheck = new QCheckBox(tr("Enable bleed fixup on export"), &dialog);
+            enableCheck->setChecked(m_hasBleedFixupSettings);
+            form->addRow(QString(), enableCheck);
+
+            QCheckBox* preflightCheck = new QCheckBox(tr("Run preflight before export"), &dialog);
+            preflightCheck->setChecked(m_hasPreflightGate);
+            form->addRow(QString(), preflightCheck);
+
+            QLineEdit* profileEdit = new QLineEdit(m_preflightProfilePath, &dialog);
+            profileEdit->setPlaceholderText(tr("Path to preflight profile JSON"));
+            form->addRow(tr("Preflight profile"), profileEdit);
+
+            QCheckBox* forcePreflightCheck = new QCheckBox(tr("Export even when preflight fails"), &dialog);
+            forcePreflightCheck->setChecked(m_forcePreflight);
+            form->addRow(QString(), forcePreflightCheck);
+
+            layout->addLayout(form);
+            QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            layout->addWidget(buttons);
+            QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+            QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+            if (dialog.exec() == QDialog::Accepted)
+            {
+                m_bleedFixupSettings.mode = bleedFixupModeFromString(modeCombo->currentData().toString());
+                m_bleedFixupSettings.referenceBox = bleedFixupReferenceBoxFromString(referenceCombo->currentData().toString());
+                m_bleedFixupSettings.bleedMM = QMarginsF(bleedLeftSpin->value(),
+                                                           bleedTopSpin->value(),
+                                                           bleedRightSpin->value(),
+                                                           bleedBottomSpin->value());
+                m_bleedFixupSettings.dpi = dpiSpin->value();
+                m_bleedFixupSettings.samplePixels = sampleSpin->value();
+                m_bleedFixupSettings.skipIfAlreadyBleeding = skipCheck->isChecked();
+                m_hasBleedFixupSettings = enableCheck->isChecked();
+                m_hasPreflightGate = preflightCheck->isChecked();
+                m_preflightProfilePath = profileEdit->text().trimmed();
+                m_forcePreflight = forcePreflightCheck->isChecked();
+            }
+            break;
+        }
 
         case Operation::ConfigurePageGeometry:
         {

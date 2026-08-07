@@ -22,7 +22,9 @@ Section 8: Issues
  - 8.6.5.8 default rendering intent is perceptual instead of relative colorimetric
  - 8.6.5.9 Black point compensation is user setting, graphic state setting
    is not respected (it is ignored)
- - 8.6.7 Overprint not implemented
+ - 8.6.7 Overprint partially implemented in the transparency renderer
+   (fill/stroke-gated ExtGState OP/op); Qt painter path and full
+   overprint simulation (separations, non-Normal blends) remain incomplete
  - 8.10.2 Some form dictionary entries, in table 93, are not all being processed
  - 8.10.4 Reference XObject is not supported. Instead, proxy is displayed.
 
@@ -95,9 +97,14 @@ Section 14: Issues
  - 14.5 Page-piece dictionaries not implemented
  - 14.9 Accessibility support not implemented
  - 14.10 Web capture not implemented
- - 14.11 Prepress support not implemented at all, only
-   basic functionality works (media box, crop box, or,
-   for example, reading output intents)
+ - 14.11 Prepress support is still incomplete: output intents
+   and page boxes are available, and Frisket adds a raster
+   bleed fixup (PDFBleedFixup / PdfTool add-bleed) for mirror,
+    pixel-repeat, and stretch edge fills. Frisket also supports
+    two-tier bleed preflight (box check + content-aware artwork
+    check) via PdfTool preflight, with dynamic add-bleed fixup
+    surfacing. Full PDF/X prepress
+    workflows are not implemented.
  - 14.12 Document parts not implemented
 
 Annex F: Not implemented

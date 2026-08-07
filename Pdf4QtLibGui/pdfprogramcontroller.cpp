@@ -44,6 +44,7 @@
 #include "pdfaboutdialog.h"
 #include "pdfrenderingerrorswidget.h"
 #include "pdfpagegeometrydialog.h"
+#include "pdfbleedfixup.h"
 #include "pdfsendmail.h"
 #include "pdfrecentfilemanager.h"
 #include "pdftexttospeech.h"
@@ -57,8 +58,15 @@
 #include <QMenu>
 #include <QPrinter>
 #include <QPrintDialog>
+#include <QFormLayout>
+#include <QDoubleSpinBox>
+#include <QDialogButtonBox>
+#include <QSpinBox>
+#include <QVBoxLayout>
+#include <QDialog>
 #include <QMessageBox>
 #include <QDesktopServices>
+#include <QFileInfo>
 #include <QApplication>
 #include <QFileDialog>
 #include <QtConcurrent/QtConcurrent>
@@ -230,6 +238,7 @@ void PDFActionManager::initActions(QSize iconSize, bool initializeStampActions)
     setShortcut(BookmarkGoToPrevious, QKeySequence("Ctrl+,"));
     setShortcut(FullscreenMode, QKeySequence("Ctrl+L"));
     setShortcut(PageGeometry, QKeySequence("Ctrl+Shift+R"));
+    setShortcut(BleedFixup, QKeySequence("Ctrl+Shift+B"));
 
     if (hasActions({ CreateStickyNoteComment, CreateStickyNoteHelp, CreateStickyNoteInsert, CreateStickyNoteKey, CreateStickyNoteNewParagraph, CreateStickyNoteNote, CreateStickyNoteParagraph }))
     {
@@ -563,6 +572,10 @@ void PDFProgramController::initialize(Features features,
     if (QAction* action = m_actionManager->getAction(PDFActionManager::PageGeometry))
     {
         connect(action, &QAction::triggered, this, &PDFProgramController::onActionPageGeometryTriggered);
+    }
+    if (QAction* action = m_actionManager->getAction(PDFActionManager::BleedFixup))
+    {
+        connect(action, &QAction::triggered, this, &PDFProgramController::onActionBleedFixupTriggered);
     }
     if (QAction* action = m_actionManager->getAction(PDFActionManager::CreateBitonalDocument))
     {
@@ -913,15 +926,33 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
             {
                 if (!m_settings->getSettings().m_allowLaunchApplications)
                 {
-                    // Launching of applications is disabled -> continue to next action
                     continue;
                 }
+
+                static const QStringList dangerousExtensions = {
+                    QStringLiteral("exe"), QStringLiteral("bat"), QStringLiteral("cmd"),
+                    QStringLiteral("com"), QStringLiteral("vbs"), QStringLiteral("js"),
+                    QStringLiteral("wsh"), QStringLiteral("ps1"), QStringLiteral("msi"),
+                    QStringLiteral("scr"), QStringLiteral("pif"), QStringLiteral("reg")
+                };
 
                 const pdf::PDFActionLaunch* typedAction = dynamic_cast<const pdf::PDFActionLaunch*>(currentAction);
 #ifdef Q_OS_WIN
                 const pdf::PDFActionLaunch::Win& winSpecification = typedAction->getWinSpecification();
                 if (!winSpecification.file.isEmpty())
                 {
+                    const QString extension = QFileInfo(QString::fromLatin1(winSpecification.file)).suffix().toLower();
+                    if (dangerousExtensions.contains(extension))
+                    {
+                        if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
+                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(QString::fromLatin1(winSpecification.file)),
+                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                        {
+                            continue;
+                        }
+                    }
+
                     QString message = tr("Would you like to launch application '%1' in working directory '%2' with parameters '%3'?").arg(QString::fromLatin1(winSpecification.file), QString::fromLatin1(winSpecification.directory), QString::fromLatin1(winSpecification.parameters));
                     if (QMessageBox::question(m_mainWindow, tr("Launch application"), message) == QMessageBox::Yes)
                     {
@@ -950,6 +981,18 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                 QString plaftormFileName = fileSpecification.getPlatformFileName();
                 if (!plaftormFileName.isEmpty())
                 {
+                    const QString extension = QFileInfo(plaftormFileName).suffix().toLower();
+                    if (dangerousExtensions.contains(extension))
+                    {
+                        if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
+                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(plaftormFileName),
+                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                        {
+                            continue;
+                        }
+                    }
+
                     QString message = tr("Would you like to launch application '%1'?").arg(plaftormFileName);
                     if (QMessageBox::question(m_mainWindow, tr("Launch application"), message) == QMessageBox::Yes)
                     {
@@ -972,19 +1015,33 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
             {
                 if (!m_settings->getSettings().m_allowLaunchURI)
                 {
-                    // Launching of URI is disabled -> continue to next action
                     continue;
                 }
 
                 const pdf::PDFActionURI* typedAction = dynamic_cast<const pdf::PDFActionURI*>(currentAction);
                 QByteArray URI = m_pdfDocument->getCatalog()->getBaseURI() + typedAction->getURI();
                 QString urlString = QString::fromUtf8(URI);
+                QUrl url(urlString);
+
+                static const QStringList allowedSchemes = {
+                    QStringLiteral("http"),
+                    QStringLiteral("https"),
+                    QStringLiteral("mailto")
+                };
+
+                const QString scheme = url.scheme().toLower();
+                if (!allowedSchemes.contains(scheme))
+                {
+                    QMessageBox::warning(m_mainWindow, tr("Open URL"),
+                        tr("URL scheme '%1' is not allowed. Only http, https, and mailto links are permitted.").arg(scheme));
+                    break;
+                }
+
                 QString message = tr("Would you like to open URL '%1'?").arg(urlString);
                 if (QMessageBox::question(m_mainWindow, tr("Open URL"), message) == QMessageBox::Yes)
                 {
-                    if (!QDesktopServices::openUrl(QUrl(urlString)))
+                    if (!QDesktopServices::openUrl(url))
                     {
-                        // Error occured
                         QMessageBox::warning(m_mainWindow, tr("Open URL"), tr("Opening url '%1' failed.").arg(urlString));
                     }
                 }
@@ -1570,6 +1627,98 @@ void PDFProgramController::onActionPageGeometryTriggered()
     }
 }
 
+
+void PDFProgramController::onActionBleedFixupTriggered()
+{
+    if (!m_pdfDocument)
+    {
+        return;
+    }
+
+    const auto answer = QMessageBox::question(m_mainWindow, tr("Bleed Fixup"),
+                                              tr("Bleed fixup will rewrite page content by rasterizing and extending page edges. Continue?"),
+                                              QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    QDialog dialog(m_mainWindow);
+    dialog.setWindowTitle(tr("Bleed Fixup"));
+    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    QFormLayout* form = new QFormLayout();
+
+    QComboBox* modeCombo = new QComboBox(&dialog);
+    modeCombo->addItem(tr("Mirror"), int(pdf::PDFBleedFixupMode::Mirror));
+    modeCombo->addItem(tr("Pixel repeat"), int(pdf::PDFBleedFixupMode::PixelRepeat));
+    modeCombo->addItem(tr("Stretch"), int(pdf::PDFBleedFixupMode::Stretch));
+    form->addRow(tr("Mode"), modeCombo);
+
+    QComboBox* referenceCombo = new QComboBox(&dialog);
+    referenceCombo->addItem(tr("Trim box"), int(pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox));
+    referenceCombo->addItem(tr("Crop box"), int(pdf::PDFBleedFixupSettings::ReferenceBox::CropBox));
+    referenceCombo->addItem(tr("Media box"), int(pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox));
+    form->addRow(tr("Reference box"), referenceCombo);
+
+    QDoubleSpinBox* bleedSpin = new QDoubleSpinBox(&dialog);
+    bleedSpin->setRange(0.0, 50.0);
+    bleedSpin->setDecimals(2);
+    bleedSpin->setSuffix(tr(" mm"));
+    bleedSpin->setValue(3.0);
+    form->addRow(tr("Bleed"), bleedSpin);
+
+    QSpinBox* dpiSpin = new QSpinBox(&dialog);
+    dpiSpin->setRange(72, 1200);
+    dpiSpin->setValue(300);
+    form->addRow(tr("DPI"), dpiSpin);
+
+    QSpinBox* sampleSpin = new QSpinBox(&dialog);
+    sampleSpin->setRange(1, 32);
+    sampleSpin->setValue(1);
+    form->addRow(tr("Sample pixels"), sampleSpin);
+
+    layout->addLayout(form);
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    std::vector<pdf::PDFInteger> currentPages = m_pdfWidget->getDrawWidget()->getCurrentPages();
+    pdf::PDFBleedFixupSettings settings;
+    if (!currentPages.empty())
+    {
+        settings.pageRange = QString::number(currentPages.front() + 1);
+    }
+
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    settings.mode = pdf::PDFBleedFixupMode(modeCombo->currentData().toInt());
+    settings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox(referenceCombo->currentData().toInt());
+    const qreal bleedMm = bleedSpin->value();
+    settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+    settings.dpi = dpiSpin->value();
+    settings.samplePixels = sampleSpin->value();
+
+    pdf::PDFDocument updatedDocument = *m_pdfDocument;
+    pdf::PDFModifiedDocument::ModificationFlags flags;
+    const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&updatedDocument, settings, nullptr, &flags);
+    if (!result)
+    {
+        QMessageBox::critical(m_mainWindow, tr("Error"), result.getErrorMessage());
+        return;
+    }
+
+    if (updatedDocument != *m_pdfDocument)
+    {
+        pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(std::move(updatedDocument)));
+        onDocumentModified(pdf::PDFModifiedDocument(std::move(pointer), m_optionalContentActivity, flags));
+    }
+}
+
+
 void PDFProgramController::onActionCreateBitonalDocumentTriggered()
 {
     auto cms = m_CMSManager->getCurrentCMS();
@@ -1924,6 +2073,7 @@ void PDFProgramController::updateActionsAvailability()
     m_actionManager->setEnabled(PDFActionManager::Sanitize, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::RemoveExternalLinks, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::PageGeometry, hasValidDocument && canModify);
+    m_actionManager->setEnabled(PDFActionManager::BleedFixup, hasValidDocument && canModify);
     m_actionManager->setEnabled(PDFActionManager::CreateBitonalDocument, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::Encryption, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::Save, hasValidDocument);

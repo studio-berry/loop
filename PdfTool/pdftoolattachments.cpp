@@ -22,7 +22,9 @@
 
 #include "pdftoolattachments.h"
 #include "pdfexception.h"
+#include "pdffilenamesanitizer.h"
 
+#include <QDir>
 #include <QFile>
 #include <QMimeDatabase>
 
@@ -162,6 +164,8 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
             return ErrorInvalidArguments;
         }
 
+        bool anyAttachmentSkipped = false;
+
         for (const FileInfo& info : embeddedFiles)
         {
             if (!info.isSaved)
@@ -170,7 +174,7 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 continue;
             }
 
-            QString outputFile = info.fileName;
+            QString outputFile = pdf::PDFFilenameSanitizer::sanitize(info.fileName);
             if (!options.attachmentsTargetFile.isEmpty())
             {
                 outputFile = options.attachmentsTargetFile;
@@ -179,6 +183,13 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
             if (!options.attachmentsOutputDirectory.isEmpty())
             {
                 outputFile = QString("%1/%2").arg(options.attachmentsOutputDirectory, outputFile);
+
+                if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
+                {
+                    PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
+                    anyAttachmentSkipped = true;
+                    continue;
+                }
             }
 
             try
@@ -188,8 +199,18 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 QFile file(outputFile);
                 if (file.open(QFile::WriteOnly | QFile::Truncate))
                 {
-                    file.write(data);
+                    // A short write (disk full, quota) must not be reported as a
+                    // saved attachment -- that leaves a silently truncated file.
+                    const qint64 written = file.write(data);
+                    const bool flushed = file.flush();
                     file.close();
+
+                    if (written != data.size() || !flushed || file.error() != QFile::NoError)
+                    {
+                        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2")
+                                                   .arg(outputFile, file.errorString()), options.outputCodec);
+                        return ErrorFailedWriteToFile;
+                    }
                 }
                 else
                 {
@@ -202,6 +223,11 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), options.outputCodec);
                 return ErrorFailedWriteToFile;
             }
+        }
+
+        if (anyAttachmentSkipped)
+        {
+            return ErrorInvalidArguments;
         }
     }
 

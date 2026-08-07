@@ -26,6 +26,8 @@
 
 #include <QFileInfo>
 #include <QCommandLineParser>
+#include <QFile>
+#include <QDir>
 
 namespace pdftool
 {
@@ -154,7 +156,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(ConsoleFormat))
     {
-        parser->addOption(QCommandLineOption("console-format", "Console output text format (valid values: text|xml|html).", "format", "text"));
+        parser->addOption(QCommandLineOption("console-format", "Console output text format (valid values: text|xml|html|json).", "format", "text"));
         parser->addOption(QCommandLineOption("text-codec", QString("Text codec used when writing text output to redirected standard output. UTF-8 is default."), "text codec", "UTF-8"));
     }
 
@@ -193,6 +195,49 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("redact-copy-title", "Copy source title into the redacted document."));
         parser->addOption(QCommandLineOption("redact-copy-metadata", "Copy source metadata into the redacted document."));
         parser->addOption(QCommandLineOption("redact-copy-outline", "Copy source outline into the redacted document."));
+    }
+
+    if (optionFlags.testFlag(AddBleed))
+    {
+        parser->addOption(QCommandLineOption(QStringList() << "o" << "output", "Output document filename.", "file"));
+        parser->addOption(QCommandLineOption("mode", "Bleed fill mode: mirror|pixel-repeat|stretch.", "mode", "mirror"));
+        parser->addOption(QCommandLineOption("bleed-mm", "Uniform bleed distance in millimeters.", "mm", "3"));
+        parser->addOption(QCommandLineOption("bleed-mm-ltrb", "Per-side bleed in millimeters as left,top,right,bottom.", "ltrb"));
+        parser->addOption(QCommandLineOption("reference-box", "Reference content box: trim|crop|media.", "box", "trim"));
+        parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for edge sampling.", "dpi", "300"));
+        parser->addOption(QCommandLineOption("sample-pixels", "Edge sample depth in pixels for pixel-repeat/stretch.", "n", "1"));
+        parser->addOption(QCommandLineOption("force", "Ignore skip-if-already-bleeding heuristic."));
+        parser->addOption(QCommandLineOption("overwrite", "Overwrite an existing output file."));
+        parser->addOption(QCommandLineOption("dry-run", "Compute report only; do not write an output file."));
+        parser->addOption(QCommandLineOption("report", "Print before/after box report."));
+    }
+
+    if (optionFlags.testFlag(DestructiveWrite))
+    {
+        registerDestructiveWriteOptions(parser);
+    }
+
+    if (optionFlags.testFlag(PreflightProfile))
+    {
+        parser->addOption(QCommandLineOption("profile", "Frisket preflight profile (JSON).", "profile"));
+    }
+
+    if (optionFlags.testFlag(OcrOptions))
+    {
+        parser->addOption(QCommandLineOption("sidecar", "Path to FrisketOcrService executable.", "path"));
+        parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for OCR pages.", "dpi", "300"));
+        parser->addOption(QCommandLineOption("languages", "Comma-separated EasyOCR language codes.", "codes", "en"));
+        parser->addOption(QCommandLineOption("min-text-chars", "Skip OCR when page has at least this many non-whitespace characters.", "n", "20"));
+    }
+
+    if (optionFlags.testFlag(VerifyRedaction))
+    {
+        parser->addPositionalArgument("original", "Original document containing redact annotations.");
+        parser->addPositionalArgument("redacted", "Redacted output document to verify.");
+        parser->addOption(QCommandLineOption("verify-redact-copy-title", "Original redaction copied the title."));
+        parser->addOption(QCommandLineOption("verify-redact-copy-metadata", "Original redaction copied metadata."));
+        parser->addOption(QCommandLineOption("verify-redact-copy-outline", "Original redaction copied outline."));
+        parser->addOption(QCommandLineOption("verify-redact-allow-incremental", "Do not fail when the output trailer contains /Prev."));
     }
 
     if (optionFlags.testFlag(SignatureVerification))
@@ -404,6 +449,10 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.outputStyle = PDFOutputFormatter::Style::Html;
         }
+        else if (consoleFormat == "json")
+        {
+            options.outputStyle = PDFOutputFormatter::Style::Json;
+        }
         else
         {
             if (!consoleFormat.isEmpty())
@@ -469,6 +518,152 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.redactOptions |= pdf::PDFRedact::CopyOutline;
         }
+    }
+
+    if (optionFlags.testFlag(AddBleed))
+    {
+        options.addBleedOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
+        options.addBleedDryRun = parser->isSet("dry-run");
+        options.addBleedReport = parser->isSet("report");
+        options.addBleedSettings = pdf::PDFBleedFixupSettings();
+
+        const QString mode = parser->value("mode").trimmed().toLower();
+        if (mode == QStringLiteral("mirror") || mode.isEmpty())
+        {
+            options.addBleedSettings.mode = pdf::PDFBleedFixupMode::Mirror;
+        }
+        else if (mode == QStringLiteral("pixel-repeat") || mode == QStringLiteral("repeat"))
+        {
+            options.addBleedSettings.mode = pdf::PDFBleedFixupMode::PixelRepeat;
+        }
+        else if (mode == QStringLiteral("stretch"))
+        {
+            options.addBleedSettings.mode = pdf::PDFBleedFixupMode::Stretch;
+        }
+        else
+        {
+            PDFConsole::writeError(PDFToolTranslationContext::tr("Unknown bleed mode '%1'. Defaulting to mirror.").arg(mode), options.outputCodec);
+            options.addBleedSettings.mode = pdf::PDFBleedFixupMode::Mirror;
+        }
+
+        const QString referenceBox = parser->value("reference-box").trimmed().toLower();
+        if (referenceBox == QStringLiteral("crop"))
+        {
+            options.addBleedSettings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox::CropBox;
+        }
+        else if (referenceBox == QStringLiteral("media"))
+        {
+            options.addBleedSettings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox;
+        }
+        else
+        {
+            options.addBleedSettings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox;
+            if (!referenceBox.isEmpty() && referenceBox != QStringLiteral("trim"))
+            {
+                PDFConsole::writeError(PDFToolTranslationContext::tr("Unknown reference box '%1'. Defaulting to trim.").arg(referenceBox), options.outputCodec);
+            }
+        }
+
+        bool ok = false;
+        const qreal bleedMm = parser->value("bleed-mm").toDouble(&ok);
+        if (ok && bleedMm >= 0.0)
+        {
+            options.addBleedSettings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+        }
+
+        if (parser->isSet("bleed-mm-ltrb"))
+        {
+            const QStringList parts = parser->value("bleed-mm-ltrb").split(QLatin1Char(','), Qt::KeepEmptyParts);
+            if (parts.size() == 4)
+            {
+                bool okL = false;
+                bool okT = false;
+                bool okR = false;
+                bool okB = false;
+                const qreal left = parts[0].trimmed().toDouble(&okL);
+                const qreal top = parts[1].trimmed().toDouble(&okT);
+                const qreal right = parts[2].trimmed().toDouble(&okR);
+                const qreal bottom = parts[3].trimmed().toDouble(&okB);
+                if (okL && okT && okR && okB)
+                {
+                    options.addBleedSettings.bleedMM = QMarginsF(left, top, right, bottom);
+                }
+                else
+                {
+                    PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid --bleed-mm-ltrb value '%1'.").arg(parser->value("bleed-mm-ltrb")), options.outputCodec);
+                }
+            }
+            else
+            {
+                PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid --bleed-mm-ltrb value '%1'. Expected left,top,right,bottom.").arg(parser->value("bleed-mm-ltrb")), options.outputCodec);
+            }
+        }
+
+        const int dpi = parser->value("dpi").toInt(&ok);
+        if (ok && dpi > 0)
+        {
+            options.addBleedSettings.dpi = dpi;
+        }
+
+        const int samplePixels = parser->value("sample-pixels").toInt(&ok);
+        if (ok && samplePixels > 0)
+        {
+            options.addBleedSettings.samplePixels = samplePixels;
+        }
+
+        options.addBleedSettings.force = parser->isSet("force");
+        if (options.addBleedSettings.force)
+        {
+            options.addBleedSettings.skipIfAlreadyBleeding = false;
+        }
+        options.addBleedOverwrite = parser->isSet("overwrite");
+    }
+
+    if (optionFlags.testFlag(PreflightProfile))
+    {
+        options.preflightProfilePath = parser->value("profile");
+    }
+
+    if (optionFlags.testFlag(OcrOptions))
+    {
+        options.ocrSidecarPath = parser->value("sidecar");
+        bool ok = false;
+        const int dpi = parser->value("dpi").toInt(&ok);
+        if (ok && dpi > 0)
+        {
+            options.ocrDpi = dpi;
+        }
+        if (parser->isSet("languages"))
+        {
+            options.ocrLanguages = parser->value("languages");
+        }
+        // Reject 0: the gate tests 'characters >= threshold', so a threshold of 0
+        // is always satisfied and would skip every page as "has text" -- the exact
+        // opposite of what asking for a zero threshold means.
+        const int minTextChars = parser->value("min-text-chars").toInt(&ok);
+        if (ok && minTextChars >= 1)
+        {
+            options.ocrMinTextChars = minTextChars;
+        }
+    }
+
+    if (optionFlags.testFlag(VerifyRedaction))
+    {
+        options.verifyRedactionFiles = positionalArguments;
+        options.verifyRedactionOptions = pdf::PDFRedact::None;
+        if (parser->isSet("verify-redact-copy-title"))
+        {
+            options.verifyRedactionOptions |= pdf::PDFRedact::CopyTitle;
+        }
+        if (parser->isSet("verify-redact-copy-metadata"))
+        {
+            options.verifyRedactionOptions |= pdf::PDFRedact::CopyMetadata;
+        }
+        if (parser->isSet("verify-redact-copy-outline"))
+        {
+            options.verifyRedactionOptions |= pdf::PDFRedact::CopyOutline;
+        }
+        options.verifyRedactionCheckIncremental = !parser->isSet("verify-redact-allow-incremental");
     }
 
     if (optionFlags.testFlag(Separate))
@@ -1216,6 +1411,13 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.encryptionPermissions = parser->value("enc-permissions").toUInt();
     }
 
+    if (optionFlags.testFlag(DestructiveWrite))
+    {
+        options.destructiveDryRun = parser->isSet("dry-run");
+        options.destructiveReport = parser->isSet("report");
+        options.destructiveForce = parser->isSet("force");
+    }
+
     return options;
 }
 
@@ -1434,6 +1636,48 @@ std::vector<PDFToolOptions::OptimizeFeatureInfo> PDFToolOptions::getOptimizeFlag
         OptimizeFeatureInfo{ "opt-recompress-flate", "Recompress flate streams with maximal compression.", pdf::PDFOptimizer::RecompressFlateStreams },
         OptimizeFeatureInfo{ "opt-all", "Use all optimization algorithms.", pdf::PDFOptimizer::All }
     };
+}
+
+void PDFToolAbstractApplication::registerDestructiveWriteOptions(QCommandLineParser* parser)
+{
+    parser->addOption(QCommandLineOption("dry-run", "Compute the result but do not write an output file."));
+    parser->addOption(QCommandLineOption("report", "Print a summary of the pending write operation."));
+    parser->addOption(QCommandLineOption("force", "Overwrite an existing output file without confirmation."));
+}
+
+int PDFToolAbstractApplication::validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const
+{
+    if (outputPath.isEmpty())
+    {
+        PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set."), options.outputCodec);
+        return ErrorInvalidArguments;
+    }
+
+    if (QFile::exists(outputPath) && !options.destructiveForce)
+    {
+        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --force to overwrite.").arg(outputPath), options.outputCodec);
+        return ErrorInvalidArguments;
+    }
+
+    return 0;
+}
+
+void PDFToolAbstractApplication::removePartialOutput(const QString& outputPath)
+{
+    if (outputPath.isEmpty())
+    {
+        return;
+    }
+
+    QFile::remove(outputPath);
+    const QFileInfo info(outputPath);
+    QDir dir(info.absolutePath());
+    const QString baseName = info.fileName();
+    const QStringList partials = dir.entryList({ baseName + QStringLiteral(".*") }, QDir::Files);
+    for (const QString& partial : partials)
+    {
+        QFile::remove(dir.filePath(partial));
+    }
 }
 
 }   // pdftool

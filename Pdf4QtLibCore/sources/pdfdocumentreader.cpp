@@ -509,6 +509,10 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
             {
                 const PDFInteger objectNumber = objectNumberAndOffset[i].first;
                 const PDFInteger offset = objectNumberAndOffset[i].second;
+                if (objectNumber < 0 || static_cast<size_t>(objectNumber) >= objects.size())
+                {
+                    continue;
+                }
                 parser.seek(offset);
 
                 PDFObject currentObject = parser.getObject();
@@ -712,7 +716,12 @@ bool PDFDocumentReader::restoreObjects(std::map<PDFObjectReference, PDFObject>& 
             if (objectNumberObject.isInt() && objectGenerationObject.isInt() && !object.isNull())
             {
                 PDFObjectReference reference(objectNumberObject.getInteger(), objectGenerationObject.getInteger());
-                if (reference.isValid())
+
+                // Object storage is resized to the highest restored object number, so bound
+                // it by the document size - a document containing an object with number N
+                // must occupy at least N bytes. This prevents a huge allocation caused by
+                // a bogus object number in a damaged document.
+                if (reference.isValid() && reference.objectNumber <= static_cast<PDFInteger>(m_source.size()))
                 {
                     QMutexLocker lock(&restoredObjectsMutex);
                     if (!restoredObjects.count(reference))

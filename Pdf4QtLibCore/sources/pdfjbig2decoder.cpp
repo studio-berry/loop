@@ -23,10 +23,99 @@
 #include "pdfjbig2decoder.h"
 #include "pdfexception.h"
 #include "pdfccittfaxdecoder.h"
+#include "pdfglobal.h"
 #include "pdfdbgheap.h"
+
+#include <algorithm>
+#include <limits>
 
 namespace pdf
 {
+
+// Many JBIG2 counts and dimensions (symbol counts, bitmap width/height, pattern
+// counts, ...) are decoded directly from attacker-controlled stream data with
+// no inherent bound. 16384 in each bitmap dimension (256M pixels/bytes total)
+// comfortably covers any real scanned page while staying far below a
+// DoS-sized allocation; it also serves as a general sanity cap for counts
+// that end up sizing containers of similar or smaller per-element size.
+constexpr int64_t JBIG2_MAX_BITMAP_DIMENSION = 16384;
+constexpr int64_t JBIG2_MAX_BITMAP_PIXELS = JBIG2_MAX_BITMAP_DIMENSION * JBIG2_MAX_BITMAP_DIMENSION;
+
+// The per-bitmap cap above bounds any single allocation, but a symbol
+// dictionary can legally contain thousands of individually-small-enough
+// symbol bitmaps. A stream that stays under the per-bitmap cap on every
+// single symbol can still sum to a multi-gigabyte decode. 512 MiB is
+// roughly double the largest single legal bitmap, which comfortably covers
+// a full scanned page plus a large, legitimate symbol dictionary, while
+// staying far below a DoS-sized cumulative allocation.
+constexpr int64_t JBIG2_MAX_TOTAL_BITMAP_PIXELS = 512LL * 1024 * 1024;
+
+// The budget above bounds how much memory a stream can make the decoder allocate, but
+// not how long it can make the decoder run - and the two are only loosely related.
+// Arithmetic-decoding a pixel costs far more than storing it, compositing allocates
+// nothing at all, and a loop that decodes zero-sized bitmaps allocates nothing while
+// still spinning. All three are driven by stream values with no inherent bound
+// (SBNUMINSTANCES for text regions, the grid dimensions for halftone regions, the
+// height classes of a symbol dictionary), so decoding *work* is tracked separately, as
+// two independent quantities that fail for different reasons and so need different
+// caps:
+//
+//  - Pixels (decoded or composited). A single legal-size bitmap at the allocation cap
+//    above, arithmetic-decoded under ASan/UBSan, was measured at ~11.2M px/s - i.e. the
+//    512 Mi allocation cap alone can already cost ~48s of decode time for one bitmap
+//    that never trips any composition-count check. A cap here has to sit below that:
+//    160 Mi keeps the worst case around 15s, comfortably inside the 30s local verify
+//    budget (scripts/docker-fuzz-build-inner.sh) and the 1200s CI fuzz timeout, while
+//    still covering pages up to roughly 600 dpi A3 (~70M px) with margin for
+//    compositing overlap. There genuinely is no larger value that is simultaneously
+//    "supports arbitrarily large scans" and "bounded decode time under sanitizers" -
+//    a bigger legitimate bitmap costs proportionally more time to arithmetic-decode,
+//    full stop. Release builds without sanitizer overhead will decode this cap's worth
+//    of pixels considerably faster.
+//  - Items (one decoded bitmap, symbol instance, halftone grid cell, or symbol
+//    dictionary height class). A degenerate stream can request an item that costs zero
+//    pixels - a zero-sized symbol, a height class that decodes nothing - so pixels
+//    alone cannot bound it; only a per-item cap can. This cap is deliberately tight:
+//    a real page needs at most tens of thousands of items, so ~2M leaves it
+//    unrestricted, while it bounds a degenerate stream (whose items cost only a
+//    handful of arithmetic-decoder rounds each) to a couple of seconds regardless of
+//    how large the pixel budget above is.
+constexpr int64_t JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS = 160LL * 1024 * 1024;
+constexpr int64_t JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS = 2LL * 1024 * 1024;
+
+// Custom Huffman code tables (7.4.3) store an 8-bit-derived range-length
+// field per entry with no inherent bound, and a real table has at most a
+// few dozen entries. Cap it generously to stop a crafted table with a
+// near-zero range length from looping toward htHigh billions of times.
+constexpr size_t JBIG2_MAX_HUFFMAN_TABLE_ENTRIES = 65536;
+
+namespace
+{
+
+/// Returns the value if it fits into int32_t, otherwise returns no value. Huffman-decoded
+/// integers combine a table base value with a range value read straight from the stream,
+/// and a crafted table/stream pair can push the result outside the 32-bit range. Such a
+/// value is meaningless, so it is reported as "no value" (handled by the callers exactly
+/// like an out-of-band code) instead of being computed with signed overflow.
+std::optional<int32_t> checkHuffmanRange(int64_t value)
+{
+    if (value < std::numeric_limits<int32_t>::min() || value > std::numeric_limits<int32_t>::max())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<int32_t>(value);
+}
+
+void checkJBIG2BitmapDimensions(int width, int height)
+{
+    if (width < 0 || height < 0 || int64_t(width) * int64_t(height) > JBIG2_MAX_BITMAP_PIXELS)
+    {
+        throw PDFException(PDFTranslationContext::tr("Invalid JBIG2 bitmap dimensions %1x%2.").arg(width).arg(height));
+    }
+}
+
+}   // namespace
 
 class PDFJBIG2HuffmanCodeTable : public PDFJBIG2Segment
 {
@@ -1353,6 +1442,17 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
 
     /* sanity checks */
 
+    // SDNUMEXSYMS/SDNUMNEWSYMS come directly from the segment data and are used
+    // to reserve/resize symbol bitmap vectors below. A well-formed segment can't
+    // encode more symbols than it has bytes to describe them, so bound both by
+    // the remaining stream size to reject a bogus huge count instead of
+    // attempting a multi-gigabyte allocation.
+    const uint32_t maximalSymbolCount = static_cast<uint32_t>(m_reader.getStream()->size());
+    if (parameters.SDNUMEXSYMS > maximalSymbolCount || parameters.SDNUMNEWSYMS > maximalSymbolCount)
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 invalid number of symbols in symbol dictionary segment."));
+    }
+
     if ((symbolDictionaryFlags >> 13) != 0)
     {
         throw PDFException(PDFTranslationContext::tr("JBIG2 invalid flags for symbol dictionary segment."));
@@ -1504,7 +1604,13 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
         }
     }
 
-    uint8_t SBSYMCODELENGTH = log2ceil(parameters.SDNUMINSYMS + parameters.SDNUMNEWSYMS);
+    uint32_t symbolCount = 0;
+    if (!pdfTryAdd(parameters.SDNUMINSYMS, parameters.SDNUMNEWSYMS, symbolCount))
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 - invalid symbol dictionary size."));
+    }
+
+    uint8_t SBSYMCODELENGTH = log2ceil(symbolCount);
     if (parameters.SDHUFF)
     {
         SBSYMCODELENGTH = qMax<uint8_t>(SBSYMCODELENGTH, 1);
@@ -1535,6 +1641,13 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
     /* 6.5.5 step 4) - read all bitmaps */
     while (NSYMSDECODED < parameters.SDNUMNEWSYMS)
     {
+        // A height class that decodes no symbol at all - its first delta width is an
+        // out-of-band code - leaves NSYMSDECODED untouched, so this loop makes no
+        // progress and never reaches a bitmap decode that would be accounted for. The
+        // arithmetic decoder keeps producing integers past the end of the data, so the
+        // loop is otherwise unbounded; charge every height class as an item.
+        accountDecodeWork(1, 0);
+
         /* 6.5.5 step 4) b) - decode height class delta height according to 6.5.6 */
         int32_t HCDH = checkInteger(parameters.SDHUFF ? parameters.SDHUFFDH_Decoder.readSignedInteger() : arithmeticDecoder.getSignedInteger(&arithmeticDecoderStates.states[PDFJBIG2ArithmeticDecoderStates::IADH]));
         HCHEIGHT += HCDH;
@@ -1745,7 +1858,11 @@ void PDFJBIG2Decoder::processSymbolDictionary(const PDFJBIG2SegmentHeader& heade
 
     /* 6.5.5 step 5) - determine exports according to 6.5.10 */
     std::vector<bool> EXFLAGS;
-    const size_t symbolsSize = parameters.SDNUMINSYMS + parameters.SDNEWSYMS.size();
+    size_t symbolsSize = 0;
+    if (!pdfTryAdd(static_cast<size_t>(parameters.SDNUMINSYMS), parameters.SDNEWSYMS.size(), symbolsSize))
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 - invalid symbol dictionary size."));
+    }
     EXFLAGS.reserve(symbolsSize);
     bool CUREXFLAG = false;
     while (EXFLAGS.size() < symbolsSize)
@@ -2178,6 +2295,27 @@ void PDFJBIG2Decoder::processPatternDictionary(const PDFJBIG2SegmentHeader& head
         throw PDFException(PDFTranslationContext::tr("JBIG2 invalid pattern dictionary flags."));
     }
 
+    if (HDPW == 0 || HDPH == 0)
+    {
+        // GRAYMAX is otherwise unbounded and is used below both to size the
+        // collective bitmap (GBW = (GRAYMAX + 1) * HDPW) and to reserve/fill
+        // the pattern vector directly (bitmaps.reserve(GRAYMAX + 1)). With
+        // HDPW == 0, GBW is always 0 regardless of GRAYMAX, so a malicious
+        // GRAYMAX would bypass the bitmap dimension cap and still drive an
+        // unbounded vector allocation. A pattern dictionary can't have zero
+        // pattern width/height anyway, so reject it outright.
+        throw PDFException(PDFTranslationContext::tr("JBIG2 invalid pattern dictionary pattern size."));
+    }
+
+    if (int64_t(GRAYMAX) + 1 > JBIG2_MAX_BITMAP_PIXELS / HDPW)
+    {
+        // Defense in depth: even with HDPW > 0, (GRAYMAX + 1) * HDPW below can
+        // wrap around as a uint32_t and slip a small GBW past the collective
+        // bitmap's dimension check while bitmaps.reserve(GRAYMAX + 1) further
+        // down still attempts to allocate GRAYMAX + 1 elements directly.
+        throw PDFException(PDFTranslationContext::tr("JBIG2 invalid pattern dictionary pattern count."));
+    }
+
     QByteArray mmrData;
     PDFJBIG2ArithmeticDecoder arithmeticDecoder(&m_reader);
     PDFJBIG2ArithmeticDecoderState genericState;
@@ -2205,7 +2343,13 @@ void PDFJBIG2Decoder::processPatternDictionary(const PDFJBIG2SegmentHeader& head
     int8_t gbat0_x = -static_cast<int8_t>(HDPW);
     PDFJBIG2BitmapDecodingParameters parameters;
     parameters.MMR = HDMMR;
-    parameters.GBW = (GRAYMAX + 1) * HDPW;
+    const int64_t collectiveWidth = (int64_t(GRAYMAX) + 1) * HDPW;
+    if (collectiveWidth <= 0 || collectiveWidth > JBIG2_MAX_BITMAP_DIMENSION)
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 invalid pattern dictionary collective bitmap width."));
+    }
+
+    parameters.GBW = static_cast<int>(collectiveWidth);
     parameters.GBH = HDPH;
     parameters.GBTEMPLATE = HDTEMPLATE;
     parameters.TPGDON = false;
@@ -2431,6 +2575,13 @@ void PDFJBIG2Decoder::processHalftoneRegion(const PDFJBIG2SegmentHeader& header)
     }
 
     /* 6.6 step 5) - 6.6.5.2 render the grid */
+
+    // One pattern is painted per grid cell. The grid dimensions and the pattern size are
+    // independent stream values, so the product can be far larger than any bitmap that
+    // was actually allocated - and a zero-sized pattern makes it zero while still costing
+    // one paint call per cell, hence the grid cells are also charged as items.
+    accountDecodeWork(int64_t(HGW) * int64_t(HGH), int64_t(HGW) * int64_t(HGH) * int64_t(HPW) * int64_t(HPH));
+
     for (int MG = 0; MG < static_cast<int>(HGH); ++MG)
     {
         for (int NG = 0; NG < static_cast<int>(HGW); ++NG)
@@ -2761,14 +2912,34 @@ void PDFJBIG2Decoder::processCodeTables(const PDFJBIG2SegmentHeader& header)
     table.reserve(32);
 
     // Read standard values
-    int32_t currentRangeLow = htLow;
-    while (currentRangeLow < htHigh)
+    //
+    // entry.rangeBitLength comes straight from the stream (up to 255, from an
+    // 8-bit-derived field) with no inherent bound. `1 << rangeBitLength` in
+    // 32-bit int is undefined behavior for shifts >= 32, and even a valid
+    // shift can overflow the accumulation into currentRangeLow. Widen the
+    // accumulator to int64_t, reject an out-of-range shift outright, and cap
+    // the entry count so a rangeBitLength of 0 can't loop toward htHigh
+    // billions of times.
+    int64_t currentRangeLow = htLow;
+    const int64_t htHigh64 = htHigh;
+    while (currentRangeLow < htHigh64)
     {
+        if (table.size() >= JBIG2_MAX_HUFFMAN_TABLE_ENTRIES)
+        {
+            throw PDFException(PDFTranslationContext::tr("JBIG2 huffman table has too many entries."));
+        }
+
         PDFJBIG2HuffmanTableEntry entry;
         entry.prefixBitLength = m_reader.read(htps);
         entry.rangeBitLength = m_reader.read(htrs);
-        entry.value = currentRangeLow;
-        currentRangeLow += 1 << entry.rangeBitLength;
+
+        if (entry.rangeBitLength > 31)
+        {
+            throw PDFException(PDFTranslationContext::tr("JBIG2 invalid range bit length in huffman table."));
+        }
+
+        entry.value = static_cast<int32_t>(currentRangeLow);
+        currentRangeLow += int64_t(1) << entry.rangeBitLength;
         table.push_back(entry);
     }
 
@@ -2850,8 +3021,41 @@ PDFJBIG2Bitmap PDFJBIG2Decoder::getBitmap(const uint32_t segmentIndex, bool remo
     throw PDFException(PDFTranslationContext::tr("JBIG2 bitmap segment %1 not found.").arg(segmentIndex));
 }
 
+void PDFJBIG2Decoder::accountBitmapPixels(int64_t width, int64_t height)
+{
+    m_totalBitmapPixelsDecoded += width * height;
+
+    if (m_totalBitmapPixelsDecoded > JBIG2_MAX_TOTAL_BITMAP_PIXELS)
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 stream exceeds the maximum total decoded bitmap size."));
+    }
+}
+
+void PDFJBIG2Decoder::accountDecodeWork(int64_t items, int64_t pixels)
+{
+    // The counts are derived from stream values, so they are clamped to their own
+    // budget before accumulating - a saturating charge trips the corresponding check
+    // just the same, and the addition cannot overflow.
+    m_totalDecodeWorkItems += std::clamp<int64_t>(items, 0, JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS);
+    m_totalDecodeWorkPixels += std::clamp<int64_t>(pixels, 0, JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS);
+
+    if (m_totalDecodeWorkItems > JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS)
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 stream exceeds the maximum total number of decoded items."));
+    }
+
+    if (m_totalDecodeWorkPixels > JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS)
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 stream exceeds the maximum total decoding work."));
+    }
+}
+
 PDFJBIG2Bitmap PDFJBIG2Decoder::readBitmap(PDFJBIG2BitmapDecodingParameters& parameters)
 {
+    checkJBIG2BitmapDimensions(parameters.GBW, parameters.GBH);
+    accountBitmapPixels(parameters.GBW, parameters.GBH);
+    accountDecodeWork(1, int64_t(parameters.GBW) * int64_t(parameters.GBH));
+
     if (parameters.MMR)
     {
         // Use modified-modified-read (it corresponds to CCITT 2D encoding)
@@ -2866,6 +3070,8 @@ PDFJBIG2Bitmap PDFJBIG2Decoder::readBitmap(PDFJBIG2BitmapDecodingParameters& par
         PDFCCITTFaxDecoder decoder(&parameters.data, ccittParameters);
         PDFImageData data = decoder.decode();
         parameters.dataEndPosition = decoder.getReader()->getPosition();
+
+        checkJBIG2BitmapDimensions(int(data.getWidth()), int(data.getHeight()));
 
         PDFJBIG2Bitmap bitmap(data.getWidth(), data.getHeight(), m_pageDefaultPixelValue);
 
@@ -3156,6 +3362,9 @@ PDFJBIG2Bitmap PDFJBIG2Decoder::readBitmap(PDFJBIG2BitmapDecodingParameters& par
 PDFJBIG2Bitmap PDFJBIG2Decoder::readRefinementBitmap(PDFJBIG2BitmapRefinementDecodingParameters& parameters)
 {
     // Use algorithm described in 6.3.5.6
+    checkJBIG2BitmapDimensions(parameters.GRW, parameters.GRH);
+    accountBitmapPixels(parameters.GRW, parameters.GRH);
+    accountDecodeWork(1, int64_t(parameters.GRW) * int64_t(parameters.GRH));
     PDFJBIG2Bitmap GRREG(parameters.GRW, parameters.GRH, 0x00);
 
     // Use arithmetic encoding. For templates, we fill bytes from right to left, from bottom to top bits,
@@ -3398,6 +3607,13 @@ PDFJBIG2Bitmap PDFJBIG2Decoder::readTextBitmap(PDFJBIG2TextRegionDecodingParamet
             const int32_t WI = IB.getWidth();
             const int32_t HI = IB.getHeight();
 
+            // SBNUMINSTANCES is a 32-bit stream value, so this loop can be asked to
+            // composite billions of symbol instances from a few bytes of input. Each
+            // instance costs several arithmetic-decoder rounds and a symbol bitmap copy
+            // even when it paints nothing, so it is charged as an item as well as for
+            // its pixels; the item charge is what actually bounds the loop.
+            accountDecodeWork(1, int64_t(WI) * int64_t(HI));
+
             /* 6.4.5. step 3) vi) */
             if (parameters.TRANSPOSED == 0 && (parameters.REFCORNER == PDFJBIG2TextRegionDecodingParameters::TOPRIGHT ||
                                                parameters.REFCORNER == PDFJBIG2TextRegionDecodingParameters::BOTTOMRIGHT))
@@ -3609,12 +3825,25 @@ void PDFJBIG2Decoder::checkBitmapSize(const uint32_t size)
     }
 }
 
+void PDFJBIG2Decoder::checkRegionOffset(const int32_t offset)
+{
+    // offsetX/offsetY are signed (a region may legitimately be placed partly
+    // off the page bitmap; PDFJBIG2Bitmap::paint clips out-of-range pixels
+    // safely). Do not reinterpret a negative offset as a huge uint32_t via
+    // checkBitmapSize(), which would always exceed MAX_BITMAP_SIZE and reject
+    // well-formed regions using negative placement.
+    if (offset < -int32_t(MAX_BITMAP_SIZE) || offset > int32_t(MAX_BITMAP_SIZE))
+    {
+        throw PDFException(PDFTranslationContext::tr("JBIG2 region offset out of range (%1).").arg(offset));
+    }
+}
+
 void PDFJBIG2Decoder::checkRegionSegmentInformationField(const PDFJBIG2RegionSegmentInformationField& field)
 {
     checkBitmapSize(field.width);
     checkBitmapSize(field.height);
-    checkBitmapSize(field.offsetX);
-    checkBitmapSize(field.offsetY);
+    checkRegionOffset(field.offsetX);
+    checkRegionOffset(field.offsetY);
 
     if (field.width == 0 || field.height == 0)
     {
@@ -3650,6 +3879,7 @@ PDFJBIG2Bitmap::PDFJBIG2Bitmap(int width, int height) :
     m_width(width),
     m_height(height)
 {
+    checkJBIG2BitmapDimensions(width, height);
     m_data.resize(width * height, 0);
 }
 
@@ -3657,6 +3887,7 @@ PDFJBIG2Bitmap::PDFJBIG2Bitmap(int width, int height, uint8_t fill) :
     m_width(width),
     m_height(height)
 {
+    checkJBIG2BitmapDimensions(width, height);
     m_data.resize(width * height, fill);
 }
 
@@ -3790,11 +4021,22 @@ std::vector<PDFJBIG2HuffmanTableEntry> PDFJBIG2HuffmanCodeTable::buildPrefixes(c
         uint16_t count = 1;
         for (uint32_t i = 1; i < result.size(); ++i)
         {
-            const uint16_t bitShift = result[i].prefixBitLength - result[i - 1].prefixBitLength;
+            const uint16_t prefixBitLength = result[i].prefixBitLength;
+            if (prefixBitLength > 15)
+            {
+                throw PDFException(PDFTranslationContext::tr("JBIG2 invalid prefix bit length in huffman table."));
+            }
+
+            const uint16_t bitShift = prefixBitLength - result[i - 1].prefixBitLength;
             if (bitShift > 0)
             {
+                if (bitShift >= 16)
+                {
+                    throw PDFException(PDFTranslationContext::tr("JBIG2 invalid prefix bit shift in huffman table."));
+                }
+
                 // Bit length of the prefix changed, we must shift the prefix by amount of new bits
-                prefix = prefix << bitShift;
+                prefix = static_cast<uint16_t>(prefix << bitShift);
                 count = 0;
             }
 
@@ -3802,7 +4044,8 @@ std::vector<PDFJBIG2HuffmanTableEntry> PDFJBIG2HuffmanCodeTable::buildPrefixes(c
             ++prefix;
             ++count;
 
-            if (count > (1 << result[i].prefixBitLength))
+            const uint16_t prefixCapacity = static_cast<uint16_t>(1u << prefixBitLength);
+            if (count > prefixCapacity)
             {
                 // We have "overflow" of values, for binary number with prefixBitLength digits (0/1), we can
                 // have only 2^prefixBitLength values, which we exceeded. This is unrecoverable error.
@@ -3920,7 +4163,9 @@ std::optional<int32_t> PDFJBIG2HuffmanDecoder::readSignedInteger()
             }
             else if (it->isLowValue())
             {
-                return it->value - int32_t(m_reader->read(32));
+                // The range value is attacker-controlled, so the sum/difference is computed
+                // in 64 bits and range-checked - it can easily fall outside int32_t.
+                return checkHuffmanRange(int64_t(it->value) - int64_t(m_reader->read(32)));
             }
             else if (it->rangeBitLength == 0)
             {
@@ -3928,7 +4173,7 @@ std::optional<int32_t> PDFJBIG2HuffmanDecoder::readSignedInteger()
             }
             else
             {
-                return it->value + int32_t(m_reader->read(it->rangeBitLength));
+                return checkHuffmanRange(int64_t(it->value) + int64_t(m_reader->read(it->rangeBitLength)));
             }
         }
     }
