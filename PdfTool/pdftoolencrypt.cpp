@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdftoolencrypt.h"
+#include "pdftoolcancel.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 
@@ -79,9 +80,38 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
         return ErrorDocumentReading;
     }
 
+    if (const int blocked = validateDestructiveOutput(options, options.document))
+    {
+        return blocked;
+    }
+
+    if (options.destructiveReport)
+    {
+        PDFConsole::writeText(PDFToolTranslationContext::tr("Would encrypt '%1'.").arg(options.document), options.outputCodec);
+    }
+
+    if (options.destructiveDryRun)
+    {
+        return ExitSuccess;
+    }
+
+    if (isCancelRequested())
+    {
+        return ExitFailure;
+    }
+
     pdf::PDFDocumentBuilder builder(&document);
     builder.setSecurityHandler(qMove(securityHandler));
     document = builder.build();
+
+    if (isCancelRequested())
+    {
+        // Nothing has been written yet (writer.write() below uses QSaveFile and
+        // only touches the target on a successful commit), so there is no
+        // partial output to clean up. Removing the file here would delete the
+        // still-intact original.
+        return ExitFailure;
+    }
 
     pdf::PDFDocumentWriter writer(nullptr);
     pdf::PDFOperationResult result = writer.write(options.document, &document, true);
@@ -97,7 +127,7 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolEncryptApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | Encrypt;
+    return ConsoleFormat | OpenDocument | Encrypt | DestructiveWrite;
 }
 
 }   // namespace pdftool

@@ -26,6 +26,7 @@
 #include "pdfapplicationtranslator.h"
 #include "pdfwidgetutils.h"
 #include "pdfsettings.h"
+#include "pdfsentry.h"
 #include "mainwindow.h"
 
 #include <QApplication>
@@ -41,6 +42,8 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("PDF4QT Diff");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT Diff"));
+
+    const pdf::PDFSentrySession sentrySession(QStringLiteral("diff"));
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");
@@ -65,7 +68,7 @@ int main(int argc, char *argv[])
         pdf::PDFSecurityHandler::setNoDRMMode();
     }
 
-    pdf::PDFWidgetUtils::setDarkTheme(parser.isSet(lightGui), parser.isSet(darkGui));
+    pdf::PDFWidgetUtils::initApplicationColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
 
     pdf::PDFApplicationTranslator translator;
     translator.installTranslator();

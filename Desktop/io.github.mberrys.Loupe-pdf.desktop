@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=PDF4QT LaunchPad
+Comment=Launch PDF applications
+Exec=Pdf4QtLaunchPad %f
+Icon=io.github.mberrys.Loupe-pdf
+Terminal=false
+Categories=Office;
+MimeType=application/pdf;
