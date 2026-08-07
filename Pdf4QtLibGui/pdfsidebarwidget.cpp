@@ -39,6 +39,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfbookmarkui.h"
 #include "pdfwidgetannotation.h"
+#include "pdffilenamesanitizer.h"
 
 #include <QMenu>
 #include <QAction>
@@ -409,7 +410,7 @@ void PDFSidebarWidget::selectPage(Page page)
         {
             QMessageBox::critical(this, tr("Error"), tr("Speech engine failed to initialize. Reported error: %1").arg(engineErrorMessage));
         }
-        else
+        else if (!m_textToSpeech || m_textToSpeech->areEngineListsInitialized())
         {
             QMessageBox::critical(this, tr("Error"), tr("The speech feature is available, but its options are not properly set. Please check the speech settings in the options dialog."));
         }
@@ -962,7 +963,7 @@ void PDFSidebarWidget::onAttachmentCustomContextMenuRequested(const QPoint& pos)
             const pdf::PDFEmbeddedFile* platformFile = fileSpecification->getPlatformFile();
             if (platformFile && platformFile->isValid())
             {
-                QString defaultFileName = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QDir::separator() + fileSpecification->getPlatformFileName();
+                QString defaultFileName = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + QDir::separator() + pdf::PDFFilenameSanitizer::sanitize(fileSpecification->getPlatformFileName());
                 QString saveFileName = QFileDialog::getSaveFileName(this, tr("Save attachment"), defaultFileName);
                 if (!saveFileName.isEmpty())
                 {
@@ -1026,10 +1027,31 @@ void PDFSidebarWidget::openAttachment(const pdf::PDFFileSpecification* fileSpeci
         return;
     }
 
-    QString fileName = QFileInfo(fileSpecification->getPlatformFileName()).fileName();
+    QString fileName = pdf::PDFFilenameSanitizer::sanitize(fileSpecification->getPlatformFileName());
     if (fileName.isEmpty())
     {
         fileName = tr("attachment");
+    }
+
+    static const QStringList dangerousExtensions = {
+        QStringLiteral("exe"), QStringLiteral("bat"), QStringLiteral("cmd"),
+        QStringLiteral("com"), QStringLiteral("vbs"), QStringLiteral("js"),
+        QStringLiteral("wsh"), QStringLiteral("ps1"), QStringLiteral("msi"),
+        QStringLiteral("scr"), QStringLiteral("pif"), QStringLiteral("reg"),
+        QStringLiteral("sh"), QStringLiteral("bash"), QStringLiteral("zsh"),
+        QStringLiteral("desktop"), QStringLiteral("py"), QStringLiteral("appimage")
+    };
+
+    const QString extension = QFileInfo(fileName).suffix().toLower();
+    if (dangerousExtensions.contains(extension))
+    {
+        if (QMessageBox::warning(this, tr("Security Warning"),
+                                 tr("Attachment '%1' appears to be an executable or script. "
+                                    "This is potentially dangerous. Are you sure you want to open it?").arg(fileName),
+                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        {
+            return;
+        }
     }
 
     const QString message = tr("Would you like to open attachment '%1' using the associated application?").arg(fileName);
@@ -1054,6 +1076,12 @@ void PDFSidebarWidget::openAttachment(const pdf::PDFFileSpecification* fileSpeci
 
     attachmentDirectory.setPath(attachmentDirectoryName);
     const QString attachmentFileName = attachmentDirectory.filePath(fileName);
+    if (!pdf::PDFFilenameSanitizer::isPathContained(attachmentFileName, attachmentDirectoryName))
+    {
+        QMessageBox::critical(this, tr("Open Attachment"), tr("Attachment filename is not allowed."));
+        return;
+    }
+
     if (!saveAttachmentToFile(fileSpecification, attachmentFileName))
     {
         return;

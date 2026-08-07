@@ -1,0 +1,50 @@
+{
+    "checks": [
+        {
+            "id": "embedded-fonts",
+            "status": "ok"
+        },
+        {
+            "id": "image-resolution",
+            "status": "ok"
+        },
+        {
+            "id": "bleed",
+            "status": "ok"
+        },
+        {
+            "id": "trim",
+            "status": "ok"
+        },
+        {
+            "id": "page-size",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
+            "status": "failed"
+        },
+        {
+            "id": "white-overprint",
+            "status": "ok"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "color-mode",
+            "message": "Disallowed color space(s) found on page 1: DeviceRGB (allowed: CMYK, Grayscale)",
+            "page": 1,
+            "scope": "page",
+            "severity": "error",
+            "type": "color-mode"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loupe Default",
+    "schema_version": 3,
+    "warnings": [
+    ]
+}

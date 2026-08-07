@@ -1,205 +1,77 @@
-[![CI](https://github.com/JakubMelka/PDF4QT/actions/workflows/ci.yml/badge.svg)](https://github.com/JakubMelka/PDF4QT/actions/workflows/ci.yml)
+# Loupe-PDF
 
-# PDF4QT
+A desktop PDF toolkit for editing, inspecting, validating, and automating PDF workflows.
 
-**(c) Jakub Melka 2018-2025**
+[Download](https://github.com/mberrys/Loupe-pdf/releases) · [Platform support](docs/PLATFORM_SUPPORT.md) · [Project guide](docs/REPO_MAP.md) · [Build from source](#build-from-source)
 
-**Mgr.Jakub.Melka@gmail.com**
+> **New install?** Get Loupe-PDF from the official [GitHub releases](https://github.com/mberrys/Loupe-pdf/releases). Windows and Linux are supported for V1; macOS source builds are best-effort only.
 
-**https://jakubmelka.github.io/**
+## What it does
 
-This software is consisting of PDF rendering library, and several
-applications, such as advanced document viewer, command line tool,
-and document page manipulator application. Software is implementing PDF
-functionality based on PDF Reference 2.0. It is written and maintained
-by Jakub Melka.
+- **Edit and inspect** PDFs with annotations, forms, attachments, optional content, text layout analysis, and document-structure tools.
+- **Protect** documents with encryption, certificate management, signature validation, and digital signing.
+- **Optimize and compare** files with compression, rendering, page operations, document comparison, and image/text extraction.
+- **Automate** PDF work with PdfTool for batch pipelines, reporting, preflight checks, rendering, redaction, and more.
 
-*Software works on Microsoft Windows / Linux.*
+## Choose the right tool
 
-Software is provided without any warranty of any kind.
+| Tool | Use it for |
+| --- | --- |
+| **Pdf4QtEditor** | The primary interactive workspace for editing, inspection, and editor plugins. |
+| **PdfTool** | Scripted and batch workflows in CI or from the command line. Run `PdfTool help` for commands. |
+| **Pdf4QtPageMaster** | Batch page geometry, assembly, and export. |
+| **Pdf4QtViewer** | Quick, read-only viewing. |
+| **Pdf4QtDiff** | Comparing two PDF documents. |
 
-Should you find this software beneficial, your support would be greatly appreciated [:heart: Sponsor](https://github.com/sponsors/JakubMelka)!
+## Known limitations
 
-## 1. ACKNOWLEDGEMENTS
+- **Overprint is not simulated in the interactive page view.** The standard page renderer does not composite overprint (`OP`/`op`/OPM in the graphics state); overprint-accurate compositing is only available in **Output Preview**. Preflight only raises a finding for the unsafe white/near-white overprint case — a document using ordinary overprint (spot-over-process, rich black over an image) produces no finding at all. Proof any overprint-sensitive document in Output Preview before it ships to print.
 
-This software is based in part on the work of the Independent JPEG Group.
+## Install
 
-Portions of this software are copyright © 2019 The FreeType
-Project (www.freetype.org). All rights reserved.
+Use Loupe’s own release artifacts, not upstream PDF4QT packages.
 
-## 2. LEGAL ISSUES
+- **Windows (x64):** download the MSI or portable ZIP from [GitHub releases](https://github.com/mberrys/Loupe-pdf/releases). **V1 installers are unsigned** — Windows SmartScreen will show an “unrecognized app” warning on first install. Choose **More info** → **Run anyway** to proceed. Verify the download against `SHA256SUMS.txt` on the release page before installing.
+- **Linux (x64):** download the AppImage from [GitHub releases](https://github.com/mberrys/Loupe-pdf/releases), `chmod +x` it, and run. Verify the download against `SHA256SUMS.txt` on the release page. Flatpak packaging exists (`LinuxFlatpak.yml`) but isn't yet attached to releases. `ci.yml` also builds a `.deb` on every push to `master`, but **it does not work** — verified by installing it on a clean Ubuntu 22.04 container: `dpkg -i` succeeds, but the binary fails to launch (`libQt6Gui.so.6: cannot open shared object file`) because, unlike the AppImage, it doesn't bundle the Qt runtime, and it also has a glibc version mismatch against 22.04. Do not install the `.deb` until it's fixed.
+- **macOS:** not supported for V1. There is no official package, notarization, or macOS CI coverage.
 
-This software was originally licensed under the GNU Lesser General Public License version 3 (LGPLv3).
-As of April 27, 2025, the project has been relicensed under the MIT License by the original author.
-The change to the MIT License was made to provide greater freedom and flexibility for both open-source and commercial use, reduce legal complexity, and encourage broader adoption and contribution.
+See [platform support](docs/PLATFORM_SUPPORT.md) for supported configurations, package layouts, and current validation notes.
 
-Please see the attached LICENSE.txt file for details.
+## Build from source
 
-This software also uses several third-party libraries, and users must comply with the licenses of those third-party components.
+Loupe-PDF requires a C++20 compiler, Qt 6.11.1 or newer, and vcpkg. Windows and Linux are the supported development targets.
 
-## 3. FEATURES
+```bash
+git clone https://github.com/mberrys/Loupe-pdf.git
+cd Loupe-pdf
 
-Software have following features (the list is not complete):
+git clone https://github.com/Microsoft/vcpkg.git
+./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+export VCPKG_ROOT="$PWD/vcpkg"
 
-- [x] multithreading support
-- [x] encryption
-- [x] color management
-- [x] optional content handling
-- [x] text layout analysis
-- [x] signature validation
-- [x] annotations
-- [x] form filling
-- [x] text to speech capability
-- [x] editation
-- [x] file attachments
-- [x] optimalization (compressing documents)
-- [x] command line tool
-- [x] audio book conversion
-- [x] internal structure inspector
-- [x] compare documents
-- [x] static XFA support (readonly, simple XFA only)
-- [x] electronically/digitally sign documents
-- [x] public key security encryption
+cmake -B build -S . \
+  -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
 
-## 4. THIRD PARTY LIBRARIES
+On Windows, use Visual Studio 2022 or MinGW. For the full set of build options and packaging requirements, consult [CMakeLists.txt](CMakeLists.txt) and the [platform guide](docs/PLATFORM_SUPPORT.md).
 
-Several third-party libraries are used.
+## Documentation
 
-1. libjpeg, see https://www.ijg.org/
-2. FreeType, see https://www.freetype.org/index.html, FTL license used
-3. OpenJPEG, implementing Jpeg2000, see https://www.openjpeg.org/, 2-clause MIT license
-4. Qt, https://www.qt.io/, LGPL license used
-5. OpenSSL, https://www.openssl.org/, Apache 2.0 license
-6. LittleCMS, http://www.littlecms.com/
-7. zlib, https://zlib.net/
-8. Blend2D, https://blend2d.com/
+- [Platform support and packaging](docs/PLATFORM_SUPPORT.md)
+- [Repository map and upstream policy](docs/REPO_MAP.md)
+- [Preflight tool documentation](loupe-preflight/README.md)
+- [Packaging and licensing guide](docs/PACKAGING_LICENSING.md)
+- [Contributor and architecture guidance](AGENTS.md)
 
-## 5. CONTRIBUTIONS
+## Contributing
 
-Contributions are welcome!
+Contributions, testing, feedback, and bug reports are welcome. Please read [AGENTS.md](AGENTS.md) and the [repository map](docs/REPO_MAP.md) before starting work, especially when changing the forked PDF4QT codebase or syncing upstream.
 
-Since the project is now licensed under the MIT License, contributions can be freely submitted without the need to sign a Contributor License Agreement (CLA).
-However, all contributions must be made under the terms of the MIT License to ensure license consistency across the project.
+## License and acknowledgements
 
-You are encouraged to contribute by testing, offering feedback, providing advice, or submitting code improvements.
+Loupe-PDF is based on [PDF4QT](https://github.com/JakubMelka/PDF4QT) and is currently distributed under the MIT License. **The license is subject to change at any time.** It includes third-party components with their own license obligations, including Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, libjpeg, and Blend2D. Review the [packaging and licensing guide](docs/PACKAGING_LICENSING.md) before distributing a build.
 
-## 6. INSTALLING
-
-### Windows
-
-The [Release page](https://github.com/JakubMelka/PDF4QT/releases) lists binaries for Windows, both with and without an installer.
-
-### Arch Linux
-
-A [pdf4qt-git](https://aur.archlinux.org/packages/pdf4qt-git) package is available in the AUR.
-
-### Linux - Flatpak/AppImage
-
-For other Linux distributions, there are two options available. A Flatpak package can be accessed at [Flathub](https://flathub.org/apps/io.github.JakubMelka.Pdf4qt).
-Alternatively, an AppImage is available in the Releases section. The AppImage format is designed to work on nearly all Linux systems.
-Historically, a .deb package was also offered, but it has been discontinued due to compatibility issues with some Linux distributions.
-The executable names are: Pdf4QtEditor, Pdf4QtDiff, Pdf4QtLaunchPad, Pdf4QtPageMaster, Pdf4QtViewer, and PdfTool.
-
-## 7. COMPILING
-
-This software can be compiled on both Windows and Linux. A compiler supporting the C++20 standard is needed.
-
-On Windows, you can use Visual Studio 2022 or MinGW.
-
-On Linux, a GCC version >= 8 should work, altough we tested it with GCC 11.
-
-### Compiling from sources
-
-1. Install [vcpkg](https://vcpkg.io/en/getting-started.html)
-
-        git clone https://github.com/Microsoft/vcpkg.git
-        ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
-        VCPKG_ROOT=$(pwd)/vcpkg
-
-    Check that vcpkg path is correct: `$VCPKG_ROOT/vcpkg --version`.
-
-2. Build PDF4QT
-
-    2.1 Clone repo
-
-        git clone https://github.com/JakubMelka/PDF4QT
-        cd PDF4QT
-
-    2.2 Configure
-
-        cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake -DCMAKE_INSTALL_PREFIX='/' -DCMAKE_BUILD_TYPE=Release
-
-   (One user reported success with `-DCMAKE_INSTALL_PREFIX=''` instead, as otherwise all there paths were prepended with `/usr` (causing `/usr/usr...`
-
-    For a debug build, append `-DCMAKE_BUILD_TYPE=Debug`.
-
-    It is recommended to set the VCPKG_OVERLAY_PORTS variable to 'PDF4QT/vcpkg/overlays' to prevent crashes due to the incompatible LIBPNG library on some Linux systems.
-
-    2.3 Build
-
-        cmake --build build
-
-    Use the [`-j` switch](https://cmake.org/cmake/help/latest/manual/cmake.1.html#cmdoption-cmake-build-j) to build multiple files in parallel.
-
-    2.4 Install
-
-        sudo cmake --install build
-
-    To uninstall, run `sudo xargs rm < ./build/install_manifest.txt`.
-
-### Using Qt Creator (both Windows/Linux)
-1. Download Qt 6.9 or higher, and VCPKG package manager (https://vcpkg.io/en/index.html)
-2. Open Qt Creator and configure the project
-3. Build
- 
-### CMAKE Compilation Options
-
-Several important compilation options are available and should be set before building. On Windows,
-CMake can prepare a Wix project to create a *.msi installer package.
-
-|                  Option                | Platform |     Description                                          |
-| ------------------------------------   | ---------|--------------------------------------------------------- |
-| `PDF4QT_INSTALL_MSVC_REDISTRIBUTABLE`  | Windows  |Includes MSVC redistributable in installation             |
-| `PDF4QT_INSTALL_PREPARE_WIX_INSTALLER` | Windows  |Prepare .msi installator using Wix installer              |
-| `PDF4QT_INSTALL_DEPENDENCIES`          | Any      |Install dependent libraries into installation directory   |
-| `PDF4QT_INSTALL_QT_DEPENDENCIES`       | Any      |Install Qt dependent libraries into installation directory|
-| `VCPKG_OVERLAY_PORTS`                  | Linux    |Set it to prevent crashes with incompatible libpng library|
- 
-Following important variables should be set or checked before any attempt to compile this project:
-
-|                  Variable              | Platform |     Description                                          |
-| ------------------------------------   | ---------|--------------------------------------------------------- |
-| `PDF4QT_QT_ROOT`                       | Any      |Qt installation directory                                 |
-| `QT_CREATOR_SKIP_VCPKG_SETUP`          | Any      |Enable or disable automatic vcpkg setup                   |
-| `CMAKE_PROJECT_INCLUDE_BEFORE`         | Any      |Should be set to package manager auto setup               |
-| `CMAKE_TOOLCHAIN_FILE`                 | Any      |Should be set to toolchain                                |
-| `CMAKE_BUILD_TYPE`                     | Any      |Can be Release (default) or Debug                         |
-
-#### Sample setup on Windows
-
-Following set of variables gives sample setup for MS Windows. It is minimal initial configuration
-to be able to built Debug build on MS Windows.
-
-| Key                             | Value                                                        |
-| ------------------------------- | -------------------------------------------------------------|
-| `CMAKE_BUILD_TYPE`              | Debug                                                        |
-| `CMAKE_CXX_COMPILER`            | %{Compiler:Executable:Cxx}                                   |
-| `CMAKE_C_COMPILER`              | %{Compiler:Executable:C}                                     |
-| `CMAKE_GENERATOR`               | Ninja                                                        |
-| `CMAKE_PREFIX_PATH`             | %{Qt:QT_INSTALL_PREFIX}                                      |
-| `CMAKE_PROJECT_INCLUDE_BEFORE`  | %{IDE:ResourcePath}/package-manager/auto-setup.cmake         |
-| `CMAKE_TOOLCHAIN_FILE`          | %{Qt:QT_INSTALL_PREFIX}/lib/cmake/Qt6/qt.toolchain.cmake     |
-| `PDF4QT_QT_ROOT`                | C:/Programming/Qt/6.4.0/msvc2019_64                          |
-| `QT_QMAKE_EXECUTABLE`           | %{Qt:qmakeExecutable}                                        |
-
-
-### Tested Compilers - Windows
- - Visual Studio 2022 (Microsoft Visual C++ Compiler 17.1)
- - MinGW 11.2.0
- 
-### Tested Compilers - Linux
- - GCC 13.1.1
-
-## 8. DISCLAIMER
-
-I wrote this project in my free time. I hope you will find it useful!
+Copyright © 2026 Michael Berry. Portions are copyright © 2019 The FreeType Project.

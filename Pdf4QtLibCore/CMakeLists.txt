@@ -44,6 +44,21 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfdocumentmanipulator.h
     sources/pdfpagegeometry.cpp
     sources/pdfpagegeometry.h
+    sources/pdfbleedfixup.cpp
+    sources/pdfbleedfixup.h
+    sources/pdfpagemasterexport.cpp
+    sources/pdfpagemasterexport.h
+    sources/pdfbleedmarginprobe.cpp
+    sources/pdfbleedmarginprobe.h
+    sources/pdfocrpagegate.cpp
+    sources/pdfocrpagegate.h
+    sources/pdfocrreport.cpp
+    sources/pdfocrreport.h
+    sources/pdfdocumentsession.cpp
+    sources/pdfdocumentsession.h
+    sources/preflightengine.cpp
+    sources/preflightengine.h
+    sources/pdfpreflightchecks.h
     sources/pdfdocumenttextflow.cpp
     sources/pdfdocumenttextflow.h
     sources/pdfdocumenttextfloweditormodel.cpp
@@ -54,6 +69,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfexecutionpolicy.h
     sources/pdffile.cpp
     sources/pdffile.h
+    sources/pdffilenamesanitizer.cpp
+    sources/pdffilenamesanitizer.h
     sources/pdfform.cpp
     sources/pdfform.h
     sources/pdficontheme.cpp
@@ -96,6 +113,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfprogress.h
     sources/pdfredact.cpp
     sources/pdfredact.h
+    sources/pdfredactverifier.cpp
+    sources/pdfredactverifier.h
     sources/pdfsecurityhandler.cpp
     sources/pdfsecurityhandler.h
     sources/pdfsignaturehandler.cpp
@@ -170,6 +189,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfapplicationtranslator.cpp
     sources/pdfsettings.h
     sources/pdfsettings.cpp
+    sources/pdfsentry.h
+    sources/pdfsentry.cpp
     fonts.qrc
 )
 
@@ -188,7 +209,7 @@ target_link_libraries(Pdf4QtLibCore PRIVATE Freetype::Freetype)
 target_link_libraries(Pdf4QtLibCore PRIVATE openjp2)
 target_link_libraries(Pdf4QtLibCore PRIVATE JPEG::JPEG)
 
-if(LINUX_GCC)
+if(PDF4QT_USE_TBB)
     target_link_libraries(Pdf4QtLibCore PUBLIC TBB::tbb)
 endif()
 
@@ -197,9 +218,19 @@ if(MINGW)
 endif()
 
 target_include_directories(Pdf4QtLibCore INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+target_include_directories(Pdf4QtLibCore PRIVATE ${CMAKE_BINARY_DIR})
 target_include_directories(Pdf4QtLibCore PUBLIC ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
 target_link_libraries(Pdf4QtLibCore PRIVATE blend2d::blend2d)
+
+if(PDF4QT_ENABLE_SENTRY)
+    target_compile_definitions(Pdf4QtLibCore PUBLIC PDF4QT_ENABLE_SENTRY)
+    target_compile_definitions(Pdf4QtLibCore PRIVATE PDF4QT_ENABLE_SENTRY_IMPL)
+    if(PDF4QT_SENTRY_DSN)
+        target_compile_definitions(Pdf4QtLibCore PRIVATE PDF4QT_SENTRY_DSN="${PDF4QT_SENTRY_DSN}")
+    endif()
+    target_link_libraries(Pdf4QtLibCore PRIVATE sentry::sentry)
+endif()
 
 set_target_properties(Pdf4QtLibCore PROPERTIES
                       VERSION ${PDF4QT_VERSION}

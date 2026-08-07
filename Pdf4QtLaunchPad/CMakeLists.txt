@@ -34,7 +34,7 @@ add_executable(Pdf4QtLaunchPad
     launchdialog.ui
 )
 
-target_link_libraries(Pdf4QtLaunchPad PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(Pdf4QtLaunchPad PRIVATE Pdf4QtLibCore Pdf4QtLibWidgets Qt6::Core Qt6::Gui Qt6::Widgets)
 
 set_target_properties(Pdf4QtLaunchPad PROPERTIES
     WIN32_EXECUTABLE ON
@@ -44,3 +44,7 @@ set_target_properties(Pdf4QtLaunchPad PROPERTIES
 )
 
 install(TARGETS Pdf4QtLaunchPad RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR} LIBRARY DESTINATION ${PDF4QT_INSTALL_LIB_DIR})
+
+if(PDF4QT_ENABLE_SENTRY)
+    pdf4qt_deploy_sentry_crashpad(Pdf4QtLaunchPad)
+endif()
