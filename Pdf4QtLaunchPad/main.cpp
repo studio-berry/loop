@@ -42,6 +42,9 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("PDF4QT LaunchPad");
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT LaunchPad"));
 
+    pdf::PDFFSentry::initialize();
+    qAddPostRoutine([]() { pdf::PDFFSentry::shutdown(); });
+
     QCommandLineParser parser;
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
     QCommandLineOption lightGui(QStringLiteral("theme-light"), QStringLiteral("Use a light theme for the GUI."));
