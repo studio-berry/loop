@@ -469,6 +469,29 @@ public:
 private:
     static constexpr const uint32_t MAX_BITMAP_SIZE = 65536;
 
+    /// Adds \p width x \p height pixels to the running total of bitmap memory
+    /// decoded so far by this decoder instance, and throws if the cumulative
+    /// total exceeds the total-decode budget. A single bitmap can legally be
+    /// as large as the per-bitmap cap allows; this guards against a stream
+    /// that stays under that cap on every individual allocation (e.g. many
+    /// symbols in a symbol dictionary) but still amounts to a multi-gigabyte
+    /// decompression bomb in aggregate.
+    void accountBitmapPixels(int64_t width, int64_t height);
+
+    /// Charges \p items decoded items (decoded bitmaps, symbol instances, halftone grid
+    /// cells, symbol-dictionary height classes) and \p pixels decoded or composited
+    /// pixels against two independent decoding-work budgets, and throws when either
+    /// cumulative total exceeds its own cap. This bounds decoding *time*, which
+    /// accountBitmapPixels does not: a text region can be asked to paint SBNUMINSTANCES
+    /// (a 32-bit stream value) symbols and a halftone region one pattern per grid cell,
+    /// neither of which allocates, and arithmetic-decoding a pixel costs far more than
+    /// storing it - so a legitimate large scan and a same-size malicious bitmap cost the
+    /// same decode time until fully decoded, and the pixel cap has to bound that time
+    /// rather than the page sizes it can support. The item cap is separate because pixel
+    /// count cannot bound it: a stream of zero-sized bitmaps costs no pixels at all, but
+    /// still costs an arithmetic-decoder round per item.
+    void accountDecodeWork(int64_t items, int64_t pixels);
+
     /// Processes current data stream (reads all data from the stream, interprets
     /// them as segments and processes the segments).
     void processStream();
@@ -520,6 +543,7 @@ private:
     PDFJBIG2ReferencedSegments getReferencedSegments(const PDFJBIG2SegmentHeader& header) const;
 
     static void checkBitmapSize(const uint32_t size);
+    static void checkRegionOffset(const int32_t offset);
     static void checkRegionSegmentInformationField(const PDFJBIG2RegionSegmentInformationField& field);
     static int32_t checkInteger(std::optional<int32_t> value);
 
@@ -533,6 +557,9 @@ private:
     bool m_pageDefaultCompositionOperatorOverriden;
     bool m_pageSizeUndefined;
     PDFJBIG2Bitmap m_pageBitmap;
+    int64_t m_totalBitmapPixelsDecoded = 0;
+    int64_t m_totalDecodeWorkItems = 0;
+    int64_t m_totalDecodeWorkPixels = 0;
 };
 
 }   // namespace pdf

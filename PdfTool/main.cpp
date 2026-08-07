@@ -21,17 +21,73 @@
 // SOFTWARE.
 
 #include "pdftoolabstractapplication.h"
+#include "pdftoolcancel.h"
 #include "pdfconstants.h"
+#include "pdfsentry.h"
 
+#include <QDir>
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QCommandLineParser>
+#include <QFileInfo>
+#include <QStringList>
+
+#include <csignal>
+
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#endif
+
+namespace
+{
+
+QString executableDirectory(const char* argv0)
+{
+#if defined(Q_OS_WIN)
+    wchar_t modulePath[MAX_PATH] = {};
+    const DWORD length = ::GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    if (length > 0 && length < MAX_PATH)
+    {
+        return QFileInfo(QString::fromWCharArray(modulePath, int(length))).absolutePath();
+    }
+#endif
+
+    const QFileInfo argvInfo(QString::fromLocal8Bit(argv0));
+    if (argvInfo.isAbsolute())
+    {
+        return argvInfo.absolutePath();
+    }
+
+    // Bare argv[0] (PATH lookup) is not the process CWD — fall back to CWD only
+    // after absolute-path resolution fails so plugin dirs still work for local runs.
+    return QDir::currentPath();
+}
+
+} // namespace
+
+namespace
+{
+
+void handleTerminationSignal(int)
+{
+    pdftool::cancelRequested().store(true, std::memory_order_release);
+}
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
+    // Prefer offscreen when requested; ensure the exe dir is searched for plugins
+    // (platforms/qoffscreen.dll) before QGuiApplication constructs the QPA plugin.
+    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) }
+                                      + QCoreApplication::libraryPaths());
+
     QGuiApplication a(argc, argv);
     QCoreApplication::setOrganizationName("MelkaJ");
     QCoreApplication::setApplicationName("PdfTool");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
+
+    const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
 
     QStringList arguments = QCoreApplication::arguments();
 
@@ -59,6 +115,15 @@ int main(int argc, char *argv[])
     parser.addHelpOption();
     parser.addVersionOption();
     parser.process(arguments);
+
+    pdftool::resetCancelRequested();
+    std::signal(SIGINT, handleTerminationSignal);
+#ifndef Q_OS_WIN
+    std::signal(SIGTERM, handleTerminationSignal);
+#endif
+
+    const QString sentryCommand = command.isEmpty() ? QStringLiteral("help") : command;
+    const pdf::PDFSentryTransaction sentryTransaction(sentryCommand, "pdftool.command");
 
     return application->execute(application->getOptions(&parser));
 }

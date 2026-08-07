@@ -48,6 +48,68 @@ endif()
 
 option(PDF4QT_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
 option(PDF4QT_BUILD_TESTS "Build UnitTests" ON)
+option(PDF4QT_ENABLE_SANITIZERS "Build with ASan+UBSan" OFF)
+option(PDF4QT_BUILD_FUZZERS "Build libFuzzer harnesses" OFF)
+if(WIN32)
+    set(_PDF4QT_ENABLE_SENTRY_DEFAULT ON)
+else()
+    set(_PDF4QT_ENABLE_SENTRY_DEFAULT OFF)
+endif()
+option(PDF4QT_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_PDF4QT_ENABLE_SENTRY_DEFAULT})
+set(PDF4QT_SENTRY_DSN "" CACHE STRING "Optional compile-time Sentry DSN (prefer SENTRY_DSN env at runtime)")
+
+if(PDF4QT_ENABLE_SENTRY)
+    find_package(Threads REQUIRED)
+    find_package(sentry CONFIG REQUIRED)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Pdf4QtSentry.cmake)
+endif()
+
+# Frisket slim release profile: disable apps/plugins without deleting upstream sources.
+option(PDF4QT_FRISKET_DISTRIBUTION "Slim Frisket release (disable non-product apps and plugins)" OFF)
+
+if(PDF4QT_FRISKET_DISTRIBUTION)
+    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT OFF)
+    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT OFF)
+    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
+    set(_PDF4QT_BUILD_VIEWER_DEFAULT OFF)
+    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT OFF)
+    set(_PDF4QT_BUILD_DIFF_DEFAULT OFF)
+    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT OFF)
+    set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT OFF)
+    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT OFF)
+else()
+    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT ON)
+    set(_PDF4QT_BUILD_DIFF_DEFAULT ON)
+    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
+endif()
+
+option(PDF4QT_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT})
+option(PDF4QT_BUILD_JBIG2_VIEWER "Build JBIG2_Viewer developer tool" ${_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT})
+option(PDF4QT_BUILD_EXAMPLE_GENERATOR "Build PdfExampleGenerator developer tool" ${_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT})
+option(PDF4QT_BUILD_VIEWER "Build Pdf4QtViewer application" ${_PDF4QT_BUILD_VIEWER_DEFAULT})
+option(PDF4QT_BUILD_PAGEMASTER "Build Pdf4QtPageMaster application" ${_PDF4QT_BUILD_PAGEMASTER_DEFAULT})
+option(PDF4QT_BUILD_DIFF "Build Pdf4QtDiff application" ${_PDF4QT_BUILD_DIFF_DEFAULT})
+option(PDF4QT_BUILD_LAUNCHPAD "Build Pdf4QtLaunchPad application" ${_PDF4QT_BUILD_LAUNCHPAD_DEFAULT})
+option(PDF4QT_PLUGIN_AUDIOBOOK "Build AudioBook editor plugin" ${_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT})
+option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCANNER_DEFAULT})
+
+# V1 ships OCR as CLI-only (PdfTool ocr) per the 2026-07-25 product decision (MIC-343).
+# The Editor OCR UI plugin is not part of the V1 release surface, but stays buildable
+# for local/developer use. Release packaging workflows pass -DPDF4QT_PLUGIN_OCR=OFF
+# explicitly; PdfTool's OCR subcommand is unaffected. (PDF4QT_BUNDLE_OCR_SERVICE, the
+# other half of the V1 CLI-only OCR surface, is declared in frisket-ocr/tools/CMakeLists.txt.)
+option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ON)
+
+if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 set(PDF4QT_QT_ROOT "" CACHE PATH "Qt root directory")
 
@@ -60,16 +122,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 REQUIRED COMPONENTS Core LinguistTools)
+find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
 if(PDF4QT_BUILD_ONLY_CORE_LIBRARY)
-    find_package(Qt6 REQUIRED COMPONENTS Core Gui Svg Xml)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml)
 else()
-    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Xml PrintSupport TextToSpeech Concurrent)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml PrintSupport TextToSpeech Concurrent)
 endif()
 
 if(PDF4QT_BUILD_TESTS)
-    find_package(Qt6 REQUIRED COMPONENTS Test)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)
 endif()
 
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
@@ -111,8 +173,10 @@ if (UNIX AND NOT APPLE)
     set(PDF4QT_LINUX ON)
 endif()
 
-if (LINUX_GCC)
-    find_package(TBB REQUIRED)
+# Parallel STL (libstdc++/libc++) on Linux needs TBB for both GCC and Clang.
+if(PDF4QT_LINUX)
+    find_package(TBB CONFIG REQUIRED)
+    set(PDF4QT_USE_TBB ON)
 endif()
 
 option(PDF4QT_INSTALL_TO_USR "Install to usr directory" ${VCPKG_TOOLCHAIN})
@@ -178,23 +242,43 @@ endif()
 
 if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     add_subdirectory(Pdf4QtLibWidgets)
-    add_subdirectory(CodeGenerator)
-    add_subdirectory(JBIG2_Viewer)
-    add_subdirectory(PdfExampleGenerator)
+    if(PDF4QT_BUILD_CODE_GENERATOR)
+        add_subdirectory(CodeGenerator)
+    endif()
+    if(PDF4QT_BUILD_JBIG2_VIEWER)
+        add_subdirectory(JBIG2_Viewer)
+    endif()
+    if(PDF4QT_BUILD_EXAMPLE_GENERATOR)
+        add_subdirectory(PdfExampleGenerator)
+    endif()
     add_subdirectory(PdfTool)
+    add_subdirectory(frisket-preflight/tools)
+    add_subdirectory(frisket-ocr/tools)
     add_subdirectory(Pdf4QtLibGui)
     add_subdirectory(Pdf4QtEditorPlugins)
     add_subdirectory(Pdf4QtEditor)
-    add_subdirectory(Pdf4QtViewer)
-    add_subdirectory(Pdf4QtPageMaster)
-    add_subdirectory(Pdf4QtDiff)
-    add_subdirectory(Pdf4QtLaunchPad)
+    if(PDF4QT_BUILD_VIEWER)
+        add_subdirectory(Pdf4QtViewer)
+    endif()
+    if(PDF4QT_BUILD_PAGEMASTER)
+        add_subdirectory(Pdf4QtPageMaster)
+    endif()
+    if(PDF4QT_BUILD_DIFF)
+        add_subdirectory(Pdf4QtDiff)
+    endif()
+    if(PDF4QT_BUILD_LAUNCHPAD)
+        add_subdirectory(Pdf4QtLaunchPad)
+    endif()
     add_subdirectory(WixInstaller)
 endif()
 
 if(PDF4QT_BUILD_TESTS)
     enable_testing()
     add_subdirectory(UnitTests)
+endif()
+
+if(PDF4QT_BUILD_FUZZERS)
+    add_subdirectory(Fuzz)
 endif()
 
 qt_collect_translation_source_targets(i18n_targets)
@@ -206,13 +290,21 @@ set(PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_
 message("PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY" ${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY})
 message("PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY" ${PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY})
 
-qt_add_translations(TARGETS Pdf4QtEditor Pdf4QtViewer Pdf4QtPageMaster Pdf4QtDiff PdfTool
-                    SOURCE_TARGETS ${i18n_targets}
-                    MERGE_QT_TRANSLATIONS
-                    LUPDATE_OPTIONS -no-obsolete
-                    TS_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY}
-                    QM_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY}
-                    QM_FILES_OUTPUT_VARIABLE PDF4QT_QM_FILES)
+# Only add translation targets for targets that actually exist in this build.
+foreach(_tgt Pdf4QtEditor Pdf4QtViewer Pdf4QtPageMaster Pdf4QtDiff PdfTool)
+    if(TARGET ${_tgt})
+        list(APPEND _existing_translation_targets ${_tgt})
+    endif()
+endforeach()
+if(_existing_translation_targets)
+    qt_add_translations(TARGETS ${_existing_translation_targets}
+                        SOURCE_TARGETS ${i18n_targets}
+                        MERGE_QT_TRANSLATIONS
+                        LUPDATE_OPTIONS -no-obsolete
+                        TS_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY}
+                        QM_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY}
+                        QM_FILES_OUTPUT_VARIABLE PDF4QT_QM_FILES)
+endif()
 
 if(WIN32)
     set(PDF4QT_LUPDATE_TARGET "${PROJECT_NAME}_lupdate")
@@ -252,24 +344,24 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        install(FILES Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtDiff.desktop
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtPageMaster.desktop
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtViewer.desktop
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtEditor.desktop
-                      Desktop/io.github.JakubMelka.Pdf4qt.desktop
+        install(FILES Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.desktop
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.desktop
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.desktop
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.desktop
+                      Desktop/io.github.mberrys.Frisket-pdf.desktop
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-        install(FILES Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtDiff.svg
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtPageMaster.svg
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtViewer.svg
-                      Desktop/io.github.JakubMelka.Pdf4qt.Pdf4QtEditor.svg
-                      Desktop/io.github.JakubMelka.Pdf4qt.svg
+        install(FILES Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.svg
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.svg
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.svg
+                      Desktop/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.svg
+                      Desktop/io.github.mberrys.Frisket-pdf.svg
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
-        install(FILES Desktop/io.github.JakubMelka.Pdf4qt.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        install(FILES Desktop/128x128/io.github.JakubMelka.Pdf4qt.Pdf4QtDiff.png
-                      Desktop/128x128/io.github.JakubMelka.Pdf4qt.Pdf4QtPageMaster.png
-                      Desktop/128x128/io.github.JakubMelka.Pdf4qt.Pdf4QtViewer.png
-                      Desktop/128x128/io.github.JakubMelka.Pdf4qt.Pdf4QtEditor.png
-                      Desktop/128x128/io.github.JakubMelka.Pdf4qt.png
+        install(FILES Desktop/io.github.mberrys.Frisket-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
+        install(FILES Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtDiff.png
+                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtPageMaster.png
+                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtViewer.png
+                      Desktop/128x128/io.github.mberrys.Frisket-pdf.Pdf4QtEditor.png
+                      Desktop/128x128/io.github.mberrys.Frisket-pdf.png
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
     endif()
 
@@ -297,10 +389,22 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
+        # ICU is a load-time dependency of Qt6Core on Windows aqt builds; without
+        # these DLLs beside PdfTool.exe the MSI-installed binary fails with
+        # STATUS_DLL_NOT_FOUND (0xC0000135) even when Qt6*.dll themselves are present.
+        install(DIRECTORY ${PDF4QT_QT_ROOT}/bin/
+            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/
+            FILES_MATCHING
+            PATTERN "icu*.dll"
+            PATTERN "Debug" EXCLUDE
+            PATTERN "*.pdb" EXCLUDE
+        )
+
         install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/platforms/
             RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/platforms/
             FILES_MATCHING
             PATTERN "qwindows.dll"
+            PATTERN "qoffscreen.dll"
             PATTERN "*.so"
             PATTERN "*.dylib"
             PATTERN "*.pdb" EXCLUDE
@@ -358,6 +462,37 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             FILES_MATCHING
             PATTERN "*.dll"
         )
+    endif()
+endif()
+
+if(PDF4QT_ENABLE_SENTRY AND TARGET sentry_crashpad::crashpad_handler)
+    get_target_property(_pdf4qt_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION_RELEASE)
+    if(NOT _pdf4qt_sentry_crashpad_handler_install)
+        get_target_property(_pdf4qt_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION)
+    endif()
+
+    if(_pdf4qt_sentry_crashpad_handler_install)
+        if(WIN32)
+            install(PROGRAMS ${_pdf4qt_sentry_crashpad_handler_install}
+                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}
+                    RENAME crashpad_handler.exe)
+        else()
+            install(PROGRAMS ${_pdf4qt_sentry_crashpad_handler_install}
+                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}
+                    RENAME crashpad_handler)
+        endif()
+    endif()
+
+    if(TARGET sentry_crashpad::crashpad_wer)
+        get_target_property(_pdf4qt_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION_RELEASE)
+        if(NOT _pdf4qt_sentry_crashpad_wer_install)
+            get_target_property(_pdf4qt_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION)
+        endif()
+
+        if(_pdf4qt_sentry_crashpad_wer_install)
+            install(FILES ${_pdf4qt_sentry_crashpad_wer_install}
+                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR})
+        endif()
     endif()
 endif()
 

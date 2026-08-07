@@ -32,6 +32,7 @@
 #include "pdfoptimizer.h"
 #include "pdfimageoptimizer.h"
 #include "pdfredact.h"
+#include "pdfbleedfixup.h"
 
 #include <QtGlobal>
 #include <QString>
@@ -171,6 +172,32 @@ struct PDFToolOptions
     pdf::PDFRedact::Options redactOptions = {};
     QString redactedDocument;
 
+    // For option 'AddBleed'
+    pdf::PDFBleedFixupSettings addBleedSettings;
+    QString addBleedOutputDocument;
+    bool addBleedDryRun = false;
+    bool addBleedReport = false;
+    bool addBleedOverwrite = false;
+
+    // Shared destructive-write guard (optimize, redact, encrypt, unite, separate).
+    bool destructiveDryRun = false;
+    bool destructiveReport = false;
+    bool destructiveForce = false;
+
+    // For option 'PreflightProfile'
+    QString preflightProfilePath;
+
+    // For option 'OcrOptions'
+    QString ocrSidecarPath;
+    int ocrDpi = 300;
+    QString ocrLanguages = QStringLiteral("en");
+    int ocrMinTextChars = 20;
+
+    // For option 'VerifyRedaction'
+    QStringList verifyRedactionFiles;
+    pdf::PDFRedact::Options verifyRedactionOptions = {};
+    bool verifyRedactionCheckIncremental = true;
+
     // For option 'Encrypt'
     pdf::PDFSecurityHandlerFactory::Algorithm encryptionAlgorithm = pdf::PDFSecurityHandlerFactory::Algorithm::AES_256;
     pdf::PDFSecurityHandlerFactory::EncryptContents encryptionContents = pdf::PDFSecurityHandlerFactory::EncryptContents::All;
@@ -265,6 +292,11 @@ public:
         Encrypt                         = 0x00800000,       ///< Encryption settings
         Diff                            = 0x01000000,       ///< Diff settings (compare documents)
         Redact                          = 0x02000000,       ///< Settings for Redact tool
+        AddBleed                        = 0x04000000,       ///< Settings for add-bleed tool
+        PreflightProfile                = 0x08000000,       ///< Frisket preflight profile path
+        VerifyRedaction                 = 0x10000000,       ///< Settings for verify-redaction tool
+        DestructiveWrite                = 0x20000000,       ///< Shared --dry-run/--report/--force for overwrite commands
+        OcrOptions                      = 0x40000000,       ///< Frisket OCR sidecar settings
     };
     Q_DECLARE_FLAGS(Options, Option)
 
@@ -295,6 +327,15 @@ protected:
 
     /// Converts string to encoding
     static QStringConverter::Encoding getEncoding(const QString& encodingName);
+
+    /// Registers shared --dry-run, --report, and --force options.
+    static void registerDestructiveWriteOptions(QCommandLineParser* parser);
+
+    /// Returns 0 when the write may proceed; otherwise an ExitCodes error value.
+    int validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const;
+
+    /// Removes Qt safe-write leftovers after a cancelled run.
+    static void removePartialOutput(const QString& outputPath);
 };
 
 /// This class stores information about all applications available. Application

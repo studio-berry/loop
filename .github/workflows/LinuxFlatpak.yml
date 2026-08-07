@@ -3,6 +3,11 @@ name: Linux_Flatpak
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
 jobs:
   build_ubuntu:
     runs-on: ubuntu-latest
@@ -31,10 +36,10 @@ jobs:
           flatpak list
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Cache Flatpak builder artifacts
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ~/.cache/flatpak-builder
@@ -47,20 +52,20 @@ jobs:
         run: |
           COMMIT_HASH=$(git rev-parse HEAD)
           echo "Current commit hash: $COMMIT_HASH"
-          sed -i "s/PDF4QT_LAST_COMMIT/$COMMIT_HASH/g" ./Flatpak/io.github.JakubMelka.Pdf4qt.json
+          sed -i "s/PDF4QT_LAST_COMMIT/$COMMIT_HASH/g" ./Flatpak/io.github.mberrys.Frisket-pdf.json
 
       - name: Build Flatpak
         run: |
-          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.JakubMelka.Pdf4qt.json 
+          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.mberrys.Frisket-pdf.json 
 
       - name: Build Flatpak Package
         run: |
-          flatpak build-bundle repo io.github.JakubMelka.Pdf4qt.flatpak io.github.JakubMelka.Pdf4qt
+          flatpak build-bundle repo io.github.mberrys.Frisket-pdf.flatpak io.github.mberrys.Frisket-pdf
 
       - name: Upload Flatpak Package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: io.github.JakubMelka.Pdf4qt.flatpak
-          path: ./io.github.JakubMelka.Pdf4qt.flatpak
+          name: io.github.mberrys.Frisket-pdf.flatpak
+          path: ./io.github.mberrys.Frisket-pdf.flatpak
           retention-days: 30
           compression-level: 0

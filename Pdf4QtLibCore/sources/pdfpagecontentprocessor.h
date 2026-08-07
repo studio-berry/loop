@@ -99,6 +99,13 @@ struct PDFOverprintMode
     {
         return !(*this == other);
     }
+
+    /// Returns true if overprint should apply to content that contains the given
+    /// fill and/or stroke operations (PDF 2.0 /op, /OP, /OPM).
+    inline bool appliesToContent(bool containsFilling, bool containsStroking) const
+    {
+        return (overprintFilling && containsFilling) || (overprintStroking && containsStroking);
+    }
 };
 
 /// Represents graphic state of the PDF (holding current graphic state parameters).
@@ -949,6 +956,11 @@ private:
     template<typename... Operands>
     inline QColor getColorFromColorSpace(const PDFAbstractColorSpace* colorSpace, Operands... operands)
     {
+        if (!colorSpace)
+        {
+            throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Invalid color space."));
+        }
+
         constexpr const size_t operandCount = sizeof...(Operands);
         const size_t colorSpaceComponentCount = colorSpace->getColorComponentCount();
         if (operandCount == colorSpaceComponentCount)
