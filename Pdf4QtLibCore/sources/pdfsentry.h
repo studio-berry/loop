@@ -25,19 +25,42 @@
 
 #include "pdfglobal.h"
 
+#include <QString>
+
 namespace pdf
 {
 
-class PDF4QTLIBCORESHARED_EXPORT PDFFSentry
+/// RAII wrapper for sentry-native. No-op when PDF4QT_ENABLE_SENTRY is off or SENTRY_DSN is unset.
+class PDF4QTLIBCORESHARED_EXPORT PDFSentrySession
 {
 public:
-    static void initialize();
-    static void shutdown();
-    static bool isEnabled();
-    static void captureMessage(const char* message);
+    explicit PDFSentrySession(const QString& applicationId);
+    ~PDFSentrySession();
+
+    PDFSentrySession(const PDFSentrySession&) = delete;
+    PDFSentrySession& operator=(const PDFSentrySession&) = delete;
+
+    bool isActive() const { return m_active; }
+
+    static bool isGloballyActive();
+    static void captureVerificationEvent();
 
 private:
-    static bool s_initialized;
+    bool m_active = false;
+};
+
+/// One performance transaction for a PdfTool command (or similar unit of work).
+class PDF4QTLIBCORESHARED_EXPORT PDFSentryTransaction
+{
+public:
+    explicit PDFSentryTransaction(const QString& name, const char* operation = "app.command");
+    ~PDFSentryTransaction();
+
+    PDFSentryTransaction(const PDFSentryTransaction&) = delete;
+    PDFSentryTransaction& operator=(const PDFSentryTransaction&) = delete;
+
+private:
+    void* m_transaction = nullptr;
 };
 
 }   // namespace pdf

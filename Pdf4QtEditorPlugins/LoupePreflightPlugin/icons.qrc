@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/pdfplugins/loupepreflight">
+        <file>preflight.svg</file>
+        <file alias="report.example.json">../../loupe-preflight/examples/report.example.json</file>
+    </qresource>
+</RCC>

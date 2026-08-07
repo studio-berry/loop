@@ -3,13 +3,21 @@ name: Windows_MSI
 on:
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN: checkout reads the repo, artifacts are uploaded
+# via the job token, and signing uses the DigiCert SM_* secrets rather than this token.
+permissions:
+  contents: read
+
 jobs:
   build_windows:
     runs-on: windows-2022
+    env:
+      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
       
@@ -90,15 +98,16 @@ jobs:
           
       - name: 'VCPKG: Set up VCPKG'
         run: |
-          git clone --depth=1 https://github.com/microsoft/vcpkg.git
+          git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
+          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
           .\bootstrap-vcpkg.bat -disableMetrics
           .\vcpkg integrate install
           set VCPKG_ROOT=${env:GITHUB_WORKSPACE}\vcpkg\
           set "VCPKG_BINARY_SOURCES=clear;files,${env:GITHUB_WORKSPACE}\vcpkg\archives,readwrite"
 
       - name: 'VCPKG: Cache vcpkg dependencies'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ./vcpkg/downloads
@@ -114,9 +123,9 @@ jobs:
         working-directory: vcpkg
         
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
-          version: '6.9.0'
+          version: '6.11.1'
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2022_64'
@@ -124,7 +133,10 @@ jobs:
           install-deps: 'true'
           modules: 'qtspeech qtmultimedia qtimageformats'
           cache: 'true'
-          cache-key-prefix: ${{ runner.os }}-qt-690
+          cache-key-prefix: ${{ runner.os }}-qt-6111
+          # aqtinstall 3.3.0 cannot resolve Qt 6.11+ Windows repo layout (miurahr/aqtinstall#1007).
+          # Pin PR #1000 merge until aqtinstall >3.3.0 ships with that fix.
+          aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
           
 
       - name: Find VC Redistributable Directories
@@ -155,15 +167,36 @@ jobs:
         working-directory: pdf4qt
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:Qt6_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON 
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:QT_ROOT_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_PLUGIN_OCR=OFF -DPDF4QT_BUNDLE_OCR_SERVICE=OFF
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
+          ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
           MSVC_TOOLSET_VERSION: ${{ env.MSVC_TOOLSET_VERSION }}
           MSVC_REDISTRIBUTABLES_PATH: ${{ env.MSVC_REDISTRIBUTABLES_PATH }}
+
+      - name: Validate staged install tree
+        shell: pwsh
+        run: |
+          # Verifies layout, profile/schema resolution and a real PdfTool preflight run
+          # against the staged tree before it is packaged, and enforces the
+          # docs/PACKAGING_LICENSING.md prohibition on Ghostscript / JRE / Python
+          # payloads -- previously a manual checklist item with nothing checking it.
+          # Editor launch is skipped: no interactive desktop on the runner.
+          .\pdf4qt\scripts\smoke-test-install.ps1 `
+            -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin" `
+            -SkipEditorLaunch
+
+      - name: Generate third-party notices
+        shell: pwsh
+        env:
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg\installed
+        run: |
+          .\pdf4qt\scripts\generate-third-party-notices.ps1 `
+            -OutputPath "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\THIRD_PARTY_NOTICES.txt"
 
       - name: Read version
         id: get_version
@@ -173,8 +206,8 @@ jobs:
           $version = $version.Trim()  # Odstraní případné prázdné znaky kolem verze
           Write-Host "Version: $version"
           echo "pdf4qt_version=$version" >> $env:GITHUB_ENV
-          echo "msipackagefilename=JakubMelka.PDF4QT_${version}.msi" >> $env:GITHUB_ENV
-          Write-Host "MSI package file name: JakubMelka.PDF4QT_${version}.msi"
+          echo "msipackagefilename=mberrys.Loupe-pdf_${version}.msi" >> $env:GITHUB_ENV
+          Write-Host "MSI package file name: mberrys.Loupe-pdf_${version}.msi"
 
       - name: Find WiXUIExtension.dll
         id: find_wixui_extension
@@ -189,6 +222,15 @@ jobs:
           } else {
               Write-Error "WiXUIExtension.dll not found in the expected path."
           }
+
+      - name: Inject missing install DLLs into Product.wxs
+        shell: pwsh
+        run: |
+          # cmake --install stages runtime DLLs that the hand-maintained Product.wxs.in
+          # may omit. Light only packages listed files — close the gap before candle.
+          & "${env:GITHUB_WORKSPACE}\pdf4qt\scripts\Inject-WixMissingDlls.ps1" `
+            -ProductWxs "${env:GITHUB_WORKSPACE}\pdf4qt\build\WixInstaller\Product.wxs" `
+            -InstallBinDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin"
  
       - name: Create MSI Package
         working-directory: pdf4qt\build\WixInstaller
@@ -203,27 +245,39 @@ jobs:
           signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"        
           signtool.exe verify /v /pa "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"
 
+      - name: Run MSI lifecycle smoke test
+        shell: pwsh
+        run: |
+          # WiX is invoked with -arch x86, so INSTALLFOLDER resolves under ProgramFilesX86.
+          # Editor launch is skipped: no interactive desktop on the runner.
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "pdf4qt\build\install\${{ env.msipackagefilename }}"
+          $installDir = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'PDF4QT'
+          & "${env:GITHUB_WORKSPACE}\pdf4qt\scripts\Invoke-MsiSmokeTest.ps1" `
+            -MsiPath $msiPath `
+            -InstallDir $installDir `
+            -SkipEditorLaunch
+
       - name: Create MSIX Package
         run: |
-          MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\JakubMelka.PDF4QT_${{ env.pdf4qt_version }}.msix"
+          MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix"
           
       - name: Upload ZIP directory
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'PDF4QT-${{ runner.os }}-${{ env.pdf4qt_version }}.zip'
+          name: 'Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip'
           path: .\pdf4qt\build\install\usr\bin
           retention-days: 30
 
       - name: Upload MSIX package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'JakubMelka.PDF4QT_${{ env.pdf4qt_version }}.msix'
-          path: .\pdf4qt\build\install\JakubMelka.PDF4QT_${{ env.pdf4qt_version }}.msix
+          name: 'mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix'
+          path: .\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix
           retention-days: 30
           compression-level: 0
           
       - name: Upload MSI package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: '${{ env.msipackagefilename }}'
           path: .\pdf4qt\build\install\${{ env.msipackagefilename }}

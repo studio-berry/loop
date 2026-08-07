@@ -25,6 +25,8 @@
 
 #include "pdficontheme.h"
 #include "pdfpagegeometry.h"
+#include "pdfbleedfixup.h"
+#include "pdfpagemasterexport.h"
 #include "pdfprogress.h"
 
 #include "pageitemmodel.h"
@@ -39,12 +41,16 @@
 #include <QStringList>
 #include <QUrl>
 
+#include <memory>
+
 namespace Ui
 {
 class MainWindow;
 }
 
 class QAbstractItemView;
+class QAction;
+class QCloseEvent;
 class QEvent;
 class QFrame;
 class QLabel;
@@ -52,6 +58,7 @@ class QLineEdit;
 class QMenu;
 class QMimeData;
 class QProgressBar;
+class QPushButton;
 class QTableView;
 
 namespace pdf
@@ -61,13 +68,6 @@ class PDFProgress;
 
 namespace pdfpagemaster
 {
-
-struct ExportResult
-{
-    bool success = false;
-    QString errorMessage;
-    QStringList writtenFiles;
-};
 
 class PageItemPreviewRenderer;
 class WorkspaceFilterProxyModel;
@@ -133,6 +133,7 @@ public:
         InsertEmptyPage,
         InsertPDF,
         ConfigurePageGeometry,
+        ConfigureBleedFixup,
         InsertPDFPages,
 
         RegroupEvenOdd,
@@ -163,6 +164,7 @@ public:
 protected:
     virtual bool eventFilter(QObject* watched, QEvent* event) override;
     virtual void resizeEvent(QResizeEvent* resizeEvent) override;
+    virtual void closeEvent(QCloseEvent* event) override;
 
 private slots:
     void on_actionClose_triggered();
@@ -179,6 +181,7 @@ private slots:
     void onExportProgressStep(int percentage);
     void onExportProgressFinished();
     void onExportFinished();
+    void onExportCancelClicked();
 
 private:
     void loadSettings();
@@ -229,6 +232,9 @@ private:
     bool insertDocument(const QString& fileName, int insertRow, const std::vector<pdf::PDFInteger>& pages = {});
     void setExportInProgress(bool inProgress);
     void hideExportProgress();
+    void requestExportCancel();
+    void stopExportWatcherBounded();
+    void detachExportWatcher();
 
     struct Settings
     {
@@ -252,7 +258,9 @@ private:
     pdf::PDFProgress* m_exportProgress;
     QProgressBar* m_exportProgressBar;
     QLabel* m_exportProgressLabel;
-    QFutureWatcher<ExportResult>* m_exportWatcher;
+    QPushButton* m_exportCancelButton;
+    QFutureWatcher<pdf::PDFPageMasterExportResult>* m_exportWatcher;
+    pdf::PDFPageMasterExportCancelToken m_exportCancelToken;
     QLabel* m_dropFeedbackLabel;
     QFrame* m_dropInsertionMarker;
     QWidget* m_dropFeedbackViewport;
@@ -260,10 +268,15 @@ private:
     QSignalMapper m_mapper;
     Qt::DropAction m_dropAction;
     bool m_isExporting = false;
-    bool m_wasEnabledBeforeExport = true;
     bool m_isChangingExportProgressStep = false;
     bool m_hasPageGeometrySettings = false;
     pdf::PDFPageGeometrySettings m_pageGeometrySettings;
+    bool m_hasBleedFixupSettings = false;
+    pdf::PDFBleedFixupSettings m_bleedFixupSettings;
+    bool m_hasPreflightGate = false;
+    bool m_forcePreflight = false;
+    QString m_preflightProfilePath;
+    QAction* m_actionBleedFixup = nullptr;
 
     struct WorkspaceCheckpoint
     {
