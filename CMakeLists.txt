@@ -179,6 +179,10 @@ if(PDF4QT_LINUX)
     set(PDF4QT_USE_TBB ON)
 endif()
 
+if(PDF4QT_ENABLE_SENTRY)
+    find_package(sentry CONFIG REQUIRED)
+endif()
+
 option(PDF4QT_INSTALL_TO_USR "Install to usr directory" ${VCPKG_TOOLCHAIN})
 
 if(PDF4QT_LINUX)
