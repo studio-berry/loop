@@ -71,7 +71,7 @@ QString PDFToolPreflightApplication::getStandardString(StandardString standardSt
             return PDFToolTranslationContext::tr("Preflight");
 
         case Description:
-            return PDFToolTranslationContext::tr("Run Frisket preflight checks and emit a normalized JSON report.");
+            return PDFToolTranslationContext::tr("Run Loupe preflight checks and emit a normalized JSON report.");
 
         default:
             Q_ASSERT(false);

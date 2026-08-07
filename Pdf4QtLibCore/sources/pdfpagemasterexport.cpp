@@ -45,7 +45,7 @@ namespace
 {
 
 constexpr int MANIFEST_SCHEMA_VERSION = 1;
-constexpr QLatin1String MANIFEST_FILE_NAME(".frisket-batch.json");
+constexpr QLatin1String MANIFEST_FILE_NAME(".loupe-batch.json");
 constexpr QLatin1String OUTPUT_STATUS_PENDING("pending");
 constexpr QLatin1String OUTPUT_STATUS_WRITTEN("written");
 constexpr QLatin1String OUTPUT_STATUS_FAILED("failed");

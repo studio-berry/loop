@@ -1,6 +1,6 @@
-# Frisket PDF — production runbook (V1)
+# Loupe PDF — production runbook (V1)
 
-Operational guide for shipping, monitoring, and supporting **Frisket PDF 1.6.x** desktop releases. This is not a hosted service runbook — there is no production API or database.
+Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** desktop releases. This is not a hosted service runbook — there is no production API or database.
 
 ---
 
@@ -8,20 +8,20 @@ Operational guide for shipping, monitoring, and supporting **Frisket PDF 1.6.x**
 
 | Platform | Artifact | Workflow | Install location |
 |----------|----------|----------|------------------|
-| Windows | MSI (**unsigned for V1**; signing optional post-V1) | `WindowsInstall.yml` | `C:\Program Files\Frisket PDF\` (WiX) |
+| Windows | MSI (**unsigned for V1**; signing optional post-V1) | `WindowsInstall.yml` | `C:\Program Files\Loupe PDF\` (WiX) |
 | Windows | Portable zip | `ci.yml` | User-chosen |
 | Linux | AppImage | `LinuxInstall.yml` | User-chosen |
 | Linux | Flatpak | `LinuxFlatpak.yml` | Flathub-style bundle |
 
 **`.deb` is built but does not work — do not distribute it.** `ci.yml`'s `build_ubuntu` job runs `make-package.sh` (generated from `make-package.sh.in` via CMake `configure_file`) on every push to `master` and uploads a `ubuntu-deb-package` artifact. Verified 2026-08-02 by installing the artifact from a real CI run on a clean Ubuntu 22.04 Docker container: `dpkg -i` succeeds, but the installed binary fails to launch — `libQt6Gui.so.6: cannot open shared object file` — because, unlike the AppImage (which uses `linuxdeployqt`), the `.deb` doesn't bundle the Qt runtime or declare any `Depends:` in its control file. It also has a glibc version mismatch against 22.04 (`GLIBC_2.38' not found`). It is not attached to GitHub releases by `CreateReleaseDraft.yml`. Linux V1 ships AppImage (and, once wired into the release process, Flatpak) only, until this is fixed.
 
-**V1 slim bundle** (`PDF4QT_FRISKET_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
+**V1 slim bundle** (`PDF4QT_LOUPE_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
 
 **Bundled paths (Linux):**
 
 - Binaries: `usr/bin/Pdf4QtEditor`, `usr/bin/PdfTool`
 - Plugins: `usr/lib/pdf4qt/`
-- Preflight profile: `usr/share/frisket/profiles/frisket-default.json`
+- Preflight profile: `usr/share/loupe/profiles/loupe-default.json`
 
 ---
 
@@ -49,9 +49,9 @@ Operational guide for shipping, monitoring, and supporting **Frisket PDF 1.6.x**
 1. Clean Windows 10/11 VM (no Qt/MSVC installed).
 2. Install MSI.
 3. Launch **Pdf4QtEditor**.
-4. Open `frisket-preflight/testdata/fixtures/bleed-missing.pdf`.
-5. **Frisket Preflight → Run Preflight** — expect fail + bleed finding.
-6. Confirm `PdfTool.exe` exists beside Editor and `share/frisket/profiles/frisket-default.json` is present.
+4. Open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
+5. **Loupe Preflight → Run Preflight** — expect fail + bleed finding.
+6. Confirm `PdfTool.exe` exists beside Editor and `share/loupe/profiles/loupe-default.json` is present.
 
 ### 2.3 Linux packages
 
@@ -76,7 +76,7 @@ Publish draft only after smoke tests pass.
 |----------|--------|
 | Bad MSI/AppImage shipped | Unpublish GitHub release; re-point download to previous artifact |
 | Regression in Editor only | Ship hotfix build; users reinstall |
-| Bad preflight profile | Replace `frisket-default.json` in `share/frisket/profiles/` and rebuild; profiles are not auto-updated in place |
+| Bad preflight profile | Replace `loupe-default.json` in `share/loupe/profiles/` and rebuild; profiles are not auto-updated in place |
 | PdfTool CLI break | Same bundle rollback — Editor plugin shells bundled PdfTool |
 
 **No database migrations or feature flags** — rollback is binary replacement.
@@ -89,7 +89,7 @@ Publish draft only after smoke tests pass.
 
 ### 4.1 CI health
 
-- Watch: https://github.com/mberrys/Frisket-pdf/actions
+- Watch: https://github.com/mberrys/Loupe-pdf/actions
 - Alert on: `ci.yml` failure on `master`, preflight corpus failure, Windows build break.
 
 ### 4.2 Crash telemetry (optional, opt-in)
@@ -134,13 +134,13 @@ PdfTool sentry-verify   # requires SENTRY_DSN
 | Symptom | Check |
 |---------|-------|
 | "Could not find PdfTool" | `PdfTool` beside `Pdf4QtEditor` in install prefix |
-| "Could not find profile" | `share/frisket/profiles/frisket-default.json` relative to bin |
+| "Could not find profile" | `share/loupe/profiles/loupe-default.json` relative to bin |
 | Hang | Task Manager for stuck `PdfTool`; kill and retry |
 | Invalid report JSON | stderr buffer overflow (>16 MB stdout) — reduce document complexity |
 
 ### 5.2 Preflight wrong results
 
-1. Confirm profile: bundled `frisket-default.json` version.
+1. Confirm profile: bundled `loupe-default.json` version.
 2. Run headless: `PdfTool preflight <file> --profile <path> --console-format json`
 3. Compare with `UnitTestsPreflightCorpus` fixtures.
 
@@ -148,7 +148,7 @@ PdfTool sentry-verify   # requires SENTRY_DSN
 
 ```bash
 PdfTool add-bleed input.pdf output.pdf --amount-mm 3.175 --mode mirror --force
-PdfTool preflight output.pdf --profile profiles/frisket-default.json
+PdfTool preflight output.pdf --profile profiles/loupe-default.json
 ```
 
 Known limitation: mirror seams on high-contrast corners (`docs/bleed-stress-test-results.md`).
@@ -177,7 +177,7 @@ Known limitation: mirror seams on high-contrast corners (`docs/bleed-stress-test
 
 ## 6. Problematic uploads / untrusted PDFs
 
-Frisket is a **local document processor**, not an upload service. Treat all PDFs as untrusted input.
+Loupe is a **local document processor**, not an upload service. Treat all PDFs as untrusted input.
 
 | Risk | Mitigation |
 |------|------------|
@@ -200,7 +200,7 @@ Frisket is a **local document processor**, not an upload service. Treat all PDFs
 | Variable | Component | Purpose |
 |----------|-----------|---------|
 | `SENTRY_DSN` | All GUI apps | Crash reporting |
-| `FRISKET_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
+| `LOUPE_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
 | `QT_QPA_PLATFORM` | Headless CI | `offscreen` for tests |
 | `PDF4QT_*` | Build-time | See `CMakeLists.txt` |
 
@@ -226,7 +226,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 
 | Ref | Symptom a user will report | Answer |
 |-----|----------------------------|--------|
-| R-002 | "Overprint looks wrong in the page view" | Standard page rendering does not simulate overprint (MIC-320). Use **Output Preview** for overprint-accurate proofing. Preflight still flags white/near-white overprint and the report panel says so. Frisket V1 makes no overprint-safe output claim |
+| R-002 | "Overprint looks wrong in the page view" | Standard page rendering does not simulate overprint (MIC-320). Use **Output Preview** for overprint-accurate proofing. Preflight still flags white/near-white overprint and the report panel says so. Loupe V1 makes no overprint-safe output claim |
 | R-016 | "Windows warns the installer is untrusted" | The V1 MSI is unsigned — no code-signing certificate is held yet. Expected SmartScreen behaviour; verify the download against `SHA256SUMS.txt` on the release |
 | R-009 | "Changing the color scheme did nothing" | Settings are read at startup; restart the application |
 | R-004 | "A `PdfTool` process is still running" | Only after the Editor is force-killed (Task Manager) mid-preflight. In-app cancel terminates the child cleanly. End the orphan manually |
@@ -249,7 +249,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 - [x] README documents unsigned Windows installer, SmartScreen steps, and `SHA256SUMS.txt` integrity check (MIC-342)
 - [ ] `PACKAGING_LICENSING.md` critical items reviewed (full checklist gates *paid* distribution)
 - [ ] `THIRD_PARTY_NOTICES.txt` generated for the release artifact
-- [x] README points to Frisket release artifacts (not upstream PDF4QT)
+- [x] README points to Loupe release artifacts (not upstream PDF4QT)
 - [ ] Draft release artifacts attached with `SHA256SUMS.txt`
 - [ ] Release notes state: unsigned installer, no overprint simulation in page view, Windows + Linux only
 - [ ] `docs/V1_RELEASE_READINESS.md` recommendation reviewed by product owner

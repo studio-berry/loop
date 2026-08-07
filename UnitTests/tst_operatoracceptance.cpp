@@ -22,7 +22,7 @@
 
 // End-to-end operator-loop acceptance for MIC-300 (Phase C).
 // Drives PdfTool preflight + add-bleed via QProcess (same sidecar contract as the
-// Editor plugin) and validates report handling helpers used by FrisketPreflightPlugin.
+// Editor plugin) and validates report handling helpers used by LoupePreflightPlugin.
 // GUI navigation/overlay/cancel flows are covered in docs/v1-operator-acceptance.md.
 
 #include "preflightsidecarutils.h"
@@ -43,7 +43,7 @@
 namespace
 {
 
-constexpr char DEFAULT_PROFILE_REL[] = "profiles/frisket-default.json";
+constexpr char DEFAULT_PROFILE_REL[] = "profiles/loupe-default.json";
 constexpr qreal POINTS_PER_MM = 72.0 / 25.4;
 
 struct OperatorCorpusEntry
@@ -66,12 +66,12 @@ constexpr OperatorCorpusEntry OPERATOR_CORPUS[] = {
 
 QString fixturesDir()
 {
-    return QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 QString sourceDir()
 {
-    return QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR);
+    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR);
 }
 
 QString defaultProfilePath()
@@ -610,7 +610,7 @@ void OperatorAcceptanceTest::reportContract_rejectsUnsupportedSchema()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 99);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Frisket Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());

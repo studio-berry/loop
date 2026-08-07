@@ -13,7 +13,7 @@ Non-negotiable constraints for every session in this repo:
 - **Docs-with-code:** user-facing or API doc changes ship in the same PR as the code.
 - **Hooks:** client-side gates are fast feedback only; CI is authoritative. Do not
   bypass pre-commit or pre-push checks.
-- **Frisket-pdf:** Qt 6.11.1+ C++20 fork; Editor is the plugin host; PdfTool for
+- **Loupe-pdf:** Qt 6.11.1+ C++20 fork; Editor is the plugin host; PdfTool for
   headless automation; PageMaster for batch geometry. Do not run full rebuilds unless asked.
 
 Full hook map: Notion → Policy Enforcement Hooks.

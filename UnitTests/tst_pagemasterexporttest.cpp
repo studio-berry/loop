@@ -994,7 +994,7 @@ void PageMasterExportTest::resume_mismatchedManifestStartsFreshBatch()
               }
           } }
     };
-    const QString manifestPath = tempDir.filePath(QStringLiteral(".frisket-batch.json"));
+    const QString manifestPath = tempDir.filePath(QStringLiteral(".loupe-batch.json"));
     QFile manifestFile(manifestPath);
     QVERIFY(manifestFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
     manifestFile.write(QJsonDocument(staleManifest).toJson(QJsonDocument::Compact));
@@ -1023,8 +1023,8 @@ void PageMasterExportTest::preflight_gate_blocksFailedOutput()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString fixturePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
-    const QString profilePath = QStringLiteral(FRISKET_PREFLIGHT_SOURCE_DIR "/profiles/frisket-default.json");
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
     QVERIFY(QFile::exists(fixturePath));
     QVERIFY(QFile::exists(profilePath));
 

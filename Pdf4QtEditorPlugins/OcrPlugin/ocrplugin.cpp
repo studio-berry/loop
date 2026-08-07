@@ -55,13 +55,13 @@ void OcrPlugin::setWidget(pdf::PDFWidget* widget)
     BaseClass::setWidget(widget);
 
     m_actionRunOcr = new QAction(tr("&Run OCR"), this);
-    m_actionRunOcr->setObjectName("frisketocr_Run");
+    m_actionRunOcr->setObjectName("loupeocr_Run");
     m_actionRunOcr->setEnabled(false);
     m_actionRunOcr->setToolTip(tr("Runs PdfTool ocr via QProcess."));
     connect(m_actionRunOcr, &QAction::triggered, this, &OcrPlugin::onRunOcrTriggered);
 
     m_actionShowPanel = new QAction(tr("Show &OCR Panel"), this);
-    m_actionShowPanel->setObjectName("frisketocr_ShowPanel");
+    m_actionShowPanel->setObjectName("loupeocr_ShowPanel");
     m_actionShowPanel->setCheckable(true);
     connect(m_actionShowPanel, &QAction::toggled, this, &OcrPlugin::onShowPanelTriggered);
 
@@ -102,7 +102,7 @@ std::vector<QAction*> OcrPlugin::getActions() const
 
 QString OcrPlugin::getPluginMenuName() const
 {
-    return tr("Frisket &OCR");
+    return tr("Loupe &OCR");
 }
 
 void OcrPlugin::ensureDockWidget()
@@ -143,7 +143,7 @@ bool OcrPlugin::resolvePdfToolPath(QString* pdfToolPath) const
     const QString candidate = ocr::resolveBundlePath(applicationDirectory, QStringLiteral("../") + ocr::getPdfToolFileName());
     if (!QFileInfo::exists(candidate))
     {
-        QMessageBox::critical(m_widget, tr("Frisket OCR"),
+        QMessageBox::critical(m_widget, tr("Loupe OCR"),
                               tr("Could not find PdfTool at %1.").arg(candidate));
         return false;
     }
@@ -167,7 +167,7 @@ void OcrPlugin::startOcrRun()
     m_ocrTemporaryDirectory = std::make_unique<QTemporaryDir>();
     if (!m_ocrTemporaryDirectory->isValid())
     {
-        QMessageBox::critical(m_widget, tr("Frisket OCR"), tr("Could not create a temporary directory for the OCR snapshot."));
+        QMessageBox::critical(m_widget, tr("Loupe OCR"), tr("Could not create a temporary directory for the OCR snapshot."));
         return;
     }
 
@@ -176,7 +176,7 @@ void OcrPlugin::startOcrRun()
     const pdf::PDFOperationResult writeResult = writer.write(snapshotPath, m_document, false);
     if (!writeResult)
     {
-        QMessageBox::critical(m_widget, tr("Frisket OCR"),
+        QMessageBox::critical(m_widget, tr("Loupe OCR"),
                               tr("Could not create an OCR snapshot: %1").arg(writeResult.getErrorMessage()));
         m_ocrTemporaryDirectory.reset();
         return;
@@ -252,7 +252,7 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
     if (exitStatus != static_cast<int>(QProcess::NormalExit) || !ocr::isExpectedOcrExitCode(exitCode))
     {
         QMessageBox::critical(m_widget,
-                              tr("Frisket OCR"),
+                              tr("Loupe OCR"),
                               tr("PdfTool ocr failed (exit %1): %2").arg(exitCode).arg(QString::fromUtf8(stderrData)));
         return;
     }
@@ -262,7 +262,7 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
     if (parseError.error != QJsonParseError::NoError || !document.isObject())
     {
         QMessageBox::critical(m_widget,
-                              tr("Frisket OCR"),
+                              tr("Loupe OCR"),
                               tr("Invalid OCR JSON: %1").arg(parseError.errorString()));
         return;
     }
@@ -270,13 +270,13 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
     QString validationError;
     if (!applyReportJson(document.object(), &validationError))
     {
-        QMessageBox::critical(m_widget, tr("Frisket OCR"), validationError);
+        QMessageBox::critical(m_widget, tr("Loupe OCR"), validationError);
     }
 }
 
 void OcrPlugin::onOcrProcessErrorOccurred()
 {
-    QMessageBox::critical(m_widget, tr("Frisket OCR"), tr("Failed to start PdfTool ocr."));
+    QMessageBox::critical(m_widget, tr("Loupe OCR"), tr("Failed to start PdfTool ocr."));
     finishOcrRun();
 }
 
@@ -308,7 +308,7 @@ void OcrPlugin::cancelOcrRun(bool silent)
 
     if (!silent)
     {
-        QMessageBox::information(m_widget, tr("Frisket OCR"), tr("OCR run cancelled."));
+        QMessageBox::information(m_widget, tr("Loupe OCR"), tr("OCR run cancelled."));
     }
 
     finishOcrRun();

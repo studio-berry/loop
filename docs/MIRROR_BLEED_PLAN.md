@@ -1,7 +1,7 @@
 # Bleed Fixup — Implementation Plan
 
 Status: **approved with changes** (Senior Developer + triple review, 2026-07-09).  
-Scope: Frisket-pdf / PDF4QT 1.6.0.0.  
+Scope: Loupe-pdf / PDF4QT 1.6.0.0.  
 Primary API name: **`PDFBleedFixup`** (`pdfbleedfixup.*`) with mode enum (`Mirror`, `PixelRepeat`, `Stretch`).  
 PdfTool command: **`add-bleed --mode ...`**.  
 Related: MIC-121 (Mirror / M1), MIC-122 (PixelRepeat + Stretch / M2; blocked by MIC-121 scaffolding).

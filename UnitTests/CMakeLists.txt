@@ -119,7 +119,7 @@ add_executable(UnitTestsPreflightEngine
 
 target_link_libraries(UnitTestsPreflightEngine PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
 target_compile_definitions(UnitTestsPreflightEngine PRIVATE
-    FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight")
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
 set_target_properties(UnitTestsPreflightEngine PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -135,7 +135,7 @@ add_executable(UnitTestsOcrPageGate
 
 target_link_libraries(UnitTestsOcrPageGate PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
 target_compile_definitions(UnitTestsOcrPageGate PRIVATE
-    FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight")
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
 set_target_properties(UnitTestsOcrPageGate PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -152,8 +152,8 @@ add_executable(UnitTestsOcrCli
 target_link_libraries(UnitTestsOcrCli PRIVATE Qt6::Core Qt6::Test)
 add_dependencies(UnitTestsOcrCli PdfTool)
 target_compile_definitions(UnitTestsOcrCli PRIVATE
-    FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight"
-    FRISKET_OCR_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-ocr"
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+    LOUPE_OCR_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-ocr"
     PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>")
 
 set_target_properties(UnitTestsOcrCli PROPERTIES
@@ -207,7 +207,7 @@ add_executable(UnitTestsPageMasterExport
 target_link_libraries(UnitTestsPageMasterExport PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test Qt6::Concurrent)
 
 target_compile_definitions(UnitTestsPageMasterExport PRIVATE
-    FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight"
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
 )
 
 set_target_properties(UnitTestsPageMasterExport PROPERTIES
@@ -285,7 +285,7 @@ add_executable(UnitTestsPreflightPlugin
 )
 
 target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Test)
-target_include_directories(UnitTestsPreflightPlugin PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/FrisketPreflightPlugin)
+target_include_directories(UnitTestsPreflightPlugin PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
 
 set_target_properties(UnitTestsPreflightPlugin PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -295,7 +295,7 @@ set_target_properties(UnitTestsPreflightPlugin PROPERTIES
 )
 add_test(UnitTestsPreflightPlugin  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPreflightPlugin")
 
-# Drives `PdfTool preflight` against the frisket-preflight golden corpus, so it needs
+# Drives `PdfTool preflight` against the loupe-preflight golden corpus, so it needs
 # the PdfTool executable, which is not built in PDF4QT_BUILD_ONLY_CORE_LIBRARY mode.
 if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     add_executable(UnitTestsPreflightCorpus
@@ -306,7 +306,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     add_dependencies(UnitTestsPreflightCorpus PdfTool)
     target_compile_definitions(UnitTestsPreflightCorpus PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
-        FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight"
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
 
     set_target_properties(UnitTestsPreflightCorpus PROPERTIES
@@ -325,7 +325,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     add_dependencies(UnitTestsBleedStress PdfTool)
     target_compile_definitions(UnitTestsBleedStress PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
-        FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight"
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
 
     set_target_properties(UnitTestsBleedStress PROPERTIES
@@ -344,9 +344,9 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     add_dependencies(UnitTestsOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
-        FRISKET_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/frisket-preflight"
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
-    target_include_directories(UnitTestsOperatorAcceptance PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/FrisketPreflightPlugin)
+    target_include_directories(UnitTestsOperatorAcceptance PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
 
     set_target_properties(UnitTestsOperatorAcceptance PROPERTIES
         WIN32_EXECUTABLE OFF

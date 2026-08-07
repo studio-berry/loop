@@ -1,0 +1,51 @@
+{
+    "checks": [
+        {
+            "id": "embedded-fonts",
+            "status": "ok"
+        },
+        {
+            "id": "image-resolution",
+            "status": "warning"
+        },
+        {
+            "id": "bleed",
+            "status": "ok"
+        },
+        {
+            "id": "trim",
+            "status": "ok"
+        },
+        {
+            "id": "page-size",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
+            "status": "ok"
+        },
+        {
+            "id": "white-overprint",
+            "status": "ok"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loupe Default",
+    "schema_version": 3,
+    "warnings": [
+        {
+            "check_id": "image-resolution",
+            "message": "Image resolution 25 DPI is below minimum 300 DPI on page 1",
+            "object_id": "6",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "image-resolution"
+        }
+    ]
+}

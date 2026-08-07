@@ -1,6 +1,6 @@
 # Release packaging and OSS licensing (MIC-140)
 
-Planning review for Frisket desktop distribution — **not legal advice**. A qualified open-source licensing attorney should review the final release manifest before commercial distribution.
+Planning review for Loupe desktop distribution — **not legal advice**. A qualified open-source licensing attorney should review the final release manifest before commercial distribution.
 
 **Linear:** [MIC-140](https://linear.app/mbx2/issue/MIC-140/plan-packaging-licensing-review-ghostscriptverapdfjre-bundle)  
 **Notion source:** [MIC-140 — Packaging & Licensing Review](https://app.notion.com/p/9bdbe383233d44cd88b7916d9aa4ce6d)  
@@ -8,13 +8,13 @@ Planning review for Frisket desktop distribution — **not legal advice**. A qua
 
 ## Recommendation
 
-Ship Frisket’s **default desktop bundle as C++/Qt only**: PDF4QT host + Frisket plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
+Ship Loupe’s **default desktop bundle as C++/Qt only**: PDF4QT host + Loupe plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
 
 ## Decision record
 
 | Component | Default bundle | Optional add-on | Decision |
 |-----------|:--------------:|:---------------:|----------|
-| Frisket / PDF4QT fork | Yes | — | MIT; re-verify at each release commit |
+| Loupe / PDF4QT fork | Yes | — | MIT; re-verify at each release commit |
 | Qt runtime | Yes | — | Dynamically linked LGPL-eligible modules; avoid requiring a commercial Qt license unless chosen |
 | PdfTool `preflight` engine | Yes | — | Separate C++ process; no JVM. Version with plugin and JSON schema |
 | Little CMS | Transitive | — | MIT; include notice |
@@ -42,15 +42,15 @@ MIC-140 is therefore a **release packaging and license-compliance gate**, not a 
 ### Default bundle
 
 ```text
-Frisket/
+Loupe/
 ├─ app/
 │  ├─ Pdf4QtEditor[.exe]
 │  ├─ PdfTool[.exe]
 │  └─ required shared libraries
 ├─ plugins/
-│  └─ frisket-preflight[.dll|.so|.dylib]
+│  └─ loupe-preflight[.dll|.so|.dylib]
 ├─ profiles/
-│  ├─ frisket-default.yaml
+│  ├─ loupe-default.yaml
 │  └─ schemas/
 ├─ licenses/
 │  ├─ THIRD_PARTY_NOTICES.txt
@@ -63,14 +63,14 @@ Frisket/
 └─ VERSION.json
 ```
 
-User profiles (overrides): `%APPDATA%/Frisket` or MelkaJ org settings (Windows),
-`~/.config/frisket` / MelkaJ (Linux), plus bundled defaults under `profiles/`.
+User profiles (overrides): `%APPDATA%/Loupe` or MelkaJ org settings (Windows),
+`~/.config/loupe` / MelkaJ (Linux), plus bundled defaults under `profiles/`.
 See [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md).
 
 ### Optional validator pack
 
 ```text
-Frisket-ValidatorPack/
+Loupe-ValidatorPack/
 ├─ verapdf/
 │  ├─ exact upstream CLI distribution
 │  └─ version metadata
@@ -84,7 +84,7 @@ Frisket-ValidatorPack/
 └─ VERSION.json
 ```
 
-`VERSION.json` should bind app, plugin ABI, PdfTool engine, report-schema version, profile-schema version, and optional validator-pack version. Refuse execution on incompatible major contract versions (see `schema_version` in [frisket-preflight/README.md](../frisket-preflight/README.md)).
+`VERSION.json` should bind app, plugin ABI, PdfTool engine, report-schema version, profile-schema version, and optional validator-pack version. Refuse execution on incompatible major contract versions (see `schema_version` in [loupe-preflight/README.md](../loupe-preflight/README.md)).
 
 ## License findings
 
@@ -109,7 +109,7 @@ Sources: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-ob
 
 Dual-licensed GPLv3+ or MPL 2.0+. Select **MPL 2.0** in the optional pack and document that election. Distributors must tell recipients where to obtain corresponding MPL-covered source.
 
-Ship unmodified upstream CLI when possible. Keep Frisket integration in a separate process and separate proprietary files. Preserve veraPDF license/notice files and archive exact corresponding source.
+Ship unmodified upstream CLI when possible. Keep Loupe integration in a separate process and separate proprietary files. Preserve veraPDF license/notice files and archive exact corresponding source.
 
 Sources: [veraPDF licensing](https://verapdf.org/home/), [veraPDF apps](https://github.com/veraPDF/veraPDF-apps), [MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
 
@@ -130,7 +130,7 @@ Sources: [Adoptium FAQ](https://adoptium.net/docs/faq), [OpenJDK GPLv2 + CE](htt
 
 AGPL or Artifex commercial license. Since Ghostscript is not needed for the default architecture, **complete exclusion** is the lowest-risk decision.
 
-**Hard gate:** fail packaging if a Ghostscript executable, library, resource, installer, or container layer appears in a proprietary Frisket artifact unless the release record contains an executed Artifex commercial agreement.
+**Hard gate:** fail packaging if a Ghostscript executable, library, resource, installer, or container layer appears in a proprietary Loupe artifact unless the release record contains an executed Artifex commercial agreement.
 
 Sources: [Ghostscript licensing](https://ghostscript.com/licensing), [Artifex licensing](https://artifex.com/licensing).
 
@@ -172,7 +172,7 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 
 **Title:** `[Plan] Release packaging + OSS licensing gate (Qt / optional veraPDF)`
 
-**Summary:** Default Frisket packaging is C++/Qt only: PDF4QT host, Frisket plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
+**Summary:** Default Loupe packaging is C++/Qt only: PDF4QT host, Loupe plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
 
 **Deliverables:**
 
