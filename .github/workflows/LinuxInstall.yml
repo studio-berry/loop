@@ -3,6 +3,11 @@ name: Linux_AppImage
 on:
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN: checkout reads the repo and artifacts are
+# uploaded via the job token.
+permissions:
+  contents: read
+
 jobs:
   build_ubuntu:
     runs-on: ubuntu-22.04
@@ -10,71 +15,39 @@ jobs:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/pdf4qt/vcpkg/overlays/linux:${{ github.workspace }}/pdf4qt/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       GNUPGHOME: ${{ github.workspace }}/gnupg
+      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
+      # Pinned 2026-08-03 from upstream continuous releases.
+      APPIMAGETOOL_SHA256: a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
+      LINUXDEPLOYQT_SHA256: 974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b
 
     steps:
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libxcb-cursor0 libspeechd2 gnupg2 wget appstream libcups2 libcups2-dev
+
+      - name: Install appimagetool
+        run: |
           wget -c "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          echo "${APPIMAGETOOL_SHA256}  appimagetool-x86_64.AppImage" | sha256sum -c -
           chmod +x appimagetool-x86_64.AppImage
           sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
 
-      - name: Prepare GPG home
-        run: |
-          rm -rf "$GNUPGHOME"
-          install -d -m 700 "$GNUPGHOME"
-          
-      - name: Configure GPG
-        run: |
-          echo "use-agent" >> "$GNUPGHOME/gpg.conf"
-          echo "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf"
-          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
-          echo "allow-preset-passphrase" >> "$GNUPGHOME/gpg-agent.conf"
-          gpgconf --kill gpg-agent
-          echo "GPG configuration complete."
-        env:
-          GNUPGHOME: ${{ env.GNUPGHOME }}
-
-      - name: Import PGP private key
-        run: |
-          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --batch --import
-          for keygrip in $(gpg --list-secret-keys --with-keygrip "${{ secrets.PGP_KEY_ID }}" | grep Keygrip | awk '{print $3}'); do
-            echo "${{ secrets.PGP_PASSPHRASE }}" | "$(gpgconf --list-dirs libexecdir)/gpg-preset-passphrase" --preset "$keygrip"
-          done
-        env:
-          GNUPGHOME: ${{ env.GNUPGHOME }}
-          
-      - name: Create Test signature
-        run: |
-          echo "TEST" >> ~/test_with_passphrase.txt
-          echo "TEST" >> ~/test_without_passphrase.txt
-          gpg --batch --yes --verbose --passphrase "${{ secrets.PGP_PASSPHRASE }}" --pinentry-mode loopback --detach-sign --local-user "${{ secrets.PGP_KEY_ID }}" --output ~/test_with_passphrase.txt.sig ~/test_with_passphrase.txt
-          gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --local-user "${{ secrets.PGP_KEY_ID }}" --output ~/test_without_passphrase.txt.sig ~/test_without_passphrase.txt
-        env:
-          GNUPGHOME: ${{ env.GNUPGHOME }}
-
-      - name: Verify Test signature
-        run: |
-          gpg --batch --yes --verbose --verify ~/test_with_passphrase.txt.sig ~/test_with_passphrase.txt
-          gpg --batch --yes --verbose --verify ~/test_without_passphrase.txt.sig ~/test_without_passphrase.txt
-        env:
-          GNUPGHOME: ${{ env.GNUPGHOME }}
-          
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
-          
+
       - name: 'VCPKG: Set up VCPKG'
         run: |
-          git clone --depth=1 https://github.com/microsoft/vcpkg.git
+          git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
+          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
           ./bootstrap-vcpkg.sh
           ./vcpkg integrate install
-        
+
       - name: 'VCPKG: Cache vcpkg dependencies'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
         with:
           path: |
             ./vcpkg/downloads
@@ -90,21 +63,21 @@ jobs:
         working-directory: vcpkg
         
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
-          version: '6.9.0'
+          version: '6.11.1'
           host: 'linux'
           target: 'desktop'
           dir: '${{ github.workspace }}/qt/'
           install-deps: 'true'
           modules: 'qtspeech qtmultimedia'
           cache: 'true'
-          cache-key-prefix: ${{ runner.os }}-qt-690
+          cache-key-prefix: ${{ runner.os }}-qt-6111
 
       - name: Build Project
         working-directory: pdf4qt
         run: |
-          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_TO_USR=ON
+          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_PLUGIN_OCR=OFF
           cmake --build build --target all release_translations -j6
           cmake --install build
           
@@ -113,21 +86,46 @@ jobs:
         run: |
           version=$(cat "pdf4qt/build/version.txt")
           echo "Version: $version"
-          echo "appimagefilename=PDF4QT-$version-x86_64.AppImage" >> $GITHUB_ENV
-          echo "appimage_update_info=gh-releases-zsync|JakubMelka|PDF4QT|latest|PDF4QT-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
-          echo "AppImage file name: PDF4QT-$version-x86_64.AppImage"
+          echo "appimagefilename=Loupe-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
+          echo "appimage_update_info=gh-releases-zsync|mberrys|Loupe-pdf|latest|Loupe-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
+          echo "AppImage file name: Loupe-pdf-$version-x86_64.AppImage"
         env:
           appimagefilename: ${{ env.appimagefilename }}
           
       - name: 'Linux Deploy Qt'
         working-directory: pdf4qt/build
         run: |
-          cp install/usr/share/icons/hicolor/scalable/apps/io.github.JakubMelka.Pdf4qt.svg install/io.github.JakubMelka.Pdf4qt.svg
+          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
           wget -O deploy.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          echo "${LINUXDEPLOYQT_SHA256}  deploy.AppImage" | sha256sum -c -
           chmod +x deploy.AppImage
-          ./deploy.AppImage install/usr/share/applications/io.github.JakubMelka.Pdf4qt.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
+          ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
           
+      - name: Prepare GPG home
+        if: vars.SIGN_APPIMAGE == 'true'
+        run: |
+          rm -rf "$GNUPGHOME"
+          install -d -m 700 "$GNUPGHOME"
+          echo "use-agent" >> "$GNUPGHOME/gpg.conf"
+          echo "pinentry-mode loopback" >> "$GNUPGHOME/gpg.conf"
+          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+          echo "allow-preset-passphrase" >> "$GNUPGHOME/gpg-agent.conf"
+          gpgconf --kill gpg-agent
+          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --batch --import
+          for keygrip in $(gpg --list-secret-keys --with-keygrip "${{ secrets.PGP_KEY_ID }}" | grep Keygrip | awk '{print $3}'); do
+            echo "${{ secrets.PGP_PASSPHRASE }}" | "$(gpgconf --list-dirs libexecdir)/gpg-preset-passphrase" --preset "$keygrip"
+          done
+        env:
+          GNUPGHOME: ${{ env.GNUPGHOME }}
+
+      - name: Pack AppImage (unsigned — V1 default)
+        if: vars.SIGN_APPIMAGE != 'true'
+        working-directory: pdf4qt/build
+        run: |
+          appimagetool -u "${{ env.appimage_update_info }}" install/ ${{ env.appimagefilename }}
+
       - name: Sign and Repack AppImage
+        if: vars.SIGN_APPIMAGE == 'true'
         working-directory: pdf4qt/build
         run: |
           appimagetool -u "${{ env.appimage_update_info }}" -s --sign-key "${{ secrets.PGP_KEY_ID }}" install/ ${{ env.appimagefilename }}
@@ -135,20 +133,30 @@ jobs:
           GNUPGHOME: ${{ env.GNUPGHOME }}
           
       - name: Manual signature
+        if: vars.SIGN_APPIMAGE == 'true'
         run: |
           gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --passphrase "${{ secrets.PGP_PASSPHRASE }}" --local-user "${{ secrets.PGP_KEY_ID }}" --output pdf4qt/build/${{ env.appimagefilename }}.sig pdf4qt/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
       - name: Verify AppImage Detached Signature
+        if: vars.SIGN_APPIMAGE == 'true'
         run: |
           echo "${{ secrets.PGP_PUBLIC_KEY }}" | gpg --batch --import
           gpg --verify pdf4qt/build/${{ env.appimagefilename }}.sig pdf4qt/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
+      - name: Run AppImage smoke test
+        working-directory: pdf4qt
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          chmod +x "build/${{ env.appimagefilename }}"
+          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}"
+
       - name: Upload AppImage Package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}
           path: ./pdf4qt/build/${{ env.appimagefilename }}
@@ -156,7 +164,8 @@ jobs:
           compression-level: 0
           
       - name: Upload AppImage Signature File
-        uses: actions/upload-artifact@v4
+        if: vars.SIGN_APPIMAGE == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.sig
           path: ./pdf4qt/build/${{ env.appimagefilename }}.sig
@@ -165,7 +174,7 @@ jobs:
           compression-level: 0
           
       - name: Upload AppImage zsync File
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.zsync
           path: ./pdf4qt/build/${{ env.appimagefilename }}.zsync
@@ -174,6 +183,7 @@ jobs:
           compression-level: 0
 
       - name: Cleanup GPG home
+        if: always() && vars.SIGN_APPIMAGE == 'true'
         run: |
           rm -rf "$GNUPGHOME"
         env:

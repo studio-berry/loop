@@ -13,7 +13,7 @@
     "blend2d",
     {
       "name": "sentry-native",
-      "features": [ "backend", "transport" ]
+      "platform": "windows"
     }
   ]
 }

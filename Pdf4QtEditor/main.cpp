@@ -24,12 +24,10 @@
 #include "pdfconstants.h"
 #include "pdfsecurityhandler.h"
 #include "pdfwidgetutils.h"
-#include "pdfviewersettings.h"
 #include "pdfapplicationtranslator.h"
 #include "pdfsettings.h"
 #include "pdfsentry.h"
 
-#include <QSettings>
 #include <QApplication>
 #include <QCommandLineParser>
 
@@ -49,8 +47,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT Editor"));
 
-    pdf::PDFFSentry::initialize();
-    qAddPostRoutine([]() { pdf::PDFFSentry::shutdown(); });
+    const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");
@@ -78,30 +75,7 @@ int main(int argc, char *argv[])
     translator.loadSettings();
     translator.installTranslator();
 
-    bool isLightGui = false;
-    bool isDarkGui = false;
-    const pdfviewer::PDFViewerSettings::ColorScheme colorScheme = pdfviewer::PDFViewerSettings::getColorSchemeStatic();
-    switch (colorScheme)
-    {
-        case pdfviewer::PDFViewerSettings::AutoScheme:
-            isLightGui = parser.isSet(lightGui);
-            isDarkGui = parser.isSet(darkGui);
-            break;
-
-        case pdfviewer::PDFViewerSettings::LightScheme:
-            isLightGui = true;
-            break;
-
-        case pdfviewer::PDFViewerSettings::DarkScheme:
-            isDarkGui = true;
-            break;
-
-        default:
-            Q_ASSERT(false);
-            break;
-    }
-
-    pdf::PDFWidgetUtils::setDarkTheme(isLightGui, isDarkGui);
+    pdf::PDFWidgetUtils::initApplicationColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
 
     QIcon appIcon(":/app-icon.svg");
     QApplication::setWindowIcon(appIcon);

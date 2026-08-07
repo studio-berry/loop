@@ -246,8 +246,18 @@ QByteArray PDFInvisibleTextSanitizerHelper::sanitizeInvisibleTextInContent(const
 
                     if (width > 0 && height > 0 && bpc > 0)
                     {
-                        const PDFInteger stride = (width * bpc + 7) / 8;
-                        dataLength = stride * height;
+                        PDFInteger stride = 0;
+                        PDFInteger dataLengthProduct = 0;
+                        if (!pdfTryMultiply(width, bpc, stride) || !pdfTryAdd(stride, PDFInteger(7), stride))
+                        {
+                            continue;
+                        }
+                        stride = (stride + 7) / 8;
+                        if (!pdfTryMultiply(stride, height, dataLengthProduct))
+                        {
+                            continue;
+                        }
+                        dataLength = dataLengthProduct;
                     }
                 }
 
@@ -728,6 +738,10 @@ void PDFDocumentSanitizer::performSanitizeFileAttachments()
     {
         PDFObject namesObject = builder.getObject(catalogDictionary->get("Names"));
         const PDFDictionary* namesDictionary = builder.getDictionaryFromObject(namesObject);
+        if (!namesDictionary)
+        {
+            return;
+        }
         if (namesDictionary->hasKey("EmbeddedFiles"))
         {
             PDFDictionary dictionaryCopy = *namesDictionary;
@@ -760,6 +774,10 @@ void PDFDocumentSanitizer::performSanitizeEmbeddedSearchIndex()
     {
         PDFObject pieceInfoObject = builder.getObject(catalogDictionary->get("PieceInfo"));
         const PDFDictionary* pieceInfoDictionary = builder.getDictionaryFromObject(pieceInfoObject);
+        if (!pieceInfoDictionary)
+        {
+            return;
+        }
         if (pieceInfoDictionary->hasKey("SearchIndex"))
         {
             PDFDictionary dictionaryCopy = *pieceInfoDictionary;

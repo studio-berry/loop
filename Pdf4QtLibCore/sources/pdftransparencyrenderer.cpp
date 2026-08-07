@@ -73,11 +73,22 @@ PDFFloatBitmap::PDFFloatBitmap(size_t width, size_t height, PDFPixelFormat forma
 {
     Q_ASSERT(format.isValid());
 
-    m_data.resize(format.calculateBitmapDataLength(width, height), static_cast<PDFColorComponent>(0.0f));
+    const size_t dataLength = format.calculateBitmapDataLength(width, height);
+    if (dataLength == 0)
+    {
+        throw PDFException(PDFTranslationContext::tr("Invalid bitmap dimensions."));
+    }
+
+    m_data.resize(dataLength, static_cast<PDFColorComponent>(0.0f));
 
     if (m_format.hasActiveColorMask())
     {
-        m_activeColorMask.resize(width * height, 0);
+        size_t maskLength = 0;
+        if (!pdfTryMultiply(width, height, maskLength))
+        {
+            throw PDFException(PDFTranslationContext::tr("Invalid bitmap dimensions."));
+        }
+        m_activeColorMask.resize(maskLength, 0);
     }
 }
 
@@ -2627,18 +2638,16 @@ void PDFTransparencyRenderer::performEndTransparencyGroup(ProcessOrder order, co
         PDFTransparencyGroupPainterData& targetData = m_transparencyGroupDataStack.back();
         sourceData.immediateBackdrop.convertToColorSpace(getCMS(), targetData.renderingIntent, targetData.blendColorSpace, this);
 
-        PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
-        const bool useOverprint = overprintMode.overprintFilling || overprintMode.overprintStroking;
-
-        PDFFloatBitmap::OverprintMode selectedOverprintMode = PDFFloatBitmap::OverprintMode::NoOveprint;
-        if (useOverprint)
-        {
-            selectedOverprintMode = overprintMode.overprintMode == 0 ? PDFFloatBitmap::OverprintMode::Overprint_Mode_0
-                                                                     : PDFFloatBitmap::OverprintMode::Overprint_Mode_1;
-        }
+        const PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
+        const PDFFloatBitmap::OverprintMode selectedOverprintMode = selectBlendOverprintMode(overprintMode,
+                                                                                             sourceData.containsFilling,
+                                                                                             sourceData.containsStroking);
 
         PDFFloatBitmap::blend(sourceData.immediateBackdrop, targetData.immediateBackdrop, *getBackdrop(), *getInitialBackdrop(), *sourceData.softMask.getSoftMask(),
                               sourceData.alphaIsShape, sourceData.alphaFill, sourceData.blendMode, sourceData.group.knockout, selectedOverprintMode, getPaintRect());
+
+        targetData.containsFilling |= sourceData.containsFilling;
+        targetData.containsStroking |= sourceData.containsStroking;
 
         // Create draw buffer
         PDFFloatBitmapWithColorSpace* backdrop = getImmediateBackdrop();
@@ -3104,21 +3113,23 @@ void PDFTransparencyRenderer::flushDrawBuffer()
 {
     if (m_drawBuffer.isModified())
     {
-        PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
-        const bool useOverprint = (overprintMode.overprintFilling && m_drawBuffer.isContainsFilling()) ||
-                                  (overprintMode.overprintStroking && m_drawBuffer.isContainsStroking());
-
-        PDFFloatBitmap::OverprintMode selectedOverprintMode = PDFFloatBitmap::OverprintMode::NoOveprint;
-        if (useOverprint)
-        {
-            selectedOverprintMode = overprintMode.overprintMode == 0 ? PDFFloatBitmap::OverprintMode::Overprint_Mode_0
-                                                                     : PDFFloatBitmap::OverprintMode::Overprint_Mode_1;
-        }
+        const bool containsFilling = m_drawBuffer.isContainsFilling();
+        const bool containsStroking = m_drawBuffer.isContainsStroking();
+        const PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
+        const PDFFloatBitmap::OverprintMode selectedOverprintMode = selectBlendOverprintMode(overprintMode,
+                                                                                             containsFilling,
+                                                                                             containsStroking);
 
         PDFFloatBitmap::blend(m_drawBuffer, *getImmediateBackdrop(), *getBackdrop(), *getInitialBackdrop(), *getPainterState()->softMask.getSoftMask(),
                               getGraphicState()->getAlphaIsShape(), 1.0f, getGraphicState()->getBlendMode(), isTransparencyGroupKnockout(),
                               selectedOverprintMode, m_drawBuffer.getModifiedRect());
 
+        if (!m_transparencyGroupDataStack.empty())
+        {
+            PDFTransparencyGroupPainterData& groupData = m_transparencyGroupDataStack.back();
+            groupData.containsFilling |= containsFilling;
+            groupData.containsStroking |= containsStroking;
+        }
 
         m_drawBuffer.clear();
     }
