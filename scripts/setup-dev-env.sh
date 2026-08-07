@@ -43,6 +43,7 @@ sudo apt-get install -y --no-install-recommends \
     libfontconfig1-dev \
     libgl1-mesa-dev \
     libxkbcommon-dev \
+    libxkbcommon-x11-0 \
     libxcb1-dev \
     libxcb-cursor-dev \
     libxcb-icccm4-dev \
