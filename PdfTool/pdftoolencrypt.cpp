@@ -51,7 +51,7 @@ QString PDFToolEncryptApplication::getStandardString(StandardString standardStri
     return QString();
 }
 
-int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolEncryptApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFSecurityHandlerFactory::SecuritySettings settings;
     settings.algorithm = options.encryptionAlgorithm;
@@ -64,7 +64,7 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
     if (!pdf::PDFSecurityHandlerFactory::validate(settings, &errorMessage))
     {
         PDFConsole::writeError(errorMessage, options.outputCodec);
-        return ErrorEncryptionSettings;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFSecurityHandlerPointer securityHandler = pdf::PDFSecurityHandlerFactory::createSecurityHandler(settings);
@@ -77,10 +77,10 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
         {
             PDFConsole::writeError(PDFToolTranslationContext::tr("Authorization as owner failed. Encryption change is not permitted if authorized as user only."), options.outputCodec);
         }
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
     {
         return blocked;
     }
@@ -92,12 +92,12 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentBuilder builder(&document);
@@ -110,7 +110,7 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
         // only touches the target on a successful commit), so there is no
         // partial output to clean up. Removing the file here would delete the
         // still-intact original.
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
@@ -119,10 +119,20 @@ int PDFToolEncryptApplication::execute(const PDFToolOptions& options)
     if (!result)
     {
         PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-        return ErrorDocumentWriting;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolEncryptApplication::getOptionsFlags() const

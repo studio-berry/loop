@@ -267,13 +267,13 @@ QString PDFToolInfoStructureTreeApplication::getStandardString(StandardString st
     return QString();
 }
 
-int PDFToolInfoStructureTreeApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoStructureTreeApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFStructureTree structureTree = pdf::PDFStructureTree::parse(&document.getStorage(), document.getCatalog()->getStructureTreeRoot());
@@ -286,14 +286,24 @@ int PDFToolInfoStructureTreeApplication::execute(const PDFToolOptions& options)
         structureTree.accept(&visitor);
 
         formatter.endDocument();
-        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json)
+        {
+            if (options.executionContext)
+            {
+                options.executionContext->setData(formatter.getJsonObject());
+            }
+        }
+        else
+        {
+            PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        }
     }
     else
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No structure tree found in document."), options.outputCodec);
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoStructureTreeApplication::getOptionsFlags() const

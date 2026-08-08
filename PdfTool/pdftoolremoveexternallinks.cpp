@@ -120,13 +120,13 @@ QString PDFToolRemoveExternalLinks::getStandardString(StandardString standardStr
     return QString();
 }
 
-int PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     RemovalResult result = removeExternalLinkAnnotations(&document);
@@ -138,23 +138,43 @@ int PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
     {
         formatter.writeText("result", PDFToolTranslationContext::tr("No external link annotations found."));
         formatter.endDocument();
-        PDFConsole::writeText(formatter.getString(), options.outputCodec);
-        return ExitSuccess;
+        if (options.outputStyle == PDFOutputFormatter::Style::Json)
+        {
+            if (options.executionContext)
+            {
+                options.executionContext->setData(formatter.getJsonObject());
+            }
+        }
+        else
+        {
+            PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        }
+        return PDFToolExitCode::Success;
     }
 
     formatter.writeText("removed-count", PDFToolTranslationContext::tr("External link annotations removed: %1.").arg(result.removed));
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
     if (!result.document)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to create modified document."), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     // In-place rewrite of the source document: guard it like the other
     // destructive commands instead of silently replacing the original file.
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
     {
         return blocked;
     }
@@ -164,10 +184,20 @@ int PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
     if (!writeResult)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write document. %1").arg(writeResult.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolRemoveExternalLinks::getOptionsFlags() const

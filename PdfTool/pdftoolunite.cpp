@@ -55,19 +55,19 @@ QString PDFToolUnite::getStandardString(PDFToolAbstractApplication::StandardStri
     return QString();
 }
 
-int PDFToolUnite::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
 {
     if (options.uniteFiles.size() < 3)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("At least two documents and target (merged) document must be specified."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QStringList files = options.uniteFiles;
     QString targetFile = files.back();
     files.pop_back();
 
-    if (const int blocked = validateDestructiveOutput(options, targetFile))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, targetFile))
     {
         return blocked;
     }
@@ -82,12 +82,12 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     try
@@ -109,13 +109,13 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
             if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
             {
                 PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(fileName), options.outputCodec);
-                return ErrorDocumentReading;
+                return PDFToolExitCode::InputError;
             }
 
             if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
             {
                 PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to assemble pages."), options.outputCodec);
-                return ErrorPermissions;
+                return PDFToolExitCode::ProcessingFailure;
             }
 
             pdf::PDFDocumentBuilder temporaryBuilder(&document);
@@ -230,7 +230,7 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
 
         if (isCancelRequested())
         {
-            return ExitFailure;
+            return PDFToolExitCode::Cancelled;
         }
 
         pdf::PDFDocumentWriter writer(nullptr);
@@ -238,16 +238,26 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
         if (!result)
         {
             PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-            return ErrorFailedWriteToFile;
+            return PDFToolExitCode::ProcessingFailure;
+        }
+
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("primary"),
+                targetFile,
+                QStringLiteral("written")
+            });
         }
     }
     catch (const pdf::PDFException &exception)
     {
         PDFConsole::writeError(exception.getMessage(), options.outputCodec);
-        return ErrorUnknown;
+        return PDFToolExitCode::InternalError;
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolUnite::getOptionsFlags() const

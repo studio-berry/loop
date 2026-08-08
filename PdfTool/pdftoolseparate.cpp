@@ -55,19 +55,19 @@ QString PDFToolSeparate::getStandardString(StandardString standardString) const
     return QString();
 }
 
-int PDFToolSeparate::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -76,26 +76,28 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     if (options.separatePagePattern.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("File template is empty."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     if (!options.separatePagePattern.contains("%"))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("File template must contain character '%' for page number."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
+
+    size_t failedWrites = 0;
 
     for (pdf::PDFInteger pageIndex : pageIndices)
     {
         if (isCancelRequested())
         {
-            return ExitFailure;
+            return PDFToolExitCode::Cancelled;
         }
 
         try
@@ -121,7 +123,7 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
             QString fileName = options.separatePagePattern;
             fileName.replace('%', QString::number(pageIndex + 1));
 
-            if (const int blocked = validateDestructiveOutput(options, fileName))
+            if (const PDFToolExitCode blocked = validateDestructiveOutput(options, fileName))
             {
                 return blocked;
             }
@@ -143,7 +145,18 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
             pdf::PDFOperationResult result = writer.write(fileName, &singlePageDocument, true);
             if (!result)
             {
+                ++failedWrites;
                 PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
+            }
+
+            if (options.executionContext)
+            {
+                options.executionContext->addOutput({
+                    QStringLiteral("file"),
+                    QStringLiteral("separate"),
+                    fileName,
+                    result ? QStringLiteral("written") : QStringLiteral("partial")
+                });
             }
         }
         catch (const pdf::PDFException &exception)
@@ -152,7 +165,7 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
         }
     }
 
-    return ExitSuccess;
+    return failedWrites > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolSeparate::getOptionsFlags() const

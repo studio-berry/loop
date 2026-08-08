@@ -53,13 +53,13 @@ QString PDFToolInfoApplication::getStandardString(StandardString standardString)
     return QString();
 }
 
-int PDFToolInfoApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QLocale locale;
@@ -297,9 +297,20 @@ int PDFToolInfoApplication::execute(const PDFToolOptions& options)
     }
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
 
-    return ExitSuccess;
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoApplication::getOptionsFlags() const

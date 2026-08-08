@@ -390,19 +390,19 @@ PDFToolAbstractApplication::Options PDFToolOcrApplication::getOptionsFlags() con
     return ConsoleFormat | OpenDocument | PageSelector | OcrOptions;
 }
 
-int PDFToolOcrApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
 {
     if (options.document.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
-        return OcrContractError;
+        PDFConsole::writeError(PDFToolTranslationContext::tr("No document was specified."), options.outputCodec);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -411,7 +411,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return OcrContractError;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     const QString sidecarPath = options.ocrSidecarPath.isEmpty() ? resolveOcrSidecarPath() : options.ocrSidecarPath;
@@ -442,7 +442,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     if (anyNeedsOcr && !sidecar.start(sidecarPath, sidecarError))
     {
         PDFConsole::writeError(sidecarError, options.outputCodec);
-        return OcrSidecarUnavailable;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QTemporaryDir temporaryDirectory;
@@ -451,7 +451,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         PDFConsole::writeError(PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."),
                                options.outputCodec);
         sidecar.stop();
-        return OcrContractError;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     pdf::PDFOcrReport report;
@@ -609,20 +609,33 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     }
 
     const QByteArray reportJson = QJsonDocument(report.toJson()).toJson(QJsonDocument::Compact);
-    PDFConsole::writeData(reportJson);
-    PDFConsole::writeData(QByteArray("\n"));
+
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{
+                { QStringLiteral("report"), report.toJson() }
+            });
+        }
+    }
+    else
+    {
+        PDFConsole::writeData(reportJson);
+        PDFConsole::writeData(QByteArray("\n"));
+    }
 
     if (cancelled)
     {
-        return OcrCancelled;
+        return PDFToolExitCode::Cancelled;
     }
 
     if (anyPageFailed)
     {
-        return OcrPartialFailure;
+        return PDFToolExitCode::PartialOutput;
     }
 
-    return OcrSuccess;
+    return PDFToolExitCode::Success;
 }
 
 }   // namespace pdftool

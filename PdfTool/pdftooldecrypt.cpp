@@ -51,7 +51,7 @@ QString PDFToolDecryptApplication::getStandardString(StandardString standardStri
     return QString();
 }
 
-int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
@@ -61,16 +61,16 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
         {
             PDFConsole::writeError(PDFToolTranslationContext::tr("Authorization as owner failed. Encryption removal is not permitted if authorized as user only."), options.outputCodec);
         }
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (document.getStorage().getSecurityHandler()->getMode() == pdf::EncryptionMode::None)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Document is not encrypted."), options.outputCodec);
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
     {
         return blocked;
     }
@@ -82,12 +82,12 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentBuilder builder(&document);
@@ -101,7 +101,7 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
         // only touches the target on a successful commit), so there is no
         // partial output to clean up. Removing the file here would delete the
         // still-intact original.
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
@@ -110,10 +110,20 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
     if (!result)
     {
         PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-        return ErrorDocumentWriting;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolDecryptApplication::getOptionsFlags() const

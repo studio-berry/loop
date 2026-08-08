@@ -24,6 +24,7 @@ add_executable(PdfTool
     main.cpp 
     pdfoutputformatter.cpp 
     pdftoolabstractapplication.cpp 
+    pdftoolresult.cpp 
     pdftoolattachments.cpp 
     pdftoolaudiobook.cpp 
     pdftoolcertstore.cpp 

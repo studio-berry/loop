@@ -86,12 +86,12 @@ QString PDFToolAttachmentsApplication::getStandardString(StandardString standard
     return QString();
 }
 
-int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     if (!readDocument(options, document, nullptr, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     struct FileInfo
@@ -186,14 +186,24 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
         formatter.endTable();
 
         formatter.endDocument();
-        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json)
+        {
+            if (options.executionContext)
+            {
+                options.executionContext->setData(formatter.getJsonObject());
+            }
+        }
+        else
+        {
+            PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        }
     }
     else
     {
         if (savedFileCount > 1 && !options.attachmentsTargetFile.isEmpty())
         {
             PDFConsole::writeError(PDFToolTranslationContext::tr("Target file name must not be specified, if multiple files are being saved."), options.outputCodec);
-            return ErrorInvalidArguments;
+            return PDFToolExitCode::InvalidInvocation;
         }
 
         // Guard every planned output up front: a name already on disk needs
@@ -219,14 +229,14 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
                 {
                     PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
-                    return ErrorInvalidArguments;
+                    return PDFToolExitCode::InvalidInvocation;
                 }
             }
 
             plannedOutputs << outputFile;
         }
 
-        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
         {
             return blocked;
         }
@@ -281,23 +291,33 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 if (!writeResult)
                 {
                     PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), options.outputCodec);
-                    return ErrorFailedWriteToFile;
+                    return PDFToolExitCode::ProcessingFailure;
+                }
+
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({
+                        QStringLiteral("file"),
+                        QStringLiteral("attachment"),
+                        outputFile,
+                        QStringLiteral("written")
+                    });
                 }
             }
             catch (const pdf::PDFException &e)
             {
                 PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), options.outputCodec);
-                return ErrorFailedWriteToFile;
+                return PDFToolExitCode::ProcessingFailure;
             }
         }
 
         if (anyAttachmentSkipped)
         {
-            return ErrorInvalidArguments;
+            return PDFToolExitCode::InvalidInvocation;
         }
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolAttachmentsApplication::getOptionsFlags() const

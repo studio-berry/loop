@@ -106,9 +106,9 @@ QString PDFVoiceInfo::getStringValue(QString key) const
     return QString();
 }
 
-int PDFToolAudioBookBase::fillVoices(const PDFToolOptions& options, PDFVoiceInfoList& list, bool fillVoiceTokenPointers)
+PDFToolExitCode PDFToolAudioBookBase::fillVoices(const PDFToolOptions& options, PDFVoiceInfoList& list, bool fillVoiceTokenPointers)
 {
-    int result = ExitSuccess;
+    PDFToolExitCode result = PDFToolExitCode::Success;
 
     QStringList voiceSelector;
     if (!options.textVoiceName.isEmpty())
@@ -134,14 +134,14 @@ int PDFToolAudioBookBase::fillVoices(const PDFToolOptions& options, PDFVoiceInfo
     if (!SUCCEEDED(::CoCreateInstance(CLSID_SpObjectTokenCategory, NULL, CLSCTX_ALL, __uuidof(ISpObjectTokenCategory), (LPVOID*)&category)))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("SAPI Error: Cannot enumerate SAPI voices."), options.outputCodec);
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     if (!SUCCEEDED(category->SetId(SPCAT_VOICES, FALSE)))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("SAPI Error: Cannot enumerate SAPI voices."), options.outputCodec);
         category->Release();
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     IEnumSpObjectTokens* enumTokensObject = nullptr;
@@ -212,7 +212,7 @@ int PDFToolAudioBookBase::fillVoices(const PDFToolOptions& options, PDFVoiceInfo
     else
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("SAPI Error: Cannot enumerate SAPI voices."), options.outputCodec);
-        result = ErrorSAPI;
+        result = PDFToolExitCode::ProcessingFailure;
     }
 
     if (enumTokensObject)
@@ -228,10 +228,10 @@ int PDFToolAudioBookBase::fillVoices(const PDFToolOptions& options, PDFVoiceInfo
     return result;
 }
 
-int PDFToolAudioBookBase::showVoiceList(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAudioBookBase::showVoiceList(const PDFToolOptions& options)
 {
     PDFVoiceInfoList voices;
-    int result = fillVoices(options, voices, false);
+    PDFToolExitCode result = fillVoices(options, voices, false);
 
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("voices", PDFToolTranslationContext::tr("Available voices for given settings:"));
@@ -270,7 +270,17 @@ int PDFToolAudioBookBase::showVoiceList(const PDFToolOptions& options)
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
     return result;
 }
@@ -296,14 +306,14 @@ QString PDFToolAudioBookVoices::getStandardString(PDFToolAbstractApplication::St
     return QString();
 }
 
-int PDFToolAudioBookVoices::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAudioBookVoices::execute(const PDFToolOptions& options)
 {
     if (!SUCCEEDED(::CoInitialize(nullptr)))
     {
-        return ErrorCOM;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    int returnCode = showVoiceList(options);
+    PDFToolExitCode returnCode = showVoiceList(options);
 
     ::CoUninitialize();
 
@@ -337,13 +347,13 @@ QString PDFToolAudioBook::getStandardString(StandardString standardString) const
 }
 
 
-int PDFToolAudioBook::getDocumentTextFlow(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow)
+PDFToolExitCode PDFToolAudioBook::getDocumentTextFlow(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -352,16 +362,16 @@ int PDFToolAudioBook::getDocumentTextFlow(const PDFToolOptions& options, pdf::PD
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocumentTextFlowFactory factory;
     flow = factory.create(&document, pages, options.textAnalysisAlgorithm);
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
-int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow)
+PDFToolExitCode PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow)
 {
     QString audioString;
     QTextStream textStream(&audioString);
@@ -397,13 +407,13 @@ int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDoc
     if (voices.empty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No suitable voice found."), options.outputCodec);
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     if (!voices.front().getVoiceToken())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid voice."), options.outputCodec);
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QFileInfo info(options.document);
@@ -414,7 +424,7 @@ int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDoc
     if (!SUCCEEDED(::CoCreateInstance(CLSID_SpFileStream, NULL, CLSCTX_ALL, __uuidof(ISpeechFileStream), (LPVOID*)&stream)))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot create output stream '%1'.").arg(outputFile), options.outputCodec);
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     ISpVoice* voice = nullptr;
@@ -422,7 +432,7 @@ int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDoc
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot create voice."), options.outputCodec);
         stream->Release();
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     if (!SUCCEEDED(stream->Open(outputFileName, SSFMCreateForWrite)))
@@ -430,7 +440,7 @@ int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDoc
         PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot create output stream '%1'.").arg(outputFile), options.outputCodec);
         voice->Release();
         stream->Release();
-        return ErrorSAPI;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     ISpObjectToken* voiceToken = voices.front().getVoiceToken();
@@ -448,14 +458,14 @@ int PDFToolAudioBook::createAudioBook(const PDFToolOptions& options, pdf::PDFDoc
     voice->Release();
     stream->Release();
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
-int PDFToolAudioBook::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAudioBook::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocumentTextFlow textFlow;
-    int result = getDocumentTextFlow(options, textFlow);
-    if (result != ExitSuccess)
+    PDFToolExitCode result = getDocumentTextFlow(options, textFlow);
+    if (result != PDFToolExitCode::Success)
     {
         return result;
     }
@@ -463,13 +473,13 @@ int PDFToolAudioBook::execute(const PDFToolOptions& options)
     if (textFlow.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No text extracted to be converted to audio book."), options.outputCodec);
-        return ErrorNoText;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     auto comResult = ::CoInitialize(nullptr);
     if (!SUCCEEDED(comResult))
     {
-        return ErrorCOM;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     result = createAudioBook(options, textFlow);

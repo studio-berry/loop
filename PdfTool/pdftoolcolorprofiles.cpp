@@ -49,7 +49,7 @@ QString PDFToolColorProfiles::getStandardString(StandardString standardString) c
     return QString();
 }
 
-int PDFToolColorProfiles::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolColorProfiles::execute(const PDFToolOptions& options)
 {
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("color-profiles", PDFToolTranslationContext::tr("Available Color Profiles"));
@@ -97,9 +97,19 @@ int PDFToolColorProfiles::execute(const PDFToolOptions& options)
     writeColorProfileList("cmyk-profiles", PDFToolTranslationContext::tr("CMYK Profiles"), cmsManager.getCMYKProfiles());
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolColorProfiles::getOptionsFlags() const

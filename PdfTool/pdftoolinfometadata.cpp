@@ -23,6 +23,8 @@
 #include "pdftoolinfometadata.h"
 #include "pdfexception.h"
 
+#include <QJsonObject>
+
 namespace pdftool
 {
 
@@ -49,13 +51,13 @@ QString PDFToolInfoMetadataApplication::getStandardString(StandardString standar
     return QString();
 }
 
-int PDFToolInfoMetadataApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoMetadataApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFObject metadata = document.getObject(document.getCatalog()->getMetadata());
@@ -64,7 +66,20 @@ int PDFToolInfoMetadataApplication::execute(const PDFToolOptions& options)
         try
         {
             QByteArray rawData = document.getDecodedStream(metadata.getStream());
-            PDFConsole::writeData(rawData);
+
+            if (options.outputStyle == PDFOutputFormatter::Style::Json)
+            {
+                if (options.executionContext)
+                {
+                    options.executionContext->setData(QJsonObject{
+                        { QStringLiteral("metadata"), QString::fromUtf8(rawData) }
+                    });
+                }
+            }
+            else
+            {
+                PDFConsole::writeData(rawData);
+            }
         }
         catch (const pdf::PDFException &e)
         {
@@ -76,7 +91,7 @@ int PDFToolInfoMetadataApplication::execute(const PDFToolOptions& options)
         PDFConsole::writeError(PDFToolTranslationContext::tr("Metadata not found in document."), options.outputCodec);
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoMetadataApplication::getOptionsFlags() const

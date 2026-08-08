@@ -52,13 +52,13 @@ QString PDFToolVerifySignaturesApplication::getStandardString(StandardString sta
     return QString();
 }
 
-int PDFToolVerifySignaturesApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions& options)
 {
     // No document specified?
     if (options.document.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
-        return ErrorNoDocumentSpecified;
+        return PDFToolExitCode::InputError;
     }
 
     bool isFirstPasswordAttempt = true;
@@ -77,17 +77,17 @@ int PDFToolVerifySignaturesApplication::execute(const PDFToolOptions& options)
             break;
 
         case pdf::PDFDocumentReader::Result::Cancelled:
-            return ExitSuccess;
+            return PDFToolExitCode::Success;
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
             PDFConsole::writeError(PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()), options.outputCodec);
-            return ErrorDocumentReading;
+            return PDFToolExitCode::InputError;
         }
 
         default:
             Q_ASSERT(false);
-            return ErrorDocumentReading;
+            return PDFToolExitCode::InputError;
     }
 
     for (const QString& warning : reader.getWarnings())
@@ -391,8 +391,18 @@ int PDFToolVerifySignaturesApplication::execute(const PDFToolOptions& options)
 
     formatter.endDocument();
 
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
-    return ExitSuccess;
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolVerifySignaturesApplication::getOptionsFlags() const

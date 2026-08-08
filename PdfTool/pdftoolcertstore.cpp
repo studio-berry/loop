@@ -52,7 +52,7 @@ QString PDFToolCertStore::getStandardString(PDFToolAbstractApplication::Standard
     return QString();
 }
 
-int PDFToolCertStore::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolCertStore::execute(const PDFToolOptions& options)
 {
     // Certificate store
     pdf::PDFCertificateStore certificateStore;
@@ -140,9 +140,19 @@ int PDFToolCertStore::execute(const PDFToolOptions& options)
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolCertStore::getOptionsFlags() const
@@ -171,7 +181,7 @@ QString PDFToolCertStoreInstallCertificate::getStandardString(PDFToolAbstractApp
     return QString();
 }
 
-int PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions& options)
 {
     QByteArray certificateData;
     QFile file(options.certificateStoreInstallCertificateFile);
@@ -183,7 +193,7 @@ int PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions& options)
     else
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open file '%1'. %2").arg(options.certificateStoreInstallCertificateFile, file.errorString()), options.outputCodec);
-        return ErrorCertificateReading;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     pdf::PDFCertificateStore certificateStore;
@@ -196,10 +206,10 @@ int PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions& options)
     else
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot read certificate from file '%1'.").arg(options.certificateStoreInstallCertificateFile), options.outputCodec);
-        return ErrorCertificateReading;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolCertStoreInstallCertificate::getOptionsFlags() const

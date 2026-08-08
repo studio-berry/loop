@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfoutputformatter.h"
+#include "pdftoolresult.h"
 #include "pdfdocument.h"
 #include "pdfdocumenttextflow.h"
 #include "pdfrenderer.h"
@@ -193,6 +194,11 @@ struct PDFToolOptions
     QString ocrLanguages = QStringLiteral("en");
     int ocrMinTextChars = 20;
 
+    // Structured result contract context owned by main.cpp. Commands populate
+    // diagnostics, outputs, and data through it instead of writing the envelope
+    // themselves. Null when not running under the contract.
+    PDFToolExecutionContext* executionContext = nullptr;
+
     // For option 'VerifyRedaction'
     QStringList verifyRedactionFiles;
     pdf::PDFRedact::Options verifyRedactionOptions = {};
@@ -239,24 +245,6 @@ public:
     explicit PDFToolAbstractApplication(bool isDefault = false);
     virtual ~PDFToolAbstractApplication() = default;
 
-    enum ExitCodes
-    {
-        ExitSuccess = EXIT_SUCCESS,
-        ExitFailure = EXIT_FAILURE,
-        ErrorUnknown,
-        ErrorNoDocumentSpecified,
-        ErrorDocumentReading,
-        ErrorDocumentWriting,
-        ErrorCertificateReading,
-        ErrorInvalidArguments,
-        ErrorFailedWriteToFile,
-        ErrorPermissions,
-        ErrorNoText,
-        ErrorCOM,
-        ErrorSAPI,
-        ErrorEncryptionSettings
-    };
-
     enum StandardString
     {
         Command,        ///< Command, by which is this application invoked
@@ -301,15 +289,29 @@ public:
     Q_DECLARE_FLAGS(Options, Option)
 
     virtual QString getStandardString(StandardString standardString) const = 0;
-    virtual int execute(const PDFToolOptions& options) = 0;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) = 0;
     virtual Options getOptionsFlags() const = 0;
 
     void initializeCommandLineParser(QCommandLineParser* parser) const;
-    PDFToolOptions getOptions(QCommandLineParser* parser) const;
+    PDFToolOptions getOptions(QCommandLineParser* parser, PDFToolExecutionContext* executionContext) const;
 
     static QString convertDateTimeToString(const QDateTime& dateTime, PDFToolOptions::DateFormat dateFormat);
 
 protected:
+    /// Reports a structured diagnostic to the execution context (JSON mode) and,
+    /// in human modes, keeps the existing stderr behavior. Errors and warnings
+    /// are never written to stderr when an execution context exists.
+    /// \param options Options (carries execution context and output style)
+    /// \param severity Diagnostic severity
+    /// \param code Stable diagnostic identifier (e.g. "pdf.document-unreadable")
+    /// \param message Human-oriented message
+    /// \param context Optional structured context
+    void reportDiagnostic(const PDFToolOptions& options,
+                          PDFToolDiagnosticSeverity severity,
+                          const QString& code,
+                          const QString& message,
+                          QJsonObject context = QJsonObject()) const;
+
     /// Tries to read the document. If document is successfully read, true is returned,
     /// if error occurs, then false is returned. Optionally, original document content
     /// can also be retrieved.
@@ -332,11 +334,13 @@ protected:
     /// \p registerForceAlias is false, the legacy --overwrite alias --force).
     static void registerDestructiveWriteOptions(QCommandLineParser* parser, bool registerForceAlias);
 
-    /// Returns 0 when the write may proceed; otherwise an ExitCodes error value.
-    int validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const;
+    /// Returns PDFToolExitCode::Success when the write may proceed; otherwise an
+    /// error value.
+    PDFToolExitCode validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const;
 
-    /// Returns 0 when every write may proceed; otherwise an ExitCodes error value.
-    int validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const;
+    /// Returns PDFToolExitCode::Success when every write may proceed; otherwise an
+    /// error value.
+    PDFToolExitCode validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const;
 };
 
 /// This class stores information about all applications available. Application

@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -81,18 +81,18 @@ QString PDFToolPreflightApplication::getStandardString(StandardString standardSt
     return QString();
 }
 
-int PDFToolPreflightApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& options)
 {
     if (options.document.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
-        return ErrorNoDocumentSpecified;
+        return PDFToolExitCode::InputError;
     }
 
     if (options.preflightProfilePath.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No profile specified. Use --profile <file.json>."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QJsonObject profileJson;
@@ -100,26 +100,38 @@ int PDFToolPreflightApplication::execute(const PDFToolOptions& options)
     if (!loadProfileJson(options.preflightProfilePath, profileJson, profileError))
     {
         PDFConsole::writeError(profileError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
 
     pdf::PreflightResult result = engine.run(profileJson);
-    const QByteArray reportJson = QJsonDocument(result.toJson(options.document)).toJson(QJsonDocument::Compact);
 
-    PDFConsole::writeData(reportJson);
-    PDFConsole::writeData(QByteArray("\n"));
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{
+                { QStringLiteral("report"), result.toJson(options.document) }
+            });
+        }
+    }
+    else
+    {
+        const QByteArray reportJson = QJsonDocument(result.toJson(options.document)).toJson(QJsonDocument::Compact);
+        PDFConsole::writeData(reportJson);
+        PDFConsole::writeData(QByteArray("\n"));
+    }
 
-    return result.pass ? ExitSuccess : ExitFailure;
+    return result.pass ? PDFToolExitCode::Success : PDFToolExitCode::Findings;
 }
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const

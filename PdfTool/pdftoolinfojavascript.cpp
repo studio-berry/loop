@@ -49,13 +49,13 @@ QString PDFToolInfoJavaScriptApplication::getStandardString(StandardString stand
     return QString();
 }
 
-int PDFToolInfoJavaScriptApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoJavaScriptApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -64,7 +64,7 @@ int PDFToolInfoJavaScriptApplication::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFJavaScriptScanner scanner(&document);
@@ -148,9 +148,19 @@ int PDFToolInfoJavaScriptApplication::execute(const PDFToolOptions& options)
     formatter.endHeader();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoJavaScriptApplication::getOptionsFlags() const

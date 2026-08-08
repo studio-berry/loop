@@ -49,13 +49,13 @@ QString PDFToolInkCoverageApplication::getStandardString(PDFToolAbstractApplicat
     return QString();
 }
 
-int PDFToolInkCoverageApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInkCoverageApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -64,7 +64,7 @@ int PDFToolInkCoverageApplication::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty() || pageIndices.empty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     // We are ready to calculate the document's ink coverage
@@ -179,9 +179,19 @@ int PDFToolInkCoverageApplication::execute(const PDFToolOptions& options)
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInkCoverageApplication::getOptionsFlags() const
