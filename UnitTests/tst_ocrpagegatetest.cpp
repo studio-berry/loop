@@ -36,6 +36,7 @@ private slots:
     void fontEmbeddedPage_isSkipped();
     void imageOnlyPage_needsOcr();
     void blankPage_isSkippedAsEmpty();
+    void classifyPages_matchesPerPageClassification();
 };
 
 namespace
@@ -92,6 +93,39 @@ void OcrPageGateTest::blankPage_isSkippedAsEmpty()
         pdf::PDFOcrPageGate::classifyPage(&session, 0, settings);
 
     QCOMPARE(need, pdf::PDFOcrPageGate::PageOcrNeed::SkipEmpty);
+}
+
+void OcrPageGateTest::classifyPages_matchesPerPageClassification()
+{
+    {
+        pdf::PDFDocument document = readFixture("font-embedded.pdf");
+        pdf::PDFDocumentSession session(&document);
+        pdf::PDFOcrPageGate::Settings settings;
+        const std::vector<pdf::PDFOcrPageGate::PageOcrNeed> needs =
+            pdf::PDFOcrPageGate::classifyPages(&session, { 0 }, settings);
+        QCOMPARE(needs.size(), size_t(1));
+        QCOMPARE(needs[0], pdf::PDFOcrPageGate::PageOcrNeed::SkipHasText);
+    }
+    {
+        pdf::PDFDocument document = readFixture("image-dpi-low.pdf");
+        pdf::PDFDocumentSession session(&document);
+        pdf::PDFOcrPageGate::Settings settings;
+        const std::vector<pdf::PDFOcrPageGate::PageOcrNeed> needs =
+            pdf::PDFOcrPageGate::classifyPages(&session, { 0 }, settings);
+        QCOMPARE(needs.size(), size_t(1));
+        QCOMPARE(needs[0], pdf::PDFOcrPageGate::PageOcrNeed::NeedsOcr);
+    }
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.appendPage(QRectF(0, 0, 200, 200));
+        pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentSession session(&document);
+        pdf::PDFOcrPageGate::Settings settings;
+        const std::vector<pdf::PDFOcrPageGate::PageOcrNeed> needs =
+            pdf::PDFOcrPageGate::classifyPages(&session, { 0 }, settings);
+        QCOMPARE(needs.size(), size_t(1));
+        QCOMPARE(needs[0], pdf::PDFOcrPageGate::PageOcrNeed::SkipEmpty);
+    }
 }
 
 QTEST_MAIN(OcrPageGateTest)

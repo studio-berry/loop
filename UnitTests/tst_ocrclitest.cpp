@@ -23,6 +23,7 @@
 #include <QtTest>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -36,11 +37,14 @@ class OcrCliTest : public QObject
 private slots:
     void initTestCase();
     void pdftoolOcr_withMockSidecar_emitsReport();
+    void textOnlyFile_neverStartsSidecar();
 
 private:
     QString pdfToolPath() const;
     QString mockSidecarPath() const;
     QString fixturePdfPath() const;
+    QString textOnlyPdfPath() const;
+    QString missingSidecarPath() const;
 };
 
 void OcrCliTest::initTestCase()
@@ -68,6 +72,17 @@ QString OcrCliTest::fixturePdfPath() const
 {
     return QDir(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR))
         .filePath(QStringLiteral("testdata/fixtures/image-dpi-low.pdf"));
+}
+
+QString OcrCliTest::textOnlyPdfPath() const
+{
+    return QDir(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR))
+        .filePath(QStringLiteral("testdata/fixtures/font-embedded.pdf"));
+}
+
+QString OcrCliTest::missingSidecarPath() const
+{
+    return QDir::temp().filePath(QStringLiteral("loupe-ocr-sidecar-does-not-exist"));
 }
 
 void OcrCliTest::pdftoolOcr_withMockSidecar_emitsReport()
@@ -120,6 +135,71 @@ void OcrCliTest::pdftoolOcr_withMockSidecar_emitsReport()
         }
     }
     QVERIFY(foundOcrPage);
+}
+
+void OcrCliTest::textOnlyFile_neverStartsSidecar()
+{
+    QVERIFY2(QFileInfo::exists(pdfToolPath()), qPrintable(QStringLiteral("PdfTool not found at ") + pdfToolPath()));
+    QVERIFY2(QFileInfo::exists(textOnlyPdfPath()), qPrintable(QStringLiteral("Fixture not found at ") + textOnlyPdfPath()));
+
+    // A text-based document must never require (or launch) an OCR sidecar. Use a
+    // path that cannot exist: on a file that needs OCR this run would abort with
+    // exit code 3 (OcrSidecarUnavailable), so exit 0 here is direct proof that the
+    // engine was never consulted.
+    QFile::remove(missingSidecarPath());
+    QVERIFY2(!QFileInfo::exists(missingSidecarPath()),
+             qPrintable(QStringLiteral("Sidecar path unexpectedly exists at ") + missingSidecarPath()));
+
+    QProcess process;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    process.setProcessEnvironment(environment);
+    process.setProgram(pdfToolPath());
+    process.setArguments({ QStringLiteral("ocr"),
+                           textOnlyPdfPath(),
+                           QStringLiteral("--console-format"),
+                           QStringLiteral("json"),
+                           QStringLiteral("--sidecar"),
+                           missingSidecarPath() });
+    process.start();
+    QVERIFY(process.waitForFinished(120000));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+
+    const QByteArray stdOut = process.readAllStandardOutput();
+    const QByteArray stdErr = process.readAllStandardError();
+    QVERIFY2(process.exitCode() == 0,
+             qPrintable(QStringLiteral("unexpected exit %1\nstdout: %2\nstderr: %3")
+                            .arg(process.exitCode())
+                            .arg(QString::fromUtf8(stdOut))
+                            .arg(QString::fromUtf8(stdErr))));
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
+    QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
+    QVERIFY(document.isObject());
+
+    const QJsonObject report = document.object();
+    QCOMPARE(report.value(QStringLiteral("schema_version")).toInt(), 1);
+    QVERIFY(report.contains(QStringLiteral("pages")));
+
+    bool anyOcrPage = false;
+    bool anySkippedPage = false;
+    const auto pages = report.value(QStringLiteral("pages")).toArray();
+    for (const QJsonValue& pageValue : pages)
+    {
+        const QJsonObject pageObject = pageValue.toObject();
+        const QString status = pageObject.value(QStringLiteral("status")).toString();
+        if (status == QStringLiteral("ocr"))
+        {
+            anyOcrPage = true;
+        }
+        else if (status == QStringLiteral("skipped_has_text") || status == QStringLiteral("skipped_empty"))
+        {
+            anySkippedPage = true;
+        }
+    }
+    QVERIFY2(!anyOcrPage, "a text-only file must have no OCR'd pages");
+    QVERIFY2(anySkippedPage, "every page of a text-only file must be reported as skipped");
 }
 
 QTEST_MAIN(OcrCliTest)

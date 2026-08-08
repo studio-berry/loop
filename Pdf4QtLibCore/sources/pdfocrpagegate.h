@@ -25,6 +25,8 @@
 
 #include "pdfglobal.h"
 
+#include <vector>
+
 namespace pdf
 {
 
@@ -50,6 +52,10 @@ public:
     static PageOcrNeed classifyPage(PDFDocumentSession* session,
                                     PDFInteger pageIndex,
                                     const Settings& settings);
+
+    static std::vector<PageOcrNeed> classifyPages(PDFDocumentSession* session,
+                                                  const std::vector<PDFInteger>& pageIndices,
+                                                  const Settings& settings);
 };
 
 }   // namespace pdf

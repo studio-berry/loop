@@ -415,26 +415,44 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     }
 
     const QString sidecarPath = options.ocrSidecarPath.isEmpty() ? resolveOcrSidecarPath() : options.ocrSidecarPath;
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFOcrPageGate::Settings gateSettings;
+    gateSettings.minTextCharacters = options.ocrMinTextChars;
+
+    // Classify the whole selected range up front. The expensive EasyOCR sidecar
+    // (model load, first-run downloads) is only started when at least one page
+    // actually needs OCR: a fully text-based document must produce an all-skipped
+    // report without requiring a sidecar to be present at all.
+    const std::vector<pdf::PDFOcrPageGate::PageOcrNeed> pageNeeds =
+        pdf::PDFOcrPageGate::classifyPages(&session, pageIndices, gateSettings);
+
+    bool anyNeedsOcr = false;
+    for (const pdf::PDFOcrPageGate::PageOcrNeed need : pageNeeds)
+    {
+        if (need == pdf::PDFOcrPageGate::PageOcrNeed::NeedsOcr)
+        {
+            anyNeedsOcr = true;
+            break;
+        }
+    }
+
     OcrSidecarClient sidecar;
     QString sidecarError;
-    if (!sidecar.start(sidecarPath, sidecarError))
+    if (anyNeedsOcr && !sidecar.start(sidecarPath, sidecarError))
     {
         PDFConsole::writeError(sidecarError, options.outputCodec);
         return OcrSidecarUnavailable;
     }
 
     QTemporaryDir temporaryDirectory;
-    if (!temporaryDirectory.isValid())
+    if (anyNeedsOcr && !temporaryDirectory.isValid())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."),
                                options.outputCodec);
         sidecar.stop();
         return OcrContractError;
     }
-
-    pdf::PDFDocumentSession session(&document);
-    pdf::PDFOcrPageGate::Settings gateSettings;
-    gateSettings.minTextCharacters = options.ocrMinTextChars;
 
     pdf::PDFOcrReport report;
     report.pdfPath = options.document;
@@ -455,6 +473,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     bool anyPageFailed = false;
     bool cancelled = false;
 
+    size_t needIndex = 0;
     for (pdf::PDFInteger pageIndex : pageIndices)
     {
         if (cancelRequested().load(std::memory_order_acquire))
@@ -464,8 +483,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         }
 
         const int oneBasedPage = int(pageIndex) + 1;
-        const pdf::PDFOcrPageGate::PageOcrNeed need =
-            pdf::PDFOcrPageGate::classifyPage(&session, pageIndex, gateSettings);
+        const pdf::PDFOcrPageGate::PageOcrNeed need = pageNeeds[needIndex++];
 
         if (need == pdf::PDFOcrPageGate::PageOcrNeed::Failed)
         {

@@ -137,4 +137,18 @@ PDFOcrPageGate::PageOcrNeed PDFOcrPageGate::classifyPage(PDFDocumentSession* ses
     return PageOcrNeed::SkipEmpty;
 }
 
+std::vector<PDFOcrPageGate::PageOcrNeed> PDFOcrPageGate::classifyPages(
+    PDFDocumentSession* session,
+    const std::vector<PDFInteger>& pageIndices,
+    const Settings& settings)
+{
+    std::vector<PDFOcrPageGate::PageOcrNeed> needs;
+    needs.reserve(pageIndices.size());
+    for (PDFInteger pageIndex : pageIndices)
+    {
+        needs.push_back(classifyPage(session, pageIndex, settings));
+    }
+    return needs;
+}
+
 }   // namespace pdf
