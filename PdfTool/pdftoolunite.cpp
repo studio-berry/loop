@@ -230,7 +230,6 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
 
         if (isCancelRequested())
         {
-            removePartialOutput(targetFile);
             return ExitFailure;
         }
 

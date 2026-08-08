@@ -23,9 +23,11 @@
 #include "pdftoolrender.h"
 #include "pdffont.h"
 #include "pdfconstants.h"
+#include "pdfsafefilewriter.h"
 
 #include <QColorSpace>
 #include <QElapsedTimer>
+#include <QImageWriter>
 
 namespace pdftool
 {
@@ -56,7 +58,7 @@ QString PDFToolRender::getStandardString(PDFToolAbstractApplication::StandardStr
 
 PDFToolAbstractApplication::Options PDFToolRender::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ImageExportSettingsResolution | ColorManagementSystem | RenderFlags;
+    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ImageExportSettingsResolution | ColorManagementSystem | RenderFlags | DestructiveWrite;
 }
 
 void PDFToolRender::finish(const PDFToolOptions& options)
@@ -84,16 +86,32 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
     QElapsedTimer imageWriterTimer;
     imageWriterTimer.start();
 
-    QImageWriter imageWriter(fileName, options.imageWriterSettings.getCurrentFormat());
-    imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
-    imageWriter.setCompression(options.imageWriterSettings.getCompression());
-    imageWriter.setQuality(options.imageWriterSettings.getQuality());
-    imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
-    imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
+    // Atomic write: serialize into a QSaveFile and rename only after the image
+    // bytes are durable, so a crash or short write cannot leave a truncated image.
+    QString imageWriterError;
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
+        [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
+        {
+            QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
+            imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
+            imageWriter.setCompression(options.imageWriterSettings.getCompression());
+            imageWriter.setQuality(options.imageWriterSettings.getQuality());
+            imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
+            imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
 
-    if (!imageWriter.write(renderedPageImage.pageImage))
+            if (!imageWriter.write(renderedPageImage.pageImage))
+            {
+                imageWriterError = imageWriter.errorString();
+                return false;
+            }
+
+            return true;
+        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+
+    if (!writeResult)
     {
-        m_pageInfo[renderedPageImage.pageIndex].errors.emplace_back(pdf::PDFRenderError(pdf::RenderErrorType::Error, PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.").arg(fileName).arg(imageWriter.errorString())));
+        const QString reason = imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError;
+        m_pageInfo[renderedPageImage.pageIndex].errors.emplace_back(pdf::PDFRenderError(pdf::RenderErrorType::Error, PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.").arg(fileName, reason)));
     }
 
     m_pageInfo[renderedPageImage.pageIndex].pageWriteTime = imageWriterTimer.elapsed();
@@ -172,6 +190,23 @@ int PDFToolRenderBase::execute(const PDFToolOptions& options)
     {
         PDFConsole::writeError(errorMessage, options.outputCodec);
         return ErrorInvalidArguments;
+    }
+
+    // Guard every output file up front: rendering must not silently clobber an
+    // existing image unless --overwrite was supplied.
+    if (optionFlags.testFlag(DestructiveWrite))
+    {
+        QStringList plannedOutputs;
+        plannedOutputs.reserve(int(pageIndices.size()));
+        for (const pdf::PDFInteger pageIndex : pageIndices)
+        {
+            plannedOutputs << options.imageExportSettings.getOutputFileName(pageIndex, options.imageWriterSettings.getCurrentFormat());
+        }
+
+        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        {
+            return blocked;
+        }
     }
 
     // We are ready to render the document

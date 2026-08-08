@@ -2917,7 +2917,10 @@ void PDFProgramController::onActionBookmarkExport()
     QString saveFileName = QFileDialog::getSaveFileName(m_mainWindow, tr("Export Bookmarks As"), fileInfo.dir().absoluteFilePath(m_fileInfo.originalFileName).replace(".pdf", ".json"), tr("JSON (*.json);;All files (*.*)"));
     if (!saveFileName.isEmpty())
     {
-        m_bookmarkManager->saveToFile(saveFileName);
+        if (!m_bookmarkManager->saveToFile(saveFileName))
+        {
+            QMessageBox::critical(m_mainWindow, tr("Export Bookmarks"), tr("Failed to save bookmarks to file '%1'.").arg(saveFileName));
+        }
     }
 }
 

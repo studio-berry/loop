@@ -207,14 +207,15 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for edge sampling.", "dpi", "300"));
         parser->addOption(QCommandLineOption("sample-pixels", "Edge sample depth in pixels for pixel-repeat/stretch.", "n", "1"));
         parser->addOption(QCommandLineOption("force", "Ignore skip-if-already-bleeding heuristic."));
-        parser->addOption(QCommandLineOption("overwrite", "Overwrite an existing output file."));
-        parser->addOption(QCommandLineOption("dry-run", "Compute report only; do not write an output file."));
-        parser->addOption(QCommandLineOption("report", "Print before/after box report."));
     }
 
     if (optionFlags.testFlag(DestructiveWrite))
     {
-        registerDestructiveWriteOptions(parser);
+        // add-bleed keeps --overwrite/--dry-run/--report shared with unite/separate via
+        // registerDestructiveWriteOptions(); it does not register the legacy --force
+        // alias because --force there already means "ignore skip-if-already-bleeding".
+        const bool registerForceAlias = !optionFlags.testFlag(AddBleed);
+        registerDestructiveWriteOptions(parser, registerForceAlias);
     }
 
     if (optionFlags.testFlag(PreflightProfile))
@@ -523,8 +524,6 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(AddBleed))
     {
         options.addBleedOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
-        options.addBleedDryRun = parser->isSet("dry-run");
-        options.addBleedReport = parser->isSet("report");
         options.addBleedSettings = pdf::PDFBleedFixupSettings();
 
         const QString mode = parser->value("mode").trimmed().toLower();
@@ -630,7 +629,6 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.addBleedSettings.skipIfAlreadyBleeding = false;
         }
-        options.addBleedOverwrite = parser->isSet("overwrite");
     }
 
     if (optionFlags.testFlag(PreflightProfile))
@@ -1429,7 +1427,14 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     {
         options.destructiveDryRun = parser->isSet("dry-run");
         options.destructiveReport = parser->isSet("report");
-        options.destructiveForce = parser->isSet("force");
+        // --overwrite is canonical everywhere. --force is the legacy alias only on
+        // commands that register it; add-bleed's own --force means "ignore the
+        // skip-if-already-bleeding heuristic", so it must not select overwrite.
+        options.destructiveOverwrite = parser->isSet("overwrite");
+        if (!optionFlags.testFlag(AddBleed) && parser->isSet("force"))
+        {
+            options.destructiveOverwrite = true;
+        }
     }
 
     return options;
@@ -1652,11 +1657,15 @@ std::vector<PDFToolOptions::OptimizeFeatureInfo> PDFToolOptions::getOptimizeFlag
     };
 }
 
-void PDFToolAbstractApplication::registerDestructiveWriteOptions(QCommandLineParser* parser)
+void PDFToolAbstractApplication::registerDestructiveWriteOptions(QCommandLineParser* parser, bool registerForceAlias)
 {
     parser->addOption(QCommandLineOption("dry-run", "Compute the result but do not write an output file."));
     parser->addOption(QCommandLineOption("report", "Print a summary of the pending write operation."));
-    parser->addOption(QCommandLineOption("force", "Overwrite an existing output file without confirmation."));
+    parser->addOption(QCommandLineOption("overwrite", "Overwrite an existing output file without confirmation."));
+    if (registerForceAlias)
+    {
+        parser->addOption(QCommandLineOption("force", "Overwrite an existing output file without confirmation (legacy alias of --overwrite)."));
+    }
 }
 
 int PDFToolAbstractApplication::validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const
@@ -1667,31 +1676,26 @@ int PDFToolAbstractApplication::validateDestructiveOutput(const PDFToolOptions& 
         return ErrorInvalidArguments;
     }
 
-    if (QFile::exists(outputPath) && !options.destructiveForce)
+    if (QFile::exists(outputPath) && !options.destructiveOverwrite)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --force to overwrite.").arg(outputPath), options.outputCodec);
+        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --overwrite to overwrite.").arg(outputPath), options.outputCodec);
         return ErrorInvalidArguments;
     }
 
     return 0;
 }
 
-void PDFToolAbstractApplication::removePartialOutput(const QString& outputPath)
+int PDFToolAbstractApplication::validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const
 {
-    if (outputPath.isEmpty())
+    for (const QString& outputPath : outputPaths)
     {
-        return;
+        if (const int blocked = validateDestructiveOutput(options, outputPath))
+        {
+            return blocked;
+        }
     }
 
-    QFile::remove(outputPath);
-    const QFileInfo info(outputPath);
-    QDir dir(info.absolutePath());
-    const QString baseName = info.fileName();
-    const QStringList partials = dir.entryList({ baseName + QStringLiteral(".*") }, QDir::Files);
-    for (const QString& partial : partials)
-    {
-        QFile::remove(dir.filePath(partial));
-    }
+    return 0;
 }
 
 }   // pdftool

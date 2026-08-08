@@ -102,7 +102,7 @@ static void writeReport(const PDFToolOptions& options,
                  .arg(settings.bleedMM.left()).arg(settings.bleedMM.top())
                  .arg(settings.bleedMM.right()).arg(settings.bleedMM.bottom()));
     writeSetting(QStringLiteral("force"), settings.force ? QStringLiteral("true") : QStringLiteral("false"));
-    writeSetting(QStringLiteral("dry-run"), options.addBleedDryRun ? QStringLiteral("true") : QStringLiteral("false"));
+    writeSetting(QStringLiteral("dry-run"), options.destructiveDryRun ? QStringLiteral("true") : QStringLiteral("false"));
     formatter.endTable();
     formatter.endl();
 
@@ -150,7 +150,7 @@ static void writeReport(const PDFToolOptions& options,
 
 int PDFToolAddBleed::execute(const PDFToolOptions& options)
 {
-    if (!options.addBleedDryRun && options.addBleedOutputDocument.isEmpty())
+    if (!options.destructiveDryRun && options.addBleedOutputDocument.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."), options.outputCodec);
         return ErrorInvalidArguments;
@@ -166,7 +166,7 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
 
     // A dry run reports geometry only; skip the page raster it would otherwise
     // build for edge sampling.
-    settings.analyzeOnly = options.addBleedDryRun;
+    settings.analyzeOnly = options.destructiveDryRun;
 
     if (!options.pageSelectorSelection.isEmpty())
     {
@@ -187,20 +187,19 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
         return ErrorFailedWriteToFile;
     }
 
-    if (options.addBleedReport || options.addBleedDryRun)
+    if (options.destructiveReport || options.destructiveDryRun)
     {
         writeReport(options, settings, report);
     }
 
-    if (options.addBleedDryRun)
+    if (options.destructiveDryRun)
     {
         return ExitSuccess;
     }
 
-    if (QFile::exists(options.addBleedOutputDocument) && !options.addBleedOverwrite)
+    if (const int blocked = validateDestructiveOutput(options, options.addBleedOutputDocument))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --overwrite to replace it.").arg(options.addBleedOutputDocument), options.outputCodec);
-        return ErrorInvalidArguments;
+        return blocked;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
@@ -216,7 +215,7 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed;
+    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite;
 }
 
 } // namespace pdftool

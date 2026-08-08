@@ -22,6 +22,7 @@
 
 #include "pdfpagemasterexport.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsafefilewriter.h"
 #include "pdfprogress.h"
 #include "preflightengine.h"
 #include "pdfdocumentsession.h"
@@ -33,7 +34,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSaveFile>
 #include <QUuid>
 
 #include <utility>
@@ -112,19 +112,8 @@ QString resolveManifestPath(const PDFPageMasterExportJob& job)
 
 bool writeFileAtomically(const QString& finalPath, const QByteArray& payload)
 {
-    QSaveFile saveFile(finalPath);
-    if (!saveFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        return false;
-    }
-
-    if (saveFile.write(payload) != payload.size())
-    {
-        saveFile.cancelWriting();
-        return false;
-    }
-
-    return saveFile.commit();
+    const PDFOperationResult result = PDFSafeFileWriter::writeData(finalPath, payload, PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    return static_cast<bool>(result);
 }
 
 QJsonObject createManifestObject(const QString& batchId, const QStringList& outputFileNames)
@@ -321,26 +310,6 @@ bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObjec
 
     const QString status = outputStatusAt(manifest, index);
     return status == OUTPUT_STATUS_WRITTEN && QFile::exists(fileName);
-}
-
-bool writeDocumentAtomically(const QString& fileName, PDFDocument* document, bool allowOverwrite)
-{
-    const bool isDocumentFileAlreadyExisting = QFile::exists(fileName);
-    if (!allowOverwrite && isDocumentFileAlreadyExisting)
-    {
-        return false;
-    }
-
-    // PDFDocumentWriter(safeWrite=true) uses QSaveFile: temp write then commit/rename
-    // without deleting the previous final until the new bytes are durable.
-    PDFDocumentWriter writer(nullptr);
-    const PDFOperationResult writeResult = writer.write(fileName, document, true);
-    if (!writeResult)
-    {
-        return false;
-    }
-
-    return true;
 }
 
 } // namespace
@@ -573,7 +542,11 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
-        if (!writeDocumentAtomically(fileName, &assembledDocument, job.overwriteFiles))
+        // PDFDocumentWriter(safeWrite=true) uses QSaveFile: temp write then commit/rename
+        // without deleting the previous final until the new bytes are durable.
+        PDFDocumentWriter writer(nullptr);
+        const PDFOperationResult writeResult = writer.write(fileName, &assembledDocument, true);
+        if (!writeResult)
         {
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                 "Could not write document to '%1'.").arg(fileName);

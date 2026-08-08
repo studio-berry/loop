@@ -804,10 +804,8 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
         return;
     }
 
-    if (QFile::exists(outputPath))
-    {
-        QFile::remove(outputPath);
-    }
+    // The atomic safe write below replaces an existing file (if any) only after
+    // the new bytes are durable; do not delete the previous output up front.
 
     pdf::PDFDocumentWriter writer(nullptr);
     const pdf::PDFOperationResult writeResult = writer.write(outputPath, &fixedDocument, true);
