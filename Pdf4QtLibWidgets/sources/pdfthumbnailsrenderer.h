@@ -165,7 +165,6 @@ private:
     QFutureWatcher<RenderBatchResult> m_renderWatcher;
     bool m_renderInProgress = false;
     quint64 m_renderEpoch = 0;
-    int m_maxBatchSize = 1;
 
     /// Cache keys (including pixel size) per page index, used to invalidate
     /// cached images for a page when its content changes.
