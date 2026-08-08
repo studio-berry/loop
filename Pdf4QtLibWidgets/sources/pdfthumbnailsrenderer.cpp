@@ -226,7 +226,6 @@ void PDFThumbnailsRenderer::startNextRequest()
         }
 
         const int maxBatchSize = qMax(1, PDFExecutionPolicy::getMaxThreadCount(PDFExecutionPolicy::Scope::Page));
-        m_maxBatchSize = maxBatchSize;
 
         requests.reserve(maxBatchSize);
         while (!m_requestQueue.isEmpty() && requests.size() < maxBatchSize)
