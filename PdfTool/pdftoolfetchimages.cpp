@@ -24,8 +24,10 @@
 #include "pdfpagecontentprocessor.h"
 #include "pdfconstants.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
+#include <QImageWriter>
 
 namespace pdftool
 {
@@ -191,6 +193,22 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     };
     std::sort(m_images.begin(), m_images.end(), comparator);
 
+    // Guard every planned output up front: saving must not silently clobber an
+    // existing image unless --overwrite was supplied.
+    {
+        QStringList plannedOutputs;
+        plannedOutputs.reserve(int(m_images.size()));
+        for (pdf::PDFInteger i = 0; i < pdf::PDFInteger(m_images.size()); ++i)
+        {
+            plannedOutputs << options.imageExportSettings.getOutputFileName(i, options.imageWriterSettings.getCurrentFormat());
+        }
+
+        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        {
+            return blocked;
+        }
+    }
+
     // Write information about images
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("images", PDFToolTranslationContext::tr("Images fetched from document %1").arg(options.document));
@@ -236,16 +254,32 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     {
         Image& image = m_images[index];
 
-        QImageWriter imageWriter(image.fileName, options.imageWriterSettings.getCurrentFormat());
-        imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
-        imageWriter.setCompression(options.imageWriterSettings.getCompression());
-        imageWriter.setQuality(options.imageWriterSettings.getQuality());
-        imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
-        imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
+        // Atomic write: serialize into a QSaveFile and rename only after the image
+        // bytes are durable, so a crash or short write cannot leave a truncated image.
+        QString imageWriterError;
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(image.fileName,
+            [&options, &image, &imageWriterError](QIODevice* device) -> bool
+            {
+                QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
+                imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
+                imageWriter.setCompression(options.imageWriterSettings.getCompression());
+                imageWriter.setQuality(options.imageWriterSettings.getQuality());
+                imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
+                imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
 
-        if (!imageWriter.write(image.image))
+                if (!imageWriter.write(image.image))
+                {
+                    imageWriterError = imageWriter.errorString();
+                    return false;
+                }
+
+                return true;
+            }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+
+        if (!writeResult)
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.").arg(image.fileName).arg(imageWriter.errorString()), options.outputCodec);
+            PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
+                                       .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError), options.outputCodec);
         }
     };
 
@@ -257,7 +291,7 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolFetchImages::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem;
+    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem | DestructiveWrite;
 }
 
 void PDFToolFetchImages::onImageExtracted(pdf::PDFInteger pageIndex, pdf::PDFInteger order, const QImage& image)

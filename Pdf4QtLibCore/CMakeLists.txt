@@ -71,6 +71,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdffile.h
     sources/pdffilenamesanitizer.cpp
     sources/pdffilenamesanitizer.h
+    sources/pdfsafefilewriter.cpp
+    sources/pdfsafefilewriter.h
     sources/pdfform.cpp
     sources/pdfform.h
     sources/pdficontheme.cpp

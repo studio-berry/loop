@@ -175,14 +175,14 @@ struct PDFToolOptions
     // For option 'AddBleed'
     pdf::PDFBleedFixupSettings addBleedSettings;
     QString addBleedOutputDocument;
-    bool addBleedDryRun = false;
-    bool addBleedReport = false;
-    bool addBleedOverwrite = false;
 
-    // Shared destructive-write guard (optimize, redact, encrypt, unite, separate).
+    // Shared destructive-write guard (unite, separate, redact, encrypt, decrypt,
+    // optimize, remove-external-links, attachments, render, fetch-images, add-bleed).
+    // --overwrite is canonical; --force is kept as a silent alias on the commands
+    // that historically accepted it (add-bleed --force keeps its heuristic meaning).
     bool destructiveDryRun = false;
     bool destructiveReport = false;
-    bool destructiveForce = false;
+    bool destructiveOverwrite = false;
 
     // For option 'PreflightProfile'
     QString preflightProfilePath;
@@ -328,14 +328,15 @@ protected:
     /// Converts string to encoding
     static QStringConverter::Encoding getEncoding(const QString& encodingName);
 
-    /// Registers shared --dry-run, --report, and --force options.
-    static void registerDestructiveWriteOptions(QCommandLineParser* parser);
+    /// Registers shared --dry-run, --report, and --overwrite options (and, unless
+    /// \p registerForceAlias is false, the legacy --overwrite alias --force).
+    static void registerDestructiveWriteOptions(QCommandLineParser* parser, bool registerForceAlias);
 
     /// Returns 0 when the write may proceed; otherwise an ExitCodes error value.
     int validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const;
 
-    /// Removes Qt safe-write leftovers after a cancelled run.
-    static void removePartialOutput(const QString& outputPath);
+    /// Returns 0 when every write may proceed; otherwise an ExitCodes error value.
+    int validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const;
 };
 
 /// This class stores information about all applications available. Application

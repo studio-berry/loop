@@ -107,7 +107,6 @@ int PDFToolRedact::execute(const PDFToolOptions& options)
 
     if (isCancelRequested())
     {
-        removePartialOutput(options.redactedDocument);
         return ExitFailure;
     }
 

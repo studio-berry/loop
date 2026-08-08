@@ -205,6 +205,8 @@ private slots:
     void operatorLoop_bleedFixupAndRevalidate();
     void operatorLoop_preservesOriginalBytes();
 
+    void overwriteExplicit_addBleedRequiresOverwriteFlag();
+
     void unicodeAndSpacePaths_preflightAndAddBleedSucceed();
 
     void malformedInput_failsWithoutCrash();
@@ -500,6 +502,49 @@ void OperatorAcceptanceTest::operatorLoop_preservesOriginalBytes()
     QCOMPARE(fileSha256(pdfPath), beforeHash);
     QVERIFY(!fileSha256(outputPath).isEmpty());
     QVERIFY(fileSha256(outputPath) != beforeHash);
+}
+
+void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
+{
+    // Overwrite-explicit contract (MIC-310): a second add-bleed run writing to an
+    // existing output must be refused unless --overwrite is passed, and the
+    // existing file must survive the refused run.
+    const QString pdfPath = fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::exists(pdfPath));
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("bleed-fixed.pdf"));
+
+    int firstExitCode = -1;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                       nullptr, nullptr, &firstExitCode));
+    QCOMPARE(firstExitCode, 0);
+    QVERIFY(QFile::exists(outputPath));
+    const QByteArray firstHash = fileSha256(outputPath);
+    QVERIFY(!firstHash.isEmpty());
+
+    int refusedExitCode = -1;
+    QByteArray refusedError;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                        nullptr, &refusedError, &refusedExitCode));
+    QVERIFY2(refusedExitCode != 0, "add-bleed must not overwrite the existing output without --overwrite.");
+    QVERIFY(!refusedError.trimmed().isEmpty());
+    QCOMPARE(fileSha256(outputPath), firstHash);
+
+    int overwriteExitCode = -1;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
+                         QStringLiteral("--overwrite") },
+                        nullptr, nullptr, &overwriteExitCode));
+    QCOMPARE(overwriteExitCode, 0);
+    QVERIFY(QFile::exists(outputPath));
+    // add-bleed is deterministic, so a re-run of the same input legitimately
+    // yields the same bytes; the contract is that --overwrite unblocks the write
+    // (exit 0 versus the refusal above), not that the bytes must differ.
+    QVERIFY(!fileSha256(outputPath).isEmpty());
 }
 
 void OperatorAcceptanceTest::unicodeAndSpacePaths_preflightAndAddBleedSucceed()

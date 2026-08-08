@@ -23,15 +23,47 @@
 #include "pdftoolattachments.h"
 #include "pdfexception.h"
 #include "pdffilenamesanitizer.h"
+#include "pdfsafefilewriter.h"
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QMimeDatabase>
+#include <QSet>
 
 namespace pdftool
 {
 
 static PDFToolAttachmentsApplication s_attachmentsApplication;
+
+/// Returns the first "base (n).ext" variant of \p fileName that is neither claimed
+/// in this run (via \p usedPaths) nor present on disk. Returns \p fileName unchanged
+/// when it already satisfies both.
+static QString makeRunUniqueFileName(const QString& fileName, const QSet<QString>& usedPaths)
+{
+    if (!usedPaths.contains(fileName) && !QFile::exists(fileName))
+    {
+        return fileName;
+    }
+
+    const QFileInfo info(fileName);
+    const QString baseName = info.completeBaseName();
+    const QString suffix = info.suffix();
+    const QString directory = info.absolutePath();
+
+    for (qint64 n = 1; n < 100000; ++n)
+    {
+        QString candidate = QDir(directory).filePath(suffix.isEmpty()
+                                            ? QStringLiteral("%1 (%2)").arg(baseName).arg(n)
+                                            : QStringLiteral("%1 (%2).%3").arg(baseName).arg(n).arg(suffix));
+        if (!usedPaths.contains(candidate) && !QFile::exists(candidate))
+        {
+            return candidate;
+        }
+    }
+
+    return fileName;
+}
 
 QString PDFToolAttachmentsApplication::getStandardString(StandardString standardString) const
 {
@@ -164,8 +196,43 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
             return ErrorInvalidArguments;
         }
 
-        bool anyAttachmentSkipped = false;
+        // Guard every planned output up front: a name already on disk needs
+        // --overwrite; names are re-checked (and uniquified) again in the loop.
+        QStringList plannedOutputs;
+        for (const FileInfo& info : embeddedFiles)
+        {
+            if (!info.isSaved)
+            {
+                continue;
+            }
 
+            QString outputFile = pdf::PDFFilenameSanitizer::sanitize(info.fileName);
+            if (!options.attachmentsTargetFile.isEmpty())
+            {
+                outputFile = options.attachmentsTargetFile;
+            }
+
+            if (!options.attachmentsOutputDirectory.isEmpty())
+            {
+                outputFile = QDir(options.attachmentsOutputDirectory).filePath(outputFile);
+
+                if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
+                {
+                    PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
+                    return ErrorInvalidArguments;
+                }
+            }
+
+            plannedOutputs << outputFile;
+        }
+
+        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        {
+            return blocked;
+        }
+
+        bool anyAttachmentSkipped = false;
+        QSet<QString> usedPaths;
         for (const FileInfo& info : embeddedFiles)
         {
             if (!info.isSaved)
@@ -182,7 +249,7 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
 
             if (!options.attachmentsOutputDirectory.isEmpty())
             {
-                outputFile = QString("%1/%2").arg(options.attachmentsOutputDirectory, outputFile);
+                outputFile = QDir(options.attachmentsOutputDirectory).filePath(outputFile);
 
                 if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
                 {
@@ -192,29 +259,28 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
                 }
             }
 
+            // Names colliding within a single run must not clobber each other:
+            // append a unique suffix instead of overwriting the sibling output.
+            // Existing on-disk files are reused intentionally (see --overwrite).
+            while (usedPaths.contains(outputFile))
+            {
+                const QString unique = makeRunUniqueFileName(outputFile, usedPaths);
+                if (unique == outputFile)
+                {
+                    break;
+                }
+                outputFile = unique;
+            }
+            usedPaths.insert(outputFile);
+
             try
             {
                 QByteArray data = document.getDecodedStream(info.specification->getPlatformFile()->getStream());
 
-                QFile file(outputFile);
-                if (file.open(QFile::WriteOnly | QFile::Truncate))
+                const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(outputFile, data, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+                if (!writeResult)
                 {
-                    // A short write (disk full, quota) must not be reported as a
-                    // saved attachment -- that leaves a silently truncated file.
-                    const qint64 written = file.write(data);
-                    const bool flushed = file.flush();
-                    file.close();
-
-                    if (written != data.size() || !flushed || file.error() != QFile::NoError)
-                    {
-                        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2")
-                                                   .arg(outputFile, file.errorString()), options.outputCodec);
-                        return ErrorFailedWriteToFile;
-                    }
-                }
-                else
-                {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(file.errorString()), options.outputCodec);
+                    PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), options.outputCodec);
                     return ErrorFailedWriteToFile;
                 }
             }
@@ -236,7 +302,7 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolAttachmentsApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | Attachments;
+    return ConsoleFormat | OpenDocument | Attachments | DestructiveWrite;
 }
 
 }   // namespace pdftool

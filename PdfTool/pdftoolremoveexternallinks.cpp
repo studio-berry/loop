@@ -152,6 +152,13 @@ int PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
         return ErrorFailedWriteToFile;
     }
 
+    // In-place rewrite of the source document: guard it like the other
+    // destructive commands instead of silently replacing the original file.
+    if (const int blocked = validateDestructiveOutput(options, options.document))
+    {
+        return blocked;
+    }
+
     pdf::PDFDocumentWriter writer(nullptr);
     pdf::PDFOperationResult writeResult = writer.write(options.document, result.document.data(), true);
     if (!writeResult)
@@ -165,7 +172,7 @@ int PDFToolRemoveExternalLinks::execute(const PDFToolOptions& options)
 
 PDFToolAbstractApplication::Options PDFToolRemoveExternalLinks::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument;
+    return ConsoleFormat | OpenDocument | DestructiveWrite;
 }
 
 }   // namespace pdftool

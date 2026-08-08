@@ -22,6 +22,7 @@
 
 #include "pdfbookmarkmanager.h"
 #include "pdfaction.h"
+#include "pdfsafefilewriter.h"
 
 #include <QFile>
 #include <QJsonObject>
@@ -130,20 +131,18 @@ void PDFBookmarkManager::setDocument(const pdf::PDFModifiedDocument& document)
     Q_EMIT bookmarksChanged();
 }
 
-void PDFBookmarkManager::saveToFile(QString fileName)
+bool PDFBookmarkManager::saveToFile(const QString& fileName)
 {
     QJsonDocument doc(PDFBookmarkManagerHelper::convertBookmarksToJson(m_bookmarks));
 
-    // Příklad zápisu do souboru
-    QFile file(fileName);
-    if (file.open(QIODevice::WriteOnly))
-    {
-        file.write(doc.toJson());
-        file.close();
-    }
+    // Atomic write through QSaveFile so a failed export never truncates an
+    // existing bookmarks file on disk.
+    const pdf::PDFOperationResult result = pdf::PDFSafeFileWriter::writeData(
+        fileName, doc.toJson(), pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    return static_cast<bool>(result);
 }
 
-bool PDFBookmarkManager::loadFromFile(QString fileName)
+bool PDFBookmarkManager::loadFromFile(const QString& fileName)
 {
     QFile file(fileName);
     if (file.open(QIODevice::ReadOnly))
