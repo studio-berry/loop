@@ -43,6 +43,7 @@ class PDFFileSpecification;
 class PDFOptionalContentActivity;
 class PDFDrawWidgetProxy;
 class PDFDestination;
+class PDFThumbnailsRenderer;
 
 /// Represents tree item in the GUI tree
 class PDF4QTLIBWIDGETSSHARED_EXPORT PDFTreeItem
@@ -321,11 +322,16 @@ public:
 
 private:
     void onPageImageChanged(bool all, const std::vector<PDFInteger>& pages);
+    void onThumbnailReady(int pageIndex);
 
     /// Returns generated key for page index
     QString getKey(int pageIndex) const;
 
+    /// Returns number of pixels, in which the thumbnail is rendered
+    int getThumbnailPixelSize() const;
+
     const PDFDrawWidgetProxy* m_proxy;
+    PDFThumbnailsRenderer* m_thumbnailRenderer;
     int m_thumbnailSize;
     int m_extraItemWidthHint;
     int m_extraItemHeighHint;

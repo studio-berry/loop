@@ -24,6 +24,7 @@
 #include "pdfdocument.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
+#include "pdfthumbnailsrenderer.h"
 #include "pdfwidgetutils.h"
 
 #include <QFont>
@@ -1075,6 +1076,7 @@ const PDFFileSpecification* PDFAttachmentsTreeItemModel::getFileSpecification(co
 PDFThumbnailsItemModel::PDFThumbnailsItemModel(const PDFDrawWidgetProxy* proxy, QObject* parent) :
     QAbstractItemModel(parent),
     m_proxy(proxy),
+    m_thumbnailRenderer(new PDFThumbnailsRenderer(proxy->getDocument(), this)),
     m_thumbnailSize(100),
     m_extraItemWidthHint(0),
     m_extraItemHeighHint(0),
@@ -1082,6 +1084,7 @@ PDFThumbnailsItemModel::PDFThumbnailsItemModel(const PDFDrawWidgetProxy* proxy, 
     m_document(nullptr)
 {
     connect(proxy, &PDFDrawWidgetProxy::pageImageChanged, this, &PDFThumbnailsItemModel::onPageImageChanged);
+    connect(m_thumbnailRenderer, &PDFThumbnailsRenderer::pageImageReady, this, &PDFThumbnailsItemModel::onThumbnailReady);
 }
 
 bool PDFThumbnailsItemModel::isEmpty() const
@@ -1141,10 +1144,11 @@ QVariant PDFThumbnailsItemModel::data(const QModelIndex& index, int role) const
             QPixmap pixmap;
             if (!m_thumbnailCache.find(key, &pixmap))
             {
-                const qreal devicePixelRatio = m_proxy->getWidget()->devicePixelRatioF();
-                QImage thumbnail = m_proxy->drawThumbnailImage(index.row(), m_thumbnailSize * devicePixelRatio);
+                const int pixelSize = getThumbnailPixelSize();
+                QImage thumbnail = m_thumbnailRenderer->getPageImage(index.row(), pixelSize);
                 if (!thumbnail.isNull())
                 {
+                    const qreal devicePixelRatio = m_proxy->getWidget()->devicePixelRatioF();
                     thumbnail.setDevicePixelRatio(devicePixelRatio);
                     pixmap = QPixmap::fromImage(qMove(thumbnail));
                     m_thumbnailCache.insert(key, pixmap);
@@ -1181,6 +1185,7 @@ void PDFThumbnailsItemModel::setThumbnailsSize(int size)
         Q_EMIT layoutAboutToBeChanged();
         m_thumbnailSize = size;
         m_thumbnailCache.clear();
+        m_thumbnailRenderer->clear();
         Q_EMIT layoutChanged();
     }
 }
@@ -1194,6 +1199,7 @@ void PDFThumbnailsItemModel::setDocument(const PDFModifiedDocument& document)
             beginResetModel();
             m_thumbnailCache.clear();
             m_document = document;
+            m_thumbnailRenderer->setDocument(document);
 
             m_pageCount = 0;
             if (m_document)
@@ -1218,11 +1224,9 @@ PDFInteger PDFThumbnailsItemModel::getPageIndex(const QModelIndex& index) const
 
 void PDFThumbnailsItemModel::onPageImageChanged(bool all, const std::vector<PDFInteger>& pages)
 {
-    Q_UNUSED(all);
-    Q_UNUSED(pages);
-
     if (all)
     {
+        m_thumbnailRenderer->clear();
         m_thumbnailCache.clear();
         Q_EMIT dataChanged(index(0, 0, QModelIndex()), index(rowCount(QModelIndex()) - 1, 0, QModelIndex()));
     }
@@ -1233,11 +1237,24 @@ void PDFThumbnailsItemModel::onPageImageChanged(bool all, const std::vector<PDFI
         {
             if (pageIndex < rowCount)
             {
+                m_thumbnailRenderer->invalidatePage(pageIndex);
                 m_thumbnailCache.remove(getKey(pageIndex));
                 Q_EMIT dataChanged(index(pageIndex, 0, QModelIndex()), index(pageIndex, 0, QModelIndex()));
             }
         }
     }
+}
+
+void PDFThumbnailsItemModel::onThumbnailReady(int pageIndex)
+{
+    m_thumbnailCache.remove(getKey(pageIndex));
+    Q_EMIT dataChanged(index(pageIndex, 0, QModelIndex()), index(pageIndex, 0, QModelIndex()));
+}
+
+int PDFThumbnailsItemModel::getThumbnailPixelSize() const
+{
+    const qreal devicePixelRatio = m_proxy->getWidget()->devicePixelRatioF();
+    return qMax(1, int(m_thumbnailSize * devicePixelRatio));
 }
 
 QString PDFThumbnailsItemModel::getKey(int pageIndex) const

@@ -67,6 +67,8 @@ add_library(Pdf4QtLibWidgets SHARED
     sources/pdfpagecontentelements.h
     sources/pdfitemmodels.cpp
     sources/pdfitemmodels.h
+    sources/pdfthumbnailsrenderer.h
+    sources/pdfthumbnailsrenderer.cpp
     sources/pdfwidgetformmanager.h
     sources/pdfwidgetformmanager.cpp
     sources/pdftexteditpseudowidget.cpp
@@ -89,7 +91,7 @@ GENERATE_EXPORT_HEADER(Pdf4QtLibWidgets
                        PDF4QTLIBWIDGETSSHARED_EXPORT
                        EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}/pdf4qtlibwidgets_export.h")
 
-target_link_libraries(Pdf4QtLibWidgets PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg Qt6::Widgets)
+target_link_libraries(Pdf4QtLibWidgets PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg Qt6::Widgets Qt6::Concurrent)
 
 if(LINUX_GCC)
     target_link_libraries(Pdf4QtLibWidgets PUBLIC TBB::tbb)
