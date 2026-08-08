@@ -566,9 +566,16 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
 
         bool ok = false;
         const qreal bleedMm = parser->value("bleed-mm").toDouble(&ok);
-        if (ok && bleedMm >= 0.0)
+        if (ok)
         {
-            options.addBleedSettings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+            if (bleedMm < 0.0)
+            {
+                PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid --bleed-mm value '%1': margin must be non-negative.").arg(parser->value("bleed-mm")), options.outputCodec);
+            }
+            else
+            {
+                options.addBleedSettings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
+            }
         }
 
         if (parser->isSet("bleed-mm-ltrb"))
@@ -586,7 +593,14 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
                 const qreal bottom = parts[3].trimmed().toDouble(&okB);
                 if (okL && okT && okR && okB)
                 {
-                    options.addBleedSettings.bleedMM = QMarginsF(left, top, right, bottom);
+                    if (left < 0.0 || top < 0.0 || right < 0.0 || bottom < 0.0)
+                    {
+                        PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid --bleed-mm-ltrb value '%1': margins must be non-negative.").arg(parser->value("bleed-mm-ltrb")), options.outputCodec);
+                    }
+                    else
+                    {
+                        options.addBleedSettings.bleedMM = QMarginsF(left, top, right, bottom);
+                    }
                 }
                 else
                 {

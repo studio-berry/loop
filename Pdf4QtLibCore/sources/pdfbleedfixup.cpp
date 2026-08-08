@@ -461,6 +461,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         return PDFTranslationContext::tr("Sample pixel count must be positive.");
     }
 
+    if (settings.bleedMM.left() < 0.0 || settings.bleedMM.top() < 0.0
+        || settings.bleedMM.right() < 0.0 || settings.bleedMM.bottom() < 0.0)
+    {
+        return PDFTranslationContext::tr("Bleed margins must be non-negative.");
+    }
+
     QString pageSelectionError;
     const std::vector<PDFInteger> pageIndices = selectPageIndices(document, settings.pageRange, &pageSelectionError);
     if (!pageSelectionError.isEmpty())
