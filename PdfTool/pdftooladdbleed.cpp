@@ -145,21 +145,31 @@ static void writeReport(const PDFToolOptions& options,
 
     formatter.endTable();
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 }
 
-int PDFToolAddBleed::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 {
     if (!options.destructiveDryRun && options.addBleedOutputDocument.isEmpty())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     if (!readDocument(options, document, nullptr, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFBleedFixupSettings settings = options.addBleedSettings;
@@ -184,7 +194,7 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
     if (!result)
     {
         PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     if (options.destructiveReport || options.destructiveDryRun)
@@ -194,10 +204,10 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.addBleedOutputDocument))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument))
     {
         return blocked;
     }
@@ -207,10 +217,20 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
     if (!writeResult)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.addBleedOutputDocument,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const

@@ -75,7 +75,17 @@ void PDFToolRender::finish(const PDFToolOptions& options)
     writeErrors(formatter);
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 }
 
 void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRenderedPageImage& renderedPageImage)
@@ -112,6 +122,16 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
     {
         const QString reason = imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError;
         m_pageInfo[renderedPageImage.pageIndex].errors.emplace_back(pdf::PDFRenderError(pdf::RenderErrorType::Error, PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.").arg(fileName, reason)));
+    }
+
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("render"),
+            fileName,
+            writeResult ? QStringLiteral("written") : QStringLiteral("partial")
+        });
     }
 
     m_pageInfo[renderedPageImage.pageIndex].pageWriteTime = imageWriterTimer.elapsed();
@@ -157,7 +177,17 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     writeErrors(formatter);
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 }
 
 void PDFToolBenchmark::onPageRendered(const PDFToolOptions& options, pdf::PDFRenderedPageImage& renderedPageImage)
@@ -166,13 +196,13 @@ void PDFToolBenchmark::onPageRendered(const PDFToolOptions& options, pdf::PDFRen
     writePageInfoStatistics(renderedPageImage);
 }
 
-int PDFToolRenderBase::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -181,7 +211,7 @@ int PDFToolRenderBase::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QString errorMessage;
@@ -189,7 +219,7 @@ int PDFToolRenderBase::execute(const PDFToolOptions& options)
     if (!options.imageExportSettings.validate(&errorMessage, false, optionFlags.testFlag(ImageExportSettingsFiles), optionFlags.testFlag(ImageExportSettingsResolution)))
     {
         PDFConsole::writeError(errorMessage, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     // Guard every output file up front: rendering must not silently clobber an
@@ -203,7 +233,7 @@ int PDFToolRenderBase::execute(const PDFToolOptions& options)
             plannedOutputs << options.imageExportSettings.getOutputFileName(pageIndex, options.imageWriterSettings.getCurrentFormat());
         }
 
-        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
         {
             return blocked;
         }
@@ -275,7 +305,21 @@ int PDFToolRenderBase::execute(const PDFToolOptions& options)
     fontCache.setCacheShrinkEnabled(nullptr, true);
 
     finish(options);
-    return ExitSuccess;
+
+    // Some requested pages could not be rendered or written: report partial
+    // output instead of success so pipelines can detect incomplete work.
+    for (const PageInfo& info : m_pageInfo)
+    {
+        for (const pdf::PDFRenderError& error : info.errors)
+        {
+            if (error.type == pdf::RenderErrorType::Error)
+            {
+                return PDFToolExitCode::PartialOutput;
+            }
+        }
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 void PDFToolRenderBase::writePageInfoStatistics(const pdf::PDFRenderedPageImage& renderedPageImage)

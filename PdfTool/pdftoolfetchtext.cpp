@@ -49,19 +49,19 @@ QString PDFToolFetchTextApplication::getStandardString(PDFToolAbstractApplicatio
     return QString();
 }
 
-int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -70,7 +70,7 @@ int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocumentTextFlowFactory factory;
@@ -123,9 +123,19 @@ int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
         PDFConsole::writeError(error.message, options.outputCodec);
     }
 
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolFetchTextApplication::getOptionsFlags() const

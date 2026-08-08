@@ -23,6 +23,7 @@
 #ifndef PDFOUTPUTFORMATTER_H
 #define PDFOUTPUTFORMATTER_H
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringConverter>
 
@@ -94,6 +95,10 @@ public:
 
     /// Get result string in unicode.
     QString getString() const;
+
+    /// Returns the JSON tree as a structured object (JSON style only; other
+    /// styles return an empty object). Avoids serializing to text and reparsing.
+    QJsonObject getJsonObject() const;
 
 private:
     PDFOutputFormatterImpl* m_impl;

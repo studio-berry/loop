@@ -198,12 +198,12 @@ QString PDFToolXmlApplication::getStandardString(StandardString standardString) 
     return QString();
 }
 
-int PDFToolXmlApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolXmlApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     if (!readDocument(options, document, nullptr, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString xmlString;
@@ -246,7 +246,7 @@ int PDFToolXmlApplication::execute(const PDFToolOptions& options)
     writer.writeEndDocument();
 
     PDFConsole::writeText(xmlString, options.outputCodec);
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolXmlApplication::getOptionsFlags() const

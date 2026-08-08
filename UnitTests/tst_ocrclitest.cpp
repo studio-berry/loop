@@ -119,8 +119,13 @@ void OcrCliTest::pdftoolOcr_withMockSidecar_emitsReport()
     QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
     QVERIFY(document.isObject());
 
-    const QJsonObject report = document.object();
-    QCOMPARE(report.value(QStringLiteral("schema_version")).toInt(), 1);
+    const QJsonObject envelope = document.object();
+    QCOMPARE(envelope.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+
+    const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
+    QVERIFY(data.contains(QStringLiteral("report")));
+    const QJsonObject report = data.value(QStringLiteral("report")).toObject();
     QVERIFY(report.contains(QStringLiteral("pages")));
 
     bool foundOcrPage = false;
@@ -144,8 +149,8 @@ void OcrCliTest::textOnlyFile_neverStartsSidecar()
 
     // A text-based document must never require (or launch) an OCR sidecar. Use a
     // path that cannot exist: on a file that needs OCR this run would abort with
-    // exit code 3 (OcrSidecarUnavailable), so exit 0 here is direct proof that the
-    // engine was never consulted.
+    // a processing failure (sidecar unavailable), so exit 0 here is direct proof
+    // that the engine was never consulted.
     QFile::remove(missingSidecarPath());
     QVERIFY2(!QFileInfo::exists(missingSidecarPath()),
              qPrintable(QStringLiteral("Sidecar path unexpectedly exists at ") + missingSidecarPath()));
@@ -178,8 +183,12 @@ void OcrCliTest::textOnlyFile_neverStartsSidecar()
     QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
     QVERIFY(document.isObject());
 
-    const QJsonObject report = document.object();
-    QCOMPARE(report.value(QStringLiteral("schema_version")).toInt(), 1);
+    const QJsonObject envelope = document.object();
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+
+    const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
+    QVERIFY(data.contains(QStringLiteral("report")));
+    const QJsonObject report = data.value(QStringLiteral("report")).toObject();
     QVERIFY(report.contains(QStringLiteral("pages")));
 
     bool anyOcrPage = false;

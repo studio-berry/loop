@@ -31,17 +31,8 @@ namespace pdftool
 class PDFToolOcrApplication : public PDFToolAbstractApplication
 {
 public:
-    enum OcrExitCodes
-    {
-        OcrSuccess = 0,
-        OcrPartialFailure = 1,
-        OcrContractError = 2,
-        OcrSidecarUnavailable = 3,
-        OcrCancelled = 4
-    };
-
     virtual QString getStandardString(StandardString standardString) const override;
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     virtual Options getOptionsFlags() const override;
 };
 

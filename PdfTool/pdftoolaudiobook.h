@@ -74,15 +74,15 @@ public:
     PDFToolAudioBookBase() = default;
 
 protected:
-    int fillVoices(const PDFToolOptions& options, PDFVoiceInfoList& list, bool fillVoiceTokenPointers);
-    int showVoiceList(const PDFToolOptions& options);
+    PDFToolExitCode fillVoices(const PDFToolOptions& options, PDFVoiceInfoList& list, bool fillVoiceTokenPointers);
+    PDFToolExitCode showVoiceList(const PDFToolOptions& options);
 };
 
 class PDFToolAudioBookVoices : public PDFToolAudioBookBase
 {
 public:
     virtual QString getStandardString(StandardString standardString) const override;
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     virtual Options getOptionsFlags() const override;
 };
 
@@ -90,12 +90,12 @@ class PDFToolAudioBook : public PDFToolAudioBookBase
 {
 public:
     virtual QString getStandardString(StandardString standardString) const override;
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     virtual Options getOptionsFlags() const override;
 
 private:
-    int getDocumentTextFlow(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow);
-    int createAudioBook(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow);
+    PDFToolExitCode getDocumentTextFlow(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow);
+    PDFToolExitCode createAudioBook(const PDFToolOptions& options, pdf::PDFDocumentTextFlow& flow);
 };
 
 }   // namespace pdftool

@@ -51,22 +51,22 @@ QString PDFToolOptimize::getStandardString(PDFToolAbstractApplication::StandardS
     return QString();
 }
 
-int PDFToolOptimize::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
 {
     if (!options.optimizeFlags && !options.imageOptimizationSettings.enabled)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("No optimization option has been set."), options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
     {
         return blocked;
     }
@@ -78,12 +78,12 @@ int PDFToolOptimize::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     if (options.imageOptimizationSettings.enabled)
@@ -107,7 +107,7 @@ int PDFToolOptimize::execute(const PDFToolOptions& options)
         // only touches the target on a successful commit), so there is no
         // partial output to clean up. Removing the file here would delete the
         // still-intact original.
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
@@ -115,10 +115,20 @@ int PDFToolOptimize::execute(const PDFToolOptions& options)
     if (!result)
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolOptimize::getOptionsFlags() const

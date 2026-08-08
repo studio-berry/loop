@@ -68,13 +68,13 @@ struct PDFPageBoxInfo
     QRectF artBox;
 };
 
-int PDFToolInfoPageBoxesApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoPageBoxesApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -83,7 +83,7 @@ int PDFToolInfoPageBoxesApplication::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     std::vector<PDFPageBoxInfo> infos;
@@ -152,9 +152,19 @@ int PDFToolInfoPageBoxesApplication::execute(const PDFToolOptions& options)
     }
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoPageBoxesApplication::getOptionsFlags() const

@@ -50,13 +50,13 @@ QString PDFToolSentryVerify::getStandardString(StandardString standardString) co
     return QString();
 }
 
-int PDFToolSentryVerify::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolSentryVerify::execute(const PDFToolOptions& options)
 {
     if (!pdf::PDFSentrySession::isGloballyActive())
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Sentry is not active. Set SENTRY_DSN (or PDF4QT_SENTRY_DSN at build time) and retry."),
                                options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFSentrySession::captureVerificationEvent();
@@ -64,7 +64,7 @@ int PDFToolSentryVerify::execute(const PDFToolOptions& options)
         const pdf::PDFSentryTransaction verificationTransaction(QStringLiteral("sentry-verify"));
         PDFConsole::writeText(QStringLiteral("Sentry verification event sent."), options.outputCodec);
     }
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolSentryVerify::getOptionsFlags() const

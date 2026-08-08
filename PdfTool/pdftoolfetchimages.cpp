@@ -123,19 +123,19 @@ QString PDFToolFetchImages::getStandardString(PDFToolAbstractApplication::Standa
     return QString();
 }
 
-int PDFToolFetchImages::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
         PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -144,7 +144,7 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     if (!parseError.isEmpty())
     {
         PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QString errorMessage;
@@ -152,7 +152,7 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     if (!options.imageExportSettings.validate(&errorMessage, false, optionFlags.testFlag(ImageExportSettingsFiles), optionFlags.testFlag(ImageExportSettingsResolution)))
     {
         PDFConsole::writeError(errorMessage, options.outputCodec);
-        return ErrorInvalidArguments;
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     // We are ready to render the document
@@ -203,7 +203,7 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
             plannedOutputs << options.imageExportSettings.getOutputFileName(i, options.imageWriterSettings.getCurrentFormat());
         }
 
-        if (const int blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
         {
             return blocked;
         }
@@ -247,7 +247,17 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
     // Store images to the disk file
     auto saveImage = [this, &options](size_t index)
@@ -278,15 +288,26 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
 
         if (!writeResult)
         {
+            m_failedWrites.fetch_add(1);
             PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
                                        .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError), options.outputCodec);
+        }
+
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("fetch-images"),
+                image.fileName,
+                writeResult ? QStringLiteral("written") : QStringLiteral("partial")
+            });
         }
     };
 
     auto imageRange = pdf::PDFIntegerRange<size_t>(0, m_images.size());
     pdf::PDFExecutionPolicy::execute(pdf::PDFExecutionPolicy::Scope::Page, imageRange.begin(), imageRange.end(), saveImage);
 
-    return ExitSuccess;
+    return m_failedWrites.load() > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolFetchImages::getOptionsFlags() const

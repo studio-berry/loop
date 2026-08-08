@@ -10,3 +10,6 @@ build/*
 /test-verify.txt
 /build/*.log
 /build/test-*.txt
+
+# vcpkg manifest installs are machine-local (see vcpkg/ and vcpkg.json).
+/vcpkg_installed/

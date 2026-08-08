@@ -65,6 +65,13 @@ public:
     /// Get result string in unicode.
     virtual QString getString() const = 0;
 
+    /// Returns the JSON tree as a structured object. Non-JSON formatters return an
+    /// empty object.
+    virtual QJsonObject getJsonObject() const
+    {
+        return QJsonObject();
+    }
+
     /// Ends current line (for formatters, that support it)
     virtual void endl() { }
 };
@@ -143,6 +150,7 @@ public:
     virtual void beginElement(PDFOutputFormatter::Element type, QString name, QString description, Qt::Alignment alignment, int reference) override;
     virtual void endElement() override;
     virtual QString getString() const override;
+    virtual QJsonObject getJsonObject() const override;
 
 private:
     struct JsonNode
@@ -157,7 +165,7 @@ private:
 
     std::stack<JsonNode> m_stack;
     QJsonArray m_tableRow;
-    QString m_result;
+    QJsonObject m_result;
 
     void appendChild(const QJsonObject& child);
 };
@@ -550,7 +558,7 @@ void PDFJsonOutputFormatterImpl::endElement()
                 root.insert(QStringLiteral("description"), node.description);
             }
             root.insert(QStringLiteral("children"), node.children);
-            m_result = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
+            m_result = std::move(root);
             break;
         }
 
@@ -638,6 +646,11 @@ void PDFJsonOutputFormatterImpl::appendChild(const QJsonObject& child)
 }
 
 QString PDFJsonOutputFormatterImpl::getString() const
+{
+    return QString::fromUtf8(QJsonDocument(m_result).toJson(QJsonDocument::Indented));
+}
+
+QJsonObject PDFJsonOutputFormatterImpl::getJsonObject() const
 {
     return m_result;
 }
@@ -792,6 +805,11 @@ void PDFOutputFormatter::endl()
 QString PDFOutputFormatter::getString() const
 {
     return m_impl->getString();
+}
+
+QJsonObject PDFOutputFormatter::getJsonObject() const
+{
+    return m_impl->getJsonObject();
 }
 
 void PDFConsole::writeText(QString text, QStringConverter::Encoding encoding)

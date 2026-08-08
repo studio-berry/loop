@@ -28,6 +28,7 @@
 #include <QCommandLineParser>
 #include <QFile>
 #include <QDir>
+#include <utility>
 
 namespace pdftool
 {
@@ -65,7 +66,7 @@ QString PDFToolHelpApplication::getStandardString(StandardString standardString)
     return QString();
 }
 
-int PDFToolHelpApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolHelpApplication::execute(const PDFToolOptions& options)
 {
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("help", PDFToolTranslationContext::tr("PDFTool help"));
@@ -136,8 +137,19 @@ int PDFToolHelpApplication::execute(const PDFToolOptions& options)
 
     formatter.endDocument();
 
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
-    return ExitSuccess;
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolHelpApplication::getOptionsFlags() const
@@ -428,9 +440,10 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     }
 }
 
-PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser) const
+PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser, PDFToolExecutionContext* executionContext) const
 {
     PDFToolOptions options;
+    options.executionContext = executionContext;
 
     QStringList positionalArguments = parser->positionalArguments();
 
@@ -1485,13 +1498,19 @@ bool PDFToolAbstractApplication::readDocument(const PDFToolOptions& options, pdf
 
         case pdf::PDFDocumentReader::Result::Cancelled:
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Invalid password provided."), options.outputCodec);
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("pdf.invalid-password"),
+                             PDFToolTranslationContext::tr("Invalid password provided."));
             return false;
         }
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()), options.outputCodec);
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("pdf.document-unreadable"),
+                             PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()));
             return false;
         }
 
@@ -1504,10 +1523,35 @@ bool PDFToolAbstractApplication::readDocument(const PDFToolOptions& options, pdf
 
     for (const QString& warning : reader.getWarnings())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Warning: %1").arg(warning), options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("pdf.reader-warning"),
+                         PDFToolTranslationContext::tr("Warning: %1").arg(warning));
     }
 
     return true;
+}
+
+void PDFToolAbstractApplication::reportDiagnostic(const PDFToolOptions& options,
+                                                  PDFToolDiagnosticSeverity severity,
+                                                  const QString& code,
+                                                  const QString& message,
+                                                  QJsonObject context) const
+{
+    if (options.executionContext)
+    {
+        PDFToolDiagnostic diagnostic;
+        diagnostic.severity = severity;
+        diagnostic.code = code;
+        diagnostic.message = message;
+        diagnostic.context = std::move(context);
+        options.executionContext->addDiagnostic(std::move(diagnostic));
+    }
+
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
+    {
+        PDFConsole::writeError(message, options.outputCodec);
+    }
 }
 
 QList<QByteArray> PDFToolAbstractApplication::getAvailableEncodings()
@@ -1668,34 +1712,40 @@ void PDFToolAbstractApplication::registerDestructiveWriteOptions(QCommandLinePar
     }
 }
 
-int PDFToolAbstractApplication::validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const
+PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFToolOptions& options, const QString& outputPath) const
 {
     if (outputPath.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("Output document file name is not set."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     if (QFile::exists(outputPath) && !options.destructiveOverwrite)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --overwrite to overwrite.").arg(outputPath), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("output.already-exists"),
+                         PDFToolTranslationContext::tr("Output '%1' already exists. Use --overwrite to overwrite.").arg(outputPath));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
-    return 0;
+    return PDFToolExitCode::Success;
 }
 
-int PDFToolAbstractApplication::validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const
+PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const
 {
     for (const QString& outputPath : outputPaths)
     {
-        if (const int blocked = validateDestructiveOutput(options, outputPath))
+        if (const PDFToolExitCode blocked = validateDestructiveOutput(options, outputPath))
         {
             return blocked;
         }
     }
 
-    return 0;
+    return PDFToolExitCode::Success;
 }
 
 }   // pdftool
