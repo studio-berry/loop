@@ -29,7 +29,11 @@
 #include "pdftoolpreflightchecks.h"
 
 #include <QtTest>
+#include <QPainterPath>
 #include <QRectF>
+
+#include <cmath>
+#include <limits>
 
 class PreflightChecksTest : public QObject
 {
@@ -46,6 +50,11 @@ private slots:
     void sizeWithinTolerance_widthOutOfToleranceFails();
     void sizeWithinTolerance_heightOutOfToleranceFails();
     void sizeWithinTolerance_swappedOrientationFails();
+    void transformedStrokeWidth_identity();
+    void transformedStrokeWidth_uniformScaleAndRotation();
+    void transformedStrokeWidth_userUnit();
+    void transformedStrokeWidth_anisotropicShearAndDirections();
+    void transformedStrokeWidth_degenerateAndEmptyPaths();
 };
 
 void PreflightChecksTest::resolveEffectiveBox_prefersTrimThenCropThenMedia()
@@ -113,6 +122,55 @@ void PreflightChecksTest::sizeWithinTolerance_swappedOrientationFails()
 {
     // 792 x 612 must not satisfy an expected 612 x 792 (strict orientation).
     QVERIFY(!pdf::preflight::sizeWithinTolerance(792.0, 612.0, 612.0, 792.0, 1.0));
+}
+
+void PreflightChecksTest::transformedStrokeWidth_identity()
+{
+    QCOMPARE(pdf::preflight::transformedStrokeWidth(2.0, QTransform(), QPointF(1.0, 0.0)), 2.0);
+    QCOMPARE(pdf::preflight::minimumEffectiveStrokeWidth(
+                 QPainterPath(QPointF(0.0, 0.0)), 2.0, QTransform()),
+             std::numeric_limits<qreal>::infinity());
+}
+
+void PreflightChecksTest::transformedStrokeWidth_uniformScaleAndRotation()
+{
+    QTransform scale;
+    scale.scale(3.0, 3.0);
+    QCOMPARE(pdf::preflight::transformedStrokeWidth(2.0, scale, QPointF(1.0, 0.0)), 6.0);
+
+    QTransform rotation;
+    rotation.rotate(37.0);
+    QVERIFY(qAbs(pdf::preflight::transformedStrokeWidth(2.0, rotation, QPointF(1.0, 0.0)) - 2.0) < 1.0e-9);
+}
+
+void PreflightChecksTest::transformedStrokeWidth_userUnit()
+{
+    QCOMPARE(pdf::preflight::transformedStrokeWidth(0.5, QTransform(), QPointF(0.0, 1.0), 4.0), 2.0);
+}
+
+void PreflightChecksTest::transformedStrokeWidth_anisotropicShearAndDirections()
+{
+    const QTransform anisotropic(2.0, 0.0, 0.0, 0.5, 0.0, 0.0);
+    QVERIFY(qAbs(pdf::preflight::transformedStrokeWidth(1.0, anisotropic, QPointF(1.0, 0.0)) - 0.5) < 1.0e-9);
+    QVERIFY(qAbs(pdf::preflight::transformedStrokeWidth(1.0, anisotropic, QPointF(0.0, 1.0)) - 2.0) < 1.0e-9);
+
+    const qreal diagonal = pdf::preflight::transformedStrokeWidth(1.0, anisotropic, QPointF(1.0, 1.0));
+    QVERIFY(qAbs(diagonal - (1.0 / std::sqrt(2.125))) < 1.0e-9);
+
+    const QTransform shear(1.0, 0.0, 1.0, 1.0, 0.0, 0.0);
+    QVERIFY(qAbs(pdf::preflight::transformedStrokeWidth(1.0, shear, QPointF(0.0, 1.0)) - (1.0 / std::sqrt(2.0))) < 1.0e-9);
+}
+
+void PreflightChecksTest::transformedStrokeWidth_degenerateAndEmptyPaths()
+{
+    const QTransform degenerate(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    QCOMPARE(pdf::preflight::transformedStrokeWidth(1.0, degenerate, QPointF(1.0, 0.0)), 0.0);
+
+    QPainterPath path;
+    path.moveTo(0.0, 0.0);
+    path.lineTo(10.0, 0.0);
+    path.lineTo(10.0, 10.0);
+    QCOMPARE(pdf::preflight::minimumEffectiveStrokeWidth(path, 1.0, QTransform()), 1.0);
 }
 
 QTEST_APPLESS_MAIN(PreflightChecksTest)
