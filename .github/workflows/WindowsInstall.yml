@@ -209,11 +209,12 @@ jobs:
         working-directory: pdf4qt
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:QT_ROOT_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_PLUGIN_OCR=OFF -DPDF4QT_BUNDLE_OCR_SERVICE=OFF
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:QT_ROOT_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_LOUPE_DISTRIBUTION=ON -DPDF4QT_PLUGIN_OCR=OFF -DPDF4QT_BUNDLE_OCR_SERVICE=OFF
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
           ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
+          .\pdf4qt\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin"
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}

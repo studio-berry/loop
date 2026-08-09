@@ -443,8 +443,12 @@ void PDFEditorMainWindow::onProgressFinished()
 
 void PDFEditorMainWindow::updateDeveloperMenu()
 {
+#ifdef PDF4QT_LOUPE_DISTRIBUTION
+    ui->menuDeveloper->menuAction()->setVisible(false);
+#else
     bool isDeveloperMode = m_programController->getSettings()->getSettings().m_allowDeveloperMode;
     ui->menuDeveloper->menuAction()->setVisible(isDeveloperMode);
+#endif
 }
 
 void PDFEditorMainWindow::updateUI(bool fullUpdate)
