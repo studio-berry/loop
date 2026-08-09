@@ -1,0 +1,26 @@
+{
+    "checks": [
+        {
+            "id": "transparency-risk",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loupe Test - Transparency Risk",
+    "schema_version": 3,
+    "warnings": [
+        {
+            "check_id": "transparency-risk",
+            "message": "Potential transparency blend-space mismatch: CMYK group contains RGB content",
+            "page": 1,
+            "scope": "page",
+            "severity": "warning",
+            "type": "transparency-blend-space"
+        }
+    ]
+}
