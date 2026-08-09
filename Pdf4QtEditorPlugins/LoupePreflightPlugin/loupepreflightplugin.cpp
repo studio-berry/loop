@@ -23,6 +23,7 @@
 #include "loupepreflightplugin.h"
 #include "preflightreportdockwidget.h"
 #include "preflightsidecarutils.h"
+#include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
 #include "pdfdocumentwriter.h"
@@ -317,7 +318,13 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
 
     updateActions();
     m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath, { QStringLiteral("preflight"), stagedPath, QStringLiteral("--profile"), profilePath });
+    m_preflightProcess->start(pdfToolPath,
+                              { QStringLiteral("preflight"),
+                                stagedPath,
+                                QStringLiteral("--profile"),
+                                profilePath,
+                                QStringLiteral("--console-format"),
+                                QStringLiteral("json") });
 }
 
 void LoupePreflightPlugin::onRunPreflightTriggered()
@@ -373,7 +380,13 @@ void LoupePreflightPlugin::onRunPreflightTriggered()
 
     updateActions();
     m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath, { QStringLiteral("preflight"), snapshotPath, QStringLiteral("--profile"), profilePath });
+    m_preflightProcess->start(pdfToolPath,
+                              { QStringLiteral("preflight"),
+                                snapshotPath,
+                                QStringLiteral("--profile"),
+                                profilePath,
+                                QStringLiteral("--console-format"),
+                                QStringLiteral("json") });
 }
 
 void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStatus)
@@ -400,11 +413,11 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
 
     if (exitStatus != QProcess::NormalExit || !preflight::isExpectedPreflightExitCode(exitCode))
     {
-        QString detail = standardError;
-        if (detail.isEmpty())
-        {
-            detail = tr("PdfTool exited with code %1.").arg(exitCode);
-        }
+        const QString detail = pdfplugin::pdftool::failureDetailFromStdout(
+            standardOutput,
+            standardError,
+            exitCode,
+            tr("PdfTool exited with code %1.").arg(exitCode));
 
         QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Preflight did not complete successfully: %1").arg(detail));
         return;
@@ -419,7 +432,25 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
         return;
     }
 
-    const QJsonObject report = reportDocument.object();
+    const QJsonObject envelope = reportDocument.object();
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")) ||
+        envelope.value(QStringLiteral("exit_code")).toInt(-1) != exitCode)
+    {
+        QMessageBox::critical(m_widget,
+                              tr("Loupe Preflight"),
+                              tr("PdfTool returned an invalid result envelope."));
+        return;
+    }
+
+    const QJsonObject report = pdfplugin::pdftool::reportFromEnvelope(envelope);
+    if (report.isEmpty())
+    {
+        QMessageBox::critical(m_widget,
+                              tr("Loupe Preflight"),
+                              tr("PdfTool returned a result without a preflight report."));
+        return;
+    }
+
     QString validationError;
     if (!applyReportJson(report, &validationError, reportSourceLabel))
     {

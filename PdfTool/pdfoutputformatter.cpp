@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfoutputformatter.h"
+#include "pdftoolresult.h"
 
 #include <QMutex>
 #include <QTextStream>
@@ -831,6 +832,7 @@ void PDFConsole::writeText(QString text, QStringConverter::Encoding encoding)
 }
 
 QMutex s_writeErrorMutex;
+PDFToolExecutionContext* s_diagnosticSink = nullptr;
 
 void PDFConsole::writeError(QString text, QStringConverter::Encoding encoding)
 {
@@ -840,6 +842,17 @@ void PDFConsole::writeError(QString text, QStringConverter::Encoding encoding)
     }
 
     QMutexLocker lock(&s_writeErrorMutex);
+
+    if (s_diagnosticSink)
+    {
+        s_diagnosticSink->addDiagnostic({
+            PDFToolDiagnosticSeverity::Error,
+            QStringLiteral("cli.legacy-error"),
+            text,
+            {}
+        });
+        return;
+    }
 
     text += "\n";
 
@@ -859,6 +872,12 @@ void PDFConsole::writeError(QString text, QStringConverter::Encoding encoding)
     stream << text;
     stream << Qt::endl;
 #endif
+}
+
+void PDFConsole::setDiagnosticSink(PDFToolExecutionContext* context)
+{
+    QMutexLocker lock(&s_writeErrorMutex);
+    s_diagnosticSink = context;
 }
 
 void PDFConsole::writeData(const QByteArray& data)

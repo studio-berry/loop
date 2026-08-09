@@ -57,8 +57,7 @@ PDFToolExitCode PDFToolVerifyRedaction::execute(const PDFToolOptions& options)
 {
     if (options.verifyRedactionFiles.size() != 2)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Exactly two documents must be specified: original and redacted."),
-                               options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Exactly two documents must be specified: original and redacted."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -66,16 +65,14 @@ PDFToolExitCode PDFToolVerifyRedaction::execute(const PDFToolOptions& options)
     const pdf::PDFDocument originalDocument = reader.readFromFile(options.verifyRedactionFiles.front());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to read original document: %1").arg(reader.getErrorMessage()),
-                               options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Failed to read original document: %1").arg(reader.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.verifyRedactionFiles.front()}});
         return PDFToolExitCode::InputError;
     }
 
     const pdf::PDFDocument redactedDocument = reader.readFromFile(options.verifyRedactionFiles.back());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to read redacted document: %1").arg(reader.getErrorMessage()),
-                               options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Failed to read redacted document: %1").arg(reader.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.verifyRedactionFiles.back()}});
         return PDFToolExitCode::InputError;
     }
 
@@ -108,7 +105,7 @@ PDFToolExitCode PDFToolVerifyRedaction::execute(const PDFToolOptions& options)
 
     for (const pdf::PDFRedactVerificationIssue& issue : verification.issues)
     {
-        PDFConsole::writeError(QStringLiteral("%1: %2").arg(issue.checkId, issue.message), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("verification.failed"), QStringLiteral("%1: %2").arg(issue.checkId, issue.message), QJsonObject{{QStringLiteral("check_id"), issue.checkId}});
     }
 
     return PDFToolExitCode::Findings;

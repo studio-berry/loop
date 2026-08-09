@@ -24,6 +24,7 @@
 #include "pdftoolcancel.h"
 #include "pdftoolresult.h"
 #include "pdfconstants.h"
+#include "pdflogger.h"
 #include "pdfsentry.h"
 
 #include <QDir>
@@ -89,6 +90,41 @@ bool commandLineRequestsJson(const QStringList& arguments)
     return false;
 }
 
+bool commandLineSpecifiesConsoleFormat(const QStringList& arguments)
+{
+    for (const QString& argument : arguments)
+    {
+        if (argument == QStringLiteral("--console-format") ||
+            argument.startsWith(QStringLiteral("--console-format=")))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QString requestedCommand(const QStringList& arguments)
+{
+    for (qsizetype i = 1; i < arguments.size(); ++i)
+    {
+        const QString& argument = arguments[i];
+        if (argument == QStringLiteral("--console-format") ||
+            argument == QStringLiteral("--text-codec"))
+        {
+            ++i;
+            continue;
+        }
+
+        if (!argument.startsWith('-'))
+        {
+            return argument;
+        }
+    }
+
+    return QString();
+}
+
 /// Writes the result envelope to stdout (compact JSON, single document) and
 /// returns the process exit code that must agree with its exit_code field.
 int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::PDFToolExitCode exitCode)
@@ -100,25 +136,43 @@ int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::
     return static_cast<int>(exitCode);
 }
 
+int writeInvocationError(const pdftool::PDFToolExecutionContext& context,
+                         pdftool::PDFToolExitCode exitCode,
+                         bool wantsJson,
+                         const QString& message)
+{
+    if (wantsJson)
+    {
+        return writeJsonEnvelope(context, exitCode);
+    }
+
+    if (!message.isEmpty())
+    {
+        pdftool::PDFConsole::writeError(message, QStringConverter::Utf8);
+    }
+
+    return static_cast<int>(exitCode);
+}
+
 void handleTerminationSignal(int)
 {
     pdftool::cancelRequested().store(true, std::memory_order_release);
 }
 
-} // namespace
+}   // namespace
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     // Prefer offscreen when requested; ensure the exe dir is searched for plugins
     // (platforms/qoffscreen.dll) before QGuiApplication constructs the QPA plugin.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) }
-                                      + QCoreApplication::libraryPaths());
+    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
 
     QGuiApplication a(argc, argv);
     QCoreApplication::setOrganizationName("MelkaJ");
     QCoreApplication::setApplicationName("PdfTool");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
 
+    const pdf::PDFLogSession logSession(QStringLiteral("pdftool"));
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
 
     const QStringList arguments = QCoreApplication::arguments();
@@ -131,8 +185,7 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("command", "Command to execute.");
     parser.parse(arguments);
 
-    QStringList positionalArguments = parser.positionalArguments();
-    const QString command = !positionalArguments.isEmpty() ? positionalArguments.front() : QString();
+    const QString command = requestedCommand(arguments);
 
     pdftool::PDFToolAbstractApplication* application = pdftool::PDFToolApplicationStorage::getApplicationByCommand(command);
 
@@ -140,12 +193,14 @@ int main(int argc, char *argv[])
     if (!application && !command.isEmpty())
     {
         pdftool::PDFToolExecutionContext context(command);
-        context.addDiagnostic({
-            pdftool::PDFToolDiagnosticSeverity::Error,
-            QStringLiteral("cli.unknown-command"),
-            pdftool::PDFToolTranslationContext::tr("Unknown command '%1'.").arg(command),
-            {}
-        });
+        if (wantsJson)
+        {
+            pdftool::PDFConsole::setDiagnosticSink(&context);
+        }
+        context.addDiagnostic({ pdftool::PDFToolDiagnosticSeverity::Error,
+                                QStringLiteral("cli.unknown-command"),
+                                pdftool::PDFToolTranslationContext::tr("Unknown command '%1'.").arg(command),
+                                {} });
 
         if (wantsJson)
         {
@@ -186,6 +241,12 @@ int main(int argc, char *argv[])
 
     const QString displayCommand = application->getStandardString(pdftool::PDFToolAbstractApplication::Command);
     pdftool::PDFToolExecutionContext context(displayCommand);
+    if (wantsJson ||
+        ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("ocr")) &&
+         !commandLineSpecifiesConsoleFormat(arguments)))
+    {
+        pdftool::PDFConsole::setDiagnosticSink(&context);
+    }
 
     application->initializeCommandLineParser(&parser);
 
@@ -193,22 +254,23 @@ int main(int argc, char *argv[])
     parser.addVersionOption();
     if (!parser.parse(commandArguments))
     {
-        context.addDiagnostic({
-            pdftool::PDFToolDiagnosticSeverity::Error,
-            QStringLiteral("cli.invalid-arguments"),
-            parser.errorText(),
-            {}
-        });
+        context.addDiagnostic({ pdftool::PDFToolDiagnosticSeverity::Error,
+                                QStringLiteral("cli.invalid-arguments"),
+                                parser.errorText(),
+                                {} });
 
-        return writeJsonEnvelope(context, pdftool::PDFToolExitCode::InvalidInvocation);
+        return writeInvocationError(context,
+                                    pdftool::PDFToolExitCode::InvalidInvocation,
+                                    wantsJson,
+                                    parser.errorText());
     }
 
-    if (parser.isSet("help"))
+    if (!wantsJson && parser.isSet("help"))
     {
         parser.showHelp();
     }
 
-    if (parser.isSet("version"))
+    if (!wantsJson && parser.isSet("version"))
     {
         parser.showVersion();
     }

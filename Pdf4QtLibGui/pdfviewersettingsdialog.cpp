@@ -70,7 +70,6 @@ public:
     SettingsDelegate(QObject* parent) :
         QStyledItemDelegate(parent)
     {
-
     }
 
     virtual QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
@@ -155,16 +154,23 @@ PDFViewerSettingsDialog::PDFViewerSettingsDialog(const PDFViewerSettings::Settin
     ui->cmsAccuracyComboBox->addItem(tr("Medium"), int(pdf::PDFCMSSettings::Accuracy::Medium));
     ui->cmsAccuracyComboBox->addItem(tr("High"), int(pdf::PDFCMSSettings::Accuracy::High));
 
-    ui->cmsColorAdaptationXYZComboBox->addItem(tr("None"), int (pdf::PDFCMSSettings::ColorAdaptationXYZ::None));
-    ui->cmsColorAdaptationXYZComboBox->addItem(tr("XYZ scaling"), int (pdf::PDFCMSSettings::ColorAdaptationXYZ::XYZScaling));
-    ui->cmsColorAdaptationXYZComboBox->addItem(tr("CAT97 matrix"), int (pdf::PDFCMSSettings::ColorAdaptationXYZ::CAT97));
-    ui->cmsColorAdaptationXYZComboBox->addItem(tr("CAT02 matrix"), int (pdf::PDFCMSSettings::ColorAdaptationXYZ::CAT02));
-    ui->cmsColorAdaptationXYZComboBox->addItem(tr("Bradford method"), int (pdf::PDFCMSSettings::ColorAdaptationXYZ::Bradford));
+    ui->cmsColorAdaptationXYZComboBox->addItem(tr("None"), int(pdf::PDFCMSSettings::ColorAdaptationXYZ::None));
+    ui->cmsColorAdaptationXYZComboBox->addItem(tr("XYZ scaling"), int(pdf::PDFCMSSettings::ColorAdaptationXYZ::XYZScaling));
+    ui->cmsColorAdaptationXYZComboBox->addItem(tr("CAT97 matrix"), int(pdf::PDFCMSSettings::ColorAdaptationXYZ::CAT97));
+    ui->cmsColorAdaptationXYZComboBox->addItem(tr("CAT02 matrix"), int(pdf::PDFCMSSettings::ColorAdaptationXYZ::CAT02));
+    ui->cmsColorAdaptationXYZComboBox->addItem(tr("Bradford method"), int(pdf::PDFCMSSettings::ColorAdaptationXYZ::Bradford));
 
     // Author identity
     ui->authorNameModeComboBox->addItem(tr("Anonymous (do not disclose the user name)"), static_cast<int>(pdf::PDFAuthorSettings::AuthorNameMode::Anonymous));
     ui->authorNameModeComboBox->addItem(tr("System user name"), static_cast<int>(pdf::PDFAuthorSettings::AuthorNameMode::SystemUserName));
     ui->authorNameModeComboBox->addItem(tr("Custom name"), static_cast<int>(pdf::PDFAuthorSettings::AuthorNameMode::CustomName));
+
+    // Diagnostics
+    ui->logLevelComboBox->addItem(tr("Off"), static_cast<int>(pdf::PDFLogSession::Off));
+    ui->logLevelComboBox->addItem(tr("Error"), static_cast<int>(pdf::PDFLogSession::Error));
+    ui->logLevelComboBox->addItem(tr("Warning"), static_cast<int>(pdf::PDFLogSession::Warning));
+    ui->logLevelComboBox->addItem(tr("Info"), static_cast<int>(pdf::PDFLogSession::Info));
+    ui->logLevelComboBox->addItem(tr("Debug"), static_cast<int>(pdf::PDFLogSession::Debug));
 
     // UI Color Schemes
     ui->colorSchemeCombo->addItem(tr("Automatic (or via command line)"), static_cast<int>(PDFViewerSettings::AutoScheme));
@@ -360,6 +366,7 @@ void PDFViewerSettingsDialog::loadData()
     ui->authorNameModeComboBox->setCurrentIndex(ui->authorNameModeComboBox->findData(static_cast<int>(m_settings.m_authorNameMode)));
     ui->customAuthorNameEdit->setText(m_settings.m_customAuthorName);
     updateAuthorSettingsUI();
+    ui->logLevelComboBox->setCurrentIndex(ui->logLevelComboBox->findData(static_cast<int>(m_settings.m_logLevel)));
 
     // UI
     ui->maximumRecentFileCountEdit->setValue(m_otherSettings.maximumRecentFileCount);
@@ -589,6 +596,10 @@ void PDFViewerSettingsDialog::saveData()
     else if (sender == ui->customAuthorNameEdit)
     {
         m_settings.m_customAuthorName = ui->customAuthorNameEdit->text();
+    }
+    else if (sender == ui->logLevelComboBox)
+    {
+        m_settings.m_logLevel = static_cast<pdf::PDFLogSession::Level>(ui->logLevelComboBox->currentData().toInt());
     }
     else if (sender == ui->developerModeCheckBox)
     {
@@ -843,7 +854,7 @@ void PDFViewerSettingsDialog::loadActionShortcutsTable()
 {
     ui->shortcutsTableWidget->setRowCount(m_actions.size());
     ui->shortcutsTableWidget->setColumnCount(2);
-    ui->shortcutsTableWidget->setHorizontalHeaderLabels({ tr("Action"), tr("Shortcut")});
+    ui->shortcutsTableWidget->setHorizontalHeaderLabels({ tr("Action"), tr("Shortcut") });
     ui->shortcutsTableWidget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     for (int i = 0; i < m_actions.size(); ++i)

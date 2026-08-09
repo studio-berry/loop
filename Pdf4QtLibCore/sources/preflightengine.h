@@ -31,6 +31,7 @@
 #include <QList>
 #include <QRectF>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <map>
@@ -74,6 +75,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     // color-inventory parameters.
     int colorProbeDpi = 150;
     qreal richBlackKThreshold = 0.10;
+
+    // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
+    QStringList allowedOutputConditionIdentifiers;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.

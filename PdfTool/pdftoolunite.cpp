@@ -59,7 +59,7 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
 {
     if (options.uniteFiles.size() < 3)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("At least two documents and target (merged) document must be specified."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("At least two documents and target (merged) document must be specified."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -74,14 +74,25 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
 
     if (options.destructiveReport)
     {
-        PDFConsole::writeText(PDFToolTranslationContext::tr("Would merge %1 document(s) into '%2'.")
-                                .arg(files.size())
-                                .arg(targetFile),
-                            options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("unite")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+        else
+        {
+            PDFConsole::writeText(PDFToolTranslationContext::tr("Would merge %1 document(s) into '%2'.")
+                                    .arg(files.size())
+                                    .arg(targetFile),
+                                options.outputCodec);
+        }
     }
 
     if (options.destructiveDryRun)
     {
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), targetFile, QStringLiteral("planned")});
+        }
         return PDFToolExitCode::Success;
     }
 
@@ -108,13 +119,13 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
             pdf::PDFDocument document = reader.readFromFile(fileName);
             if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(fileName), options.outputCodec);
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(fileName), QJsonObject{{QStringLiteral("path"), fileName}});
                 return PDFToolExitCode::InputError;
             }
 
             if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to assemble pages."), options.outputCodec);
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.assemble-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to assemble pages."));
                 return PDFToolExitCode::ProcessingFailure;
             }
 
@@ -237,7 +248,7 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
         pdf::PDFOperationResult result = writer.write(targetFile, &mergedDocument, true);
         if (!result)
         {
-            PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), targetFile}});
             return PDFToolExitCode::ProcessingFailure;
         }
 
@@ -253,7 +264,7 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
     }
     catch (const pdf::PDFException &exception)
     {
-        PDFConsole::writeError(exception.getMessage(), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), exception.getMessage());
         return PDFToolExitCode::InternalError;
     }
 

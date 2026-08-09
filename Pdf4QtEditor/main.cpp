@@ -26,6 +26,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfapplicationtranslator.h"
 #include "pdfsettings.h"
+#include "pdflogger.h"
 #include "pdfsentry.h"
 
 #include <QApplication>
@@ -33,10 +34,10 @@
 
 #include "pdfdbgheap.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 #if defined(PDF4QT_USE_DBG_HEAP)
-    _CrtSetDbgFlag( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
     QApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
@@ -65,6 +66,11 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("file", "The PDF file to open.");
     parser.process(application);
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
+
+    // Constructed after the settings path is applied (unlike PDFSentrySession
+    // above, which does not support --config) so a portable/--config install
+    // gets its log directory under <settingsPath>/logs rather than %APPDATA%.
+    const pdf::PDFLogSession logSession(QStringLiteral("editor"));
 
     if (parser.isSet(noDrm))
     {

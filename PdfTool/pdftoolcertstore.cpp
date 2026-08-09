@@ -192,7 +192,7 @@ PDFToolExitCode PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions
     }
     else
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open file '%1'. %2").arg(options.certificateStoreInstallCertificateFile, file.errorString()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("input.unreadable"), PDFToolTranslationContext::tr("Cannot open file '%1'. %2").arg(options.certificateStoreInstallCertificateFile, file.errorString()), QJsonObject{{QStringLiteral("path"), options.certificateStoreInstallCertificateFile}});
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -205,7 +205,7 @@ PDFToolExitCode PDFToolCertStoreInstallCertificate::execute(const PDFToolOptions
     }
     else
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot read certificate from file '%1'.").arg(options.certificateStoreInstallCertificateFile), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("input.unreadable"), PDFToolTranslationContext::tr("Cannot read certificate from file '%1'.").arg(options.certificateStoreInstallCertificateFile), QJsonObject{{QStringLiteral("path"), options.certificateStoreInstallCertificateFile}});
         return PDFToolExitCode::ProcessingFailure;
     }
 
