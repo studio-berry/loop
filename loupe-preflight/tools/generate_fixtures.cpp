@@ -393,6 +393,8 @@ int main(int argc, char* argv[])
     generateContentBleedMissingFixture(outputDir);
     generateContentBleedRasterConfirmFixture(outputDir);
     generateContentBleedThreeOfFourFixture(outputDir);
+    generateOverprintRenderFixtures(outputDir);
+    generateWhiteOverprintColorSpaceFixtures(outputDir);
     generateOutputIntentCmykFixture(outputDir);
     generateOutputIntentMissingFixture(outputDir);
     generateOutputIntentProfileMissingFixture(outputDir);

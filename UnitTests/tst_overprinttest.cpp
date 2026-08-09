@@ -32,6 +32,9 @@ class OverprintTest : public QObject
 private slots:
     void overprintMode_appliesToContent_respectsFillStrokeFlags();
     void selectBlendOverprintMode_respectsFillStrokeGating();
+    void floatBitmapBlend_mode0_selectsBackdropForInactiveChannels();
+    void floatBitmapBlend_mode1_selectsNonOneSourceOrBackdropForSubtractiveChannels();
+    void floatBitmapBlend_mode1_selectsNonZeroSourceOrBackdropForAdditiveChannels();
 };
 
 void OverprintTest::overprintMode_appliesToContent_respectsFillStrokeFlags()
@@ -83,6 +86,131 @@ void OverprintTest::selectBlendOverprintMode_respectsFillStrokeGating()
     mode.overprintMode = 1;
     QCOMPARE(pdf::selectBlendOverprintMode(mode, false, true),
              pdf::PDFFloatBitmap::OverprintMode::Overprint_Mode_1);
+}
+
+void OverprintTest::floatBitmapBlend_mode0_selectsBackdropForInactiveChannels()
+{
+    const pdf::PDFPixelFormat format = pdf::PDFPixelFormat::createFormat(4, 0, true, true, true);
+    pdf::PDFFloatBitmap source(1, 1, format);
+    pdf::PDFFloatBitmap target(1, 1, format);
+    pdf::PDFFloatBitmap backdrop(1, 1, format);
+    pdf::PDFFloatBitmap initialBackdrop(1, 1, format);
+    const pdf::PDFFloatBitmap softMask = pdf::PDFFloatBitmap::createOpaqueSoftMask(1, 1);
+
+    const pdf::PDFColor sourceColor{ 0.2f, 0.3f, 0.4f, 0.5f };
+    const pdf::PDFColor backdropColor{ 0.7f, 0.8f, 0.9f, 1.0f };
+    for (pdf::PDFFloatBitmap* bitmap : { &source, &target, &backdrop, &initialBackdrop })
+    {
+        pdf::PDFColorBuffer pixel = bitmap->getPixel(0, 0);
+        for (size_t i = 0; i < backdropColor.size(); ++i)
+        {
+            pixel[i] = backdropColor[i];
+        }
+        pixel[4] = 1.0f;
+        pixel[5] = 1.0f;
+    }
+    for (size_t i = 0; i < sourceColor.size(); ++i)
+    {
+        source.getPixel(0, 0)[i] = sourceColor[i];
+    }
+    source.getPixel(0, 0)[4] = 1.0f;
+    source.getPixel(0, 0)[5] = 1.0f;
+    source.setPixelActiveColorMask(0, 0, 1u << 0);
+
+    pdf::PDFFloatBitmap::blend(source, target, backdrop, initialBackdrop, softMask, false, 1.0f,
+                               pdf::BlendMode::Normal, false,
+                               pdf::PDFFloatBitmap::OverprintMode::Overprint_Mode_0,
+                               QRect(0, 0, 1, 1));
+
+    const pdf::PDFFloatBitmap& constTarget = target;
+    const pdf::PDFConstColorBuffer result = constTarget.getPixel(0, 0);
+    QCOMPARE(result[0], sourceColor[0]);
+    QCOMPARE(result[1], backdropColor[1]);
+    QCOMPARE(result[2], backdropColor[2]);
+    QCOMPARE(result[3], backdropColor[3]);
+}
+
+void OverprintTest::floatBitmapBlend_mode1_selectsNonOneSourceOrBackdropForSubtractiveChannels()
+{
+    const pdf::PDFPixelFormat format = pdf::PDFPixelFormat::createFormat(4, 0, true, true, true);
+    pdf::PDFFloatBitmap source(1, 1, format);
+    pdf::PDFFloatBitmap target(1, 1, format);
+    pdf::PDFFloatBitmap backdrop(1, 1, format);
+    pdf::PDFFloatBitmap initialBackdrop(1, 1, format);
+    const pdf::PDFFloatBitmap softMask = pdf::PDFFloatBitmap::createOpaqueSoftMask(1, 1);
+    const pdf::PDFColor sourceColor{ 0.2f, 0.3f, 0.4f, 0.0f };
+    const pdf::PDFColor backdropColor{ 0.7f, 0.8f, 0.9f, 0.6f };
+
+    for (pdf::PDFFloatBitmap* bitmap : { &source, &target, &backdrop, &initialBackdrop })
+    {
+        pdf::PDFColorBuffer pixel = bitmap->getPixel(0, 0);
+        for (size_t i = 0; i < backdropColor.size(); ++i)
+        {
+            pixel[i] = backdropColor[i];
+        }
+        pixel[4] = 1.0f;
+        pixel[5] = 1.0f;
+    }
+    for (size_t i = 0; i < sourceColor.size(); ++i)
+    {
+        source.getPixel(0, 0)[i] = sourceColor[i];
+    }
+    source.getPixel(0, 0)[4] = 1.0f;
+    source.getPixel(0, 0)[5] = 1.0f;
+    source.setPixelActiveColorMask(0, 0, pdf::PDFPixelFormat::getAllColorsMask());
+
+    pdf::PDFFloatBitmap::blend(source, target, backdrop, initialBackdrop, softMask, false, 1.0f,
+                               pdf::BlendMode::Normal, false,
+                               pdf::PDFFloatBitmap::OverprintMode::Overprint_Mode_1,
+                               QRect(0, 0, 1, 1));
+
+    const pdf::PDFFloatBitmap& constTarget = target;
+    const pdf::PDFConstColorBuffer result = constTarget.getPixel(0, 0);
+    QCOMPARE(result[0], sourceColor[0]);
+    QCOMPARE(result[1], sourceColor[1]);
+    QCOMPARE(result[2], sourceColor[2]);
+    QCOMPARE(result[3], backdropColor[3]);
+}
+
+void OverprintTest::floatBitmapBlend_mode1_selectsNonZeroSourceOrBackdropForAdditiveChannels()
+{
+    const pdf::PDFPixelFormat format = pdf::PDFPixelFormat::createFormat(3, 0, true, false, true);
+    pdf::PDFFloatBitmap source(1, 1, format);
+    pdf::PDFFloatBitmap target(1, 1, format);
+    pdf::PDFFloatBitmap backdrop(1, 1, format);
+    pdf::PDFFloatBitmap initialBackdrop(1, 1, format);
+    const pdf::PDFFloatBitmap softMask = pdf::PDFFloatBitmap::createOpaqueSoftMask(1, 1);
+    const pdf::PDFColor sourceColor{ 0.0f, 0.3f, 0.4f };
+    const pdf::PDFColor backdropColor{ 0.7f, 0.8f, 0.9f };
+
+    for (pdf::PDFFloatBitmap* bitmap : { &source, &target, &backdrop, &initialBackdrop })
+    {
+        pdf::PDFColorBuffer pixel = bitmap->getPixel(0, 0);
+        for (size_t i = 0; i < backdropColor.size(); ++i)
+        {
+            pixel[i] = backdropColor[i];
+        }
+        pixel[3] = 1.0f;
+        pixel[4] = 1.0f;
+    }
+    for (size_t i = 0; i < sourceColor.size(); ++i)
+    {
+        source.getPixel(0, 0)[i] = sourceColor[i];
+    }
+    source.getPixel(0, 0)[3] = 1.0f;
+    source.getPixel(0, 0)[4] = 1.0f;
+    source.setPixelActiveColorMask(0, 0, pdf::PDFPixelFormat::getAllColorsMask());
+
+    pdf::PDFFloatBitmap::blend(source, target, backdrop, initialBackdrop, softMask, false, 1.0f,
+                               pdf::BlendMode::Normal, false,
+                               pdf::PDFFloatBitmap::OverprintMode::Overprint_Mode_1,
+                               QRect(0, 0, 1, 1));
+
+    const pdf::PDFFloatBitmap& constTarget = target;
+    const pdf::PDFConstColorBuffer result = constTarget.getPixel(0, 0);
+    QCOMPARE(result[0], backdropColor[0]);
+    QCOMPARE(result[1], sourceColor[1]);
+    QCOMPARE(result[2], sourceColor[2]);
 }
 
 QTEST_APPLESS_MAIN(OverprintTest)
