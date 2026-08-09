@@ -164,6 +164,23 @@ set_target_properties(UnitTestsOcrCli PROPERTIES
 )
 add_test(UnitTestsOcrCli "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOcrCli")
 
+add_executable(UnitTestsPdfToolContract
+    tst_pdftoolcontract.cpp
+)
+
+target_link_libraries(UnitTestsPdfToolContract PRIVATE Qt6::Core Qt6::Test)
+add_dependencies(UnitTestsPdfToolContract PdfTool)
+target_compile_definitions(UnitTestsPdfToolContract PRIVATE
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>")
+
+set_target_properties(UnitTestsPdfToolContract PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPdfToolContract "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPdfToolContract")
+
 add_executable(UnitTestsBleedMarginProbe
 	tst_bleedmarginprobetest.cpp
 )
@@ -327,7 +344,9 @@ add_executable(UnitTestsPreflightPlugin
 )
 
 target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Test)
-target_include_directories(UnitTestsPreflightPlugin PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
+target_include_directories(UnitTestsPreflightPlugin PRIVATE
+    ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+    ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins)
 
 set_target_properties(UnitTestsPreflightPlugin PROPERTIES
     WIN32_EXECUTABLE OFF

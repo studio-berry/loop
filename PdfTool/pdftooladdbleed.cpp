@@ -204,6 +204,15 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("primary"),
+                options.addBleedOutputDocument,
+                QStringLiteral("planned")
+            });
+        }
         return PDFToolExitCode::Success;
     }
 
