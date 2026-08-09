@@ -168,6 +168,22 @@
     "notes": "White overprint inside a Form XObject painted via Do. MIC-306."
   },
   {
+    "id": "ink-coverage-over",
+    "pdf": "ink-coverage-over.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": ["ink-coverage"] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 370% TAC on an otherwise light page; the test profile isolates the ink-coverage warning."
+  },
+  {
+    "id": "ink-coverage-ok",
+    "pdf": "ink-coverage-ok.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 190% TAC, below the 300% test threshold."
+  },
+  {
     "id": "output-intent-cmyk",
     "pdf": "output-intent-cmyk.pdf",
     "profile": "testdata/profiles/test-output-intent.json",
