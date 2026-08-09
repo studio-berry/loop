@@ -64,7 +64,9 @@ jobs:
           # lives in .github/pins/packaging-tools.json.
           $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $keylocker = $pins.digicertKeylocker
-          if ([string]::IsNullOrWhiteSpace($keylocker.version -or $keylocker.url -or $keylocker.sha256)) {
+          if ([string]::IsNullOrWhiteSpace([string]$keylocker.version) -or
+              [string]::IsNullOrWhiteSpace([string]$keylocker.url) -or
+              [string]::IsNullOrWhiteSpace([string]$keylocker.sha256)) {
             throw "DigiCert KeyLocker tools are not pinned (packaging-tools.json -> digicertKeylocker). Refusing to sign with an unpinned toolchain. Update the pins before enabling SIGN_MSI."
           }
 
@@ -89,6 +91,8 @@ jobs:
           echo "SM_API_KEY=${{ secrets.SM_API_KEY }}" >> "$env:GITHUB_ENV"
           echo "SM_CLIENT_CERT_FILE=$certPath" >> "$env:GITHUB_ENV"
           echo "SM_CLIENT_CERT_PASSWORD=${{ secrets.SM_CLIENT_CERT_PASSWORD }}" >> "$env:GITHUB_ENV"
+
+          $installer = Join-Path $env:RUNNER_TEMP "Keylockertools-windows-x64.msi"
           
           # Add paths to PATH environment variable
           echo "C:\Program Files (x86)\Windows Kits\10\App Certification Kit" >> $env:GITHUB_PATH
@@ -98,9 +102,22 @@ jobs:
           # Download and install the Keylocker tools
           & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
             -Url $pins.digicertKeylocker.url `
-            -OutFile "$env:GITHUB_WORKSPACE\Keylockertools-windows-x64.msi" `
+            -OutFile $installer `
             -Sha256 $pins.digicertKeylocker.sha256
-          msiexec /i "$env:GITHUB_WORKSPACE\Keylockertools-windows-x64.msi" /quiet /qn
+
+          $signature = Get-AuthenticodeSignature $installer
+          if ($signature.Status -ne 'Valid') {
+            throw "DigiCert KeyLocker installer Authenticode signature is not valid: $($signature.Status)"
+          }
+
+          $install = Start-Process msiexec.exe `
+            -ArgumentList @('/i', "`"$installer`"", '/quiet', '/qn') `
+            -Wait `
+            -NoNewWindow `
+            -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "DigiCert KeyLocker installer failed with exit code $($install.ExitCode)"
+          }
           
       - name: Certificates Sync   
         shell: pwsh
