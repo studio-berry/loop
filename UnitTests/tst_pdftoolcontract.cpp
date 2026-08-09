@@ -75,6 +75,7 @@ void verifyEnvelope(const ToolRun& run, int expectedExitCode, const QString& com
     QVERIFY2(!run.json.isEmpty(), qPrintable(QStringLiteral("stdout was not one JSON object: %1").arg(QString::fromUtf8(run.stdoutData))));
     QCOMPARE(run.json.value(QStringLiteral("schema_version")).toInt(), 1);
     QCOMPARE(run.json.value(QStringLiteral("command")).toString(), command);
+    QVERIFY(!run.json.value(QStringLiteral("version")).toString().isEmpty());
     QCOMPARE(run.json.value(QStringLiteral("exit_code")).toInt(), expectedExitCode);
     QVERIFY(!run.json.value(QStringLiteral("diagnostics")).isNull());
     QVERIFY(!run.json.value(QStringLiteral("outputs")).isNull());
@@ -91,6 +92,8 @@ private slots:
     void equalsFormIsDetected();
     void unknownCommandIsInvalidInvocation();
     void malformedInvocationIsWrapped();
+    void defaultPreflightMalformedInvocationIsWrapped();
+    void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
 };
 
@@ -122,6 +125,21 @@ void PdfToolContractTest::malformedInvocationIsWrapped()
     const ToolRun run = runPdfTool({QStringLiteral("help"), QStringLiteral("--console-format"), QStringLiteral("json"), QStringLiteral("--not-an-option")});
     verifyEnvelope(run, 2, QStringLiteral("help"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
+}
+
+void PdfToolContractTest::defaultPreflightMalformedInvocationIsWrapped()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("preflight"), QStringLiteral("--profile")});
+    verifyEnvelope(run, 2, QStringLiteral("preflight"));
+    QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
+}
+
+void PdfToolContractTest::preflightRejectsNonJsonOutput()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("text")});
+    QCOMPARE(run.exitCode, 2);
+    QVERIFY(run.json.isEmpty());
+    QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
 }
 
 void PdfToolContractTest::preflightKeepsNestedReportBoundary()
