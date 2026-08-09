@@ -41,12 +41,26 @@ add_executable(UnitTestsProcessingBudget
 target_link_libraries(UnitTestsProcessingBudget PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
 set_target_properties(UnitTestsProcessingBudget PROPERTIES
+add_executable(UnitTestsAccessibility
+    tst_accessibilitytest.cpp
+)
+
+target_link_libraries(UnitTestsAccessibility PRIVATE
+    Pdf4QtLibWidgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+set_target_properties(UnitTestsAccessibility PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsProcessingBudget "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsProcessingBudget")
+add_test(UnitTestsAccessibility "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsAccessibility")
 
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
@@ -61,6 +75,20 @@ set_target_properties(UnitTestsImageOptimizer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsImageOptimizer  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsImageOptimizer")
+
+add_executable(UnitTestsImageDownsampleFixup
+    tst_imagedownsamplefixuptest.cpp
+)
+
+target_link_libraries(UnitTestsImageDownsampleFixup PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsImageDownsampleFixup PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsImageDownsampleFixup "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsImageDownsampleFixup")
 
 add_executable(UnitTestsBleedFixup
 	tst_bleedfixuptest.cpp

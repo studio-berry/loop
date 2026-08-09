@@ -34,6 +34,7 @@
 #include "pdffont.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
+#include "pdfimageoptimizer.h"
 #include "pdfinkcoverageprobe.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfoptionalcontent.h"
@@ -749,6 +750,18 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     probeSettings.dpi = check.probeDpi;
     probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
+    if (check.inkCoverageAnalysisBox == QStringLiteral("trim"))
+    {
+        probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Trim;
+    }
+    else if (check.inkCoverageAnalysisBox == QStringLiteral("crop"))
+    {
+        probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Crop;
+    }
+    else if (check.inkCoverageAnalysisBox == QStringLiteral("media"))
+    {
+        probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Media;
+    }
 
     PDFInkCoverageProbe probe(session);
     const PDFCatalog* catalog = document->getCatalog();
@@ -769,10 +782,12 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
             finding.page = int(pageIndex + 1);
             finding.objectId = QString();
-            finding.type = QStringLiteral("ink-coverage");
+            finding.type = QStringLiteral("check-incomplete");
             finding.severity = QStringLiteral("info");
             finding.checkId = check.id;
-            finding.message = PDFTranslationContext::tr("Page %1 skipped: ink coverage raster exceeds the pixel budget").arg(pageIndex + 1);
+            finding.message = result.budgetExceeded
+                ? PDFTranslationContext::tr("Page %1 skipped: ink coverage raster exceeds the pixel budget").arg(pageIndex + 1)
+                : PDFTranslationContext::tr("Page %1 skipped: ink coverage rasterization was unavailable").arg(pageIndex + 1);
             pushPreflightFinding(finding, finding.severity, errors, warnings);
             continue;
         }
@@ -865,7 +880,47 @@ bool hasBleedGapFinding(const QList<PreflightFinding>& findings)
     return false;
 }
 
-void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
+bool hasDownsampleCandidate(const PDFDocument* document,
+                            int targetDpi,
+                            int* candidateCount = nullptr)
+{
+    if (candidateCount)
+    {
+        *candidateCount = 0;
+    }
+    if (!document || targetDpi < 72 || targetDpi > 1200)
+    {
+        return false;
+    }
+
+    const std::vector<PDFImageOptimizer::ImageInfo> images = PDFImageOptimizer::collectImageInfos(document);
+    constexpr double qualityThreshold = 1.15;
+    int count = 0;
+    for (const PDFImageOptimizer::ImageInfo& image : images)
+    {
+        if (image.isImageMask)
+        {
+            continue;
+        }
+        const double dpiX = image.minimalDpi.x();
+        const double dpiY = image.minimalDpi.y();
+        const bool highX = std::isfinite(dpiX) && dpiX > targetDpi * qualityThreshold;
+        const bool highY = std::isfinite(dpiY) && dpiY > targetDpi * qualityThreshold;
+        if (highX || highY)
+        {
+            ++count;
+        }
+    }
+
+    if (candidateCount)
+    {
+        *candidateCount = count;
+    }
+    return count > 0;
+}
+
+void adjustFixupsAvailable(PDFDocumentSession* session,
+                           QList<PreflightFixupConfig>& fixups,
                            bool needsAddBleed,
                            qreal addBleedAmountPt,
                            const QList<PreflightFinding>& errors,
@@ -875,6 +930,8 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
     bool hasProfileAddBleed = false;
     PreflightFixupConfig rgbToCmykConfig;
     bool hasProfileRgbToCmyk = false;
+    PreflightFixupConfig downsampleConfig;
+    bool hasProfileDownsample = false;
 
     for (const PreflightFixupConfig& fixup : fixups)
     {
@@ -882,6 +939,16 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
         {
             addBleedConfig = fixup;
             hasProfileAddBleed = true;
+            break;
+        }
+    }
+
+    for (const PreflightFixupConfig& fixup : fixups)
+    {
+        if (fixup.id == QStringLiteral("downsample-images"))
+        {
+            downsampleConfig = fixup;
+            hasProfileDownsample = true;
             break;
         }
     }
@@ -956,6 +1023,29 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
         params.insert(QStringLiteral("safe"), true);
         rgbToCmykConfig.params = params;
         fixups.push_back(rgbToCmykConfig);
+    }
+
+    const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
+    int candidateCount = 0;
+    if (hasProfileDownsample
+        && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
+    {
+        if (downsampleConfig.description.isEmpty())
+        {
+            downsampleConfig.description = PDFTranslationContext::tr(
+                "Downsample %1 oversized image(s) toward %2 DPI")
+                .arg(candidateCount)
+                .arg(targetDpi);
+        }
+
+        QJsonObject params = downsampleConfig.params;
+        params.insert(QStringLiteral("target_dpi"), targetDpi);
+        params.insert(QStringLiteral("candidate_count"), candidateCount);
+        params.insert(QStringLiteral("quality"), 90);
+        params.insert(QStringLiteral("preserve_color"), true);
+        params.insert(QStringLiteral("preserve_transparency"), true);
+        downsampleConfig.params = params;
+        fixups.push_back(downsampleConfig);
     }
 }
 
@@ -2874,6 +2964,16 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             continue;
         }
 
+        const auto isCheckIncomplete = [](const PreflightFinding& finding)
+        {
+            return finding.type == QStringLiteral("check-incomplete");
+        };
+        const bool checkIncomplete = std::any_of(result.errors.cbegin() + errorsBefore,
+                                                  result.errors.cend(),
+                                                  isCheckIncomplete)
+            || std::any_of(result.warnings.cbegin() + warningsBefore,
+                           result.warnings.cend(),
+                           isCheckIncomplete);
         const bool checkFailed = result.errors.size() > errorsBefore;
         const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
                                               result.warnings.cend(),
@@ -2881,7 +2981,13 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         {
             return finding.severity == QStringLiteral("warning");
         });
-        if (checkFailed)
+        if (checkIncomplete)
+        {
+            status.status = QStringLiteral("skipped");
+            status.reason = QStringLiteral("rasterization incomplete");
+            result.inspectionComplete = false;
+        }
+        else if (checkFailed)
         {
             status.status = QStringLiteral("failed");
         }
@@ -2910,7 +3016,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
     }
 
     const bool needsAddBleed = hasBleedGapFinding(result.errors) || hasBleedGapFinding(result.warnings);
-    adjustFixupsAvailable(result.fixupsAvailable,
+    adjustFixupsAvailable(m_session,
+                          result.fixupsAvailable,
                           needsAddBleed,
                           addBleedAmountPt,
                           result.errors,
@@ -3001,13 +3108,75 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         check.probeThreshold = checkObject.value(QStringLiteral("probe_threshold")).toInt(16);
         check.rasterWhiteThreshold = checkObject.value(QStringLiteral("raster_white_threshold")).toDouble(0.9975);
 
-        check.maxInkPct = checkObject.value(QStringLiteral("max_ink_pct")).toDouble(0.0);
-        check.minRegionAreaPct = checkObject.value(QStringLiteral("min_region_area_pct")).toDouble(0.05);
-        check.maxRegionsPerPage = checkObject.value(QStringLiteral("max_regions_per_page")).toInt(20);
-        if (check.id == QStringLiteral("ink-coverage") && check.maxInkPct <= 0.0)
+        const QJsonValue maxInkValue = checkObject.value(QStringLiteral("max_ink_pct"));
+        const QJsonValue minRegionAreaValue = checkObject.value(QStringLiteral("min_region_area_pct"));
+        const QJsonValue maxRegionsValue = checkObject.value(QStringLiteral("max_regions_per_page"));
+        check.maxInkPct = maxInkValue.toDouble(0.0);
+        check.minRegionAreaPct = minRegionAreaValue.toDouble(0.05);
+        check.maxRegionsPerPage = maxRegionsValue.toInt(20);
+        if (check.id == QStringLiteral("ink-coverage")
+            && (!maxInkValue.isDouble()
+                || !std::isfinite(check.maxInkPct)
+                || check.maxInkPct <= 0.0))
         {
             errorMessage = PDFTranslationContext::tr("Check '%1' requires positive max_ink_pct.").arg(check.id);
             return false;
+        }
+
+        if (check.id == QStringLiteral("ink-coverage"))
+        {
+            if (checkObject.contains(QStringLiteral("probe_dpi"))
+                && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble()
+                    || check.probeDpi <= 0
+                    || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble())
+                        != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires integral positive probe_dpi.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("min_region_area_pct"))
+                && (!minRegionAreaValue.isDouble()
+                    || !std::isfinite(check.minRegionAreaPct)
+                    || check.minRegionAreaPct < 0.0
+                    || check.minRegionAreaPct > 100.0))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires min_region_area_pct between 0 and 100.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("max_regions_per_page"))
+                && (!maxRegionsValue.isDouble()
+                    || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble()
+                    || check.maxRegionsPerPage < 1))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_regions_per_page.").arg(check.id);
+                return false;
+            }
+
+            const QJsonValue analysisBoxValue = checkObject.value(QStringLiteral("analysis_box"));
+            if (analysisBoxValue.isUndefined())
+            {
+                check.inkCoverageAnalysisBox = QStringLiteral("bleed");
+            }
+            else if (!analysisBoxValue.isString())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires string analysis_box.").arg(check.id);
+                return false;
+            }
+            else
+            {
+                check.inkCoverageAnalysisBox = analysisBoxValue.toString();
+            }
+
+            if (check.inkCoverageAnalysisBox != QStringLiteral("bleed")
+                && check.inkCoverageAnalysisBox != QStringLiteral("trim")
+                && check.inkCoverageAnalysisBox != QStringLiteral("crop")
+                && check.inkCoverageAnalysisBox != QStringLiteral("media"))
+            {
+                errorMessage = PDFTranslationContext::tr(
+                    "Check '%1' has invalid analysis_box '%2' (must be 'bleed', 'trim', 'crop', or 'media').")
+                    .arg(check.id, check.inkCoverageAnalysisBox);
+                return false;
+            }
         }
 
         if (check.id == QStringLiteral("thin-strokes"))
@@ -3115,6 +3284,26 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         fixup.amountPt = fixupObject.value(QStringLiteral("amount_pt")).toDouble(0.0);
         fixup.description = fixupObject.value(QStringLiteral("description")).toString();
         fixup.params = fixupObject.value(QStringLiteral("params")).toObject();
+        if (fixupObject.contains(QStringLiteral("target_dpi"))
+            && !fixup.params.contains(QStringLiteral("target_dpi")))
+        {
+            fixup.params.insert(QStringLiteral("target_dpi"), fixupObject.value(QStringLiteral("target_dpi")));
+        }
+        if (fixup.id == QStringLiteral("downsample-images"))
+        {
+            const QJsonValue targetDpiValue = fixup.params.value(QStringLiteral("target_dpi"));
+            if (!targetDpiValue.isUndefined()
+                && (!targetDpiValue.isDouble()
+                    || !std::isfinite(targetDpiValue.toDouble())
+                    || std::floor(targetDpiValue.toDouble()) != targetDpiValue.toDouble()
+                    || targetDpiValue.toInt() < 72
+                    || targetDpiValue.toInt() > 1200))
+            {
+                errorMessage = PDFTranslationContext::tr(
+                    "Fixup 'downsample-images' requires an integral target_dpi between 72 and 1200.");
+                return false;
+            }
+        }
 
         profile.fixups.push_back(fixup);
     }

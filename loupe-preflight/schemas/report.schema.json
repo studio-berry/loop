@@ -158,7 +158,7 @@
         "status": {
           "type": "string",
           "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile. unsupported: unknown check id."
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id."
         },
         "reason": {
           "type": "string",
