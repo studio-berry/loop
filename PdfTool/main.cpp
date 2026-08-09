@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
     const QStringList arguments = QCoreApplication::arguments();
     const QString command = requestedCommand(arguments);
     const bool wantsJson = commandLineRequestsJson(arguments) ||
-                           ((command == QStringLiteral("preflight") || command == QStringLiteral("ocr")) &&
+                           ((command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities")) &&
                             !commandLineSpecifiesConsoleFormat(arguments));
 
     // Extract the requested command without terminating on unknown options so
@@ -243,7 +243,7 @@ int main(int argc, char* argv[])
     const QString displayCommand = application->getStandardString(pdftool::PDFToolAbstractApplication::Command);
     pdftool::PDFToolExecutionContext context(displayCommand);
     if (wantsJson ||
-        ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("ocr")) &&
+        ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("ocr") || displayCommand == QStringLiteral("capabilities")) &&
          !commandLineSpecifiesConsoleFormat(arguments)))
     {
         pdftool::PDFConsole::setDiagnosticSink(&context);
