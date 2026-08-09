@@ -50,16 +50,21 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     layout->setSpacing(pdf::PDFUITheme::kDialogMarginPx);
 
     m_headerLabel = new QLabel(tr("No preflight report loaded."), container);
+    m_headerLabel->setObjectName(QStringLiteral("preflightReportHeader"));
+    m_headerLabel->setAccessibleName(tr("Preflight report status"));
     m_headerLabel->setWordWrap(true);
     layout->addWidget(m_headerLabel);
 
     m_summaryLabel = new QLabel(container);
+    m_summaryLabel->setObjectName(QStringLiteral("preflightReportSummary"));
+    m_summaryLabel->setAccessibleName(tr("Preflight finding summary"));
     m_summaryLabel->setWordWrap(true);
     layout->addWidget(m_summaryLabel);
 
     m_contentStack = new QStackedWidget(container);
 
     m_emptyLabel = new QLabel(tr("Run preflight or load an example report to see findings here."), container);
+    m_emptyLabel->setAccessibleName(tr("Preflight report instructions"));
     m_emptyLabel->setWordWrap(true);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
     {
@@ -74,6 +79,9 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     reportLayout->setContentsMargins(0, 0, 0, 0);
 
     m_findingsView = new QTableView(reportPage);
+    m_findingsView->setObjectName(QStringLiteral("preflightFindingsView"));
+    m_findingsView->setAccessibleName(tr("Preflight findings"));
+    m_findingsView->setAccessibleDescription(tr("Select a finding to inspect its evidence and available fixups."));
     m_findingsView->setModel(&m_model);
     m_findingsView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_findingsView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -92,10 +100,17 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     });
 
     m_fixupsList = new QListWidget(reportPage);
+    m_fixupsList->setObjectName(QStringLiteral("preflightFixupsList"));
+    m_fixupsList->setAccessibleName(tr("Available fixups"));
+    m_fixupsList->setAccessibleDescription(tr("Safe and bounded operations available for the current report."));
     m_fixupsList->setMaximumHeight(120);
     reportLayout->addWidget(m_fixupsList);
 
     m_applyFixupButton = new QPushButton(tr("Apply Fixup..."), reportPage);
+    m_applyFixupButton = new QPushButton(tr("Apply Bleed Fix..."), reportPage);
+    m_applyFixupButton->setObjectName(QStringLiteral("applyPreflightFixupButton"));
+    m_applyFixupButton->setAccessibleName(tr("Apply selected preflight fixup"));
+    m_applyFixupButton->setAccessibleDescription(tr("Apply the selected bounded fixup after reviewing its scope."));
     m_applyFixupButton->setEnabled(false);
     connect(m_applyFixupButton, &QPushButton::clicked, this, [this]
     {
@@ -164,7 +179,9 @@ void PreflightReportDockWidget::refreshHeader()
     }
 
     const QString statusText = m_model.pass() ? tr("Pass") : tr("Fail");
-    const QColor statusColor = m_model.pass() ? QColor(34, 197, 94) : pdf::PDFUITheme::severityErrorColor();
+    const QColor statusColor = m_model.pass()
+                                   ? (pdf::PDFWidgetUtils::isDarkTheme() ? QColor(134, 239, 172) : QColor(0, 102, 51))
+                                   : pdf::PDFUITheme::severityTextColor(QStringLiteral("error"));
     if (m_reportSourceLabel.isEmpty())
     {
         m_headerLabel->setText(tr("%1 — profile: %2").arg(statusText, m_model.profileName()));

@@ -282,17 +282,10 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
         return;
     }
 
-    const QJsonObject report = pdfplugin::pdftool::reportFromEnvelope(envelope);
-    if (report.isEmpty())
-    {
-        QMessageBox::critical(m_widget,
-                              tr("Loupe OCR"),
-                              tr("PdfTool returned a result without an OCR report."));
-        return;
-    }
-
+    QJsonObject report;
     QString validationError;
-    if (!applyReportJson(report, &validationError))
+    if (!ocr::extractOcrReport(envelope, &report, &validationError)
+        || !applyReportJson(report, &validationError))
     {
         QMessageBox::critical(m_widget, tr("Loupe OCR"), validationError);
     }

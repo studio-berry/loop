@@ -37,6 +37,8 @@ namespace Ui
 class OutputPreviewDialog;
 }
 
+class QLabel;
+
 namespace pdfplugin
 {
 
@@ -75,6 +77,7 @@ private:
         pdf::PDFFloatBitmapWithColorSpace originalProcessImage;
         QSizeF pageSize;
         QList<pdf::PDFRenderError> errors;
+        pdf::PDFRenderDiagnostics diagnostics;
     };
 
     void updatePageImage();
@@ -93,6 +96,7 @@ private:
     pdf::PDFWidget* m_widget;
     bool m_needUpdateImage;
     OutputPreviewWidget* m_outputPreviewWidget;
+    QLabel* m_fidelityLabel;
 
     QFuture<RenderedImage> m_future;
     QFutureWatcher<RenderedImage>* m_futureWatcher;

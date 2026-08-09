@@ -30,6 +30,7 @@
 
 #include <QCloseEvent>
 #include <QColorDialog>
+#include <QLabel>
 #include <QtConcurrent/QtConcurrent>
 
 namespace pdfplugin
@@ -44,6 +45,7 @@ OutputPreviewDialog::OutputPreviewDialog(const pdf::PDFDocument* document, pdf::
     m_widget(widget),
     m_needUpdateImage(false),
     m_outputPreviewWidget(new OutputPreviewWidget(this)),
+    m_fidelityLabel(new QLabel(this)),
     m_futureWatcher(nullptr)
 {
     ui->setupUi(this);
@@ -53,6 +55,9 @@ OutputPreviewDialog::OutputPreviewDialog(const pdf::PDFDocument* document, pdf::
     ui->pageIndexScrollBar->setMaximum(int(document->getCatalog()->getPageCount()));
 
     ui->frameViewLayout->insertWidget(0, m_outputPreviewWidget);
+    m_fidelityLabel->setWordWrap(true);
+    m_fidelityLabel->setVisible(false);
+    ui->verticalLayout->insertWidget(0, m_fidelityLabel);
 
     ui->displayModeComboBox->addItem(tr("Separations"), OutputPreviewWidget::Separations);
     ui->displayModeComboBox->addItem(tr("Color Warnings | Ink Coverage"), OutputPreviewWidget::ColorWarningInkCoverage);
@@ -358,6 +363,7 @@ OutputPreviewDialog::RenderedImage OutputPreviewDialog::renderPage(const pdf::PD
 
     pdf::PDFTransparencyRendererSettings settings;
     settings.flags = additionalFlags;
+    settings.renderPolicy = pdf::PDFRenderPolicy::forOutputPreview();
 
     // Jakub Melka: debug is very slow, use multithreading
 #ifdef QT_DEBUG
@@ -376,6 +382,7 @@ OutputPreviewDialog::RenderedImage OutputPreviewDialog::renderPage(const pdf::PD
 
     renderer.beginPaint(imageSize);
     result.errors = renderer.processContents();
+    result.diagnostics = renderer.getRenderDiagnostics();
     renderer.endPaint();
 
     QImage image = renderer.toImage(false, true, paperColor);
@@ -398,6 +405,22 @@ void OutputPreviewDialog::onPageImageRendered()
         m_futureWatcher = nullptr;
 
         m_outputPreviewWidget->setPageImage(qMove(result.image), qMove(result.originalProcessImage), result.pageSize);
+
+        if (result.diagnostics.isExact())
+        {
+            m_fidelityLabel->clear();
+            m_fidelityLabel->setVisible(false);
+        }
+        else
+        {
+            const QString prefix = result.diagnostics.fidelity == pdf::PDFRenderFidelity::Unsupported
+                ? tr("Unsupported overprint combination")
+                : tr("Overprint fallback in preview");
+            m_fidelityLabel->setText(prefix + QStringLiteral(": ")
+                                      + result.diagnostics.reasons.join(QStringLiteral(" "))
+                                      + tr(" Use the result as a diagnostic preview, not as an exact proof for this combination."));
+            m_fidelityLabel->setVisible(true);
+        }
 
         if (m_needUpdateImage)
         {
