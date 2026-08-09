@@ -64,19 +64,21 @@ if(PDF4QT_ENABLE_SENTRY)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Pdf4QtSentry.cmake)
 endif()
 
-# Loupe slim release profile: disable apps/plugins without deleting upstream sources.
-option(PDF4QT_LOUPE_DISTRIBUTION "Slim Loupe release (disable non-product apps and plugins)" OFF)
+# Loupe release profile: retain the standalone production/developer tools while
+# deferring only explicitly out-of-profile plugins without deleting sources.
+option(PDF4QT_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 
 if(PDF4QT_LOUPE_DISTRIBUTION)
-    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT OFF)
-    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
-    set(_PDF4QT_BUILD_VIEWER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_DIFF_DEFAULT OFF)
-    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT OFF)
+    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT ON)
+    set(_PDF4QT_BUILD_DIFF_DEFAULT ON)
+    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT OFF)
-    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT OFF)
+    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_OCR_DEFAULT OFF)
 else()
     set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
@@ -87,6 +89,7 @@ else()
     set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT ON)
     set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_OCR_DEFAULT ON)
 endif()
 
 option(PDF4QT_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT})
@@ -104,7 +107,7 @@ option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCAN
 # for local/developer use. Release packaging workflows pass -DPDF4QT_PLUGIN_OCR=OFF
 # explicitly; PdfTool's OCR subcommand is unaffected. (PDF4QT_BUNDLE_OCR_SERVICE, the
 # other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
-option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ON)
+option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_PDF4QT_PLUGIN_OCR_DEFAULT})
 
 if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -332,21 +335,14 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             DESTINATION ${PDF4QT_INSTALL_TRANS_DIR})
 
     if(WIN32)
-        if(PDF4QT_LOUPE_DISTRIBUTION)
-            install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
-                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44)
-            install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
-                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150)
-        else()
-            install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
-                    RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
-                    FILES_MATCHING
-                    PATTERN *.png)
-            install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
-                    RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
-                    FILES_MATCHING
-                    PATTERN *.png)
-        endif()
+        install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
+                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
+                FILES_MATCHING
+                PATTERN *.png)
+        install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
+                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
+                FILES_MATCHING
+                PATTERN *.png)
 
         configure_file(${CMAKE_CURRENT_SOURCE_DIR}/AppxManifest.xml.in ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml)
         install(FILES ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml DESTINATION ${PDF4QT_INSTALL_BIN_DIR})
@@ -354,34 +350,25 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        if(PDF4QT_LOUPE_DISTRIBUTION)
-            install(FILES Desktop/io.github.mberrys.Loupe-pdf.desktop
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-            install(FILES Desktop/io.github.mberrys.Loupe-pdf.svg
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
-        else()
-            install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
-                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
-                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
-                          Desktop/io.github.mberrys.Loupe-pdf.desktop
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-            install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
-                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
-                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
-                          Desktop/io.github.mberrys.Loupe-pdf.svg
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
-        endif()
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
+                      Desktop/io.github.mberrys.Loupe-pdf.desktop
+                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
+                      Desktop/io.github.mberrys.Loupe-pdf.svg
+                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
         install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        if(PDF4QT_LOUPE_DISTRIBUTION)
-            install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.png
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
-        else()
-            install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
-                          Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
-                          Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
-                          Desktop/128x128/io.github.mberrys.Loupe-pdf.png
-                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
-        endif()
+        install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+                      Desktop/128x128/io.github.mberrys.Loupe-pdf.png
+                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
     endif()
 
 endif()
