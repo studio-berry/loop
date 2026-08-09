@@ -28,6 +28,7 @@
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
 #include "pdfcms.h"
+#include "pdfprocessingbudget.h"
 
 #include <QByteArray>
 
@@ -42,6 +43,7 @@ class PDFFontCache;
 class PDFCMSManager;
 class PDFCMS;
 class PDFOptionalContentActivity;
+class PDFProcessingBudget;
 
 /// Shared session for a PDF document that caches expensive intermediate
 /// artifacts used by preflight, rendering, and analysis tools. The session
@@ -89,6 +91,11 @@ public:
     /// byte array if the reference is invalid or the stream cannot be decoded.
     QByteArray getDecodedStream(PDFObjectReference reference);
 
+    PDFProcessingBudget* getProcessingBudget() const;
+    const PDFProcessingLimits& getProcessingLimits() const;
+    void setProcessingLimits(const PDFProcessingLimits& limits);
+    void resetProcessingBudget();
+
     /// Clears all caches. Call this when the underlying document is mutated.
     void invalidate();
 
@@ -117,6 +124,7 @@ private:
 
     PDFDocument* m_document;
     PDFRenderer::Features m_features;
+    std::unique_ptr<PDFProcessingBudget> m_processingBudget;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;
