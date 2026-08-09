@@ -125,7 +125,10 @@ file. A run where some files succeed and some fail reports `partial-output`.
 
 `--console-format json` and `--console-format=json` are detected from the raw
 command line before parsing, so that malformed command lines still return a
-valid JSON error envelope when JSON was requested.
+valid JSON error envelope when JSON was requested. The `preflight` and `ocr`
+commands default to JSON because their domain reports are JSON-only; malformed
+invocations of those commands therefore also return the envelope. Supplying a
+different console format to either command is an invalid invocation.
 
 ## Unknown command
 
