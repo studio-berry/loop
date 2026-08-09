@@ -23,6 +23,7 @@
 #include "preflightengine.h"
 
 #include "pdfbleedmarginprobe.h"
+#include "pdfblendfunction.h"
 #include "pdfcatalog.h"
 #include "pdfcms.h"
 #include "pdfcolorinventory.h"
@@ -38,6 +39,7 @@
 #include "pdfoptionalcontent.h"
 #include "pdfpage.h"
 #include "pdfpagecontentprocessor.h"
+#include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 
 #include <QCoreApplication>
@@ -55,7 +57,6 @@
 #include <functional>
 #include <limits>
 #include <set>
-#include <vector>
 
 namespace pdf
 {
@@ -1581,6 +1582,437 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
     }
 }
 
+enum class TransparencyColorFamily
+{
+    Unknown,
+    Gray,
+    RGB,
+    CMYK,
+    Spot
+};
+
+QString transparencyColorFamilyName(TransparencyColorFamily family)
+{
+    switch (family)
+    {
+        case TransparencyColorFamily::Gray:
+            return QStringLiteral("Gray");
+        case TransparencyColorFamily::RGB:
+            return QStringLiteral("RGB");
+        case TransparencyColorFamily::CMYK:
+            return QStringLiteral("CMYK");
+        case TransparencyColorFamily::Spot:
+            return QStringLiteral("Spot");
+        case TransparencyColorFamily::Unknown:
+            break;
+    }
+
+    return QStringLiteral("Unknown");
+}
+
+TransparencyColorFamily classifyTransparencyColorSpace(const PDFAbstractColorSpace* colorSpace)
+{
+    if (!colorSpace)
+    {
+        return TransparencyColorFamily::Unknown;
+    }
+
+    const PDFAbstractColorSpace* base = colorSpace;
+    while (base && base->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Indexed)
+    {
+        base = static_cast<const PDFIndexedColorSpace*>(base)->getBaseColorSpace().get();
+    }
+
+    if (!base)
+    {
+        return TransparencyColorFamily::Unknown;
+    }
+
+    switch (base->getColorSpace())
+    {
+        case PDFAbstractColorSpace::ColorSpace::DeviceGray:
+        case PDFAbstractColorSpace::ColorSpace::CalGray:
+            return TransparencyColorFamily::Gray;
+
+        case PDFAbstractColorSpace::ColorSpace::DeviceRGB:
+        case PDFAbstractColorSpace::ColorSpace::CalRGB:
+        case PDFAbstractColorSpace::ColorSpace::Lab:
+        case PDFAbstractColorSpace::ColorSpace::ICCBased:
+            return TransparencyColorFamily::RGB;
+
+        case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
+            return TransparencyColorFamily::CMYK;
+
+        case PDFAbstractColorSpace::ColorSpace::Separation:
+        case PDFAbstractColorSpace::ColorSpace::DeviceN:
+            return TransparencyColorFamily::Spot;
+
+        default:
+            return TransparencyColorFamily::Unknown;
+    }
+}
+
+bool isRiskyTransparencyConversion(TransparencyColorFamily blendSpace,
+                                   TransparencyColorFamily sourceSpace)
+{
+    if (blendSpace == TransparencyColorFamily::Unknown
+        || sourceSpace == TransparencyColorFamily::Unknown
+        || blendSpace == sourceSpace)
+    {
+        return false;
+    }
+
+    // Gray content can enter a process-color transparency group without being
+    // treated as a production risk by this check.
+    if (sourceSpace == TransparencyColorFamily::Gray)
+    {
+        return false;
+    }
+
+    if (sourceSpace == TransparencyColorFamily::Spot)
+    {
+        return true;
+    }
+
+    if (blendSpace == TransparencyColorFamily::Gray)
+    {
+        return true;
+    }
+
+    return (blendSpace == TransparencyColorFamily::RGB && sourceSpace == TransparencyColorFamily::CMYK)
+        || (blendSpace == TransparencyColorFamily::CMYK && sourceSpace == TransparencyColorFamily::RGB);
+}
+
+struct TransparencyGroupFrame
+{
+    TransparencyColorFamily blendSpace = TransparencyColorFamily::Unknown;
+    bool hasExplicitBlendSpace = false;
+    BlendMode entryBlendMode = BlendMode::Normal;
+    QSet<TransparencyColorFamily> paintedSpaces;
+};
+
+class TransparencyRiskProcessor final : public PDFPageContentProcessor
+{
+public:
+    TransparencyRiskProcessor(const PDFPage* page,
+                              const PDFDocument* document,
+                              const PDFFontCache* fontCache,
+                              const PDFCMS* cms,
+                              const PDFOptionalContentActivity* optionalContentActivity,
+                              const PDFMeshQualitySettings& meshQuality,
+                              QSet<QString>* riskyBlendModes,
+                              QSet<QString>* mismatchDescriptions) :
+        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQuality),
+        m_riskyBlendModes(riskyBlendModes),
+        m_mismatchDescriptions(mismatchDescriptions)
+    {
+    }
+
+    void processFormStream(const PDFStream* stream)
+    {
+        if (stream && !isContentSuppressed())
+        {
+            processForm(stream);
+        }
+    }
+
+protected:
+    bool isContentKindSuppressed(ContentKind kind) const override
+    {
+        Q_UNUSED(kind);
+        return false;
+    }
+
+    void performBeginTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& group) override
+    {
+        if (order != ProcessOrder::BeforeOperation)
+        {
+            return;
+        }
+
+        TransparencyGroupFrame frame;
+        frame.hasExplicitBlendSpace = !!group.colorSpacePointer;
+        frame.blendSpace = classifyTransparencyColorSpace(group.colorSpacePointer.get());
+        if (!frame.hasExplicitBlendSpace && !m_groups.empty())
+        {
+            frame.blendSpace = m_groups.back().blendSpace;
+        }
+        frame.entryBlendMode = getGraphicState()->getBlendMode();
+        inspectGroupBlendMode(frame.entryBlendMode);
+        m_groups.push_back(std::move(frame));
+    }
+
+    void performEndTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& group) override
+    {
+        Q_UNUSED(group);
+
+        if (order != ProcessOrder::AfterOperation || m_groups.empty())
+        {
+            return;
+        }
+
+        TransparencyGroupFrame frame = std::move(m_groups.back());
+        m_groups.pop_back();
+        evaluateBlendSpace(frame);
+
+        if (!m_groups.empty())
+        {
+            TransparencyColorFamily outputSpace = frame.blendSpace;
+            if (outputSpace == TransparencyColorFamily::Unknown)
+            {
+                outputSpace = m_groups.back().blendSpace;
+            }
+            if (outputSpace != TransparencyColorFamily::Unknown)
+            {
+                m_groups.back().paintedSpaces.insert(outputSpace);
+            }
+        }
+    }
+
+    void performUpdateGraphicsState(const PDFPageContentProcessorState& state) override
+    {
+        if (state.getStateFlags().testFlag(PDFPageContentProcessorState::StateBlendMode))
+        {
+            inspectBlendMode(state.getBlendMode());
+        }
+        PDFPageContentProcessor::performUpdateGraphicsState(state);
+    }
+
+    void performPathPainting(const QPainterPath& path,
+                             bool stroke,
+                             bool fill,
+                             bool text,
+                             Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(path);
+        Q_UNUSED(text);
+        Q_UNUSED(fillRule);
+
+        if (isContentSuppressed() || m_groups.empty())
+        {
+            return;
+        }
+
+        const PDFPageContentProcessorState* state = getGraphicState();
+        if (fill)
+        {
+            recordPaintedSpace(state->getFillColorSpace());
+        }
+        if (stroke)
+        {
+            recordPaintedSpace(state->getStrokeColorSpace());
+        }
+    }
+
+    bool performOriginalImagePainting(const PDFImage& image,
+                                      const PDFStream* stream,
+                                      PDFObjectReference reference) override
+    {
+        Q_UNUSED(stream);
+        Q_UNUSED(reference);
+        if (!isContentSuppressed())
+        {
+            recordPaintedImageSpace(image);
+        }
+        return true;
+    }
+
+    bool performPathPaintingUsingShading(const QPainterPath& path,
+                                         bool stroke,
+                                         bool fill,
+                                         const PDFShadingPattern* shadingPattern) override
+    {
+        Q_UNUSED(path);
+        Q_UNUSED(stroke);
+        Q_UNUSED(fill);
+        if (shadingPattern && !isContentSuppressed())
+        {
+            recordPaintedSpace(shadingPattern->getColorSpace());
+        }
+        return false;
+    }
+
+private:
+    void inspectBlendMode(BlendMode mode)
+    {
+        if (!m_riskyBlendModes || mode == BlendMode::Normal || mode == BlendMode::Compatible)
+        {
+            return;
+        }
+
+        if (mode == BlendMode::Invalid || !PDFBlendModeInfo::isSupportedByQt(mode))
+        {
+            m_riskyBlendModes->insert(PDFBlendModeInfo::getBlendModeName(mode));
+        }
+    }
+
+    void inspectGroupBlendMode(BlendMode mode)
+    {
+        if (!m_riskyBlendModes || mode == BlendMode::Normal || mode == BlendMode::Compatible)
+        {
+            return;
+        }
+
+        QString description = PDFBlendModeInfo::getBlendModeName(mode);
+        description += QStringLiteral(" (transparency group)");
+        m_riskyBlendModes->insert(description);
+    }
+
+    void recordPaintedSpace(const PDFAbstractColorSpace* colorSpace)
+    {
+        if (m_groups.empty())
+        {
+            return;
+        }
+
+        const TransparencyColorFamily family = classifyTransparencyColorSpace(colorSpace);
+        if (family != TransparencyColorFamily::Unknown)
+        {
+            m_groups.back().paintedSpaces.insert(family);
+        }
+    }
+
+    void recordPaintedImageSpace(const PDFImage& image)
+    {
+        if (m_groups.empty())
+        {
+            return;
+        }
+
+        const TransparencyColorFamily family = classifyTransparencyColorSpace(image.getColorSpace().get());
+        if (family != TransparencyColorFamily::Unknown)
+        {
+            m_groups.back().paintedSpaces.insert(family);
+            return;
+        }
+
+        switch (image.getImageData().getComponents())
+        {
+            case 1:
+                m_groups.back().paintedSpaces.insert(TransparencyColorFamily::Gray);
+                break;
+            case 3:
+                m_groups.back().paintedSpaces.insert(TransparencyColorFamily::RGB);
+                break;
+            case 4:
+                m_groups.back().paintedSpaces.insert(TransparencyColorFamily::CMYK);
+                break;
+            default:
+                break;
+        }
+    }
+
+    void evaluateBlendSpace(const TransparencyGroupFrame& frame)
+    {
+        if (!frame.hasExplicitBlendSpace
+            || frame.blendSpace == TransparencyColorFamily::Unknown
+            || !m_mismatchDescriptions)
+        {
+            return;
+        }
+
+        for (const TransparencyColorFamily source : frame.paintedSpaces)
+        {
+            if (isRiskyTransparencyConversion(frame.blendSpace, source))
+            {
+                m_mismatchDescriptions->insert(
+                    QStringLiteral("%1 group contains %2 content")
+                        .arg(transparencyColorFamilyName(frame.blendSpace), transparencyColorFamilyName(source)));
+            }
+        }
+    }
+
+    std::vector<TransparencyGroupFrame> m_groups;
+    QSet<QString>* m_riskyBlendModes = nullptr;
+    QSet<QString>* m_mismatchDescriptions = nullptr;
+};
+
+void runTransparencyRiskCheck(PDFDocumentSession* session,
+                              const PreflightCheckConfig& check,
+                              QList<PreflightFinding>& errors,
+                              QList<PreflightFinding>& warnings)
+{
+    if (!session)
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    if (!document)
+    {
+        return;
+    }
+
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+
+    PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
+    PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    PDFModifiedDocument modifiedDocument(document, &ocActivity);
+    fontCache.setDocument(modifiedDocument);
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+    PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(document);
+    PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    PDFMeshQualitySettings meshQuality;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        QSet<QString> riskyBlendModes;
+        QSet<QString> mismatchDescriptions;
+        TransparencyRiskProcessor processor(page,
+                                             document,
+                                             &fontCache,
+                                             cms.get(),
+                                             &ocActivity,
+                                             meshQuality,
+                                             &riskyBlendModes,
+                                             &mismatchDescriptions);
+
+        processor.processContents();
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
+            processor.processFormStream(formStream);
+        });
+
+        QStringList blendModes = riskyBlendModes.values();
+        blendModes.sort();
+        if (!blendModes.isEmpty())
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = int(pageIndex + 1);
+            finding.type = QStringLiteral("transparency-blend-mode");
+            finding.severity = check.severity;
+            finding.checkId = check.id;
+            finding.message = PDFTranslationContext::tr(
+                "Transparency uses blend mode configuration(s) that may not be reproduced reliably by all render paths: %1")
+                .arg(blendModes.join(QStringLiteral(", ")));
+            pushPreflightFinding(finding, check.severity, errors, warnings);
+        }
+
+        QStringList mismatches = mismatchDescriptions.values();
+        mismatches.sort();
+        if (!mismatches.isEmpty())
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = int(pageIndex + 1);
+            finding.type = QStringLiteral("transparency-blend-space");
+            finding.severity = check.severity;
+            finding.checkId = check.id;
+            finding.message = PDFTranslationContext::tr("Potential transparency blend-space mismatch: %1")
+                .arg(mismatches.join(QStringLiteral("; ")));
+            pushPreflightFinding(finding, check.severity, errors, warnings);
+        }
+    }
+}
+
 struct ThinStrokeFinding
 {
     QString type;
@@ -2682,6 +3114,22 @@ void PreflightEngine::registerBuiltInChecks()
         runColorModeCheck(session, check, errors, warnings);
     };
 
+    m_checks[QStringLiteral("transparency-risk")] = [](PDFDocumentSession* session,
+                                                         const PreflightCheckConfig& check,
+                                                         QList<PreflightFinding>& errors,
+                                                         QList<PreflightFinding>& warnings)
+    {
+        runTransparencyRiskCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("thin-strokes")] = [](PDFDocumentSession* session,
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
+    {
+        runThinStrokesCheck(session, check, errors, warnings);
+    };
+
     m_checks[QStringLiteral("color-inventory")] = [](PDFDocumentSession* session,
                                                        const PreflightCheckConfig& check,
                                                        QList<PreflightFinding>& errors,
@@ -2720,14 +3168,6 @@ void PreflightEngine::registerBuiltInChecks()
                                                        QList<PreflightFinding>& warnings)
     {
         runWhiteOverprintCheck(session, check, errors, warnings);
-    };
-
-    m_checks[QStringLiteral("thin-strokes")] = [](PDFDocumentSession* session,
-                                                    const PreflightCheckConfig& check,
-                                                    QList<PreflightFinding>& errors,
-                                                    QList<PreflightFinding>& warnings)
-    {
-        runThinStrokesCheck(session, check, errors, warnings);
     };
 }
 

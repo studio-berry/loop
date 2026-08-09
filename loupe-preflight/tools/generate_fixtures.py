@@ -23,7 +23,7 @@
 
 """Regenerate the hand-built golden PDF fixtures for the Loupe custom checks
 (MIC-145 / #22): color-mode, embedded-fonts, image-resolution, trim, page-size,
-and color inventory.
+and color inventory, plus transparency-risk group fixtures.
 
 The bleed pair (bleed-adequate/bleed-missing) is generated separately by the
 C++ tool tools/generate_fixtures.cpp and is NOT touched here.
@@ -596,6 +596,109 @@ Q
     pdf.save(path)
 
 
+# ---------------------------------------------------------------------------
+# transparency-risk
+# ---------------------------------------------------------------------------
+
+def _transparency_group_fixture(out_dir, name, group_cs, blend_mode, content, resources=None, annotation=False):
+    """Create a low-level Form transparency group used by #24 fixtures."""
+    path = os.path.join(out_dir, name + ".pdf")
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+
+    ext_gstate = pdf.make_indirect(pikepdf.Dictionary({
+        "/Type": pikepdf.Name("/ExtGState"),
+        "/BM": pikepdf.Name("/" + blend_mode),
+        "/ca": 1.0,
+        "/CA": 1.0,
+    }))
+    form_resources = pikepdf.Dictionary({
+        "/ExtGState": pikepdf.Dictionary({"/GS0": ext_gstate}),
+    })
+    if resources:
+        form_resources.update(resources)
+
+    form = pdf.make_stream(b"/GS0 gs\n" + content + b"\n", {
+        "/Type": pikepdf.Name("/XObject"),
+        "/Subtype": pikepdf.Name("/Form"),
+        "/FormType": 1,
+        "/BBox": pikepdf.Array([0, 0, 200, 200]),
+        "/Group": pikepdf.Dictionary({
+            "/S": pikepdf.Name("/Transparency"),
+            "/CS": pikepdf.Name("/" + group_cs),
+            "/I": False,
+            "/K": False,
+        }),
+        "/Resources": pdf.make_indirect(form_resources),
+    })
+
+    if annotation:
+        page.Contents = pdf.make_stream(b"")
+        annotation_object = pdf.make_indirect(pikepdf.Dictionary({
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Stamp"),
+            "/Rect": pikepdf.Array([20, 20, 180, 180]),
+            "/AP": pikepdf.Dictionary({"/N": form}),
+        }))
+        page.Annots = pikepdf.Array([annotation_object])
+    else:
+        page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Tr0": form})})
+        page.Contents = pdf.make_stream(b"q\n/Tr0 Do\nQ\n")
+
+    pdf.save(path)
+
+
+def transparency_normal_cmyk(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-normal-cmyk", "DeviceCMYK", "Normal", b"0 1 1 0 k 20 20 160 160 re f")
+
+
+def transparency_hue(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-hue", "DeviceRGB", "Hue", b"1 0 0 rg 20 20 160 160 re f")
+
+
+def transparency_rgb_group_cmyk(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-rgb-group-cmyk", "DeviceRGB", "Normal", b"0 1 1 0 k 20 20 160 160 re f")
+
+
+def transparency_cmyk_group_rgb(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-cmyk-group-rgb", "DeviceCMYK", "Normal", b"1 0 0 rg 20 20 160 160 re f")
+
+
+def transparency_cmyk_group_spot(out_dir, tmp):
+    tint_function = pikepdf.Dictionary({
+        "/FunctionType": 2,
+        "/Domain": pikepdf.Array([0, 1]),
+        "/C0": pikepdf.Array([0, 0, 0, 0]),
+        "/C1": pikepdf.Array([0, 1, 0, 0]),
+        "/N": 1,
+    })
+    spot_space = pikepdf.Array([
+        pikepdf.Name("/Separation"),
+        pikepdf.Name("/SpotGreen"),
+        pikepdf.Name("/DeviceCMYK"),
+        tint_function,
+    ])
+    _transparency_group_fixture(
+        out_dir,
+        "transparency-cmyk-group-spot",
+        "DeviceCMYK",
+        "Normal",
+        b"/CS1 cs 1 scn 20 20 160 160 re f",
+        resources=pikepdf.Dictionary({"/ColorSpace": pikepdf.Dictionary({"/CS1": spot_space})}),
+    )
+
+
+def transparency_annotation_appearance(out_dir, tmp):
+    _transparency_group_fixture(
+        out_dir,
+        "transparency-annotation-appearance",
+        "DeviceRGB",
+        "Normal",
+        b"0 1 1 0 k 20 20 160 160 re f",
+        annotation=True,
+    )
+
+
 FIXTURES = [
     color_rgb,
     color_cmyk,
@@ -618,6 +721,12 @@ FIXTURES = [
     white_overprint_in_form,
     ink_coverage_over,
     ink_coverage_ok,
+    transparency_normal_cmyk,
+    transparency_hue,
+    transparency_rgb_group_cmyk,
+    transparency_cmyk_group_rgb,
+    transparency_cmyk_group_spot,
+    transparency_annotation_appearance,
 ]
 
 

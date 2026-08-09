@@ -254,5 +254,53 @@
     "expect": { "pass": false, "check_ids": ["output-intent"] },
     "source": "generated",
     "notes": "DestOutputProfile is a stream containing non-ICC bytes, exercising invalid-profile handling."
+  },
+  {
+    "id": "transparency-normal-cmyk",
+    "pdf": "transparency-normal-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "Normal CMYK transparency group with matching CMYK content remains clean."
+  },
+  {
+    "id": "transparency-hue",
+    "pdf": "transparency-hue.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Hue blend mode in a transparency group emits a blend-mode risk warning."
+  },
+  {
+    "id": "transparency-rgb-group-cmyk",
+    "pdf": "transparency-rgb-group-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "CMYK artwork entering an explicit RGB transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-rgb",
+    "pdf": "transparency-cmyk-group-rgb.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "RGB artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-spot",
+    "pdf": "transparency-cmyk-group-spot.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Spot artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-annotation-appearance",
+    "pdf": "transparency-annotation-appearance.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "A risky transparency group exists only in an annotation appearance stream."
   }
 ]

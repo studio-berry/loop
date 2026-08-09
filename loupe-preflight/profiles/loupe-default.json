@@ -10,6 +10,7 @@
     { "id": "trim", "severity": "warning", "tolerance_pt": 1 },
     { "id": "page-size", "severity": "warning", "tolerance_pt": 1 },
     { "id": "color-mode", "allowed": ["CMYK", "Grayscale"], "severity": "error" },
+    { "id": "transparency-risk", "severity": "warning" },
     { "id": "color-inventory", "probe_dpi": 150, "rich_black_k_percent": 10, "severity": "info" },
     { "id": "white-overprint", "severity": "warning" }
   ],
