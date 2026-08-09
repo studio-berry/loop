@@ -124,10 +124,17 @@ def _new_canvas(buf, size):
     return c
 
 
-def _cmyk_image(px, path):
-    # Solid cyan patch in DeviceCMYK; JPEG is the only common CMYK raster PIL
-    # writes, and reportlab passes it through as a /DeviceCMYK image.
-    Image.new("CMYK", (px, px), (255, 0, 0, 0)).save(path, "JPEG", quality=90)
+def _cmyk_image(px, path, fill=(255, 0, 0, 0), patch=None):
+    # JPEG is the only common CMYK raster PIL writes, and reportlab passes it
+    # through as a /DeviceCMYK image. When patch is supplied, draw it centered
+    # on a page-colored field so raster checks can isolate a region.
+    im = Image.new("CMYK", (px, px), fill)
+    if patch is not None:
+        draw = ImageDraw.Draw(im)
+        margin = px // 5
+        draw.rectangle((margin, margin, px - margin - 1, px - margin - 1), fill=patch)
+    save_options = {"quality": 100, "subsampling": 0} if patch is not None else {"quality": 90}
+    im.save(path, "JPEG", **save_options)
 
 
 def _rgb_image(px, path):
@@ -397,6 +404,40 @@ def ai_art_raster_trim_edge(out_dir, tmp):
     _finalize(path, media=(0, 0, 400, 400), trim=(0, 0, 400, 400))
 
 
+# ---------------------------------------------------------------------------
+# total ink coverage
+# ---------------------------------------------------------------------------
+
+def ink_coverage_over(out_dir, tmp):
+    """WARNING ink-coverage: a CMYK patch at approximately 370% TAC."""
+    path = os.path.join(out_dir, "ink-coverage-over.pdf")
+    img = os.path.join(tmp, "ink_coverage_over.jpg")
+    _cmyk_image(900, img, (0, 0, 0, 0), (242, 230, 230, 242))
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 0, 0, width=312, height=312)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
+def ink_coverage_ok(out_dir, tmp):
+    """PASS ink-coverage: a CMYK patch at approximately 190% TAC."""
+    path = os.path.join(out_dir, "ink-coverage-ok.pdf")
+    img = os.path.join(tmp, "ink_coverage_ok.jpg")
+    _cmyk_image(900, img, (0, 0, 0, 0), (153, 128, 102, 102))
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 0, 0, width=312, height=312)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
 def white_overprint_fail(out_dir, tmp):
     """FAIL white-overprint: CMYK paper white with overprint enabled on a filled path."""
     del tmp
@@ -503,6 +544,8 @@ FIXTURES = [
     white_overprint_fail,
     white_overprint_ok,
     white_overprint_in_form,
+    ink_coverage_over,
+    ink_coverage_ok,
 ]
 
 
