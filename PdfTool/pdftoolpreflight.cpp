@@ -133,20 +133,11 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
     pdf::PreflightResult result = engine.run(profileJson);
 
-    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    if (options.executionContext)
     {
-        if (options.executionContext)
-        {
-            options.executionContext->setData(QJsonObject{
-                { QStringLiteral("report"), result.toJson(options.document) }
-            });
-        }
-    }
-    else
-    {
-        const QByteArray reportJson = QJsonDocument(result.toJson(options.document)).toJson(QJsonDocument::Compact);
-        PDFConsole::writeData(reportJson);
-        PDFConsole::writeData(QByteArray("\n"));
+        options.executionContext->setData(QJsonObject{
+            { QStringLiteral("report"), result.toJson(options.document) }
+        });
     }
 
     return result.pass ? PDFToolExitCode::Success : PDFToolExitCode::Findings;

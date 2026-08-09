@@ -28,6 +28,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonObject>
 #include <QMimeDatabase>
 
 namespace pdftool
@@ -211,6 +212,15 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
             return blocked;
         }
 
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{
+                { QStringLiteral("operation"), QStringLiteral("attachments") },
+                { QStringLiteral("dry_run"), options.destructiveDryRun },
+                { QStringLiteral("selected_count"), static_cast<qint64>(savedFileCount) }
+            });
+        }
+
         bool anyAttachmentSkipped = false;
         size_t writtenCount = 0;
         int plannedOutputIndex = 0;
@@ -246,6 +256,15 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
                 if (!writeResult)
                 {
                     reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
+                    if (options.executionContext)
+                    {
+                        options.executionContext->addOutput({
+                            QStringLiteral("file"),
+                            QStringLiteral("attachment"),
+                            outputFile,
+                            QStringLiteral("partial")
+                        });
+                    }
                     return writtenCount > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::ProcessingFailure;
                 }
 
@@ -263,6 +282,15 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
             catch (const pdf::PDFException &e)
             {
                 reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({
+                        QStringLiteral("file"),
+                        QStringLiteral("attachment"),
+                        outputFile,
+                        QStringLiteral("partial")
+                    });
+                }
                 return writtenCount > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::ProcessingFailure;
             }
         }

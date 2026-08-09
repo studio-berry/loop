@@ -197,7 +197,8 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
 
-    if (options.destructiveReport || options.destructiveDryRun)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json ||
+        options.destructiveReport || options.destructiveDryRun)
     {
         writeReport(options, settings, report);
     }
