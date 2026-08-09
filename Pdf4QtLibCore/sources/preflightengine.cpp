@@ -42,6 +42,7 @@
 #include "pdfpagecontentprocessor.h"
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
+#include "pdfprocessingbudget.h"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -835,6 +836,35 @@ void recordCheckFailure(PreflightResult& result,
     result.errors.push_back(finding);
 }
 
+void recordBudgetFailure(PreflightResult& result,
+                         PreflightCheckStatus& status,
+                         const PreflightCheckConfig& check,
+                         const PDFBudgetExceededException& exception)
+{
+    const PDFBudgetExceeded& detail = exception.getDetail();
+    status.status = QStringLiteral("incomplete");
+    status.reason = QStringLiteral("budget-exceeded");
+    status.budgetKind = QString::fromLatin1(getPDFBudgetKindName(detail.kind));
+    status.budgetLimit = static_cast<qint64>(detail.limit);
+    status.budgetAttempted = static_cast<qint64>(detail.attempted);
+    status.budgetContext = detail.context;
+    result.checkStatuses.push_back(status);
+    result.inspectionComplete = false;
+
+    PreflightFinding finding;
+    finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+    finding.type = QStringLiteral("budget-exceeded");
+    finding.severity = QStringLiteral("error");
+    finding.checkId = check.id;
+    finding.bbox = QRectF();
+    finding.message = PDFTranslationContext::tr("Check '%1' exceeded the %2 processing budget (%3 > %4): %5")
+        .arg(check.id, status.budgetKind)
+        .arg(detail.attempted)
+        .arg(detail.limit)
+        .arg(detail.context);
+    result.errors.push_back(finding);
+}
+
 bool hasBleedGapFinding(const QList<PreflightFinding>& findings)
 {
     for (const PreflightFinding& finding : findings)
@@ -1079,8 +1109,9 @@ void runColorModeCheck(PDFDocumentSession* session,
                            const PDFCMS* cms_p,
                            const PDFOptionalContentActivity* oc,
                            const PDFMeshQualitySettings& mq,
+                           PDFProcessingBudget* budget,
                            QSet<QString>* paintedSpaces)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq)
+            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
             , m_paintedSpaces(paintedSpaces)
         {
         }
@@ -1174,7 +1205,7 @@ void runColorModeCheck(PDFDocumentSession* session,
         std::set<PDFObjectReference> visitedForms;
         collectColorSpacesFromResources(document, page->getResources(), &paintedSpaces, visitedForms, 0);
 
-        ColorModeProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, &paintedSpaces);
+        ColorModeProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &paintedSpaces);
         processor.processContents();
 
         processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
@@ -1570,8 +1601,9 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
                                 const PDFCMS* cms_p,
                                 const PDFOptionalContentActivity* oc,
                                 const PDFMeshQualitySettings& mq,
+                                PDFProcessingBudget* budget,
                                 bool* foundWhiteOverprint)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq)
+            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
             , m_foundWhiteOverprint(foundWhiteOverprint)
         {
         }
@@ -1639,7 +1671,7 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
         }
 
         bool foundWhiteOverprint = false;
-        WhiteOverprintProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, &foundWhiteOverprint);
+        WhiteOverprintProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &foundWhiteOverprint);
         processor.processContents();
 
         processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
@@ -1790,9 +1822,10 @@ public:
                               const PDFCMS* cms,
                               const PDFOptionalContentActivity* optionalContentActivity,
                               const PDFMeshQualitySettings& meshQuality,
+                              PDFProcessingBudget* budget,
                               QSet<QString>* riskyBlendModes,
                               QSet<QString>* mismatchDescriptions) :
-        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQuality),
+        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQuality, budget),
         m_riskyBlendModes(riskyBlendModes),
         m_mismatchDescriptions(mismatchDescriptions)
     {
@@ -2062,6 +2095,7 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
                                              cms.get(),
                                              &ocActivity,
                                              meshQuality,
+                                             session->getProcessingBudget(),
                                              &riskyBlendModes,
                                              &mismatchDescriptions);
 
@@ -2120,9 +2154,10 @@ public:
                         const PDFCMS* cms,
                         const PDFOptionalContentActivity* optionalContentActivity,
                         const PDFMeshQualitySettings& meshQualitySettings,
+                        PDFProcessingBudget* budget,
                         qreal minimumWidth,
                         qreal zeroWidthEpsilon) :
-        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings),
+        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings, budget),
         m_minimumWidth(minimumWidth),
         m_zeroWidthEpsilon(zeroWidthEpsilon)
     {
@@ -2311,6 +2346,7 @@ void runThinStrokesCheck(PDFDocumentSession* session,
                                       cms.get(),
                                       &ocActivity,
                                       meshQuality,
+                                      session->getProcessingBudget(),
                                       check.minEffectiveStrokeWidthPt,
                                       check.zeroWidthEpsilonPt);
         const QList<PDFRenderError> pageErrors = processor.processContents();
@@ -2615,8 +2651,9 @@ void runImageResolutionCheck(PDFDocumentSession* session,
                           const PDFCMS* cms_p,
                           const PDFOptionalContentActivity* oc,
                           const PDFMeshQualitySettings& mq,
+                          PDFProcessingBudget* budget,
                           std::vector<ImageDpiInfo>* results)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq)
+            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
             , m_results(results)
         {
         }
@@ -2693,7 +2730,7 @@ void runImageResolutionCheck(PDFDocumentSession* session,
         }
 
         std::vector<ImageDpiProcessor::ImageDpiInfo> images;
-        ImageDpiProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, &images);
+        ImageDpiProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &images);
         processor.processContents();
 
         processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
@@ -2794,6 +2831,18 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         {
             checkObject.insert(QStringLiteral("reason"), status.reason);
         }
+        if (!status.budgetKind.isEmpty())
+        {
+            QJsonObject budgetObject;
+            budgetObject.insert(QStringLiteral("kind"), status.budgetKind);
+            budgetObject.insert(QStringLiteral("limit"), status.budgetLimit);
+            budgetObject.insert(QStringLiteral("attempted"), status.budgetAttempted);
+            if (!status.budgetContext.isEmpty())
+            {
+                budgetObject.insert(QStringLiteral("context"), status.budgetContext);
+            }
+            checkObject.insert(QStringLiteral("budget"), budgetObject);
+        }
         checksArray.append(checkObject);
     }
     root.insert(QStringLiteral("checks"), checksArray);
@@ -2848,6 +2897,10 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
     PreflightResult result;
     result.profileName = profile.name;
     result.inspectionComplete = true;
+    if (m_session)
+    {
+        m_session->resetProcessingBudget();
+    }
 
     for (const PreflightCheckConfig& check : profile.checks)
     {
@@ -2889,6 +2942,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         try
         {
             it->second(m_session, check, result.errors, result.warnings);
+        }
+        catch (const PDFBudgetExceededException& exception)
+        {
+            recordBudgetFailure(result, status, check, exception);
+            continue;
         }
         catch (const PDFException& exception)
         {

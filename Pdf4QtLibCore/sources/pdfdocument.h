@@ -38,6 +38,7 @@ namespace pdf
 {
 class PDFDocument;
 class PDFDocumentBuilder;
+class PDFProcessingBudget;
 
 /// Storage for objects. This class is not thread safe for writing (calling non-const functions). Caller must ensure
 /// locking, if this object is used from multiple threads. Calling const functions should be thread safe.
@@ -134,6 +135,7 @@ public:
     /// then empty byte array is returned.
     /// \param stream Stream to be decoded
     QByteArray getDecodedStream(const PDFStream* stream) const;
+    QByteArray getDecodedStream(const PDFStream* stream, PDFProcessingBudget* budget) const;
 
     /// Set trailer dictionary
     /// \param object Object defining trailer dictionary
@@ -447,6 +449,7 @@ public:
     /// then empty byte array is returned.
     /// \param stream Stream to be decoded
     QByteArray getDecodedStream(const PDFStream* stream) const;
+    QByteArray getDecodedStream(const PDFStream* stream, PDFProcessingBudget* budget) const;
 
     /// Returns the trailer dictionary
     const PDFDictionary* getTrailerDictionary() const;
