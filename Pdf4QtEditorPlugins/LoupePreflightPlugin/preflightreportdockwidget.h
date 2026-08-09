@@ -51,6 +51,8 @@ public:
     const QVector<PreflightFindingEntry>& findings() const { return m_model.findings(); }
     bool hasAddBleedFixup() const { return m_model.hasAddBleedFixup(); }
     const PreflightFixupEntry* addBleedFixup() const { return m_model.addBleedFixup(); }
+    bool hasRgbToCmykFixup() const { return m_model.hasRgbToCmykFixup(); }
+    const PreflightFixupEntry* rgbToCmykFixup() const { return m_model.rgbToCmykFixup(); }
 
 Q_SIGNALS:
     void findingSelectionChanged(int row);

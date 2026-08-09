@@ -76,6 +76,7 @@ private:
                               bool ignoreRevisionMatch,
                               const QString& reportSourceLabel);
     void onApplyBleedFixupRequested();
+    void onApplyRgbToCmykFixupRequested();
     void finishPreflightRun();
     void cancelPreflightRun(bool silent = false);
     void abortPreflightRun(const QString& message);

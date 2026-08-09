@@ -56,6 +56,8 @@ add_executable(PdfTool
     pdftoolredact.h
     pdftooladdbleed.cpp
     pdftooladdbleed.h
+    pdftoolrgbtocmyk.cpp
+    pdftoolrgbtocmyk.h
     pdftoolpreflight.cpp
     pdftoolpreflight.h
     pdftoolpreflightchecks.h
