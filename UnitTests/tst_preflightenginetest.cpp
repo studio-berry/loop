@@ -25,6 +25,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
+#include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
 
 #include <QtTest>
@@ -43,6 +44,7 @@ class PreflightEngineTest : public QObject
 private slots:
     void parseProfile_rejectsMissingName();
     void parseProfile_rejectsEmptyChecks();
+    void parseProfile_rejectsInvalidDownsampleTargetDpi();
     void parseProfile_rejectsInkCoverageWithoutPositiveMax();
     void parseProfile_acceptsInkCoverageDefaults();
     void parseProfile_rejectsInvalidInkCoverageParameters();
@@ -68,6 +70,9 @@ private slots:
     void run_inkCoverage_passesBelowLimitFixture();
     void run_inkCoverage_budgetAbortIsIncomplete();
     void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
+    void run_downsampleFixupAdvertisedForHighDpiImage();
+    void run_downsampleFixupHiddenWhenNoCandidateExists();
+    void run_downsampleFixupCarriesTargetDpi();
     void run_colorRgbFixtureFailsColorMode();
     void colorInventory_isRegisteredAndInfoOnly();
     void colorInventory_rejectsInvalidParameters();
@@ -206,6 +211,51 @@ QJsonObject tieredBleedProfile(bool rasterConfirm)
     return profile;
 }
 
+pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 144, 144));
+
+    QImage image(sourcePixels, sourcePixels, QImage::Format_ARGB32);
+    for (int y = 0; y < sourcePixels; ++y)
+    {
+        for (int x = 0; x < sourcePixels; ++x)
+        {
+            image.setPixel(x, y, qRgb((x * 17 + y * 13) % 256,
+                                      (x * 7 + y * 29) % 256,
+                                      (x * 31 + y * 3) % 256));
+        }
+    }
+
+    pdf::PDFImage::ImageEncodeOptions imageOptions;
+    imageOptions.compression = pdf::PDFImage::ImageCompression::Flate;
+    imageOptions.colorMode = pdf::PDFImage::ImageColorMode::Preserve;
+    const pdf::PDFObjectReference imageReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+            pdf::PDFImage::createStreamFromImage(image, imageOptions))));
+
+    const QByteArray content("q 144 0 0 144 0 0 cm /Im1 Do Q");
+    pdf::PDFDictionary contentDictionary;
+    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                                pdf::PDFObject::createInteger(content.size()));
+    const pdf::PDFObjectReference contentReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+            pdf::PDFStream(std::move(contentDictionary), content))));
+
+    pdf::PDFDictionary xObject;
+    xObject.addEntry(pdf::PDFInplaceOrMemoryString("Im1"), pdf::PDFObject::createReference(imageReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObject))));
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(pageReference,
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+    return builder.build();
+}
+
 } // namespace
 
 void PreflightEngineTest::parseProfile_rejectsMissingName()
@@ -230,6 +280,31 @@ void PreflightEngineTest::parseProfile_rejectsEmptyChecks()
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
     QVERIFY(!errorMessage.isEmpty());
+}
+
+void PreflightEngineTest::parseProfile_rejectsInvalidDownsampleTargetDpi()
+{
+    pdf::PreflightEngine engine(nullptr);
+    for (const QJsonValue& targetDpi : { QJsonValue(0), QJsonValue(71), QJsonValue(1201), QJsonValue(300.5), QJsonValue(QStringLiteral("300")) })
+    {
+        pdf::PreflightProfileData profile;
+        QString errorMessage;
+        const QJsonObject profileObject{
+            { QStringLiteral("name"), QStringLiteral("Downsample") },
+            { QStringLiteral("checks"), QJsonArray{
+                QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
+            } },
+            { QStringLiteral("fixups"), QJsonArray{
+                QJsonObject{
+                    { QStringLiteral("id"), QStringLiteral("downsample-images") },
+                    { QStringLiteral("target_dpi"), targetDpi }
+                }
+            } }
+        };
+
+        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+        QVERIFY(errorMessage.contains(QStringLiteral("target_dpi")));
+    }
 }
 
 void PreflightEngineTest::parseProfile_rejectsInkCoverageWithoutPositiveMax()
@@ -934,6 +1009,79 @@ void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
     const pdf::PDFInkCoverageProbeResult mediaResult = probe.probe(page, 0, settings);
     QVERIFY(!mediaResult.rasterized);
     QVERIFY(mediaResult.budgetExceeded);
+}
+
+void PreflightEngineTest::run_downsampleFixupAdvertisedForHighDpiImage()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Downsample candidate") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.fixupsAvailable.size(), 1);
+    QCOMPARE(result.fixupsAvailable.first().id, QStringLiteral("downsample-images"));
+    QCOMPARE(result.fixupsAvailable.first().params.value(QStringLiteral("target_dpi")).toInt(), 300);
+    QCOMPARE(result.fixupsAvailable.first().params.value(QStringLiteral("candidate_count")).toInt(), 1);
+}
+
+void PreflightEngineTest::run_downsampleFixupHiddenWhenNoCandidateExists()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("No downsample candidate") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(std::none_of(result.fixupsAvailable.cbegin(), result.fixupsAvailable.cend(), [](const pdf::PreflightFixupConfig& fixup)
+    {
+        return fixup.id == QStringLiteral("downsample-images");
+    }));
+}
+
+void PreflightEngineTest::run_downsampleFixupCarriesTargetDpi()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Downsample custom target") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 450 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.fixupsAvailable.size(), 1);
+    const pdf::PreflightFixupConfig& fixup = result.fixupsAvailable.first();
+    QCOMPARE(fixup.params.value(QStringLiteral("target_dpi")).toInt(), 450);
+    QCOMPARE(fixup.params.value(QStringLiteral("quality")).toInt(), 90);
+    QCOMPARE(fixup.params.value(QStringLiteral("preserve_color")).toBool(), true);
+    QCOMPARE(fixup.params.value(QStringLiteral("preserve_transparency")).toBool(), true);
 }
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()

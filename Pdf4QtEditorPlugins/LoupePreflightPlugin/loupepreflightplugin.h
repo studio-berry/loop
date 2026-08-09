@@ -75,8 +75,10 @@ private:
                               quint64 revisionToMatch,
                               bool ignoreRevisionMatch,
                               const QString& reportSourceLabel);
+    void onApplyFixupRequested(const QString& id);
     void onApplyBleedFixupRequested();
     void onApplyRgbToCmykFixupRequested();
+    void onApplyDownsampleImagesRequested();
     void finishPreflightRun();
     void cancelPreflightRun(bool silent = false);
     void abortPreflightRun(const QString& message);

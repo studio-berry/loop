@@ -111,6 +111,16 @@ Pages exceeding the raster pixel budget emit an informational page-scope finding
 set the check status to `skipped`, and set `inspection_complete` to `false`;
 budget exhaustion never silently passes as a clean inspection.
 
+## Image downsampling fixup
+
+The profile's `downsample-images` fixup is advertised only when at least one
+image's effective DPI is strictly greater than `target_dpi * 1.15`. Images at or
+below that boundary remain untouched. Applying the fixup uses
+`PDFImageOptimizer` with `PreferQuality`, bicubic resampling, preserved color
+characteristics and transparency, and `keepOriginalIfLarger=true`. The Editor
+always works on a document copy, writes a separate output PDF, and offers to
+rerun the normal preflight sidecar on that output.
+
 ## Transparency risk checking
 
 The `transparency-risk` check observes actual page-content processing and emits
@@ -265,6 +275,7 @@ passes, and only the target check is exercised.
 | `color-cmyk.pdf` | loupe-default | pass | `color-mode` (DeviceCMYK image) |
 | `image-dpi-low.pdf` | loupe-default | warning | `image-resolution` (~25 DPI) |
 | `image-dpi-ok.pdf` | loupe-default | pass | `image-resolution` (~310 DPI) |
+| `image-dpi-excessive.pdf` | loupe-default | pass | 600-DPI image advertises `downsample-images` |
 | `font-not-embedded.pdf` | loupe-default | fail | `embedded-fonts` (Helvetica, no FontFile) |
 | `font-embedded.pdf` | loupe-default | pass | `embedded-fonts` (`/FontFile2` subset) |
 | `trim-pagesize-mismatch.pdf` | test-trim-pagesize | fail | `trim`, `page-size` (540×720 vs 612×792) |
