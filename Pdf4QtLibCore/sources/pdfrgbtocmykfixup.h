@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfglobal.h"
+#include "pdfutils.h"
 
 #include <QByteArray>
 #include <QString>
@@ -101,9 +102,13 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRgbToCmykReport
 class PDF4QTLIBCORESHARED_EXPORT PDFRgbToCmykFixup
 {
 public:
-    static PDFOperationResult convertRgbToCmyk(const PDFDocument* document,
-                                    const PDFRgbToCmykSettings& settings,
-                                    PDFRgbToCmykReport* report);
+    static PDFOperationResult previewRgbToCmyk(const PDFDocument* document,
+                                               const PDFRgbToCmykSettings& settings,
+                                               PDFRgbToCmykReport* report);
+
+    static PDFOperationResult writeRgbToCmyk(PDFDocument* document,
+                                           const PDFRgbToCmykSettings& settings,
+                                           PDFRgbToCmykReport* report = nullptr);
 };
 
 } // namespace pdf

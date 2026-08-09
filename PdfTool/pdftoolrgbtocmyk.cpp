@@ -207,7 +207,7 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Success;
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.rgbToCmykOutputDocument))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.rgbToCmykOutputDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

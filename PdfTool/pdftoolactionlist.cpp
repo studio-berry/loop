@@ -103,7 +103,7 @@ bool parseBindings(const QStringList& assignments, QJsonObject* bindings, QStrin
     return true;
 }
 
-bool readDocument(const PDFToolOptions& options, const QString& path, pdf::PDFDocument* document, QByteArray* sourceData, QString* error)
+bool readDocumentFromPath(const PDFToolOptions& options, const QString& path, pdf::PDFDocument* document, QByteArray* sourceData, QString* error)
 {
     pdf::PDFDocumentReader reader(nullptr,
                                   [&options](bool*) { return options.password; },
@@ -232,7 +232,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
         {
             pdf::PDFDocument source;
             QByteArray sourceData;
-            if (!readDocument(options, input, &source, &sourceData, &error))
+            if (!readDocumentFromPath(options, input, &source, &sourceData, &error))
             {
                 items.append(QJsonObject{{QStringLiteral("input"), input}, {QStringLiteral("status"), QStringLiteral("failed")}, {QStringLiteral("error"), error}});
                 aggregateCode = PDFToolExitCode::InputError;
@@ -285,7 +285,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
     }
     pdf::PDFDocument source;
     QByteArray sourceData;
-    if (!readDocument(options, options.actionListFiles.first(), &source, &sourceData, &error))
+    if (!readDocumentFromPath(options, options.actionListFiles.first(), &source, &sourceData, &error))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), error);
         return PDFToolExitCode::InputError;
@@ -293,7 +293,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
 
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocument candidate;
-    pdf::PDFOperationResult execution;
+    pdf::PDFOperationResult execution(false);
     if (subcommand == QStringLiteral("plan"))
     {
         execution = executor.plan(actionList, source, executionOptions, &executionResult);

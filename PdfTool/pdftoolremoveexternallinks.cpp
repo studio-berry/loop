@@ -174,7 +174,7 @@ PDFToolExitCode PDFToolRemoveExternalLinks::execute(const PDFToolOptions& option
 
     // In-place rewrite of the source document: guard it like the other
     // destructive commands instead of silently replacing the original file.
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdftoolrender.h"
+#include "pdftoolcancel.h"
 #include "pdffont.h"
 #include "pdfconstants.h"
 #include "pdfsafefilewriter.h"
@@ -233,7 +234,7 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
             plannedOutputs << options.imageExportSettings.getOutputFileName(pageIndex, options.imageWriterSettings.getCurrentFormat());
         }
 
-        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
         {
             return blocked;
         }

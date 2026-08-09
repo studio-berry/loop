@@ -45,7 +45,7 @@ public:
     }
 };
 
-bool readDocument(const QString& path,
+bool readDocumentFromPath(const QString& path,
                   const PDFToolOptions& options,
                   pdf::PDFDocument* document,
                   QString* error)
@@ -112,13 +112,13 @@ PDFToolExitCode PDFToolRepairDiff::execute(const PDFToolOptions& options)
     pdf::PDFDocument before;
     pdf::PDFDocument after;
     QString error;
-    if (!readDocument(options.repairDiffFiles.at(0), options, &before, &error))
+    if (!readDocumentFromPath(options.repairDiffFiles.at(0), options, &before, &error))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.before-unreadable"), error,
                          QJsonObject{{QStringLiteral("path"), options.repairDiffFiles.at(0)}});
         return PDFToolExitCode::InputError;
     }
-    if (!readDocument(options.repairDiffFiles.at(1), options, &after, &error))
+    if (!readDocumentFromPath(options.repairDiffFiles.at(1), options, &after, &error))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.after-unreadable"), error,
                          QJsonObject{{QStringLiteral("path"), options.repairDiffFiles.at(1)}});
