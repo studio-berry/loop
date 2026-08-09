@@ -11,6 +11,33 @@ automation contract**, which is separate from any domain report it carries
 The machine-facing contract is: branch on `status`, `exit_code`, and diagnostic
 `code` — never on translated `message` text.
 
+## Capability discovery
+
+`PdfTool capabilities` is a JSON-first, versioned discovery command. It reports
+what the current binary can actually invoke without opening documents, reading
+user settings, launching sidecars, scanning directories, or making network
+requests:
+
+```text
+PdfTool capabilities
+PdfTool capabilities --command preflight
+PdfTool capabilities --console-format json
+```
+
+The outer envelope keeps schema version `1`; the nested
+`data.discovery_schema_version` is the independent discovery contract version.
+Stable command IDs, option IDs/names, capability IDs, fixup IDs, and schema IDs
+are locale-independent lower-case identifiers. Names and descriptions are for
+display and may be translated. Arrays of machine identifiers are sorted by
+stable ID. Consumers must ignore additive fields and increment handling when
+`discovery_schema_version` changes.
+
+Capability metadata marks password-bearing options such as `--pswd` and the
+encryption password options as `sensitive: true`; discovery never includes
+option values, local paths, environment variables, sidecar locations, or
+secrets. Fixup metadata is sourced from the Core implementation registry and
+contains only fixups available in the current build.
+
 ## Envelope
 
 ```json
@@ -125,10 +152,11 @@ file. A run where some files succeed and some fail reports `partial-output`.
 
 `--console-format json` and `--console-format=json` are detected from the raw
 command line before parsing, so that malformed command lines still return a
-valid JSON error envelope when JSON was requested. The `preflight` and `ocr`
-commands default to JSON because their domain reports are JSON-only; malformed
-invocations of those commands therefore also return the envelope. Supplying a
-different console format to either command is an invalid invocation.
+valid JSON error envelope when JSON was requested. The `preflight`, `ocr`, and
+`capabilities` commands default to JSON because their contracts are
+machine-readable; malformed invocations of those commands therefore also
+return the envelope. Supplying a different console format to those commands is
+an invalid invocation.
 
 ## Unknown command
 

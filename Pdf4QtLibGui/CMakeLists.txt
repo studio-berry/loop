@@ -37,6 +37,8 @@ add_library(Pdf4QtLibGui SHARED
     pdfoptimizeimagesdialog.h
     pdfprogramcontroller.cpp
     pdfprogramcontroller.h
+    pdfrecoverymanager.cpp
+    pdfrecoverymanager.h
     pdfrecentfilemanager.cpp
     pdfrecentfilemanager.h
     pdfrendertoimagesdialog.cpp
