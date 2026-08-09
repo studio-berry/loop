@@ -1,0 +1,36 @@
+%PDF-1.7
+% PDF producer: PDF4QT 1.6.0.0
+
+
+1 0 obj
+<< /Type /Pages /Kids [ 4 0 R ] /Count 1 >> endobj
+2 0 obj
+<< /Type /Catalog /Pages 1 0 R >> endobj
+3 0 obj
+<< /Producer (PDF4QT 1.6.0.0) /CreationDate (D:20260809045239) /ModDate (D:20260809045239) /Title (Loupe fixture - overprint render) /Creator (LoupeGenerateFixtures) >> endobj
+4 0 obj
+<< /Type /Page /Parent 1 0 R /MediaBox [ 0.00000 0.00000 200.00000 200.00000 ] /Resources << /ExtGState << /GS 5 0 R >> /ColorSpace << /SpotCS [ /Separation /Spot /DeviceCMYK 6 0 R ] >> >> /Contents 7 0 R >> endobj
+5 0 obj
+<< /Type /ExtGState /OP true /op true /OPM 0 >> endobj
+6 0 obj
+<< /FunctionType 2 /Domain [ 0.00000 1.00000 ] /C0 [ 0.00000 0.00000 0.00000 0.00000 ] /C1 [ 0.00000 0.00000 1.00000 0.00000 ] /N 1.00000 >> endobj
+7 0 obj
+<< /Length 87 >> stream
+q /GS gs /DeviceCMYK cs 1 0 0 0 scn 0 0 200 200 re f 0 0 0 0.5 scn 35 35 130 130 re f Q
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f
+0000000046 00000 n
+0000000107 00000 n
+0000000158 00000 n
+0000000344 00000 n
+0000000569 00000 n
+0000000634 00000 n
+0000000792 00000 n
+trailer
+<< /Size 8 /Root 2 0 R /Info 3 0 R >> 
+startxref
+934
+%%EOF

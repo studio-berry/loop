@@ -51,6 +51,7 @@ private slots:
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
     void run_whiteOverprint_passesWhenOverprintOff();
     void run_whiteOverprint_emitsWarningInsideFormXObject();
+    void run_whiteOverprint_emitsWarningForNonDeviceColorSpaces();
     void run_colorRgbFixtureFailsColorMode();
 };
 
@@ -490,6 +491,42 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
     QCOMPARE(result.warnings.size(), 1);
     QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("white-overprint"));
+}
+
+void PreflightEngineTest::run_whiteOverprint_emitsWarningForNonDeviceColorSpaces()
+{
+    const QStringList fixtures = {
+        QStringLiteral("white-overprint-separation.pdf"),
+        QStringLiteral("white-overprint-devicen.pdf"),
+        QStringLiteral("white-overprint-iccbased.pdf")
+    };
+
+    for (const QString& fixture : fixtures)
+    {
+        const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fixture;
+        QVERIFY(QFile::exists(fixturePath));
+
+        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+        pdf::PDFDocument document = reader.readFromFile(fixturePath);
+        QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+        pdf::PDFDocumentSession session(&document);
+        pdf::PreflightEngine engine(&session);
+        QJsonObject profile;
+        profile.insert(QStringLiteral("name"), QStringLiteral("Non-device white overprint test"));
+        profile.insert(QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("white-overprint") },
+                { QStringLiteral("severity"), QStringLiteral("warning") }
+            }
+        });
+
+        const pdf::PreflightResult result = engine.run(profile);
+        QVERIFY(result.pass);
+        QCOMPARE(result.errors.size(), 0);
+        QVERIFY2(result.warnings.size() == 1, qPrintable(fixture));
+        QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
+    }
 }
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()

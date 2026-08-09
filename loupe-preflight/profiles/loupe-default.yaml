@@ -36,6 +36,9 @@ checks:
     allowed: [CMYK, Grayscale]
     severity: error
 
+  - id: white-overprint
+    severity: warning
+
 fixups:
   - id: rgb-to-cmyk
     confirm: true

@@ -27,6 +27,7 @@
 // Usage: generate_fixtures [output-directory]  (defaults to the current directory)
 
 #include "pdfdocumentbuilder.h"
+#include "pdfconstants.h"
 #include "pdfdocumentwriter.h"
 
 #include <QCoreApplication>
@@ -49,6 +50,218 @@ void writeFixture(const QDir& outputDir, const QString& fileName, const pdf::PDF
     {
         qFatal("Failed to write fixture '%s': %s", qPrintable(fileName), qPrintable(result.getErrorMessage()));
     }
+}
+
+pdf::PDFObject createNumberArray(std::initializer_list<qreal> values)
+{
+    pdf::PDFArray array;
+    for (qreal value : values)
+    {
+        array.appendItem(pdf::PDFObject::createReal(value));
+    }
+    return pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(array)));
+}
+
+pdf::PDFObjectReference addContentStream(pdf::PDFDocumentBuilder& builder, const QByteArray& content)
+{
+    pdf::PDFDictionary dictionary;
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(content.size()));
+    QByteArray streamData = content;
+    return builder.addObject(pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(dictionary), std::move(streamData))));
+}
+
+pdf::PDFObjectReference addExtGState(pdf::PDFDocumentBuilder& builder,
+                                     bool overprintFilling,
+                                     bool overprintStroking,
+                                     int overprintMode,
+                                     const char* blendMode = nullptr)
+{
+    pdf::PDFDictionary dictionary;
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("ExtGState"));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("OP"), pdf::PDFObject::createBool(overprintFilling));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("op"), pdf::PDFObject::createBool(overprintStroking));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("OPM"), pdf::PDFObject::createInteger(overprintMode));
+    if (blendMode)
+    {
+        dictionary.setEntry(pdf::PDFInplaceOrMemoryString("BM"), pdf::PDFObject::createName(blendMode));
+    }
+    return builder.addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(dictionary))));
+}
+
+pdf::PDFObjectReference addType2TintFunction(pdf::PDFDocumentBuilder& builder,
+                                             std::initializer_list<qreal> c1)
+{
+    pdf::PDFDictionary dictionary;
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("FunctionType"), pdf::PDFObject::createInteger(2));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("Domain"), createNumberArray({ 0.0, 1.0 }));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("C0"), createNumberArray({ 0.0, 0.0, 0.0, 0.0 }));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("C1"), createNumberArray(c1));
+    dictionary.setEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createReal(1.0));
+    return builder.addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(dictionary))));
+}
+
+pdf::PDFObject createSeparationColorSpace(pdf::PDFObjectReference tintFunction)
+{
+    pdf::PDFArray array;
+    array.appendItem(pdf::PDFObject::createName("Separation"));
+    array.appendItem(pdf::PDFObject::createName("Spot"));
+    array.appendItem(pdf::PDFObject::createName("DeviceCMYK"));
+    array.appendItem(pdf::PDFObject::createReference(tintFunction));
+    return pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(array)));
+}
+
+pdf::PDFObject createDeviceNColorSpace(pdf::PDFObjectReference tintFunction)
+{
+    pdf::PDFArray colorants;
+    colorants.appendItem(pdf::PDFObject::createName("Spot"));
+
+    pdf::PDFArray array;
+    array.appendItem(pdf::PDFObject::createName("DeviceN"));
+    array.appendItem(pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(colorants))));
+    array.appendItem(pdf::PDFObject::createName("DeviceCMYK"));
+    array.appendItem(pdf::PDFObject::createReference(tintFunction));
+    return pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(array)));
+}
+
+pdf::PDFDocument createOverprintDocument(bool enabled,
+                                         int overprintMode,
+                                         const QByteArray& overlay,
+                                         const char* blendMode = nullptr,
+                                         bool group = false)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - overprint render");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFObjectReference state = addExtGState(builder, enabled, enabled, overprintMode, blendMode);
+    const pdf::PDFObjectReference tintFunction = addType2TintFunction(builder, { 0.0, 0.0, 1.0, 0.0 });
+
+    pdf::PDFDictionary resources;
+    pdf::PDFDictionary extGStates;
+    extGStates.addEntry(pdf::PDFInplaceOrMemoryString("GS"), pdf::PDFObject::createReference(state));
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("ExtGState"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(extGStates))));
+
+    pdf::PDFDictionary colorSpaces;
+    colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("SpotCS"), createSeparationColorSpace(tintFunction));
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(colorSpaces))));
+
+    QByteArray content;
+    if (group)
+    {
+        pdf::PDFDictionary formResources;
+        pdf::PDFDictionary formExtGStates;
+        formExtGStates.addEntry(pdf::PDFInplaceOrMemoryString("GS"), pdf::PDFObject::createReference(state));
+        formResources.addEntry(pdf::PDFInplaceOrMemoryString("ExtGState"),
+                               pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(formExtGStates))));
+        pdf::PDFDictionary formDictionary;
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Form"));
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("BBox"), createNumberArray({ 0.0, 0.0, 200.0, 200.0 }));
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                                pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(formResources))));
+        pdf::PDFDictionary transparencyGroup;
+        transparencyGroup.setEntry(pdf::PDFInplaceOrMemoryString("S"), pdf::PDFObject::createName("Transparency"));
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Group"),
+                                pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(transparencyGroup))));
+        const QByteArray formContent = "q /GS gs /DeviceCMYK cs 1 0 0 0 scn 20 20 160 160 re f 0 0 0 0.5 scn 35 35 130 130 re B Q";
+        formDictionary.setEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(formContent.size()));
+        const pdf::PDFObjectReference form = builder.addObject(pdf::PDFObject::createStream(
+            std::make_shared<pdf::PDFStream>(std::move(formDictionary), QByteArray(formContent))));
+
+        pdf::PDFDictionary xObjects;
+        xObjects.addEntry(pdf::PDFInplaceOrMemoryString("Form"), pdf::PDFObject::createReference(form));
+        resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                           pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
+        content = "q /Form Do Q";
+    }
+    else
+    {
+        content = "q /GS gs /DeviceCMYK cs 1 0 0 0 scn 0 0 200 200 re f ";
+        content += overlay;
+        content += " Q";
+    }
+
+    const pdf::PDFObjectReference contentReference = addContentStream(builder, content);
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+    return builder.build();
+}
+
+void generateOverprintRenderFixtures(const QDir& outputDir)
+{
+    const auto writePair = [&](const QString& name, int opm, const QByteArray& overlay, const char* blendMode = nullptr, bool group = false)
+    {
+        writeFixture(outputDir, name + QStringLiteral("-off.pdf"), createOverprintDocument(false, opm, overlay, blendMode, group));
+        writeFixture(outputDir, name + QStringLiteral("-on.pdf"), createOverprintDocument(true, opm, overlay, blendMode, group));
+    };
+
+    writePair(QStringLiteral("overprint-cmyk-mode0"), 0, "0 0 0 0.5 scn 35 35 130 130 re f");
+    writePair(QStringLiteral("overprint-cmyk-mode1"), 1, "0 0 0 0.5 scn 35 35 130 130 re f");
+    writePair(QStringLiteral("overprint-white"), 0, "0 0 0 0 scn 35 35 130 130 re f");
+    writePair(QStringLiteral("overprint-separation"), 0, "/SpotCS cs 1 scn 35 35 130 130 re f");
+    writePair(QStringLiteral("overprint-multiply"), 0, "0 0 0 1 scn 35 35 130 130 re f", "Multiply");
+    writePair(QStringLiteral("overprint-group-stroke"), 0, QByteArray(), nullptr, true);
+}
+
+void generateWhiteOverprintColorSpaceFixtures(const QDir& outputDir)
+{
+    const auto writeColorSpaceFixture = [&](const QString& name, bool deviceN, bool iccBased)
+    {
+        pdf::PDFDocumentBuilder builder;
+        builder.setDocumentTitle("Loupe fixture - white overprint color space");
+        const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+        const pdf::PDFObjectReference state = addExtGState(builder, true, true, 0);
+        const pdf::PDFObjectReference tintFunction = addType2TintFunction(builder, { 0.0, 0.0, 0.0, 0.0 });
+        pdf::PDFObject colorSpace;
+        QByteArray color = "0";
+        if (deviceN)
+        {
+            colorSpace = createDeviceNColorSpace(tintFunction);
+        }
+        else if (iccBased)
+        {
+            color = "0 0 0 0";
+            pdf::PDFDictionary iccDictionary;
+            iccDictionary.setEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createInteger(4));
+            iccDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Alternate"), pdf::PDFObject::createName("DeviceCMYK"));
+            iccDictionary.setEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH), pdf::PDFObject::createInteger(0));
+            const pdf::PDFObjectReference iccStream = builder.addObject(pdf::PDFObject::createStream(
+                std::make_shared<pdf::PDFStream>(std::move(iccDictionary), QByteArray())));
+            pdf::PDFArray iccArray;
+            iccArray.appendItem(pdf::PDFObject::createName("ICCBased"));
+            iccArray.appendItem(pdf::PDFObject::createReference(iccStream));
+            colorSpace = pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(iccArray)));
+        }
+        else
+        {
+            colorSpace = createSeparationColorSpace(tintFunction);
+        }
+
+        pdf::PDFDictionary extGStates;
+        extGStates.addEntry(pdf::PDFInplaceOrMemoryString("GS"), pdf::PDFObject::createReference(state));
+        pdf::PDFDictionary colorSpaces;
+        colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("CS1"), std::move(colorSpace));
+        pdf::PDFDictionary resources;
+        resources.addEntry(pdf::PDFInplaceOrMemoryString("ExtGState"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(extGStates))));
+        resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(colorSpaces))));
+        const QByteArray content = "/GS gs /CS1 cs " + color + " scn 20 20 160 160 re f";
+        const pdf::PDFObjectReference contentReference = addContentStream(builder, content);
+        pdf::PDFDictionary pageUpdate;
+        pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Resources"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+        pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+        builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+        writeFixture(outputDir, name + QStringLiteral(".pdf"), builder.build());
+    };
+
+    writeColorSpaceFixture(QStringLiteral("white-overprint-separation"), false, false);
+    writeColorSpaceFixture(QStringLiteral("white-overprint-devicen"), true, false);
+    writeColorSpaceFixture(QStringLiteral("white-overprint-iccbased"), false, true);
 }
 
 pdf::PDFObjectReference appendTieredBleedPage(pdf::PDFDocumentBuilder& builder, const QRectF& contentRect)
@@ -165,6 +378,8 @@ int main(int argc, char* argv[])
     generateContentBleedMissingFixture(outputDir);
     generateContentBleedRasterConfirmFixture(outputDir);
     generateContentBleedThreeOfFourFixture(outputDir);
+    generateOverprintRenderFixtures(outputDir);
+    generateWhiteOverprintColorSpaceFixtures(outputDir);
 
     return 0;
 }

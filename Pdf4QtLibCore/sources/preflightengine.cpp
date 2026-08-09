@@ -1,4 +1,4 @@
-// MIT License
+﻿// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -1021,7 +1021,9 @@ void runColorModeCheck(PDFDocumentSession* session,
     }
 }
 
-bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color)
+bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace,
+                            const PDFColor& color,
+                            const PDFCMS* cms)
 {
     if (!colorSpace)
     {
@@ -1037,7 +1039,23 @@ bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFCo
         case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
             return color[0] <= 0.01f && color[1] <= 0.01f && color[2] <= 0.01f && color[3] <= 0.01f;
         default:
-            return false;
+        {
+            PDFRenderErrorReporterDummy reporter;
+            QColor converted = colorSpace->getColor(color, cms, RenderingIntent::RelativeColorimetric, &reporter, true);
+            const PDFICCBasedColorSpace* iccBased = dynamic_cast<const PDFICCBasedColorSpace*>(colorSpace);
+            if (!converted.isValid() || (iccBased && iccBased->getIccProfileData().isEmpty()))
+            {
+                if (iccBased)
+                {
+                    const PDFAbstractColorSpace* alternate = iccBased->getAlternateColorSpace();
+                    if (alternate)
+                    {
+                        converted = alternate->getColor(color, cms, RenderingIntent::RelativeColorimetric, &reporter, true);
+                    }
+                }
+            }
+            return converted.isValid() && converted.redF() >= 0.99f && converted.greenF() >= 0.99f && converted.blueF() >= 0.99f;
+        }
     }
 }
 
@@ -1081,6 +1099,7 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
                                 const PDFMeshQualitySettings& mq,
                                 bool* foundWhiteOverprint)
             : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq)
+            , m_cms(cms_p)
             , m_foundWhiteOverprint(foundWhiteOverprint)
         {
         }
@@ -1123,19 +1142,20 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
             const PDFOverprintMode overprintMode = state->getOverprintMode();
 
             if (fill && overprintMode.overprintFilling
-                && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal()))
+                && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal(), m_cms))
             {
                 *m_foundWhiteOverprint = true;
             }
 
             if (stroke && overprintMode.overprintStroking
-                && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal()))
+                && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal(), m_cms))
             {
                 *m_foundWhiteOverprint = true;
             }
         }
 
     private:
+        const PDFCMS* m_cms = nullptr;
         bool* m_foundWhiteOverprint = nullptr;
     };
 
