@@ -166,5 +166,29 @@
     "expect": { "pass": true, "check_ids": ["white-overprint"] },
     "source": "hand-built",
     "notes": "White overprint inside a Form XObject painted via Do. MIC-306."
+  },
+  {
+    "id": "white-overprint-separation",
+    "pdf": "white-overprint-separation.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "generated",
+    "notes": "Near-white Separation paint with overprint enabled."
+  },
+  {
+    "id": "white-overprint-devicen",
+    "pdf": "white-overprint-devicen.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "generated",
+    "notes": "Near-white DeviceN paint with overprint enabled."
+  },
+  {
+    "id": "white-overprint-iccbased",
+    "pdf": "white-overprint-iccbased.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "generated",
+    "notes": "Near-white ICCBased paint with overprint enabled."
   }
 ]

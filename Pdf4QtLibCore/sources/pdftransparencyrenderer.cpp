@@ -556,7 +556,9 @@ void PDFFloatBitmap::blend(const PDFFloatBitmap& source,
                            BlendMode mode,
                            bool knockoutGroup,
                            OverprintMode overprintMode,
-                           QRect blendRegion)
+                           QRect blendRegion,
+                           const std::vector<uint8_t>* overprintContentMask,
+                           uint8_t enabledContentMask)
 {
     Q_ASSERT(source.getWidth() == target.getWidth());
     Q_ASSERT(source.getHeight() == target.getHeight());
@@ -595,8 +597,14 @@ void PDFFloatBitmap::blend(const PDFFloatBitmap& source,
     // Handle overprint mode for normal blend mode. We do not support
     // oveprinting for other blend modes, than normal.
 
-    auto getBlendModeForPixel = [&source, &channelBlendModes, pixelFormat, overprintMode, mode](size_t x, size_t y, uint8_t channel)
+    auto getBlendModeForPixel = [&source, &channelBlendModes, pixelFormat, overprintMode, mode, overprintContentMask, enabledContentMask](size_t x, size_t y, uint8_t channel)
     {
+        if (overprintContentMask && enabledContentMask != 0
+            && ((*overprintContentMask)[y * source.getWidth() + x] & enabledContentMask) == 0)
+        {
+            return channelBlendModes[channel];
+        }
+
         switch (overprintMode)
         {
             case OverprintMode::NoOveprint:
@@ -1091,6 +1099,7 @@ void PDFTransparencyRenderer::beginPaint(QSize pixelSize)
     deviceGroup.renderingIntent = RenderingIntent::RelativeColorimetric;
     deviceGroup.initialBackdrop = qMove(paper);
     deviceGroup.immediateBackdrop = deviceGroup.initialBackdrop;
+    deviceGroup.contentMask.assign(deviceGroup.immediateBackdrop.getWidth() * deviceGroup.immediateBackdrop.getHeight(), 0);
     deviceGroup.blendColorSpace = m_deviceColorSpace;
 
     m_transparencyGroupDataStack.emplace_back(qMove(deviceGroup));
@@ -1214,6 +1223,8 @@ QImage PDFTransparencyRenderer::toImage(bool use16Bit, bool usePaper, const PDFR
         createOpaqueSoftMask(imageSoftMask, paperImage.getWidth(), paperImage.getHeight());
 
         QRect blendRegion(0, 0, int(floatImage.getWidth()), int(floatImage.getHeight()));
+        // The paper bitmap is opaque, so overprint selection is a no-op at this
+        // final composite boundary.
         PDFFloatBitmapWithColorSpace::blend(floatImage, paperImage, paperImage, paperImage, imageSoftMask, false, 1.0f, BlendMode::Normal, false, PDFFloatBitmap::OverprintMode::NoOveprint, blendRegion);
 
         return toImageImpl(paperImage, use16Bit);
@@ -2576,6 +2587,7 @@ void PDFTransparencyRenderer::performBeginTransparencyGroup(ProcessOrder order, 
 
         data.initialBackdrop.convertToColorSpace(getCMS(), data.renderingIntent, data.blendColorSpace, this);
         data.immediateBackdrop = data.initialBackdrop;
+        data.contentMask.assign(data.immediateBackdrop.getWidth() * data.immediateBackdrop.getHeight(), 0);
 
         // Jakub Melka: According to 11.4.8 of PDF 2.0 specification, we must
         // initialize f_g_0 and alpha_g_0 to zero. We store f_g_0 and alpha_g_0
@@ -2639,15 +2651,29 @@ void PDFTransparencyRenderer::performEndTransparencyGroup(ProcessOrder order, co
         sourceData.immediateBackdrop.convertToColorSpace(getCMS(), targetData.renderingIntent, targetData.blendColorSpace, this);
 
         const PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
-        const PDFFloatBitmap::OverprintMode selectedOverprintMode = selectBlendOverprintMode(overprintMode,
-                                                                                             sourceData.containsFilling,
-                                                                                             sourceData.containsStroking);
+        const uint8_t enabledContentMask = (overprintMode.overprintFilling ? 0x01 : 0x00)
+                                          | (overprintMode.overprintStroking ? 0x02 : 0x00);
+        const bool containsOverprintContent = (sourceData.containsFilling && (enabledContentMask & 0x01))
+                                           || (sourceData.containsStroking && (enabledContentMask & 0x02));
+        const PDFFloatBitmap::OverprintMode selectedOverprintMode = containsOverprintContent
+            ? (overprintMode.overprintMode == 0 ? PDFFloatBitmap::OverprintMode::Overprint_Mode_0
+                                               : PDFFloatBitmap::OverprintMode::Overprint_Mode_1)
+            : PDFFloatBitmap::OverprintMode::NoOveprint;
 
         PDFFloatBitmap::blend(sourceData.immediateBackdrop, targetData.immediateBackdrop, *getBackdrop(), *getInitialBackdrop(), *sourceData.softMask.getSoftMask(),
-                              sourceData.alphaIsShape, sourceData.alphaFill, sourceData.blendMode, sourceData.group.knockout, selectedOverprintMode, getPaintRect());
+                              sourceData.alphaIsShape, sourceData.alphaFill, sourceData.blendMode, sourceData.group.knockout, selectedOverprintMode, getPaintRect(),
+                              &sourceData.contentMask, enabledContentMask);
 
         targetData.containsFilling |= sourceData.containsFilling;
         targetData.containsStroking |= sourceData.containsStroking;
+        if (targetData.contentMask.size() != sourceData.contentMask.size())
+        {
+            targetData.contentMask.assign(sourceData.contentMask.size(), 0);
+        }
+        for (size_t i = 0; i < sourceData.contentMask.size(); ++i)
+        {
+            targetData.contentMask[i] |= sourceData.contentMask[i];
+        }
 
         // Create draw buffer
         PDFFloatBitmapWithColorSpace* backdrop = getImmediateBackdrop();
@@ -3115,6 +3141,19 @@ void PDFTransparencyRenderer::flushDrawBuffer()
     {
         const bool containsFilling = m_drawBuffer.isContainsFilling();
         const bool containsStroking = m_drawBuffer.isContainsStroking();
+        const uint8_t contentMask = (containsFilling ? 0x01 : 0x00) | (containsStroking ? 0x02 : 0x00);
+        const uint8_t shapeChannel = m_drawBuffer.getPixelFormat().getShapeChannelIndex();
+        const QRect modifiedRect = m_drawBuffer.getModifiedRect();
+        for (int x = modifiedRect.left(); x <= modifiedRect.right(); ++x)
+        {
+            for (int y = modifiedRect.top(); y <= modifiedRect.bottom(); ++y)
+            {
+                if (m_drawBuffer.getPixel(x, y)[shapeChannel] > 0.0f)
+                {
+                    m_drawBuffer.markPixelContentMask(x, y, contentMask);
+                }
+            }
+        }
         const PDFOverprintMode overprintMode = getGraphicState()->getOverprintMode();
         const PDFFloatBitmap::OverprintMode selectedOverprintMode = selectBlendOverprintMode(overprintMode,
                                                                                              containsFilling,
@@ -3129,6 +3168,14 @@ void PDFTransparencyRenderer::flushDrawBuffer()
             PDFTransparencyGroupPainterData& groupData = m_transparencyGroupDataStack.back();
             groupData.containsFilling |= containsFilling;
             groupData.containsStroking |= containsStroking;
+            for (int x = modifiedRect.left(); x <= modifiedRect.right(); ++x)
+            {
+                for (int y = modifiedRect.top(); y <= modifiedRect.bottom(); ++y)
+                {
+                    const size_t index = static_cast<size_t>(y) * m_drawBuffer.getWidth() + static_cast<size_t>(x);
+                    groupData.contentMask[index] |= m_drawBuffer.getPixelContentMask(x, y);
+                }
+            }
         }
 
         m_drawBuffer.clear();
@@ -3633,6 +3680,13 @@ void PDFDrawBuffer::clear()
 
     m_containsFilling = false;
     m_containsStroking = false;
+    for (int x = m_modifiedRect.left(); x <= m_modifiedRect.right(); ++x)
+    {
+        for (int y = m_modifiedRect.top(); y <= m_modifiedRect.bottom(); ++y)
+        {
+            m_contentMask[y * getWidth() + x] = 0;
+        }
+    }
     m_modifiedRect = QRect();
 }
 

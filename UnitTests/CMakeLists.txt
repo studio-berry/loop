@@ -200,6 +200,24 @@ set_target_properties(UnitTestsOverprint PROPERTIES
 )
 add_test(UnitTestsOverprint "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOverprint")
 
+if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
+    add_executable(UnitTestsOverprintRender
+        tst_overprintrendertest.cpp
+    )
+
+    target_link_libraries(UnitTestsOverprintRender PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_compile_definitions(UnitTestsOverprintRender PRIVATE
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+
+    set_target_properties(UnitTestsOverprintRender PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsOverprintRender "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOverprintRender")
+endif()
+
 add_executable(UnitTestsPageMasterExport
 	tst_pagemasterexporttest.cpp
 )

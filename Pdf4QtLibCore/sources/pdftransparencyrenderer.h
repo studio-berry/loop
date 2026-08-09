@@ -308,7 +308,9 @@ public:
                       BlendMode mode,
                       bool knockoutGroup,
                       OverprintMode overprintMode,
-                      QRect blendRegion);
+                      QRect blendRegion,
+                      const std::vector<uint8_t>* overprintContentMask = nullptr,
+                      uint8_t enabledContentMask = 0);
 
     /// Blends converted spot colors, which are in \p convertedSpotColors bitmap.
     /// Process colors must match.
@@ -484,7 +486,12 @@ private:
 class PDFDrawBuffer : public PDFFloatBitmap
 {
 public:
-    using PDFFloatBitmap::PDFFloatBitmap;
+    explicit PDFDrawBuffer() = default;
+    explicit PDFDrawBuffer(size_t width, size_t height, PDFPixelFormat format) :
+        PDFFloatBitmap(width, height, format),
+        m_contentMask(width * height, 0)
+    {
+    }
 
     /// Clears the draw buffer
     void clear();
@@ -501,9 +508,13 @@ public:
     bool isContainsFilling() const { return m_containsFilling; }
     bool isContainsStroking() const { return m_containsStroking; }
 
+    uint8_t getPixelContentMask(size_t x, size_t y) const { return m_contentMask[y * getWidth() + x]; }
+    void markPixelContentMask(size_t x, size_t y, uint8_t contentMask) { m_contentMask[y * getWidth() + x] |= contentMask; }
+
 private:
     bool m_containsFilling = false;
     bool m_containsStroking = false;
+    std::vector<uint8_t> m_contentMask;
     QRect m_modifiedRect;
 };
 
@@ -717,6 +728,7 @@ private:
         bool saveOriginalImage = false;
         bool containsFilling = false;
         bool containsStroking = false;
+        std::vector<uint8_t> contentMask;
     };
 
     struct PDFTransparencyPainterState
