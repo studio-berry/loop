@@ -83,6 +83,9 @@ private slots:
     void run_outputIntent_identifierNotInAllowListEmitsIdentityFinding();
     void run_outputIntent_profileCsDisagreesWithEmbeddedProfile();
     void run_outputIntent_conflictingIntentsEmitConflictFinding();
+    void run_outputIntent_strictMultipleIntentsEmitAmbiguityFinding();
+    void run_outputIntent_optionalEmbeddedProfileCanBeAbsent();
+    void run_outputIntent_malformedArrayEntryEmitsFinding();
     void run_outputIntent_severityWarningRoutesToWarnings();
 };
 
@@ -1342,6 +1345,86 @@ void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding
     });
     QVERIFY(conflict != result.errors.cend());
     QVERIFY(conflict->message.contains(QStringLiteral("CMYK, RGB")));
+}
+
+void PreflightEngineTest::run_outputIntent_strictMultipleIntentsEmitAmbiguityFinding()
+{
+    const QByteArray cmykProfile = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!cmykProfile.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("first"), QByteArrayLiteral("CMYK"), cmykProfile },
+        { QByteArrayLiteral("second"), QByteArrayLiteral("CMYK"), cmykProfile }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Strict output intent cardinality") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") },
+            { QStringLiteral("allow_multiple"), false }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const auto ambiguity = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
+        return finding.type == QStringLiteral("output-intent-ambiguous");
+    });
+    QVERIFY(ambiguity != result.errors.cend());
+    QVERIFY(ambiguity->message.contains(QStringLiteral("intent 0")));
+    QVERIFY(ambiguity->message.contains(QStringLiteral("intent 1")));
+}
+
+void PreflightEngineTest::run_outputIntent_optionalEmbeddedProfileCanBeAbsent()
+{
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("metadata-only"), QByteArrayLiteral("CMYK"), QByteArray(), false }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Optional embedded output profile") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") },
+            { QStringLiteral("require_embedded_profile"), false }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+}
+
+void PreflightEngineTest::run_outputIntent_malformedArrayEntryEmitsFinding()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFArray outputIntents;
+    outputIntents.appendItem(pdf::PDFObject::createInteger(42));
+    pdf::PDFDictionary catalog;
+    catalog.addEntry(pdf::PDFInplaceOrMemoryString("OutputIntents"),
+                     pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(outputIntents))));
+    builder.mergeTo(builder.getCatalogReference(),
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(catalog))));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Malformed output intents") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const auto malformed = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
+        return finding.type == QStringLiteral("output-intent-malformed");
+    });
+    QVERIFY(malformed != result.errors.cend());
 }
 
 void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()

@@ -163,6 +163,25 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
 - Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **thin-strokes** (opt-in hairline and effective-width detection), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
+## Output-intent validation
+
+The `output-intent` check treats the decoded ICC payload as authoritative. It
+opens each bounded `/DestOutputProfile` with LittleCMS and derives the actual
+device space; PDF-side `ProfileCS` metadata is compared for consistency but is
+never trusted as the source of truth. Findings include the deterministic array
+index and identifier, and malformed catalog entries are reported as
+`output-intent-malformed` rather than being silently ignored.
+
+Optional output-intent policy fields are:
+
+- `require_embedded_profile` (default `true`)
+- `allowed_subtypes` (allow-list for `/S`)
+- `allowed_profile_sha256` (allow-list for decoded ICC payload digests)
+- `allow_multiple` (default `true`; set `false` to report `output-intent-ambiguous`)
+
+The check remains catalog-scoped. Page-level intent inheritance/overrides are
+deliberately outside this contract and require a separate semantics decision.
+
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
 ## ICC-managed RGB-to-CMYK fixup
