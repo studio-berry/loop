@@ -234,16 +234,17 @@ void PreflightPluginTest::filterAdvertisedFixups_removesUnimplementedFixups()
 
     const QJsonObject filtered = pdfplugin::preflight::filterAdvertisedFixups(report);
     const QJsonArray filteredFixups = filtered.value(QStringLiteral("fixups_available")).toArray();
-    QCOMPARE(filteredFixups.size(), 2);
+    QCOMPARE(filteredFixups.size(), 3);
     QCOMPARE(filteredFixups.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("rgb-to-cmyk"));
     QCOMPARE(filteredFixups.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+    QCOMPARE(filteredFixups.at(2).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("downsample-images"));
 }
 
 void PreflightPluginTest::isImplementedFixupId_advertisesImplementedFixups()
 {
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("add-bleed")));
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
-    QVERIFY(!pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
+    QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
 }
 
 void PreflightPluginTest::sidecarStreamBuffer_spillsToDiskAboveWatermark()
