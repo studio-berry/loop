@@ -21,6 +21,10 @@
       "type": "string",
       "description": "Optional summary of when to use this profile."
     },
+    "pdfx": {
+      "$ref": "#/$defs/pdfx",
+      "description": "Optional PDF/X conformance policy. Omitting this object preserves legacy preflight behavior."
+    },
     "job_types": {
       "type": "array",
       "description": "Loupe job categories this profile applies to.",
@@ -43,6 +47,25 @@
     }
   },
   "$defs": {
+    "pdfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["PDF/X-1a:2001", "PDF/X-4"],
+          "description": "Audited PDF/X policy target. PDF/X-3:2002 is reserved for a future policy pack."
+        },
+        "policyVersion": {
+          "oneOf": [
+            { "type": "string", "const": "1" },
+            { "type": "integer", "const": 1 }
+          ],
+          "description": "Optional Loupe policy revision; defaults to the target's registered revision."
+        }
+      }
+    },
     "severity": {
       "type": "string",
       "enum": ["error", "warning", "info"],
