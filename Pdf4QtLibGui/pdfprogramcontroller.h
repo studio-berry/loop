@@ -30,6 +30,7 @@
 #include "pdfdocumentpropertiesdialog.h"
 #include "pdfplugin.h"
 #include "pdfbookmarkmanager.h"
+#include "pdfrecoverymanager.h"
 
 #include <QObject>
 #include <QAction>
@@ -307,6 +308,7 @@ public:
     PDFRecentFileManager* getRecentFileManager() const { return m_recentFileManager; }
     PDFViewerSettings* getSettings() const { return m_settings; }
     pdf::PDFDocument* getDocument() const { return m_pdfDocument.data(); }
+    PDFRecoveryManager* getRecoveryManager() const { return m_recoveryManager; }
     pdf::PDFCertificateStore* getCertificateStore() const { return const_cast<pdf::PDFCertificateStore*>(&m_certificateStore); }
     PDFBookmarkManager* getBookmarkManager() const { return m_bookmarkManager; }
     PDFTextToSpeech* getTextToSpeech() const { return m_textToSpeech; }
@@ -336,6 +338,7 @@ public:
 
     bool canClose() const;
     bool askForSaveDocumentBeforeClose();
+    bool restoreRecovery(const RecoveryCandidate& candidate, QString* errorMessage);
 
     virtual QString getOriginalFileName() const override;
     virtual pdf::PDFTextSelection getSelectedText() const override;
@@ -458,12 +461,15 @@ private:
     IMainWindow* m_mainWindowInterface;
     pdf::PDFWidget* m_pdfWidget;
     PDFViewerSettings* m_settings;
+    PDFRecoveryManager* m_recoveryManager;
     PDFUndoRedoManager* m_undoRedoManager;
     PDFRecentFileManager* m_recentFileManager;
     pdf::PDFOptionalContentActivity* m_optionalContentActivity;
     pdf::PDFDocumentPointer m_pdfDocument;
     PDFTextToSpeech* m_textToSpeech;
     bool m_isDocumentSetInProgress;
+    bool m_isRecoveredDocument;
+    quint64 m_documentRevision;
 
     QFuture<AsyncReadingResult> m_future;
     QFutureWatcher<AsyncReadingResult>* m_futureWatcher;

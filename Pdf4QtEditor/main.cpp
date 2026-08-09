@@ -90,7 +90,11 @@ int main(int argc, char* argv[])
     mainWindow.show();
 
     QStringList arguments = parser.positionalArguments();
-    if (!arguments.isEmpty())
+    if (arguments.isEmpty())
+    {
+        mainWindow.showRecoveryCandidates();
+    }
+    else
     {
         mainWindow.getProgramController()->openDocument(arguments.front());
     }
