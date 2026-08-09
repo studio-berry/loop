@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfbleedfixup.h"
+#include "pdfdocumentbuilder.h"
 #include "pdfglobal.h"
 
 #include <QtTest>
@@ -39,6 +40,7 @@ private slots:
     void buildEdgeFillImage_mirrorFlipsHorizontally();
     void buildEdgeFillImage_pixelRepeatTilesEdge();
     void buildEdgeFillImage_stretchScalesToBleedDepth();
+    void apply_selectedSidesOnly_reportsAndExpandsSelectedEdges();
 };
 
 void BleedFixupTest::targetBleedRect_expandsByMillimeters()
@@ -138,6 +140,35 @@ void BleedFixupTest::buildEdgeFillImage_stretchScalesToBleedDepth()
                                                                    5);
     QCOMPARE(fill.width(), 5);
     QCOMPARE(fill.height(), 4);
+}
+
+void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF media(0.0, 0.0, 100.0, 100.0);
+    const pdf::PDFObjectReference pageReference = builder.appendPage(media);
+    builder.setPageTrimBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFBleedFixupSettings settings;
+    settings.analyzeOnly = true;
+    settings.force = true;
+    settings.sides = pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+
+    pdf::PDFBleedFixupReport report;
+    const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(report.pages.size(), 1);
+
+    const pdf::PDFBleedFixupPageReport& page = report.pages.front();
+    QVERIFY(pdf::isBleedFixupSideEnabled(page.sidesRequested, pdf::PDFBleedFixupSide::Left));
+    QVERIFY(pdf::isBleedFixupSideEnabled(page.sidesEligible, pdf::PDFBleedFixupSide::Left));
+    QCOMPARE(page.sidesRequested & pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Right), quint8(0));
+    QCOMPARE(page.sidesEligible & pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Right), quint8(0));
+    QVERIFY(page.sidesApplied.contains(pdf::PDFBleedFixupSide::Left));
+    QCOMPARE(page.newBleedBox.right(), page.originalBleedBox.right());
+    QCOMPARE(page.newBleedBox.top(), page.originalBleedBox.top());
+    QVERIFY(page.newBleedBox.left() < page.originalBleedBox.left());
 }
 
 QTEST_APPLESS_MAIN(BleedFixupTest)

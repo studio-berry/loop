@@ -52,6 +52,24 @@ enum class PDFBleedFixupSide
     Top = 3
 };
 
+using PDFBleedFixupSideMask = quint8;
+
+constexpr PDFBleedFixupSideMask bleedFixupSideBit(PDFBleedFixupSide side)
+{
+    return PDFBleedFixupSideMask(1u << static_cast<quint8>(side));
+}
+
+constexpr PDFBleedFixupSideMask PDFBleedFixupAllSides =
+        bleedFixupSideBit(PDFBleedFixupSide::Left)
+        | bleedFixupSideBit(PDFBleedFixupSide::Bottom)
+        | bleedFixupSideBit(PDFBleedFixupSide::Right)
+        | bleedFixupSideBit(PDFBleedFixupSide::Top);
+
+constexpr bool isBleedFixupSideEnabled(PDFBleedFixupSideMask sides, PDFBleedFixupSide side)
+{
+    return (sides & bleedFixupSideBit(side)) != 0;
+}
+
 struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupSettings
 {
     enum class ReferenceBox
@@ -65,6 +83,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupSettings
     QString pageRange = "-";
     ReferenceBox referenceBox = ReferenceBox::TrimBox;
     QMarginsF bleedMM = QMarginsF(3.0, 3.0, 3.0, 3.0); ///< left, top, right, bottom
+    PDFBleedFixupSideMask sides = PDFBleedFixupAllSides;
     bool expandMediaBox = true;
     bool expandCropBox = true;
     bool expandBleedBox = true;
@@ -96,6 +115,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupPageReport
     QRectF newCropBox;
     QRectF newBleedBox;
     QRectF newTrimBox;
+    PDFBleedFixupSideMask sidesRequested = 0;
+    PDFBleedFixupSideMask sidesEligible = 0;
     QVector<PDFBleedFixupSide> sidesApplied;
     QStringList skipReasons;
 };

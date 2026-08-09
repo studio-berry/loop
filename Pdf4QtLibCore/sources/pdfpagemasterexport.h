@@ -45,6 +45,12 @@ namespace pdf
 
 class PDFProgress;
 
+enum class PDFPageMasterBleedConfirmationPolicy
+{
+    Never,
+    BeforeBatch
+};
+
 /// Shared cancel / progress-lifetime flags for a PageMaster export run (MIC-308).
 /// UI owns the shared_ptrs; the worker borrows raw pointers via the job.
 struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportCancelToken
@@ -85,9 +91,12 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     PDFPageGeometrySettings pageGeometrySettings;
     bool hasBleedFixupSettings = false;
     PDFBleedFixupSettings bleedFixupSettings;
+    PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicy = PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
+    bool bleedConfirmationGranted = false;
     bool hasPreflightGate = false;
     QString preflightProfilePath;
     bool forcePreflight = false;
+    bool revalidatePreflightAfterFixups = false;
     PDFProgress* progress = nullptr;
     std::atomic_bool* cancelFlag = nullptr;
     std::atomic_bool* progressAlive = nullptr;
