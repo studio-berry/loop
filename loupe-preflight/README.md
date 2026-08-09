@@ -96,14 +96,20 @@ The opt-in `ink-coverage` check rasterizes each page through the same transparen
 renderer used by Output Preview, then reports one object-scope finding for each
 connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
 is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
-Optional parameters are `probe_dpi` (default 150), `min_region_area_pct`
-(default 0.05% of the page), and `max_regions_per_page` (default 20). Spot inks
-are included in TAC because the probe activates the ink mapper's spot colors.
+The finding is emitted only when the measured value is strictly greater than the
+threshold; an exact boundary is clean. Optional parameters are `probe_dpi`
+(default 150), `min_region_area_pct` (default 0.05% of the analyzed box), and
+`max_regions_per_page` (default 20). `analysis_box` defaults to `bleed` and falls
+back to `trim`, `crop`, then `media` when the requested box is not explicitly
+present; set it to `trim`, `crop`, or `media` to override that policy. The probe
+includes process and spot/DeviceN colorants, including overprint-aware output
+colorants, in the TAC sum.
 
 This check is deliberately not enabled by `loupe-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.
-Pages exceeding the raster pixel budget emit an informational page-scope finding
-instead of silently passing.
+Pages exceeding the raster pixel budget emit an informational page-scope finding,
+set the check status to `skipped`, and set `inspection_complete` to `false`;
+budget exhaustion never silently passes as a clean inspection.
 
 ## Transparency risk checking
 
