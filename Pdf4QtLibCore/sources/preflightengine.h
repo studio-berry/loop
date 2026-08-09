@@ -59,11 +59,16 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal tolerancePt = 1.0;
     bool hasExpectedSize = false;
 
-    // Tier-2 content-bleed parameters.
+    // Raster probe parameters shared by content-bleed and ink-coverage.
     bool rasterConfirm = false;
     int probeDpi = 150;
     int probeThreshold = 16;
     qreal rasterWhiteThreshold = 0.9975;
+
+    // ink-coverage parameters.
+    qreal maxInkPct = 0.0;
+    qreal minRegionAreaPct = 0.05;
+    int maxRegionsPerPage = 20;
 
     // image-resolution parameters.
     int minDpi = 0;
