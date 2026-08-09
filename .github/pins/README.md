@@ -30,14 +30,18 @@ inline. Its layout:
 
 ## Refreshing a pin
 
-1. Read the upstream release notes and diff the mentioned commit against the
-   pinned one.
-2. Update `packaging-tools.json` (and any inline SHA-256 check in the
-   consuming workflow).
-3. Run the affected workflow manually from the `Actions` tab and inspect logs
-   and generated artifacts - the verify step fails loudly on any mismatch.
-4. Record the reviewed version and hash in the commit message or pull request
-   description.
+1. Let Dependabot propose GitHub Action SHA updates; review the release tag,
+   commit, and action diff before accepting one.
+2. For packaging binaries, resolve the exact upstream commit/release asset and
+   download the candidate outside the production workflow.
+3. Verify any upstream signature or published digest, then compute an
+   independent SHA-256.
+4. Update `packaging-tools.json` so the diff shows the old/new identity and
+   old/new digest together.
+5. Run `python3 scripts/ci/check_supply_chain_pins.py`, the affected packaging
+   workflow, and the existing AppImage/MSI/MSIX smoke tests.
+6. Record the reviewed version and evidence in the commit or pull request
+   description before merging.
 
 Never replace an immutable pin with a moving tag such as `main`, `latest`, or
 `continuous`.

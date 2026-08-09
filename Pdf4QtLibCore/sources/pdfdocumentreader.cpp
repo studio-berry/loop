@@ -485,6 +485,18 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
 
             QByteArray objectStreamData = PDFStreamFilterStorage::getDecodedStream(objectStream, m_securityHandler.data());
 
+            // The object count /N is attacker-controlled. Each index entry in
+            // the decoded stream consists of at least two tokens (object
+            // number + offset), so N can never legitimately exceed half of the
+            // decoded stream size. Reject absurd values before the vector is
+            // reserved, otherwise a single huge number would cause a huge
+            // memory allocation. This mirrors how PDFXRefTable bounds entry
+            // counts by the byte array size.
+            if (n < 0 || n > objectStreamData.size() / 2)
+            {
+                throw PDFException(PDFTranslationContext::tr("Object stream %1 is invalid.").arg(objectStreamReference.objectNumber));
+            }
+
             PDFParsingContext::PDFParsingContextGuard guard(&context, objectStreamReference);
             PDFParser parser(objectStreamData, &context, PDFParser::AllowStreams);
 

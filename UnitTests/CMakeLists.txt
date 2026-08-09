@@ -96,6 +96,22 @@ set_target_properties(UnitTestsAuthorSettings PROPERTIES
 )
 add_test(UnitTestsAuthorSettings  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsAuthorSettings")
 
+add_executable(UnitTestsDiagnostics
+	tst_diagnosticstest.cpp
+)
+
+target_link_libraries(UnitTestsDiagnostics PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsDiagnostics PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+# Test name is lower-case (unlike sibling targets) so it matches
+# `ctest -R diagnostics` as documented in docs/PRODUCTION_RUNBOOK.md.
+add_test(diagnostics  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsDiagnostics")
+
 add_executable(UnitTestsContentEditor
 	tst_contenteditortest.cpp
 )
@@ -163,6 +179,23 @@ set_target_properties(UnitTestsOcrCli PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsOcrCli "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOcrCli")
+
+add_executable(UnitTestsPdfToolContract
+    tst_pdftoolcontract.cpp
+)
+
+target_link_libraries(UnitTestsPdfToolContract PRIVATE Qt6::Core Qt6::Test)
+add_dependencies(UnitTestsPdfToolContract PdfTool)
+target_compile_definitions(UnitTestsPdfToolContract PRIVATE
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>")
+
+set_target_properties(UnitTestsPdfToolContract PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPdfToolContract "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPdfToolContract")
 
 add_executable(UnitTestsBleedMarginProbe
 	tst_bleedmarginprobetest.cpp
@@ -246,6 +279,20 @@ set_target_properties(UnitTestsSafeFileWriter PROPERTIES
 )
 add_test(UnitTestsSafeFileWriter "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsSafeFileWriter")
 
+add_executable(UnitTestsContentProcessorLimits
+	tst_contentprocessorlimitstest.cpp
+)
+
+target_link_libraries(UnitTestsContentProcessorLimits PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsContentProcessorLimits PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsContentProcessorLimits "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsContentProcessorLimits")
+
 add_executable(UnitTestsJbig2Decoder
 	tst_jbig2decodertest.cpp
 )
@@ -313,7 +360,9 @@ add_executable(UnitTestsPreflightPlugin
 )
 
 target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Test)
-target_include_directories(UnitTestsPreflightPlugin PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
+target_include_directories(UnitTestsPreflightPlugin PRIVATE
+    ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+    ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins)
 
 set_target_properties(UnitTestsPreflightPlugin PROPERTIES
     WIN32_EXECUTABLE OFF

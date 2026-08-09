@@ -300,7 +300,7 @@ PDFToolExitCode PDFToolInfoStructureTreeApplication::execute(const PDFToolOption
     }
     else
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No structure tree found in document."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Warning, QStringLiteral("pdf.structure-tree-missing"), PDFToolTranslationContext::tr("No structure tree found in document."));
     }
 
     return PDFToolExitCode::Success;

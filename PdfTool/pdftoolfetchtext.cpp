@@ -60,7 +60,7 @@ PDFToolExitCode PDFToolFetchTextApplication::execute(const PDFToolOptions& optio
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.copy-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to copy content."));
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -69,7 +69,7 @@ PDFToolExitCode PDFToolFetchTextApplication::execute(const PDFToolOptions& optio
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -120,7 +120,7 @@ PDFToolExitCode PDFToolFetchTextApplication::execute(const PDFToolOptions& optio
 
     for (const pdf::PDFRenderError& error : factory.getErrors())
     {
-        PDFConsole::writeError(error.message, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.text-extraction-failed"), error.message);
     }
 
     if (options.outputStyle == PDFOutputFormatter::Style::Json)

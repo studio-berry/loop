@@ -54,15 +54,21 @@ PDFToolExitCode PDFToolSentryVerify::execute(const PDFToolOptions& options)
 {
     if (!pdf::PDFSentrySession::isGloballyActive())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Sentry is not active. Set SENTRY_DSN (or PDF4QT_SENTRY_DSN at build time) and retry."),
-                               options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("sentry.unavailable"), PDFToolTranslationContext::tr("Sentry is not active. Set SENTRY_DSN (or PDF4QT_SENTRY_DSN at build time) and retry."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFSentrySession::captureVerificationEvent();
     {
         const pdf::PDFSentryTransaction verificationTransaction(QStringLiteral("sentry-verify"));
-        PDFConsole::writeText(QStringLiteral("Sentry verification event sent."), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("sent"), true}});
+        }
+        else
+        {
+            PDFConsole::writeText(QStringLiteral("Sentry verification event sent."), options.outputCodec);
+        }
     }
     return PDFToolExitCode::Success;
 }
