@@ -299,8 +299,8 @@ public:
 
 protected:
     /// Reports a structured diagnostic to the execution context (JSON mode) and,
-    /// in human modes, keeps the existing stderr behavior. Errors and warnings
-    /// are never written to stderr when an execution context exists.
+    /// in human modes, keeps the existing stderr behavior. JSON mode does not
+    /// duplicate handled diagnostics on stderr.
     /// \param options Options (carries execution context and output style)
     /// \param severity Diagnostic severity
     /// \param code Stable diagnostic identifier (e.g. "pdf.document-unreadable")

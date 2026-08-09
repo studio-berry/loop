@@ -30,6 +30,7 @@
 namespace pdftool
 {
 class PDFOutputFormatterImpl;
+class PDFToolExecutionContext;
 
 /// Output formatter for text output in various format (text, xml, html...)
 /// to the output console. Text output is in form of a structure tree,
@@ -116,6 +117,10 @@ public:
 
     /// Writes binary data to the console
     static void writeData(const QByteArray& data);
+
+    /// Captures legacy direct error writes as structured diagnostics while a
+    /// JSON result envelope is being assembled.
+    static void setDiagnosticSink(PDFToolExecutionContext* context);
 
 private:
     explicit PDFConsole() = delete;

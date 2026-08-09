@@ -24,7 +24,7 @@ add_executable(LoupeGenerateFixtures
     generate_fixtures.cpp
 )
 
-target_link_libraries(LoupeGenerateFixtures PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui)
+target_link_libraries(LoupeGenerateFixtures PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui ${LCMS2_LIBRARIES})
 
 set_target_properties(LoupeGenerateFixtures PROPERTIES
     WIN32_EXECUTABLE OFF

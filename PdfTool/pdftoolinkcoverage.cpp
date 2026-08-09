@@ -63,7 +63,7 @@ PDFToolExitCode PDFToolInkCoverageApplication::execute(const PDFToolOptions& opt
 
     if (!parseError.isEmpty() || pageIndices.empty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
