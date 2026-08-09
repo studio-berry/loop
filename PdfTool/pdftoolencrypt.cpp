@@ -80,7 +80,7 @@ PDFToolExitCode PDFToolEncryptApplication::execute(const PDFToolOptions& options
         return PDFToolExitCode::InputError;
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

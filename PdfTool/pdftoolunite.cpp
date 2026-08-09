@@ -89,7 +89,7 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
         }
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, targetFile))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, targetFile); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

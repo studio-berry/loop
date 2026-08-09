@@ -207,7 +207,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
             plannedOutputs << outputFile;
         }
 
-        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
         {
             return blocked;
         }

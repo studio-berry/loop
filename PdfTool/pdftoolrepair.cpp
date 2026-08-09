@@ -315,7 +315,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportJson.insert(QStringLiteral("status"), QStringLiteral("planned"));
         if (!options.repairReportFile.isEmpty())
         {
-            if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.repairReportFile))
+            if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.repairReportFile); blocked != PDFToolExitCode::Success)
             {
                 return blocked;
             }
@@ -456,7 +456,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     {
         plannedOutputs.append(options.repairReportFile);
     }
-    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

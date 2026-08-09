@@ -203,7 +203,7 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
             plannedOutputs << options.imageExportSettings.getOutputFileName(i, options.imageWriterSettings.getCurrentFormat());
         }
 
-        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
         {
             return blocked;
         }

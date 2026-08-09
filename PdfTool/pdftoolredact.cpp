@@ -68,7 +68,7 @@ PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InputError;
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.redactedDocument))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.redactedDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

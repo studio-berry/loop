@@ -70,7 +70,7 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
         return PDFToolExitCode::Success;
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }
