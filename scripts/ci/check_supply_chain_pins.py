@@ -24,16 +24,13 @@ ACTION = re.compile(
 )
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
-HEX_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+HEX_DIGEST = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 
 MUTABLE_DOWNLOADS = (
     "/releases/download/continuous/",
     "/releases/latest/",
     "/releases/latest/download/",
 )
-
-TAG_OR_BRANCH = re.compile(r"^(v[0-9]+|main|master|stable|latest)$")
-
 
 def check_workflows():
     """All external action refs must be full SHAs; no mutable download URLs."""
@@ -79,14 +76,23 @@ def check_packaging_pins():
     pins = json.loads(PINS.read_text(encoding="utf-8"))
     errors = []
 
+    if pins.get("schemaVersion") != 1:
+        errors.append("packaging-tools.json schemaVersion must be 1")
+
     for tool in ("appimagetool", "appimageRuntime", "linuxdeployqt"):
         pin = pins.get(tool)
         if not pin:
             errors.append(f"{tool}: missing pin")
             continue
-        for key in ("upstream", "upstreamCommit", "assetId", "sha256"):
+        for key in ("upstream", "upstreamCommit", "assetId", "assetName", "sha256"):
             if not pin.get(key):
                 errors.append(f"{tool}.{key}: missing")
+        if (
+            not isinstance(pin.get("assetId"), int)
+            or isinstance(pin.get("assetId"), bool)
+            or pin["assetId"] <= 0
+        ):
+            errors.append(f"{tool}.assetId is not a positive integer")
         if not FULL_SHA.fullmatch(str(pin.get("upstreamCommit", ""))):
             errors.append(f"{tool}.upstreamCommit is not a full commit SHA")
         if not HEX_DIGEST.fullmatch(str(pin.get("sha256", ""))):
@@ -95,6 +101,8 @@ def check_packaging_pins():
     wix = pins.get("wix", {})
     if not wix.get("version") or not wix.get("url"):
         errors.append("wix: missing version or url")
+    if not isinstance(wix.get("url"), str) or not wix["url"].startswith("https://"):
+        errors.append("wix.url must be an HTTPS URL")
     if not HEX_DIGEST.fullmatch(str(wix.get("sha256", ""))):
         errors.append("wix.sha256 is not a 64-char hex digest")
     if any(m in str(wix.get("url", "")) for m in MUTABLE_DOWNLOADS):
@@ -105,6 +113,8 @@ def check_packaging_pins():
             errors.append(f"{key}: missing pin")
 
     windows_sdk = pins.get("windowsSdk", {})
+    if not windows_sdk.get("version"):
+        errors.append("windowsSdk.version: missing")
     if not HEX_DIGEST.fullmatch(str(windows_sdk.get("makeAppxSha256", ""))):
         errors.append("windowsSdk.makeAppxSha256 is not a 64-char hex digest")
 
@@ -117,6 +127,22 @@ def check_packaging_pins():
     for key in ("runner", "dpkgVersion"):
         if not deb.get(key):
             errors.append(f"deb.{key}: missing")
+
+    keylocker = pins.get("digicertKeylocker", {})
+    keylocker_values = [
+        keylocker.get("version"),
+        keylocker.get("url"),
+        keylocker.get("sha256"),
+    ]
+    if any(value is not None for value in keylocker_values):
+        if not all(keylocker_values):
+            errors.append("digicertKeylocker.version, url, and sha256 must be set together")
+        if not isinstance(keylocker.get("url"), str) or not keylocker["url"].startswith("https://"):
+            errors.append("digicertKeylocker.url must be an HTTPS URL")
+        if any(marker in str(keylocker.get("url", "")) for marker in MUTABLE_DOWNLOADS):
+            errors.append("digicertKeylocker.url resolves through a mutable release URL")
+        if not HEX_DIGEST.fullmatch(str(keylocker.get("sha256", ""))):
+            errors.append("digicertKeylocker.sha256 is not a 64-char hex digest")
 
     return errors
 
