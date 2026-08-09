@@ -65,6 +65,27 @@ PDFBleedFixupSettings bleedSettings(const QJsonObject& parameters, bool analyzeO
     return settings;
 }
 
+QJsonObject addBleedParameterSchema()
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("properties"), QJsonObject{
+            { QStringLiteral("mode"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("string") },
+                { QStringLiteral("enum"), QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat"), QStringLiteral("stretch") } }
+            } },
+            { QStringLiteral("bleed_mm"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("number") },
+                { QStringLiteral("minimum"), 0.0 },
+                { QStringLiteral("maximum"), 1000.0 }
+            } },
+            { QStringLiteral("page_range"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+            { QStringLiteral("force"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } }
+        } }
+    };
+}
+
 void addBleedPlanTargets(const PDFBleedFixupReport& report, PDFRepairPlan* plan)
 {
     for (const PDFBleedFixupPageReport& page : report.pages)
@@ -87,6 +108,7 @@ class PDFAddBleedRepair final : public PDFRepairOperation
 public:
     QString id() const override { return QStringLiteral("add-bleed"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    QJsonObject parameterSchema() const override { return addBleedParameterSchema(); }
     PDFRepairDomains domains() const override
     {
         return PDFRepairDomain::PageGeometry | PDFRepairDomain::Images | PDFRepairDomain::Structure;
@@ -184,11 +206,32 @@ PDFImageOptimizer::Settings optimizerSettings(const QJsonObject& parameters)
     return settings;
 }
 
+QJsonObject downsampleImagesParameterSchema()
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("properties"), QJsonObject{
+            { QStringLiteral("target_dpi"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("integer") },
+                { QStringLiteral("minimum"), 72 },
+                { QStringLiteral("maximum"), 2400 }
+            } },
+            { QStringLiteral("quality"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("integer") },
+                { QStringLiteral("minimum"), 1 },
+                { QStringLiteral("maximum"), 100 }
+            } }
+        } }
+    };
+}
+
 class PDFDownsampleImagesRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("downsample-images"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    QJsonObject parameterSchema() const override { return downsampleImagesParameterSchema(); }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
 
     PDFOperationResult analyze(const PDFDocument& source,
@@ -269,11 +312,31 @@ PDFRgbToCmykSettings cmykSettings(const QJsonObject& parameters)
     return settings;
 }
 
+QJsonObject rgbToCmykParameterSchema()
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("target_icc_base64") } },
+        { QStringLiteral("properties"), QJsonObject{
+            { QStringLiteral("target_icc_base64"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("string") },
+                { QStringLiteral("minLength"), 1 }
+            } },
+            { QStringLiteral("target_icc_id"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+            { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+            { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+            { QStringLiteral("embed_output_intent"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } }
+        } }
+    };
+}
+
 class PDFRgbToCmykRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("rgb-to-cmyk"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::High; }
+    QJsonObject parameterSchema() const override { return rgbToCmykParameterSchema(); }
     PDFRepairDomains domains() const override
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Images | PDFRepairDomain::Structure;

@@ -170,6 +170,9 @@ public:
     virtual int version() const { return 1; }
     virtual PDFRepairRisk risk() const = 0;
     virtual PDFRepairDomains domains() const = 0;
+    /// JSON Schema fragment for the operation parameters.  Action Lists use
+    /// this metadata to validate a complete recipe before any mutation.
+    virtual QJsonObject parameterSchema() const;
 
     virtual PDFOperationResult analyze(const PDFDocument& source,
                                        const QJsonObject& parameters,

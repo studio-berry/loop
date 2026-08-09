@@ -37,6 +37,7 @@
 #include "pdfrgbtocmykfixup.h"
 #include "pdfrepairdiff.h"
 #include "pdfrepairoperation.h"
+#include "pdfactionlist.h"
 
 #include <QtGlobal>
 #include <QList>
@@ -267,6 +268,14 @@ struct PDFToolOptions
     bool repairListOperations = false;
     bool repairAllowIncomplete = false;
 
+    // For Action List recipes
+    QString actionListSubcommand;
+    QString actionListRecipe;
+    QStringList actionListFiles;
+    QString actionListOutputDocument;
+    QString actionListOutputDirectory;
+    QStringList actionListParameterAssignments;
+
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
     // themselves. Null when not running under the contract.
@@ -363,6 +372,7 @@ public:
         CapabilityDiscovery = 0x200000000ULL, ///< Machine-readable command discovery
         RepairDiff = 0x400000000ULL, ///< Deterministic before/after repair comparison
         Repair = 0x800000000ULL, ///< Transactional prepress-safe repair operation
+        ActionList = 0x1000000000ULL, ///< Reusable declarative Action List execution
     };
     Q_DECLARE_FLAGS(Options, Option)
 
