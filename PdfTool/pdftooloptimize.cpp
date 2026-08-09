@@ -55,7 +55,7 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
 {
     if (!options.optimizeFlags && !options.imageOptimizationSettings.enabled)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No optimization option has been set."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("No optimization option has been set."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -73,11 +73,22 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
 
     if (options.destructiveReport)
     {
-        PDFConsole::writeText(PDFToolTranslationContext::tr("Would optimize '%1'.").arg(options.document), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("optimize")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+        else
+        {
+            PDFConsole::writeText(PDFToolTranslationContext::tr("Would optimize '%1'.").arg(options.document), options.outputCodec);
+        }
     }
 
     if (options.destructiveDryRun)
     {
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+        }
         return PDFToolExitCode::Success;
     }
 
@@ -95,7 +106,7 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     if (options.optimizeFlags)
     {
         pdf::PDFOptimizer optimizer(options.optimizeFlags, nullptr);
-        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [&options](QString text) { PDFConsole::writeError(text, options.outputCodec); }, Qt::DirectConnection);
+        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [this, &options](QString text) { reportDiagnostic(options, PDFToolDiagnosticSeverity::Info, QStringLiteral("operation.progress"), text); }, Qt::DirectConnection);
         optimizer.setDocument(&document);
         optimizer.optimize();
         document = optimizer.takeOptimizedDocument();
@@ -114,7 +125,7 @@ PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
     pdf::PDFOperationResult result = writer.write(options.document, &document, true);
     if (!result)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.document}});
         return PDFToolExitCode::ProcessingFailure;
     }
 

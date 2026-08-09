@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -45,6 +45,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+
+#include <lcms2.h>
 
 #include <algorithm>
 #include <cmath>
@@ -1083,9 +1085,228 @@ void runColorInventoryCheck(PDFDocumentSession* session,
     }
 }
 
-bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace,
-                            const PDFColor& color,
-                            const PDFCMS* cms)
+/// Owns a cmsHPROFILE for the duration of a scope. The output-intent check has
+/// several early-exit paths; a guard keeps them from leaking the handle.
+class IccProfileGuard
+{
+public:
+    explicit IccProfileGuard(const QByteArray& data) :
+        m_profile(cmsOpenProfileFromMem(data.data(), cmsUInt32Number(data.size())))
+    {
+    }
+
+    ~IccProfileGuard()
+    {
+        if (m_profile)
+        {
+            cmsCloseProfile(m_profile);
+        }
+    }
+
+    IccProfileGuard(const IccProfileGuard&) = delete;
+    IccProfileGuard& operator=(const IccProfileGuard&) = delete;
+
+    bool isValid() const { return m_profile != nullptr; }
+    cmsColorSpaceSignature getColorSpace() const { return cmsGetColorSpace(m_profile); }
+
+private:
+    cmsHPROFILE m_profile;
+};
+
+QString classifyIccColorSpace(cmsColorSpaceSignature signature)
+{
+    switch (signature)
+    {
+        case cmsSigGrayData:
+            return QStringLiteral("Grayscale");
+        case cmsSigRgbData:
+            return QStringLiteral("RGB");
+        case cmsSigCmykData:
+            return QStringLiteral("CMYK");
+        default:
+            return QString();
+    }
+}
+
+void runOutputIntentCheck(PDFDocumentSession* session,
+                          const PreflightCheckConfig& check,
+                          QList<PreflightFinding>& errors,
+                          QList<PreflightFinding>& warnings)
+{
+    if (!session)
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    if (!document)
+    {
+        return;
+    }
+
+    const auto& outputIntents = document->getCatalog()->getOutputIntents();
+    if (outputIntents.empty())
+    {
+        if (check.required)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+            finding.type = QStringLiteral("output-intent-missing");
+            finding.severity = check.severity;
+            finding.checkId = check.id;
+            finding.message = PDFTranslationContext::tr(
+                "No output intent is defined; the intended printing condition cannot be determined.");
+
+            if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
+            {
+                warnings.push_back(finding);
+            }
+            else
+            {
+                errors.push_back(finding);
+            }
+        }
+        return;
+    }
+
+    auto recordFinding = [&](const QString& type, const QString& message) {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = type;
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.message = message;
+
+        if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
+        {
+            warnings.push_back(finding);
+        }
+        else
+        {
+            errors.push_back(finding);
+        }
+    };
+
+    QSet<QString> resolvedColorSpaces;
+    for (const PDFOutputIntent& outputIntent : outputIntents)
+    {
+        const QString identifier = outputIntent.getOutputConditionIdentifier();
+        const QString label = identifier.isEmpty() ? QStringLiteral("(unnamed)") : identifier;
+
+        if (identifier.isEmpty())
+        {
+            recordFinding(
+                QStringLiteral("output-intent-identity"),
+                PDFTranslationContext::tr(
+                    "Output intent has no /OutputConditionIdentifier, so the intended printing condition cannot be identified."));
+        }
+        else if (!check.allowedOutputConditionIdentifiers.isEmpty() &&
+                 !check.allowedOutputConditionIdentifiers.contains(identifier))
+        {
+            recordFinding(
+                QStringLiteral("output-intent-identity"),
+                PDFTranslationContext::tr(
+                    "Output intent condition identifier '%1' is not allowed (allowed: %2).")
+                    .arg(identifier, check.allowedOutputConditionIdentifiers.join(QStringLiteral(", "))));
+        }
+
+        const PDFObject outputProfileObject = document->getObject(outputIntent.getOutputProfile());
+        if (!outputProfileObject.isStream())
+        {
+            recordFinding(
+                QStringLiteral("output-intent-profile-missing"),
+                PDFTranslationContext::tr(
+                    "Output intent '%1' has no embedded ICC profile (/DestOutputProfile is missing or is not a stream).")
+                    .arg(label));
+            continue;
+        }
+
+        QByteArray content;
+        try
+        {
+            content = document->getDecodedStream(outputProfileObject.getStream());
+        }
+        catch (const PDFException&)
+        {
+            recordFinding(
+                QStringLiteral("output-intent-profile-invalid"),
+                PDFTranslationContext::tr(
+                    "Output intent '%1' has an ICC profile that could not be decoded.")
+                    .arg(label));
+            continue;
+        }
+
+        IccProfileGuard profile(content);
+        if (!profile.isValid())
+        {
+            recordFinding(
+                QStringLiteral("output-intent-profile-invalid"),
+                PDFTranslationContext::tr(
+                    "Output intent '%1' has an ICC profile that is not a valid ICC profile.")
+                    .arg(label));
+            continue;
+        }
+
+        const QString colorSpace = classifyIccColorSpace(profile.getColorSpace());
+        if (colorSpace.isEmpty())
+        {
+            recordFinding(
+                QStringLiteral("output-intent-profile-invalid"),
+                PDFTranslationContext::tr(
+                    "Output intent '%1' has an ICC profile with an unsupported color space.")
+                    .arg(label));
+            continue;
+        }
+
+        resolvedColorSpaces.insert(colorSpace);
+
+        const QString declaredColorSpace = QString::fromLatin1(outputIntent.getOutputProfileInfo().getSignature());
+        if (!declaredColorSpace.isEmpty() && declaredColorSpace.compare(colorSpace, Qt::CaseInsensitive) != 0)
+        {
+            recordFinding(
+                QStringLiteral("output-intent-color-mismatch"),
+                PDFTranslationContext::tr(
+                    "Output intent '%1' declares ProfileCS '%2' but its embedded ICC profile is %3.")
+                    .arg(label, declaredColorSpace, colorSpace));
+        }
+
+        if (!check.allowedColorModes.isEmpty())
+        {
+            bool allowed = false;
+            for (const QString& mode : check.allowedColorModes)
+            {
+                if (mode.compare(colorSpace, Qt::CaseInsensitive) == 0)
+                {
+                    allowed = true;
+                    break;
+                }
+            }
+
+            if (!allowed)
+            {
+                recordFinding(
+                    QStringLiteral("output-intent-color-mismatch"),
+                    PDFTranslationContext::tr(
+                        "Output intent '%1' ICC profile color space %2 is not allowed (allowed: %3).")
+                        .arg(label, colorSpace, check.allowedColorModes.join(QStringLiteral(", "))));
+            }
+        }
+    }
+
+    QStringList conflictColorSpaces = resolvedColorSpaces.values();
+    conflictColorSpaces.sort();
+    if (conflictColorSpaces.size() > 1)
+    {
+        recordFinding(
+            QStringLiteral("output-intent-conflict"),
+            PDFTranslationContext::tr(
+                "Document defines %1 output intents with conflicting color spaces: %2.")
+                .arg(int(outputIntents.size()))
+                .arg(conflictColorSpaces.join(QStringLiteral(", "))));
+    }
+}
+
+bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color)
 {
     if (!colorSpace)
     {
@@ -1101,23 +1322,7 @@ bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace,
         case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
             return color[0] <= 0.01f && color[1] <= 0.01f && color[2] <= 0.01f && color[3] <= 0.01f;
         default:
-        {
-            PDFRenderErrorReporterDummy reporter;
-            QColor converted = colorSpace->getColor(color, cms, RenderingIntent::RelativeColorimetric, &reporter, true);
-            const PDFICCBasedColorSpace* iccBased = dynamic_cast<const PDFICCBasedColorSpace*>(colorSpace);
-            if (!converted.isValid() || (iccBased && iccBased->getIccProfileData().isEmpty()))
-            {
-                if (iccBased)
-                {
-                    const PDFAbstractColorSpace* alternate = iccBased->getAlternateColorSpace();
-                    if (alternate)
-                    {
-                        converted = alternate->getColor(color, cms, RenderingIntent::RelativeColorimetric, &reporter, true);
-                    }
-                }
-            }
-            return converted.isValid() && converted.redF() >= 0.99f && converted.greenF() >= 0.99f && converted.blueF() >= 0.99f;
-        }
+            return false;
     }
 }
 
@@ -1161,7 +1366,6 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
                                 const PDFMeshQualitySettings& mq,
                                 bool* foundWhiteOverprint)
             : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq)
-            , m_cms(cms_p)
             , m_foundWhiteOverprint(foundWhiteOverprint)
         {
         }
@@ -1204,20 +1408,19 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
             const PDFOverprintMode overprintMode = state->getOverprintMode();
 
             if (fill && overprintMode.overprintFilling
-                && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal(), m_cms))
+                && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal()))
             {
                 *m_foundWhiteOverprint = true;
             }
 
             if (stroke && overprintMode.overprintStroking
-                && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal(), m_cms))
+                && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal()))
             {
                 *m_foundWhiteOverprint = true;
             }
         }
 
     private:
-        const PDFCMS* m_cms = nullptr;
         bool* m_foundWhiteOverprint = nullptr;
     };
 
@@ -1956,6 +2159,22 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             return false;
         }
 
+        if (check.id == QStringLiteral("output-intent"))
+        {
+            for (const QString& mode : check.allowedColorModes)
+            {
+                if (mode != QStringLiteral("CMYK") &&
+                    mode != QStringLiteral("RGB") &&
+                    mode != QStringLiteral("Grayscale"))
+                {
+                    errorMessage = PDFTranslationContext::tr(
+                        "Check '%1' has unknown allowed color space '%2' (expected 'CMYK', 'RGB', or 'Grayscale').")
+                        .arg(check.id, mode);
+                    return false;
+                }
+            }
+        }
+
         if (check.id == QStringLiteral("color-inventory"))
         {
             check.colorProbeDpi = checkObject.value(QStringLiteral("probe_dpi")).toInt(check.colorProbeDpi);
@@ -1971,6 +2190,12 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                 return false;
             }
             check.richBlackKThreshold = richBlackPercent / 100.0;
+        }
+
+        const QJsonArray allowedIdentifiers = checkObject.value(QStringLiteral("allowed_identifiers")).toArray();
+        for (const QJsonValue& val : allowedIdentifiers)
+        {
+            check.allowedOutputConditionIdentifiers.append(val.toString());
         }
 
         profile.checks.push_back(check);
@@ -2046,6 +2271,14 @@ void PreflightEngine::registerBuiltInChecks()
                                                        QList<PreflightFinding>& warnings)
     {
         runColorInventoryCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("output-intent")] = [](PDFDocumentSession* session,
+                                                     const PreflightCheckConfig& check,
+                                                     QList<PreflightFinding>& errors,
+                                                     QList<PreflightFinding>& warnings)
+    {
+        runOutputIntentCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("embedded-fonts")] = [](PDFDocumentSession* session,

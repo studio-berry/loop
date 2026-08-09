@@ -40,12 +40,6 @@ Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 | `probe_dpi` | `content-bleed` |
 | `probe_threshold` | `content-bleed` |
 | `raster_white_threshold` | `content-bleed` |
-| `probe_dpi` | `color-inventory` (fixed page raster DPI) |
-| `rich_black_k_percent` | `color-inventory` (0-100, default 10) |
-
-The `color-inventory` check reports deterministic output separations and spot
-colors as informational findings, plus page-scoped rich-black findings when
-process black exceeds `rich_black_k_percent` alongside process C/M/Y ink.
 
 ## Report JSON
 
@@ -108,7 +102,7 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - Exit `0` when `pass` is true; exit `1` when `errors[]` is non-empty.
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
-- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **color-mode**, **color-inventory**, **image-resolution**, and **embedded-fonts**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size.
+- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `color-inventory` reports deterministic process/spot separations and page-scoped rich-black findings; `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 

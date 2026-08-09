@@ -80,7 +80,14 @@
         },
         "allowed": {
           "type": "array",
-          "description": "Allow-list for categorical checks (e.g. color-mode).",
+          "description": "Allow-list for categorical checks (e.g. color-mode or output-intent ICC color spaces).",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_identifiers": {
+          "type": "array",
+          "description": "Optional allow-list of /OutputConditionIdentifier values (output-intent).",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true

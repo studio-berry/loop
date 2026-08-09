@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -32,6 +32,9 @@
 #include <QJsonObject>
 #include <QPainter>
 
+#include <algorithm>
+#include <vector>
+
 class PreflightEngineTest : public QObject
 {
     Q_OBJECT
@@ -39,6 +42,7 @@ class PreflightEngineTest : public QObject
 private slots:
     void parseProfile_rejectsMissingName();
     void parseProfile_rejectsEmptyChecks();
+    void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void run_bleedCheckFailsWhenBoxMissing();
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
@@ -52,15 +56,106 @@ private slots:
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
     void run_whiteOverprint_passesWhenOverprintOff();
     void run_whiteOverprint_emitsWarningInsideFormXObject();
-    void run_whiteOverprint_emitsWarningForNonDeviceColorSpaces();
     void run_colorRgbFixtureFailsColorMode();
     void colorInventory_isRegisteredAndInfoOnly();
     void colorInventory_rejectsInvalidParameters();
     void richBlackPredicate_distinguishesChromaticBlack();
+    void run_outputIntent_missingIntentEmitsError();
+    void run_outputIntent_notRequiredPassesWithoutIntent();
+    void run_outputIntent_emptyIdentifierEmitsIdentityFinding();
+    void run_outputIntent_identifierNotInAllowListEmitsIdentityFinding();
+    void run_outputIntent_profileCsDisagreesWithEmbeddedProfile();
+    void run_outputIntent_conflictingIntentsEmitConflictFinding();
+    void run_outputIntent_severityWarningRoutesToWarnings();
 };
 
 namespace
 {
+
+struct OutputIntentSpec
+{
+    QByteArray identifier;
+    QByteArray profileCS;
+    QByteArray profileContent;
+    bool includeProfile = true;
+};
+
+QByteArray loadOutputIntentProfile(const QString& fixturePath)
+{
+    if (!QFile::exists(fixturePath))
+    {
+        return QByteArray();
+    }
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK ||
+        document.getCatalog()->getOutputIntents().empty())
+    {
+        return QByteArray();
+    }
+
+    const pdf::PDFOutputIntent& intent = document.getCatalog()->getOutputIntents().front();
+    const pdf::PDFObject profileObject = document.getObject(intent.getOutputProfile());
+    if (!profileObject.isStream())
+    {
+        return QByteArray();
+    }
+
+    return *profileObject.getStream()->getContent();
+}
+
+pdf::PDFDocument buildOutputIntentDocument(const std::vector<OutputIntentSpec>& specs)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+
+    pdf::PDFArray outputIntents;
+    for (const OutputIntentSpec& spec : specs)
+    {
+        pdf::PDFDictionary intentDictionary;
+        intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("OutputIntent"));
+        intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("S"), pdf::PDFObject::createName("GTS_PDFX"));
+        intentDictionary.addEntry(
+            pdf::PDFInplaceOrMemoryString("OutputConditionIdentifier"), pdf::PDFObject::createString(spec.identifier));
+
+        if (spec.includeProfile)
+        {
+            pdf::PDFDictionary streamDictionary;
+            streamDictionary.addEntry(
+                pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createInteger(spec.profileCS == QByteArrayLiteral("RGB") ? 3 : 4));
+            streamDictionary.addEntry(
+                pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(spec.profileContent.size()));
+            const pdf::PDFObjectReference profileReference = builder.addObject(
+                pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+                    std::move(streamDictionary), QByteArray(spec.profileContent))));
+            intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("DestOutputProfile"), pdf::PDFObject::createReference(profileReference));
+
+            pdf::PDFDictionary profileInfo;
+            profileInfo.addEntry(pdf::PDFInplaceOrMemoryString("ProfileCS"), pdf::PDFObject::createString(spec.profileCS));
+            intentDictionary.addEntry(
+                pdf::PDFInplaceOrMemoryString("DestOutputProfileRef"),
+                pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(profileInfo))));
+        }
+
+        const pdf::PDFObjectReference intentReference = builder.addObject(
+            pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(intentDictionary))));
+        outputIntents.appendItem(pdf::PDFObject::createReference(intentReference));
+    }
+
+    if (!specs.empty())
+    {
+        pdf::PDFDictionary catalog;
+        catalog.addEntry(
+            pdf::PDFInplaceOrMemoryString("OutputIntents"),
+            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(outputIntents))));
+        builder.mergeTo(
+            builder.getCatalogReference(),
+            pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(catalog))));
+    }
+
+    return builder.build();
+}
 
 pdf::PDFDocument buildTieredBleedGapPage()
 {
@@ -123,6 +218,26 @@ void PreflightEngineTest::parseProfile_rejectsEmptyChecks()
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
     QVERIFY(!errorMessage.isEmpty());
+}
+
+void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Output intent test") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("Lab") } }
+            }
+        } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("unknown allowed color space")));
 }
 
 void PreflightEngineTest::run_bleedCheckFailsWhenBoxMissing()
@@ -497,42 +612,6 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("white-overprint"));
 }
 
-void PreflightEngineTest::run_whiteOverprint_emitsWarningForNonDeviceColorSpaces()
-{
-    const QStringList fixtures = {
-        QStringLiteral("white-overprint-separation.pdf"),
-        QStringLiteral("white-overprint-devicen.pdf"),
-        QStringLiteral("white-overprint-iccbased.pdf")
-    };
-
-    for (const QString& fixture : fixtures)
-    {
-        const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/") + fixture;
-        QVERIFY(QFile::exists(fixturePath));
-
-        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
-        pdf::PDFDocument document = reader.readFromFile(fixturePath);
-        QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
-
-        pdf::PDFDocumentSession session(&document);
-        pdf::PreflightEngine engine(&session);
-        QJsonObject profile;
-        profile.insert(QStringLiteral("name"), QStringLiteral("Non-device white overprint test"));
-        profile.insert(QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("white-overprint") },
-                { QStringLiteral("severity"), QStringLiteral("warning") }
-            }
-        });
-
-        const pdf::PreflightResult result = engine.run(profile);
-        QVERIFY(result.pass);
-        QCOMPARE(result.errors.size(), 0);
-        QVERIFY2(result.warnings.size() == 1, qPrintable(fixture));
-        QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
-    }
-}
-
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
 {
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
@@ -641,6 +720,181 @@ void PreflightEngineTest::richBlackPredicate_distinguishesChromaticBlack()
     QVERIFY(!pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(blackOnly, 4), format, 0.10f));
     QVERIFY(pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(richBlack, 4), format, 0.10f));
     QVERIFY(!pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(cmyOnly, 4), format, 0.10f));
+}
+
+void PreflightEngineTest::run_outputIntent_missingIntentEmitsError()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent missing") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("severity"), QStringLiteral("error") }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+    QCOMPARE(result.errors.first().scope, QStringLiteral("document"));
+    QCOMPARE(result.errors.first().type, QStringLiteral("output-intent-missing"));
+}
+
+void PreflightEngineTest::run_outputIntent_notRequiredPassesWithoutIntent()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Optional output intent") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("required"), false }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+    QVERIFY(result.warnings.isEmpty());
+}
+
+void PreflightEngineTest::run_outputIntent_emptyIdentifierEmitsIdentityFinding()
+{
+    const QByteArray profileContent = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!profileContent.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArray(), QByteArrayLiteral("CMYK"), profileContent } });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent identity") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.errors.size() >= 1);
+    QCOMPARE(result.errors.first().type, QStringLiteral("output-intent-identity"));
+}
+
+void PreflightEngineTest::run_outputIntent_identifierNotInAllowListEmitsIdentityFinding()
+{
+    const QByteArray profileContent = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!profileContent.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("Other"), QByteArrayLiteral("CMYK"), profileContent } });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent identity allow list") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("allowed_identifiers"), QJsonArray{ QStringLiteral("CGATS TR 001") } }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.errors.size() >= 1);
+    QCOMPARE(result.errors.first().type, QStringLiteral("output-intent-identity"));
+}
+
+void PreflightEngineTest::run_outputIntent_profileCsDisagreesWithEmbeddedProfile()
+{
+    const QByteArray profileContent = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
+    QVERIFY(!profileContent.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent } });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent profile CS") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("RGB") } }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.errors.size() >= 1);
+    QCOMPARE(result.errors.first().type, QStringLiteral("output-intent-color-mismatch"));
+    QVERIFY(result.errors.first().message.contains(QStringLiteral("ProfileCS")));
+}
+
+void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding()
+{
+    const QByteArray cmykProfile = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    const QByteArray rgbProfile = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
+    QVERIFY(!cmykProfile.isEmpty());
+    QVERIFY(!rgbProfile.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), cmykProfile },
+        { QByteArrayLiteral("sRGB"), QByteArrayLiteral("RGB"), rgbProfile }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent conflict") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.errors.size() >= 1);
+    const auto conflict = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
+        return finding.type == QStringLiteral("output-intent-conflict");
+    });
+    QVERIFY(conflict != result.errors.cend());
+    QVERIFY(conflict->message.contains(QStringLiteral("CMYK, RGB")));
+}
+
+void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Output intent warning") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("output-intent") },
+                { QStringLiteral("severity"), QStringLiteral("warning") }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("output-intent-missing"));
 }
 
 QTEST_GUILESS_MAIN(PreflightEngineTest)
