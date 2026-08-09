@@ -83,6 +83,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
     QStringList allowedOutputConditionIdentifiers;
+    QStringList allowedOutputIntentSubtypes;
+    QStringList allowedOutputIntentProfileSha256;
+    bool requireEmbeddedOutputIntentProfile = true;
+    bool allowMultipleOutputIntents = true;
 
     // thin-strokes parameters.
     qreal minEffectiveStrokeWidthPt = 0.0;
