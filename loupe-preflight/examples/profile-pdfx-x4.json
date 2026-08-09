@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "name": "Loupe PDF/X-4 policy",
+  "description": "Strict PDF/X-4 conformance policy layered onto the shared Loupe preflight checks.",
+  "pdfx": {
+    "target": "PDF/X-4",
+    "policyVersion": 1
+  },
+  "checks": [
+    {
+      "id": "output-intent",
+      "severity": "error",
+      "required": true
+    },
+    {
+      "id": "embedded-fonts",
+      "severity": "error"
+    },
+    {
+      "id": "transparency-risk",
+      "severity": "warning"
+    }
+  ]
+}
