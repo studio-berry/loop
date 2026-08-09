@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentsession.h"
+#include "pdfinkcoverageprobe.h"
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -70,6 +71,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal maxInkPct = 0.0;
     qreal minRegionAreaPct = 0.05;
     int maxRegionsPerPage = 20;
+    qint64 maxRasterPixels = 250LL * 1000 * 1000;
+    PDFInkCoverageAnalysisBox analysisBox = PDFInkCoverageAnalysisBox::Bleed;
 
     // image-resolution parameters.
     int minDpi = 0;

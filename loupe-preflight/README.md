@@ -94,16 +94,31 @@ empty edge) instead of a single aggregate `content-bleed` finding.
 
 The opt-in `ink-coverage` check rasterizes each page through the same transparency
 renderer used by Output Preview, then reports one object-scope finding for each
-connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
-is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
+connected region whose rendered total ink coverage exceeds `max_ink_pct`.
+`max_ink_pct` is expressed as a percentage of summed active output colorant
+values, so `300` means 300% TAC. The predicate is strictly `>`: content exactly
+at the configured limit is accepted. TAC is measured after transparency and
+separation simulation, so it describes rendered output rather than merely
+summing source-space CMYK operands; process, Separation, and DeviceN colorants
+represented by the active separation renderer are included.
+
 Optional parameters are `probe_dpi` (default 150), `min_region_area_pct`
-(default 0.05% of the page), and `max_regions_per_page` (default 20). Spot inks
-are included in TAC because the probe activates the ink mapper's spot colors.
+(default 0.05% of the analysis region), `max_regions_per_page` (default 20),
+and `max_raster_pixels` (default 250,000,000). Regions use four-way connected
+components, are filtered by minimum area, and are retained deterministically by
+descending area with top/left spatial tie-breaks before the cap is applied.
+`analysis_box` selects `bleed`, `trim`, `crop`, or `media`; the default is
+BleedBox with deterministic fallback to TrimBox, CropBox, and finally MediaBox.
+This keeps registration marks and slugs outside the production region from
+creating false positives while leaving MediaBox available for diagnostics.
 
 This check is deliberately not enabled by `loupe-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.
-Pages exceeding the raster pixel budget emit an informational page-scope finding
-instead of silently passing.
+Pages exceeding the raster pixel budget emit an informational page-scope
+`ink-coverage-skipped` finding and a `checks` entry with status `skipped`; the
+report sets `inspection_complete` to false and therefore cannot pass. This is a
+controlled incomplete inspection, not a clean TAC result. Renderer exceptions
+are contained by the preflight engine and likewise prevent a complete pass.
 
 ## Transparency risk checking
 

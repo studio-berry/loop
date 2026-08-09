@@ -35,9 +35,20 @@ namespace pdf
 
 class PDFPage;
 
+/// Page region used as the production analysis surface for TAC.
+enum class PDFInkCoverageAnalysisBox
+{
+    Bleed,
+    Trim,
+    Crop,
+    Media
+};
+
 struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageProbeSettings
 {
-    /// Maximum allowed total area coverage, as a sum of colorant values (3.0 == 300%).
+    /// Maximum allowed rendered total area coverage, as a sum of active output
+    /// colorants (3.0 == 300%). This is evaluated after transparency and
+    /// separation simulation, rather than from source-space operands.
     qreal maxInkCoverage = 3.0;
     /// Rasterization resolution for the coverage probe.
     int dpi = 150;
@@ -46,6 +57,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageProbeSettings
     /// Maximum number of regions reported per page; the largest are kept.
     int maxRegionsPerPage = 20;
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
+    /// Requested production region. Missing boxes fall back Bleed -> Trim ->
+    /// Crop -> Media, matching the prepress default policy.
+    PDFInkCoverageAnalysisBox analysisBox = PDFInkCoverageAnalysisBox::Bleed;
 };
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageRegion
