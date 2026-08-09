@@ -26,13 +26,15 @@
 #include "pdfcms.h"
 #include "pdffont.h"
 #include "pdfoptionalcontent.h"
+#include "pdfprocessingbudget.h"
 
 namespace pdf
 {
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document) :
     m_document(document),
-    m_features(PDFRenderer::getDefaultFeatures())
+    m_features(PDFRenderer::getDefaultFeatures()),
+    m_processingBudget(std::make_unique<PDFProcessingBudget>())
 {
     initializeRendering();
 }
@@ -68,13 +70,41 @@ void PDFDocumentSession::setRendererFeatures(PDFRenderer::Features features)
                                                     m_cms.get(),
                                                     m_optionalContentActivity.get(),
                                                     m_features,
-                                                    meshQualitySettings);
+                                                    meshQualitySettings,
+                                                    m_processingBudget.get());
     }
 }
 
 PDFRenderer::Features PDFDocumentSession::getRendererFeatures() const
 {
     return m_features;
+}
+
+PDFProcessingBudget* PDFDocumentSession::getProcessingBudget() const
+{
+    return m_processingBudget.get();
+}
+
+const PDFProcessingLimits& PDFDocumentSession::getProcessingLimits() const
+{
+    return m_processingBudget->limits();
+}
+
+void PDFDocumentSession::setProcessingLimits(const PDFProcessingLimits& limits)
+{
+    m_processingBudget = std::make_unique<PDFProcessingBudget>(limits);
+    invalidate();
+    m_renderer.reset();
+    m_fontCache.reset();
+    m_cms.reset();
+    m_cmsManager.reset();
+    m_optionalContentActivity.reset();
+    initializeRendering();
+}
+
+void PDFDocumentSession::resetProcessingBudget()
+{
+    m_processingBudget->reset();
 }
 
 const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
@@ -131,7 +161,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
         return QByteArray();
     }
 
-    QByteArray decoded = m_document->getStorage().getDecodedStream(object.getStream());
+    QByteArray decoded = m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
 
     while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= StreamCacheLimit)
     {
@@ -196,7 +226,8 @@ void PDFDocumentSession::initializeRendering()
                                                 m_cms.get(),
                                                 m_optionalContentActivity.get(),
                                                 m_features,
-                                                meshQualitySettings);
+                                                meshQualitySettings,
+                                                m_processingBudget.get());
 }
 
 } // namespace pdf
