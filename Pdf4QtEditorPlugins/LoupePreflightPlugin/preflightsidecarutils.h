@@ -23,6 +23,8 @@
 #ifndef PREFLIGHTSIDECARUTILS_H
 #define PREFLIGHTSIDECARUTILS_H
 
+#include "pdffixupregistry.h"
+
 #include <cmath>
 #include <memory>
 
@@ -183,9 +185,7 @@ private:
 
 inline bool isImplementedFixupId(const QString& fixupId)
 {
-    return fixupId == QStringLiteral("add-bleed")
-        || fixupId == QStringLiteral("rgb-to-cmyk")
-        || fixupId == QStringLiteral("downsample-images");
+    return pdf::isImplementedFixupId(fixupId);
 }
 
 inline QJsonObject filterAdvertisedFixups(const QJsonObject& report)
