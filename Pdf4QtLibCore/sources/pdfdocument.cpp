@@ -34,7 +34,12 @@ static constexpr const char* PDF_DOCUMENT_INFO_ENTRY = "Info";
 
 QByteArray PDFObjectStorage::getDecodedStream(const PDFStream* stream) const
 {
-    return PDFStreamFilterStorage::getDecodedStream(stream, std::bind(QOverload<const PDFObject&>::of(&PDFObjectStorage::getObject), this, std::placeholders::_1), getSecurityHandler());
+    return getDecodedStream(stream, nullptr);
+}
+
+QByteArray PDFObjectStorage::getDecodedStream(const PDFStream* stream, PDFProcessingBudget* budget) const
+{
+    return PDFStreamFilterStorage::getDecodedStream(stream, std::bind(QOverload<const PDFObject&>::of(&PDFObjectStorage::getObject), this, std::placeholders::_1), getSecurityHandler(), budget);
 }
 
 PDFDocument::~PDFDocument()
@@ -70,7 +75,12 @@ QByteArray PDFDocument::getIdPart(size_t index) const
 
 QByteArray PDFDocument::getDecodedStream(const PDFStream* stream) const
 {
-    return m_pdfObjectStorage.getDecodedStream(stream);
+    return getDecodedStream(stream, nullptr);
+}
+
+QByteArray PDFDocument::getDecodedStream(const PDFStream* stream, PDFProcessingBudget* budget) const
+{
+    return m_pdfObjectStorage.getDecodedStream(stream, budget);
 }
 
 const PDFDictionary* PDFDocument::getTrailerDictionary() const

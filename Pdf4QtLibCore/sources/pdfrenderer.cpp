@@ -27,6 +27,7 @@
 #include "pdfprogress.h"
 #include "pdfannotation.h"
 #include "pdfblpainter.h"
+#include "pdfprocessingbudget.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -42,14 +43,16 @@ PDFRenderer::PDFRenderer(const PDFDocument* document,
                          const PDFCMS* cms,
                          const PDFOptionalContentActivity* optionalContentActivity,
                          Features features,
-                         const PDFMeshQualitySettings& meshQualitySettings) :
+                         const PDFMeshQualitySettings& meshQualitySettings,
+                         PDFProcessingBudget* processingBudget) :
     m_document(document),
     m_fontCache(fontCache),
     m_cms(cms),
     m_optionalContentActivity(optionalContentActivity),
     m_operationControl(nullptr),
     m_features(features),
-    m_meshQualitySettings(meshQualitySettings)
+    m_meshQualitySettings(meshQualitySettings),
+    m_processingBudget(processingBudget)
 {
     Q_ASSERT(document);
 }
@@ -172,7 +175,15 @@ QList<PDFRenderError> PDFRenderer::render(QPainter* painter, const QRectF& recta
 
     QTransform matrix = createPagePointToDevicePointMatrix(page, rectangle);
 
-    PDFPainter processor(painter, m_features, matrix, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings);
+    if (m_processingBudget)
+    {
+        const uint64_t width = static_cast<uint64_t>(qMax(0, qCeil(rectangle.width())));
+        const uint64_t height = static_cast<uint64_t>(qMax(0, qCeil(rectangle.height())));
+        m_processingBudget->chargeRenderPixels(width * height, PDFTranslationContext::tr("render target"));
+        m_processingBudget->checkElapsed(PDFTranslationContext::tr("render"));
+    }
+
+    PDFPainter processor(painter, m_features, matrix, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings, m_processingBudget);
     processor.setOperationControl(m_operationControl);
     return processor.processContents();
 }
@@ -189,7 +200,7 @@ QList<PDFRenderError> PDFRenderer::render(QPainter* painter, const QTransform& m
     const PDFPage* page = catalog->getPage(pageIndex);
     Q_ASSERT(page);
 
-    PDFPainter processor(painter, m_features, matrix, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings);
+    PDFPainter processor(painter, m_features, matrix, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings, m_processingBudget);
     processor.setOperationControl(m_operationControl);
     return processor.processContents();
 }
@@ -210,7 +221,7 @@ void PDFRenderer::compile(PDFPrecompiledPage* precompiledPage, size_t pageIndex)
     QElapsedTimer timer;
     timer.start();
 
-    PDFPrecompiledPageGenerator generator(precompiledPage, m_features, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings);
+    PDFPrecompiledPageGenerator generator(precompiledPage, m_features, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings, m_processingBudget);
     generator.setOperationControl(m_operationControl);
     QList<PDFRenderError> errors = generator.processContents();
 

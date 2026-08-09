@@ -52,7 +52,8 @@ public:
                             const PDFCMS* cms,
                             const PDFOptionalContentActivity* optionalContentActivity,
                             QTransform pagePointToDevicePointMatrix,
-                            const PDFMeshQualitySettings& meshQualitySettings);
+                            const PDFMeshQualitySettings& meshQualitySettings,
+                            PDFProcessingBudget* processingBudget = nullptr);
 
     virtual bool isContentSuppressedByOC(PDFObjectReference ocgOrOcmd) override;
 
@@ -132,7 +133,8 @@ public:
                         const PDFFontCache* fontCache,
                         const PDFCMS* cms,
                         const PDFOptionalContentActivity* optionalContentActivity,
-                        const PDFMeshQualitySettings& meshQualitySettings);
+                        const PDFMeshQualitySettings& meshQualitySettings,
+                        PDFProcessingBudget* processingBudget = nullptr);
     virtual ~PDFPainter() override;
 
 protected:
@@ -382,7 +384,8 @@ public:
                                          const PDFFontCache* fontCache,
                                          const PDFCMS* cms,
                                          const PDFOptionalContentActivity* optionalContentActivity,
-                                         const PDFMeshQualitySettings& meshQualitySettings);
+                                         const PDFMeshQualitySettings& meshQualitySettings,
+                                         PDFProcessingBudget* processingBudget = nullptr);
 
 protected:
     virtual void performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule) override;
