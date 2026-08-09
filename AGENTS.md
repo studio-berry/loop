@@ -115,6 +115,7 @@ Process detail: [docs/PLANNING.md](docs/PLANNING.md).
 - Prefer Qt types and patterns already used in the touched module (`QString`, Qt containers, `QObject` parent ownership in GUI code, etc.).
 - Keep headers lean: avoid heavy includes in `.h` when nearby code uses forward declarations; put implementation includes in `.cpp`.
 - AUTOMOC / AUTOUIC / AUTORCC are enabled—do not add manual moc steps or duplicate generated wiring.
+- `qWarning`/`qDebug`/`qCWarning` are fine to use for anything worth persisting: once `pdf::PDFLogSession` (`Pdf4QtLibCore/sources/pdflogger.h`) is active (PdfTool and Editor both install one in `main()`), every message is captured, scrubbed, and written to the rotating log automatically — do not build a separate ad hoc file-logging path.
 
 ## Module boundaries
 

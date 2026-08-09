@@ -24,6 +24,7 @@
 #include "pdftoolcancel.h"
 #include "pdftoolresult.h"
 #include "pdfconstants.h"
+#include "pdflogger.h"
 #include "pdfsentry.h"
 
 #include <QDir>
@@ -158,20 +159,20 @@ void handleTerminationSignal(int)
     pdftool::cancelRequested().store(true, std::memory_order_release);
 }
 
-} // namespace
+}   // namespace
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     // Prefer offscreen when requested; ensure the exe dir is searched for plugins
     // (platforms/qoffscreen.dll) before QGuiApplication constructs the QPA plugin.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) }
-                                      + QCoreApplication::libraryPaths());
+    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
 
     QGuiApplication a(argc, argv);
     QCoreApplication::setOrganizationName("MelkaJ");
     QCoreApplication::setApplicationName("PdfTool");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
 
+    const pdf::PDFLogSession logSession(QStringLiteral("pdftool"));
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
 
     const QStringList arguments = QCoreApplication::arguments();
@@ -196,12 +197,10 @@ int main(int argc, char *argv[])
         {
             pdftool::PDFConsole::setDiagnosticSink(&context);
         }
-        context.addDiagnostic({
-            pdftool::PDFToolDiagnosticSeverity::Error,
-            QStringLiteral("cli.unknown-command"),
-            pdftool::PDFToolTranslationContext::tr("Unknown command '%1'.").arg(command),
-            {}
-        });
+        context.addDiagnostic({ pdftool::PDFToolDiagnosticSeverity::Error,
+                                QStringLiteral("cli.unknown-command"),
+                                pdftool::PDFToolTranslationContext::tr("Unknown command '%1'.").arg(command),
+                                {} });
 
         if (wantsJson)
         {
@@ -255,12 +254,10 @@ int main(int argc, char *argv[])
     parser.addVersionOption();
     if (!parser.parse(commandArguments))
     {
-        context.addDiagnostic({
-            pdftool::PDFToolDiagnosticSeverity::Error,
-            QStringLiteral("cli.invalid-arguments"),
-            parser.errorText(),
-            {}
-        });
+        context.addDiagnostic({ pdftool::PDFToolDiagnosticSeverity::Error,
+                                QStringLiteral("cli.invalid-arguments"),
+                                parser.errorText(),
+                                {} });
 
         return writeInvocationError(context,
                                     pdftool::PDFToolExitCode::InvalidInvocation,
