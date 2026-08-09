@@ -1,0 +1,27 @@
+%PDF-1.7
+% PDF producer: PDF4QT 1.6.0.0
+
+
+1 0 obj
+<< /Type /Pages /Kids [ 4 0 R ] /Count 1 >> endobj
+2 0 obj
+<< /Type /Catalog /Pages 1 0 R /OutputIntents [ 5 0 R ] >> endobj
+3 0 obj
+<< /Producer (PDF4QT 1.6.0.0) /CreationDate (D:20260101000000) /ModDate (D:20260101000000) /Title (Loupe fixture - output intent profile missing) /Creator (LoupeGenerateFixtures) /Subject (loupe-preflight golden corpus: output intent without ICC profile) >> endobj
+4 0 obj
+<< /Type /Page /Parent 1 0 R /MediaBox [ 0.00000 0.00000 200.00000 200.00000 ] >> endobj
+5 0 obj
+<< /Type /OutputIntent /S /GTS_PDFX /OutputConditionIdentifier (CGATS TR 001) >> endobj
+xref
+0 6
+0000000000 65535 f
+0000000046 00000 n
+0000000107 00000 n
+0000000183 00000 n
+0000000458 00000 n
+0000000557 00000 n
+trailer
+<< /Size 6 /Root 2 0 R /Info 3 0 R >> 
+startxref
+655
+%%EOF

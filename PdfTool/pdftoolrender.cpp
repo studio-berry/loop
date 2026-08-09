@@ -210,7 +210,7 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -218,7 +218,7 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
     Options optionFlags = getOptionsFlags();
     if (!options.imageExportSettings.validate(&errorMessage, false, optionFlags.testFlag(ImageExportSettingsFiles), optionFlags.testFlag(ImageExportSettingsResolution)))
     {
-        PDFConsole::writeError(errorMessage, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), errorMessage);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -305,6 +305,15 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
     fontCache.setCacheShrinkEnabled(nullptr, true);
 
     finish(options);
+
+    if (isCancelRequested())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("operation.cancelled"),
+                         PDFToolTranslationContext::tr("The render operation was cancelled."));
+        return PDFToolExitCode::Cancelled;
+    }
 
     // Some requested pages could not be rendered or written: report partial
     // output instead of success so pipelines can detect incomplete work.

@@ -1,0 +1,25 @@
+{
+    "checks": [
+        {
+            "id": "output-intent",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "output-intent",
+            "message": "No output intent is defined; the intended printing condition cannot be determined.",
+            "scope": "document",
+            "severity": "error",
+            "type": "output-intent-missing"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loupe Test - Output Intent",
+    "schema_version": 3,
+    "warnings": [
+    ]
+}

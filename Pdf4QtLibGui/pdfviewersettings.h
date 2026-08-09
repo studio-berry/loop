@@ -31,6 +31,7 @@
 #include "pdfform.h"
 #include "pdfapplicationtranslator.h"
 #include "pdfutils.h"
+#include "pdflogger.h"
 
 #include <QObject>
 #include <limits>
@@ -48,7 +49,6 @@ public:
     inline explicit PDFViewerSettings(QObject* parent) :
         QObject(parent)
     {
-
     }
 
     enum ColorScheme
@@ -96,6 +96,9 @@ public:
         bool m_allowLaunchURI;
         bool m_allowDeveloperMode;
         pdf::PDFExecutionPolicy::Strategy m_multithreadingStrategy;
+
+        // Diagnostics settings
+        pdf::PDFLogSession::Level m_logLevel;
 
         // Cache settings
         qint64 m_compiledPageCacheLimit;
@@ -200,4 +203,4 @@ private:
 
 }   // namespace pdfviewer
 
-#endif // PDFVIEWERSETTINGS_H
+#endif   // PDFVIEWERSETTINGS_H

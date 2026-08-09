@@ -153,7 +153,12 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     process.setProcessEnvironment(environment);
     process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH),
-                   { QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath });
+                   { QStringLiteral("preflight"),
+                     pdfPath,
+                     QStringLiteral("--profile"),
+                     profilePath,
+                     QStringLiteral("--console-format"),
+                     QStringLiteral("json") });
     QVERIFY2(process.waitForFinished(30000), "PdfTool preflight timed out");
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
@@ -162,9 +167,14 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
     QVERIFY2(parseError.error == QJsonParseError::NoError,
              qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(process.readAllStandardError()))));
-    QVERIFY2(document.isObject(), "report JSON must be a top-level object");
+    QVERIFY2(document.isObject(), "result JSON must be a top-level object");
 
-    report = document.object();
+    const QJsonObject envelope = document.object();
+    QCOMPARE(envelope.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("preflight"));
+    QCOMPARE(envelope.value(QStringLiteral("exit_code")).toInt(), process.exitCode());
+    report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY2(!report.isEmpty(), "preflight result must contain data.report");
     exitCode = process.exitCode();
 }
 
