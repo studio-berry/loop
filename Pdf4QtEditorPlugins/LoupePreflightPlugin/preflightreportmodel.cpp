@@ -140,8 +140,15 @@ void PreflightReportModel::setReport(const QJsonObject& report)
 
     appendFindings(report.value(QStringLiteral("errors")).toArray());
     m_errorCount = report.value(QStringLiteral("errors")).toArray().size();
-    appendFindings(report.value(QStringLiteral("warnings")).toArray());
-    m_warningCount = report.value(QStringLiteral("warnings")).toArray().size();
+    const QJsonArray warnings = report.value(QStringLiteral("warnings")).toArray();
+    appendFindings(warnings);
+    for (const QJsonValue& warningValue : warnings)
+    {
+        if (warningValue.toObject().value(QStringLiteral("severity")).toString() == QStringLiteral("warning"))
+        {
+            ++m_warningCount;
+        }
+    }
 
     const QJsonArray fixups = report.value(QStringLiteral("fixups_available")).toArray();
     for (const QJsonValue& fixupValue : fixups)

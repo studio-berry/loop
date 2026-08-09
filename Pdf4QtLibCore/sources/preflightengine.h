@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -70,6 +70,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // color-mode parameters (e.g. ["CMYK", "Grayscale"]).
     QStringList allowedColorModes;
+
+    // color-inventory parameters.
+    int colorProbeDpi = 150;
+    qreal richBlackKThreshold = 0.10;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.

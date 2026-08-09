@@ -36,6 +36,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfcertificatemanager.h
     sources/pdfcms.cpp
     sources/pdfcms.h
+    sources/pdfcolorinventory.cpp
+    sources/pdfcolorinventory.h
     sources/pdfdiff.cpp
     sources/pdfdiff.h
     sources/pdfdocumentbuilder.cpp

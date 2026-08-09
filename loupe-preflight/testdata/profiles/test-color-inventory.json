@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "Color Inventory Test",
+  "checks": [
+    {
+      "id": "color-inventory",
+      "probe_dpi": 150,
+      "rich_black_k_percent": 10,
+      "severity": "info"
+    }
+  ]
+}
