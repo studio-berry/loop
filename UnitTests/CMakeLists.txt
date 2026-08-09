@@ -180,6 +180,23 @@ set_target_properties(UnitTestsOcrCli PROPERTIES
 )
 add_test(UnitTestsOcrCli "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOcrCli")
 
+add_executable(UnitTestsOcrContract
+    tst_ocrcontracttest.cpp
+)
+
+target_link_libraries(UnitTestsOcrContract PRIVATE Qt6::Core Qt6::Test)
+target_include_directories(UnitTestsOcrContract PRIVATE
+    ${CMAKE_SOURCE_DIR}/PdfTool
+    ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/OcrPlugin)
+
+set_target_properties(UnitTestsOcrContract PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsOcrContract "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOcrContract")
+
 add_executable(UnitTestsPdfToolContract
     tst_pdftoolcontract.cpp
 )

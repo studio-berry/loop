@@ -24,6 +24,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
+#include "pdfdocumenttextflow.h"
 
 #include <QtTest>
 #include <QFile>
@@ -37,6 +38,7 @@ private slots:
     void imageOnlyPage_needsOcr();
     void blankPage_isSkippedAsEmpty();
     void classifyPages_matchesPerPageClassification();
+    void textThreshold_isInclusive();
 };
 
 namespace
@@ -51,6 +53,31 @@ pdf::PDFDocument readFixture(const char* name)
 {
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
     return reader.readFromFile(fixturePath(name));
+}
+
+int countRealTextCharacters(const pdf::PDFDocument& document)
+{
+    pdf::PDFDocumentTextFlowFactory factory;
+    const std::vector<pdf::PDFInteger> pageIndices = { 0 };
+    const pdf::PDFDocumentTextFlow textFlow =
+        factory.create(&document, pageIndices, pdf::PDFDocumentTextFlowFactory::Algorithm::Layout);
+
+    int count = 0;
+    for (const pdf::PDFDocumentTextFlow::Item& item : textFlow.getItems())
+    {
+        if (!item.isText())
+        {
+            continue;
+        }
+        for (const QChar& character : item.text)
+        {
+            if (!character.isSpace())
+            {
+                ++count;
+            }
+        }
+    }
+    return count;
 }
 
 }   // namespace
@@ -126,6 +153,23 @@ void OcrPageGateTest::classifyPages_matchesPerPageClassification()
         QCOMPARE(needs.size(), size_t(1));
         QCOMPARE(needs[0], pdf::PDFOcrPageGate::PageOcrNeed::SkipEmpty);
     }
+}
+
+void OcrPageGateTest::textThreshold_isInclusive()
+{
+    pdf::PDFDocument document = readFixture("font-embedded.pdf");
+    const int realTextCharacters = countRealTextCharacters(document);
+    QVERIFY(realTextCharacters > 0);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFOcrPageGate::Settings settings;
+    settings.minTextCharacters = realTextCharacters;
+    QCOMPARE(pdf::PDFOcrPageGate::classifyPage(&session, 0, settings),
+             pdf::PDFOcrPageGate::PageOcrNeed::SkipHasText);
+
+    settings.minTextCharacters = realTextCharacters + 1;
+    QCOMPARE(pdf::PDFOcrPageGate::classifyPage(&session, 0, settings),
+             pdf::PDFOcrPageGate::PageOcrNeed::SkipEmpty);
 }
 
 QTEST_MAIN(OcrPageGateTest)
