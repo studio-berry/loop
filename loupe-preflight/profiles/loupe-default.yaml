@@ -36,6 +36,11 @@ checks:
     allowed: [CMYK, Grayscale]
     severity: error
 
+  - id: color-inventory
+    probe_dpi: 150
+    rich_black_k_percent: 10
+    severity: info
+
   - id: white-overprint
     severity: warning
 

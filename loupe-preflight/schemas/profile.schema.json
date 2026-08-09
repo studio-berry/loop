@@ -109,13 +109,20 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "default": 150,
-          "description": "DPI for the strip-raster probe (content-bleed only)."
+          "description": "DPI for the strip-raster probe or color-inventory page inspection."
         },
         "probe_threshold": {
           "type": "number",
           "minimum": 0,
           "default": 16,
           "description": "Pixel channel threshold (0-255) that counts as ink in the raster probe (content-bleed only)."
+        },
+        "rich_black_k_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 10,
+          "description": "Minimum process-black percentage for rich-black inventory (color-inventory only)."
         }
       },
       "additionalProperties": true

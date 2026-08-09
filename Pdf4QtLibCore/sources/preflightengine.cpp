@@ -25,6 +25,7 @@
 #include "pdfbleedmarginprobe.h"
 #include "pdfcatalog.h"
 #include "pdfcms.h"
+#include "pdfcolorinventory.h"
 #include "pdfcolorspaces.h"
 #include "pdfconstants.h"
 #include "pdfdocument.h"
@@ -1021,6 +1022,67 @@ void runColorModeCheck(PDFDocumentSession* session,
     }
 }
 
+void runColorInventoryCheck(PDFDocumentSession* session,
+                            const PreflightCheckConfig& check,
+                            QList<PreflightFinding>& errors,
+                            QList<PreflightFinding>& warnings)
+{
+    if (!session)
+    {
+        return;
+    }
+
+    PDFColorInventorySettings settings;
+    settings.probeDpi = check.colorProbeDpi;
+    settings.richBlackKThreshold = check.richBlackKThreshold;
+
+    PDFColorInventory inventory(session);
+    const PDFColorInventoryResult result = inventory.inspect(settings);
+
+    auto emitInfo = [&](PreflightFinding finding)
+    {
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
+    for (const PDFColorInventoryInk& ink : result.spotColors)
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.objectId = ink.name;
+        finding.type = QStringLiteral("spot-color");
+        finding.message = PDFTranslationContext::tr("Spot color detected: %1").arg(ink.name);
+        emitInfo(finding);
+    }
+
+    for (const PDFColorInventoryInk& ink : result.separations)
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.objectId = ink.name;
+        finding.type = QStringLiteral("separation");
+        finding.message = ink.isSpot
+                ? PDFTranslationContext::tr("Spot output separation: %1").arg(ink.name)
+                : PDFTranslationContext::tr("Process output separation: %1").arg(ink.name);
+        emitInfo(finding);
+    }
+
+    for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = richBlack.page;
+        finding.type = QStringLiteral("rich-black");
+        finding.message = PDFTranslationContext::tr(
+            "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
+                .arg(richBlack.page)
+                .arg(richBlack.areaMM2, 0, 'f', 2)
+                .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
+        emitInfo(finding);
+    }
+}
+
 bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace,
                             const PDFColor& color,
                             const PDFCMS* cms)
@@ -1754,7 +1816,12 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         }
 
         const bool checkFailed = result.errors.size() > errorsBefore;
-        const bool checkWarned = result.warnings.size() > warningsBefore;
+        const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
+                                              result.warnings.cend(),
+                                              [](const PreflightFinding& finding)
+        {
+            return finding.severity == QStringLiteral("warning");
+        });
         if (checkFailed)
         {
             status.status = QStringLiteral("failed");
@@ -1889,6 +1956,23 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             return false;
         }
 
+        if (check.id == QStringLiteral("color-inventory"))
+        {
+            check.colorProbeDpi = checkObject.value(QStringLiteral("probe_dpi")).toInt(check.colorProbeDpi);
+            const qreal richBlackPercent = checkObject.value(QStringLiteral("rich_black_k_percent")).toDouble(10.0);
+            if (check.colorProbeDpi <= 0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive probe_dpi.").arg(check.id);
+                return false;
+            }
+            if (richBlackPercent < 0.0 || richBlackPercent > 100.0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires rich_black_k_percent between 0 and 100.").arg(check.id);
+                return false;
+            }
+            check.richBlackKThreshold = richBlackPercent / 100.0;
+        }
+
         profile.checks.push_back(check);
     }
 
@@ -1954,6 +2038,14 @@ void PreflightEngine::registerBuiltInChecks()
                                                   QList<PreflightFinding>& warnings)
     {
         runColorModeCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("color-inventory")] = [](PDFDocumentSession* session,
+                                                       const PreflightCheckConfig& check,
+                                                       QList<PreflightFinding>& errors,
+                                                       QList<PreflightFinding>& warnings)
+    {
+        runColorInventoryCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("embedded-fonts")] = [](PDFDocumentSession* session,

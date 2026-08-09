@@ -3,7 +3,7 @@
     "id": "bleed-adequate",
     "pdf": "bleed-adequate.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "MediaBox 220x220, TrimBox 200x200 inset 10pt on all sides -> unset BleedBox falls back to CropBox -> MediaBox, giving 10pt margin (>= amount_pt 9)."
   },
@@ -11,7 +11,7 @@
     "id": "bleed-missing",
     "pdf": "bleed-missing.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "expect": { "pass": false, "check_ids": ["bleed", "color-inventory"] },
     "source": "generated",
     "notes": "Only MediaBox (200x200) is set; TrimBox/BleedBox/CropBox all fall back to it, so bleed==trim==media -> zero bleed margin -> bleed check fails."
   },
@@ -19,7 +19,7 @@
     "id": "color-rgb",
     "pdf": "color-rgb.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["color-mode"] },
+    "expect": { "pass": false, "check_ids": ["color-mode", "color-inventory"] },
     "source": "hand-built",
     "notes": "DeviceRGB image (disallowed) at ~310 DPI on a page with adequate bleed and no fonts, so only color-mode fires."
   },
@@ -27,15 +27,47 @@
     "id": "color-cmyk",
     "pdf": "color-cmyk.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "DeviceCMYK image (allowed) at ~310 DPI, adequate bleed, no fonts -> clean pass. Implemented in MIC-148."
+  },
+  {
+    "id": "color-inventory-spot",
+    "pdf": "color-inventory-spot.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Named Separation colorant; expected spot-color and separation informational findings."
+  },
+  {
+    "id": "rich-black",
+    "pdf": "rich-black.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y plus K patch; expected page-scoped rich-black informational finding."
+  },
+  {
+    "id": "black-only",
+    "pdf": "black-only.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process black alone; must not emit rich-black."
+  },
+  {
+    "id": "cmy-rich-no-k",
+    "pdf": "cmy-rich-no-k.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y without K; must not emit rich-black."
   },
   {
     "id": "image-dpi-low",
     "pdf": "image-dpi-low.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": ["image-resolution"] },
+    "expect": { "pass": true, "check_ids": ["image-resolution", "color-inventory"] },
     "source": "hand-built",
     "notes": "100x100 px DeviceGray image placed at 4x4 in -> ~25 DPI, below min_dpi 300. image-resolution is severity warning in loupe-default, so it appears in warnings[] and report.pass stays true. Implemented in MIC-149."
   },
@@ -43,7 +75,7 @@
     "id": "image-dpi-ok",
     "pdf": "image-dpi-ok.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "1240x1240 px DeviceGray image placed at 4x4 in -> ~310 DPI (>= 300), adequate bleed, no fonts -> clean pass. Implemented in MIC-149."
   },
@@ -51,7 +83,7 @@
     "id": "font-not-embedded",
     "pdf": "font-not-embedded.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["embedded-fonts"] },
+    "expect": { "pass": false, "check_ids": ["embedded-fonts", "color-inventory"] },
     "source": "hand-built",
     "notes": "Text set in Helvetica (standard-14) with no FontFile, adequate bleed, no images -> only embedded-fonts fires. Implemented in MIC-150."
   },
@@ -59,7 +91,7 @@
     "id": "font-embedded",
     "pdf": "font-embedded.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "Text set in a subsetted TrueType font embedded via /FontFile2, adequate bleed, no images -> clean pass. Implemented in MIC-150."
   },
