@@ -148,6 +148,12 @@
           "default": 20,
           "description": "Maximum number of ink-coverage regions reported per page."
         },
+        "analysis_box": {
+          "type": "string",
+          "enum": ["bleed", "trim", "crop", "media"],
+          "default": "bleed",
+          "description": "Page box analyzed by ink-coverage. bleed falls back to trim, crop, then media when those boxes are not explicitly present."
+        },
         "min_effective_width_pt": {
           "type": "number",
           "exclusiveMinimum": 0,
@@ -168,7 +174,20 @@
           "description": "Severity override for thin-stroke findings."
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": { "const": "ink-coverage" }
+            },
+            "required": ["id"]
+          },
+          "then": {
+            "required": ["max_ink_pct"]
+          }
+        }
+      ]
     },
     "fixup": {
       "type": "object",

@@ -316,6 +316,8 @@ void PDFPage::parseImpl(std::vector<PDFPage>& pages,
                 }
 
                 PDFDocumentDataLoaderDecorator loader(storage);
+                page.m_hasBleedBox = dictionary->hasKey("BleedBox");
+                page.m_hasTrimBox = dictionary->hasKey("TrimBox");
                 page.m_bleedBox = loader.readRectangle(dictionary->get("BleedBox"), page.getCropBox());
                 page.m_trimBox = loader.readRectangle(dictionary->get("TrimBox"), page.getCropBox());
                 page.m_artBox = loader.readRectangle(dictionary->get("ArtBox"), page.getCropBox());
