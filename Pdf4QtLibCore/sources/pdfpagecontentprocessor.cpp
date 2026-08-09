@@ -394,6 +394,19 @@ void PDFPageContentProcessor::performPathPainting(const QPainterPath& path, bool
     Q_UNUSED(fillRule);
 }
 
+void PDFPageContentProcessor::performBeforePathPainting(const QPainterPath& path,
+                                                        bool stroke,
+                                                        bool fill,
+                                                        bool text,
+                                                        Qt::FillRule fillRule)
+{
+    Q_UNUSED(path);
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    Q_UNUSED(text);
+    Q_UNUSED(fillRule);
+}
+
 bool PDFPageContentProcessor::performPathPaintingUsingShading(const QPainterPath& path, bool stroke, bool fill, const PDFShadingPattern* shadingPattern)
 {
     Q_UNUSED(path);
@@ -902,6 +915,8 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
         // No operation requested - either path is empty, or neither stroking or filling
         return;
     }
+
+    performBeforePathPainting(path, stroke, fill, text, fillRule);
 
     if (fill)
     {

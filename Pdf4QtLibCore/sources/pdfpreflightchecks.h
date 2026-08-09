@@ -28,9 +28,13 @@
 // command, and the unit tests can share the exact same logic. Page-box
 // extraction stays in the engine; only rectangle math lives here.
 
+#include <QPainterPath>
 #include <QRectF>
+#include <QTransform>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace pdf
 {
@@ -94,6 +98,57 @@ inline bool sizeWithinTolerance(qreal actualWidthPt,
 {
     return (std::abs(actualWidthPt - expectedWidthPt) <= tolerancePt)
         && (std::abs(actualHeightPt - expectedHeightPt) <= tolerancePt);
+}
+
+/// Returns the effective stroke width in page space for a path tangent. PDF
+/// stroke widths are transformed by the full affine CTM, so this accounts for
+/// rotation, shear, non-uniform scale, and the page UserUnit.
+inline qreal transformedStrokeWidth(qreal declaredWidth,
+                                    const QTransform& ctm,
+                                    const QPointF& tangent,
+                                    qreal userUnit = 1.0)
+{
+    const qreal tangentLength = std::hypot(tangent.x(), tangent.y());
+    if (tangentLength <= std::numeric_limits<qreal>::epsilon())
+    {
+        return std::numeric_limits<qreal>::infinity();
+    }
+
+    const QPointF normalizedTangent(tangent.x() / tangentLength, tangent.y() / tangentLength);
+    const QPointF transformedTangent = ctm.map(QPointF(normalizedTangent.x(), normalizedTangent.y()))
+        - ctm.map(QPointF(0.0, 0.0));
+    const qreal transformedLength = std::hypot(transformedTangent.x(), transformedTangent.y());
+    if (transformedLength <= std::numeric_limits<qreal>::epsilon())
+    {
+        return 0.0;
+    }
+
+    const qreal determinant = std::abs(ctm.m11() * ctm.m22() - ctm.m12() * ctm.m21());
+    return declaredWidth * determinant / transformedLength * userUnit;
+}
+
+/// Returns the minimum effective width over all flattened path segments.
+/// Infinite is returned for paths with no non-zero-length segment.
+inline qreal minimumEffectiveStrokeWidth(const QPainterPath& path,
+                                         qreal declaredWidth,
+                                         const QTransform& ctm,
+                                         qreal userUnit = 1.0)
+{
+    qreal minimum = std::numeric_limits<qreal>::infinity();
+    const QList<QPolygonF> subpaths = path.toSubpathPolygons();
+    for (const QPolygonF& subpath : subpaths)
+    {
+        for (int index = 1; index < subpath.size(); ++index)
+        {
+            const QPointF tangent = subpath.at(index) - subpath.at(index - 1);
+            if (std::hypot(tangent.x(), tangent.y()) <= std::numeric_limits<qreal>::epsilon())
+            {
+                continue;
+            }
+            minimum = std::min(minimum, transformedStrokeWidth(declaredWidth, ctm, tangent, userUnit));
+        }
+    }
+    return minimum;
 }
 
 }   // namespace preflight
