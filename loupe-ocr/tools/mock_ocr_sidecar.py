@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 
 
 def handle_request(request: dict) -> dict:
@@ -29,7 +31,13 @@ def handle_request(request: dict) -> dict:
     }
 
 
+def write_response(response: dict) -> None:
+    sys.stdout.write(json.dumps(response, separators=(",", ":"), allow_nan=False) + "\n")
+    sys.stdout.flush()
+
+
 def main() -> int:
+    mode = os.environ.get("LOUPE_OCR_MOCK_MODE", "normal")
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -38,10 +46,34 @@ def main() -> int:
             request = json.loads(line)
         except json.JSONDecodeError as exc:
             response = {"ok": False, "error": f"invalid json: {exc}"}
+        elif not isinstance(request, dict):
+            response = {"ok": False, "error": "request must be a JSON object"}
         else:
-            response = handle_request(request)
-        sys.stdout.write(json.dumps(response, separators=(",", ":")) + "\n")
-        sys.stdout.flush()
+            if mode == "stderr-noise":
+                sys.stderr.write("mock sidecar diagnostic\n")
+                sys.stderr.flush()
+                response = handle_request(request)
+            elif mode == "malformed-json":
+                sys.stdout.write("{not valid json}\n")
+                sys.stdout.flush()
+                continue
+            elif mode == "wrong-page":
+                response = handle_request(request)
+                response["page"] = response.get("page", 0) + 1
+            elif mode == "missing-lines":
+                response = handle_request(request)
+                response.pop("lines", None)
+            elif mode == "explicit-error":
+                page = request.get("page", 0)
+                response = {"page": page, "ok": False, "error": "mock OCR failure"}
+            elif mode == "hang":
+                time.sleep(180)
+                continue
+            elif mode == "crash":
+                return 7
+            else:
+                response = handle_request(request)
+        write_response(response)
     return 0
 
 

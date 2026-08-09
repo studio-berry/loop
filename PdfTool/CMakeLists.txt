@@ -63,6 +63,9 @@ add_executable(PdfTool
     pdftoolpreflightchecks.h
     pdftoolocr.cpp
     pdftoolocr.h
+    ocrsidecarclient.cpp
+    ocrsidecarclient.h
+    ocrsidecarprotocol.h
     pdftoolverifyredaction.cpp
     pdftoolverifyredaction.h
     pdftoolsentryverify.cpp

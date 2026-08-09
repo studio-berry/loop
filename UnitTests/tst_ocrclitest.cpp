@@ -38,6 +38,8 @@ private slots:
     void initTestCase();
     void pdftoolOcr_withMockSidecar_emitsReport();
     void textOnlyFile_neverStartsSidecar();
+    void malformedSidecarResponse_becomesPartialFailure();
+    void sidecarStderrNoise_doesNotCorruptProtocol();
 
 private:
     QString pdfToolPath() const;
@@ -45,6 +47,7 @@ private:
     QString fixturePdfPath() const;
     QString textOnlyPdfPath() const;
     QString missingSidecarPath() const;
+    bool runMockOcr(const QString& mode, QJsonObject& envelope, int& exitCode, QString& error) const;
 };
 
 void OcrCliTest::initTestCase()
@@ -83,6 +86,47 @@ QString OcrCliTest::textOnlyPdfPath() const
 QString OcrCliTest::missingSidecarPath() const
 {
     return QDir::temp().filePath(QStringLiteral("loupe-ocr-sidecar-does-not-exist"));
+}
+
+bool OcrCliTest::runMockOcr(const QString& mode,
+                            QJsonObject& envelope,
+                            int& exitCode,
+                            QString& error) const
+{
+    QProcess process;
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    if (!mode.isEmpty())
+    {
+        environment.insert(QStringLiteral("LOUPE_OCR_MOCK_MODE"), mode);
+    }
+    process.setProcessEnvironment(environment);
+    process.setProgram(pdfToolPath());
+    process.setArguments({ QStringLiteral("ocr"),
+                           fixturePdfPath(),
+                           QStringLiteral("--console-format"),
+                           QStringLiteral("json"),
+                           QStringLiteral("--sidecar"),
+                           mockSidecarPath() });
+    process.start();
+    if (!process.waitForFinished(120000))
+    {
+        error = QStringLiteral("PdfTool did not finish.");
+        return false;
+    }
+
+    exitCode = process.exitCode();
+    const QByteArray stdOut = process.readAllStandardOutput();
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+    {
+        error = parseError.errorString();
+        return false;
+    }
+
+    envelope = document.object();
+    return true;
 }
 
 void OcrCliTest::pdftoolOcr_withMockSidecar_emitsReport()
@@ -209,6 +253,50 @@ void OcrCliTest::textOnlyFile_neverStartsSidecar()
     }
     QVERIFY2(!anyOcrPage, "a text-only file must have no OCR'd pages");
     QVERIFY2(anySkippedPage, "every page of a text-only file must be reported as skipped");
+}
+
+void OcrCliTest::malformedSidecarResponse_becomesPartialFailure()
+{
+    QJsonObject envelope;
+    int exitCode = -1;
+    QString error;
+    QVERIFY2(runMockOcr(QStringLiteral("malformed-json"), envelope, exitCode, error), qPrintable(error));
+    QCOMPARE(exitCode, 1);
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+
+    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
+                                   .value(QStringLiteral("report")).toObject();
+    QVERIFY(!report.value(QStringLiteral("errors")).toArray().isEmpty());
+    bool foundFailedPage = false;
+    for (const QJsonValue& pageValue : report.value(QStringLiteral("pages")).toArray())
+    {
+        if (pageValue.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("failed"))
+        {
+            foundFailedPage = true;
+        }
+    }
+    QVERIFY(foundFailedPage);
+}
+
+void OcrCliTest::sidecarStderrNoise_doesNotCorruptProtocol()
+{
+    QJsonObject envelope;
+    int exitCode = -1;
+    QString error;
+    QVERIFY2(runMockOcr(QStringLiteral("stderr-noise"), envelope, exitCode, error), qPrintable(error));
+    QCOMPARE(exitCode, 0);
+
+    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
+                                   .value(QStringLiteral("report")).toObject();
+    bool foundOcrPage = false;
+    for (const QJsonValue& pageValue : report.value(QStringLiteral("pages")).toArray())
+    {
+        if (pageValue.toObject().value(QStringLiteral("status")).toString() == QStringLiteral("ocr"))
+        {
+            foundOcrPage = true;
+        }
+    }
+    QVERIFY(foundOcrPage);
 }
 
 QTEST_MAIN(OcrCliTest)

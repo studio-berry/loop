@@ -12,7 +12,7 @@ def main() -> int:
     parser.add_argument("--languages", nargs="+", default=["en"])
     args = parser.parse_args()
     print(f"Downloading models to {model_storage_directory()} ...")
-    get_reader(args.languages)
+    get_reader(args.languages, allow_download=True)
     print("Done.")
     return 0
 
