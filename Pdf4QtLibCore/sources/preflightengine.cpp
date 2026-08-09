@@ -61,6 +61,152 @@
 namespace pdf
 {
 
+QString pdfxFlavorToString(PDFXFlavor flavor)
+{
+    switch (flavor)
+    {
+        case PDFXFlavor::X1a2001:
+            return QStringLiteral("PDF/X-1a:2001");
+        case PDFXFlavor::X4:
+            return QStringLiteral("PDF/X-4");
+        case PDFXFlavor::X3_2002:
+            return QStringLiteral("PDF/X-3:2002");
+        case PDFXFlavor::None:
+        default:
+            return QString();
+    }
+}
+
+QStringList supportedPDFXTargets()
+{
+    return {
+        pdfxFlavorToString(PDFXFlavor::X1a2001),
+        pdfxFlavorToString(PDFXFlavor::X4)
+    };
+}
+
+bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& errorMessage)
+{
+    errorMessage.clear();
+
+    PDFXFlavor flavor = PDFXFlavor::None;
+    if (target == pdfxFlavorToString(PDFXFlavor::X1a2001))
+    {
+        flavor = PDFXFlavor::X1a2001;
+    }
+    else if (target == pdfxFlavorToString(PDFXFlavor::X4))
+    {
+        flavor = PDFXFlavor::X4;
+    }
+    else
+    {
+        errorMessage = PDFTranslationContext::tr(
+            "Unsupported PDF/X target '%1' (supported: %2).")
+            .arg(target, supportedPDFXTargets().join(QStringLiteral(", ")));
+        return false;
+    }
+
+    policy.flavor = flavor;
+    policy.policyVersion = QStringLiteral("1");
+    policy.rules = {
+        { QStringLiteral("pdfx.document.version"), true },
+        { QStringLiteral("pdfx.document.trailer-id"), true },
+        { QStringLiteral("pdfx.document.encryption"), true },
+        { QStringLiteral("pdfx.metadata.identification"), true },
+        { QStringLiteral("pdfx.output-intent.present"), true },
+        { QStringLiteral("pdfx.output-intent.subtype"), true },
+        { QStringLiteral("pdfx.output-intent.profile"), true },
+        { QStringLiteral("pdfx.output-intent.profile-space"), true },
+        { QStringLiteral("pdfx.page.trim-box"), true },
+        { QStringLiteral("pdfx.page.bleed-box"), true },
+        { QStringLiteral("pdfx.font.embedded"), true },
+        { QStringLiteral("pdfx.color.device-rgb"), flavor == PDFXFlavor::X1a2001 },
+        { QStringLiteral("pdfx.transparency.allowed"), true },
+        { QStringLiteral("pdfx.overprint.inspectable"), true },
+        { QStringLiteral("pdfx.annotation.forbidden-action"), true }
+    };
+    return true;
+}
+
+namespace
+{
+
+QString pdfxRuleStateToString(PDFXRuleState state)
+{
+    switch (state)
+    {
+        case PDFXRuleState::Passed:
+            return QStringLiteral("passed");
+        case PDFXRuleState::Failed:
+            return QStringLiteral("failed");
+        case PDFXRuleState::NotApplicable:
+            return QStringLiteral("not-applicable");
+        case PDFXRuleState::NotInspected:
+        default:
+            return QStringLiteral("not-inspected");
+    }
+}
+
+} // namespace
+
+QJsonObject PDFXConformanceResult::toJson() const
+{
+    QJsonArray failed;
+    for (const QString& ruleId : failedRuleIds)
+    {
+        failed.append(ruleId);
+    }
+
+    QJsonArray incomplete;
+    for (const QString& ruleId : incompleteRuleIds)
+    {
+        incomplete.append(ruleId);
+    }
+
+    QJsonArray ruleArray;
+    for (const PDFXRuleResult& rule : rules)
+    {
+        QJsonObject ruleObject{
+            { QStringLiteral("id"), rule.ruleId },
+            { QStringLiteral("mandatory"), rule.mandatory },
+            { QStringLiteral("state"), pdfxRuleStateToString(rule.state) }
+        };
+        if (!rule.evidence.isEmpty())
+        {
+            ruleObject.insert(QStringLiteral("evidence"), rule.evidence);
+        }
+        if (!rule.diagnostic.isEmpty())
+        {
+            ruleObject.insert(QStringLiteral("diagnostic"), rule.diagnostic);
+        }
+        ruleArray.append(ruleObject);
+    }
+
+    QString status;
+    switch (this->status)
+    {
+        case PDFXConformanceStatus::Conformant:
+            status = QStringLiteral("conformant");
+            break;
+        case PDFXConformanceStatus::NonConformant:
+            status = QStringLiteral("non-conformant");
+            break;
+        case PDFXConformanceStatus::Incomplete:
+        default:
+            status = QStringLiteral("incomplete");
+            break;
+    }
+
+    return QJsonObject{
+        { QStringLiteral("target"), pdfxFlavorToString(requestedFlavor) },
+        { QStringLiteral("policyVersion"), policyVersion },
+        { QStringLiteral("status"), status },
+        { QStringLiteral("failedRuleIds"), failed },
+        { QStringLiteral("incompleteRuleIds"), incomplete },
+        { QStringLiteral("rules"), ruleArray }
+    };
+}
+
 namespace
 {
 
@@ -100,6 +246,11 @@ QJsonObject findingToJson(const PreflightFinding& finding)
     if (!finding.checkId.isEmpty())
     {
         object.insert(QStringLiteral("check_id"), finding.checkId);
+    }
+
+    if (!finding.evidence.isEmpty())
+    {
+        object.insert(QStringLiteral("evidence"), finding.evidence);
     }
 
     return object;
@@ -2643,6 +2794,518 @@ void runImageResolutionCheck(PDFDocumentSession* session,
     }
 }
 
+PDFXRuleResult makePDFXRuleResult(const QString& ruleId,
+                                  bool mandatory,
+                                  PDFXRuleState state,
+                                  const QJsonObject& evidence = QJsonObject(),
+                                  const QString& diagnostic = QString())
+{
+    PDFXRuleResult result;
+    result.ruleId = ruleId;
+    result.mandatory = mandatory;
+    result.state = state;
+    result.evidence = evidence;
+    result.diagnostic = diagnostic;
+    return result;
+}
+
+bool isValidPDFBox(const QRectF& box)
+{
+    return box.isValid() && box.width() > 0.0 && box.height() > 0.0;
+}
+
+PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
+                                const PDFXPolicy& policy,
+                                const PDFXRuleRequirement& requirement)
+{
+    PDFDocument* document = session ? session->getDocument() : nullptr;
+    if (!document)
+    {
+        return makePDFXRuleResult(requirement.ruleId,
+                                  requirement.mandatory,
+                                  PDFXRuleState::NotInspected,
+                                  QJsonObject(),
+                                  PDFTranslationContext::tr("The PDF document was not available."));
+    }
+
+    const PDFCatalog* catalog = document->getCatalog();
+    if (!catalog)
+    {
+        return makePDFXRuleResult(requirement.ruleId,
+                                  requirement.mandatory,
+                                  PDFXRuleState::NotInspected,
+                                  QJsonObject(),
+                                  PDFTranslationContext::tr("The PDF catalog could not be inspected."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.document.version"))
+    {
+        const QString version = QString::fromLatin1(document->getVersion());
+        if (version.isEmpty())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject(), PDFTranslationContext::tr("The PDF version could not be determined."));
+        }
+
+        const QStringList parts = version.split(QLatin1Char('.'));
+        bool majorOk = false;
+        bool minorOk = false;
+        const int major = parts.value(0).toInt(&majorOk);
+        const int minor = parts.value(1).toInt(&minorOk);
+        const bool validVersion = majorOk && minorOk;
+        const bool allowed = validVersion && (policy.flavor == PDFXFlavor::X4
+                                                  ? (major > 1 || (major == 1 && minor >= 6))
+                                                  : (major == 1 && minor == 3));
+        const QJsonObject evidence{
+            { QStringLiteral("document_version"), version },
+            { QStringLiteral("minimum_version"), policy.flavor == PDFXFlavor::X4 ? QStringLiteral("1.6") : QStringLiteral("1.3") }
+        };
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  allowed ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  evidence,
+                                  allowed ? QString() : PDFTranslationContext::tr("The document version is not permitted by the selected PDF/X policy."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.document.trailer-id"))
+    {
+        const QByteArray firstId = document->getIdPart(0);
+        const QByteArray secondId = document->getIdPart(1);
+        const bool present = !firstId.isEmpty() && !secondId.isEmpty();
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  present ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("first_present"), !firstId.isEmpty() },
+                                      { QStringLiteral("second_present"), !secondId.isEmpty() }
+                                  },
+                                  present ? QString() : PDFTranslationContext::tr("The trailer does not contain the two-part document identifier required by PDF/X."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.document.encryption"))
+    {
+        const PDFSecurityHandler* securityHandler = document->getStorage().getSecurityHandler();
+        if (!securityHandler)
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject(), PDFTranslationContext::tr("The document security handler was not available."));
+        }
+
+        const bool encrypted = securityHandler->getMode() != EncryptionMode::None;
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  encrypted ? PDFXRuleState::Failed : PDFXRuleState::Passed,
+                                  QJsonObject{
+                                      { QStringLiteral("encrypted"), encrypted }
+                                  },
+                                  encrypted ? PDFTranslationContext::tr("Encrypted documents are not permitted by the selected PDF/X policy.") : QString());
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.metadata.identification"))
+    {
+        const PDFObject metadataObject = document->getObject(catalog->getMetadata());
+        if (!metadataObject.isStream())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Failed,
+                                      QJsonObject{{ QStringLiteral("metadata_stream"), false }},
+                                      PDFTranslationContext::tr("PDF/X identification metadata is missing."));
+        }
+
+        QByteArray metadata;
+        try
+        {
+            metadata = document->getDecodedStream(metadataObject.getStream());
+        }
+        catch (const PDFException& exception)
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject{{ QStringLiteral("metadata_stream"), true }}, exception.getMessage());
+        }
+
+        const QByteArray lowerMetadata = metadata.toLower();
+        const bool hasPdfxIdentification = lowerMetadata.contains("pdfaid:")
+            || lowerMetadata.contains("gts_pdfxversion")
+            || lowerMetadata.contains("pdf/x-");
+        const bool hasTargetMarker = policy.flavor == PDFXFlavor::X1a2001
+            ? (lowerMetadata.contains("pdfaid:part=\"1\"") || lowerMetadata.contains("pdf/x-1a"))
+            : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
+        const bool identified = hasPdfxIdentification && hasTargetMarker;
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  identified ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("metadata_stream"), true },
+                                      { QStringLiteral("has_pdfx_identification"), hasPdfxIdentification },
+                                      { QStringLiteral("has_target_marker"), hasTargetMarker }
+                                  },
+                                  identified ? QString() : PDFTranslationContext::tr("PDF/X metadata does not identify the requested target."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.output-intent.present")
+        || requirement.ruleId == QStringLiteral("pdfx.output-intent.subtype")
+        || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile")
+        || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
+    {
+        const auto& intents = catalog->getOutputIntents();
+        if (intents.empty())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Failed,
+                                      QJsonObject{{ QStringLiteral("count"), 0 }},
+                                      PDFTranslationContext::tr("No PDF/X output intent is defined."));
+        }
+
+        int subtypeFailures = 0;
+        int profileFailures = 0;
+        int profileSpaceFailures = 0;
+        QJsonArray spaces;
+        for (const PDFOutputIntent& intent : intents)
+        {
+            if (intent.getSubtype() != QByteArrayLiteral("GTS_PDFX"))
+            {
+                ++subtypeFailures;
+            }
+
+            const PDFObject profileObject = document->getObject(intent.getOutputProfile());
+            if (!profileObject.isStream())
+            {
+                ++profileFailures;
+                continue;
+            }
+
+            QByteArray profileBytes;
+            try
+            {
+                profileBytes = document->getDecodedStream(profileObject.getStream());
+            }
+            catch (const PDFException&)
+            {
+                ++profileFailures;
+                continue;
+            }
+
+            IccProfileGuard profile(profileBytes);
+            if (!profile.isValid())
+            {
+                ++profileFailures;
+                continue;
+            }
+
+            const QString colorSpace = classifyIccColorSpace(profile.getColorSpace());
+            spaces.append(colorSpace);
+            const QByteArray declared = intent.getOutputProfileInfo().getSignature();
+            if (colorSpace.isEmpty() || declared.isEmpty()
+                || QString::fromLatin1(declared).compare(colorSpace, Qt::CaseInsensitive) != 0)
+            {
+                ++profileSpaceFailures;
+            }
+        }
+
+        if (requirement.ruleId == QStringLiteral("pdfx.output-intent.subtype"))
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      subtypeFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                      QJsonObject{
+                                          { QStringLiteral("count"), int(intents.size()) },
+                                          { QStringLiteral("invalid_subtypes"), subtypeFailures }
+                                      },
+                                      subtypeFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must use the GTS_PDFX subtype."));
+        }
+
+        if (requirement.ruleId == QStringLiteral("pdfx.output-intent.profile"))
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      profileFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                      QJsonObject{
+                                          { QStringLiteral("count"), int(intents.size()) },
+                                          { QStringLiteral("invalid_profiles"), profileFailures }
+                                      },
+                                      profileFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must contain a valid, decodable ICC profile."));
+        }
+
+        if (requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      profileSpaceFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                      QJsonObject{
+                                          { QStringLiteral("color_spaces"), spaces },
+                                          { QStringLiteral("mismatches"), profileSpaceFailures }
+                                      },
+                                      profileSpaceFailures == 0 ? QString() : PDFTranslationContext::tr("An output intent declares a color space that does not match its embedded ICC profile."));
+        }
+
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Passed,
+                                  QJsonObject{{ QStringLiteral("count"), int(intents.size()) }});
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.page.trim-box")
+        || requirement.ruleId == QStringLiteral("pdfx.page.bleed-box"))
+    {
+        QJsonArray missingPages;
+        const bool trim = requirement.ruleId.endsWith(QStringLiteral("trim-box"));
+        for (PDFInteger pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
+        {
+            const PDFPage* page = catalog->getPage(pageIndex);
+            if (!page || !isValidPDFBox(trim ? page->getTrimBox() : page->getBleedBox()))
+            {
+                missingPages.append(int(pageIndex + 1));
+            }
+        }
+
+        const bool passed = missingPages.isEmpty();
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  passed ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("page_count"), int(catalog->getPageCount()) },
+                                      { QStringLiteral("missing_pages"), missingPages }
+                                  },
+                                  passed ? QString() : PDFTranslationContext::tr("One or more pages do not have the required inherited page box."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.font.embedded"))
+    {
+        PreflightCheckConfig fontCheck;
+        fontCheck.id = QStringLiteral("embedded-fonts");
+        fontCheck.severity = QStringLiteral("error");
+        QList<PreflightFinding> errors;
+        QList<PreflightFinding> warnings;
+        runEmbeddedFontsCheck(session, fontCheck, errors, warnings);
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("failed_fonts"), int(errors.size()) },
+                                      { QStringLiteral("warnings"), int(warnings.size()) }
+                                  },
+                                  errors.isEmpty() ? QString() : PDFTranslationContext::tr("One or more fonts are not embedded."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.color.device-rgb"))
+    {
+        if (policy.flavor != PDFXFlavor::X1a2001)
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotApplicable,
+                                      QJsonObject{{ QStringLiteral("target_allows_device_rgb"), true }});
+        }
+
+        PreflightCheckConfig colorCheck;
+        colorCheck.id = QStringLiteral("color-mode");
+        colorCheck.severity = QStringLiteral("error");
+        colorCheck.allowedColorModes = { QStringLiteral("CMYK"), QStringLiteral("Grayscale") };
+        QList<PreflightFinding> errors;
+        QList<PreflightFinding> warnings;
+        runColorModeCheck(session, colorCheck, errors, warnings);
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("disallowed_pages"), int(errors.size()) },
+                                      { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK"), QStringLiteral("Grayscale") } }
+                                  },
+                                  errors.isEmpty() ? QString() : PDFTranslationContext::tr("DeviceRGB content is not permitted by PDF/X-1a:2001."));
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.transparency.allowed"))
+    {
+        int transparencyObjects = 0;
+        const PDFObjectStorage::PDFObjects& objects = document->getStorage().getObjects();
+        PDFDocumentDataLoaderDecorator loader(document);
+        for (const auto& entry : objects)
+        {
+            const PDFObject& object = entry.object;
+            const PDFDictionary* dictionary = document->getDictionaryFromObject(object);
+            if (!dictionary)
+            {
+                continue;
+            }
+
+            bool transparent = loader.readNameFromDictionary(dictionary, "S") == QByteArrayLiteral("Transparency")
+                || dictionary->hasKey("SMask")
+                || dictionary->hasKey("ca")
+                || dictionary->hasKey("CA");
+            if (dictionary->hasKey("BM"))
+            {
+                const QByteArray blendMode = loader.readNameFromDictionary(dictionary, "BM");
+                transparent = transparent || (!blendMode.isEmpty()
+                                               && blendMode != QByteArrayLiteral("Normal")
+                                               && blendMode != QByteArrayLiteral("Compatible"));
+            }
+            if (transparent)
+            {
+                ++transparencyObjects;
+            }
+        }
+
+        const bool forbidden = policy.flavor == PDFXFlavor::X1a2001 && transparencyObjects > 0;
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  forbidden ? PDFXRuleState::Failed : PDFXRuleState::Passed,
+                                  QJsonObject{
+                                      { QStringLiteral("transparency_objects"), transparencyObjects },
+                                      { QStringLiteral("target_allows_live_transparency"), !forbidden }
+                                  },
+                                  forbidden ? PDFTranslationContext::tr("Live transparency is not permitted by PDF/X-1a:2001.") : QString());
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.overprint.inspectable"))
+    {
+        int overprintObjects = 0;
+        for (const auto& entry : document->getStorage().getObjects())
+        {
+            const PDFDictionary* dictionary = document->getDictionaryFromObject(entry.object);
+            if (dictionary && (dictionary->hasKey("OP") || dictionary->hasKey("op") || dictionary->hasKey("OPM")))
+            {
+                ++overprintObjects;
+            }
+        }
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Passed,
+                                  QJsonObject{
+                                      { QStringLiteral("overprint_objects"), overprintObjects },
+                                      { QStringLiteral("renderer"), QStringLiteral("Output Preview separation/overprint path") },
+                                      { QStringLiteral("inspection"), QStringLiteral("structural flags inspected; rendering remains authoritative in Output Preview") }
+                                  });
+    }
+
+    if (requirement.ruleId == QStringLiteral("pdfx.annotation.forbidden-action"))
+    {
+        int actionCount = catalog->getOpenAction() ? 1 : 0;
+        for (const auto& action : catalog->getDocumentActions())
+        {
+            actionCount += action ? 1 : 0;
+        }
+        actionCount += int(catalog->getNamedJavaScriptActions().size());
+
+        QJsonArray actionPages;
+        for (PDFInteger pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
+        {
+            const PDFPage* page = catalog->getPage(pageIndex);
+            if (!page)
+            {
+                continue;
+            }
+            for (const PDFObjectReference& annotationReference : page->getAnnotations())
+            {
+                const PDFObject annotation = document->getObjectByReference(annotationReference);
+                const PDFDictionary* annotationDictionary = document->getDictionaryFromObject(annotation);
+                if (annotationDictionary && (annotationDictionary->hasKey("A") || annotationDictionary->hasKey("AA")))
+                {
+                    ++actionCount;
+                    actionPages.append(int(pageIndex + 1));
+                }
+            }
+        }
+
+        return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                  actionCount == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                  QJsonObject{
+                                      { QStringLiteral("action_count"), actionCount },
+                                      { QStringLiteral("annotation_pages"), actionPages }
+                                  },
+                                  actionCount == 0 ? QString() : PDFTranslationContext::tr("Active document or annotation actions are not permitted by the selected PDF/X policy."));
+    }
+
+    return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                              PDFXRuleState::NotInspected,
+                              QJsonObject(),
+                              PDFTranslationContext::tr("This mandatory PDF/X rule is not implemented by the current policy capability set."));
+}
+
+PDFXConformanceResult evaluatePDFXPolicy(PDFDocumentSession* session, const PDFXPolicy& policy)
+{
+    PDFXConformanceResult result;
+    result.requestedFlavor = policy.flavor;
+    result.policyVersion = policy.policyVersion;
+
+    for (const PDFXRuleRequirement& requirement : policy.rules)
+    {
+        PDFXRuleResult rule;
+        try
+        {
+            rule = evaluatePDFXRule(session, policy, requirement);
+        }
+        catch (const PDFException& exception)
+        {
+            rule = makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      PDFXRuleState::NotInspected, QJsonObject(), exception.getMessage());
+        }
+        catch (const std::exception& exception)
+        {
+            rule = makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      PDFXRuleState::NotInspected, QJsonObject(), QString::fromUtf8(exception.what()));
+        }
+        catch (...)
+        {
+            rule = makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      PDFXRuleState::NotInspected, QJsonObject(), PDFTranslationContext::tr("Unknown error."));
+        }
+
+        result.rules.push_back(rule);
+        if (!rule.mandatory)
+        {
+            continue;
+        }
+        if (rule.state == PDFXRuleState::Failed)
+        {
+            result.failedRuleIds.append(rule.ruleId);
+        }
+        else if (rule.state == PDFXRuleState::NotInspected)
+        {
+            result.incompleteRuleIds.append(rule.ruleId);
+        }
+    }
+
+    if (!result.failedRuleIds.isEmpty())
+    {
+        result.status = PDFXConformanceStatus::NonConformant;
+    }
+    else if (!result.incompleteRuleIds.isEmpty())
+    {
+        result.status = PDFXConformanceStatus::Incomplete;
+    }
+    else
+    {
+        result.status = PDFXConformanceStatus::Conformant;
+    }
+
+    return result;
+}
+
+void appendPDFXFindings(const PDFXConformanceResult& result,
+                        QList<PreflightFinding>& errors,
+                        QList<PreflightFinding>& warnings)
+{
+    for (const PDFXRuleResult& rule : result.rules)
+    {
+        if (rule.state != PDFXRuleState::Failed && rule.state != PDFXRuleState::NotInspected)
+        {
+            continue;
+        }
+
+        QJsonObject evidence{
+            { QStringLiteral("rule_id"), rule.ruleId },
+            { QStringLiteral("mandatory"), rule.mandatory },
+            { QStringLiteral("state"), pdfxRuleStateToString(rule.state) }
+        };
+        if (!rule.evidence.isEmpty())
+        {
+            evidence.insert(QStringLiteral("rule"), rule.evidence);
+        }
+
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = rule.state == PDFXRuleState::Failed
+            ? QStringLiteral("pdfx-conformance") : QStringLiteral("pdfx-incomplete");
+        finding.severity = rule.state == PDFXRuleState::Failed
+            ? QStringLiteral("error") : QStringLiteral("warning");
+        finding.checkId = QStringLiteral("pdfx");
+        finding.evidence = evidence;
+        finding.message = rule.state == PDFXRuleState::Failed
+            ? PDFTranslationContext::tr("PDF/X rule '%1' failed: %2").arg(rule.ruleId, rule.diagnostic)
+            : PDFTranslationContext::tr("PDF/X rule '%1' could not be inspected: %2").arg(rule.ruleId, rule.diagnostic);
+
+        if (rule.state == PDFXRuleState::Failed)
+        {
+            errors.push_back(finding);
+        }
+        else
+        {
+            warnings.push_back(finding);
+        }
+    }
+}
+
 } // namespace
 
 QJsonObject PreflightResult::toJson(const QString& pdfPath) const
@@ -2707,6 +3370,11 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         checksArray.append(checkObject);
     }
     root.insert(QStringLiteral("checks"), checksArray);
+
+    if (pdfx.has_value())
+    {
+        root.insert(QStringLiteral("pdfx"), pdfx->toJson());
+    }
 
     return root;
 }
@@ -2838,6 +3506,32 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         result.checkStatuses.push_back(status);
     }
 
+    if (profile.pdfx.has_value())
+    {
+        const PDFXConformanceResult pdfxResult = evaluatePDFXPolicy(m_session, profile.pdfx.value());
+        result.pdfx = pdfxResult;
+        appendPDFXFindings(pdfxResult, result.errors, result.warnings);
+
+        PreflightCheckStatus pdfxStatus;
+        pdfxStatus.id = QStringLiteral("pdfx");
+        if (pdfxResult.status == PDFXConformanceStatus::NonConformant)
+        {
+            pdfxStatus.status = QStringLiteral("failed");
+            pdfxStatus.reason = PDFTranslationContext::tr("Mandatory PDF/X rules failed.");
+        }
+        else if (pdfxResult.status == PDFXConformanceStatus::Incomplete)
+        {
+            pdfxStatus.status = QStringLiteral("unsupported");
+            pdfxStatus.reason = PDFTranslationContext::tr("Mandatory PDF/X evidence was not available.");
+            result.inspectionComplete = false;
+        }
+        else
+        {
+            pdfxStatus.status = QStringLiteral("ok");
+        }
+        result.checkStatuses.push_back(pdfxStatus);
+    }
+
     result.pass = result.errors.isEmpty() && result.inspectionComplete;
     result.fixupsAvailable = profile.fixups;
 
@@ -2904,6 +3598,53 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
     {
         errorMessage = PDFTranslationContext::tr("Profile must define at least one check.");
         return false;
+    }
+
+    if (profileObject.contains(QStringLiteral("pdfx")))
+    {
+        const QJsonValue pdfxValue = profileObject.value(QStringLiteral("pdfx"));
+        if (!pdfxValue.isObject())
+        {
+            errorMessage = PDFTranslationContext::tr("Profile field 'pdfx' must be an object.");
+            return false;
+        }
+
+        const QJsonObject pdfxObject = pdfxValue.toObject();
+        for (const QString& key : pdfxObject.keys())
+        {
+            if (key != QStringLiteral("target") && key != QStringLiteral("policyVersion"))
+            {
+                errorMessage = PDFTranslationContext::tr("Profile field 'pdfx.%1' is not supported.").arg(key);
+                return false;
+            }
+        }
+        const QJsonValue targetValue = pdfxObject.value(QStringLiteral("target"));
+        if (!targetValue.isString() || targetValue.toString().isEmpty())
+        {
+            errorMessage = PDFTranslationContext::tr("Profile field 'pdfx.target' must be a non-empty string.");
+            return false;
+        }
+
+        PDFXPolicy policy;
+        if (!pdfxPolicyForTarget(targetValue.toString(), policy, errorMessage))
+        {
+            return false;
+        }
+
+        if (pdfxObject.contains(QStringLiteral("policyVersion")))
+        {
+            const QJsonValue versionValue = pdfxObject.value(QStringLiteral("policyVersion"));
+            const bool validVersion = (versionValue.isString() && versionValue.toString() == policy.policyVersion)
+                || (versionValue.isDouble() && qFuzzyCompare(versionValue.toDouble() + 1.0, policy.policyVersion.toDouble() + 1.0));
+            if (!validVersion)
+            {
+                errorMessage = PDFTranslationContext::tr(
+                    "Profile field 'pdfx.policyVersion' must match supported policy revision %1.").arg(policy.policyVersion);
+                return false;
+            }
+        }
+
+        profile.pdfx = policy;
     }
 
     for (const QJsonValue& checkValue : checks)

@@ -47,6 +47,10 @@ private slots:
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
+    void parseProfile_acceptsPDFXTargetAndRevision();
+    void parseProfile_rejectsUnknownPDFXTarget();
+    void run_pdfxWithoutDocumentIsIncompleteAndSerialized();
+    void run_pdfxEmitsStableRuleIdsAndEvidence();
     void run_bleedCheckFailsWhenBoxMissing();
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
@@ -372,6 +376,108 @@ void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpa
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("unknown allowed color space")));
+}
+
+void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") },
+            { QStringLiteral("policyVersion"), 1 }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(profile.pdfx.has_value());
+    QCOMPARE(profile.pdfx->flavor, pdf::PDFXFlavor::X4);
+    QCOMPARE(profile.pdfx->policyVersion, QStringLiteral("1"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsUnknownPDFXTarget()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Unknown PDF/X") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-3:2002") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("Unsupported PDF/X target")));
+}
+
+void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
+{
+    pdf::PreflightEngine engine(nullptr);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.pdfx.has_value());
+    QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::Incomplete);
+    QVERIFY(!result.pdfx->incompleteRuleIds.isEmpty());
+    QVERIFY(result.toJson().contains(QStringLiteral("pdfx")));
+    QVERIFY(!result.toJson().value(QStringLiteral("pdfx")).toObject()
+                .value(QStringLiteral("incompleteRuleIds")).toArray().isEmpty());
+}
+
+void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
+{
+    const QByteArray profileContent = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!profileContent.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pdfx.has_value());
+    QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::NonConformant);
+    QVERIFY(result.pdfx->failedRuleIds.contains(QStringLiteral("pdfx.metadata.identification")));
+    QVERIFY(std::any_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+    {
+        return finding.checkId == QStringLiteral("pdfx")
+            && finding.evidence.value(QStringLiteral("rule_id")).toString() == QStringLiteral("pdfx.metadata.identification");
+    }));
+
+    const QJsonObject report = result.toJson();
+    const QJsonObject pdfx = report.value(QStringLiteral("pdfx")).toObject();
+    QCOMPARE(pdfx.value(QStringLiteral("target")).toString(), QStringLiteral("PDF/X-4"));
+    QCOMPARE(pdfx.value(QStringLiteral("policyVersion")).toString(), QStringLiteral("1"));
+    QCOMPARE(pdfx.value(QStringLiteral("status")).toString(), QStringLiteral("non-conformant"));
 }
 
 void PreflightEngineTest::run_bleedCheckFailsWhenBoxMissing()
