@@ -48,6 +48,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfpagegeometry.h
     sources/pdfbleedfixup.cpp
     sources/pdfbleedfixup.h
+    sources/pdfrepairdiff.cpp
+    sources/pdfrepairdiff.h
     sources/pdffixupregistry.cpp
     sources/pdffixupregistry.h
     sources/pdfimagedownsamplefixup.cpp

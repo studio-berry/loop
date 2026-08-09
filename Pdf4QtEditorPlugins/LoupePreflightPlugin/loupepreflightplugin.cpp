@@ -23,12 +23,16 @@
 #include "loupepreflightplugin.h"
 #include "preflightreportdockwidget.h"
 #include "preflightsidecarutils.h"
+#include "repairpreviewdialog.h"
 #include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
 #include "pdfimagedownsamplefixup.h"
 #include "pdfrgbtocmykfixup.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
+#include "pdfrepairdiff.h"
+#include "pdfsafefilewriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
 #include "pdfuitheme.h"
@@ -45,6 +49,8 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QCryptographicHash>
+#include <QTemporaryDir>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QFile>
@@ -60,7 +66,6 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QTemporaryDir>
 #include <QVBoxLayout>
 
 #ifndef LOUPE_PREFLIGHT_PROFILES_RELATIVE_PATH
@@ -875,21 +880,104 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
     settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
     settings.force = true;
 
-    const pdf::PDFOperationResult fixupResult = pdf::PDFBleedFixup::apply(&fixedDocument, settings);
+    pdf::PDFBleedFixupReport report;
+    const pdf::PDFOperationResult fixupResult = pdf::PDFBleedFixup::apply(&fixedDocument, settings, &report);
     if (!fixupResult)
     {
         QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), fixupResult.getErrorMessage());
         return;
     }
 
-    // The atomic safe write below replaces an existing file (if any) only after
-    // the new bytes are durable; do not delete the previous output up front.
+    // Serialize and reopen the candidate before showing it to the operator. The
+    // dialog must review the bytes that will be committed, not only the copied
+    // in-memory document.
+    QTemporaryDir previewDirectory;
+    if (!previewDirectory.isValid())
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("Unable to create a private repair-preview directory."));
+        return;
+    }
 
-    pdf::PDFDocumentWriter writer(nullptr);
-    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &fixedDocument, true);
+    const QString previewPath = QDir(previewDirectory.path()).filePath(QStringLiteral("candidate.pdf"));
+    pdf::PDFDocument serializedCandidate;
+    QByteArray previewHash;
+    const pdf::PDFOperationResult candidateResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(
+        fixedDocument,
+        [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); },
+        previewPath,
+        &serializedCandidate,
+        &previewHash);
+    if (!candidateResult)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), candidateResult.getErrorMessage());
+        return;
+    }
+
+    pdf::PDFRepairDiffOptions diffOptions;
+    diffOptions.renderDirectory = previewDirectory.path();
+    diffOptions.expected.pageBoxes = true;
+    diffOptions.expected.pageContent = true;
+    for (const pdf::PDFBleedFixupPageReport& page : report.pages)
+    {
+        if (!diffOptions.affectedPages.contains(page.pageIndex))
+        {
+            diffOptions.affectedPages.append(page.pageIndex);
+        }
+    }
+
+    pdf::PDFRepairDiffReport diffReport;
+    const pdf::PDFOperationResult diffResult = pdf::PDFRepairDiffEngine::compare(*m_document,
+                                                                                   serializedCandidate,
+                                                                                   diffOptions,
+                                                                                   &diffReport);
+    if (!diffResult)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), diffResult.getErrorMessage());
+        return;
+    }
+
+    RepairPreviewDialog previewDialog(m_widget);
+    previewDialog.setReport(diffReport, previewDirectory.path());
+    if (previewDialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    QFile candidateFile(previewPath);
+    if (!candidateFile.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The reviewed repair candidate is no longer available."));
+        return;
+    }
+    const QByteArray candidateData = candidateFile.readAll();
+    candidateFile.close();
+    if (QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The repair candidate changed after preview. Review it again."));
+        return;
+    }
+
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        outputPath, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
         QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), writeResult.getErrorMessage());
+        return;
+    }
+
+    QFile finalFile(outputPath);
+    if (!finalFile.open(QIODevice::ReadOnly) ||
+        QCryptographicHash::hash(finalFile.readAll(), QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The final output does not match the approved repair candidate."));
+        return;
+    }
+    finalFile.close();
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    finalReader.readFromFile(outputPath);
+    if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The final serialized output could not be reopened for verification."));
         return;
     }
 

@@ -74,6 +74,8 @@ add_executable(PdfTool
     pdftoolsentryverify.h
     pdftooldiagnostics.cpp
     pdftooldiagnostics.h
+    pdftoolrepairdiff.cpp
+    pdftoolrepairdiff.h
 )
 
 target_link_libraries(PdfTool PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml)

@@ -32,6 +32,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <algorithm>
+
 namespace pdftool
 {
 
@@ -645,6 +647,29 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addPositionalArgument("left", "Left (old) document to be compared.");
         parser->addPositionalArgument("right", "Right (new) document to be compared.");
+    }
+
+    if (optionFlags.testFlag(RepairDiff))
+    {
+        parser->addPositionalArgument("before", "Source document used as the repair baseline.");
+        parser->addPositionalArgument("after", "Serialized candidate document to compare.");
+        parser->addOption(QCommandLineOption("pswd", "Password for encrypted documents.", "password"));
+        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+        parser->addOption(QCommandLineOption("render-dpi", "Deterministic comparison render resolution.", "dpi", "144"));
+        parser->addOption(QCommandLineOption("no-visual", "Only produce the semantic structural report."));
+        parser->addOption(QCommandLineOption("render-dir", "Directory for before/after/diff PNG artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("max-rendered-pages", "Maximum number of pages rendered.", "pages", "200"));
+        parser->addOption(QCommandLineOption("max-render-pixels", "Maximum total pixels rendered.", "pixels", "250000000"));
+        parser->addOption(QCommandLineOption("channel-tolerance", "Per-channel visual diff tolerance.", "delta", "2"));
+        parser->addOption(QCommandLineOption("allow-page-boxes", "Classify page-box changes as expected."));
+        parser->addOption(QCommandLineOption("allow-page-content", "Classify page-content changes as expected."));
+        parser->addOption(QCommandLineOption("allow-images", "Classify image changes as expected."));
+        parser->addOption(QCommandLineOption("allow-fonts", "Classify font changes as expected."));
+        parser->addOption(QCommandLineOption("allow-color-spaces", "Classify color-space changes as expected."));
+        parser->addOption(QCommandLineOption("allow-output-intent", "Classify output-intent changes as expected."));
+        parser->addOption(QCommandLineOption("allow-metadata", "Classify metadata changes as expected."));
+        parser->addOption(QCommandLineOption("allow-annotations", "Classify annotation changes as expected."));
+        parser->addOption(QCommandLineOption("allow-signatures", "Classify signature changes as expected."));
     }
 
     if (optionFlags.testFlag(Redact))
@@ -1706,6 +1731,28 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(Diff))
     {
         options.diffFiles = positionalArguments;
+    }
+
+    if (optionFlags.testFlag(RepairDiff))
+    {
+        options.repairDiffFiles = positionalArguments;
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
+        options.repairDiffOptions.renderDpi = std::max(1, parser->value("render-dpi").toInt());
+        options.repairDiffOptions.renderVisualDiff = !parser->isSet("no-visual");
+        options.repairDiffOptions.renderDirectory = parser->value("render-dir");
+        options.repairDiffOptions.maxRenderedPages = std::max(0, parser->value("max-rendered-pages").toInt());
+        options.repairDiffOptions.maxRenderPixels = std::max<qint64>(0, parser->value("max-render-pixels").toLongLong());
+        options.repairDiffOptions.channelTolerance = std::max(0, parser->value("channel-tolerance").toInt());
+        options.repairDiffOptions.expected.pageBoxes = parser->isSet("allow-page-boxes");
+        options.repairDiffOptions.expected.pageContent = parser->isSet("allow-page-content");
+        options.repairDiffOptions.expected.images = parser->isSet("allow-images");
+        options.repairDiffOptions.expected.fonts = parser->isSet("allow-fonts");
+        options.repairDiffOptions.expected.colorSpaces = parser->isSet("allow-color-spaces");
+        options.repairDiffOptions.expected.outputIntent = parser->isSet("allow-output-intent");
+        options.repairDiffOptions.expected.metadata = parser->isSet("allow-metadata");
+        options.repairDiffOptions.expected.annotations = parser->isSet("allow-annotations");
+        options.repairDiffOptions.expected.signatures = parser->isSet("allow-signatures");
     }
 
     if (optionFlags.testFlag(Optimize))
