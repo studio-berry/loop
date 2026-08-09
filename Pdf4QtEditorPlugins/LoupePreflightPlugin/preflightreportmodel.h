@@ -89,6 +89,8 @@ public:
     const QVector<PreflightFindingEntry>& findings() const { return m_findings; }
     bool hasAddBleedFixup() const;
     const PreflightFixupEntry* addBleedFixup() const;
+    bool hasRgbToCmykFixup() const;
+    const PreflightFixupEntry* rgbToCmykFixup() const;
 
     /// Returns true if any finding reports white or near-white overprint. The report
     /// panel always steers the operator to Output Preview (MIC-320/MIC-330), since

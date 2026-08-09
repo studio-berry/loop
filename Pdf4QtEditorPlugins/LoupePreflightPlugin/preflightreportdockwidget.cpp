@@ -208,7 +208,8 @@ void PreflightReportDockWidget::refreshApplyFixupButton()
         return;
     }
 
-    m_applyFixupButton->setEnabled(m_model.hasReport() && m_model.hasAddBleedFixup());
+    m_applyFixupButton->setEnabled(m_model.hasReport()
+                                   && (m_model.hasAddBleedFixup() || m_model.hasRgbToCmykFixup()));
 }
 
 void PreflightReportDockWidget::refreshEmptyState()
