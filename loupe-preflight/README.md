@@ -184,6 +184,28 @@ deliberately outside this contract and require a separate semantics decision.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
+## Reusable Action Lists
+
+Action Lists are versioned, declarative recipes over the registered Core repair
+operations. Their schema is `schemas/action-list.schema.json`; recipes contain
+stable operation IDs, typed parameters, bounded conditions, and an explicit
+failure policy. Recipe content cannot execute shell commands, arbitrary code,
+or unrestricted paths.
+
+```bash
+PdfTool action-list validate recipe.json --console-format json
+PdfTool action-list plan recipe.json input.pdf --console-format json
+PdfTool action-list run recipe.json input.pdf --output ready.pdf --console-format json
+PdfTool action-list batch recipe.json inputs/*.pdf --output-dir ready/ --console-format json
+```
+
+`plan` and `--dry-run` validate the complete recipe and report the planned
+change set without publishing an output. `run` and `batch` execute against an
+isolated candidate and publish only after every step succeeds. Existing output
+paths require `--overwrite`; the source PDF is never used as an implicit output
+path. Each result includes a normalized recipe hash, resolved parameters,
+stable step status, duration, diagnostics, affected scope, and repair result.
+
 ## ICC-managed RGB-to-CMYK fixup
 
 The shared Core fixup is available to applications as `PDFRgbToCmykFixup` and

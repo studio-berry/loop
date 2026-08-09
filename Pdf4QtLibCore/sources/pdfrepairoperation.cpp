@@ -254,8 +254,17 @@ QJsonObject PDFRepairOperation::descriptor() const
         { QStringLiteral("version"), version() },
         { QStringLiteral("risk"), pdfRepairRiskName(risk()) },
         { QStringLiteral("domains"), domainArray(domains()) },
+        { QStringLiteral("parameter_schema"), parameterSchema() },
         { QStringLiteral("requires_preview"), true },
         { QStringLiteral("requires_postflight"), true }
+    };
+}
+
+QJsonObject PDFRepairOperation::parameterSchema() const
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false }
     };
 }
 
