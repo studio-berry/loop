@@ -38,6 +38,7 @@
 #include <QPainterPath>
 #include <QSharedPointer>
 
+#include <set>
 #include <stack>
 #include <tuple>
 #include <type_traits>
@@ -1184,6 +1185,17 @@ private:
 
     /// Active structural parent key
     PDFInteger m_structuralParentKey;
+
+    /// Current nesting depth of the processed content streams (forms, tiling
+    /// patterns and Type 3 character streams). Bounded by
+    /// MAXIMUM_CONTENT_STREAM_NESTING_DEPTH, so the native stack can never be
+    /// exhausted by recursive content streams.
+    int m_contentStreamDepth = 0;
+
+    /// Form XObjects, which are currently being processed. Used to detect
+    /// recursion cycles - a form which paints itself, directly or indirectly
+    /// through other forms.
+    std::set<PDFObjectReference> m_activeFormReferences;
 };
 
 template<>

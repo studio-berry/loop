@@ -37,14 +37,6 @@
 namespace pdf
 {
 
-namespace
-{
-
-// Keep this in sync with PREFLIGHT_MAX_FORM_DEPTH in preflightengine.cpp.
-constexpr int MAXIMUM_CONTENT_STREAM_NESTING_DEPTH = 32;
-
-}
-
 // Graphic state operators - mapping from PDF name to the enum, splitted into groups.
 // Please see Table 4.1 in PDF Reference 1.7, chapter 4.1 - Graphic Objects.
 //
@@ -173,6 +165,15 @@ static constexpr const std::pair<const char*, PDFPageContentProcessor::Operator>
     { "EX", PDFPageContentProcessor::Operator::CompatibilityEnd }
 };
 
+// Maximum nesting depth of the processed content streams (forms, tiling
+// patterns and Type 3 character streams). This value matches the precedent
+// set by PREFLIGHT_MAX_FORM_DEPTH in preflightengine.cpp, so the renderer and
+// the preflight engine agree on what a legal document looks like. The depth
+// is counted per processed content stream, in the operator dispatch
+// (processContent), which is the single choke point through which all
+// recursion paths pass.
+constexpr int MAXIMUM_CONTENT_STREAM_NESTING_DEPTH = 32;
+
 void PDFPageContentProcessor::initDictionaries(const PDFObject& resourcesObject)
 {
     const PDFObject& resources = m_document->getObject(resourcesObject);
@@ -263,7 +264,6 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
     m_patternBaseMatrix(pagePointToDevicePointMatrix),
     m_pagePointToDevicePointMatrix(pagePointToDevicePointMatrix),
     m_meshQualitySettings(meshQualitySettings),
-    m_contentStreamDepth(0),
     m_structuralParentKey(0)
 {
     Q_ASSERT(page);
@@ -578,13 +578,17 @@ void PDFPageContentProcessor::performInterceptInstruction(Operator currentOperat
 
 void PDFPageContentProcessor::processContent(const QByteArray& content)
 {
-    if (m_contentStreamDepth >= MAXIMUM_CONTENT_STREAM_NESTING_DEPTH)
+    // Guard the content stream nesting depth. Forms, tiling patterns and
+    // Type 3 character streams all recurse through this single function, so
+    // a depth cap here bounds the native stack usage of all of them. The
+    // temp value change makes the decrement exception-safe.
+    PDFTemporaryValueChange contentStreamDepthGuard(&m_contentStreamDepth, m_contentStreamDepth + 1);
+    if (m_contentStreamDepth > MAXIMUM_CONTENT_STREAM_NESTING_DEPTH)
     {
-        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Maximum content stream nesting depth exceeded."));
+        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Maximum content stream nesting depth (%1) exceeded.").arg(MAXIMUM_CONTENT_STREAM_NESTING_DEPTH));
         return;
     }
 
-    PDFTemporaryValueChange contentStreamDepthGuard(&m_contentStreamDepth, m_contentStreamDepth + 1);
     PDFLexicalAnalyzer parser(content.constBegin(), content.constEnd());
 
     while (!parser.isAtEnd() && !isProcessingCancelled())
@@ -3206,25 +3210,30 @@ void PDFPageContentProcessor::operatorPaintXObject(PDFOperandName name)
                     throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Form of type %1 not supported.").arg(formType));
                 }
 
+                // Detect forms which paint themselves, directly or indirectly.
+                // A shallow two-form cycle would otherwise be re-entered many
+                // times before the content stream depth cap triggers, doing
+                // real work each pass. This mirrors the visitedForms set used
+                // by collectColorSpacesFromResources() in preflightengine.cpp.
                 if (reference.isValid())
                 {
-                    if (m_activeFormReferences.contains(reference))
+                    if (m_activeFormReferences.count(reference))
                     {
-                        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Recursive Form XObject reference detected."));
+                        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Recursive form XObject detected and was not painted."));
                         return;
                     }
-
                     m_activeFormReferences.insert(reference);
-                    auto activeFormGuard = qScopeGuard([this, reference]
+                }
+
+                auto activeFormGuard = qScopeGuard([this, reference]()
+                {
+                    if (reference.isValid())
                     {
                         m_activeFormReferences.erase(reference);
-                    });
-                    processForm(stream);
-                }
-                else
-                {
-                    processForm(stream);
-                }
+                    }
+                });
+
+                processForm(stream);
             }
             else
             {

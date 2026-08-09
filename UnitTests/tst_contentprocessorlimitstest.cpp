@@ -20,271 +20,350 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include <QtTest>
+#include <QDataStream>
+
 #include "pdfcms.h"
 #include "pdfconstants.h"
+#include "pdfdocument.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfexception.h"
 #include "pdffont.h"
+#include "pdfmeshqualitysettings.h"
+#include "pdfobject.h"
 #include "pdfoptionalcontent.h"
-#include "pdfrenderer.h"
+#include "pdfpagecontentprocessor.h"
 
-#include <QtTest>
-#include <QImage>
-#include <QPainter>
-
-#include <algorithm>
-#include <array>
-#include <memory>
 #include <vector>
 
 namespace
 {
 
-pdf::PDFObject createBoundingBox()
+/// Builds a resource dictionary with an XObject subdictionary mapping the
+/// given names to the given form references.
+pdf::PDFObject makeResourcesDictionary(const std::vector<std::pair<QByteArray, pdf::PDFObjectReference>>& xobjects)
 {
-    pdf::PDFArray boundingBox;
-    boundingBox.appendItem(pdf::PDFObject::createReal(0.0));
-    boundingBox.appendItem(pdf::PDFObject::createReal(0.0));
-    boundingBox.appendItem(pdf::PDFObject::createReal(100.0));
-    boundingBox.appendItem(pdf::PDFObject::createReal(100.0));
-    return pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(boundingBox)));
-}
-
-pdf::PDFObject createForm(const char* childName,
-                          const pdf::PDFObjectReference& childReference)
-{
-    pdf::PDFDictionary xObjects;
-    xObjects.addEntry(pdf::PDFInplaceOrMemoryString(childName), pdf::PDFObject::createReference(childReference));
-
-    pdf::PDFDictionary resources;
-    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
-                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
-
-    pdf::PDFDictionary dictionary;
-    dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
-    dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Form"));
-    dictionary.addEntry(pdf::PDFInplaceOrMemoryString("BBox"), createBoundingBox());
-    dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
-                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
-
-    QByteArray content("/");
-    content.append(childName);
-    content.append(" Do");
-    dictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                        pdf::PDFObject::createInteger(content.size()));
-
-    return pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(dictionary), std::move(content)));
-}
-
-pdf::PDFDocument createRecursiveFormDocument(bool mutual)
-{
-    pdf::PDFDocumentBuilder builder;
-    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
-    const pdf::PDFObjectReference firstFormReference = builder.addObject(pdf::PDFObject::createNull());
-    const pdf::PDFObjectReference secondFormReference = builder.addObject(pdf::PDFObject::createNull());
-
-    builder.setObject(firstFormReference, createForm(mutual ? "F2" : "F1",
-                                                     mutual ? secondFormReference : firstFormReference));
-    if (mutual)
+    pdf::PDFDictionary xobjectsDictionary;
+    for (const auto& [name, reference] : xobjects)
     {
-        builder.setObject(secondFormReference, createForm("F1", firstFormReference));
+        xobjectsDictionary.addEntry(pdf::PDFInplaceOrMemoryString(name), pdf::PDFObject::createReference(reference));
     }
 
-    pdf::PDFDictionary pageXObjects;
-    pageXObjects.addEntry(pdf::PDFInplaceOrMemoryString("F1"), pdf::PDFObject::createReference(firstFormReference));
-    pdf::PDFDictionary pageResources;
-    pageResources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
-                           pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageXObjects))));
-    builder.mergeTo(pageReference, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageResources))));
-
-    QByteArray pageContent = "/F1 Do";
-    pdf::PDFDictionary contentDictionary;
-    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                               pdf::PDFObject::createInteger(pageContent.size()));
-    const pdf::PDFObjectReference contentReference = builder.addObject(
-        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(contentDictionary), std::move(pageContent))));
-    pdf::PDFDictionary pageContentUpdate;
-    pageContentUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
-    builder.mergeTo(pageReference, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageContentUpdate))));
-
-    return builder.build();
+    pdf::PDFDictionary resourcesDictionary;
+    resourcesDictionary.addEntry(pdf::PDFInplaceOrMemoryString("XObject"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xobjectsDictionary))));
+    return pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resourcesDictionary)));
 }
 
-pdf::PDFDocument createNestedFormDocument(int depth)
+/// Creates a form XObject stream object with the given content and optional resources.
+pdf::PDFObject makeFormStreamObject(const QByteArray& content, const pdf::PDFObject& resources)
 {
-    pdf::PDFDocumentBuilder builder;
-    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
-
-    std::vector<pdf::PDFObjectReference> formReferences;
-    formReferences.reserve(depth);
-    for (int i = 0; i < depth; ++i)
+    pdf::PDFObjectFactory factory;
+    factory.beginDictionary();
+    factory.beginDictionaryItem("Type"); factory << pdf::WrapName("XObject"); factory.endDictionaryItem();
+    factory.beginDictionaryItem("Subtype"); factory << pdf::WrapName("Form"); factory.endDictionaryItem();
+    factory.beginDictionaryItem("FormType"); factory << pdf::PDFInteger(1); factory.endDictionaryItem();
+    factory.beginDictionaryItem("BBox"); factory << QRectF(0, 0, 100, 100); factory.endDictionaryItem();
+    if (resources.isDictionary())
     {
-        formReferences.push_back(builder.addObject(pdf::PDFObject::createNull()));
+        factory.beginDictionaryItem("Resources"); factory << resources; factory.endDictionaryItem();
     }
+    factory.endDictionary();
 
-    for (int i = depth - 1; i >= 0; --i)
-    {
-        if (i + 1 < depth)
-        {
-            builder.setObject(formReferences[i], createForm("F1", formReferences[i + 1]));
-        }
-        else
-        {
-            QByteArray content = "0 0 10 10 re f";
-            pdf::PDFDictionary dictionary;
-            dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
-            dictionary.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Form"));
-            dictionary.addEntry(pdf::PDFInplaceOrMemoryString("BBox"), createBoundingBox());
-            dictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                                pdf::PDFObject::createInteger(content.size()));
-            builder.setObject(formReferences[i], pdf::PDFObject::createStream(
-                std::make_shared<pdf::PDFStream>(std::move(dictionary), std::move(content))));
-        }
-    }
-
-    pdf::PDFDictionary pageXObjects;
-    pageXObjects.addEntry(pdf::PDFInplaceOrMemoryString("F1"), pdf::PDFObject::createReference(formReferences.front()));
-    pdf::PDFDictionary pageResources;
-    pageResources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
-                           pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageXObjects))));
-    builder.mergeTo(pageReference, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageResources))));
-
-    QByteArray pageContent = "/F1 Do";
-    pdf::PDFDictionary contentDictionary;
-    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                               pdf::PDFObject::createInteger(pageContent.size()));
-    const pdf::PDFObjectReference contentReference = builder.addObject(
-        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(contentDictionary), std::move(pageContent))));
-    pdf::PDFDictionary pageContentUpdate;
-    pageContentUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
-    builder.mergeTo(pageReference, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageContentUpdate))));
-
-    return builder.build();
+    pdf::PDFObject dictionary = factory.takeObject();
+    return pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(pdf::PDFDictionary(*dictionary.getDictionary()), QByteArray(content)));
 }
 
-QList<pdf::PDFRenderError> render(const pdf::PDFDocument& document)
+/// Fills a previously allocated placeholder form object with its final value.
+void setFormObject(pdf::PDFDocumentBuilder& builder, pdf::PDFObjectReference reference, const QByteArray& content, const pdf::PDFObject& resources)
 {
-    pdf::PDFCMSGeneric cms;
-    pdf::PDFFontCache fontCache(32, 32);
-    pdf::PDFOptionalContentActivity activity(&document, pdf::OCUsage::View, nullptr);
-    fontCache.setDocument(pdf::PDFModifiedDocument(const_cast<pdf::PDFDocument*>(&document), &activity));
-
-    pdf::PDFRenderer renderer(&document, &fontCache, &cms, &activity,
-                              pdf::PDFRenderer::Features(), pdf::PDFMeshQualitySettings());
-    QImage image(100, 100, QImage::Format_RGB32);
-    image.fill(Qt::white);
-    QPainter painter(&image);
-    const QList<pdf::PDFRenderError> errors = renderer.render(&painter, QRectF(0, 0, 100, 100), 0);
-    painter.end();
-    return errors;
+    builder.setObject(reference, makeFormStreamObject(content, resources));
 }
 
-void appendBigEndian(QByteArray& data, quint64 value, int byteCount)
+/// Sets the page content stream and resources of the given page.
+void setPageContent(pdf::PDFDocumentBuilder& builder, const pdf::PDFObjectReference& pageReference, const QByteArray& content, const pdf::PDFObject& resources)
 {
-    for (int i = byteCount - 1; i >= 0; --i)
-    {
-        data.append(char((value >> (i * 8)) & 0xff));
-    }
+    const pdf::PDFObject streamObject = pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(pdf::PDFDictionary(), QByteArray(content)));
+    const pdf::PDFObjectReference contentStreamReference = builder.addObject(streamObject);
+
+    pdf::PDFObjectFactory factory;
+    factory.beginDictionary();
+    factory.beginDictionaryItem("Contents"); factory << contentStreamReference; factory.endDictionaryItem();
+    factory.beginDictionaryItem("Resources"); factory << resources; factory.endDictionaryItem();
+    factory.endDictionary();
+    builder.mergeTo(pageReference, factory.takeObject());
 }
 
-QByteArray createObjectStreamWithInvalidCount()
+/// Processes the content streams of the first page of the document and returns
+/// the list of render errors.
+QList<pdf::PDFRenderError> processPage(pdf::PDFDocument& document)
 {
-    QByteArray document("%PDF-1.7\n");
-    std::array<int, 6> offsets = {};
-    auto appendObject = [&document, &offsets](int objectNumber, const QByteArray& body)
-    {
-        offsets[objectNumber] = document.size();
-        document += QByteArray::number(objectNumber) + " 0 obj\n" + body + "\nendobj\n";
-    };
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    pdf::PDFFontCache fontCache(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    pdf::PDFOptionalContentActivity optionalContentActivity(&document, pdf::OCUsage::Export, nullptr);
+    pdf::PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(&document);
+    pdf::PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    pdf::PDFMeshQualitySettings meshQualitySettings;
+    fontCache.setDocument(pdf::PDFModifiedDocument(&document, &optionalContentActivity));
+    fontCache.setCacheShrinkEnabled(nullptr, false);
 
-    appendObject(1, "<< /Type /Catalog /Pages 2 0 R >>");
-    appendObject(2, "<< /Type /Pages /Count 0 /Kids [] >>");
-    appendObject(3, "<< /Type /ObjStm /N 2147483647 /First 4 /Length 3 >>\nstream\n1 0\nendstream");
-
-    const int xrefOffset = document.size();
-    offsets[4] = xrefOffset;
-    QByteArray xrefData;
-    appendBigEndian(xrefData, 0, 1);
-    appendBigEndian(xrefData, 0, 4);
-    appendBigEndian(xrefData, 65535, 2);
-    for (int objectNumber = 1; objectNumber <= 4; ++objectNumber)
-    {
-        appendBigEndian(xrefData, 1, 1);
-        appendBigEndian(xrefData, offsets[objectNumber], 4);
-        appendBigEndian(xrefData, 0, 2);
-    }
-    appendBigEndian(xrefData, 2, 1);
-    appendBigEndian(xrefData, 3, 4);
-    appendBigEndian(xrefData, 0, 2);
-
-    QByteArray xrefBody = "<< /Type /XRef /Size 6 /Root 1 0 R /W [1 4 2] /Length 42 >>\nstream\n";
-    xrefBody += xrefData;
-    xrefBody += "\nendstream";
-    appendObject(4, xrefBody);
-
-    document += "startxref\n" + QByteArray::number(xrefOffset) + "\n%%EOF\n";
-    return document;
+    pdf::PDFPageContentProcessor processor(page, &document, &fontCache, cms.get(), &optionalContentActivity, QTransform(), meshQualitySettings);
+    return processor.processContents();
 }
 
-} // namespace
+}   // namespace
 
 class ContentProcessorLimitsTest : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void selfReferencingFormIsRejected();
-    void mutuallyReferencingFormsAreRejected();
-    void deeplyNestedFormsAreBounded();
-    void shallowNestedFormsRender();
-    void objectStreamCountIsBounded();
+    void test_selfReferencingFormXObject_isRejected();
+    void test_mutuallyRecursiveForms_areRejected();
+    void test_deeplyNestedForms_areBounded();
+    void test_recursiveType3Font_isRejected();
+    void test_objectStreamWithHugeObjectCount_isRejected();
 };
 
-void ContentProcessorLimitsTest::selfReferencingFormIsRejected()
+void ContentProcessorLimitsTest::test_selfReferencingFormXObject_isRejected()
 {
-    const QList<pdf::PDFRenderError> errors = render(createRecursiveFormDocument(false));
-    QVERIFY(!errors.isEmpty());
-    QVERIFY(std::any_of(errors.cbegin(), errors.cend(), [](const pdf::PDFRenderError& error)
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+
+    // The form paints only itself, directly.
+    const pdf::PDFObjectReference form1 = builder.addObject(pdf::PDFObject());
+    setFormObject(builder, form1, "/N Do", makeResourcesDictionary({ { QByteArray("N"), form1 } }));
+
+    setPageContent(builder, pageReference, "/N Do", makeResourcesDictionary({ { QByteArray("N"), form1 } }));
+
+    pdf::PDFDocument document = builder.build();
+    const QList<pdf::PDFRenderError> errors = processPage(document);
+
+    QCOMPARE(errors.size(), 1);
+    QVERIFY(errors.constFirst().message.contains(QStringLiteral("Recursive form XObject")));
+}
+
+void ContentProcessorLimitsTest::test_mutuallyRecursiveForms_areRejected()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+
+    const pdf::PDFObjectReference formA = builder.addObject(pdf::PDFObject());
+    const pdf::PDFObjectReference formB = builder.addObject(pdf::PDFObject());
+
+    setFormObject(builder, formA, "/B Do", makeResourcesDictionary({ { QByteArray("B"), formB } }));
+    setFormObject(builder, formB, "/A Do", makeResourcesDictionary({ { QByteArray("A"), formA } }));
+
+    setPageContent(builder, pageReference, "/A Do", makeResourcesDictionary({ { QByteArray("A"), formA } }));
+
+    pdf::PDFDocument document = builder.build();
+    const QList<pdf::PDFRenderError> errors = processPage(document);
+
+    QCOMPARE(errors.size(), 1);
+    QVERIFY(errors.constFirst().message.contains(QStringLiteral("Recursive form XObject")));
+}
+
+void ContentProcessorLimitsTest::test_deeplyNestedForms_areBounded()
+{
+    constexpr int deepChainLength = 40;
     {
-        return error.message.contains("Recursive Form XObject reference");
-    }));
-}
+        pdf::PDFDocumentBuilder builder;
+        builder.createDocument();
+        const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
 
-void ContentProcessorLimitsTest::mutuallyReferencingFormsAreRejected()
-{
-    const QList<pdf::PDFRenderError> errors = render(createRecursiveFormDocument(true));
-    QVERIFY(!errors.isEmpty());
-    QVERIFY(std::any_of(errors.cbegin(), errors.cend(), [](const pdf::PDFRenderError& error)
+        std::vector<pdf::PDFObjectReference> forms;
+        forms.reserve(deepChainLength);
+        for (int i = 0; i < deepChainLength; ++i)
+        {
+            forms.push_back(builder.addObject(pdf::PDFObject()));
+        }
+        for (int i = 0; i < deepChainLength - 1; ++i)
+        {
+            setFormObject(builder, forms[i], "/N Do", makeResourcesDictionary({ { QByteArray("N"), forms[i + 1] } }));
+        }
+        setFormObject(builder, forms.back(), QByteArray(), pdf::PDFObject());
+
+        setPageContent(builder, pageReference, "/N Do", makeResourcesDictionary({ { QByteArray("N"), forms.front() } }));
+
+        pdf::PDFDocument document = builder.build();
+        const QList<pdf::PDFRenderError> errors = processPage(document);
+
+        // The content stream depth cap is hit exactly once (when processing the
+        // 33rd level). No error is reported on the way back up.
+        QCOMPARE(errors.size(), 1);
+        QVERIFY(errors.constFirst().message.contains(QStringLiteral("Maximum content stream nesting depth")));
+    }
+
+    constexpr int legalChainLength = 16;
     {
-        return error.message.contains("Recursive Form XObject reference");
-    }));
+        pdf::PDFDocumentBuilder builder;
+        builder.createDocument();
+        const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+
+        std::vector<pdf::PDFObjectReference> forms;
+        forms.reserve(legalChainLength);
+        for (int i = 0; i < legalChainLength; ++i)
+        {
+            forms.push_back(builder.addObject(pdf::PDFObject()));
+        }
+        for (int i = 0; i < legalChainLength - 1; ++i)
+        {
+            setFormObject(builder, forms[i], "/N Do", makeResourcesDictionary({ { QByteArray("N"), forms[i + 1] } }));
+        }
+        setFormObject(builder, forms.back(), QByteArray(), pdf::PDFObject());
+
+        setPageContent(builder, pageReference, "/N Do", makeResourcesDictionary({ { QByteArray("N"), forms.front() } }));
+
+        pdf::PDFDocument document = builder.build();
+        const QList<pdf::PDFRenderError> errors = processPage(document);
+
+        // A moderately deep acyclic nesting is a legal document.
+        QVERIFY(errors.isEmpty());
+    }
 }
 
-void ContentProcessorLimitsTest::deeplyNestedFormsAreBounded()
+void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
 {
-    const QList<pdf::PDFRenderError> errors = render(createNestedFormDocument(40));
-    QVERIFY(!errors.isEmpty());
-    QVERIFY(std::any_of(errors.cbegin(), errors.cend(), [](const pdf::PDFRenderError& error)
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+
+    // A single glyph whose content paints character 0 with the very same font,
+    // creating an unbounded recursion. It is bounded by the content stream
+    // nesting depth, not by any form detection (no forms are involved here).
+    const pdf::PDFObjectReference glyphReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(pdf::PDFDictionary(), QByteArray("/F 12 Tf 1 0 0 1 0 0 Tm <00> Tj"))));
+
+    const pdf::PDFObjectReference fontReference = builder.addObject(pdf::PDFObject());
+
+    pdf::PDFObjectFactory fontFactory;
+    fontFactory.beginDictionary();
+    fontFactory.beginDictionaryItem("Type"); fontFactory << pdf::WrapName("Font"); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Subtype"); fontFactory << pdf::WrapName("Type3"); fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("FontMatrix");
+    fontFactory.beginArray();
+    fontFactory << 0.001 << 0.0 << 0.0 << 0.001 << 0.0 << 0.0;
+    fontFactory.endArray();
+    fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("FontBBox");
+    fontFactory.beginArray();
+    fontFactory << 0.0 << 0.0 << 1000.0 << 1000.0;
+    fontFactory.endArray();
+    fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("FirstChar"); fontFactory << pdf::PDFInteger(0); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("LastChar"); fontFactory << pdf::PDFInteger(0); fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("Widths");
+    fontFactory.beginArray();
+    fontFactory << 1000.0;
+    fontFactory.endArray();
+    fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("CharProcs");
+    fontFactory.beginDictionary();
+    fontFactory.beginDictionaryItem("A"); fontFactory << glyphReference; fontFactory.endDictionaryItem();
+    fontFactory.endDictionary();
+    fontFactory.endDictionaryItem();
+
+    fontFactory.beginDictionaryItem("Encoding");
+    fontFactory.beginDictionary();
+    fontFactory.beginDictionaryItem("Type"); fontFactory << pdf::WrapName("Encoding"); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Differences");
+    fontFactory.beginArray();
+    fontFactory << pdf::PDFInteger(0) << pdf::PDFObject::createName(QByteArray("A"));
+    fontFactory.endArray();
+    fontFactory.endDictionaryItem();
+    fontFactory.endDictionary();
+    fontFactory.endDictionaryItem();
+
+    // The font paints itself, so it must reference itself from its resources.
+    pdf::PDFDictionary fontFontResources;
+    fontFontResources.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(fontReference));
+    pdf::PDFDictionary fontResources;
+    fontResources.addEntry(pdf::PDFInplaceOrMemoryString("Font"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontFontResources))));
+    fontFactory.beginDictionaryItem("Resources"); fontFactory << pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontResources))); fontFactory.endDictionaryItem();
+
+    fontFactory.endDictionary();
+    builder.setObject(fontReference, fontFactory.takeObject());
+
+    pdf::PDFDictionary pageFontResources;
+    pageFontResources.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(fontReference));
+    pdf::PDFDictionary pageResources;
+    pageResources.addEntry(pdf::PDFInplaceOrMemoryString("Font"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageFontResources))));
+
+    setPageContent(builder, pageReference, "BT /F 12 Tf 1 0 0 1 0 0 Tm <00> Tj ET",
+                   pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageResources))));
+
+    pdf::PDFDocument document = builder.build();
+    const QList<pdf::PDFRenderError> errors = processPage(document);
+
+    QCOMPARE(errors.size(), 1);
+    QVERIFY(errors.constFirst().message.contains(QStringLiteral("Maximum content stream nesting depth")));
+}
+
+void ContentProcessorLimitsTest::test_objectStreamWithHugeObjectCount_isRejected()
+{
+    QByteArray buffer("%PDF-1.7\n");
+
+    auto appendObject = [&buffer](const QByteArray& text) -> qint64
     {
-        return error.message.contains("Maximum content stream nesting depth exceeded");
-    }));
-}
+        const qint64 offset = buffer.size();
+        buffer.append(text);
+        return offset;
+    };
 
-void ContentProcessorLimitsTest::shallowNestedFormsRender()
-{
-    QVERIFY(render(createNestedFormDocument(16)).isEmpty());
-}
+    const qint64 catalogOffset = appendObject("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    const qint64 pageTreeOffset = appendObject("2 0 obj\n<< /Type /Pages /Count 0 /Kids [] >>\nendobj\n");
 
-void ContentProcessorLimitsTest::objectStreamCountIsBounded()
-{
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false);
-    reader.readFromBuffer(createObjectStreamWithInvalidCount());
+    // Object stream declaring an absurd object count. Without a bound this
+    // triggers a multi-gigabyte vector allocation and a signed overflow guard.
+    const qint64 objectStreamOffset = appendObject("3 0 obj\n<< /Type /ObjStm /N 1000000000 /First 1 /Length 0 >>\nstream\nendstream\nendobj\n");
 
+    const qint64 xrefStreamOffset = buffer.size();
+
+    // Cross reference stream with W = [1 2 2], 6 entries (objects 0..5). Object
+    // 4 is stored as a compressed entry in object stream 3.
+    QByteArray xrefStreamData;
+    QDataStream xrefDataStream(&xrefStreamData, QIODevice::WriteOnly);
+    xrefDataStream.setByteOrder(QDataStream::BigEndian);
+
+    auto appendXrefEntry = [&xrefDataStream](quint8 type, quint32 value, quint32 second)
+    {
+        xrefDataStream << type;
+        xrefDataStream << quint16(value);
+        xrefDataStream << quint16(second);
+    };
+
+    appendXrefEntry(0, 0, 0);
+    appendXrefEntry(1, quint32(catalogOffset), 0);
+    appendXrefEntry(1, quint32(pageTreeOffset), 0);
+    appendXrefEntry(1, quint32(objectStreamOffset), 0);
+    appendXrefEntry(2, 3, 0);
+    appendXrefEntry(1, quint32(xrefStreamOffset), 0);
+
+    appendObject(QString("5 0 obj\n<< /Type /XRef /Size 6 /Root 1 0 R /W [1 2 2] /Index [0 6] /Length %1 >>\nstream\n").arg(xrefStreamData.size()).toLatin1());
+    buffer.append(xrefStreamData);
+    appendObject("endstream\nendobj\n");
+
+    appendObject("startxref\n");
+    appendObject(QString("%1\n").arg(xrefStreamOffset).toLatin1());
+    appendObject("%%EOF\n");
+
+    pdf::PDFDocumentReader reader(nullptr, nullptr, false, false);
+    pdf::PDFDocument document = reader.readFromBuffer(buffer);
+
+    // The document reader swallows object stream errors internally, so the
+    // failure is reported through the reader state, not via an exception.
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
-    QVERIFY(reader.getErrorMessage().contains("Object stream 3 is invalid."));
+    QVERIFY(reader.getErrorMessage().contains(QStringLiteral("Object stream")));
 }
 
-QTEST_MAIN(ContentProcessorLimitsTest)
+QTEST_GUILESS_MAIN(ContentProcessorLimitsTest)
 
 #include "tst_contentprocessorlimitstest.moc"
