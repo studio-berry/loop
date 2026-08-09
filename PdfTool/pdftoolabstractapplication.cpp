@@ -36,7 +36,10 @@ namespace pdftool
 class PDFToolHelpApplication : public PDFToolAbstractApplication
 {
 public:
-    PDFToolHelpApplication() : PDFToolAbstractApplication(true) { }
+    PDFToolHelpApplication() :
+        PDFToolAbstractApplication(true)
+    {
+    }
 
     virtual QString getStandardString(StandardString standardString) const override;
     virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
@@ -251,6 +254,13 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("verify-redact-copy-metadata", "Original redaction copied metadata."));
         parser->addOption(QCommandLineOption("verify-redact-copy-outline", "Original redaction copied outline."));
         parser->addOption(QCommandLineOption("verify-redact-allow-incremental", "Do not fail when the output trailer contains /Prev."));
+    }
+
+    if (optionFlags.testFlag(Diagnostics))
+    {
+        parser->addOption(QCommandLineOption("output", "Directory the diagnostics bundle directory is created under (default: current directory).", "dir"));
+        parser->addOption(QCommandLineOption("no-logs", "Do not include the rotated log files in the bundle."));
+        parser->addOption(QCommandLineOption("no-settings", "Do not include a filtered settings.ini copy in the bundle."));
     }
 
     if (optionFlags.testFlag(SignatureVerification))
@@ -679,6 +689,13 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.ocrMinTextChars = minTextChars;
         }
+    }
+
+    if (optionFlags.testFlag(Diagnostics))
+    {
+        options.diagnosticsOutputDirectory = parser->isSet("output") ? parser->value("output") : QDir::currentPath();
+        options.diagnosticsIncludeLogs = !parser->isSet("no-logs");
+        options.diagnosticsIncludeSettings = !parser->isSet("no-settings");
     }
 
     if (optionFlags.testFlag(VerifyRedaction))
@@ -1674,7 +1691,8 @@ std::vector<pdf::PDFInteger> PDFToolOptions::getPageRange(pdf::PDFInteger pageCo
 
     if (zeroBased)
     {
-        std::for_each(pageIndices.begin(), pageIndices.end(), [](auto& index) { --index; });
+        std::for_each(pageIndices.begin(), pageIndices.end(), [](auto& index)
+                      { --index; });
     }
 
     return pageIndices;

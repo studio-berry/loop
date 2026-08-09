@@ -115,6 +115,7 @@ public:
         GetSource,
         BecomeSponsor,
         About,
+        CollectDiagnostics,
         SendByMail,
         RenderToImages,
         Optimize,
@@ -287,13 +288,13 @@ public:
 
     enum Feature
     {
-        None            = 0x0000,   ///< No feature
-        Tools           = 0x0001,   ///< Tools
-        Forms           = 0x0002,   ///< Forms
-        UndoRedo        = 0x0004,   ///< Undo/redo
-        Plugins         = 0x0008,   ///< Plugins
-        TextToSpeech    = 0x0010,   ///< Text to speech
-        AllFeatures     = 0xFFFF,   ///< All features enabled
+        None = 0x0000,   ///< No feature
+        Tools = 0x0001,   ///< Tools
+        Forms = 0x0002,   ///< Forms
+        UndoRedo = 0x0004,   ///< Undo/redo
+        Plugins = 0x0008,   ///< Plugins
+        TextToSpeech = 0x0010,   ///< Text to speech
+        AllFeatures = 0xFFFF,   ///< All features enabled
     };
     Q_DECLARE_FLAGS(Features, Feature)
 
@@ -302,7 +303,7 @@ public:
     void closeDocument();
 
     pdf::PDFWidget* getPdfWidget() const { return m_pdfWidget; }
-    pdf::PDFToolManager* getToolManager() const { return  m_toolManager; }
+    pdf::PDFToolManager* getToolManager() const { return m_toolManager; }
     PDFRecentFileManager* getRecentFileManager() const { return m_recentFileManager; }
     PDFViewerSettings* getSettings() const { return m_settings; }
     pdf::PDFDocument* getDocument() const { return m_pdfDocument.data(); }
@@ -347,7 +348,6 @@ signals:
     void queryPasswordRequest(QString* password, bool* ok);
 
 private:
-
     struct AsyncReadingResult
     {
         pdf::PDFDocumentPointer document;
@@ -374,6 +374,7 @@ private:
     void onActionRenderingOptionTriggered(bool checked);
     void onActionPropertiesTriggered();
     void onActionAboutTriggered();
+    void onActionCollectDiagnosticsTriggered();
     void onActionSendByEMailTriggered();
     void onActionRenderToImagesTriggered();
     void onActionOptimizeTriggered();
@@ -436,12 +437,12 @@ private:
 
     enum SettingFlag
     {
-        NoSettings          = 0x0000,   ///< No feature
-        WindowSettings      = 0x0001,   ///< Window settings
-        GeneralSettings     = 0x0002,   ///< General settings
-        PluginsSettings     = 0x0004,   ///< Enabled plugin settings
-        ActionSettings      = 0x0008,   ///< Action settings
-        RecentFileSettings  = 0x0010,   ///< Recent files settings
+        NoSettings = 0x0000,   ///< No feature
+        WindowSettings = 0x0001,   ///< Window settings
+        GeneralSettings = 0x0002,   ///< General settings
+        PluginsSettings = 0x0004,   ///< Enabled plugin settings
+        ActionSettings = 0x0008,   ///< Action settings
+        RecentFileSettings = 0x0010,   ///< Recent files settings
         CertificateSettings = 0x0020,   ///< Certificate settings
     };
     Q_DECLARE_FLAGS(Settings, SettingFlag)
@@ -493,4 +494,4 @@ private:
 
 }   // namespace pdfviewer
 
-#endif // PDFPROGRAMCONTROLLER_H
+#endif   // PDFPROGRAMCONTROLLER_H
