@@ -1,0 +1,25 @@
+{
+    "checks": [
+        {
+            "id": "output-intent",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "output-intent",
+            "message": "Output intent 'CGATS TR 001' has an ICC profile that is not a valid ICC profile.",
+            "scope": "document",
+            "severity": "error",
+            "type": "output-intent-profile-invalid"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loupe Test - Output Intent",
+    "schema_version": 3,
+    "warnings": [
+    ]
+}

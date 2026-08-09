@@ -83,15 +83,30 @@ QString PDFToolPreflightApplication::getStandardString(StandardString standardSt
 
 PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& options)
 {
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("The preflight command only supports JSON output."));
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     if (options.document.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("No document specified."));
         return PDFToolExitCode::InputError;
     }
 
     if (options.preflightProfilePath.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No profile specified. Use --profile <file.json>."), options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("No profile specified. Use --profile <file.json>."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -99,7 +114,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     QString profileError;
     if (!loadProfileJson(options.preflightProfilePath, profileJson, profileError))
     {
-        PDFConsole::writeError(profileError, options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         profileError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -136,7 +154,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const
 {
-    return OpenDocument | PreflightProfile;
+    return ConsoleFormat | OpenDocument | PreflightProfile;
 }
 
 }   // namespace pdftool

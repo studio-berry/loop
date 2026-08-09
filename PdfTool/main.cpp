@@ -89,6 +89,41 @@ bool commandLineRequestsJson(const QStringList& arguments)
     return false;
 }
 
+bool commandLineSpecifiesConsoleFormat(const QStringList& arguments)
+{
+    for (const QString& argument : arguments)
+    {
+        if (argument == QStringLiteral("--console-format") ||
+            argument.startsWith(QStringLiteral("--console-format=")))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QString requestedCommand(const QStringList& arguments)
+{
+    for (qsizetype i = 1; i < arguments.size(); ++i)
+    {
+        const QString& argument = arguments[i];
+        if (argument == QStringLiteral("--console-format") ||
+            argument == QStringLiteral("--text-codec"))
+        {
+            ++i;
+            continue;
+        }
+
+        if (!argument.startsWith('-'))
+        {
+            return argument;
+        }
+    }
+
+    return QString();
+}
+
 /// Writes the result envelope to stdout (compact JSON, single document) and
 /// returns the process exit code that must agree with its exit_code field.
 int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::PDFToolExitCode exitCode)
@@ -96,6 +131,24 @@ int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::
     const QByteArray json = QJsonDocument(context.toJson(exitCode)).toJson(QJsonDocument::Compact);
     pdftool::PDFConsole::writeData(json);
     pdftool::PDFConsole::writeData(QByteArray("\n"));
+
+    return static_cast<int>(exitCode);
+}
+
+int writeInvocationError(const pdftool::PDFToolExecutionContext& context,
+                         pdftool::PDFToolExitCode exitCode,
+                         bool wantsJson,
+                         const QString& message)
+{
+    if (wantsJson)
+    {
+        return writeJsonEnvelope(context, exitCode);
+    }
+
+    if (!message.isEmpty())
+    {
+        pdftool::PDFConsole::writeError(message, QStringConverter::Utf8);
+    }
 
     return static_cast<int>(exitCode);
 }
@@ -131,8 +184,7 @@ int main(int argc, char *argv[])
     parser.addPositionalArgument("command", "Command to execute.");
     parser.parse(arguments);
 
-    QStringList positionalArguments = parser.positionalArguments();
-    const QString command = !positionalArguments.isEmpty() ? positionalArguments.front() : QString();
+    const QString command = requestedCommand(arguments);
 
     pdftool::PDFToolAbstractApplication* application = pdftool::PDFToolApplicationStorage::getApplicationByCommand(command);
 
@@ -140,6 +192,10 @@ int main(int argc, char *argv[])
     if (!application && !command.isEmpty())
     {
         pdftool::PDFToolExecutionContext context(command);
+        if (wantsJson)
+        {
+            pdftool::PDFConsole::setDiagnosticSink(&context);
+        }
         context.addDiagnostic({
             pdftool::PDFToolDiagnosticSeverity::Error,
             QStringLiteral("cli.unknown-command"),
@@ -186,6 +242,12 @@ int main(int argc, char *argv[])
 
     const QString displayCommand = application->getStandardString(pdftool::PDFToolAbstractApplication::Command);
     pdftool::PDFToolExecutionContext context(displayCommand);
+    if (wantsJson ||
+        ((displayCommand == QStringLiteral("preflight") || displayCommand == QStringLiteral("ocr")) &&
+         !commandLineSpecifiesConsoleFormat(arguments)))
+    {
+        pdftool::PDFConsole::setDiagnosticSink(&context);
+    }
 
     application->initializeCommandLineParser(&parser);
 
@@ -200,15 +262,18 @@ int main(int argc, char *argv[])
             {}
         });
 
-        return writeJsonEnvelope(context, pdftool::PDFToolExitCode::InvalidInvocation);
+        return writeInvocationError(context,
+                                    pdftool::PDFToolExitCode::InvalidInvocation,
+                                    wantsJson,
+                                    parser.errorText());
     }
 
-    if (parser.isSet("help"))
+    if (!wantsJson && parser.isSet("help"))
     {
         parser.showHelp();
     }
 
-    if (parser.isSet("version"))
+    if (!wantsJson && parser.isSet("version"))
     {
         parser.showVersion();
     }
