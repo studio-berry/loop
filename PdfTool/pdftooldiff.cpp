@@ -55,7 +55,7 @@ PDFToolExitCode PDFToolDiff::execute(const PDFToolOptions& options)
 {
     if (options.diffFiles.size() != 2)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Exactly two documents must be specified."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Exactly two documents must be specified."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -64,14 +64,14 @@ PDFToolExitCode PDFToolDiff::execute(const PDFToolOptions& options)
     pdf::PDFDocument leftDocument = reader.readFromFile(options.diffFiles.front());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.front()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.front()), QJsonObject{{QStringLiteral("path"), options.diffFiles.front()}});
         return PDFToolExitCode::InputError;
     }
 
     pdf::PDFDocument rightDocument = reader.readFromFile(options.diffFiles.back());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.back()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.back()), QJsonObject{{QStringLiteral("path"), options.diffFiles.back()}});
         return PDFToolExitCode::InputError;
     }
 
@@ -149,7 +149,7 @@ PDFToolExitCode PDFToolDiff::execute(const PDFToolOptions& options)
     }
     else
     {
-        PDFConsole::writeError(result.getResult().getErrorMessage(), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), result.getResult().getErrorMessage());
         return PDFToolExitCode::InternalError;
     }
 

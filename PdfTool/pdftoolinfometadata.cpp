@@ -83,12 +83,12 @@ PDFToolExitCode PDFToolInfoMetadataApplication::execute(const PDFToolOptions& op
         }
         catch (const pdf::PDFException &e)
         {
-            PDFConsole::writeError(e.getMessage(), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.metadata-unreadable"), e.getMessage());
         }
     }
     else
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Metadata not found in document."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Warning, QStringLiteral("pdf.metadata-missing"), PDFToolTranslationContext::tr("Metadata not found in document."));
     }
 
     return PDFToolExitCode::Success;

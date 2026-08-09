@@ -191,6 +191,7 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
     m_actionManager->setAction(PDFActionManager::GetSource, ui->actionGetSource);
     m_actionManager->setAction(PDFActionManager::BecomeSponsor, ui->actionBecomeASponsor);
     m_actionManager->setAction(PDFActionManager::About, ui->actionAbout);
+    m_actionManager->setAction(PDFActionManager::CollectDiagnostics, ui->actionCollectDiagnostics);
     m_actionManager->setAction(PDFActionManager::SendByMail, ui->actionSend_by_E_Mail);
     m_actionManager->setAction(PDFActionManager::RenderToImages, ui->actionRender_to_Images);
     m_actionManager->setAction(PDFActionManager::Optimize, ui->actionOptimize);

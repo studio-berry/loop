@@ -54,6 +54,7 @@
 #include "pdfactioncombobox.h"
 #include "pdffullscreenwidget.h"
 #include "pdfpagegeometry.h"
+#include "pdfdiagnostics.h"
 
 #include <QMenu>
 #include <QPrinter>
@@ -69,6 +70,7 @@
 #include <QFileInfo>
 #include <QApplication>
 #include <QFileDialog>
+#include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
 #include <QInputDialog>
 #include <QMainWindow>
@@ -97,7 +99,6 @@ PDFActionManager::PDFActionManager(QObject* parent) :
     m_actions(),
     m_actionGroups()
 {
-
 }
 
 QToolButton* PDFActionManager::createToolButtonForActionGroup(ActionGroup group, QWidget* parent) const
@@ -164,20 +165,19 @@ void PDFActionManager::setChecked(PDFActionManager::Action type, bool checked)
 
 std::vector<QAction*> PDFActionManager::getRenderingOptionActions() const
 {
-    return getActionList({
-         RenderOptionAntialiasing,
-         RenderOptionTextAntialiasing,
-         RenderOptionSmoothPictures,
-         RenderOptionIgnoreOptionalContentSettings,
-         RenderOptionDisplayRenderTimes,
-         RenderOptionDisplayAnnotations,
-         RenderOptionInvertColors,
-         RenderOptionGrayscale,
-         RenderOptionBitonal,
-         RenderOptionHighContrast,
-         RenderOptionCustomColors,
-         RenderOptionShowTextBlocks,
-         RenderOptionShowTextLines});
+    return getActionList({ RenderOptionAntialiasing,
+                           RenderOptionTextAntialiasing,
+                           RenderOptionSmoothPictures,
+                           RenderOptionIgnoreOptionalContentSettings,
+                           RenderOptionDisplayRenderTimes,
+                           RenderOptionDisplayAnnotations,
+                           RenderOptionInvertColors,
+                           RenderOptionGrayscale,
+                           RenderOptionBitonal,
+                           RenderOptionHighContrast,
+                           RenderOptionCustomColors,
+                           RenderOptionShowTextBlocks,
+                           RenderOptionShowTextLines });
 }
 
 std::vector<QAction*> PDFActionManager::getActions() const
@@ -544,6 +544,10 @@ void PDFProgramController::initialize(Features features,
     if (QAction* action = m_actionManager->getAction(PDFActionManager::About))
     {
         connect(action, &QAction::triggered, this, &PDFProgramController::onActionAboutTriggered);
+    }
+    if (QAction* action = m_actionManager->getAction(PDFActionManager::CollectDiagnostics))
+    {
+        connect(action, &QAction::triggered, this, &PDFProgramController::onActionCollectDiagnosticsTriggered);
     }
     if (QAction* action = m_actionManager->getAction(PDFActionManager::SendByMail))
     {
@@ -945,9 +949,10 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                     if (dangerousExtensions.contains(extension))
                     {
                         if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
-                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
-                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(QString::fromLatin1(winSpecification.file)),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                                                 tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                                    "This is potentially dangerous. Are you sure you want to proceed?")
+                                                     .arg(QString::fromLatin1(winSpecification.file)),
+                                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
                         {
                             continue;
                         }
@@ -985,9 +990,10 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                     if (dangerousExtensions.contains(extension))
                     {
                         if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
-                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
-                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(plaftormFileName),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                                                 tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                                    "This is potentially dangerous. Are you sure you want to proceed?")
+                                                     .arg(plaftormFileName),
+                                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
                         {
                             continue;
                         }
@@ -1033,7 +1039,7 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                 if (!allowedSchemes.contains(scheme))
                 {
                     QMessageBox::warning(m_mainWindow, tr("Open URL"),
-                        tr("URL scheme '%1' is not allowed. Only http, https, and mailto links are permitted.").arg(scheme));
+                                         tr("URL scheme '%1' is not allowed. Only http, https, and mailto links are permitted.").arg(scheme));
                     break;
                 }
 
@@ -1471,6 +1477,61 @@ void PDFProgramController::onActionAboutTriggered()
     dialog.exec();
 }
 
+void PDFProgramController::onActionCollectDiagnosticsTriggered()
+{
+    const QMessageBox::StandardButton consent = QMessageBox::question(
+        m_mainWindow,
+        tr("Collect Diagnostics"),
+        tr("This collects a support bundle containing application/system/dependency "
+           "version info, the loaded plugin list, the rotated log files, and a copy of "
+           "your settings.\n\n"
+           "The log files and settings copy have the home/temp directory, login name, "
+           "host name, other absolute paths, email addresses, and IPv4 literals scrubbed; "
+           "the settings copy also drops the recent-files list, default open directory, "
+           "and custom author name.\n\n"
+           "No PDF or document content, and no crash minidumps, are included. You choose "
+           "where the bundle is saved and can inspect it before sending it to anyone.\n\n"
+           "Continue?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+
+    if (consent != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    const QString outputDirectory = QFileDialog::getExistingDirectory(m_mainWindow, tr("Select Diagnostics Output Directory"));
+    if (outputDirectory.isEmpty())
+    {
+        return;
+    }
+
+    pdf::PDFDiagnosticsOptions options;
+    options.outputDirectory = outputDirectory;
+    options.plugins = m_plugins;
+
+    const pdf::PDFDiagnosticsResult result = pdf::PDFDiagnosticsCollector::collect(options);
+
+    if (!result.success)
+    {
+        QMessageBox::critical(m_mainWindow, tr("Collect Diagnostics"), tr("Could not create the diagnostics bundle: %1").arg(result.errorMessage));
+        return;
+    }
+
+    QMessageBox successBox(QMessageBox::Information,
+                           tr("Collect Diagnostics"),
+                           tr("The diagnostics bundle was written to:\n%1").arg(result.bundleDirectory),
+                           QMessageBox::Ok,
+                           m_mainWindow);
+    QPushButton* openFolderButton = successBox.addButton(tr("Open Folder"), QMessageBox::ActionRole);
+    successBox.exec();
+
+    if (successBox.clickedButton() == openFolderButton)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(result.bundleDirectory));
+    }
+}
+
 void PDFProgramController::onActionSendByEMailTriggered()
 {
     Q_ASSERT(m_pdfDocument);
@@ -1743,7 +1804,7 @@ void PDFProgramController::onActionEncryptionTriggered()
     };
 
     // Check that we have owner access to the document
-    const pdf::PDFSecurityHandler* securityHandler =  m_pdfDocument->getStorage().getSecurityHandler();
+    const pdf::PDFSecurityHandler* securityHandler = m_pdfDocument->getStorage().getSecurityHandler();
     pdf::PDFSecurityHandler::AuthorizationResult authorizationResult = securityHandler->getAuthorizationResult();
     if (authorizationResult != pdf::PDFSecurityHandler::AuthorizationResult::OwnerAuthorized &&
         authorizationResult != pdf::PDFSecurityHandler::AuthorizationResult::NoAuthorizationRequired)
@@ -2061,6 +2122,7 @@ void PDFProgramController::updateActionsAvailability()
     m_actionManager->setEnabled(PDFActionManager::Options, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::ResetToFactorySettings, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::About, !isBusy);
+    m_actionManager->setEnabled(PDFActionManager::CollectDiagnostics, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::FitPage, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::FitWidth, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::FitHeight, hasValidDocument);
@@ -2099,6 +2161,7 @@ void PDFProgramController::onViewerSettingsChanged()
     m_annotationManager->setMeshQualitySettings(m_pdfWidget->getDrawWidgetProxy()->getMeshQualitySettings());
     pdf::PDFExecutionPolicy::setStrategy(m_settings->getMultithreadingStrategy());
     pdf::PDFAuthorSettings::setAuthorName(m_settings->getSettings().m_authorNameMode, m_settings->getSettings().m_customAuthorName);
+    pdf::PDFLogSession::setLevel(m_settings->getSettings().m_logLevel);
 
     updateRenderingOptionActions();
 }
@@ -2112,9 +2175,9 @@ void PDFProgramController::onFileChanged(const QString& fileName)
 {
     QAction* autoRefreshDocumentAction = m_actionManager->getAction(PDFActionManager::AutomaticDocumentRefresh);
 
-    if (!autoRefreshDocumentAction || // We do not have action
-        !autoRefreshDocumentAction->isChecked() || // Auto refresh is not enabled
-        m_fileInfo.originalFileName != fileName) // File is different
+    if (!autoRefreshDocumentAction ||   // We do not have action
+        !autoRefreshDocumentAction->isChecked() ||   // Auto refresh is not enabled
+        m_fileInfo.originalFileName != fileName)   // File is different
     {
         return;
     }
@@ -2315,7 +2378,7 @@ void PDFProgramController::onDocumentReadingFinished()
         }
 
         case pdf::PDFDocumentReader::Result::Cancelled:
-            break; // Do nothing, user cancelled the document reading
+            break;   // Do nothing, user cancelled the document reading
     }
     updateActionsAvailability();
 }
@@ -2578,13 +2641,12 @@ void PDFProgramController::enterFullscreenMode()
 
     m_fullscreenWidget = new PDFFullscreenWidget(m_CMSManager, m_settings->getRendererEngine(), m_mainWindow);
     connect(m_fullscreenWidget, &PDFFullscreenWidget::exitRequested, this, [this]()
-    {
+            {
         if (QAction* action = m_actionManager->getAction(PDFActionManager::FullscreenMode))
         {
             action->setChecked(false);
         }
-        leaveFullscreenMode();
-    });
+        leaveFullscreenMode(); });
 
     pdf::PDFWidget* fullscreenPdfWidget = m_fullscreenWidget->getPdfWidget();
     fullscreenPdfWidget->updateCacheLimits(qsizetype(m_settings->getCompiledPageCacheLimit() * 1024LL),
