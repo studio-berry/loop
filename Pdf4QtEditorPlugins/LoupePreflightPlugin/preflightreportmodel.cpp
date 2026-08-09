@@ -185,17 +185,27 @@ bool PreflightReportModel::hasAddBleedFixup() const
     return addBleedFixup() != nullptr;
 }
 
-const PreflightFixupEntry* PreflightReportModel::addBleedFixup() const
+bool PreflightReportModel::hasFixup(const QString& id) const
 {
-    for (const PreflightFixupEntry& fixup : m_fixups)
+    return fixup(id) != nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::fixup(const QString& id) const
+{
+    for (const PreflightFixupEntry& entry : m_fixups)
     {
-        if (fixup.id == QStringLiteral("add-bleed"))
+        if (entry.id == id)
         {
-            return &fixup;
+            return &entry;
         }
     }
 
     return nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::addBleedFixup() const
+{
+    return fixup(QStringLiteral("add-bleed"));
 }
 
 bool PreflightReportModel::hasRgbToCmykFixup() const
@@ -205,14 +215,7 @@ bool PreflightReportModel::hasRgbToCmykFixup() const
 
 const PreflightFixupEntry* PreflightReportModel::rgbToCmykFixup() const
 {
-    for (const PreflightFixupEntry& fixup : m_fixups)
-    {
-        if (fixup.id == QStringLiteral("rgb-to-cmyk"))
-        {
-            return &fixup;
-        }
-    }
-    return nullptr;
+    return fixup(QStringLiteral("rgb-to-cmyk"));
 }
 
 bool PreflightReportModel::hasWhiteOverprintFinding() const
