@@ -50,6 +50,9 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfbleedfixup.h
     sources/pdfrepairdiff.cpp
     sources/pdfrepairdiff.h
+    sources/pdfrepairoperation.cpp
+    sources/pdfrepairoperation.h
+    sources/pdfrepairprimitives.cpp
     sources/pdfrgbtocmykfixup.cpp
     sources/pdfrgbtocmykfixup.h
     sources/pdfpagemasterexport.cpp
