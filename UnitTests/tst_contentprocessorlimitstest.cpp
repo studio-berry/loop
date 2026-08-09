@@ -283,8 +283,10 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
     fontFactory.endDictionaryItem();
 
     // The font paints itself, so it must reference itself from its resources.
+    pdf::PDFDictionary fontFontResources;
+    fontFontResources.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(fontReference));
     pdf::PDFDictionary fontResources;
-    fontResources.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(fontReference));
+    fontResources.addEntry(pdf::PDFInplaceOrMemoryString("Font"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontFontResources))));
     fontFactory.beginDictionaryItem("Resources"); fontFactory << pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontResources))); fontFactory.endDictionaryItem();
 
     fontFactory.endDictionary();
@@ -301,10 +303,6 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
     pdf::PDFDocument document = builder.build();
     const QList<pdf::PDFRenderError> errors = processPage(document);
 
-    for (const pdf::PDFRenderError& error : errors)
-    {
-        qWarning() << "TYPE3ERROR:" << error.message;
-    }
     QCOMPARE(errors.size(), 1);
     QVERIFY(errors.constFirst().message.contains(QStringLiteral("Maximum content stream nesting depth")));
 }
