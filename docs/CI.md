@@ -20,12 +20,24 @@ test output to the repository.
 ## Updating pinned workflow dependencies
 
 Workflow actions, vcpkg, and binary packaging tools are pinned to exact
-revisions or SHA-256 checksums. To refresh a pin:
+revisions or SHA-256 checksums. The source of truth for packaging tools is
+`.github/pins/packaging-tools.json` (see its README); the vcpkg baseline is the
+`default-registry.baseline` in `vcpkg-configuration.json`. Workflows derive
+their vcpkg checkout and all tool digests from those files at runtime, and the
+`Verify supply-chain pins` step (`scripts/ci/check_supply_chain_pins.py`)
+fails the build if any action is not a full commit SHA, any package URL is
+mutable (`continuous` / `latest`), or a pin is missing.
+
+To refresh a pin:
 
 1. Review the upstream release notes and commit diff.
-2. Update the revision or versioned asset URL and its SHA-256 in the workflow.
+2. Update `.github/pins/packaging-tools.json` (for packaging tools) or the
+   workflow's copy of a full action SHA.
 3. Run the affected workflow manually and inspect its logs and generated
-   artifact.
+   artifact; the verify step enforces the digest.
 4. Record the reviewed version in the commit or pull request description.
 
 Do not replace a pin with a moving tag such as `main`, `latest`, or `continuous`.
+DigiCert KeyLocker (`MSI` signing) must additionally be added to
+`digicertKeylocker` in `packaging-tools.json` before `SIGN_MSI` can proceed;
+the signing step refuses to run against an unpinned toolchain.
