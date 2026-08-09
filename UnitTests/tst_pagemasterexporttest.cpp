@@ -74,6 +74,8 @@ private slots:
     void resume_skipsAlreadyWrittenOutputs();
     void resume_mismatchedManifestStartsFreshBatch();
     void preflight_gate_blocksFailedOutput();
+    void bleed_confirmationGate_blocksBeforeAssembly();
+    void bleed_manifestReportsEligibility();
 };
 
 namespace
@@ -278,6 +280,7 @@ void PageMasterExportTest::pipelineOrder_geometryThenBleedThenWrite()
     job.pageGeometrySettings.applyTrimBox = true;
 
     job.hasBleedFixupSettings = true;
+    job.bleedConfirmationGranted = true;
     job.bleedFixupSettings.force = true;
     job.bleedFixupSettings.skipIfAlreadyBleeding = false;
     job.bleedFixupSettings.dpi = 72;
@@ -420,6 +423,7 @@ void PageMasterExportTest::failure_bleedError_noPartialWrite()
     job.outputFileNames.push_back(outputPath);
     job.overwriteFiles = true;
     job.hasBleedFixupSettings = true;
+    job.bleedConfirmationGranted = true;
     job.bleedFixupSettings.dpi = 0;
     job.bleedFixupSettings.force = true;
 
@@ -985,7 +989,7 @@ void PageMasterExportTest::resume_mismatchedManifestStartsFreshBatch()
     const QString staleOther = tempDir.filePath(QStringLiteral("stale-other.pdf"));
 
     QJsonObject staleManifest{
-        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("schema_version"), 2 },
         { QStringLiteral("batch_id"), QStringLiteral("stale-batch") },
         { QStringLiteral("outputs"), QJsonArray{
               QJsonObject{
@@ -1043,6 +1047,72 @@ void PageMasterExportTest::preflight_gate_blocksFailedOutput()
     QVERIFY(!result.success);
     QVERIFY(!QFile::exists(outputPath));
     QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight.json")));
+}
+
+void PageMasterExportTest::bleed_confirmationGate_blocksBeforeAssembly()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    pdf::PDFDocument source = buildFilledPage();
+    const QString outputPath = tempDir.filePath(QStringLiteral("confirmation.pdf"));
+
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.hasBleedFixupSettings = true;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("confirmation"), Qt::CaseInsensitive));
+    QVERIFY(!QFile::exists(outputPath));
+}
+
+void PageMasterExportTest::bleed_manifestReportsEligibility()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString appliedPath = tempDir.filePath(QStringLiteral("applied.pdf"));
+    pdf::PDFDocument appliedSource = buildFilledPage(QRectF(0.0, 0.0, 200.0, 200.0));
+    pdf::PDFPageMasterExportJob appliedJob;
+    appliedJob.assembledDocuments.push_back({ documentPage(0, appliedSource) });
+    appliedJob.documents.emplace(0, std::move(appliedSource));
+    appliedJob.outputFileNames.push_back(appliedPath);
+    appliedJob.overwriteFiles = true;
+    appliedJob.hasBleedFixupSettings = true;
+    appliedJob.bleedConfirmationGranted = true;
+    appliedJob.bleedFixupSettings.force = true;
+    appliedJob.bleedFixupSettings.dpi = 72;
+
+    const pdf::PDFPageMasterExportResult appliedResult = pdf::PDFPageMasterExport::run(std::move(appliedJob));
+    QVERIFY2(appliedResult.success, qPrintable(appliedResult.errorMessage));
+    const QJsonObject appliedReport = appliedResult.manifest.value(QStringLiteral("outputs")).toArray().first().toObject()
+                                              .value(QStringLiteral("bleed_report")).toObject();
+    QVERIFY(appliedReport.value(QStringLiteral("eligible")).toBool());
+    QVERIFY(appliedReport.value(QStringLiteral("applied")).toBool());
+    QCOMPARE(appliedReport.value(QStringLiteral("status")).toString(), QStringLiteral("applied"));
+
+    const QString sufficientPath = tempDir.filePath(QStringLiteral("sufficient.pdf"));
+    pdf::PDFDocument sufficientSource = buildFilledPage(QRectF(0.0, 0.0, 200.0, 200.0));
+    pdf::PDFPageMasterExportJob sufficientJob;
+    sufficientJob.assembledDocuments.push_back({ documentPage(0, sufficientSource) });
+    sufficientJob.documents.emplace(0, std::move(sufficientSource));
+    sufficientJob.outputFileNames.push_back(sufficientPath);
+    sufficientJob.overwriteFiles = true;
+    sufficientJob.hasBleedFixupSettings = true;
+    sufficientJob.bleedConfirmationGranted = true;
+    sufficientJob.bleedFixupSettings.dpi = 72;
+
+    const pdf::PDFPageMasterExportResult sufficientResult = pdf::PDFPageMasterExport::run(std::move(sufficientJob));
+    QVERIFY2(sufficientResult.success, qPrintable(sufficientResult.errorMessage));
+    const QJsonObject sufficientReport = sufficientResult.manifest.value(QStringLiteral("outputs")).toArray().first().toObject()
+                                                  .value(QStringLiteral("bleed_report")).toObject();
+    QVERIFY(!sufficientReport.value(QStringLiteral("eligible")).toBool());
+    QVERIFY(!sufficientReport.value(QStringLiteral("applied")).toBool());
+    QCOMPARE(sufficientReport.value(QStringLiteral("status")).toString(), QStringLiteral("not-needed"));
 }
 
 QTEST_GUILESS_MAIN(PageMasterExportTest)
