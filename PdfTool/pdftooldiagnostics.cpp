@@ -56,9 +56,9 @@ QString PDFToolDiagnostics::getStandardString(StandardString standardString) con
 PDFToolExitCode PDFToolDiagnostics::execute(const PDFToolOptions& options)
 {
     pdf::PDFDiagnosticsOptions collectorOptions;
+    collectorOptions.applicationId = QStringLiteral("pdftool");
     collectorOptions.outputDirectory = options.diagnosticsOutputDirectory;
     collectorOptions.includeLogs = options.diagnosticsIncludeLogs;
-    collectorOptions.includeSettings = options.diagnosticsIncludeSettings;
 
     const pdf::PDFDiagnosticsResult result = pdf::PDFDiagnosticsCollector::collect(collectorOptions);
 

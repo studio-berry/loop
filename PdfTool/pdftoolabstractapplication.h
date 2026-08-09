@@ -202,7 +202,6 @@ struct PDFToolOptions
     // For option 'Diagnostics'
     QString diagnosticsOutputDirectory;
     bool diagnosticsIncludeLogs = true;
-    bool diagnosticsIncludeSettings = true;
 
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope

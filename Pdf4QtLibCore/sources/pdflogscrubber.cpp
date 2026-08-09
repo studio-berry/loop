@@ -117,14 +117,14 @@ QString loginName()
     return QString();
 }
 
-/// Replaces any remaining absolute path (Windows drive-letter or POSIX) with
+/// Replaces any remaining absolute path (Windows drive-letter, UNC, or POSIX) with
 /// a placeholder that keeps only the extension and drops the basename - see
 /// the class comment in pdflogscrubber.h for why the basename is the part
 /// that has to go.
 QString scrubRemainingAbsolutePaths(const QString& text)
 {
     static const QRegularExpression pathPattern(
-        QStringLiteral(R"(([A-Za-z]:[\\/][^\s"'<>()\[\]{},;]*)|((?<![:/])/(?!/)[^\s"'<>()\[\]{},;]*))"));
+        QStringLiteral(R"(([A-Za-z]:[\\/][^\s"'<>()\[\]{},;]*)|(\\\\[^\s"'<>()\[\]{},;]*)|((?<![:/])/(?!/)[^\s"'<>()\[\]{},;]*))"));
 
     QString result;
     result.reserve(text.size());
@@ -168,6 +168,19 @@ QString scrubIPv4Literals(const QString& text)
     return result;
 }
 
+QString scrubIPv6Literals(const QString& text)
+{
+    // This deliberately matches only colon-rich hexadecimal tokens. It avoids
+    // adding a QtNetwork dependency to Core while covering compressed and
+    // expanded IPv6 forms commonly emitted by Qt/network diagnostics.
+    static const QRegularExpression ipPattern(
+        QStringLiteral(R"((?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:]))"));
+
+    QString result = text;
+    result.replace(ipPattern, QStringLiteral("<IP>"));
+    return result;
+}
+
 }   // namespace
 
 QString PDFLogScrubber::scrub(const QString& text)
@@ -192,6 +205,7 @@ QString PDFLogScrubber::scrub(const QString& text)
     result = scrubRemainingAbsolutePaths(result);
     result = scrubEmailAddresses(result);
     result = scrubIPv4Literals(result);
+    result = scrubIPv6Literals(result);
 
     return result;
 }

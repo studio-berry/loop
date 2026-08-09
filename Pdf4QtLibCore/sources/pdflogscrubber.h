@@ -48,8 +48,8 @@ public:
     PDFLogScrubber() = delete;
 
     /// Scrubs \p text of the home and temp directories, the login name, the
-    /// machine host name, any remaining absolute path (Windows or POSIX),
-    /// email addresses, and IPv4 literals. Order matters: the home/temp
+    /// machine host name, any remaining absolute path (Windows, UNC, or POSIX),
+    /// email addresses, and IPv4/IPv6 literals. Order matters: the home/temp
     /// directory and login name/host name passes run first so a leftover
     /// absolute path outside those roots is still caught by the generic path
     /// pass. Applying scrub() to already-scrubbed text is a no-op.

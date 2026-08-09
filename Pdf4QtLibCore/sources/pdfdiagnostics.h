@@ -35,14 +35,19 @@ namespace pdf
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFDiagnosticsOptions
 {
+    /// Stable surface id stored in the manifest (e.g. "editor" or "pdftool").
+    /// Falls back to QCoreApplication::applicationName() when empty.
+    QString applicationId;
+
     /// Directory the bundle directory is created under (e.g. a folder the user picked)
     QString outputDirectory;
 
+    /// Optional exact final bundle directory. When set, it takes precedence
+    /// over outputDirectory and an existing destination is rejected.
+    QString destinationPath;
+
     /// Include the rotated log files (logs/*.log) in the bundle
     bool includeLogs = true;
-
-    /// Include a filtered settings.ini copy in the bundle
-    bool includeSettings = true;
 
     /// Optional; when non-empty, plugins.json is written with this list
     PDFPluginInfos plugins;
@@ -59,9 +64,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFDiagnosticsResult
 /// Builds a self-contained, privacy-scrubbed support bundle: a plain directory
 /// with a manifest.json, system/dependency info, the rotated log files
 /// (already scrubbed at write time by PDFLogSession, and scrubbed again here
-/// defensively on copy), a filtered settings.ini, and a README explaining
-/// what is and is not included. Never writes a PDF, document content, the
-/// recent-files list, or a crash minidump - see README.txt for why crash
+/// defensively on copy), and a README explaining what is and is not included.
+/// Never writes a PDF, document content, settings, recent-files list,
+/// environment dump, or crash minidump - see README.txt for why crash
 /// minidumps specifically stay a separate, opt-in mechanism with different
 /// privacy properties (SECURITY.md, R-008 in docs/V1_RELEASE_READINESS.md).
 ///
