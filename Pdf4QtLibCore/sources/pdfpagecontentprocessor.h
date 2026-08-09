@@ -1177,12 +1177,6 @@ private:
     /// Set with rendering errors, which were reported (and should be reported once)
     std::set<QString> m_onceReportedErrors;
 
-    /// Current content-stream nesting depth
-    int m_contentStreamDepth;
-
-    /// Form XObjects currently being processed, used to reject recursive references
-    std::set<PDFObjectReference> m_activeFormReferences;
-
     /// Active structural parent key
     PDFInteger m_structuralParentKey;
 
