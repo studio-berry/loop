@@ -136,6 +136,7 @@
     </property>
     <addaction name="actionGetSource"/>
     <addaction name="actionBecomeASponsor"/>
+    <addaction name="actionCollectDiagnostics"/>
     <addaction name="actionAbout"/>
    </widget>
    <widget class="QMenu" name="menuDeveloper">
@@ -461,6 +462,18 @@
    </property>
    <property name="text">
     <string>&amp;About...</string>
+   </property>
+  </action>
+  <action name="actionCollectDiagnostics">
+   <property name="icon">
+    <iconset resource="pdf4qtlibgui.qrc">
+     <normaloff>:/resources/info.svg</normaloff>:/resources/info.svg</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Collect Diagnostics...</string>
+   </property>
+   <property name="toolTip">
+    <string>Collect a privacy-scrubbed log and settings bundle to help with support requests.</string>
    </property>
   </action>
   <action name="actionFitPage">

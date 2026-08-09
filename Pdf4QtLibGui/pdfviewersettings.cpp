@@ -97,7 +97,7 @@ void PDFViewerSettings::readSettings(QSettings& settings, const pdf::PDFCMSSetti
     m_colorManagementSystemSettings.foregroundColor = settings.value("foregroundColor", defaultCMSSettings.foregroundColor).value<QColor>();
     m_colorManagementSystemSettings.backgroundColor = settings.value("backgroundColor", defaultCMSSettings.backgroundColor).value<QColor>();
     m_colorManagementSystemSettings.sigmoidSlopeFactor = settings.value("sigmoidSlopeFactor", defaultCMSSettings.sigmoidSlopeFactor).toDouble();
-    m_colorManagementSystemSettings.bitonalThreshold = settings.value("bitonalThreshold",defaultCMSSettings.bitonalThreshold).toInt();
+    m_colorManagementSystemSettings.bitonalThreshold = settings.value("bitonalThreshold", defaultCMSSettings.bitonalThreshold).toInt();
     settings.endGroup();
 
     settings.beginGroup("SpeechSettings");
@@ -131,6 +131,13 @@ void PDFViewerSettings::readSettings(QSettings& settings, const pdf::PDFCMSSetti
 
     settings.beginGroup("ColorScheme");
     m_settings.m_colorScheme = static_cast<ColorScheme>(settings.value("colorScheme", int(defaultSettings.m_colorScheme)).toInt());
+    settings.endGroup();
+
+    // Lower-case group name and flat key match the "diagnostics/logLevel" path
+    // pdf::PDFLogSession reads directly, so PdfTool gets the same setting
+    // without depending on this (Gui) module.
+    settings.beginGroup("diagnostics");
+    m_settings.m_logLevel = static_cast<pdf::PDFLogSession::Level>(settings.value("logLevel", int(defaultSettings.m_logLevel)).toInt());
     settings.endGroup();
 
     // Language
@@ -221,6 +228,10 @@ void PDFViewerSettings::writeSettings(QSettings& settings)
 
     settings.beginGroup("ColorScheme");
     settings.setValue("colorScheme", int(m_settings.m_colorScheme));
+    settings.endGroup();
+
+    settings.beginGroup("diagnostics");
+    settings.setValue("logLevel", int(m_settings.m_logLevel));
     settings.endGroup();
 
     pdf::PDFApplicationTranslator::saveSettings(settings, m_settings.m_language);
@@ -330,6 +341,7 @@ PDFViewerSettings::Settings::Settings() :
     m_allowLaunchURI(false),
     m_allowDeveloperMode(false),
     m_multithreadingStrategy(pdf::PDFExecutionPolicy::Strategy::AlwaysMultithreaded),
+    m_logLevel(pdf::PDFLogSession::Warning),
     m_compiledPageCacheLimit(512 * 1024),
     m_thumbnailsCacheLimit(64 * 1024),
     m_fontCacheLimit(pdf::DEFAULT_FONT_CACHE_LIMIT),
@@ -356,7 +368,6 @@ PDFViewerSettings::Settings::Settings() :
     m_wheelScrollVerticalSpeedPercent(WHEEL_SCROLL_SPEED_PERCENT_DEFAULT),
     m_language(pdf::PDFApplicationTranslator::E_LANGUAGE_AUTOMATIC_SELECTION)
 {
-
 }
 
 }   // namespace pdfviewer

@@ -193,6 +193,12 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfsettings.cpp
     sources/pdfsentry.h
     sources/pdfsentry.cpp
+    sources/pdflogger.h
+    sources/pdflogger.cpp
+    sources/pdflogscrubber.h
+    sources/pdflogscrubber.cpp
+    sources/pdfdiagnostics.h
+    sources/pdfdiagnostics.cpp
     fonts.qrc
 )
 
