@@ -392,9 +392,21 @@ PDFToolAbstractApplication::Options PDFToolOcrApplication::getOptionsFlags() con
 
 PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
 {
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("The OCR command only supports JSON output."));
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     if (options.document.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No document was specified."), options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("No document was specified."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -410,7 +422,10 @@ PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
         options.getPageRange(document.getCatalog()->getPageCount(), parseError, true);
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -441,15 +456,20 @@ PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
     QString sidecarError;
     if (anyNeedsOcr && !sidecar.start(sidecarPath, sidecarError))
     {
-        PDFConsole::writeError(sidecarError, options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("ocr.sidecar-unavailable"),
+                         sidecarError);
         return PDFToolExitCode::ProcessingFailure;
     }
 
     QTemporaryDir temporaryDirectory;
     if (anyNeedsOcr && !temporaryDirectory.isValid())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."),
-                               options.outputCodec);
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("ocr.temporary-directory-unavailable"),
+                         PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."));
         sidecar.stop();
         return PDFToolExitCode::ProcessingFailure;
     }

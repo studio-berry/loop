@@ -100,6 +100,24 @@ int writeJsonEnvelope(const pdftool::PDFToolExecutionContext& context, pdftool::
     return static_cast<int>(exitCode);
 }
 
+int writeInvocationError(const pdftool::PDFToolExecutionContext& context,
+                         pdftool::PDFToolExitCode exitCode,
+                         bool wantsJson,
+                         const QString& message)
+{
+    if (wantsJson)
+    {
+        return writeJsonEnvelope(context, exitCode);
+    }
+
+    if (!message.isEmpty())
+    {
+        pdftool::PDFConsole::writeError(message, QStringConverter::Utf8);
+    }
+
+    return static_cast<int>(exitCode);
+}
+
 void handleTerminationSignal(int)
 {
     pdftool::cancelRequested().store(true, std::memory_order_release);
@@ -200,15 +218,18 @@ int main(int argc, char *argv[])
             {}
         });
 
-        return writeJsonEnvelope(context, pdftool::PDFToolExitCode::InvalidInvocation);
+        return writeInvocationError(context,
+                                    pdftool::PDFToolExitCode::InvalidInvocation,
+                                    wantsJson,
+                                    parser.errorText());
     }
 
-    if (parser.isSet("help"))
+    if (!wantsJson && parser.isSet("help"))
     {
         parser.showHelp();
     }
 
-    if (parser.isSet("version"))
+    if (!wantsJson && parser.isSet("version"))
     {
         parser.showVersion();
     }

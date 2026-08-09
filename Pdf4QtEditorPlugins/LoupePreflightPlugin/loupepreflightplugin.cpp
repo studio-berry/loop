@@ -317,7 +317,13 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
 
     updateActions();
     m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath, { QStringLiteral("preflight"), stagedPath, QStringLiteral("--profile"), profilePath });
+    m_preflightProcess->start(pdfToolPath,
+                              { QStringLiteral("preflight"),
+                                stagedPath,
+                                QStringLiteral("--profile"),
+                                profilePath,
+                                QStringLiteral("--console-format"),
+                                QStringLiteral("json") });
 }
 
 void LoupePreflightPlugin::onRunPreflightTriggered()
@@ -373,7 +379,13 @@ void LoupePreflightPlugin::onRunPreflightTriggered()
 
     updateActions();
     m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath, { QStringLiteral("preflight"), snapshotPath, QStringLiteral("--profile"), profilePath });
+    m_preflightProcess->start(pdfToolPath,
+                              { QStringLiteral("preflight"),
+                                snapshotPath,
+                                QStringLiteral("--profile"),
+                                profilePath,
+                                QStringLiteral("--console-format"),
+                                QStringLiteral("json") });
 }
 
 void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStatus)
@@ -419,7 +431,26 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
         return;
     }
 
-    const QJsonObject report = reportDocument.object();
+    const QJsonObject envelope = reportDocument.object();
+    if (envelope.value(QStringLiteral("schema_version")).toInt() != 1 ||
+        envelope.value(QStringLiteral("command")).toString() != QStringLiteral("preflight"))
+    {
+        QMessageBox::critical(m_widget,
+                              tr("Loupe Preflight"),
+                              tr("PdfTool returned an invalid result envelope."));
+        return;
+    }
+
+    const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
+    const QJsonObject report = data.value(QStringLiteral("report")).toObject();
+    if (report.isEmpty())
+    {
+        QMessageBox::critical(m_widget,
+                              tr("Loupe Preflight"),
+                              tr("PdfTool returned a result without a preflight report."));
+        return;
+    }
+
     QString validationError;
     if (!applyReportJson(report, &validationError, reportSourceLabel))
     {

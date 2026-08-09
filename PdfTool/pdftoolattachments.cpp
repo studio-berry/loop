@@ -202,7 +202,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
     {
         if (savedFileCount > 1 && !options.attachmentsTargetFile.isEmpty())
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Target file name must not be specified, if multiple files are being saved."), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Target file name must not be specified, if multiple files are being saved."));
             return PDFToolExitCode::InvalidInvocation;
         }
 
@@ -228,7 +228,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
 
                 if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
                 {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
+                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.path-outside-directory"), PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName));
                     return PDFToolExitCode::InvalidInvocation;
                 }
             }
@@ -263,7 +263,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
 
                 if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
                 {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
+                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.path-outside-directory"), PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName));
                     anyAttachmentSkipped = true;
                     continue;
                 }
@@ -290,7 +290,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
                 const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(outputFile, data, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
                 if (!writeResult)
                 {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), options.outputCodec);
+                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
                     return PDFToolExitCode::ProcessingFailure;
                 }
 
@@ -306,7 +306,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
             }
             catch (const pdf::PDFException &e)
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), options.outputCodec);
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
                 return PDFToolExitCode::ProcessingFailure;
             }
         }

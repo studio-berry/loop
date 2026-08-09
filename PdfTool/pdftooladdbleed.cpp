@@ -162,7 +162,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 {
     if (!options.destructiveDryRun && options.addBleedOutputDocument.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."));
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -193,7 +193,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
     const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
     if (!result)
     {
-        PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), result.getErrorMessage());
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -216,7 +216,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
     const pdf::PDFOperationResult writeResult = writer.write(options.addBleedOutputDocument, &document, true);
     if (!writeResult)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.addBleedOutputDocument}});
         return PDFToolExitCode::ProcessingFailure;
     }
 

@@ -477,6 +477,15 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
             options.outputStyle = PDFOutputFormatter::Style::Text;
         }
 
+        if (consoleFormat.isEmpty())
+        {
+            const QString command = getStandardString(Command);
+            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr"))
+            {
+                options.outputStyle = PDFOutputFormatter::Style::Json;
+            }
+        }
+
         options.outputCodec = getEncoding(parser->value("text-codec"));
     }
 
