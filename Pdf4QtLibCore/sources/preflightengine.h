@@ -31,6 +31,7 @@
 #include <QList>
 #include <QRectF>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <map>
@@ -70,6 +71,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // color-mode parameters (e.g. ["CMYK", "Grayscale"]).
     QStringList allowedColorModes;
+
+    // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
+    QStringList allowedOutputConditionIdentifiers;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.
