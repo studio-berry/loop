@@ -55,6 +55,7 @@
 #include <functional>
 #include <limits>
 #include <set>
+#include <vector>
 
 namespace pdf
 {
@@ -1580,6 +1581,257 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
     }
 }
 
+struct ThinStrokeFinding
+{
+    QString type;
+    QRectF bbox;
+    qreal declaredWidth = 0.0;
+    qreal effectiveWidth = 0.0;
+};
+
+class ThinStrokeProcessor : public PDFPageContentProcessor
+{
+public:
+    ThinStrokeProcessor(const PDFPage* page,
+                        const PDFDocument* document,
+                        const PDFFontCache* fontCache,
+                        const PDFCMS* cms,
+                        const PDFOptionalContentActivity* optionalContentActivity,
+                        const PDFMeshQualitySettings& meshQualitySettings,
+                        qreal minimumWidth,
+                        qreal zeroWidthEpsilon) :
+        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings),
+        m_minimumWidth(minimumWidth),
+        m_zeroWidthEpsilon(zeroWidthEpsilon)
+    {
+        QRectF pageClip = page ? page->getCropBox().normalized() : QRectF();
+        if (pageClip.isEmpty() && page)
+        {
+            pageClip = page->getMediaBox().normalized();
+        }
+        if (!pageClip.isEmpty())
+        {
+            m_clipPath.addRect(pageClip);
+        }
+    }
+
+    void processFormStream(const PDFStream* stream)
+    {
+        if (stream && !isContentSuppressed())
+        {
+            processForm(stream);
+        }
+    }
+
+    const QList<ThinStrokeFinding>& findings() const { return m_findings; }
+    const QList<PDFRenderError>& renderErrors() const { return getRenderErrors(); }
+
+protected:
+    bool isContentKindSuppressed(ContentKind kind) const override
+    {
+        switch (kind)
+        {
+            case ContentKind::Shapes:
+            case ContentKind::Text:
+            case ContentKind::Forms:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    void performBeforePathPainting(const QPainterPath& path,
+                                   bool stroke,
+                                   bool fill,
+                                   bool text,
+                                   Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(fill);
+        Q_UNUSED(text);
+        Q_UNUSED(fillRule);
+
+        if (!stroke || m_minimumWidth <= 0.0 || path.isEmpty())
+        {
+            return;
+        }
+
+        const PDFPageContentProcessorState* state = getGraphicState();
+        const qreal declaredWidth = state->getLineWidth();
+        const bool hairline = declaredWidth <= m_zeroWidthEpsilon;
+        const qreal effectiveWidth = preflight::minimumEffectiveStrokeWidth(
+            path,
+            declaredWidth,
+            state->getCurrentTransformationMatrix(),
+            getPage() ? getPage()->getUserUnit() : 1.0);
+        if (!hairline && !(effectiveWidth < m_minimumWidth))
+        {
+            return;
+        }
+
+        QPainterPathStroker stroker;
+        stroker.setWidth(std::max(std::abs(declaredWidth), m_zeroWidthEpsilon));
+        stroker.setCapStyle(state->getLineCapStyle());
+        stroker.setJoinStyle(state->getLineJoinStyle());
+        stroker.setMiterLimit(state->getMitterLimit());
+        const PDFLineDashPattern& dash = state->getLineDashPattern();
+        if (!dash.isSolid())
+        {
+            stroker.setDashPattern(dash.createForQPen(std::max(std::abs(declaredWidth), m_zeroWidthEpsilon)));
+            stroker.setDashOffset(dash.getDashOffset());
+        }
+
+        QPainterPath visibleStroke = getCurrentWorldMatrix().map(stroker.createStroke(path));
+        if (!m_clipPath.isEmpty())
+        {
+            visibleStroke = visibleStroke.intersected(m_clipPath);
+        }
+        if (visibleStroke.isEmpty())
+        {
+            return;
+        }
+
+        ThinStrokeFinding finding;
+        finding.type = hairline ? QStringLiteral("hairline-stroke") : QStringLiteral("thin-stroke");
+        finding.bbox = visibleStroke.boundingRect();
+        finding.declaredWidth = declaredWidth;
+        finding.effectiveWidth = effectiveWidth;
+        m_findings.push_back(finding);
+    }
+
+    void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(fillRule);
+        const QPainterPath pagePath = getCurrentWorldMatrix().map(path);
+        m_clipPath = m_clipPath.isEmpty() ? pagePath : m_clipPath.intersected(pagePath);
+    }
+
+    void performSaveGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::AfterOperation)
+        {
+            m_clipStack.push_back(m_clipPath);
+        }
+    }
+
+    void performRestoreGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::BeforeOperation && !m_clipStack.empty())
+        {
+            m_clipPath = m_clipStack.back();
+            m_clipStack.pop_back();
+        }
+    }
+
+private:
+    qreal m_minimumWidth = 0.0;
+    qreal m_zeroWidthEpsilon = 1.0e-6;
+    QPainterPath m_clipPath;
+    std::vector<QPainterPath> m_clipStack;
+    QList<ThinStrokeFinding> m_findings;
+};
+
+void throwIfThinStrokeProcessingIncomplete(const QList<PDFRenderError>& errors)
+{
+    for (const PDFRenderError& error : errors)
+    {
+        if (error.type == RenderErrorType::Error
+            || error.type == RenderErrorType::NotImplemented
+            || error.type == RenderErrorType::NotSupported)
+        {
+            throw PDFException(error.message);
+        }
+    }
+}
+
+void runThinStrokesCheck(PDFDocumentSession* session,
+                         const PreflightCheckConfig& check,
+                         QList<PreflightFinding>& errors,
+                         QList<PreflightFinding>& warnings)
+{
+    if (!session || check.minEffectiveStrokeWidthPt <= 0.0)
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    if (!document)
+    {
+        return;
+    }
+
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+
+    PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
+    PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    PDFModifiedDocument md(document, &ocActivity);
+    fontCache.setDocument(md);
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+    PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(document);
+    PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    PDFMeshQualitySettings meshQuality;
+
+    const QString hairlineSeverity = check.hairlineSeverity.isEmpty() ? check.severity : check.hairlineSeverity;
+    const QString thinStrokeSeverity = check.thinStrokeSeverity.isEmpty() ? check.severity : check.thinStrokeSeverity;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        ThinStrokeProcessor processor(page,
+                                      document,
+                                      &fontCache,
+                                      cms.get(),
+                                      &ocActivity,
+                                      meshQuality,
+                                      check.minEffectiveStrokeWidthPt,
+                                      check.zeroWidthEpsilonPt);
+        const QList<PDFRenderError> pageErrors = processor.processContents();
+        throwIfThinStrokeProcessingIncomplete(pageErrors);
+
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
+            processor.processFormStream(formStream);
+        });
+        throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
+
+        for (const ThinStrokeFinding& source : processor.findings())
+        {
+            const bool hairline = source.type == QStringLiteral("hairline-stroke");
+            const QString severity = hairline ? hairlineSeverity : thinStrokeSeverity;
+
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+            finding.page = int(pageIndex + 1);
+            finding.objectId = QString();
+            finding.type = source.type;
+            finding.severity = severity;
+            finding.checkId = check.id;
+            finding.bbox = source.bbox;
+            if (hairline)
+            {
+                finding.message = PDFTranslationContext::tr(
+                    "Hairline stroke on page %1 has declared width %2 pt.")
+                    .arg(pageIndex + 1)
+                    .arg(source.declaredWidth, 0, 'f', 6);
+            }
+            else
+            {
+                finding.message = PDFTranslationContext::tr(
+                    "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
+                    .arg(pageIndex + 1)
+                    .arg(source.effectiveWidth, 0, 'f', 6)
+                    .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+            }
+            pushPreflightFinding(finding, severity, errors, warnings);
+        }
+    }
+}
+
 // Scans Font resource dictionaries on the page and nested Form XObjects /
 // annotation appearance streams (resource recursion with cycle guard).
 void runEmbeddedFontsCheck(PDFDocumentSession* session,
@@ -2268,6 +2520,36 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             return false;
         }
 
+        if (check.id == QStringLiteral("thin-strokes"))
+        {
+            check.minEffectiveStrokeWidthPt = checkObject.value(QStringLiteral("min_effective_width_pt")).toDouble(check.minEffectiveStrokeWidthPt);
+            check.zeroWidthEpsilonPt = checkObject.value(QStringLiteral("zero_width_epsilon_pt")).toDouble(check.zeroWidthEpsilonPt);
+            check.hairlineSeverity = checkObject.value(QStringLiteral("hairline_severity")).toString(check.severity);
+            check.thinStrokeSeverity = checkObject.value(QStringLiteral("thin_stroke_severity")).toString(check.severity);
+
+            const auto validSeverity = [](const QString& severity)
+            {
+                return severity == QStringLiteral("error")
+                    || severity == QStringLiteral("warning")
+                    || severity == QStringLiteral("info");
+            };
+            if (check.minEffectiveStrokeWidthPt <= 0.0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive min_effective_width_pt.").arg(check.id);
+                return false;
+            }
+            if (check.zeroWidthEpsilonPt < 0.0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative zero_width_epsilon_pt.").arg(check.id);
+                return false;
+            }
+            if (!validSeverity(check.hairlineSeverity) || !validSeverity(check.thinStrokeSeverity))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' has invalid hairline or thin-stroke severity.").arg(check.id);
+                return false;
+            }
+        }
+
         check.minDpi = checkObject.value(QStringLiteral("min_dpi")).toInt(0);
         if (check.id == QStringLiteral("image-resolution") && check.minDpi <= 0)
         {
@@ -2438,6 +2720,14 @@ void PreflightEngine::registerBuiltInChecks()
                                                        QList<PreflightFinding>& warnings)
     {
         runWhiteOverprintCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("thin-strokes")] = [](PDFDocumentSession* session,
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
+    {
+        runThinStrokesCheck(session, check, errors, warnings);
     };
 }
 

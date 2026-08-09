@@ -147,6 +147,25 @@
           "minimum": 1,
           "default": 20,
           "description": "Maximum number of ink-coverage regions reported per page."
+        },
+        "min_effective_width_pt": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Minimum painted stroke width in points for thin-strokes."
+        },
+        "zero_width_epsilon_pt": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.000001,
+          "description": "Declared stroke widths at or below this value are hairlines."
+        },
+        "hairline_severity": {
+          "$ref": "#/$defs/severity",
+          "description": "Severity override for hairline-stroke findings."
+        },
+        "thin_stroke_severity": {
+          "$ref": "#/$defs/severity",
+          "description": "Severity override for thin-stroke findings."
         }
       },
       "additionalProperties": true

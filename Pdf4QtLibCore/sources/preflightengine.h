@@ -83,6 +83,12 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
     QStringList allowedOutputConditionIdentifiers;
+
+    // thin-strokes parameters.
+    qreal minEffectiveStrokeWidthPt = 0.0;
+    qreal zeroWidthEpsilonPt = 1.0e-6;
+    QString hairlineSeverity;
+    QString thinStrokeSeverity;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.
