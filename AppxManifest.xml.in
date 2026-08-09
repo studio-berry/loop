@@ -29,6 +29,38 @@
         </uap:Extension>
       </Extensions>
     </Application>
+	<Application Id="Pdf4QtViewer" Executable="Pdf4QtViewer.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe Viewer"
+						  Description="View and navigate PDF documents."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtPageMaster" Executable="Pdf4QtPageMaster.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe PageMaster"
+						  Description="Organize, merge, split, and duplicate PDF pages."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtDiff" Executable="Pdf4QtDiff.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe Diff"
+						  Description="Compare PDF documents."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtLaunchPad" Executable="Pdf4QtLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe LaunchPad"
+						  Description="Launch Loupe PDF applications."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\logo.png"
+						  Square44x44Logo="assets\logo.png">
+      </uap:VisualElements>
+    </Application>
   </Applications>
   
   <Dependencies>
