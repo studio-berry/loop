@@ -20,47 +20,75 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef PDFUITHEME_H
-#define PDFUITHEME_H
+#ifndef PDFACCESSIBILITY_H
+#define PDFACCESSIBILITY_H
 
 #include "pdfwidgetsglobal.h"
 
 #include <QColor>
-#include <QPalette>
+#include <QVector>
 #include <QString>
+
+class QAbstractSpinBox;
+class QAction;
+class QMainWindow;
+class QMenu;
+class QMenuBar;
+class QToolButton;
+class QWidget;
 
 namespace pdf
 {
 
-/// Shared semantic colors and palette helpers for Loupe PDF surfaces.
-class PDF4QTLIBWIDGETSSHARED_EXPORT PDFUITheme
+enum class AccessibilityRequirement
+{
+    InferredTextIsEnough,
+    ExplicitName,
+    ExplicitNameAndDescription,
+    CustomInterface
+};
+
+struct PDF4QTLIBWIDGETSSHARED_EXPORT AccessibilityFinding
+{
+    QString objectPath;
+    QString code;
+    QString message;
+};
+
+struct PDF4QTLIBWIDGETSSHARED_EXPORT MnemonicProblem
+{
+    enum class Kind
+    {
+        Missing,
+        Duplicate
+    };
+
+    Kind kind = Kind::Missing;
+    QString menuTitle;
+    QString actionText;
+    QChar mnemonic;
+};
+
+class PDF4QTLIBWIDGETSSHARED_EXPORT PDFAccessibility
 {
 public:
-    PDFUITheme() = delete;
+    PDFAccessibility() = delete;
 
-    static constexpr int kDialogMarginPx = 12;
-    static constexpr int kGroupBoxMarginPx = 20;
-    static constexpr int kGroupBoxSpacingPx = 12;
+    static QVector<AccessibilityFinding> auditWidgetTree(QWidget* root);
+    static QVector<MnemonicProblem> auditMenu(const QMenu* menu);
+    static QVector<MnemonicProblem> auditMenus(const QMainWindow* window);
 
-    static QColor severityErrorColor();
-    static QColor severityWarningColor();
-    static QColor severityInfoColor();
-    static QColor severityTextColor(const QString& severity);
     static double contrastRatio(const QColor& foreground, const QColor& background);
     static bool meetsContrast(const QColor& foreground, const QColor& background, double requiredRatio);
 
-    static QColor errorTextColor(const QPalette& palette);
-    static QColor mutedTextColor(const QPalette& palette);
-    static QColor canvasSurroundColor();
-    static QColor findHighlightColor(const QPalette& palette, bool selected);
-    static QColor bookmarkAutoColor(const QPalette& palette);
-    static QColor bookmarkManualColor(const QPalette& palette);
-    static QColor bookmarkSelectedColor(const QPalette& palette);
+    static void applyActionAccessibility(QToolButton* button, const QAction* action);
+    static int minimumSpinBoxWidth(const QAbstractSpinBox* spinBox, const QString& sampleText);
 
-    static QString overlayLabelStyleSheet(const QPalette& palette);
-    static QString errorLabelStyleSheet(const QPalette& palette);
+    /// Registers the custom accessible interface used by PDFDrawWidget.
+    /// Registration is process-wide and safe to call more than once.
+    static void install();
 };
 
 } // namespace pdf
 
-#endif // PDFUITHEME_H
+#endif // PDFACCESSIBILITY_H

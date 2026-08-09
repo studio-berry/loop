@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdrawwidget.h"
+#include "pdfaccessibility.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfcompiler.h"
 #include "pdfwidgettool.h"
@@ -34,6 +35,8 @@
 #include <QGridLayout>
 #include <QKeyEvent>
 #include <QApplication>
+#include <QAccessible>
+#include <QAccessibleValueChangeEvent>
 #include <QPixmapCache>
 #include <QColorSpace>
 #include <QDragEnterEvent>
@@ -57,6 +60,7 @@ PDFWidget::PDFWidget(const PDFCMSManager* cmsManager, RendererEngine engine, QWi
     m_proxy(nullptr),
     m_rendererEngine(engine)
 {
+    PDFAccessibility::install();
     m_drawWidget = new PDFDrawWidget(this, this);
     m_horizontalScrollBar = new QScrollBar(Qt::Horizontal, this);
     m_verticalScrollBar = new QScrollBar(Qt::Vertical, this);
@@ -99,6 +103,10 @@ void PDFWidget::setDocument(const PDFModifiedDocument& document, std::vector<PDF
     m_proxy->setDocument(document, std::move(signatureVerificationResult));
     m_pageRenderingErrors.clear();
     m_drawWidget->getWidget()->update();
+    if (PDFDrawWidget* drawWidget = dynamic_cast<PDFDrawWidget*>(m_drawWidget))
+    {
+        drawWidget->notifyAccessibilityUpdate();
+    }
 }
 
 void PDFWidget::updateRenderer(RendererEngine engine)
@@ -256,6 +264,8 @@ PDFDrawWidget::PDFDrawWidget(PDFWidget* widget, QWidget* parent) :
     m_mouseOperation(MouseOperation::None)
 {
     this->setFocusPolicy(Qt::StrongFocus);
+    this->setAccessibleName(tr("Document canvas"));
+    this->setAccessibleDescription(tr("Inspect the active document page with keyboard, pointer, or assistive technology."));
     this->setMouseTracking(true);
     this->setAcceptDrops(true);
 
@@ -282,6 +292,31 @@ void PDFDrawWidget::setWheelScrollSpeed(int horizontalPercent, int verticalPerce
 std::vector<PDFInteger> PDFDrawWidget::getCurrentPages() const
 {
     return this->m_widget->getDrawWidgetProxy()->getPagesIntersectingRect(this->rect());
+}
+
+QString PDFDrawWidget::accessibleDocumentSummary() const
+{
+    const PDFDrawWidgetProxy* proxy = m_widget ? m_widget->getDrawWidgetProxy() : nullptr;
+    const PDFDocument* document = proxy ? proxy->getDocument() : nullptr;
+    if (!document || !document->getCatalog())
+    {
+        return tr("No document is currently open.");
+    }
+
+    const PDFInteger pageCount = document->getCatalog()->getPageCount();
+    const std::vector<PDFInteger> pages = getCurrentPages();
+    const PDFInteger currentPage = pages.empty() ? 0 : pages.front() + 1;
+    const int zoomPercent = proxy ? qRound(proxy->getZoom() * 100.0) : 100;
+    return tr("Document canvas. Page %1 of %2. Zoom %3 percent.")
+        .arg(currentPage)
+        .arg(pageCount)
+        .arg(zoomPercent);
+}
+
+void PDFDrawWidget::notifyAccessibilityUpdate()
+{
+    QAccessibleValueChangeEvent event(this, accessibleDocumentSummary());
+    QAccessible::updateAccessibility(&event);
 }
 
 QSize PDFDrawWidget::minimumSizeHint() const
