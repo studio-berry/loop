@@ -92,6 +92,30 @@
           "minItems": 1,
           "uniqueItems": true
         },
+        "allowed_subtypes": {
+          "type": "array",
+          "description": "Optional allow-list of output-intent /S subtype names.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_profile_sha256": {
+          "type": "array",
+          "description": "Optional allow-list of SHA-256 digests for decoded ICC payloads.",
+          "items": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "require_embedded_profile": {
+          "type": "boolean",
+          "description": "Whether an output intent must contain a decodable /DestOutputProfile ICC stream.",
+          "default": true
+        },
+        "allow_multiple": {
+          "type": "boolean",
+          "description": "Whether more than one valid applicable output intent is permitted.",
+          "default": true
+        },
         "expected_width_pt": {
           "type": "number",
           "exclusiveMinimum": 0,
