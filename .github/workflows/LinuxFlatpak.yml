@@ -43,6 +43,8 @@ jobs:
           # Fail the build if apt substituted a different version.
           test "$(dpkg-query -W -f='${Version}' flatpak)" = "$FLATPAK_VERSION" || { echo "::error::flatpak version mismatch"; exit 1; }
           test "$(dpkg-query -W -f='${Version}' flatpak-builder)" = "$FLATPAK_BUILDER_VERSION" || { echo "::error::flatpak-builder version mismatch"; exit 1; }
+          flatpak --version
+          flatpak-builder --version
 
       - name: Add Flatpak repository
         run: |
