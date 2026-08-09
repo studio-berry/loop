@@ -70,6 +70,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal maxInkPct = 0.0;
     qreal minRegionAreaPct = 0.05;
     int maxRegionsPerPage = 20;
+    QString inkCoverageAnalysisBox = QStringLiteral("bleed");
 
     // image-resolution parameters.
     int minDpi = 0;
@@ -83,6 +84,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
     QStringList allowedOutputConditionIdentifiers;
+    QStringList allowedOutputIntentSubtypes;
+    QStringList allowedOutputIntentProfileSha256;
+    bool requireEmbeddedOutputIntentProfile = true;
+    bool allowMultipleOutputIntents = true;
 
     // thin-strokes parameters.
     qreal minEffectiveStrokeWidthPt = 0.0;
@@ -128,6 +133,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QString budgetKind;
+    qint64 budgetLimit = 0;
+    qint64 budgetAttempted = 0;
+    QString budgetContext;
 };
 
 /// Result of a preflight run.

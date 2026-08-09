@@ -316,6 +316,26 @@ PDFCatalog PDFCatalog::parse(const PDFObject& catalog, const PDFDocument* docume
     catalogObject.m_structureTreeRoot = catalogDictionary->get("StructTreeRoot");
     catalogObject.m_language = loader.readTextStringFromDictionary(catalogDictionary, "Lang", QString());
     catalogObject.m_webCaptureInfo = PDFWebCaptureInfo::parse(catalogDictionary->get("SpiderInfo"), &document->getStorage());
+    const PDFObject outputIntentsObject = document->getObject(catalogDictionary->get("OutputIntents"));
+    if (!outputIntentsObject.isNull())
+    {
+        if (!outputIntentsObject.isArray())
+        {
+            catalogObject.m_outputIntentsMalformed = true;
+        }
+        else
+        {
+            const PDFArray* outputIntentsArray = outputIntentsObject.getArray();
+            for (size_t i = 0; i < outputIntentsArray->getCount(); ++i)
+            {
+                if (!document->getObject(outputIntentsArray->getItem(i)).isDictionary())
+                {
+                    catalogObject.m_outputIntentsMalformed = true;
+                    break;
+                }
+            }
+        }
+    }
     catalogObject.m_outputIntents = loader.readObjectList<PDFOutputIntent>(catalogDictionary->get("OutputIntents"));
     catalogObject.m_pieceInfo = catalogDictionary->get("PieceInfo");
     catalogObject.m_perms = catalogDictionary->get("Perms");
