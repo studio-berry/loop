@@ -748,6 +748,8 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     probeSettings.dpi = check.probeDpi;
     probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
+    probeSettings.maxRasterPixels = check.maxRasterPixels;
+    probeSettings.analysisBox = check.analysisBox;
 
     PDFInkCoverageProbe probe(session);
     const PDFCatalog* catalog = document->getCatalog();
@@ -768,10 +770,10 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
             finding.page = int(pageIndex + 1);
             finding.objectId = QString();
-            finding.type = QStringLiteral("ink-coverage");
+            finding.type = QStringLiteral("ink-coverage-skipped");
             finding.severity = QStringLiteral("info");
             finding.checkId = check.id;
-            finding.message = PDFTranslationContext::tr("Page %1 skipped: ink coverage raster exceeds the pixel budget").arg(pageIndex + 1);
+            finding.message = PDFTranslationContext::tr("Page %1 skipped: ink coverage analysis could not be completed within the raster budget").arg(pageIndex + 1);
             pushPreflightFinding(finding, finding.severity, errors, warnings);
             continue;
         }
@@ -2817,13 +2819,25 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         }
 
         const bool checkFailed = result.errors.size() > errorsBefore;
+        const auto skippedFinding = std::find_if(result.warnings.cbegin() + warningsBefore,
+                                                 result.warnings.cend(),
+                                                 [](const PreflightFinding& finding)
+        {
+            return finding.type == QStringLiteral("ink-coverage-skipped");
+        });
         const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
                                               result.warnings.cend(),
                                               [](const PreflightFinding& finding)
         {
             return finding.severity == QStringLiteral("warning");
         });
-        if (checkFailed)
+        if (skippedFinding != result.warnings.cend())
+        {
+            status.status = QStringLiteral("skipped");
+            status.reason = QStringLiteral("raster pixel budget exceeded");
+            result.inspectionComplete = false;
+        }
+        else if (checkFailed)
         {
             status.status = QStringLiteral("failed");
         }
@@ -2943,13 +2957,148 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         check.probeThreshold = checkObject.value(QStringLiteral("probe_threshold")).toInt(16);
         check.rasterWhiteThreshold = checkObject.value(QStringLiteral("raster_white_threshold")).toDouble(0.9975);
 
-        check.maxInkPct = checkObject.value(QStringLiteral("max_ink_pct")).toDouble(0.0);
-        check.minRegionAreaPct = checkObject.value(QStringLiteral("min_region_area_pct")).toDouble(0.05);
-        check.maxRegionsPerPage = checkObject.value(QStringLiteral("max_regions_per_page")).toInt(20);
-        if (check.id == QStringLiteral("ink-coverage") && check.maxInkPct <= 0.0)
+        const auto readNumber = [&](const QString& key, qreal defaultValue, qreal& target)
+        {
+            const QJsonValue value = checkObject.value(key);
+            if (!value.isUndefined())
+            {
+                if (!value.isDouble() || !std::isfinite(value.toDouble()))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' requires numeric %2.").arg(check.id, key);
+                    return false;
+                }
+                target = value.toDouble();
+            }
+            else
+            {
+                target = defaultValue;
+            }
+            return true;
+        };
+
+        const auto readInteger = [&](const QString& key, int defaultValue, int& target)
+        {
+            const QJsonValue value = checkObject.value(key);
+            if (!value.isUndefined())
+            {
+                const qreal number = value.toDouble(std::numeric_limits<qreal>::quiet_NaN());
+                if (!value.isDouble() || !std::isfinite(number) || std::floor(number) != number
+                    || number < static_cast<qreal>(std::numeric_limits<int>::min())
+                    || number > static_cast<qreal>(std::numeric_limits<int>::max()))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' requires integer %2.").arg(check.id, key);
+                    return false;
+                }
+                target = static_cast<int>(number);
+            }
+            else
+            {
+                target = defaultValue;
+            }
+            return true;
+        };
+
+        const QJsonValue maxInkValue = checkObject.value(QStringLiteral("max_ink_pct"));
+        if (check.id == QStringLiteral("ink-coverage") && !maxInkValue.isDouble())
+        {
+            if (maxInkValue.isUndefined() || maxInkValue.isNull())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive max_ink_pct.").arg(check.id);
+            }
+            else
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires numeric max_ink_pct.").arg(check.id);
+            }
+            return false;
+        }
+        check.maxInkPct = maxInkValue.isUndefined() ? 0.0 : maxInkValue.toDouble();
+        if (!std::isfinite(check.maxInkPct) || (check.id == QStringLiteral("ink-coverage") && check.maxInkPct <= 0.0))
         {
             errorMessage = PDFTranslationContext::tr("Check '%1' requires positive max_ink_pct.").arg(check.id);
             return false;
+        }
+
+        if (check.id == QStringLiteral("ink-coverage"))
+        {
+            const QJsonValue probeDpiValue = checkObject.value(QStringLiteral("probe_dpi"));
+            const qreal probeDpi = probeDpiValue.isUndefined()
+                ? 150.0
+                : probeDpiValue.toDouble(std::numeric_limits<qreal>::quiet_NaN());
+            if (!probeDpiValue.isUndefined()
+                && (!probeDpiValue.isDouble() || !std::isfinite(probeDpi) || std::floor(probeDpi) != probeDpi))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires integer probe_dpi.").arg(check.id);
+                return false;
+            }
+            if (probeDpi <= 0.0 || probeDpi > static_cast<qreal>(std::numeric_limits<int>::max()))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive probe_dpi.").arg(check.id);
+                return false;
+            }
+            check.probeDpi = static_cast<int>(probeDpi);
+        }
+
+        if (!readNumber(QStringLiteral("min_region_area_pct"), 0.05, check.minRegionAreaPct)
+            || !readInteger(QStringLiteral("max_regions_per_page"), 20, check.maxRegionsPerPage))
+        {
+            return false;
+        }
+        if (check.id == QStringLiteral("ink-coverage")
+            && (check.minRegionAreaPct < 0.0 || check.minRegionAreaPct > 100.0))
+        {
+            errorMessage = PDFTranslationContext::tr("Check '%1' requires min_region_area_pct between 0 and 100.").arg(check.id);
+            return false;
+        }
+        if (check.id == QStringLiteral("ink-coverage") && check.maxRegionsPerPage < 0)
+        {
+            errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative max_regions_per_page.").arg(check.id);
+            return false;
+        }
+
+        const QJsonValue maxRasterPixelsValue = checkObject.value(QStringLiteral("max_raster_pixels"));
+        if (!maxRasterPixelsValue.isUndefined())
+        {
+            const qreal number = maxRasterPixelsValue.toDouble(std::numeric_limits<qreal>::quiet_NaN());
+            if (!maxRasterPixelsValue.isDouble() || !std::isfinite(number) || std::floor(number) != number
+                || number <= 0.0 || number > static_cast<qreal>(std::numeric_limits<qint64>::max()))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integer max_raster_pixels.").arg(check.id);
+                return false;
+            }
+            check.maxRasterPixels = static_cast<qint64>(number);
+        }
+
+        const QJsonValue analysisBoxValue = checkObject.value(QStringLiteral("analysis_box"));
+        if (!analysisBoxValue.isUndefined())
+        {
+            if (!analysisBoxValue.isString())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires analysis_box to be one of bleed, trim, crop, or media.").arg(check.id);
+                return false;
+            }
+
+            const QString analysisBox = analysisBoxValue.toString();
+            if (analysisBox == QStringLiteral("bleed"))
+            {
+                check.analysisBox = PDFInkCoverageAnalysisBox::Bleed;
+            }
+            else if (analysisBox == QStringLiteral("trim"))
+            {
+                check.analysisBox = PDFInkCoverageAnalysisBox::Trim;
+            }
+            else if (analysisBox == QStringLiteral("crop"))
+            {
+                check.analysisBox = PDFInkCoverageAnalysisBox::Crop;
+            }
+            else if (analysisBox == QStringLiteral("media"))
+            {
+                check.analysisBox = PDFInkCoverageAnalysisBox::Media;
+            }
+            else
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' has invalid analysis_box '%2' (must be 'bleed', 'trim', 'crop', or 'media').").arg(check.id, analysisBox);
+                return false;
+            }
         }
 
         if (check.id == QStringLiteral("thin-strokes"))
