@@ -27,6 +27,7 @@
 #include "pdfoptimizer.h"
 #include "pdfdocumentwriter.h"
 
+#include <QDir>
 #include <QFileInfo>
 
 namespace pdftool
@@ -66,6 +67,27 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
     QStringList files = options.uniteFiles;
     QString targetFile = files.back();
     files.pop_back();
+
+    QString targetKey = QDir::cleanPath(QFileInfo(targetFile).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    targetKey = targetKey.toCaseFolded();
+#endif
+    for (const QString& inputFile : files)
+    {
+        QString inputKey = QDir::cleanPath(QFileInfo(inputFile).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+        inputKey = inputKey.toCaseFolded();
+#endif
+        if (inputKey == targetKey)
+        {
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.input-collision"),
+                             PDFToolTranslationContext::tr("Output '%1' must not overwrite an input document.").arg(targetFile),
+                             QJsonObject{{QStringLiteral("path"), targetFile}});
+            return PDFToolExitCode::InvalidInvocation;
+        }
+    }
 
     if (const PDFToolExitCode blocked = validateDestructiveOutput(options, targetFile))
     {

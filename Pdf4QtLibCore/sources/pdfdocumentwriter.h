@@ -47,7 +47,7 @@ public:
     /// Writes document to the file. If \p safeWrite is true, then document is first
     /// written to the temporary file, and then renamed to original file name atomically,
     /// so no data can be lost on, for example, power failure. If it is not possible to
-    /// create temporary file, then writing operation will attempt to write to the file
+    /// create temporary file, the writing operation fails without touching the target
     /// directly.
     /// \param fileName File name
     /// \param document Document

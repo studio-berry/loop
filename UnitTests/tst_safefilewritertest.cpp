@@ -72,6 +72,9 @@ private slots:
     void writeData_overwrite_replacesExistingFile();
     void writeDevice_producerFailure_leavesOriginalUntouched();
     void writeDevice_fullWrite_isSuccess();
+    void findOutputConflicts_rejectsDuplicateNormalizedPaths();
+    void findOutputConflicts_rejectsExistingDestinationsWithoutOverwrite();
+    void findOutputConflicts_allowsExistingDestinationsWithOverwrite();
     void makeUniqueFileName_returnsInputWhenFree();
     void makeUniqueFileName_appendsFreeVariant();
 };
@@ -159,6 +162,42 @@ void SafeFileWriterTest::writeDevice_fullWrite_isSuccess()
         pdf::PDFSafeFileWriter::OverwritePolicy::Fail);
     QVERIFY2(resultOk(result), qPrintable(result.getErrorMessage()));
     QCOMPARE(readFileContent(path), payload);
+}
+
+void SafeFileWriterTest::findOutputConflicts_rejectsDuplicateNormalizedPaths()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString path = temporaryDirectory.filePath(QStringLiteral("report.pdf"));
+    const QString alias = QDir(temporaryDirectory.path()).filePath(QStringLiteral("nested/../report.pdf"));
+
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts(
+        {path, alias}, false);
+    QCOMPARE(conflicts.size(), 1);
+    QCOMPARE(conflicts.constFirst().code, QStringLiteral("output.duplicate-planned-path"));
+}
+
+void SafeFileWriterTest::findOutputConflicts_rejectsExistingDestinationsWithoutOverwrite()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString path = temporaryDirectory.filePath(QStringLiteral("existing.bin"));
+    QVERIFY(writeRawContent(path, QByteArrayLiteral("keep")));
+
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({path}, true);
+    QCOMPARE(conflicts.size(), 1);
+    QCOMPARE(conflicts.constFirst().code, QStringLiteral("output.destination-exists"));
+}
+
+void SafeFileWriterTest::findOutputConflicts_allowsExistingDestinationsWithOverwrite()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString path = temporaryDirectory.filePath(QStringLiteral("existing.bin"));
+    QVERIFY(writeRawContent(path, QByteArrayLiteral("keep")));
+
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({path}, false);
+    QVERIFY(conflicts.isEmpty());
 }
 
 void SafeFileWriterTest::makeUniqueFileName_returnsInputWhenFree()
