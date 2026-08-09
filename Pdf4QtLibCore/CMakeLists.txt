@@ -53,6 +53,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfrepairoperation.cpp
     sources/pdfrepairoperation.h
     sources/pdfrepairprimitives.cpp
+    sources/pdfimagedownsamplefixup.cpp
+    sources/pdfimagedownsamplefixup.h
     sources/pdfrgbtocmykfixup.cpp
     sources/pdfrgbtocmykfixup.h
     sources/pdfpagemasterexport.cpp
@@ -67,6 +69,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfprocessingbudget.cpp
+    sources/pdfprocessingbudget.h
     sources/preflightengine.cpp
     sources/preflightengine.h
     sources/pdfpreflightchecks.h

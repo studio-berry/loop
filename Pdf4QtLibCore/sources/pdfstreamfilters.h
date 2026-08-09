@@ -34,6 +34,7 @@ namespace pdf
 {
 class PDFStreamFilter;
 class PDFSecurityHandler;
+class PDFProcessingBudget;
 
 using PDFObjectFetcher = std::function<const PDFObject&(const PDFObject&)>;
 
@@ -52,12 +53,14 @@ public:
     /// \param objectFetcher Function which retrieves objects (for example, reads objects from reference)
     /// \param securityHandler Security handler for Crypt filters
     static QByteArray getDecodedStream(const PDFStream* stream, const PDFObjectFetcher& objectFetcher, const PDFSecurityHandler* securityHandler);
+    static QByteArray getDecodedStream(const PDFStream* stream, const PDFObjectFetcher& objectFetcher, const PDFSecurityHandler* securityHandler, PDFProcessingBudget* budget);
 
     /// Returns decoded data from the stream, without object fetching
     /// \param stream Stream containing the data
     /// \param objectFetcher Function which retrieves objects (for example, reads objects from reference)
     /// \param securityHandler Security handler for Crypt filters
     static QByteArray getDecodedStream(const PDFStream* stream, const PDFSecurityHandler* securityHandler);
+    static QByteArray getDecodedStream(const PDFStream* stream, const PDFSecurityHandler* securityHandler, PDFProcessingBudget* budget);
 
     /// Tries to find stream data length using given filter. Stream will
     /// start at given \p offset in \p data. If stream length cannot be determined,
@@ -154,6 +157,12 @@ public:
     /// \param parameters Stream parameters
     virtual QByteArray apply(const QByteArray& data, const PDFObjectFetcher& objectFetcher, const PDFObject& parameters, const PDFSecurityHandler* securityHandler) const = 0;
 
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const;
+
     /// Apply without object fetcher - it assumes no references exists in the streams dictionary
     /// \param data Stream data to be decoded
     /// \param parameters Stream parameters
@@ -203,6 +212,11 @@ public:
                              const PDFObjectFetcher& objectFetcher,
                              const PDFObject& parameters,
                              const PDFSecurityHandler* securityHandler) const override;
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const override;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFFlateDecodeFilter : public PDFStreamFilter
@@ -215,6 +229,11 @@ public:
                              const PDFObjectFetcher& objectFetcher,
                              const PDFObject& parameters,
                              const PDFSecurityHandler* securityHandler) const override;
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const override;
 
     virtual PDFInteger getStreamDataLength(const QByteArray& data, PDFInteger offset) const override;
 
@@ -228,7 +247,7 @@ public:
     static QByteArray recompress(const QByteArray& data);
 
 private:
-    static QByteArray uncompress(const QByteArray& data);
+    static QByteArray uncompress(const QByteArray& data, PDFProcessingBudget* budget = nullptr);
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFRunLengthDecodeFilter : public PDFStreamFilter
@@ -241,6 +260,11 @@ public:
                              const PDFObjectFetcher& objectFetcher,
                              const PDFObject& parameters,
                              const PDFSecurityHandler* securityHandler) const override;
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const override;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFCryptFilter : public PDFStreamFilter

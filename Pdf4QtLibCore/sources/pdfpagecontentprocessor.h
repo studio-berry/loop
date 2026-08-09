@@ -32,6 +32,7 @@
 #include "pdfblendfunction.h"
 #include "pdftextlayout.h"
 #include "pdfoperationcontrol.h"
+#include "pdfprocessingbudget.h"
 
 #include <QVector>
 #include <QTransform>
@@ -370,7 +371,8 @@ public:
                                      const PDFCMS* CMS,
                                      const PDFOptionalContentActivity* optionalContentActivity,
                                      QTransform pagePointToDevicePointMatrix,
-                                     const PDFMeshQualitySettings& meshQualitySettings);
+                                     const PDFMeshQualitySettings& meshQualitySettings,
+                                     PDFProcessingBudget* processingBudget = nullptr);
     virtual ~PDFPageContentProcessor();
 
     enum class Operator
@@ -1186,6 +1188,7 @@ private:
 
     /// Mesh quality settings
     PDFMeshQualitySettings m_meshQualitySettings;
+    PDFProcessingBudget* m_processingBudget = nullptr;
 
     /// Set with rendering errors, which were reported (and should be reported once)
     std::set<QString> m_onceReportedErrors;
