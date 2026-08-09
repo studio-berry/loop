@@ -154,7 +154,14 @@ Deletion: user deletes files; temp dirs removed on scope exit; sanitize strips m
 Retention: none server-side; Sentry may retain crash minidumps if enabled. Minidumps are
   captured by crashpad and include thread stacks and referenced heap memory, so they CAN
   contain PDF content and file paths. Nothing in the SDK can scrub them — see R-008.
-Logging: stderr/stdout for PdfTool; no centralized log shipping in product
+Logging: PdfTool and Editor both write a rotating, privacy-scrubbed log file via
+  pdf::PDFLogSession (2 MiB cap, 3 files kept); PdfTool's stderr/stdout is unchanged,
+  the log handler chains to it. Scrubbing (home/temp dir, login name, host name, other
+  absolute paths with the basename dropped, email addresses, IPv4 literals) happens once,
+  in the log sink, not at each call site. `PdfTool diagnostics` / Editor Help > Collect
+  Diagnostics build a bundle from the logs plus a filtered settings.ini - no PDF content,
+  no recent-files list, no crash minidumps (see R-008 above; a bundle is not a substitute
+  for the same scrubbing guarantee on minidumps, which does not exist).
 ```
 
 ---
@@ -187,6 +194,7 @@ Logging: stderr/stdout for PdfTool; no centralized log shipping in product
 | A19 | OCR product gate | Required for V1 | **N/A — CLI-only** (decided 2026-07-25) | OCR is merged to `master` but V1 ships **CLI-only**: `PdfTool ocr` present; `OcrPlugin.dll` and the bundled sidecar service excluded. `PdfTool ocr` is inert without a user-supplied sidecar. **Enforced (MIC-343):** `OcrPlugin` is gated behind `-DPDF4QT_PLUGIN_OCR` (default ON for dev builds, explicitly `OFF` in `WindowsInstall.yml`/`LinuxInstall.yml`/the Flatpak manifest); the WIX component that had unconditionally bundled `OcrPlugin.dll` into the MSI is now gated the same way. `PDF4QT_BUNDLE_OCR_SERVICE` defaults `OFF`. `scripts/smoke-test-install.ps1` fails the scan if `OcrPlugin.dll` is found in an installed tree, closing the drift the plugin/service inclusion previously had no assertion against |
 | A20 | Fuzz regression | Weekly fuzz CI | **Pass** (2026-08-04) | `fuzz.yml` fixed (single `permissions:`) and executing. [Run 30803378370](https://github.com/mberrys/Loupe-pdf/actions/runs/30803378370) failed with two real JBIG2 findings (see R-003); both fixed in `pdfjbig2decoder.cpp`, and [run 30937285025](https://github.com/mberrys/Loupe-pdf/actions/runs/30937285025) is green on `master` at the full 600 s/target budget (MIC-326) |
 | A23 | Manifest rollback coverage | Failure path is tested, not just implemented | **Pass** (2026-08-04) | `UnitTests/tst_pagemasterexporttest.cpp` — `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` force a real manifest-persist failure (resume run against a manifest in a write-denied directory) and assert both rollback branches. Skipped, not silently passed, where directory permissions are unenforceable (Windows, root) — MIC-335 |
+| A24 | Logging / support bundle | Rotating log, scrubbed at write time; reproducible support bundle; no PDF content or minidumps in it | **Pass** (2026-08-09) | `pdf::PDFLogSession` / `pdf::PDFLogScrubber` / `pdf::PDFDiagnosticsCollector` (`Pdf4QtLibCore/sources/pdflogger.*`, `pdflogscrubber.*`, `pdfdiagnostics.*`); `PdfTool diagnostics`, Editor Help > Collect Diagnostics; `UnitTests/tst_diagnosticstest.cpp` covers scrubber correctness/idempotence, rotation cap, manifest hash integrity, no-`.pdf`-in-bundle, and the read-only-output-directory failure path (skipped where permissions are unenforceable, same MIC-335 precedent as A23) |
 
 ---
 
