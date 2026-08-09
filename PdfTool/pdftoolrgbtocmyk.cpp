@@ -168,14 +168,14 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InputError;
     }
 
-    settings.analyzeOnly = options.destructiveDryRun;
+    settings.dryRunOnly = options.destructiveDryRun;
     if (!options.pageSelectorSelection.isEmpty())
     {
         settings.pageRange = options.pageSelectorSelection;
     }
 
     pdf::PDFRgbToCmykReport report;
-    const pdf::PDFOperationResult result = pdf::PDFRgbToCmykFixup::apply(&document, settings, &report);
+    const pdf::PDFOperationResult result = pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report);
     if (!result)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), result.getErrorMessage());

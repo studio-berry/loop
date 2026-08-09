@@ -1267,7 +1267,7 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
     settings.revalidate = true;
 
     pdf::PDFRgbToCmykReport report;
-    const pdf::PDFOperationResult fixupResult = pdf::PDFRgbToCmykFixup::apply(&candidate, settings, &report);
+    const pdf::PDFOperationResult fixupResult = pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&candidate, settings, &report);
     if (!fixupResult)
     {
         QMessageBox::critical(m_widget, tr("RGB to CMYK"), fixupResult.getErrorMessage());
