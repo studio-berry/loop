@@ -191,15 +191,21 @@
         },
         "max_regions_per_page": {
           "type": "integer",
-          "minimum": 1,
+          "minimum": 0,
           "default": 20,
-          "description": "Maximum number of ink-coverage regions reported per page."
+          "description": "Maximum number of ink-coverage regions reported per page. Zero deliberately suppresses region findings while still inspecting the page."
+        },
+        "max_raster_pixels": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "default": 250000000,
+          "description": "Per-page raster pixel budget for ink-coverage. Exceeding it produces an incomplete/skipped check, never a clean pass."
         },
         "analysis_box": {
           "type": "string",
           "enum": ["bleed", "trim", "crop", "media"],
           "default": "bleed",
-          "description": "Page box analyzed by ink-coverage. bleed falls back to trim, crop, then media when those boxes are not explicitly present."
+          "description": "Production region for TAC analysis. Bleed falls back to Trim, Crop, then Media when a box is unavailable."
         },
         "min_effective_width_pt": {
           "type": "number",
