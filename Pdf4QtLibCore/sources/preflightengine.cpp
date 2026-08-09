@@ -32,6 +32,7 @@
 #include "pdffont.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
+#include "pdfinkcoverageprobe.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfoptionalcontent.h"
 #include "pdfpage.h"
@@ -719,6 +720,76 @@ void runContentBleedCheck(PDFDocumentSession* session,
             const QRectF media = page->getMediaBox().normalized();
             const QRectF pageBbox = preflight::resolveEffectiveBox(page->getTrimBox(), page->getCropBox(), media);
             emitNeedsAutoBleedFinding(int(pageIndex + 1), pageBbox, check, errors, warnings);
+        }
+    }
+}
+
+void runInkCoverageCheck(PDFDocumentSession* session,
+                          const PreflightCheckConfig& check,
+                          QList<PreflightFinding>& errors,
+                          QList<PreflightFinding>& warnings)
+{
+    if (!session)
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    if (!document)
+    {
+        return;
+    }
+
+    PDFInkCoverageProbeSettings probeSettings;
+    probeSettings.maxInkCoverage = check.maxInkPct / 100.0;
+    probeSettings.dpi = check.probeDpi;
+    probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
+    probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
+
+    PDFInkCoverageProbe probe(session);
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        const PDFInkCoverageProbeResult result = probe.probe(page, static_cast<size_t>(pageIndex), probeSettings);
+        if (!result.rasterized)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = int(pageIndex + 1);
+            finding.objectId = QString();
+            finding.type = QStringLiteral("ink-coverage");
+            finding.severity = QStringLiteral("info");
+            finding.checkId = check.id;
+            finding.message = PDFTranslationContext::tr("Page %1 skipped: ink coverage raster exceeds the pixel budget").arg(pageIndex + 1);
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
+            continue;
+        }
+
+        for (const PDFInkCoverageRegion& region : result.regions)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+            finding.page = int(pageIndex + 1);
+            finding.objectId = QString();
+            finding.type = QStringLiteral("ink-coverage");
+            finding.severity = check.severity;
+            finding.checkId = check.id;
+            finding.bbox = region.bbox;
+            finding.message = PDFTranslationContext::tr(
+                "Total ink coverage %1% exceeds maximum %2% over %3 mm^2 on page %4")
+                .arg(qRound(region.peakInkCoverage * 100.0))
+                .arg(qRound(check.maxInkPct))
+                .arg(qRound(region.areaMM2))
+                .arg(pageIndex + 1);
+            pushPreflightFinding(finding, check.severity, errors, warnings);
         }
     }
 }
@@ -2074,6 +2145,15 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         check.probeThreshold = checkObject.value(QStringLiteral("probe_threshold")).toInt(16);
         check.rasterWhiteThreshold = checkObject.value(QStringLiteral("raster_white_threshold")).toDouble(0.9975);
 
+        check.maxInkPct = checkObject.value(QStringLiteral("max_ink_pct")).toDouble(0.0);
+        check.minRegionAreaPct = checkObject.value(QStringLiteral("min_region_area_pct")).toDouble(0.05);
+        check.maxRegionsPerPage = checkObject.value(QStringLiteral("max_regions_per_page")).toInt(20);
+        if (check.id == QStringLiteral("ink-coverage") && check.maxInkPct <= 0.0)
+        {
+            errorMessage = PDFTranslationContext::tr("Check '%1' requires positive max_ink_pct.").arg(check.id);
+            return false;
+        }
+
         check.minDpi = checkObject.value(QStringLiteral("min_dpi")).toInt(0);
         if (check.id == QStringLiteral("image-resolution") && check.minDpi <= 0)
         {
@@ -2171,6 +2251,14 @@ void PreflightEngine::registerBuiltInChecks()
                                                      QList<PreflightFinding>& warnings)
     {
         runContentBleedCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("ink-coverage")] = [](PDFDocumentSession* session,
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
+    {
+        runInkCoverageCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("color-mode")] = [](PDFDocumentSession* session,

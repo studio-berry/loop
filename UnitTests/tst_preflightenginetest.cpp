@@ -41,6 +41,8 @@ class PreflightEngineTest : public QObject
 private slots:
     void parseProfile_rejectsMissingName();
     void parseProfile_rejectsEmptyChecks();
+    void parseProfile_rejectsInkCoverageWithoutPositiveMax();
+    void parseProfile_acceptsInkCoverageDefaults();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void run_bleedCheckFailsWhenBoxMissing();
     void run_bleedCheckPassesWhenBoxAdequate();
@@ -55,6 +57,8 @@ private slots:
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
     void run_whiteOverprint_passesWhenOverprintOff();
     void run_whiteOverprint_emitsWarningInsideFormXObject();
+    void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
+    void run_inkCoverage_passesBelowLimitFixture();
     void run_colorRgbFixtureFailsColorMode();
     void run_outputIntent_missingIntentEmitsError();
     void run_outputIntent_notRequiredPassesWithoutIntent();
@@ -216,12 +220,55 @@ void PreflightEngineTest::parseProfile_rejectsEmptyChecks()
     QVERIFY(!errorMessage.isEmpty());
 }
 
+void PreflightEngineTest::parseProfile_rejectsInkCoverageWithoutPositiveMax()
+{
+    pdf::PreflightEngine engine(nullptr);
+
+    for (const QJsonValue& maxValue : { QJsonValue(), QJsonValue(0), QJsonValue(-1) })
+    {
+        QJsonObject profileObject;
+        profileObject.insert(QStringLiteral("name"), QStringLiteral("Ink coverage"));
+        profileObject.insert(QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                { QStringLiteral("max_ink_pct"), maxValue }
+            }
+        });
+
+        pdf::PreflightProfileData profile;
+        QString errorMessage;
+        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+        QCOMPARE(errorMessage, QStringLiteral("Check 'ink-coverage' requires positive max_ink_pct."));
+    }
+}
+
+void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QJsonObject profileObject;
+    profileObject.insert(QStringLiteral("name"), QStringLiteral("Ink coverage"));
+    profileObject.insert(QStringLiteral("checks"), QJsonArray{
+        QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 }
+        }
+    });
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(profile.checks.size(), 1);
+    QCOMPARE(profile.checks.first().maxInkPct, 300.0);
+    QCOMPARE(profile.checks.first().probeDpi, 150);
+    QCOMPARE(profile.checks.first().minRegionAreaPct, 0.05);
+    QCOMPARE(profile.checks.first().maxRegionsPerPage, 20);
+}
+
 void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()
 {
     pdf::PreflightEngine engine(nullptr);
     pdf::PreflightProfileData profile;
     QString errorMessage;
-
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Output intent test") },
         { QStringLiteral("checks"), QJsonArray{
@@ -606,6 +653,75 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
     QCOMPARE(result.warnings.size(), 1);
     QCOMPARE(result.warnings.first().type, QStringLiteral("white-overprint"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("white-overprint"));
+}
+
+void PreflightEngineTest::run_inkCoverage_emitsRegionalWarningForOverLimitFixture()
+{
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-over.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    QJsonObject profile;
+    profile.insert(QStringLiteral("name"), QStringLiteral("Ink coverage over limit"));
+    profile.insert(QStringLiteral("checks"), QJsonArray{
+        QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 },
+            { QStringLiteral("probe_dpi"), 150 },
+            { QStringLiteral("min_region_area_pct"), 0.05 },
+            { QStringLiteral("max_regions_per_page"), 20 },
+            { QStringLiteral("severity"), QStringLiteral("warning") }
+        }
+    });
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().scope, QStringLiteral("object"));
+    QCOMPARE(result.warnings.first().type, QStringLiteral("ink-coverage"));
+    QCOMPARE(result.warnings.first().checkId, QStringLiteral("ink-coverage"));
+    QVERIFY(result.warnings.first().bbox.isValid());
+    QVERIFY(result.warnings.first().bbox.width() > 0.0);
+    QVERIFY(result.warnings.first().bbox.height() > 0.0);
+    QVERIFY(result.warnings.first().message.contains(QStringLiteral("Total ink coverage")));
+}
+
+void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
+{
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-ok.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    QJsonObject profile;
+    profile.insert(QStringLiteral("name"), QStringLiteral("Ink coverage below limit"));
+    profile.insert(QStringLiteral("checks"), QJsonArray{
+        QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 },
+            { QStringLiteral("probe_dpi"), 150 },
+            { QStringLiteral("min_region_area_pct"), 0.05 },
+            { QStringLiteral("max_regions_per_page"), 20 },
+            { QStringLiteral("severity"), QStringLiteral("warning") }
+        }
+    });
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 0);
 }
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()

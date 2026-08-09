@@ -116,13 +116,30 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "default": 150,
-          "description": "DPI for the strip-raster probe (content-bleed only)."
+          "description": "DPI for raster probes (content-bleed and ink-coverage)."
         },
         "probe_threshold": {
           "type": "number",
           "minimum": 0,
           "default": 16,
           "description": "Pixel channel threshold (0-255) that counts as ink in the raster probe (content-bleed only)."
+        },
+        "max_ink_pct": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum total ink coverage percentage (ink-coverage, e.g. 300 for 300% TAC)."
+        },
+        "min_region_area_pct": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.05,
+          "description": "Minimum over-limit connected-region area as a percentage of the page (ink-coverage)."
+        },
+        "max_regions_per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 20,
+          "description": "Maximum number of ink-coverage regions reported per page."
         }
       },
       "additionalProperties": true
