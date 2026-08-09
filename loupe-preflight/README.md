@@ -26,6 +26,36 @@ Optional:
 - `job_types[]` — Loupe job categories
 - `description`
 - `fixups[]` — each has `id`, `confirm` (default true), and params
+- `pdfx` — optional conformance policy (`PDF/X-1a:2001` or `PDF/X-4`)
+
+### PDF/X policy validation
+
+PDF/X validation is an optional policy layer in the same `PreflightEngine`; it
+does not create a second validator. Select a target in the profile:
+
+```json
+"pdfx": { "target": "PDF/X-4", "policyVersion": 1 }
+```
+
+The report then contains a deterministic `pdfx` object with the requested
+target, policy revision, `conformant`, `non-conformant`, or `incomplete`
+status, failed/incomplete stable rule IDs, and per-rule structured evidence.
+PDF/X failures also appear in the ordinary `errors[]` array with `check_id`
+`pdfx`, so existing Editor and PdfTool consumers keep one finding model.
+
+The initial audited policy packs are PDF/X-1a:2001 and PDF/X-4. They reuse the
+existing output-intent/ICC, inherited page-box, recursive font, color-space,
+transparency, document-action, and security inspection paths. Missing evidence
+never becomes a pass; it produces `incomplete` and forces
+`inspection_complete: false`. PDF/X-3:2002 is reserved for a later policy pack.
+See [`docs/PDFX_POLICY_MATRIX.md`](../docs/PDFX_POLICY_MATRIX.md) for the
+audited rule registry and capability boundaries.
+
+Use the supplied example with PdfTool:
+
+```bash
+PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-pdfx-x4.json
+```
 
 Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 
@@ -46,9 +76,10 @@ transparency groups, blend modes, and blend-space crossings.
 
 ## Report JSON
 
-Required top-level fields: `pass`, `profile`, `errors`, `warnings`, `fixups_available`.
+Required top-level fields: `schema_version`, `inspection_complete`, `pass`,
+`profile`, `errors`, `warnings`, `fixups_available`, and `checks`.
 
-`schema_version` is currently **2**. Version 1 required `page` and `bbox` on every finding; the plugin still accepts v1 reports for backward compatibility.
+`schema_version` is currently **3**. Version 1 required `page` and `bbox` on every finding; version 3 adds explicit inspection completeness and per-check status reporting. The plugin still accepts older reports for backward compatibility.
 
 Every finding in `errors[]` / `warnings[]` **must** include:
 
