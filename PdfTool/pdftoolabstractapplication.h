@@ -34,6 +34,7 @@
 #include "pdfimageoptimizer.h"
 #include "pdfredact.h"
 #include "pdfbleedfixup.h"
+#include "pdfrgbtocmykfixup.h"
 
 #include <QtGlobal>
 #include <QString>
@@ -177,6 +178,10 @@ struct PDFToolOptions
     pdf::PDFBleedFixupSettings addBleedSettings;
     QString addBleedOutputDocument;
 
+    // For option 'RgbToCmyk'
+    pdf::PDFRgbToCmykSettings rgbToCmykSettings;
+    QString rgbToCmykOutputDocument;
+
     // Shared destructive-write guard (unite, separate, redact, encrypt, decrypt,
     // optimize, remove-external-links, attachments, render, fetch-images, add-bleed).
     // --overwrite is canonical; --force is kept as a silent alias on the commands
@@ -257,7 +262,7 @@ public:
         Description   ///< Description (what this application does)
     };
 
-    enum Option : quint32
+    enum Option : quint64
     {
         ConsoleFormat = 0x00000001,   ///< Set format of console output (text, xml or html)
         OpenDocument = 0x00000002,   ///< Flags for document reading
@@ -291,6 +296,7 @@ public:
         DestructiveWrite = 0x20000000,   ///< Shared --dry-run/--report/--force for overwrite commands
         OcrOptions = 0x40000000,   ///< Loupe OCR sidecar settings
         Diagnostics = 0x80000000,   ///< Loupe diagnostics bundle collection
+        RgbToCmyk = 0x100000000ULL,  ///< ICC-managed RGB-to-CMYK fixup
     };
     Q_DECLARE_FLAGS(Options, Option)
 

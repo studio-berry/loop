@@ -198,6 +198,23 @@ const PreflightFixupEntry* PreflightReportModel::addBleedFixup() const
     return nullptr;
 }
 
+bool PreflightReportModel::hasRgbToCmykFixup() const
+{
+    return rgbToCmykFixup() != nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::rgbToCmykFixup() const
+{
+    for (const PreflightFixupEntry& fixup : m_fixups)
+    {
+        if (fixup.id == QStringLiteral("rgb-to-cmyk"))
+        {
+            return &fixup;
+        }
+    }
+    return nullptr;
+}
+
 bool PreflightReportModel::hasWhiteOverprintFinding() const
 {
     for (const PreflightFindingEntry& finding : m_findings)

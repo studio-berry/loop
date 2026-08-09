@@ -833,10 +833,16 @@ bool hasBleedGapFinding(const QList<PreflightFinding>& findings)
     return false;
 }
 
-void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups, bool needsAddBleed, qreal addBleedAmountPt)
+void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
+                           bool needsAddBleed,
+                           qreal addBleedAmountPt,
+                           const QList<PreflightFinding>& errors,
+                           const QList<PreflightFinding>& warnings)
 {
     PreflightFixupConfig addBleedConfig;
     bool hasProfileAddBleed = false;
+    PreflightFixupConfig rgbToCmykConfig;
+    bool hasProfileRgbToCmyk = false;
 
     for (const PreflightFixupConfig& fixup : fixups)
     {
@@ -844,6 +850,16 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups, bool needsAddBle
         {
             addBleedConfig = fixup;
             hasProfileAddBleed = true;
+            break;
+        }
+    }
+
+    for (const PreflightFixupConfig& fixup : fixups)
+    {
+        if (fixup.id == QStringLiteral("rgb-to-cmyk"))
+        {
+            rgbToCmykConfig = fixup;
+            hasProfileRgbToCmyk = true;
             break;
         }
     }
@@ -881,6 +897,33 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups, bool needsAddBle
         addBleedConfig.params = params;
 
         fixups.push_back(addBleedConfig);
+    }
+
+    const auto hasRgbFinding = [](const QList<PreflightFinding>& findings)
+    {
+        return std::any_of(findings.cbegin(), findings.cend(), [](const PreflightFinding& finding)
+        {
+            return finding.checkId == QStringLiteral("color-mode")
+                && finding.message.contains(QStringLiteral("DeviceRGB"), Qt::CaseInsensitive);
+        });
+    };
+
+    if (hasRgbFinding(errors) || hasRgbFinding(warnings))
+    {
+        if (!hasProfileRgbToCmyk)
+        {
+            rgbToCmykConfig.id = QStringLiteral("rgb-to-cmyk");
+            rgbToCmykConfig.confirm = true;
+        }
+        if (rgbToCmykConfig.description.isEmpty())
+        {
+            rgbToCmykConfig.description = PDFTranslationContext::tr(
+                "Convert RGB content to an ICC-managed CMYK output condition");
+        }
+        QJsonObject params = rgbToCmykConfig.params;
+        params.insert(QStringLiteral("safe"), true);
+        rgbToCmykConfig.params = params;
+        fixups.push_back(rgbToCmykConfig);
     }
 }
 
@@ -2125,7 +2168,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
     }
 
     const bool needsAddBleed = hasBleedGapFinding(result.errors) || hasBleedGapFinding(result.warnings);
-    adjustFixupsAvailable(result.fixupsAvailable, needsAddBleed, addBleedAmountPt);
+    adjustFixupsAvailable(result.fixupsAvailable,
+                          needsAddBleed,
+                          addBleedAmountPt,
+                          result.errors,
+                          result.warnings);
 
     return result;
 }

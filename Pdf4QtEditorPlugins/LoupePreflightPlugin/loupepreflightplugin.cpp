@@ -26,6 +26,7 @@
 #include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
+#include "pdfrgbtocmykfixup.h"
 #include "pdfdocumentwriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
@@ -95,6 +96,18 @@ QString defaultBleedOutputPath(const QString& sourcePath)
 
     return sourceInfo.absolutePath() + QDir::separator()
         + sourceInfo.completeBaseName() + QStringLiteral("_bleed.") + sourceInfo.suffix();
+}
+
+QString defaultRgbToCmykOutputPath(const QString& sourcePath)
+{
+    const QFileInfo sourceInfo(sourcePath);
+    if (!sourceInfo.isFile())
+    {
+        return QString();
+    }
+
+    return sourceInfo.absolutePath() + QDir::separator()
+        + sourceInfo.completeBaseName() + QStringLiteral("_cmyk.") + sourceInfo.suffix();
 }
 
 }   // namespace
@@ -738,6 +751,10 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
     const PreflightFixupEntry* addBleedFixup = m_reportDockWidget->addBleedFixup();
     if (!addBleedFixup)
     {
+        if (m_reportDockWidget->hasRgbToCmykFixup())
+        {
+            onApplyRgbToCmykFixupRequested();
+        }
         return;
     }
 
@@ -867,6 +884,163 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
                          m_documentRevision,
                          true,
                          tr("Post-fix results for: %1").arg(QDir::toNativeSeparators(outputPath)));
+}
+
+void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
+{
+    if (!m_document || !m_reportDockWidget || !m_widget)
+    {
+        return;
+    }
+
+    const auto* cmsManager = m_widget->getDrawWidgetProxy()->getCMSManager();
+    if (!cmsManager)
+    {
+        QMessageBox::warning(m_widget, tr("RGB to CMYK"), tr("No color-management system is available."));
+        return;
+    }
+
+    const pdf::PDFColorProfileIdentifiers& profiles = cmsManager->getCMYKProfiles();
+    if (profiles.empty())
+    {
+        QMessageBox::warning(m_widget, tr("RGB to CMYK"), tr("No CMYK ICC profiles are available."));
+        return;
+    }
+
+    QDialog dialog(m_widget);
+    dialog.setWindowTitle(tr("Convert RGB to CMYK"));
+    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    QFormLayout* form = new QFormLayout();
+
+    QComboBox* profileCombo = new QComboBox(&dialog);
+    for (const pdf::PDFColorProfileIdentifier& profile : profiles)
+    {
+        profileCombo->addItem(profile.name.isEmpty() ? profile.id : profile.name,
+                              QString::fromUtf8(profile.id));
+    }
+    form->addRow(tr("Target CMYK profile"), profileCombo);
+
+    QComboBox* intentCombo = new QComboBox(&dialog);
+    intentCombo->addItem(tr("Relative colorimetric"), int(pdf::RenderingIntent::RelativeColorimetric));
+    intentCombo->addItem(tr("Perceptual"), int(pdf::RenderingIntent::Perceptual));
+    intentCombo->addItem(tr("Absolute colorimetric"), int(pdf::RenderingIntent::AbsoluteColorimetric));
+    intentCombo->addItem(tr("Saturation"), int(pdf::RenderingIntent::Saturation));
+    form->addRow(tr("Rendering intent"), intentCombo);
+
+    QCheckBox* blackPointCheck = new QCheckBox(tr("Black-point compensation"), &dialog);
+    blackPointCheck->setChecked(true);
+    form->addRow(QString(), blackPointCheck);
+
+    QLineEdit* outputPathEdit = new QLineEdit(
+        defaultRgbToCmykOutputPath(m_dataExchangeInterface->getOriginalFileName()), &dialog);
+    QPushButton* browseButton = new QPushButton(tr("Browse..."), &dialog);
+    QHBoxLayout* outputLayout = new QHBoxLayout();
+    outputLayout->addWidget(outputPathEdit, 1);
+    outputLayout->addWidget(browseButton);
+    form->addRow(tr("Output file"), outputLayout);
+
+    QCheckBox* rerunCheckBox = new QCheckBox(tr("Re-run preflight after conversion"), &dialog);
+    rerunCheckBox->setChecked(true);
+    layout->addLayout(form);
+    layout->addWidget(rerunCheckBox);
+
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(browseButton, &QPushButton::clicked, &dialog, [&dialog, outputPathEdit]()
+    {
+        const QString selectedPath = QFileDialog::getSaveFileName(
+            &dialog, tr("Save CMYK PDF"), outputPathEdit->text(), tr("PDF files (*.pdf)"));
+        if (!selectedPath.isEmpty())
+        {
+            outputPathEdit->setText(selectedPath);
+        }
+    });
+
+    pdf::PDFWidgetUtils::style(&dialog);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    const QString outputPath = outputPathEdit->text().trimmed();
+    if (outputPath.isEmpty())
+    {
+        QMessageBox::warning(m_widget, tr("RGB to CMYK"), tr("Choose an output file path."));
+        return;
+    }
+    if (QFile::exists(outputPath)
+        && QMessageBox::warning(m_widget, tr("RGB to CMYK"),
+                                tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
+                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    const int profileIndex = profileCombo->currentIndex();
+    if (profileIndex < 0 || profileIndex >= int(profiles.size()))
+    {
+        return;
+    }
+    const pdf::PDFColorProfileIdentifier& profile = profiles.at(size_t(profileIndex));
+    QByteArray profileData = profile.profileMemoryData;
+    if (profileData.isEmpty())
+    {
+        QFile profileFile(profile.id);
+        if (!profileFile.open(QIODevice::ReadOnly))
+        {
+            QMessageBox::critical(m_widget, tr("RGB to CMYK"), tr("Unable to read the selected ICC profile."));
+            return;
+        }
+        profileData = profileFile.readAll();
+    }
+
+    pdf::PDFDocument candidate = *m_document;
+    pdf::PDFRgbToCmykSettings settings;
+    settings.targetIccData = profileData;
+    settings.targetIccId = profile.id.toUtf8();
+    settings.targetProfileName = profile.name;
+    settings.intent = pdf::RenderingIntent(intentCombo->currentData().toInt());
+    settings.blackPointCompensation = blackPointCheck->isChecked();
+    settings.revalidate = true;
+
+    pdf::PDFRgbToCmykReport report;
+    const pdf::PDFOperationResult fixupResult = pdf::PDFRgbToCmykFixup::apply(&candidate, settings, &report);
+    if (!fixupResult)
+    {
+        QMessageBox::critical(m_widget, tr("RGB to CMYK"), fixupResult.getErrorMessage());
+        return;
+    }
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
+    if (!writeResult)
+    {
+        QMessageBox::critical(m_widget, tr("RGB to CMYK"), writeResult.getErrorMessage());
+        return;
+    }
+
+    QMessageBox::information(m_widget, tr("RGB to CMYK"),
+                             tr("Converted %1 vector paint(s) and saved the candidate PDF to %2. The open document was not modified.")
+                                 .arg(report.vectorPaintsConverted)
+                                 .arg(QDir::toNativeSeparators(outputPath)));
+
+    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    {
+        return;
+    }
+
+    QString pdfToolPath;
+    QString profilePath;
+    if (resolvePreflightPaths(&pdfToolPath, &profilePath))
+    {
+        startPreflightOnFile(outputPath,
+                             profilePath,
+                             m_documentRevision,
+                             true,
+                             tr("Post-conversion results for: %1").arg(QDir::toNativeSeparators(outputPath)));
+    }
 }
 
 }   // namespace pdfplugin
