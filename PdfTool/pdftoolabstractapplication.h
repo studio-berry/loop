@@ -35,6 +35,7 @@
 #include "pdfredact.h"
 #include "pdfbleedfixup.h"
 #include "pdfrgbtocmykfixup.h"
+#include "pdfrepairdiff.h"
 
 #include <QtGlobal>
 #include <QString>
@@ -204,6 +205,10 @@ struct PDFToolOptions
     bool diagnosticsIncludeLogs = true;
     bool diagnosticsIncludeSettings = true;
 
+    // For option 'RepairDiff'
+    QStringList repairDiffFiles;
+    pdf::PDFRepairDiffOptions repairDiffOptions;
+
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
     // themselves. Null when not running under the contract.
@@ -297,6 +302,7 @@ public:
         OcrOptions = 0x40000000,   ///< Loupe OCR sidecar settings
         Diagnostics = 0x80000000,   ///< Loupe diagnostics bundle collection
         RgbToCmyk = 0x100000000ULL,  ///< ICC-managed RGB-to-CMYK fixup
+        RepairDiff = 0x200000000ULL, ///< Deterministic before/after repair comparison
     };
     Q_DECLARE_FLAGS(Options, Option)
 
