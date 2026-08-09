@@ -73,6 +73,14 @@ public:
     /// to the log file.
     static void setLevel(Level level);
 
+    /// Current persisted logging threshold. This is safe to expose in a
+    /// diagnostics manifest because it contains no configuration secret.
+    static Level level();
+
+    /// False when the logger could not open, rotate, or flush its sink. The
+    /// application continues running and the previous Qt handler is retained.
+    static bool isHealthy();
+
     /// Directory the active session is writing into, resolved in this order:
     /// 1. LOUPE_LOG_DIR environment variable, if set;
     /// 2. "<settingsPath>/logs", when PDFSettings::getSettingsPath() is

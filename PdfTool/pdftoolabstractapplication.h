@@ -252,7 +252,6 @@ struct PDFToolOptions
     // For option 'Diagnostics'
     QString diagnosticsOutputDirectory;
     bool diagnosticsIncludeLogs = true;
-    bool diagnosticsIncludeSettings = true;
 
     // For option 'RepairDiff'
     QStringList repairDiffFiles;

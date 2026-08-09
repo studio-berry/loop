@@ -764,7 +764,6 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addOption(QCommandLineOption("output", "Directory the diagnostics bundle directory is created under (default: current directory).", "dir"));
         parser->addOption(QCommandLineOption("no-logs", "Do not include the rotated log files in the bundle."));
-        parser->addOption(QCommandLineOption("no-settings", "Do not include a filtered settings.ini copy in the bundle."));
     }
 
     if (optionFlags.testFlag(SignatureVerification))
@@ -1240,7 +1239,6 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     {
         options.diagnosticsOutputDirectory = parser->isSet("output") ? parser->value("output") : QDir::currentPath();
         options.diagnosticsIncludeLogs = !parser->isSet("no-logs");
-        options.diagnosticsIncludeSettings = !parser->isSet("no-settings");
     }
 
     if (optionFlags.testFlag(VerifyRedaction))
