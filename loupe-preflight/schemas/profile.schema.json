@@ -21,6 +21,10 @@
       "type": "string",
       "description": "Optional summary of when to use this profile."
     },
+    "pdfx": {
+      "$ref": "#/$defs/pdfx",
+      "description": "Optional PDF/X conformance policy. Omitting this object preserves legacy preflight behavior."
+    },
     "job_types": {
       "type": "array",
       "description": "Loupe job categories this profile applies to.",
@@ -43,6 +47,25 @@
     }
   },
   "$defs": {
+    "pdfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["PDF/X-1a:2001", "PDF/X-4"],
+          "description": "Audited PDF/X policy target. PDF/X-3:2002 is reserved for a future policy pack."
+        },
+        "policyVersion": {
+          "oneOf": [
+            { "type": "string", "const": "1" },
+            { "type": "integer", "const": 1 }
+          ],
+          "description": "Optional Loupe policy revision; defaults to the target's registered revision."
+        }
+      }
+    },
     "severity": {
       "type": "string",
       "enum": ["error", "warning", "info"],
@@ -91,6 +114,30 @@
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "allowed_subtypes": {
+          "type": "array",
+          "description": "Optional allow-list of output-intent /S subtype names.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_profile_sha256": {
+          "type": "array",
+          "description": "Optional allow-list of SHA-256 digests for decoded ICC payloads.",
+          "items": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "require_embedded_profile": {
+          "type": "boolean",
+          "description": "Whether an output intent must contain a decodable /DestOutputProfile ICC stream.",
+          "default": true
+        },
+        "allow_multiple": {
+          "type": "boolean",
+          "description": "Whether more than one valid applicable output intent is permitted.",
+          "default": true
         },
         "expected_width_pt": {
           "type": "number",
@@ -180,7 +227,20 @@
           "description": "Severity override for thin-stroke findings."
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": { "const": "ink-coverage" }
+            },
+            "required": ["id"]
+          },
+          "then": {
+            "required": ["max_ink_pct"]
+          }
+        }
+      ]
     },
     "fixup": {
       "type": "object",

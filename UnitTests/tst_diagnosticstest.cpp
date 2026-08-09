@@ -93,7 +93,9 @@ private slots:
     void scrubber_hostName();
     void scrubber_email();
     void scrubber_ipv4();
+    void scrubber_ipv6();
     void scrubber_windowsAbsolutePath();
+    void scrubber_uncPath();
     void scrubber_posixAbsolutePath_dropsBasenameKeepsExtension();
     void scrubber_idempotent();
     void scrubber_passthroughWhenNoMatches();
@@ -102,6 +104,8 @@ private slots:
 
     void collector_writesManifestWithMatchingHashes();
     void collector_neverIncludesPdfFiles();
+    void collector_scrubsFinalBundleArtifacts();
+    void collector_rejectsDestinationCollision();
     void collector_failure_readOnlyOutputDirectory();
 };
 
@@ -181,10 +185,24 @@ void DiagnosticsTest::scrubber_ipv4()
     QVERIFY(scrubbed.contains(QStringLiteral("<IP>")));
 }
 
+void DiagnosticsTest::scrubber_ipv6()
+{
+    const QString scrubbed = pdf::PDFLogScrubber::scrub(QStringLiteral("Connected from 2001:db8::42 successfully"));
+    QVERIFY(!scrubbed.contains(QStringLiteral("2001:db8::42")));
+    QVERIFY(scrubbed.contains(QStringLiteral("<IP>")));
+}
+
 void DiagnosticsTest::scrubber_windowsAbsolutePath()
 {
     const QString scrubbed = pdf::PDFLogScrubber::scrub(QStringLiteral("Failed to open D:\\Projects\\Confidential_Report.pdf"));
     QVERIFY(!scrubbed.contains(QStringLiteral("Confidential_Report")));
+    QVERIFY(scrubbed.contains(QStringLiteral("<PATH:.pdf>")));
+}
+
+void DiagnosticsTest::scrubber_uncPath()
+{
+    const QString scrubbed = pdf::PDFLogScrubber::scrub(QStringLiteral("Failed to open \\\\server\\share\\customer\\job.pdf"));
+    QVERIFY(!scrubbed.contains(QStringLiteral("customer")));
     QVERIFY(scrubbed.contains(QStringLiteral("<PATH:.pdf>")));
 }
 
@@ -272,6 +290,7 @@ void DiagnosticsTest::collector_writesManifestWithMatchingHashes()
         qWarning() << "Something worth remembering happened";
 
         pdf::PDFDiagnosticsOptions options;
+        options.applicationId = QStringLiteral("collectortest");
         options.outputDirectory = outputDir.path();
 
         result = pdf::PDFDiagnosticsCollector::collect(options);
@@ -289,7 +308,8 @@ void DiagnosticsTest::collector_writesManifestWithMatchingHashes()
     QVERIFY(manifestDoc.isObject());
 
     const QJsonObject manifest = manifestDoc.object();
-    QCOMPARE(manifest.value(QStringLiteral("schemaVersion")).toInt(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(manifest.value(QStringLiteral("application")).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("collectortest"));
 
     const QJsonArray files = manifest.value(QStringLiteral("files")).toArray();
     QVERIFY(!files.isEmpty());
@@ -317,6 +337,7 @@ void DiagnosticsTest::collector_writesManifestWithMatchingHashes()
     }
 
     QVERIFY(sawReadme);
+    QVERIFY(!QFile::exists(QDir(result.bundleDirectory).filePath(QStringLiteral("settings.ini"))));
 }
 
 void DiagnosticsTest::collector_neverIncludesPdfFiles()
@@ -332,6 +353,61 @@ void DiagnosticsTest::collector_neverIncludesPdfFiles()
 
     QDirIterator it(result.bundleDirectory, QStringList{ QStringLiteral("*.pdf") }, QDir::Files, QDirIterator::Subdirectories);
     QVERIFY(!it.hasNext());
+}
+
+void DiagnosticsTest::collector_scrubsFinalBundleArtifacts()
+{
+    QTemporaryDir outputDir;
+    QVERIFY(outputDir.isValid());
+    QTemporaryDir logDir;
+    QVERIFY(logDir.isValid());
+    qputenv("LOUPE_LOG_DIR", logDir.path().toLocal8Bit());
+    qputenv("LOUPE_LOG_LEVEL", "Warning");
+
+    const QtMessageHandler previousHandler = qInstallMessageHandler(silentMessageHandler);
+    pdf::PDFDiagnosticsResult result;
+    {
+        const pdf::PDFLogSession session(QStringLiteral("privacytest"));
+        qWarning().noquote() << QStringLiteral("Opened C:/Users/SecretUser/Documents/client-secret.pdf for person-secret@example.test from 10.44.55.66 and 2001:db8::42");
+
+        pdf::PDFDiagnosticsOptions options;
+        options.applicationId = QStringLiteral("privacytest");
+        options.outputDirectory = outputDir.path();
+        result = pdf::PDFDiagnosticsCollector::collect(options);
+    }
+    qInstallMessageHandler(previousHandler);
+    qunsetenv("LOUPE_LOG_DIR");
+    qunsetenv("LOUPE_LOG_LEVEL");
+
+    QVERIFY2(result.success, qPrintable(result.errorMessage));
+    QDirIterator it(result.bundleDirectory, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext())
+    {
+        QFile file(it.next());
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QString content = QString::fromUtf8(file.readAll());
+        QVERIFY(!content.contains(QStringLiteral("C:/Users/SecretUser")));
+        QVERIFY(!content.contains(QStringLiteral("person-secret@example.test")));
+        QVERIFY(!content.contains(QStringLiteral("10.44.55.66")));
+        QVERIFY(!content.contains(QStringLiteral("2001:db8::42")));
+    }
+}
+
+void DiagnosticsTest::collector_rejectsDestinationCollision()
+{
+    QTemporaryDir outputDir;
+    QVERIFY(outputDir.isValid());
+
+    pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("collisiontest");
+    options.outputDirectory = outputDir.path();
+    options.destinationPath = QDir(outputDir.path()).filePath(QStringLiteral("fixed-bundle"));
+    const pdf::PDFDiagnosticsResult first = pdf::PDFDiagnosticsCollector::collect(options);
+    QVERIFY2(first.success, qPrintable(first.errorMessage));
+
+    const pdf::PDFDiagnosticsResult second = pdf::PDFDiagnosticsCollector::collect(options);
+    QVERIFY(!second.success);
+    QVERIFY(QDir(first.bundleDirectory).exists());
 }
 
 void DiagnosticsTest::collector_failure_readOnlyOutputDirectory()

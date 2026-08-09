@@ -39,39 +39,54 @@ namespace pdf
 namespace
 {
 
+bool isUsableBox(const QRectF& box)
+{
+    return box.isValid()
+        && std::isfinite(box.left())
+        && std::isfinite(box.top())
+        && std::isfinite(box.width())
+        && std::isfinite(box.height())
+        && box.width() > 0.0
+        && box.height() > 0.0;
+}
+
 QRectF resolveAnalysisBox(const PDFPage* page, PDFInkCoverageAnalysisBox requested)
 {
-    const QRectF mediaBox = page->getMediaBox().normalized();
-    const auto validBox = [](const QRectF& box)
+    if (!page)
     {
-        return box.isValid() && box.width() > 0.0 && box.height() > 0.0;
-    };
+        return QRectF();
+    }
+
+    const QRectF media = page->getMediaBox().normalized();
+    const QRectF crop = page->getCropBox().normalized();
+    const QRectF trim = page->getTrimBox().normalized();
+    const QRectF bleed = page->getBleedBox().normalized();
 
     switch (requested)
     {
-        case PDFInkCoverageAnalysisBox::Bleed:
-            if (validBox(page->getBleedBox()))
-            {
-                return page->getBleedBox().normalized();
-            }
-            [[fallthrough]];
-        case PDFInkCoverageAnalysisBox::Trim:
-            if (validBox(page->getTrimBox()))
-            {
-                return page->getTrimBox().normalized();
-            }
-            [[fallthrough]];
-        case PDFInkCoverageAnalysisBox::Crop:
-            if (validBox(page->getCropBox()))
-            {
-                return page->getCropBox().normalized();
-            }
-            [[fallthrough]];
         case PDFInkCoverageAnalysisBox::Media:
-            return mediaBox;
+            return isUsableBox(media) ? media : QRectF();
+        case PDFInkCoverageAnalysisBox::Crop:
+            return isUsableBox(crop) ? crop : media;
+        case PDFInkCoverageAnalysisBox::Trim:
+            if (page->hasTrimBox() && isUsableBox(trim))
+            {
+                return trim;
+            }
+            return isUsableBox(crop) ? crop : media;
+        case PDFInkCoverageAnalysisBox::Bleed:
+            if (page->hasBleedBox() && isUsableBox(bleed))
+            {
+                return bleed;
+            }
+            if (page->hasTrimBox() && isUsableBox(trim))
+            {
+                return trim;
+            }
+            return isUsableBox(crop) ? crop : media;
     }
 
-    return mediaBox;
+    return media;
 }
 
 } // namespace
@@ -99,30 +114,23 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         return result;
     }
 
-    const QRectF mediaBox = page->getMediaBox().normalized();
-    const QRectF requestedAnalysisBox = resolveAnalysisBox(page, settings.analysisBox);
-    const QRectF analysisBox = requestedAnalysisBox.intersected(mediaBox).normalized();
-    if (!analysisBox.isValid() || analysisBox.width() <= 0.0 || analysisBox.height() <= 0.0)
+    const QRectF analysisBox = resolveAnalysisBox(page, settings.analysisBox);
+    if (!isUsableBox(analysisBox))
     {
         return result;
     }
 
-    const QRectF rotatedMediaBox = page->getRotatedBox(mediaBox, page->getPageRotation()).normalized();
-    const QRectF rotatedAnalysisBox = page->getRotatedBox(analysisBox, page->getPageRotation()).normalized();
+    const PageRotation pageRotation = page->getPageRotation();
+    const QRectF rotatedAnalysisBox = PDFPage::getRotatedBox(analysisBox, pageRotation).normalized();
+    const QSizeF mediaSize = rotatedAnalysisBox.size();
     const qreal pointToPixel = static_cast<qreal>(settings.dpi) / 72.0;
-    const double widthReal = std::ceil(rotatedAnalysisBox.width() * pointToPixel);
-    const double heightReal = std::ceil(rotatedAnalysisBox.height() * pointToPixel);
-    const double fullWidthReal = std::ceil(rotatedMediaBox.width() * pointToPixel);
-    const double fullHeightReal = std::ceil(rotatedMediaBox.height() * pointToPixel);
+    const double widthReal = std::ceil(mediaSize.width() * pointToPixel);
+    const double heightReal = std::ceil(mediaSize.height() * pointToPixel);
 
     if (!std::isfinite(widthReal) || !std::isfinite(heightReal)
-        || !std::isfinite(fullWidthReal) || !std::isfinite(fullHeightReal)
         || widthReal <= 0.0 || heightReal <= 0.0
-        || fullWidthReal <= 0.0 || fullHeightReal <= 0.0
         || widthReal > static_cast<double>(std::numeric_limits<int>::max())
-        || heightReal > static_cast<double>(std::numeric_limits<int>::max())
-        || fullWidthReal > static_cast<double>(std::numeric_limits<int>::max())
-        || fullHeightReal > static_cast<double>(std::numeric_limits<int>::max()))
+        || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
@@ -132,6 +140,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     const qint64 rasterPixels = static_cast<qint64>(width) * static_cast<qint64>(height);
     if (settings.maxRasterPixels > 0 && rasterPixels > settings.maxRasterPixels)
     {
+        result.budgetExceeded = true;
         return result;
     }
 
@@ -142,22 +151,10 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
 
     const QSize imageSize(width, height);
-    const QSize fullImageSize(qMax(1, static_cast<int>(fullWidthReal)),
-                              qMax(1, static_cast<int>(fullHeightReal)));
-    const QTransform fullPagePointToDevice = PDFRenderer::createPagePointToDevicePointMatrix(
-        page, QRect(QPoint(0, 0), fullImageSize));
-    const QRectF cropDeviceRect = fullPagePointToDevice.mapRect(analysisBox).normalized();
-    if (!cropDeviceRect.isValid() || cropDeviceRect.width() <= 0.0 || cropDeviceRect.height() <= 0.0)
-    {
-        return result;
-    }
-
-    // Render only the selected production region while retaining the page's
-    // original point-to-device scale. This excludes marks outside Bleed/Trim/
-    // Crop without changing the renderer's interpretation of page content.
-    QTransform cropTranslation;
-    cropTranslation.translate(-cropDeviceRect.left(), -cropDeviceRect.top());
-    const QTransform pagePointToDevice = cropTranslation * fullPagePointToDevice;
+    const QTransform pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(
+        rotatedAnalysisBox,
+        QRect(QPoint(0, 0), imageSize),
+        pageRotation);
     PDFInkMapper inkMapper(nullptr, document);
     inkMapper.createSpotColors(true);
 
@@ -200,12 +197,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         }
     }
 
-    const QSizeF rawAnalysisSizeMM = page->getRectMM(analysisBox).size();
-    const bool swapsAxes = page->getPageRotation() == PageRotation::Rotate90
-        || page->getPageRotation() == PageRotation::Rotate270;
-    const QSizeF pageSizeMM = swapsAxes
-        ? QSizeF(rawAnalysisSizeMM.height(), rawAnalysisSizeMM.width())
-        : rawAnalysisSizeMM;
+    const QSizeF pageSizeMM = page->getRectMM(analysisBox).size();
     const qreal pixelAreaMM2 = (pageSizeMM.width() * pageSizeMM.height()) / static_cast<qreal>(totalPixels);
     result.overLimitAreaMM2 = static_cast<qreal>(overLimitPixels) * pixelAreaMM2;
 

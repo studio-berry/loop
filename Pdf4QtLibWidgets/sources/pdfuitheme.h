@@ -46,6 +46,8 @@ public:
     static QColor severityWarningColor();
     static QColor severityInfoColor();
     static QColor severityTextColor(const QString& severity);
+    static double contrastRatio(const QColor& foreground, const QColor& background);
+    static bool meetsContrast(const QColor& foreground, const QColor& background, double requiredRatio);
 
     static QColor errorTextColor(const QPalette& palette);
     static QColor mutedTextColor(const QPalette& palette);

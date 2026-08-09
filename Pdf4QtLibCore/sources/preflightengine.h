@@ -25,7 +25,6 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentsession.h"
-#include "pdfinkcoverageprobe.h"
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -33,9 +32,11 @@
 #include <QRectF>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 
 #include <functional>
 #include <map>
+#include <optional>
 
 namespace pdf
 {
@@ -47,6 +48,81 @@ inline constexpr int PREFLIGHT_REPORT_SCHEMA_VERSION = 3;
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_DOCUMENT("document");
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_PAGE("page");
 inline constexpr QLatin1String PREFLIGHT_FINDING_SCOPE_OBJECT("object");
+
+/// PDF/X target supported by the declarative policy layer.
+enum class PDFXFlavor
+{
+    None,
+    X1a2001,
+    X3_2002,
+    X4
+};
+
+/// Deterministic reduction of mandatory PDF/X rule states.
+enum class PDFXConformanceStatus
+{
+    Conformant,
+    NonConformant,
+    Incomplete
+};
+
+/// State of one PDF/X policy rule.
+enum class PDFXRuleState
+{
+    Passed,
+    Failed,
+    NotInspected,
+    NotApplicable
+};
+
+/// One auditable requirement in a PDF/X policy pack.
+struct PDF4QTLIBCORESHARED_EXPORT PDFXRuleRequirement
+{
+    QString ruleId;
+    bool mandatory = true;
+};
+
+/// Immutable metadata and requirements for one PDF/X target.
+struct PDF4QTLIBCORESHARED_EXPORT PDFXPolicy
+{
+    PDFXFlavor flavor = PDFXFlavor::None;
+    QString policyVersion;
+    QVector<PDFXRuleRequirement> rules;
+};
+
+/// Structured result from one PDF/X policy rule.
+struct PDF4QTLIBCORESHARED_EXPORT PDFXRuleResult
+{
+    QString ruleId;
+    bool mandatory = true;
+    PDFXRuleState state = PDFXRuleState::NotInspected;
+    QJsonObject evidence;
+    QString diagnostic;
+};
+
+/// Normalized, deterministic PDF/X conformance result.
+struct PDF4QTLIBCORESHARED_EXPORT PDFXConformanceResult
+{
+    PDFXFlavor requestedFlavor = PDFXFlavor::None;
+    PDFXConformanceStatus status = PDFXConformanceStatus::Incomplete;
+    QString policyVersion;
+    QStringList failedRuleIds;
+    QStringList incompleteRuleIds;
+    QVector<PDFXRuleResult> rules;
+
+    QJsonObject toJson() const;
+};
+
+/// Returns the stable display/profile name for a PDF/X flavor.
+PDF4QTLIBCORESHARED_EXPORT QString pdfxFlavorToString(PDFXFlavor flavor);
+
+/// Returns the explicitly supported PDF/X profile targets.
+PDF4QTLIBCORESHARED_EXPORT QStringList supportedPDFXTargets();
+
+/// Resolves a target name to the audited policy registry entry.
+PDF4QTLIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
+                                                     PDFXPolicy& policy,
+                                                     QString& errorMessage);
 
 /// Configuration for a single preflight check, parsed from a profile.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
@@ -71,8 +147,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal maxInkPct = 0.0;
     qreal minRegionAreaPct = 0.05;
     int maxRegionsPerPage = 20;
-    qint64 maxRasterPixels = 250LL * 1000 * 1000;
-    PDFInkCoverageAnalysisBox analysisBox = PDFInkCoverageAnalysisBox::Bleed;
+    QString inkCoverageAnalysisBox = QStringLiteral("bleed");
 
     // image-resolution parameters.
     int minDpi = 0;
@@ -86,6 +161,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 
     // output-intent parameters (optional allow-list of /OutputConditionIdentifier values).
     QStringList allowedOutputConditionIdentifiers;
+    QStringList allowedOutputIntentSubtypes;
+    QStringList allowedOutputIntentProfileSha256;
+    bool requireEmbeddedOutputIntentProfile = true;
+    bool allowMultipleOutputIntents = true;
 
     // thin-strokes parameters.
     qreal minEffectiveStrokeWidthPt = 0.0;
@@ -115,6 +194,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightFinding
     QString message;
     QRectF bbox;
     QString checkId;
+    QJsonObject evidence;
 };
 
 /// Parsed preflight profile.
@@ -123,6 +203,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileData
     QString name;
     QList<PreflightCheckConfig> checks;
     QList<PreflightFixupConfig> fixups;
+    std::optional<PDFXPolicy> pdfx;
 };
 
 /// Per-check execution status in schema v3 reports.
@@ -131,6 +212,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QString budgetKind;
+    qint64 budgetLimit = 0;
+    qint64 budgetAttempted = 0;
+    QString budgetContext;
 };
 
 /// Result of a preflight run.
@@ -143,6 +228,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
     QList<PreflightFinding> warnings;
     QList<PreflightFixupConfig> fixupsAvailable;
     QList<PreflightCheckStatus> checkStatuses;
+    std::optional<PDFXConformanceResult> pdfx;
 
     QJsonObject toJson(const QString& pdfPath = QString()) const;
 };

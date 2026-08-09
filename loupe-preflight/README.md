@@ -26,6 +26,36 @@ Optional:
 - `job_types[]` — Loupe job categories
 - `description`
 - `fixups[]` — each has `id`, `confirm` (default true), and params
+- `pdfx` — optional conformance policy (`PDF/X-1a:2001` or `PDF/X-4`)
+
+### PDF/X policy validation
+
+PDF/X validation is an optional policy layer in the same `PreflightEngine`; it
+does not create a second validator. Select a target in the profile:
+
+```json
+"pdfx": { "target": "PDF/X-4", "policyVersion": 1 }
+```
+
+The report then contains a deterministic `pdfx` object with the requested
+target, policy revision, `conformant`, `non-conformant`, or `incomplete`
+status, failed/incomplete stable rule IDs, and per-rule structured evidence.
+PDF/X failures also appear in the ordinary `errors[]` array with `check_id`
+`pdfx`, so existing Editor and PdfTool consumers keep one finding model.
+
+The initial audited policy packs are PDF/X-1a:2001 and PDF/X-4. They reuse the
+existing output-intent/ICC, inherited page-box, recursive font, color-space,
+transparency, document-action, and security inspection paths. Missing evidence
+never becomes a pass; it produces `incomplete` and forces
+`inspection_complete: false`. PDF/X-3:2002 is reserved for a later policy pack.
+See [`docs/PDFX_POLICY_MATRIX.md`](../docs/PDFX_POLICY_MATRIX.md) for the
+audited rule registry and capability boundaries.
+
+Use the supplied example with PdfTool:
+
+```bash
+PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-pdfx-x4.json
+```
 
 Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 
@@ -46,9 +76,10 @@ transparency groups, blend modes, and blend-space crossings.
 
 ## Report JSON
 
-Required top-level fields: `pass`, `profile`, `errors`, `warnings`, `fixups_available`.
+Required top-level fields: `schema_version`, `inspection_complete`, `pass`,
+`profile`, `errors`, `warnings`, `fixups_available`, and `checks`.
 
-`schema_version` is currently **2**. Version 1 required `page` and `bbox` on every finding; the plugin still accepts v1 reports for backward compatibility.
+`schema_version` is currently **3**. Version 1 required `page` and `bbox` on every finding; version 3 adds explicit inspection completeness and per-check status reporting. The plugin still accepts older reports for backward compatibility.
 
 Every finding in `errors[]` / `warnings[]` **must** include:
 
@@ -94,31 +125,32 @@ empty edge) instead of a single aggregate `content-bleed` finding.
 
 The opt-in `ink-coverage` check rasterizes each page through the same transparency
 renderer used by Output Preview, then reports one object-scope finding for each
-connected region whose rendered total ink coverage exceeds `max_ink_pct`.
-`max_ink_pct` is expressed as a percentage of summed active output colorant
-values, so `300` means 300% TAC. The predicate is strictly `>`: content exactly
-at the configured limit is accepted. TAC is measured after transparency and
-separation simulation, so it describes rendered output rather than merely
-summing source-space CMYK operands; process, Separation, and DeviceN colorants
-represented by the active separation renderer are included.
-
-Optional parameters are `probe_dpi` (default 150), `min_region_area_pct`
-(default 0.05% of the analysis region), `max_regions_per_page` (default 20),
-and `max_raster_pixels` (default 250,000,000). Regions use four-way connected
-components, are filtered by minimum area, and are retained deterministically by
-descending area with top/left spatial tie-breaks before the cap is applied.
-`analysis_box` selects `bleed`, `trim`, `crop`, or `media`; the default is
-BleedBox with deterministic fallback to TrimBox, CropBox, and finally MediaBox.
-This keeps registration marks and slugs outside the production region from
-creating false positives while leaving MediaBox available for diagnostics.
+connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
+is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
+The finding is emitted only when the measured value is strictly greater than the
+threshold; an exact boundary is clean. Optional parameters are `probe_dpi`
+(default 150), `min_region_area_pct` (default 0.05% of the analyzed box), and
+`max_regions_per_page` (default 20). `analysis_box` defaults to `bleed` and falls
+back to `trim`, `crop`, then `media` when the requested box is not explicitly
+present; set it to `trim`, `crop`, or `media` to override that policy. The probe
+includes process and spot/DeviceN colorants, including overprint-aware output
+colorants, in the TAC sum.
 
 This check is deliberately not enabled by `loupe-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.
-Pages exceeding the raster pixel budget emit an informational page-scope
-`ink-coverage-skipped` finding and a `checks` entry with status `skipped`; the
-report sets `inspection_complete` to false and therefore cannot pass. This is a
-controlled incomplete inspection, not a clean TAC result. Renderer exceptions
-are contained by the preflight engine and likewise prevent a complete pass.
+Pages exceeding the raster pixel budget emit an informational page-scope finding,
+set the check status to `skipped`, and set `inspection_complete` to `false`;
+budget exhaustion never silently passes as a clean inspection.
+
+## Image downsampling fixup
+
+The profile's `downsample-images` fixup is advertised only when at least one
+image's effective DPI is strictly greater than `target_dpi * 1.15`. Images at or
+below that boundary remain untouched. Applying the fixup uses
+`PDFImageOptimizer` with `PreferQuality`, bicubic resampling, preserved color
+characteristics and transparency, and `keepOriginalIfLarger=true`. The Editor
+always works on a document copy, writes a separate output PDF, and offers to
+rerun the normal preflight sidecar on that output.
 
 ## Transparency risk checking
 
@@ -161,6 +193,25 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
 - Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **thin-strokes** (opt-in hairline and effective-width detection), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
+
+## Output-intent validation
+
+The `output-intent` check treats the decoded ICC payload as authoritative. It
+opens each bounded `/DestOutputProfile` with LittleCMS and derives the actual
+device space; PDF-side `ProfileCS` metadata is compared for consistency but is
+never trusted as the source of truth. Findings include the deterministic array
+index and identifier, and malformed catalog entries are reported as
+`output-intent-malformed` rather than being silently ignored.
+
+Optional output-intent policy fields are:
+
+- `require_embedded_profile` (default `true`)
+- `allowed_subtypes` (allow-list for `/S`)
+- `allowed_profile_sha256` (allow-list for decoded ICC payload digests)
+- `allow_multiple` (default `true`; set `false` to report `output-intent-ambiguous`)
+
+The check remains catalog-scoped. Page-level intent inheritance/overrides are
+deliberately outside this contract and require a separate semantics decision.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
@@ -274,6 +325,7 @@ passes, and only the target check is exercised.
 | `color-cmyk.pdf` | loupe-default | pass | `color-mode` (DeviceCMYK image) |
 | `image-dpi-low.pdf` | loupe-default | warning | `image-resolution` (~25 DPI) |
 | `image-dpi-ok.pdf` | loupe-default | pass | `image-resolution` (~310 DPI) |
+| `image-dpi-excessive.pdf` | loupe-default | pass | 600-DPI image advertises `downsample-images` |
 | `font-not-embedded.pdf` | loupe-default | fail | `embedded-fonts` (Helvetica, no FontFile) |
 | `font-embedded.pdf` | loupe-default | pass | `embedded-fonts` (`/FontFile2` subset) |
 | `trim-pagesize-mismatch.pdf` | test-trim-pagesize | fail | `trim`, `page-size` (540×720 vs 612×792) |

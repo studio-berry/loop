@@ -3,6 +3,6 @@
   "name": "Loupe Test - Ink Coverage",
   "description": "Test-only profile for TAC threshold fixtures.",
   "checks": [
-    { "id": "ink-coverage", "max_ink_pct": 300, "probe_dpi": 150, "min_region_area_pct": 0.05, "max_regions_per_page": 20, "max_raster_pixels": 250000000, "analysis_box": "bleed", "severity": "warning" }
+    { "id": "ink-coverage", "max_ink_pct": 300, "probe_dpi": 150, "min_region_area_pct": 0.05, "max_regions_per_page": 20, "analysis_box": "bleed", "severity": "warning" }
   ]
 }

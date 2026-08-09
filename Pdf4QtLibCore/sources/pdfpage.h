@@ -160,6 +160,8 @@ public:
     inline const QRectF& getBleedBox() const { return m_bleedBox; }
     inline const QRectF& getTrimBox() const { return m_trimBox; }
     inline const QRectF& getArtBox() const { return m_artBox; }
+    inline bool hasBleedBox() const { return m_hasBleedBox; }
+    inline bool hasTrimBox() const { return m_hasTrimBox; }
     inline PageRotation getPageRotation() const { return m_pageRotation; }
 
     inline const PDFObject& getResources() const { return m_resources; }
@@ -305,6 +307,8 @@ private:
     QRectF m_bleedBox;
     QRectF m_trimBox;
     QRectF m_artBox;
+    bool m_hasBleedBox = false;
+    bool m_hasTrimBox = false;
     PageRotation m_pageRotation = PageRotation::None;
     PDFObject m_resources;
     PDFObject m_contents;

@@ -35,9 +35,13 @@
 #include "pdfredact.h"
 #include "pdfbleedfixup.h"
 #include "pdfrgbtocmykfixup.h"
+#include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
 
 #include <QtGlobal>
+#include <QList>
 #include <QString>
+#include <QStringList>
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QStringConverter>
@@ -52,6 +56,49 @@ namespace pdftool
 struct PDFToolTranslationContext
 {
     Q_DECLARE_TR_FUNCTIONS(PDFToolTranslationContext)
+};
+
+enum class PDFToolValueType
+{
+    Boolean,
+    Integer,
+    Number,
+    String,
+    Path,
+    Enum,
+    Csv
+};
+
+struct PDFToolOptionDescriptor
+{
+    QString id;
+    QStringList names;
+    QString valueName;
+    PDFToolValueType valueType = PDFToolValueType::String;
+    QStringList allowedValues;
+    QString defaultValue;
+    bool required = false;
+    bool repeatable = false;
+    bool sensitive = false;
+};
+
+struct PDFToolPositionalDescriptor
+{
+    QString id;
+    PDFToolValueType valueType = PDFToolValueType::String;
+    bool required = true;
+    bool repeatable = false;
+};
+
+struct PDFToolCommandDescriptor
+{
+    QString id;
+    QString name;
+    QString description;
+    QStringList capabilities;
+    QStringList outputFormats;
+    QList<PDFToolOptionDescriptor> options;
+    QList<PDFToolPositionalDescriptor> positionals;
 };
 
 struct PDFToolOptions
@@ -193,6 +240,9 @@ struct PDFToolOptions
     // For option 'PreflightProfile'
     QString preflightProfilePath;
 
+    // For option 'CapabilityDiscovery'
+    QString capabilitiesCommand;
+
     // For option 'OcrOptions'
     QString ocrSidecarPath;
     int ocrDpi = 300;
@@ -202,7 +252,20 @@ struct PDFToolOptions
     // For option 'Diagnostics'
     QString diagnosticsOutputDirectory;
     bool diagnosticsIncludeLogs = true;
-    bool diagnosticsIncludeSettings = true;
+
+    // For option 'RepairDiff'
+    QStringList repairDiffFiles;
+    pdf::PDFRepairDiffOptions repairDiffOptions;
+
+    // For option 'Repair'
+    QStringList repairFiles;
+    QString repairOperationId;
+    QStringList repairParameterAssignments;
+    QString repairOutputDocument;
+    QString repairReportFile;
+    QString repairRenderDirectory;
+    bool repairListOperations = false;
+    bool repairAllowIncomplete = false;
 
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
@@ -297,12 +360,22 @@ public:
         OcrOptions = 0x40000000,   ///< Loupe OCR sidecar settings
         Diagnostics = 0x80000000,   ///< Loupe diagnostics bundle collection
         RgbToCmyk = 0x100000000ULL,  ///< ICC-managed RGB-to-CMYK fixup
+        CapabilityDiscovery = 0x200000000ULL, ///< Machine-readable command discovery
+        RepairDiff = 0x400000000ULL, ///< Deterministic before/after repair comparison
+        Repair = 0x800000000ULL, ///< Transactional prepress-safe repair operation
     };
     Q_DECLARE_FLAGS(Options, Option)
 
     virtual QString getStandardString(StandardString standardString) const = 0;
     virtual PDFToolExitCode execute(const PDFToolOptions& options) = 0;
     virtual Options getOptionsFlags() const = 0;
+
+    /// Returns stable, machine-readable metadata for this command.
+    virtual PDFToolCommandDescriptor describe() const;
+
+    static QList<PDFToolOptionDescriptor> describeOptions(Options optionFlags);
+    static QList<PDFToolPositionalDescriptor> describePositionals(Options optionFlags);
+    static QStringList describeCapabilities(Options optionFlags);
 
     void initializeCommandLineParser(QCommandLineParser* parser) const;
     PDFToolOptions getOptions(QCommandLineParser* parser, PDFToolExecutionContext* executionContext) const;

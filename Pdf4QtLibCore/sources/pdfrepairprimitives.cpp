@@ -1,0 +1,373 @@
+// MIT License
+//
+// Copyright (c) 2018-2025 Jakub Melka and Contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+#include "pdfrepairoperation.h"
+
+#include "pdfbleedfixup.h"
+#include "pdfimageoptimizer.h"
+#include "pdfrgbtocmykfixup.h"
+
+#include <QJsonValue>
+#include <QtMath>
+
+#include <cmath>
+#include <memory>
+
+namespace pdf
+{
+
+namespace
+{
+
+PDFBleedFixupMode bleedMode(const QJsonObject& parameters)
+{
+    const QString mode = parameters.value(QStringLiteral("mode")).toString(QStringLiteral("mirror")).trimmed().toLower();
+    if (mode == QStringLiteral("pixel-repeat") || mode == QStringLiteral("repeat"))
+    {
+        return PDFBleedFixupMode::PixelRepeat;
+    }
+    if (mode == QStringLiteral("stretch"))
+    {
+        return PDFBleedFixupMode::Stretch;
+    }
+    return PDFBleedFixupMode::Mirror;
+}
+
+PDFBleedFixupSettings bleedSettings(const QJsonObject& parameters, bool analyzeOnly)
+{
+    PDFBleedFixupSettings settings;
+    settings.mode = bleedMode(parameters);
+    const double bleedMm = parameters.value(QStringLiteral("bleed_mm")).toDouble(3.0);
+    const double safeBleedMm = std::isfinite(bleedMm) ? qBound(0.0, bleedMm, 1000.0) : 0.0;
+    settings.bleedMM = QMarginsF(safeBleedMm, safeBleedMm, safeBleedMm, safeBleedMm);
+    settings.pageRange = parameters.value(QStringLiteral("page_range")).toString(QStringLiteral("-"));
+    settings.force = parameters.value(QStringLiteral("force")).toBool(false);
+    settings.analyzeOnly = analyzeOnly;
+    return settings;
+}
+
+void addBleedPlanTargets(const PDFBleedFixupReport& report, PDFRepairPlan* plan)
+{
+    for (const PDFBleedFixupPageReport& page : report.pages)
+    {
+        const bool boxesChanged = page.originalMediaBox != page.newMediaBox ||
+                                  page.originalCropBox != page.newCropBox ||
+                                  page.originalBleedBox != page.newBleedBox ||
+                                  page.originalTrimBox != page.newTrimBox;
+        if (!boxesChanged && page.sidesApplied.isEmpty())
+        {
+            plan->warnings.append(page.skipReasons);
+            continue;
+        }
+        plan->targets.append({ int(page.pageIndex), {}, QStringLiteral("pages/%1/bleed").arg(page.pageIndex) });
+    }
+}
+
+class PDFAddBleedRepair final : public PDFRepairOperation
+{
+public:
+    QString id() const override { return QStringLiteral("add-bleed"); }
+    PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    PDFRepairDomains domains() const override
+    {
+        return PDFRepairDomain::PageGeometry | PDFRepairDomain::Images | PDFRepairDomain::Structure;
+    }
+
+    PDFOperationResult analyze(const PDFDocument& source,
+                               const QJsonObject& parameters,
+                               PDFRepairPlan* plan) const override
+    {
+        if (!plan)
+        {
+            return PDFOperationResult(QStringLiteral("Bleed repair plan is null."));
+        }
+        plan->operationId = id();
+        plan->operationVersion = version();
+        plan->parameters = parameters;
+        plan->risk = risk();
+        plan->domains = domains();
+        plan->expectedChanges.pageBoxes = true;
+        plan->expectedChanges.pageContent = true;
+        plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
+                             PDFRepairValidatorKind::NormalPreflight };
+
+        PDFDocument candidate = source;
+        PDFBleedFixupReport report;
+        const PDFOperationResult result = PDFBleedFixup::apply(&candidate,
+                                                                bleedSettings(parameters, true),
+                                                                &report);
+        if (!result)
+        {
+            return result;
+        }
+        addBleedPlanTargets(report, plan);
+        return PDFOperationResult(true);
+    }
+
+    PDFOperationResult apply(PDFDocument* candidate,
+                             const PDFRepairPlan& plan,
+                             PDFRepairResult* result) const override
+    {
+        if (!candidate || !result)
+        {
+            return PDFOperationResult(QStringLiteral("Bleed repair candidate or result is null."));
+        }
+        PDFBleedFixupReport report;
+        const PDFOperationResult fixupResult = PDFBleedFixup::apply(candidate,
+                                                                      bleedSettings(plan.parameters, false),
+                                                                      &report);
+        if (!fixupResult)
+        {
+            return fixupResult;
+        }
+
+        for (const PDFBleedFixupPageReport& page : report.pages)
+        {
+            const QString path = QStringLiteral("pages/%1/bleed").arg(page.pageIndex);
+            const bool boxesChanged = page.originalMediaBox != page.newMediaBox ||
+                                      page.originalCropBox != page.newCropBox ||
+                                      page.originalBleedBox != page.newBleedBox ||
+                                      page.originalTrimBox != page.newTrimBox;
+            if (boxesChanged)
+            {
+                result->changes.append({ { int(page.pageIndex), {}, path + QStringLiteral("/boxes") },
+                                         QStringLiteral("page-box"),
+                                         QStringLiteral("original page boxes"),
+                                         QStringLiteral("expanded page boxes"),
+                                         true });
+            }
+            if (!page.sidesApplied.isEmpty())
+            {
+                result->changes.append({ { int(page.pageIndex), {}, path + QStringLiteral("/content") },
+                                         QStringLiteral("generated-bleed-content"),
+                                         QStringLiteral("no generated bleed content"),
+                                         QStringLiteral("edge-extension content"),
+                                         true });
+            }
+            result->warnings.append(page.skipReasons);
+        }
+        return PDFOperationResult(true);
+    }
+};
+
+PDFImageOptimizer::Settings optimizerSettings(const QJsonObject& parameters)
+{
+    PDFImageOptimizer::Settings settings = PDFImageOptimizer::Settings::createDefault();
+    settings.enabled = true;
+    const int targetDpi = qBound(72, parameters.value(QStringLiteral("target_dpi")).toInt(300), 2400);
+    const int quality = qBound(1, parameters.value(QStringLiteral("quality")).toInt(90), 100);
+    settings.colorProfile.targetDpi = targetDpi;
+    settings.grayProfile.targetDpi = targetDpi;
+    settings.bitonalProfile.targetDpi = targetDpi;
+    settings.colorProfile.jpegQuality = quality;
+    settings.grayProfile.jpegQuality = quality;
+    settings.bitonalProfile.jpegQuality = quality;
+    return settings;
+}
+
+class PDFDownsampleImagesRepair final : public PDFRepairOperation
+{
+public:
+    QString id() const override { return QStringLiteral("downsample-images"); }
+    PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
+
+    PDFOperationResult analyze(const PDFDocument& source,
+                               const QJsonObject& parameters,
+                               PDFRepairPlan* plan) const override
+    {
+        if (!plan)
+        {
+            return PDFOperationResult(QStringLiteral("Image repair plan is null."));
+        }
+        plan->operationId = id();
+        plan->parameters = parameters;
+        plan->risk = risk();
+        plan->domains = domains();
+        plan->expectedChanges.images = true;
+        plan->expectedChanges.colorSpaces = true;
+        plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
+                             PDFRepairValidatorKind::ImageResolution,
+                             PDFRepairValidatorKind::NormalPreflight };
+
+        const std::vector<PDFImageOptimizer::ImageInfo> infos = PDFImageOptimizer::collectImageInfos(&source);
+        const int targetDpi = qBound(72, parameters.value(QStringLiteral("target_dpi")).toInt(300), 2400);
+        for (const PDFImageOptimizer::ImageInfo& info : infos)
+        {
+            if (info.minimalDpi.x() > targetDpi || info.minimalDpi.y() > targetDpi)
+            {
+                plan->targets.append({ -1, info.reference,
+                                       QStringLiteral("resources/images/%1").arg(info.reference.objectNumber) });
+            }
+        }
+        if (plan->targets.isEmpty())
+        {
+            plan->warnings.append(QStringLiteral("no-images-require-downsampling"));
+        }
+        return PDFOperationResult(true);
+    }
+
+    PDFOperationResult apply(PDFDocument* candidate,
+                             const PDFRepairPlan& plan,
+                             PDFRepairResult* result) const override
+    {
+        if (!candidate || !result)
+        {
+            return PDFOperationResult(QStringLiteral("Image repair candidate or result is null."));
+        }
+        PDFImageOptimizer optimizer;
+        std::vector<PDFImageOptimizer::ImageResult> imageResults;
+        PDFDocument optimized = optimizer.optimize(candidate, optimizerSettings(plan.parameters), {}, nullptr, nullptr, &imageResults);
+        *candidate = std::move(optimized);
+        for (const PDFImageOptimizer::ImageResult& image : imageResults)
+        {
+            if (!image.keptOriginal)
+            {
+                result->changes.append({ { -1, image.reference,
+                                           QStringLiteral("resources/images/%1").arg(image.reference.objectNumber) },
+                                         QStringLiteral("image-resource"),
+                                         QStringLiteral("original image resource"),
+                                         QStringLiteral("optimized image resource"),
+                                         true });
+            }
+            if (!image.message.isEmpty())
+            {
+                result->warnings.append(image.message);
+            }
+        }
+        return PDFOperationResult(true);
+    }
+};
+
+PDFRgbToCmykSettings cmykSettings(const QJsonObject& parameters)
+{
+    PDFRgbToCmykSettings settings;
+    settings.targetIccData = QByteArray::fromBase64(parameters.value(QStringLiteral("target_icc_base64")).toString().toLatin1());
+    settings.targetIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loupe-cmyk")).toUtf8();
+    settings.targetProfileName = parameters.value(QStringLiteral("target_profile_name")).toString();
+    settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
+    settings.embedOutputIntent = parameters.value(QStringLiteral("embed_output_intent")).toBool(true);
+    return settings;
+}
+
+class PDFRgbToCmykRepair final : public PDFRepairOperation
+{
+public:
+    QString id() const override { return QStringLiteral("rgb-to-cmyk"); }
+    PDFRepairRisk risk() const override { return PDFRepairRisk::High; }
+    PDFRepairDomains domains() const override
+    {
+        return PDFRepairDomain::Color | PDFRepairDomain::Images | PDFRepairDomain::Structure;
+    }
+
+    PDFOperationResult analyze(const PDFDocument& source,
+                               const QJsonObject& parameters,
+                               PDFRepairPlan* plan) const override
+    {
+        if (!plan)
+        {
+            return PDFOperationResult(QStringLiteral("RGB-to-CMYK repair plan is null."));
+        }
+        PDFRgbToCmykSettings settings = cmykSettings(parameters);
+        if (settings.targetIccData.isEmpty())
+        {
+            return PDFOperationResult(QStringLiteral("target_icc_base64 is required for rgb-to-cmyk."));
+        }
+        plan->operationId = id();
+        plan->parameters = parameters;
+        plan->risk = risk();
+        plan->domains = domains();
+        plan->expectedChanges.pageContent = true;
+        plan->expectedChanges.images = true;
+        plan->expectedChanges.colorSpaces = true;
+        plan->expectedChanges.outputIntent = true;
+        plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
+                             PDFRepairValidatorKind::ColorMode,
+                             PDFRepairValidatorKind::OutputIntent,
+                             PDFRepairValidatorKind::NormalPreflight };
+
+        PDFRgbToCmykReport report;
+        const PDFOperationResult result = PDFRgbToCmykFixup::analyze(&source, settings, &report);
+        if (!result)
+        {
+            return result;
+        }
+        for (const PDFRgbToCmykUnsupportedItem& unsupported : report.unsupported)
+        {
+            plan->unsupportedReasons.append(unsupported.reason);
+        }
+        if (!report.unsupported.isEmpty())
+        {
+            return PDFOperationResult(QStringLiteral("RGB-to-CMYK contains unsupported constructs."));
+        }
+        plan->targets.append({ -1, {}, QStringLiteral("document/color" ) });
+        return PDFOperationResult(true);
+    }
+
+    PDFOperationResult apply(PDFDocument* candidate,
+                             const PDFRepairPlan& plan,
+                             PDFRepairResult* result) const override
+    {
+        if (!candidate || !result)
+        {
+            return PDFOperationResult(QStringLiteral("RGB-to-CMYK repair candidate or result is null."));
+        }
+        PDFRgbToCmykReport report;
+        const PDFOperationResult fixupResult = PDFRgbToCmykFixup::apply(candidate,
+                                                                         cmykSettings(plan.parameters),
+                                                                         &report);
+        if (!fixupResult)
+        {
+            return fixupResult;
+        }
+        if (report.vectorPaintsConverted || report.imagesConverted || report.indexedPalettesConverted)
+        {
+            result->changes.append({ { -1, {}, QStringLiteral("document/color") },
+                                     QStringLiteral("color-conversion"),
+                                     QStringLiteral("source color spaces"),
+                                     QStringLiteral("CMYK-managed color spaces"),
+                                     true });
+        }
+        if (report.outputIntentChanged)
+        {
+            result->changes.append({ { -1, {}, QStringLiteral("document/output-intent") },
+                                     QStringLiteral("output-intent"),
+                                     QStringLiteral("original output intent"),
+                                     QStringLiteral("configured CMYK output intent"),
+                                     true });
+        }
+        result->warnings.append(report.warnings);
+        return PDFOperationResult(true);
+    }
+};
+
+const bool registerBuiltInRepairOperations = []
+{
+    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFAddBleedRepair>());
+    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFDownsampleImagesRepair>());
+    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFRgbToCmykRepair>());
+    return true;
+}();
+
+} // namespace
+
+} // namespace pdf

@@ -24,6 +24,8 @@ add_executable(PdfTool
     main.cpp 
     pdfoutputformatter.cpp 
     pdftoolabstractapplication.cpp 
+    pdftoolcapabilities.cpp
+    pdftoolcapabilities.h
     pdftoolresult.cpp 
     pdftoolattachments.cpp 
     pdftoolaudiobook.cpp 
@@ -72,6 +74,10 @@ add_executable(PdfTool
     pdftoolsentryverify.h
     pdftooldiagnostics.cpp
     pdftooldiagnostics.h
+    pdftoolrepairdiff.cpp
+    pdftoolrepairdiff.h
+    pdftoolrepair.cpp
+    pdftoolrepair.h
 )
 
 target_link_libraries(PdfTool PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml)
