@@ -24,11 +24,13 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}/.vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Verify supply-chain pins
+        run: python3 scripts/ci/check_supply_chain_pins.py
 
       - name: Prepare vcpkg directories
         run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
@@ -40,9 +42,28 @@ jobs:
 
       - name: Set up vcpkg
         run: |
+          VCPKG_COMMIT="$(python3 - <<'PY'
+          import json
+          with open("vcpkg-configuration.json", encoding="utf-8") as f:
+              print(json.load(f)["default-registry"]["baseline"])
+          PY
+          )"
+
+          if ! [[ "$VCPKG_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Invalid vcpkg baseline: $VCPKG_COMMIT"
+              exit 1
+          fi
+
           git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout --detach "$VCPKG_COMMIT"
+
+          ACTUAL="$(git -C "$VCPKG_ROOT" rev-parse HEAD)"
+          test "$ACTUAL" = "$VCPKG_COMMIT" || {
+              echo "::error::vcpkg checkout does not match manifest baseline"
+              exit 1
+          }
+
           cd "$VCPKG_ROOT"
-          git checkout "$VCPKG_COMMIT"
           ./bootstrap-vcpkg.sh
           ./vcpkg integrate install
 

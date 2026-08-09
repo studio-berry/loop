@@ -12,7 +12,6 @@ jobs:
   build_windows:
     runs-on: windows-2022
     env:
-      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
       QT_QPA_PLATFORM: offscreen
 
     steps:
@@ -20,34 +19,36 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
-      
-      - name: Add MakeAppx to PATH
+
+      - name: Verify supply-chain pins
+        working-directory: pdf4qt
+        run: python scripts\ci\check_supply_chain_pins.py
+
+      - name: Add pinned MakeAppx to PATH
         shell: pwsh
         run: |
-          # Define the base path to Windows Kits
-          $basePath = "C:\Program Files (x86)\Windows Kits\10\bin"
-          
-          # Get directories in the base path and sort them by version number
-          $sdkDirs = Get-ChildItem -Path $basePath -Directory | Sort-Object Name -Descending
-          
-          # Find the first directory that contains the MakeAppx.exe
-          $sdkPath = $null
-          foreach ($dir in $sdkDirs) {
-            $path = Join-Path $dir.FullName "x64"
-            if (Test-Path (Join-Path $path "MakeAppx.exe")) {
-              $sdkPath = $path
-              break
-            }
+          # Pin Windows SDK (and MakeAppx.exe) to the exact version recorded in
+          # .github/pins/packaging-tools.json and verify its SHA-256 before use.
+          # This replaces the previous "highest SDK found" scan, which silently
+          # followed runner image drift.
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $sdkVersion = $pins.windowsSdk.version
+          $expectedHash = "$($pins.windowsSdk.makeAppxSha256)".ToLowerInvariant()
+
+          $makeAppxPath = "C:\Program Files (x86)\Windows Kits\10\bin\${sdkVersion}\x64\MakeAppx.exe"
+          if (-not (Test-Path $makeAppxPath)) {
+            throw "Pinned Windows SDK $sdkVersion MakeAppx.exe not found at $makeAppxPath - runners do not install it; update .github/pins/packaging-tools.json (and keep the hash in sync)."
           }
-          
-          # Add the highest version SDK path to the PATH environment variable
-          if ($sdkPath) {
-            Write-Host "Adding $sdkPath to PATH"
-            echo "PATH=$env:PATH;$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          } else {
-            Write-Error "MakeAppx.exe not found in any Windows SDK directories"
+
+          $actualHash = (Get-FileHash $makeAppxPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "MakeAppx.exe SHA256 mismatch: expected $expectedHash, got $actualHash"
           }
-      
+
+          $sdkPath = Split-Path $makeAppxPath
+          Write-Host "Pinned MakeAppx verified: $makeAppxPath"
+          echo "PATH=$env:PATH;$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Verify MakeAppx Path
         shell: pwsh
         run: |
@@ -58,13 +59,22 @@ jobs:
         shell: pwsh
         if: vars.SIGN_MSI == 'true'
         run: |
+          # Supply-chain gate: signing MUST NOT proceed while the DigiCert
+          # KeyLocker toolset is unpinned. The pin block (version/url/sha256)
+          # lives in .github/pins/packaging-tools.json.
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $keylocker = $pins.digicertKeylocker
+          if ([string]::IsNullOrWhiteSpace($keylocker.version -or $keylocker.url -or $keylocker.sha256)) {
+            throw "DigiCert KeyLocker tools are not pinned (packaging-tools.json -> digicertKeylocker). Refusing to sign with an unpinned toolchain. Update the pins before enabling SIGN_MSI."
+          }
+
           # Decode the base64-encoded certificate
           $certificateBase64 = '${{ secrets.SM_CLIENT_CERT_FILE_B64 }}'
           $certificateBytes = [Convert]::FromBase64String($certificateBase64)
           $certPath = "$env:GITHUB_WORKSPACE\JM_AuthCert.p12"
           
           # Write the certificate to a file
-          [System.IO.File]::WriteAllBytes("$env:GITHUB_WORKSPACE\JM_AuthCert.p12", $certificateBytes)
+          [System.IO.File]::WriteAllBytes($certPath, $certificateBytes)
           
           # Compute the hash of the certificate file
           $hash = Get-FileHash -Path $certPath -Algorithm SHA256
@@ -77,7 +87,7 @@ jobs:
           # Set environment variables
           echo "SM_HOST=${{ secrets.SM_HOST }}" >> "$env:GITHUB_ENV"
           echo "SM_API_KEY=${{ secrets.SM_API_KEY }}" >> "$env:GITHUB_ENV"
-          echo "SM_CLIENT_CERT_FILE=$certpath" >> "$env:GITHUB_ENV"
+          echo "SM_CLIENT_CERT_FILE=$certPath" >> "$env:GITHUB_ENV"
           echo "SM_CLIENT_CERT_PASSWORD=${{ secrets.SM_CLIENT_CERT_PASSWORD }}" >> "$env:GITHUB_ENV"
           
           # Add paths to PATH environment variable
@@ -86,8 +96,11 @@ jobs:
           echo "C:\Program Files\DigiCert\DigiCert Keylocker Tools" >> $env:GITHUB_PATH
           
           # Download and install the Keylocker tools
-          curl -X GET  https://one.digicert.com/signingmanager/api-ui/v1/releases/Keylockertools-windows-x64.msi/download -H "x-api-key:${{ secrets.SM_API_KEY }}" -o Keylockertools-windows-x64.msi 
-          msiexec /i Keylockertools-windows-x64.msi /quiet /qn
+          & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
+            -Url $pins.digicertKeylocker.url `
+            -OutFile "$env:GITHUB_WORKSPACE\Keylockertools-windows-x64.msi" `
+            -Sha256 $pins.digicertKeylocker.sha256
+          msiexec /i "$env:GITHUB_WORKSPACE\Keylockertools-windows-x64.msi" /quiet /qn
           
       - name: Certificates Sync   
         shell: pwsh
@@ -98,9 +111,21 @@ jobs:
           
       - name: 'VCPKG: Set up VCPKG'
         run: |
+          $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\vcpkg-configuration.json" | ConvertFrom-Json
+          $VCPKG_COMMIT = $manifest.'default-registry'.baseline
+          if ($VCPKG_COMMIT -notmatch '^[0-9a-f]{40}$') {
+            throw "Invalid vcpkg baseline in vcpkg-configuration.json: $VCPKG_COMMIT"
+          }
+
           git clone https://github.com/microsoft/vcpkg.git
+          git -C vcpkg checkout --detach $VCPKG_COMMIT
+
+          $ACTUAL = git -C vcpkg rev-parse HEAD
+          if ($ACTUAL -ne $VCPKG_COMMIT) {
+            throw "vcpkg checkout does not match manifest baseline (expected $VCPKG_COMMIT, got $ACTUAL)"
+          }
+
           cd vcpkg
-          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
           .\bootstrap-vcpkg.bat -disableMetrics
           .\vcpkg integrate install
           set VCPKG_ROOT=${env:GITHUB_WORKSPACE}\vcpkg\
@@ -209,19 +234,31 @@ jobs:
           echo "msipackagefilename=mberrys.Loupe-pdf_${version}.msi" >> $env:GITHUB_ENV
           Write-Host "MSI package file name: mberrys.Loupe-pdf_${version}.msi"
 
-      - name: Find WiXUIExtension.dll
-        id: find_wixui_extension
+      - name: Download verified WiX Toolset
         shell: pwsh
         run: |
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.*\bin\WiXUIExtension.dll"
-          $wixUIExtensionPath = Get-ChildItem -Path $wixPath -ErrorAction SilentlyContinue | Select-Object -First 1
-      
-          if ($null -ne $wixUIExtensionPath) {
-              Write-Output "Found WiXUIExtension.dll at: $($wixUIExtensionPath.FullName)"
-              echo "wixuiextpath=$($wixUIExtensionPath.FullName)" >> $env:GITHUB_ENV
-          } else {
-              Write-Error "WiXUIExtension.dll not found in the expected path."
+          # WiX is pinned to an exact versioned release in packaging-tools.json
+          # (wix.url + wix.sha256). Download it and verify the digest before any
+          # candle/light run; the previous step relied on whatever WiX toolset
+          # happened to be preinstalled on the runner image.
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $wixZip = "$env:GITHUB_WORKSPACE\wix314-binaries.zip"
+          & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
+            -Url $pins.wix.url `
+            -OutFile $wixZip `
+            -Sha256 $pins.wix.sha256
+
+          $wixDir = "$env:GITHUB_WORKSPACE\wix"
+          Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
+
+          foreach ($required in "candle.exe", "light.exe", "WiXUIExtension.dll") {
+            if (-not (Test-Path (Join-Path $wixDir $required))) {
+              throw "Pinned WiX toolset is missing $required under $wixDir"
+            }
           }
+          Write-Host "Pinned WiX $($pins.wix.version) verified at $wixDir"
+          echo "wixdir=$wixDir" >> $env:GITHUB_ENV
+          echo "wixuiextpath=$wixDir\WiXUIExtension.dll" >> $env:GITHUB_ENV
 
       - name: Inject missing install DLLs into Product.wxs
         shell: pwsh
@@ -235,8 +272,9 @@ jobs:
       - name: Create MSI Package
         working-directory: pdf4qt\build\WixInstaller
         run: |
-          candle -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=PDF4QT.sln" -d"SolutionName=PDF4QT" -d"SolutionPath=PDF4QT.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=PDF4QT.wixproj" -d"ProjectName=PDF4QT" -d"ProjectPath=PDF4QT.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=PDF4QT" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext "${{ env.wixuiextpath }}" Product.wxs
-          Light -v -out ${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\PDF4QT.wixpdb -cultures:null -ext "${{ env.wixuiextpath }}" -contentsfile obj\Release\PDF4QT.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\PDF4QT.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\PDF4QT.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\PDF4QT.wixproj obj\Release\Product.wixobj
+          $wixBin = "$env:wixdir"
+          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=PDF4QT.sln" -d"SolutionName=PDF4QT" -d"SolutionPath=PDF4QT.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=PDF4QT.wixproj" -d"ProjectName=PDF4QT" -d"ProjectPath=PDF4QT.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=PDF4QT" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext $env:wixuiextpath Product.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\PDF4QT.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\PDF4QT.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\PDF4QT.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\PDF4QT.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\PDF4QT.wixproj obj\Release\Product.wixobj
           
       - name: Sign MSI Package
         shell: pwsh

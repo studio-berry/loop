@@ -25,13 +25,12 @@ permissions:
 
 jobs:
   build_ubuntu:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/pdf4qt/vcpkg/overlays/linux:${{ github.workspace }}/pdf4qt/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
       QT_QPA_PLATFORM: offscreen
 
     steps:
@@ -39,6 +38,10 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
+
+      - name: Verify supply-chain pins
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_supply_chain_pins.py
 
       - name: Prepare vcpkg directories
         run: |
@@ -49,12 +52,47 @@ jobs:
           sudo apt update
           sudo apt install -y libcups2 libcups2-dev libfontconfig1-dev
 
+      - name: Verify runner packaging versions
+        run: |
+          # The ubuntu-24.04 runner label is pinned at the job level; assert the
+          # dpkg version it ships matches the recorded pin (packaging-tools.json
+          # -> deb) so a runner image drift fails loudly.
+          DEB_PIN="$(python3 - <<'PY'
+          import json
+          with open("pdf4qt/.github/pins/packaging-tools.json", encoding="utf-8") as f:
+              print(json.load(f)["deb"]["dpkgVersion"])
+          PY
+          )"
+          ACTUAL="$(dpkg-query -W -f='${Version}' dpkg)"
+          test "$ACTUAL" = "$DEB_PIN" || {
+              echo "::error::dpkg version drift: expected $DEB_PIN, runner has $ACTUAL"
+              exit 1
+          }
+
       - name: 'VCPKG: Set up VCPKG'
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
-          ./bootstrap-vcpkg.sh
+          VCPKG_COMMIT="$(python3 - <<'PY'
+          import json
+          with open("pdf4qt/vcpkg-configuration.json", encoding="utf-8") as f:
+              print(json.load(f)["default-registry"]["baseline"])
+          PY
+          )"
+
+          if ! [[ "$VCPKG_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Invalid vcpkg baseline: $VCPKG_COMMIT"
+              exit 1
+          fi
+
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout --detach "$VCPKG_COMMIT"
+
+          ACTUAL="$(git -C vcpkg rev-parse HEAD)"
+          test "$ACTUAL" = "$VCPKG_COMMIT" || {
+              echo "::error::vcpkg checkout does not match manifest baseline"
+              exit 1
+          }
+
+          ./vcpkg/bootstrap-vcpkg.sh
           ./vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
@@ -116,13 +154,12 @@ jobs:
           retention-days: 30
 
   build_windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\pdf4qt\vcpkg\overlays\general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
-      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
       QT_QPA_PLATFORM: offscreen
 
     steps:
@@ -130,6 +167,12 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
+
+      - name: Verify supply-chain pins
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_supply_chain_pins.py
 
       - name: Prepare vcpkg directories
         shell: pwsh
@@ -139,10 +182,23 @@ jobs:
       - name: 'VCPKG: Set up VCPKG'
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
-          .\bootstrap-vcpkg.bat -disableMetrics
+          $configPath = Join-Path $env:GITHUB_WORKSPACE "pdf4qt\vcpkg-configuration.json"
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $vcpkgCommit = $config.'default-registry'.baseline
+
+          if ($vcpkgCommit -notmatch '^[0-9a-f]{40}$') {
+              throw "Invalid vcpkg baseline: $vcpkgCommit"
+          }
+
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout --detach $vcpkgCommit
+
+          $actual = (git -C vcpkg rev-parse HEAD).Trim()
+          if ($actual -ne $vcpkgCommit) {
+              throw "vcpkg checkout $actual does not match manifest baseline $vcpkgCommit"
+          }
+
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
           .\vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
