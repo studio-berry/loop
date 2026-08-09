@@ -1,12 +1,12 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Verifies the installed slim Loupe product surface.
+    Verifies the installed Loupe product surface.
 
 .DESCRIPTION
     Checks that the release-profile install contains the supported desktop/CLI
-    entrypoints and retained preflight plugin, while rejecting inherited
-    application binaries, optional plugins, and stale desktop entries.
+    entrypoints and retained production plugins, while rejecting only the
+    explicitly deferred OCR and AudioBook surfaces.
 
     This is an artifact-level check. It does not build, launch, or validate the
     runtime behavior of the binaries.
@@ -52,19 +52,20 @@ function Assert-Absent {
 Assert-Present "Pdf4QtEditor"
 Assert-Present "PdfTool"
 
-$preflight = @($files | Where-Object { $_.BaseName -eq "LoupePreflightPlugin" })
-if ($preflight.Count -eq 0) {
-    throw "Missing required LoupePreflightPlugin artifact"
+foreach ($name in @("DimensionsPlugin", "ObjectInspectorPlugin", "OutputPreviewPlugin", "RedactPlugin", "SignaturePlugin", "SoftProofingPlugin", "EditorPlugin", "LoupePreflightPlugin", "ScannerPlugin", "Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad")) {
+    Assert-Present $name
 }
 
-foreach ($name in @("Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad", "CodeGenerator", "JBIG2_Viewer", "PdfExampleGenerator", "AudioBookPlugin", "ScannerPlugin", "OcrPlugin")) {
+foreach ($name in @("AudioBookPlugin", "OcrPlugin", "LoupeOcrService")) {
     Assert-Absent $name
 }
 
 $desktopFiles = @($files | Where-Object { $_.Extension -eq ".desktop" })
-foreach ($name in @("Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad")) {
-    if ($desktopFiles | Where-Object { $_.Name -match [regex]::Escape($name) }) {
-        throw "Forbidden desktop entry present: $name"
+if ($desktopFiles.Count -gt 0) {
+    foreach ($name in @("Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtEditor")) {
+        if (-not ($desktopFiles | Where-Object { $_.Name -match [regex]::Escape($name) })) {
+            throw "Missing retained desktop entry: $name"
+        }
     }
 }
 
@@ -76,4 +77,4 @@ if ($loupeDesktop.Count -gt 0) {
     }
 }
 
-Write-Output "Loupe slim surface verified: Editor, PdfTool, and LoupePreflightPlugin present; inherited app/plugin surfaces absent."
+Write-Output "Loupe surface verified: Editor, PdfTool, PageMaster, Viewer, Diff, LaunchPad, Scanner, and retained production plugins present; OCR and AudioBook surfaces absent."
