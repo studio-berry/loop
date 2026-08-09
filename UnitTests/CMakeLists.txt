@@ -219,6 +219,21 @@ set_target_properties(UnitTestsRepairDiff PROPERTIES
 
 add_test(UnitTestsRepairDiff "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRepairDiff")
 
+add_executable(UnitTestsRepairOperation
+    tst_repairoperationtest.cpp
+)
+
+target_link_libraries(UnitTestsRepairOperation PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsRepairOperation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsRepairOperation "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRepairOperation")
+
 add_executable(UnitTestsPreflightEngine
 	tst_preflightenginetest.cpp
 )

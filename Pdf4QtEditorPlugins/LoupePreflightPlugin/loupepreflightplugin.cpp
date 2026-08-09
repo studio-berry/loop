@@ -32,6 +32,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfdocumentreader.h"
 #include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
 #include "pdfsafefilewriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
@@ -873,18 +874,30 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
         }
     }
 
-    pdf::PDFDocument fixedDocument = *m_document;
-    pdf::PDFBleedFixupSettings settings;
-    settings.mode = pdf::PDFBleedFixupMode(modeCombo->currentData().toInt());
     const qreal bleedMm = bleedSpin->value();
-    settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
-    settings.force = true;
-
-    pdf::PDFBleedFixupReport report;
-    const pdf::PDFOperationResult fixupResult = pdf::PDFBleedFixup::apply(&fixedDocument, settings, &report);
-    if (!fixupResult)
+    const QString mode = modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::PixelRepeat)
+        ? QStringLiteral("pixel-repeat")
+        : modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::Stretch)
+            ? QStringLiteral("stretch")
+            : QStringLiteral("mirror");
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    if (!operation)
     {
-        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), fixupResult.getErrorMessage());
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The add-bleed repair operation is unavailable."));
+        return;
+    }
+
+    pdf::PDFRepairTransaction transaction(*m_document);
+    const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
+        { QStringLiteral("mode"), mode },
+        { QStringLiteral("bleed_mm"), bleedMm },
+        { QStringLiteral("force"), true }
+    });
+    if (!addResult || !transaction.analyze() || !transaction.apply())
+    {
+        const QString message = !addResult ? addResult.getErrorMessage()
+            : tr("The bleed repair could not be planned or applied.");
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), message);
         return;
     }
 
@@ -899,42 +912,25 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
     }
 
     const QString previewPath = QDir(previewDirectory.path()).filePath(QStringLiteral("candidate.pdf"));
-    pdf::PDFDocument serializedCandidate;
-    QByteArray previewHash;
-    const pdf::PDFOperationResult candidateResult = pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-        fixedDocument,
-        [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); },
-        previewPath,
-        &serializedCandidate,
-        &previewHash);
+    pdf::PDFRepairDiffOptions diffOptions;
+    diffOptions.renderDirectory = previewDirectory.path();
+    pdf::PDFRepairDiffReport diffReport;
+    const pdf::PDFOperationResult candidateResult = transaction.compareCandidate(previewPath, diffOptions, &diffReport);
     if (!candidateResult)
     {
         QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), candidateResult.getErrorMessage());
         return;
     }
 
-    pdf::PDFRepairDiffOptions diffOptions;
-    diffOptions.renderDirectory = previewDirectory.path();
-    diffOptions.expected.pageBoxes = true;
-    diffOptions.expected.pageContent = true;
-    for (const pdf::PDFBleedFixupPageReport& page : report.pages)
+    QFile previewFile(previewPath);
+    if (!previewFile.open(QIODevice::ReadOnly))
     {
-        if (!diffOptions.affectedPages.contains(page.pageIndex))
-        {
-            diffOptions.affectedPages.append(page.pageIndex);
-        }
-    }
-
-    pdf::PDFRepairDiffReport diffReport;
-    const pdf::PDFOperationResult diffResult = pdf::PDFRepairDiffEngine::compare(*m_document,
-                                                                                   serializedCandidate,
-                                                                                   diffOptions,
-                                                                                   &diffReport);
-    if (!diffResult)
-    {
-        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), diffResult.getErrorMessage());
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The repair candidate could not be read after serialization."));
         return;
     }
+    const QByteArray previewData = previewFile.readAll();
+    previewFile.close();
+    const QByteArray previewHash = QCryptographicHash::hash(previewData, QCryptographicHash::Sha256);
 
     RepairPreviewDialog previewDialog(m_widget);
     previewDialog.setReport(diffReport, previewDirectory.path());
