@@ -57,7 +57,7 @@ PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions
     // No document specified?
     if (options.document.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("No document specified."));
         return PDFToolExitCode::InputError;
     }
 
@@ -81,7 +81,7 @@ PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.document}});
             return PDFToolExitCode::InputError;
         }
 
@@ -92,7 +92,7 @@ PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions
 
     for (const QString& warning : reader.getWarnings())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Warning: %1").arg(warning), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Warning, QStringLiteral("pdf.reader-warning"), PDFToolTranslationContext::tr("Warning: %1").arg(warning));
     }
 
     // Verify signatures

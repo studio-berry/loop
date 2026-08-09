@@ -23,6 +23,7 @@
 #include "loupepreflightplugin.h"
 #include "preflightreportdockwidget.h"
 #include "preflightsidecarutils.h"
+#include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
 #include "pdfdocumentwriter.h"
@@ -412,11 +413,11 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
 
     if (exitStatus != QProcess::NormalExit || !preflight::isExpectedPreflightExitCode(exitCode))
     {
-        QString detail = standardError;
-        if (detail.isEmpty())
-        {
-            detail = tr("PdfTool exited with code %1.").arg(exitCode);
-        }
+        const QString detail = pdfplugin::pdftool::failureDetailFromStdout(
+            standardOutput,
+            standardError,
+            exitCode,
+            tr("PdfTool exited with code %1.").arg(exitCode));
 
         QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Preflight did not complete successfully: %1").arg(detail));
         return;
@@ -432,8 +433,8 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
     }
 
     const QJsonObject envelope = reportDocument.object();
-    if (envelope.value(QStringLiteral("schema_version")).toInt() != 1 ||
-        envelope.value(QStringLiteral("command")).toString() != QStringLiteral("preflight"))
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")) ||
+        envelope.value(QStringLiteral("exit_code")).toInt(-1) != exitCode)
     {
         QMessageBox::critical(m_widget,
                               tr("Loupe Preflight"),
@@ -441,8 +442,7 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
         return;
     }
 
-    const QJsonObject data = envelope.value(QStringLiteral("data")).toObject();
-    const QJsonObject report = data.value(QStringLiteral("report")).toObject();
+    const QJsonObject report = pdfplugin::pdftool::reportFromEnvelope(envelope);
     if (report.isEmpty())
     {
         QMessageBox::critical(m_widget,

@@ -21,9 +21,11 @@
 // SOFTWARE.
 
 #include "preflightsidecarutils.h"
+#include "pdftoolenvelopeutils.h"
 
 #include <QtTest>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 class PreflightPluginTest : public QObject
@@ -46,6 +48,7 @@ private slots:
     void sidecarStreamBuffer_spillRoundTripsContent();
     void overprintDisclosureText_alwaysShownEvenWithoutFinding();
     void overprintDisclosureText_addsSpecificWarningForWhiteOverprintFinding();
+    void pdfToolEnvelope_extractsReportAndDiagnostics();
 };
 
 namespace
@@ -297,6 +300,38 @@ void PreflightPluginTest::overprintDisclosureText_addsSpecificWarningForWhiteOve
     const QString text = pdfplugin::preflight::overprintDisclosureText(true);
     QVERIFY(text.contains(QStringLiteral("does not simulate overprint")));
     QVERIFY(text.contains(QStringLiteral("white or near-white")));
+}
+
+void PreflightPluginTest::pdfToolEnvelope_extractsReportAndDiagnostics()
+{
+    const QJsonObject envelope{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("command"), QStringLiteral("preflight") },
+        { QStringLiteral("diagnostics"), QJsonArray{
+              QJsonObject{
+                  { QStringLiteral("severity"), QStringLiteral("error") },
+                  { QStringLiteral("code"), QStringLiteral("cli.invalid-arguments") },
+                  { QStringLiteral("message"), QStringLiteral("No profile specified.") }
+              }
+          } },
+        { QStringLiteral("data"), QJsonObject{
+              { QStringLiteral("report"), QJsonObject{
+                    { QStringLiteral("schema_version"), 3 },
+                    { QStringLiteral("pass"), true },
+                    { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
+                    { QStringLiteral("errors"), QJsonArray() },
+                    { QStringLiteral("warnings"), QJsonArray() },
+                    { QStringLiteral("fixups_available"), QJsonArray() }
+                } }
+          } }
+    };
+
+    QVERIFY(pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")));
+    QVERIFY(!pdfplugin::pdftool::reportFromEnvelope(envelope).isEmpty());
+
+    const QByteArray stdoutData = QJsonDocument(envelope).toJson(QJsonDocument::Compact);
+    QCOMPARE(pdfplugin::pdftool::failureDetailFromStdout(stdoutData, QString(), 2, QStringLiteral("fallback")),
+             QStringLiteral("No profile specified."));
 }
 
 QTEST_APPLESS_MAIN(PreflightPluginTest)

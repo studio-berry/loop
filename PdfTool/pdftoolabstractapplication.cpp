@@ -39,7 +39,7 @@ public:
     PDFToolHelpApplication() : PDFToolAbstractApplication(true) { }
 
     virtual QString getStandardString(StandardString standardString) const override;
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     virtual Options getOptionsFlags() const override;
 };
 
@@ -477,7 +477,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
             options.outputStyle = PDFOutputFormatter::Style::Text;
         }
 
-        if (consoleFormat.isEmpty())
+        if (!parser->isSet("console-format"))
         {
             const QString command = getStandardString(Command);
             if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr"))
