@@ -32,6 +32,10 @@ class OverprintTest : public QObject
 private slots:
     void overprintMode_appliesToContent_respectsFillStrokeFlags();
     void selectBlendOverprintMode_respectsFillStrokeGating();
+    void selectBlendOverprintMode_rejectsUnknownMode();
+    void renderPolicy_marksOutputPreviewAuthoritative();
+    void renderDiagnostics_escalatesFallbacksForStrictPolicy();
+    void classifyOverprintFidelity_respectsSupportedBoundary();
     void floatBitmapBlend_mode0_selectsBackdropForInactiveChannels();
     void floatBitmapBlend_mode1_selectsNonOneSourceOrBackdropForSubtractiveChannels();
     void floatBitmapBlend_mode1_selectsNonZeroSourceOrBackdropForAdditiveChannels();
@@ -86,6 +90,57 @@ void OverprintTest::selectBlendOverprintMode_respectsFillStrokeGating()
     mode.overprintMode = 1;
     QCOMPARE(pdf::selectBlendOverprintMode(mode, false, true),
              pdf::PDFFloatBitmap::OverprintMode::Overprint_Mode_1);
+}
+
+void OverprintTest::selectBlendOverprintMode_rejectsUnknownMode()
+{
+    pdf::PDFOverprintMode mode;
+    mode.overprintFilling = true;
+    mode.overprintMode = 2;
+
+    QCOMPARE(pdf::selectBlendOverprintMode(mode, true, false),
+             pdf::PDFFloatBitmap::OverprintMode::NoOveprint);
+}
+
+void OverprintTest::renderPolicy_marksOutputPreviewAuthoritative()
+{
+    const pdf::PDFRenderPolicy policy = pdf::PDFRenderPolicy::forOutputPreview();
+
+    QCOMPARE(policy.purpose, pdf::PDFRenderPurpose::SeparationPreview);
+    QVERIFY(policy.requiresAuthoritativeRenderer());
+    QVERIFY(policy.requireSeparationAccuracy);
+    QVERIFY(policy.requireOverprintAccuracy);
+    QVERIFY(!policy.allowApproximation);
+}
+
+void OverprintTest::renderDiagnostics_escalatesFallbacksForStrictPolicy()
+{
+    pdf::PDFRenderDiagnostics diagnostics;
+    diagnostics.record(pdf::PDFRenderFidelity::SupportedWithFallback, QStringLiteral("fallback"));
+    QCOMPARE(diagnostics.fidelity, pdf::PDFRenderFidelity::SupportedWithFallback);
+    QVERIFY(!diagnostics.isExact());
+
+    diagnostics.record(pdf::PDFRenderFidelity::Unsupported, QStringLiteral("unsupported"));
+    QCOMPARE(diagnostics.fidelity, pdf::PDFRenderFidelity::Unsupported);
+    QCOMPARE(diagnostics.reasons.size(), 2);
+}
+
+void OverprintTest::classifyOverprintFidelity_respectsSupportedBoundary()
+{
+    pdf::PDFOverprintMode mode;
+    mode.overprintFilling = true;
+    mode.overprintMode = 0;
+
+    QCOMPARE(pdf::PDFTransparencyRenderer::classifyOverprintFidelity(mode, pdf::BlendMode::Normal, false),
+             pdf::PDFRenderFidelity::ExactSupported);
+    QCOMPARE(pdf::PDFTransparencyRenderer::classifyOverprintFidelity(mode, pdf::BlendMode::Compatible, true),
+             pdf::PDFRenderFidelity::ExactSupported);
+    QCOMPARE(pdf::PDFTransparencyRenderer::classifyOverprintFidelity(mode, pdf::BlendMode::Multiply, true),
+             pdf::PDFRenderFidelity::SupportedWithFallback);
+
+    mode.overprintMode = 2;
+    QCOMPARE(pdf::PDFTransparencyRenderer::classifyOverprintFidelity(mode, pdf::BlendMode::Normal, false),
+             pdf::PDFRenderFidelity::Unsupported);
 }
 
 void OverprintTest::floatBitmapBlend_mode0_selectsBackdropForInactiveChannels()
