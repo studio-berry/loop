@@ -168,6 +168,7 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
         }
         catch (const pdf::PDFException &exception)
         {
+            ++failedWrites;
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), exception.getMessage());
         }
     }

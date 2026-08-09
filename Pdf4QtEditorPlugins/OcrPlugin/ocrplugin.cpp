@@ -29,8 +29,6 @@
 #include "pdfdrawwidget.h"
 
 #include <QCoreApplication>
-#include <QDateTime>
-#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -275,27 +273,6 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
     }
 
     const QJsonObject envelope = document.object();
-    // #region agent log
-    {
-        QFile logFile(QStringLiteral("debug-1f0a11.log"));
-        if (logFile.open(QIODevice::WriteOnly | QIODevice::Append))
-        {
-            const QJsonObject payload{
-                { QStringLiteral("sessionId"), QStringLiteral("1f0a11") },
-                { QStringLiteral("hypothesisId"), QStringLiteral("A") },
-                { QStringLiteral("location"), QStringLiteral("ocrplugin.cpp:onOcrProcessFinished") },
-                { QStringLiteral("message"), QStringLiteral("parsed OCR envelope") },
-                { QStringLiteral("data"), QJsonObject{
-                      { QStringLiteral("isEnvelope"), pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("ocr")) },
-                      { QStringLiteral("reportEmpty"), pdfplugin::pdftool::reportFromEnvelope(envelope).isEmpty() }
-                  } },
-                { QStringLiteral("timestamp"), QDateTime::currentMSecsSinceEpoch() }
-            };
-            logFile.write(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-            logFile.write("\n");
-        }
-    }
-    // #endregion
 
     if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("ocr")))
     {
