@@ -64,6 +64,7 @@
 #include <QLabel>
 #include <QDoubleSpinBox>
 #include <QDesktopServices>
+#include <QUrl>
 #include <QFileDialog>
 #include <QLockFile>
 #include <QtPrintSupport/QPrinter>
@@ -568,6 +569,84 @@ pdf::PDFTextSelection PDFEditorMainWindow::getSelectedText() const
     }
 
     return m_advancedFindWidget->getSelectedText();
+}
+
+void PDFEditorMainWindow::showRecoveryCandidates()
+{
+    const QList<RecoveryCandidate> candidates = m_programController->getRecoveryManager()->scan();
+    for (const RecoveryCandidate& candidate : candidates)
+    {
+        if (candidate.sourceStatus == RecoverySourceStatus::Active)
+        {
+            continue;
+        }
+
+        const QString documentName = candidate.sourceFileName.isEmpty() ? tr("Unknown document") : candidate.sourceFileName;
+        QString status;
+        switch (candidate.sourceStatus)
+        {
+            case RecoverySourceStatus::Unchanged:
+                status = tr("The source document still matches the recovery session.");
+                break;
+            case RecoverySourceStatus::Changed:
+                status = tr("The source changed while Loupe was closed. Restore will open an independent recovered copy.");
+                break;
+            case RecoverySourceStatus::Missing:
+                status = tr("The original source is unavailable. Restore will open the recovered copy.");
+                break;
+            case RecoverySourceStatus::Invalid:
+                status = candidate.diagnosticMessage.isEmpty() ? tr("The recovery artifact failed validation.") : candidate.diagnosticMessage;
+                break;
+            case RecoverySourceStatus::Active:
+                status = tr("Another Loupe instance owns this recovery session.");
+                break;
+        }
+        if (candidate.signedDocument)
+        {
+            status += tr(" The source was signed; the recovered session is an independent working copy and does not preserve signature coverage.");
+        }
+
+        QMessageBox dialog(QMessageBox::Warning,
+                           tr("Recover unsaved Editor work"),
+                           tr("A recoverable session for '%1' was found.\n\nCheckpoint: %2\n%3")
+                               .arg(documentName, candidate.checkpointUtc, status),
+                           QMessageBox::NoButton,
+                           this);
+        QPushButton* restoreButton = nullptr;
+        if (candidate.valid)
+        {
+            restoreButton = dialog.addButton(tr("Restore"), QMessageBox::AcceptRole);
+        }
+        QPushButton* discardButton = dialog.addButton(tr("Discard"), QMessageBox::DestructiveRole);
+        QPushButton* inspectButton = dialog.addButton(tr("Open recovery folder"), QMessageBox::ActionRole);
+        QPushButton* cancelButton = dialog.addButton(tr("Cancel"), QMessageBox::RejectRole);
+        dialog.exec();
+
+        if (dialog.clickedButton() == inspectButton)
+        {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(candidate.sessionDirectory));
+            continue;
+        }
+        if (dialog.clickedButton() == discardButton)
+        {
+            m_programController->getRecoveryManager()->discardCandidate(candidate);
+            continue;
+        }
+        if (dialog.clickedButton() == restoreButton)
+        {
+            QString errorMessage;
+            if (m_programController->restoreRecovery(candidate, &errorMessage))
+            {
+                return;
+            }
+            QMessageBox::critical(this, tr("Recovery unavailable"), errorMessage);
+            return;
+        }
+        if (dialog.clickedButton() == cancelButton)
+        {
+            return;
+        }
+    }
 }
 
 void PDFEditorMainWindow::closeEvent(QCloseEvent* event)
