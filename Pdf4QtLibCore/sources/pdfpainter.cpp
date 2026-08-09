@@ -41,8 +41,9 @@ PDFPainterBase::PDFPainterBase(PDFRenderer::Features features,
                                const PDFCMS* cms,
                                const PDFOptionalContentActivity* optionalContentActivity,
                                QTransform pagePointToDevicePointMatrix,
-                               const PDFMeshQualitySettings& meshQualitySettings) :
-    BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings),
+                               const PDFMeshQualitySettings& meshQualitySettings,
+                               PDFProcessingBudget* processingBudget) :
+    BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
     m_features(features)
 {
 
@@ -208,8 +209,9 @@ PDFPainter::PDFPainter(QPainter* painter,
                        const PDFFontCache* fontCache,
                        const PDFCMS* cms,
                        const PDFOptionalContentActivity* optionalContentActivity,
-                       const PDFMeshQualitySettings& meshQualitySettings) :
-    BaseClass(features, page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings),
+                       const PDFMeshQualitySettings& meshQualitySettings,
+                       PDFProcessingBudget* processingBudget) :
+    BaseClass(features, page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
     m_painter(painter)
 {
     Q_ASSERT(painter);
@@ -419,8 +421,9 @@ PDFPrecompiledPageGenerator::PDFPrecompiledPageGenerator(PDFPrecompiledPage* pre
                                                          const PDFFontCache* fontCache,
                                                          const PDFCMS* cms,
                                                          const PDFOptionalContentActivity* optionalContentActivity,
-                                                         const PDFMeshQualitySettings& meshQualitySettings) :
-    BaseClass(features, page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings),
+                                                         const PDFMeshQualitySettings& meshQualitySettings,
+                                                         PDFProcessingBudget* processingBudget) :
+    BaseClass(features, page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings, processingBudget),
     m_precompiledPage(precompiledPage)
 {
     m_precompiledPage->setPaperColor(cms->getPaperColor());
