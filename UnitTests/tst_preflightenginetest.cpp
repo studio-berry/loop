@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
@@ -60,6 +61,9 @@ private slots:
     void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
     void run_inkCoverage_passesBelowLimitFixture();
     void run_colorRgbFixtureFailsColorMode();
+    void colorInventory_isRegisteredAndInfoOnly();
+    void colorInventory_rejectsInvalidParameters();
+    void richBlackPredicate_distinguishesChromaticBlack();
     void run_outputIntent_missingIntentEmitsError();
     void run_outputIntent_notRequiredPassesWithoutIntent();
     void run_outputIntent_emptyIdentifierEmitsIdentityFinding();
@@ -756,6 +760,82 @@ void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
     const QJsonObject report = result.toJson();
     QCOMPARE(report.value(QStringLiteral("schema_version")).toInt(), pdf::PREFLIGHT_REPORT_SCHEMA_VERSION);
     QVERIFY(report.value(QStringLiteral("inspection_complete")).toBool());
+}
+
+void PreflightEngineTest::colorInventory_isRegisteredAndInfoOnly()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    QVERIFY(engine.hasCheck(QStringLiteral("color-inventory")));
+
+    QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Color inventory test") },
+        { QStringLiteral("checks"), QJsonArray{
+              QJsonObject{
+                  { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                  { QStringLiteral("severity"), QStringLiteral("info") },
+                  { QStringLiteral("probe_dpi"), 72 },
+                  { QStringLiteral("rich_black_k_percent"), 10 }
+              }
+          } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QVERIFY(result.warnings.size() >= 4);
+    for (const pdf::PreflightFinding& finding : result.warnings)
+    {
+        QCOMPARE(finding.checkId, QStringLiteral("color-inventory"));
+        QCOMPARE(finding.severity, QStringLiteral("info"));
+    }
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().status, QStringLiteral("ok"));
+}
+
+void PreflightEngineTest::colorInventory_rejectsInvalidParameters()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Invalid color inventory") },
+        { QStringLiteral("checks"), QJsonArray{
+              QJsonObject{
+                  { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                  { QStringLiteral("probe_dpi"), 0 }
+              }
+          } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("probe_dpi")));
+
+    QJsonArray invalidPercentChecks;
+    invalidPercentChecks.append(QJsonObject{
+        { QStringLiteral("id"), QStringLiteral("color-inventory") },
+        { QStringLiteral("rich_black_k_percent"), 101 }
+    });
+    profileObject[QStringLiteral("checks")] = invalidPercentChecks;
+    errorMessage.clear();
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("rich_black_k_percent")));
+}
+
+void PreflightEngineTest::richBlackPredicate_distinguishesChromaticBlack()
+{
+    const pdf::PDFPixelFormat format = pdf::PDFPixelFormat::createFormatDefaultCMYK(0);
+    pdf::PDFColorComponent blackOnly[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    pdf::PDFColorComponent richBlack[] = { 0.4f, 0.3f, 0.3f, 1.0f };
+    pdf::PDFColorComponent cmyOnly[] = { 0.4f, 0.3f, 0.3f, 0.0f };
+
+    QVERIFY(!pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(blackOnly, 4), format, 0.10f));
+    QVERIFY(pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(richBlack, 4), format, 0.10f));
+    QVERIFY(!pdf::isRichBlackPixel(pdf::PDFConstColorBuffer(cmyOnly, 4), format, 0.10f));
 }
 
 void PreflightEngineTest::run_outputIntent_missingIntentEmitsError()
