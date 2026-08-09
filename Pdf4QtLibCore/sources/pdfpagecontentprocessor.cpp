@@ -243,7 +243,8 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
                                                  const PDFCMS* CMS,
                                                  const PDFOptionalContentActivity* optionalContentActivity,
                                                  QTransform pagePointToDevicePointMatrix,
-                                                 const PDFMeshQualitySettings& meshQualitySettings) :
+                                                 const PDFMeshQualitySettings& meshQualitySettings,
+                                                 PDFProcessingBudget* processingBudget) :
     m_page(page),
     m_document(document),
     m_fontCache(fontCache),
@@ -264,6 +265,7 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
     m_patternBaseMatrix(pagePointToDevicePointMatrix),
     m_pagePointToDevicePointMatrix(pagePointToDevicePointMatrix),
     m_meshQualitySettings(meshQualitySettings),
+    m_processingBudget(processingBudget),
     m_structuralParentKey(0)
 {
     Q_ASSERT(page);
@@ -591,6 +593,14 @@ void PDFPageContentProcessor::performInterceptInstruction(Operator currentOperat
 
 void PDFPageContentProcessor::processContent(const QByteArray& content)
 {
+    std::unique_ptr<PDFProcessingBudget::DepthScope> budgetDepthScope;
+    if (m_processingBudget)
+    {
+        budgetDepthScope = std::make_unique<PDFProcessingBudget::DepthScope>(*m_processingBudget,
+                                                                                PDFBudgetKind::RecursiveContentDepth,
+                                                                                PDFTranslationContext::tr("content stream"));
+    }
+
     // Guard the content stream nesting depth. Forms, tiling patterns and
     // Type 3 character streams all recurse through this single function, so
     // a depth cap here bounds the native stack usage of all of them. The
@@ -603,9 +613,18 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
     }
 
     PDFLexicalAnalyzer parser(content.constBegin(), content.constEnd());
+    uint64_t operationCount = 0;
 
     while (!parser.isAtEnd() && !isProcessingCancelled())
     {
+        if (m_processingBudget)
+        {
+            m_processingBudget->chargeRenderOperation(1, PDFTranslationContext::tr("content operation"));
+            if ((++operationCount & 0xFFU) == 0)
+            {
+                m_processingBudget->checkElapsed(PDFTranslationContext::tr("content stream"));
+            }
+        }
         bool tokenFetched = false;
         PDFInteger oldParserPosition = parser.pos();
 
@@ -802,6 +821,10 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
                 }
             }
         }
+        catch (const PDFBudgetExceededException&)
+        {
+            throw;
+        }
         catch (const PDFException& exception)
         {
             // If we get exception when parsing, and parser position is not advanced,
@@ -826,9 +849,13 @@ void PDFPageContentProcessor::processContentStream(const PDFStream* stream)
 {
     try
     {
-        QByteArray content = m_document->getDecodedStream(stream);
+        QByteArray content = m_document->getDecodedStream(stream, m_processingBudget);
 
         processContent(content);
+    }
+    catch (const PDFBudgetExceededException&)
+    {
+        throw;
     }
     catch (const PDFException& exception)
     {
@@ -3122,6 +3149,12 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
 
             if (!image.isNull())
             {
+                if (m_processingBudget)
+                {
+                    const uint64_t pixels = static_cast<uint64_t>(image.width()) * static_cast<uint64_t>(image.height());
+                    m_processingBudget->chargeRenderPixels(pixels, PDFTranslationContext::tr("decoded image"));
+                }
+
                 if (PDFImage::canBeConvertedToMonochromatic(image))
                 {
                     image.convertTo(QImage::Format_Mono);

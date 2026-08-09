@@ -46,6 +46,7 @@ class PDFCMSManager;
 class PDFPrecompiledPage;
 class PDFAnnotationManager;
 class PDFOptionalContentActivity;
+class PDFProcessingBudget;
 
 /// Renders the PDF page on the painter, or onto an image.
 class PDF4QTLIBCORESHARED_EXPORT PDFRenderer
@@ -83,7 +84,8 @@ public:
                          const PDFCMS* cms,
                          const PDFOptionalContentActivity* optionalContentActivity,
                          Features features,
-                         const PDFMeshQualitySettings& meshQualitySettings);
+                         const PDFMeshQualitySettings& meshQualitySettings,
+                         PDFProcessingBudget* processingBudget = nullptr);
 
     /// Paints desired page onto the painter. Page is painted in the rectangle using best-fit method.
     /// If the page doesn't exist, then error is returned. No exception is thrown. Rendering errors
@@ -142,6 +144,7 @@ private:
     const PDFOperationControl* m_operationControl;
     Features m_features;
     PDFMeshQualitySettings m_meshQualitySettings;
+    PDFProcessingBudget* m_processingBudget = nullptr;
 };
 
 /// Renders PDF pages to bitmap images (QImage).

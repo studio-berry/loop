@@ -87,6 +87,8 @@ public:
     int schemaVersion() const { return m_schemaVersion; }
     const QVector<PreflightFixupEntry>& fixups() const { return m_fixups; }
     const QVector<PreflightFindingEntry>& findings() const { return m_findings; }
+    bool hasFixup(const QString& id) const;
+    const PreflightFixupEntry* fixup(const QString& id) const;
     bool hasAddBleedFixup() const;
     const PreflightFixupEntry* addBleedFixup() const;
     bool hasRgbToCmykFixup() const;
