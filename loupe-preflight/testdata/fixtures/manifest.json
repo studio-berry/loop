@@ -166,5 +166,45 @@
     "expect": { "pass": true, "check_ids": ["white-overprint"] },
     "source": "hand-built",
     "notes": "White overprint inside a Form XObject painted via Do. MIC-306."
+  },
+  {
+    "id": "output-intent-cmyk",
+    "pdf": "output-intent-cmyk.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "One CGATS TR 001 output intent with a deterministic synthetic CMYK ICC profile and matching ProfileCS."
+  },
+  {
+    "id": "output-intent-missing",
+    "pdf": "output-intent-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Catalog has no /OutputIntents key, so the required output-intent check emits output-intent-missing."
+  },
+  {
+    "id": "output-intent-profile-missing",
+    "pdf": "output-intent-profile-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Intent identifies CGATS TR 001 but omits /DestOutputProfile, exercising the profile-missing finding."
+  },
+  {
+    "id": "output-intent-rgb",
+    "pdf": "output-intent-rgb.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Embedded synthetic sRGB profile is valid but disallowed by the test profile's CMYK-only allow-list."
+  },
+  {
+    "id": "output-intent-profile-invalid",
+    "pdf": "output-intent-profile-invalid.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "DestOutputProfile is a stream containing non-ICC bytes, exercising invalid-profile handling."
   }
 ]
