@@ -1,0 +1,6 @@
+# Regression corpus
+
+Pinned inputs that reproduce previously-fixed fuzz findings. `fuzz.yml` and
+`scripts/fuzz-
+|------|---------|------------|-----|
+| `jbig2_composition_timeout_c8a61daa.bin` | libFuzzer timeout ØÁÎÍÏÏŒÏ, later± ÿprogress when a heovered.

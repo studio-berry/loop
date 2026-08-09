@@ -369,7 +369,7 @@ public:
                              PDFRepairValidatorKind::NormalPreflight };
 
         PDFRgbToCmykReport report;
-        const PDFOperationResult result = PDFRgbToCmykFixup::analyze(&source, settings, &report);
+        const PDFOperationResult result = PDFRgbToCmykFixup::previewRgbToCmyk(&source, settings, &report);
         if (!result)
         {
             return result;
@@ -395,7 +395,7 @@ public:
             return PDFOperationResult(QStringLiteral("RGB-to-CMYK repair candidate or result is null."));
         }
         PDFRgbToCmykReport report;
-        const PDFOperationResult fixupResult = PDFRgbToCmykFixup::apply(candidate,
+        const PDFOperationResult fixupResult = PDFRgbToCmykFixup::writeRgbToCmyk(candidate,
                                                                          cmykSettings(plan.parameters),
                                                                          &report);
         if (!fixupResult)

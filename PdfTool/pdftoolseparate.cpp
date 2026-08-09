@@ -100,7 +100,7 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
         plannedOutputs.append(fileName);
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

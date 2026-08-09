@@ -734,7 +734,7 @@ PDFOperationResult analyzeImpl(const PDFDocument* document,
 
 } // namespace
 
-PDFOperationResult PDFRgbToCmykFixup::analyze(const PDFDocument* document,
+PDFOperationResult PDFRgbToCmykFixup::previewRgbToCmyk(const PDFDocument* document,
                                              const PDFRgbToCmykSettings& settings,
                                              PDFRgbToCmykReport* report)
 {
@@ -764,25 +764,20 @@ PDFOperationResult PDFRgbToCmykFixup::analyze(const PDFDocument* document,
         return PDFTranslationContext::tr("No color-management system is available.");
     }
 
-    return analyzeImpl(document, settings, report, cms.data(), document);
+    return analyzeImpl(document, settings, report, cms.data(), &document->getStorage());
 }
 
-PDFOperationResult PDFRgbToCmykFixup::apply(PDFDocument* document,
+PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
                                            const PDFRgbToCmykSettings& settings,
-                                           PDFRgbToCmykReport* report,
-                                           PDFModifiedDocument::ModificationFlags* modificationFlags)
+                                           PDFRgbToCmykReport* report)
 {
-    if (modificationFlags)
-    {
-        *modificationFlags = PDFModifiedDocument::ModificationFlags();
-    }
     if (report)
     {
         *report = PDFRgbToCmykReport();
     }
 
     PDFRgbToCmykReport localReport;
-    const PDFOperationResult analysisResult = analyze(document, settings, &localReport);
+    const PDFOperationResult analysisResult = previewRgbToCmyk(document, settings, &localReport);
     if (!analysisResult)
     {
         return analysisResult;
@@ -793,7 +788,7 @@ PDFOperationResult PDFRgbToCmykFixup::apply(PDFDocument* document,
             "RGB-to-CMYK conversion cannot be completed safely: %1 unsupported RGB object(s) were found.")
             .arg(localReport.unsupported.size());
     }
-    if (settings.analyzeOnly)
+    if (settings.dryRunOnly)
     {
         localReport.postflightPassed = true;
         if (report)
@@ -890,7 +885,7 @@ PDFOperationResult PDFRgbToCmykFixup::apply(PDFDocument* document,
     if (settings.revalidate)
     {
         PDFRgbToCmykReport postflight;
-        const PDFOperationResult postflightResult = analyze(candidate.data(), settings, &postflight);
+        const PDFOperationResult postflightResult = previewRgbToCmyk(candidate.data(), settings, &postflight);
         if (!postflightResult)
         {
             return postflightResult;
@@ -906,10 +901,6 @@ PDFOperationResult PDFRgbToCmykFixup::apply(PDFDocument* document,
     if (report)
     {
         *report = qMove(localReport);
-    }
-    if (modificationFlags)
-    {
-        *modificationFlags = modifier.getFlags();
     }
     return true;
 }

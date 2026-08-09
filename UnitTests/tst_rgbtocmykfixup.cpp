@@ -106,7 +106,7 @@ void RgbToCmykFixupTest::rejectsMissingTargetProfile()
     pdf::PDFDocument document = buildRgbDocument();
     pdf::PDFRgbToCmykSettings settings;
     pdf::PDFRgbToCmykReport report;
-    const pdf::PDFOperationResult result = pdf::PDFRgbToCmykFixup::apply(&document, settings, &report);
+    const pdf::PDFOperationResult result = pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report);
     QVERIFY(!result);
     QVERIFY(result.getErrorMessage().contains(QStringLiteral("required"), Qt::CaseInsensitive));
 }
@@ -118,11 +118,11 @@ void RgbToCmykFixupTest::analyzesWithoutMutating()
     {
         QSKIP("CMYK output-intent fixture is unavailable.");
     }
-    settings.analyzeOnly = true;
+    settings.dryRunOnly = true;
     pdf::PDFDocument document = buildRgbDocument();
     const QByteArray before = firstPageContent(document);
     pdf::PDFRgbToCmykReport report;
-    QVERIFY(pdf::PDFRgbToCmykFixup::apply(&document, settings, &report));
+    QVERIFY(pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report));
     QCOMPARE(report.vectorPaintsConverted, 1);
     QCOMPARE(firstPageContent(document), before);
 }
@@ -136,7 +136,7 @@ void RgbToCmykFixupTest::convertsVectorPaintAndEmbedsOutputIntent()
     }
     pdf::PDFDocument document = buildRgbDocument();
     pdf::PDFRgbToCmykReport report;
-    QVERIFY(pdf::PDFRgbToCmykFixup::apply(&document, settings, &report));
+    QVERIFY(pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report));
     const QByteArray content = firstPageContent(document);
     QVERIFY(!content.contains("rg"));
     QVERIFY(content.contains("k"));

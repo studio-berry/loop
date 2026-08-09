@@ -241,13 +241,13 @@ pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
             pdf::PDFImage::createStreamFromImage(image, imageOptions))));
 
-    const QByteArray content("q 144 0 0 144 0 0 cm /Im1 Do Q");
+    QByteArray content("q 144 0 0 144 0 0 cm /Im1 Do Q");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
                                 pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            pdf::PDFStream(std::move(contentDictionary), content))));
+            pdf::PDFStream(std::move(contentDictionary), std::move(content)))));
 
     pdf::PDFDictionary xObject;
     xObject.addEntry(pdf::PDFInplaceOrMemoryString("Im1"), pdf::PDFObject::createReference(imageReference));

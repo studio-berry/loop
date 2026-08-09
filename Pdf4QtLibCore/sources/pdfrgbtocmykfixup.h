@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfglobal.h"
+#include "pdfutils.h"
 
 #include <QByteArray>
 #include <QString>
@@ -58,7 +59,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRgbToCmykSettings
     bool revalidate = true;
 
     QString pageRange = QStringLiteral("-");
-    bool analyzeOnly = false;
+    bool dryRunOnly = false;
 
     PDFRgbToCmykOutputIntentPolicy outputIntentPolicy =
         PDFRgbToCmykOutputIntentPolicy::Replace;
@@ -101,14 +102,13 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRgbToCmykReport
 class PDF4QTLIBCORESHARED_EXPORT PDFRgbToCmykFixup
 {
 public:
-    static PDFOperationResult analyze(const PDFDocument* document,
-                                      const PDFRgbToCmykSettings& settings,
-                                      PDFRgbToCmykReport* report);
+    static PDFOperationResult previewRgbToCmyk(const PDFDocument* document,
+                                               const PDFRgbToCmykSettings& settings,
+                                               PDFRgbToCmykReport* report);
 
-    static PDFOperationResult apply(PDFDocument* document,
-                                    const PDFRgbToCmykSettings& settings,
-                                    PDFRgbToCmykReport* report = nullptr,
-                                    PDFModifiedDocument::ModificationFlags* modificationFlags = nullptr);
+    static PDFOperationResult writeRgbToCmyk(PDFDocument* document,
+                                           const PDFRgbToCmykSettings& settings,
+                                           PDFRgbToCmykReport* report = nullptr);
 };
 
 } // namespace pdf

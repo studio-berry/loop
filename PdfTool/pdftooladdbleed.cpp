@@ -217,7 +217,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Success;
     }
 
-    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }

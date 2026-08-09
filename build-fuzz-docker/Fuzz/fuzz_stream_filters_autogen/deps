@@ -1,0 +1,4 @@
+fuzz_stream_filters_autogen/timestamp: \
+	/work/Fuzz/CMakeLists.txt \
+	/work/Fuzz/fuzz_stream_filters.cpp \
+	/usr/bin/cmake
