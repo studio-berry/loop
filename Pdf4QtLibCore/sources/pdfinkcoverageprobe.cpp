@@ -36,6 +36,61 @@
 namespace pdf
 {
 
+namespace
+{
+
+bool isUsableBox(const QRectF& box)
+{
+    return box.isValid()
+        && std::isfinite(box.left())
+        && std::isfinite(box.top())
+        && std::isfinite(box.width())
+        && std::isfinite(box.height())
+        && box.width() > 0.0
+        && box.height() > 0.0;
+}
+
+QRectF resolveAnalysisBox(const PDFPage* page, PDFInkCoverageAnalysisBox requested)
+{
+    if (!page)
+    {
+        return QRectF();
+    }
+
+    const QRectF media = page->getMediaBox().normalized();
+    const QRectF crop = page->getCropBox().normalized();
+    const QRectF trim = page->getTrimBox().normalized();
+    const QRectF bleed = page->getBleedBox().normalized();
+
+    switch (requested)
+    {
+        case PDFInkCoverageAnalysisBox::Media:
+            return isUsableBox(media) ? media : QRectF();
+        case PDFInkCoverageAnalysisBox::Crop:
+            return isUsableBox(crop) ? crop : media;
+        case PDFInkCoverageAnalysisBox::Trim:
+            if (page->hasTrimBox() && isUsableBox(trim))
+            {
+                return trim;
+            }
+            return isUsableBox(crop) ? crop : media;
+        case PDFInkCoverageAnalysisBox::Bleed:
+            if (page->hasBleedBox() && isUsableBox(bleed))
+            {
+                return bleed;
+            }
+            if (page->hasTrimBox() && isUsableBox(trim))
+            {
+                return trim;
+            }
+            return isUsableBox(crop) ? crop : media;
+    }
+
+    return media;
+}
+
+} // namespace
+
 PDFInkCoverageProbe::PDFInkCoverageProbe(PDFDocumentSession* session) :
     m_session(session)
 {
@@ -59,7 +114,15 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         return result;
     }
 
-    const QSizeF mediaSize = page->getRotatedMediaBox().size();
+    const QRectF analysisBox = resolveAnalysisBox(page, settings.analysisBox);
+    if (!isUsableBox(analysisBox))
+    {
+        return result;
+    }
+
+    const PageRotation pageRotation = page->getPageRotation();
+    const QRectF rotatedAnalysisBox = PDFPage::getRotatedBox(analysisBox, pageRotation).normalized();
+    const QSizeF mediaSize = rotatedAnalysisBox.size();
     const qreal pointToPixel = static_cast<qreal>(settings.dpi) / 72.0;
     const double widthReal = std::ceil(mediaSize.width() * pointToPixel);
     const double heightReal = std::ceil(mediaSize.height() * pointToPixel);
@@ -77,6 +140,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     const qint64 rasterPixels = static_cast<qint64>(width) * static_cast<qint64>(height);
     if (settings.maxRasterPixels > 0 && rasterPixels > settings.maxRasterPixels)
     {
+        result.budgetExceeded = true;
         return result;
     }
 
@@ -87,7 +151,10 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
 
     const QSize imageSize(width, height);
-    const QTransform pagePointToDevice = PDFRenderer::createPagePointToDevicePointMatrix(page, QRect(QPoint(0, 0), imageSize));
+    const QTransform pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(
+        rotatedAnalysisBox,
+        QRect(QPoint(0, 0), imageSize),
+        pageRotation);
     PDFInkMapper inkMapper(nullptr, document);
     inkMapper.createSpotColors(true);
 
@@ -130,7 +197,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         }
     }
 
-    const QSizeF pageSizeMM = page->getRotatedMediaBoxMM().size();
+    const QSizeF pageSizeMM = page->getRectMM(analysisBox).size();
     const qreal pixelAreaMM2 = (pageSizeMM.width() * pageSizeMM.height()) / static_cast<qreal>(totalPixels);
     result.overLimitAreaMM2 = static_cast<qreal>(overLimitPixels) * pixelAreaMM2;
 
