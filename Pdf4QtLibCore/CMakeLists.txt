@@ -52,6 +52,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfpagemasterexport.h
     sources/pdfbleedmarginprobe.cpp
     sources/pdfbleedmarginprobe.h
+    sources/pdfinkcoverageprobe.cpp
+    sources/pdfinkcoverageprobe.h
     sources/pdfocrpagegate.cpp
     sources/pdfocrpagegate.h
     sources/pdfocrreport.cpp

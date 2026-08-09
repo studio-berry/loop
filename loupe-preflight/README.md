@@ -70,6 +70,7 @@ Loupe supports two tiers of bleed validation:
 |------|----------|---------------|------|
 | 1 | `bleed` | Box dimensions (BleedBox extends beyond TrimBox) | Free (page dictionary read) |
 | 2 | `content-bleed` | Actual artwork extends into the bleed margin | Rasterization (opt-in, profile-driven) |
+| 3 | `ink-coverage` | Per-pixel total ink coverage exceeds a press limit | Full-page rasterization (opt-in, profile-driven) |
 
 Tier-2 runs only when Tier-1 passes (boxes are adequate) and the profile includes a
 `content-bleed` check. It uses a fast vector-content bounds pass first. When
@@ -85,6 +86,21 @@ finding per affected page.
 
 With `raster_confirm: true`, Tier-2 emits `bleed-margin-empty` (one finding per
 empty edge) instead of a single aggregate `content-bleed` finding.
+
+## Total ink coverage checking
+
+The opt-in `ink-coverage` check rasterizes each page through the same transparency
+renderer used by Output Preview, then reports one object-scope finding for each
+connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
+is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
+Optional parameters are `probe_dpi` (default 150), `min_region_area_pct`
+(default 0.05% of the page), and `max_regions_per_page` (default 20). Spot inks
+are included in TAC because the probe activates the ink mapper's spot colors.
+
+This check is deliberately not enabled by `loupe-default.json`: it requires a
+full-page rasterization and is intended for profiles that explicitly opt in.
+Pages exceeding the raster pixel budget emit an informational page-scope finding
+instead of silently passing.
 
 ## Intended CLI (MIC-133)
 
@@ -103,6 +119,7 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
 - Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `color-inventory` reports deterministic process/spot separations and page-scoped rich-black findings; `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
+- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **color-mode**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
@@ -203,6 +220,8 @@ passes, and only the target check is exercised.
 | `content-bleed-missing.pdf` | tiered-bleed | fail (warnings) | `content-bleed`, `needs-auto-bleed` (artwork stops at trim) |
 | `content-bleed-raster-confirm.pdf` | tiered-bleed-raster | fail (warnings) | `bleed-margin-empty`, `needs-auto-bleed` (raster-confirmed empty margins) |
 | `content-bleed-three-of-four.pdf` | tiered-bleed | fail (warnings) | `content-bleed` (one empty edge only) |
+| `ink-coverage-over.pdf` | test-ink-coverage | warning | `ink-coverage` (over-limit TAC region) |
+| `ink-coverage-ok.pdf` | test-ink-coverage | pass | clean TAC below the threshold |
 
 The `bleed-*` pair above covers the `bleed` check, so every Loupe Default custom check has
 at least one known-pass and one known-fail (or warning) case.
