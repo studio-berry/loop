@@ -35,6 +35,13 @@ fi
 
 mkdir -p "${VCPKG_DEFAULT_BINARY_CACHE}"
 
+if [[ -x "${VCPKG_ROOT}/vcpkg" ]]; then
+    ACTUAL="$(git -C "${VCPKG_ROOT}" rev-parse HEAD)"
+    if [[ "$ACTUAL" != "$VCPKG_COMMIT" ]]; then
+        rm -rf "${VCPKG_ROOT}"
+    fi
+fi
+
 if [[ ! -x "${VCPKG_ROOT}/vcpkg" ]]; then
     if [[ -d "${VCPKG_ROOT}" ]]; then
         rm -rf "${VCPKG_ROOT}"
