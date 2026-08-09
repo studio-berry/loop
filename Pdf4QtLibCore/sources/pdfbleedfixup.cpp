@@ -531,7 +531,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
             return PDFTranslationContext::tr("Reference box on page %1 is invalid.").arg(pageIndex + 1);
         }
 
-        const QRectF targetBleed = PDFBleedFixupMath::targetBleedRect(reference, settings.bleedMM);
+        const QMarginsF effectiveBleedMM(
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Left) ? settings.bleedMM.left() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Top) ? settings.bleedMM.top() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Right) ? settings.bleedMM.right() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Bottom) ? settings.bleedMM.bottom() : 0.0);
+        const QRectF targetBleed = PDFBleedFixupMath::targetBleedRect(reference, effectiveBleedMM);
         if (!targetBleed.isValid() || targetBleed.isEmpty())
         {
             return PDFTranslationContext::tr("Target bleed box on page %1 is invalid.").arg(pageIndex + 1);
@@ -546,11 +551,18 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
 
         for (PDFBleedFixupSide side : allSides)
         {
+            if (!isBleedFixupSideEnabled(settings.sides, side))
+            {
+                continue;
+            }
+
             const PDFReal depthMM = PDFBleedFixupMath::sideBleedMM(settings.bleedMM, side);
             if (!(depthMM > 0.0))
             {
                 continue;
             }
+
+            pageReport.sidesRequested |= bleedFixupSideBit(side);
 
             const PDFReal depthPt = depthMM * PDF_MM_TO_POINT;
             if (!settings.force && settings.skipIfAlreadyBleeding &&
@@ -561,6 +573,7 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                 continue;
             }
 
+            pageReport.sidesEligible |= bleedFixupSideBit(side);
             sidesToApply.push_back(SideWork{side, depthPt});
         }
 

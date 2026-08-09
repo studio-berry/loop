@@ -273,8 +273,10 @@ private:
     pdf::PDFPageGeometrySettings m_pageGeometrySettings;
     bool m_hasBleedFixupSettings = false;
     pdf::PDFBleedFixupSettings m_bleedFixupSettings;
+    pdf::PDFPageMasterBleedConfirmationPolicy m_bleedConfirmationPolicy = pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
     bool m_hasPreflightGate = false;
     bool m_forcePreflight = false;
+    bool m_revalidatePreflightAfterFixups = false;
     QString m_preflightProfilePath;
     QAction* m_actionBleedFixup = nullptr;
 
