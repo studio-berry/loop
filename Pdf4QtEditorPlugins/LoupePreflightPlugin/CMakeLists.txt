@@ -24,6 +24,8 @@ set(LOUPE_PREFLIGHT_PLUGIN_SOURCES
     loupepreflightplugin.cpp
     preflightreportdockwidget.cpp
     preflightreportmodel.cpp
+    repairpreviewdialog.cpp
+    repairpreviewdialog.h
     icons.qrc
 )
 
