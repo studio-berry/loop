@@ -27,6 +27,8 @@
 #include "pdfutils.h"
 
 #include <QString>
+#include <QStringList>
+#include <QList>
 
 #include <functional>
 
@@ -34,6 +36,12 @@ class QIODevice;
 
 namespace pdf
 {
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFOutputConflict
+{
+    QString path;
+    QString code;
+};
 
 /// Shared atomic, collision-safe output helper (MIC-310). Writes through QSaveFile
 /// (temp write + commit/rename), so an existing file is never destroyed before the
@@ -67,6 +75,12 @@ public:
     static PDFOperationResult writeDevice(const QString& fileName,
                                           const std::function<bool(QIODevice*)>& producer,
                                           OverwritePolicy policy);
+
+    /// Finds duplicate planned paths and, optionally, destinations that already exist.
+    /// Paths are compared as absolute, cleaned paths using the host filesystem's
+    /// case sensitivity rules.
+    static QList<PDFOutputConflict> findOutputConflicts(const QStringList& fileNames,
+                                                        bool rejectExisting);
 
     /// Returns \p fileName when free, otherwise the first free "base (n).ext" variant.
     /// Used for names that collide within a single run; a file that already exists on

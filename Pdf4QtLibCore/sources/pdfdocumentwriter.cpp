@@ -192,7 +192,7 @@ PDFOperationResult PDFDocumentWriter::write(const QString& fileName, const PDFDo
     if (safeWrite)
     {
         QSaveFile file(fileName);
-        file.setDirectWriteFallback(true);
+        file.setDirectWriteFallback(false);
 
         if (file.open(QFile::WriteOnly | QFile::Truncate))
         {

@@ -26,6 +26,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QHash>
 
 #include "pdfdbgheap.h"
 
@@ -60,7 +61,7 @@ PDFOperationResult PDFSafeFileWriter::writeDevice(const QString& fileName,
     }
 
     QSaveFile file(fileName);
-    file.setDirectWriteFallback(true);
+    file.setDirectWriteFallback(false);
 
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
     {
@@ -79,6 +80,46 @@ PDFOperationResult PDFSafeFileWriter::writeDevice(const QString& fileName,
     }
 
     return true;
+}
+
+QList<PDFOutputConflict> PDFSafeFileWriter::findOutputConflicts(const QStringList& fileNames,
+                                                                bool rejectExisting)
+{
+    QList<PDFOutputConflict> conflicts;
+    QHash<QString, QString> seenPaths;
+
+    for (const QString& fileName : fileNames)
+    {
+        if (fileName.isEmpty())
+        {
+            conflicts.append({fileName, QStringLiteral("output.empty-path")});
+            continue;
+        }
+
+        QString normalizedPath = QDir::cleanPath(QFileInfo(fileName).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+        normalizedPath = normalizedPath.toCaseFolded();
+#endif
+
+        if (seenPaths.contains(normalizedPath))
+        {
+            conflicts.append({fileName, QStringLiteral("output.duplicate-planned-path")});
+        }
+        else
+        {
+            seenPaths.insert(normalizedPath, fileName);
+        }
+
+        const QFileInfo info(fileName);
+        if (info.exists() && (rejectExisting || info.isDir()))
+        {
+            conflicts.append({fileName, info.isDir()
+                                      ? QStringLiteral("output.destination-is-directory")
+                                      : QStringLiteral("output.destination-exists")});
+        }
+    }
+
+    return conflicts;
 }
 
 QString PDFSafeFileWriter::makeUniqueFileName(const QString& fileName)
