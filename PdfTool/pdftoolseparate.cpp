@@ -139,11 +139,7 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
 
             if (options.destructiveReport)
             {
-                if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
-                {
-                    options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("separate"), fileName, QStringLiteral("planned")});
-                }
-                else
+                if (options.outputStyle != PDFOutputFormatter::Style::Json)
                 {
                     PDFConsole::writeText(PDFToolTranslationContext::tr("Would extract page %1 to '%2'.")
                                             .arg(pageIndex + 1)
@@ -154,6 +150,10 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
 
             if (options.destructiveDryRun)
             {
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("separate"), fileName, QStringLiteral("planned")});
+                }
                 continue;
             }
 
@@ -179,6 +179,15 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
         {
             ++failedWrites;
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), exception.getMessage());
+            if (options.executionContext)
+            {
+                options.executionContext->addOutput({
+                    QStringLiteral("file"),
+                    QStringLiteral("separate"),
+                    fileName,
+                    QStringLiteral("partial")
+                });
+            }
         }
     }
 

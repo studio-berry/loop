@@ -624,6 +624,16 @@ protected:
     /// \param fillRule Fill rule used in the fill mode
     virtual void performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule);
 
+    /// This hook is called for a path that is about to be painted, after
+    /// suppression/no-op checks and before fill/stroke pattern dispatch.
+    /// Unlike performPathPainting(), it also observes paths whose concrete
+    /// renderer handles the paint through a pattern.
+    virtual void performBeforePathPainting(const QPainterPath& path,
+                                           bool stroke,
+                                           bool fill,
+                                           bool text,
+                                           Qt::FillRule fillRule);
+
     /// This function is used, when we want to implement custom fill using shading. If path is successfully
     /// filled by shading, then true should be returned.
     /// \param path Path to be filled
@@ -779,6 +789,9 @@ protected:
     /// Returns current procedure sets. Procedure sets are deprecated in PDF 2.0 and are here
     /// only for compatibility purposes. See chapter 14.2 in PDF 2.0 specification.
     ProcedureSets getProcedureSets() const { return m_procedureSets; }
+
+    /// Returns errors collected while processing the current page/form.
+    const QList<PDFRenderError>& getRenderErrors() const { return m_errorList; }
 
     /// Returns page
     const PDFPage* getPage() const { return m_page; }

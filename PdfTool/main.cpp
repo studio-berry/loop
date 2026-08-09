@@ -176,7 +176,10 @@ int main(int argc, char* argv[])
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
 
     const QStringList arguments = QCoreApplication::arguments();
-    const bool wantsJson = commandLineRequestsJson(arguments);
+    const QString command = requestedCommand(arguments);
+    const bool wantsJson = commandLineRequestsJson(arguments) ||
+                           ((command == QStringLiteral("preflight") || command == QStringLiteral("ocr")) &&
+                            !commandLineSpecifiesConsoleFormat(arguments));
 
     // Extract the requested command without terminating on unknown options so
     // invalid invocations can be reported through the result contract.
@@ -184,8 +187,6 @@ int main(int argc, char* argv[])
     parser.setApplicationDescription("PdfTool - work with pdf documents via command line");
     parser.addPositionalArgument("command", "Command to execute.");
     parser.parse(arguments);
-
-    const QString command = requestedCommand(arguments);
 
     pdftool::PDFToolAbstractApplication* application = pdftool::PDFToolApplicationStorage::getApplicationByCommand(command);
 

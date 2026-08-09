@@ -117,6 +117,18 @@ real compositing boundaries, including Forms, tiling, shadings, images, text,
 and annotation appearance streams. These are appearance/production-risk
 advisories, not claims that the PDF is invalid.
 
+## Hairline and thin-stroke checking
+
+The opt-in `thin-strokes` check observes actual stroking operations after the
+graphics-state CTM has been applied. A declared width at or below
+`zero_width_epsilon_pt` (default `0.000001`) emits a `hairline-stroke` finding;
+other strokes emit `thin-stroke` when their minimum effective painted width is
+below `min_effective_width_pt`. Effective width accounts for non-uniform scale,
+rotation, shear, nested Forms, and page `/UserUnit`. `hairline_severity` and
+`thin_stroke_severity` override the check's normal severity and fall back to it
+when omitted. The default profile does not enable this check because the
+production threshold is job-specific.
+
 ## Intended CLI (MIC-133)
 
 ```bash
@@ -133,7 +145,7 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - Exit `0` when `pass` is true; exit `1` when `errors[]` is non-empty.
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
-- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
+- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **thin-strokes** (opt-in hairline and effective-width detection), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 

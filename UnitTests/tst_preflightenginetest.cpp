@@ -44,10 +44,13 @@ private slots:
     void parseProfile_rejectsEmptyChecks();
     void parseProfile_rejectsInkCoverageWithoutPositiveMax();
     void parseProfile_acceptsInkCoverageDefaults();
+    void parseProfile_acceptsThinStrokeOverridesAndDefaults();
+    void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void run_bleedCheckFailsWhenBoxMissing();
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
+    void run_thinStrokes_detectsPaintedThinStroke();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
@@ -266,6 +269,90 @@ void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
     QCOMPARE(profile.checks.first().probeDpi, 150);
     QCOMPARE(profile.checks.first().minRegionAreaPct, 0.05);
     QCOMPARE(profile.checks.first().maxRegionsPerPage, 20);
+}
+
+void PreflightEngineTest::parseProfile_acceptsThinStrokeOverridesAndDefaults()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Thin strokes") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                { QStringLiteral("severity"), QStringLiteral("warning") },
+                { QStringLiteral("min_effective_width_pt"), 0.25 },
+                { QStringLiteral("zero_width_epsilon_pt"), 0.0001 },
+                { QStringLiteral("hairline_severity"), QStringLiteral("error") }
+            }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(profile.checks.first().minEffectiveStrokeWidthPt, 0.25);
+    QCOMPARE(profile.checks.first().zeroWidthEpsilonPt, 0.0001);
+    QCOMPARE(profile.checks.first().hairlineSeverity, QStringLiteral("error"));
+    QCOMPARE(profile.checks.first().thinStrokeSeverity, QStringLiteral("warning"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsInvalidThinStrokeThreshold()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Thin strokes") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                { QStringLiteral("min_effective_width_pt"), 0.0 }
+            }
+        } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(errorMessage, QStringLiteral("Check 'thin-strokes' requires positive min_effective_width_pt."));
+}
+
+void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    QPen thinPen(Qt::black);
+    thinPen.setWidthF(0.1);
+    painter->setPen(thinPen);
+    painter->drawLine(QPointF(20, 20), QPointF(180, 20));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin strokes") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                { QStringLiteral("min_effective_width_pt"), 0.25 },
+                { QStringLiteral("thin_stroke_severity"), QStringLiteral("warning") }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().scope, QStringLiteral("object"));
+    QCOMPARE(result.warnings.first().type, QStringLiteral("thin-stroke"));
+    QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-strokes"));
+    QVERIFY(result.warnings.first().bbox.isValid());
 }
 
 void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()

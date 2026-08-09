@@ -26,6 +26,8 @@
 #include "pdfsignaturehandler.h"
 #include "pdfform.h"
 
+#include <QJsonObject>
+
 namespace pdftool
 {
 
@@ -77,7 +79,11 @@ PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions
             break;
 
         case pdf::PDFDocumentReader::Result::Cancelled:
-            return PDFToolExitCode::Success;
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("pdf.invalid-password"),
+                             PDFToolTranslationContext::tr("Invalid password provided."));
+            return PDFToolExitCode::InputError;
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
@@ -402,6 +408,42 @@ PDFToolExitCode PDFToolVerifySignaturesApplication::execute(const PDFToolOptions
     {
         PDFConsole::writeText(formatter.getString(), options.outputCodec);
     }
+
+    if (signatures.empty())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("verification.no-signatures"),
+                         PDFToolTranslationContext::tr("No digital signatures or timestamps were found in the document."));
+        return PDFToolExitCode::Findings;
+    }
+
+    bool hasErrors = false;
+    bool hasWarnings = false;
+    for (const pdf::PDFSignatureVerificationResult& signature : signatures)
+    {
+        hasErrors = hasErrors || signature.hasError() || signature.getType() == pdf::PDFSignature::Type::Invalid;
+        hasWarnings = hasWarnings || signature.hasWarning();
+    }
+
+    if (hasErrors)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("verification.signature-failed"),
+                         PDFToolTranslationContext::tr("One or more signatures failed verification."));
+        return PDFToolExitCode::Findings;
+    }
+
+    if (hasWarnings)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("verification.signature-warning"),
+                         PDFToolTranslationContext::tr("One or more signatures produced verification warnings."));
+        return PDFToolExitCode::Findings;
+    }
+
     return PDFToolExitCode::Success;
 }
 

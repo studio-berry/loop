@@ -183,24 +183,27 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
     }
 
     const QJsonObject json = reportObject(settings, report);
-    if (options.destructiveReport || options.destructiveDryRun)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
     {
         if (options.executionContext)
         {
             options.executionContext->setData(json);
         }
-        else if (options.outputStyle == PDFOutputFormatter::Style::Json)
-        {
-            PDFConsole::writeText(QString::fromUtf8(QJsonDocument(json).toJson(QJsonDocument::Compact)), options.outputCodec);
-        }
-        else
-        {
-            PDFConsole::writeText(QString::fromUtf8(QJsonDocument(json).toJson(QJsonDocument::Indented)), options.outputCodec);
-        }
+    }
+    else if (options.destructiveReport || options.destructiveDryRun)
+    {
+        PDFConsole::writeText(QString::fromUtf8(QJsonDocument(json).toJson(QJsonDocument::Indented)), options.outputCodec);
     }
 
     if (options.destructiveDryRun)
     {
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("primary"),
+                                                  options.rgbToCmykOutputDocument,
+                                                  QStringLiteral("planned") });
+        }
         return PDFToolExitCode::Success;
     }
 
@@ -216,6 +219,15 @@ PDFToolExitCode PDFToolRgbToCmyk::execute(const PDFToolOptions& options)
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), writeResult.getErrorMessage());
         return PDFToolExitCode::ProcessingFailure;
     }
+
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("primary"),
+                                              options.rgbToCmykOutputDocument,
+                                              QStringLiteral("written") });
+    }
+
     return PDFToolExitCode::Success;
 }
 
