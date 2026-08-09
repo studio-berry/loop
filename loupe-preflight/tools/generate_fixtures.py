@@ -217,6 +217,21 @@ def image_dpi_ok(out_dir, tmp):
     _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
 
 
+def image_dpi_excessive(out_dir, tmp):
+    """PASS image-resolution with a useful downsample fixup candidate at 600 DPI."""
+    path = os.path.join(out_dir, "image-dpi-excessive.pdf")
+    img = os.path.join(tmp, "excessive.png")
+    _gray_image(1200, img)  # 1200 px / 2 in = 600 DPI; target is 300 DPI.
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 84, 84, width=144, height=144)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
 # ---------------------------------------------------------------------------
 # embedded-fonts
 # ---------------------------------------------------------------------------
@@ -704,6 +719,7 @@ FIXTURES = [
     color_cmyk,
     image_dpi_low,
     image_dpi_ok,
+    image_dpi_excessive,
     font_not_embedded,
     font_embedded,
     trim_pagesize_ok,

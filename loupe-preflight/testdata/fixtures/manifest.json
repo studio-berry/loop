@@ -80,6 +80,14 @@
     "notes": "1240x1240 px DeviceGray image placed at 4x4 in -> ~310 DPI (>= 300), adequate bleed, no fonts -> clean pass. Implemented in MIC-149."
   },
   {
+    "id": "image-dpi-excessive",
+    "pdf": "image-dpi-excessive.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "1200x1200 px DeviceGray image placed at 2x2 in -> 600 DPI. Preflight should advertise downsample-images with the conservative 300-DPI target while leaving image-resolution clean."
+  },
+  {
     "id": "font-not-embedded",
     "pdf": "font-not-embedded.pdf",
     "profile": "profiles/loupe-default.json",
