@@ -43,6 +43,7 @@
 #include "pdfpreflightchecks.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -1260,7 +1261,33 @@ void runOutputIntentCheck(PDFDocumentSession* session,
         return;
     }
 
-    const auto& outputIntents = document->getCatalog()->getOutputIntents();
+    const PDFCatalog* catalog = document->getCatalog();
+    const auto& outputIntents = catalog->getOutputIntents();
+    auto recordFinding = [&](const QString& type, const QString& message) {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = type;
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.message = message;
+
+        if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
+        {
+            warnings.push_back(finding);
+        }
+        else
+        {
+            errors.push_back(finding);
+        }
+    };
+
+    if (catalog->hasMalformedOutputIntents())
+    {
+        recordFinding(
+            QStringLiteral("output-intent-malformed"),
+            PDFTranslationContext::tr("The catalog /OutputIntents array contains a non-dictionary or unresolved entry."));
+    }
+
     if (outputIntents.empty())
     {
         if (check.required)
@@ -1285,29 +1312,27 @@ void runOutputIntentCheck(PDFDocumentSession* session,
         return;
     }
 
-    auto recordFinding = [&](const QString& type, const QString& message) {
-        PreflightFinding finding;
-        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
-        finding.type = type;
-        finding.severity = check.severity;
-        finding.checkId = check.id;
-        finding.message = message;
-
-        if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
-        {
-            warnings.push_back(finding);
-        }
-        else
-        {
-            errors.push_back(finding);
-        }
-    };
-
     QSet<QString> resolvedColorSpaces;
-    for (const PDFOutputIntent& outputIntent : outputIntents)
+    QStringList validIntentLabels;
+    for (size_t intentIndex = 0; intentIndex < outputIntents.size(); ++intentIndex)
     {
+        const PDFOutputIntent& outputIntent = outputIntents[intentIndex];
         const QString identifier = outputIntent.getOutputConditionIdentifier();
         const QString label = identifier.isEmpty() ? QStringLiteral("(unnamed)") : identifier;
+        const QString indexedLabel = outputIntents.size() > 1
+            ? PDFTranslationContext::tr("intent %1 '%2'").arg(int(intentIndex)).arg(label)
+            : label;
+
+        if (!check.allowedOutputIntentSubtypes.isEmpty()
+            && std::none_of(check.allowedOutputIntentSubtypes.cbegin(), check.allowedOutputIntentSubtypes.cend(), [&outputIntent](const QString& subtype) {
+                return subtype.compare(QString::fromLatin1(outputIntent.getSubtype()), Qt::CaseInsensitive) == 0;
+            }))
+        {
+            recordFinding(
+                QStringLiteral("output-intent-subtype"),
+                PDFTranslationContext::tr("Output intent %1 has subtype '%2', which is not allowed (allowed: %3).")
+                    .arg(indexedLabel, QString::fromLatin1(outputIntent.getSubtype()), check.allowedOutputIntentSubtypes.join(QStringLiteral(", "))));
+        }
 
         if (identifier.isEmpty())
         {
@@ -1329,18 +1354,29 @@ void runOutputIntentCheck(PDFDocumentSession* session,
         const PDFObject outputProfileObject = document->getObject(outputIntent.getOutputProfile());
         if (!outputProfileObject.isStream())
         {
-            recordFinding(
-                QStringLiteral("output-intent-profile-missing"),
-                PDFTranslationContext::tr(
-                    "Output intent '%1' has no embedded ICC profile (/DestOutputProfile is missing or is not a stream).")
-                    .arg(label));
+            if (check.requireEmbeddedOutputIntentProfile)
+            {
+                recordFinding(
+                    QStringLiteral("output-intent-profile-missing"),
+                    PDFTranslationContext::tr(
+                        "Output intent '%1' has no embedded ICC profile (/DestOutputProfile is missing or is not a stream).")
+                        .arg(indexedLabel));
+            }
             continue;
         }
 
         QByteArray content;
         try
         {
-            content = document->getDecodedStream(outputProfileObject.getStream());
+            const PDFObject& outputProfileReference = outputIntent.getOutputProfile();
+            if (outputProfileReference.isReference())
+            {
+                content = session->getDecodedStream(outputProfileReference.getReference());
+            }
+            else
+            {
+                content = document->getDecodedStream(outputProfileObject.getStream());
+            }
         }
         catch (const PDFException&)
         {
@@ -1348,7 +1384,7 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                 QStringLiteral("output-intent-profile-invalid"),
                 PDFTranslationContext::tr(
                     "Output intent '%1' has an ICC profile that could not be decoded.")
-                    .arg(label));
+                    .arg(indexedLabel));
             continue;
         }
 
@@ -1359,7 +1395,7 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                 QStringLiteral("output-intent-profile-invalid"),
                 PDFTranslationContext::tr(
                     "Output intent '%1' has an ICC profile that is not a valid ICC profile.")
-                    .arg(label));
+                    .arg(indexedLabel));
             continue;
         }
 
@@ -1370,11 +1406,26 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                 QStringLiteral("output-intent-profile-invalid"),
                 PDFTranslationContext::tr(
                     "Output intent '%1' has an ICC profile with an unsupported color space.")
-                    .arg(label));
+                    .arg(indexedLabel));
             continue;
         }
 
         resolvedColorSpaces.insert(colorSpace);
+        validIntentLabels.append(indexedLabel);
+
+        if (!check.allowedOutputIntentProfileSha256.isEmpty())
+        {
+            const QString profileSha256 = QString::fromLatin1(QCryptographicHash::hash(content, QCryptographicHash::Sha256).toHex());
+            if (std::none_of(check.allowedOutputIntentProfileSha256.cbegin(), check.allowedOutputIntentProfileSha256.cend(), [&profileSha256](const QString& allowed) {
+                return allowed.compare(profileSha256, Qt::CaseInsensitive) == 0;
+            }))
+            {
+                recordFinding(
+                    QStringLiteral("output-intent-profile-identity"),
+                    PDFTranslationContext::tr("Output intent %1 has ICC payload identity %2, which is not allowed.")
+                        .arg(indexedLabel, profileSha256));
+            }
+        }
 
         const QString declaredColorSpace = QString::fromLatin1(outputIntent.getOutputProfileInfo().getSignature());
         if (!declaredColorSpace.isEmpty() && declaredColorSpace.compare(colorSpace, Qt::CaseInsensitive) != 0)
@@ -1383,7 +1434,7 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                 QStringLiteral("output-intent-color-mismatch"),
                 PDFTranslationContext::tr(
                     "Output intent '%1' declares ProfileCS '%2' but its embedded ICC profile is %3.")
-                    .arg(label, declaredColorSpace, colorSpace));
+                    .arg(indexedLabel, declaredColorSpace, colorSpace));
         }
 
         if (!check.allowedColorModes.isEmpty())
@@ -1404,9 +1455,17 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                     QStringLiteral("output-intent-color-mismatch"),
                     PDFTranslationContext::tr(
                         "Output intent '%1' ICC profile color space %2 is not allowed (allowed: %3).")
-                        .arg(label, colorSpace, check.allowedColorModes.join(QStringLiteral(", "))));
+                        .arg(indexedLabel, colorSpace, check.allowedColorModes.join(QStringLiteral(", "))));
             }
         }
+    }
+
+    if (!check.allowMultipleOutputIntents && validIntentLabels.size() > 1)
+    {
+        recordFinding(
+            QStringLiteral("output-intent-ambiguous"),
+            PDFTranslationContext::tr("Multiple valid applicable output intents were found (%1); policy requires a unique target.")
+                .arg(validIntentLabels.join(QStringLiteral(", "))));
     }
 
     QStringList conflictColorSpaces = resolvedColorSpaces.values();
@@ -3037,6 +3096,36 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         for (const QJsonValue& val : allowedIdentifiers)
         {
             check.allowedOutputConditionIdentifiers.append(val.toString());
+        }
+
+        if (check.id == QStringLiteral("output-intent"))
+        {
+            const QJsonArray allowedSubtypes = checkObject.value(QStringLiteral("allowed_subtypes")).toArray();
+            for (const QJsonValue& val : allowedSubtypes)
+            {
+                const QString subtype = val.toString();
+                if (!subtype.isEmpty())
+                {
+                    check.allowedOutputIntentSubtypes.append(subtype);
+                }
+            }
+
+            const QJsonArray allowedProfileSha256 = checkObject.value(QStringLiteral("allowed_profile_sha256")).toArray();
+            for (const QJsonValue& val : allowedProfileSha256)
+            {
+                const QString digest = val.toString();
+                if (digest.size() != 64 || !std::all_of(digest.cbegin(), digest.cend(), [](QChar character) {
+                    return character.isDigit() || (character.toLower() >= QLatin1Char('a') && character.toLower() <= QLatin1Char('f'));
+                }))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' contains an invalid allowed_profile_sha256 digest.").arg(check.id);
+                    return false;
+                }
+                check.allowedOutputIntentProfileSha256.append(digest.toLower());
+            }
+
+            check.requireEmbeddedOutputIntentProfile = checkObject.value(QStringLiteral("require_embedded_profile")).toBool(true);
+            check.allowMultipleOutputIntents = checkObject.value(QStringLiteral("allow_multiple")).toBool(true);
         }
 
         profile.checks.push_back(check);
