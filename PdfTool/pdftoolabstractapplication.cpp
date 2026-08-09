@@ -22,6 +22,7 @@
 
 #include "pdftoolabstractapplication.h"
 #include "pdfdocumentreader.h"
+#include "pdfsafefilewriter.h"
 #include "pdfutils.h"
 
 #include <QFileInfo>
@@ -1750,7 +1751,18 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
         return PDFToolExitCode::InvalidInvocation;
     }
 
-    if (QFile::exists(outputPath) && !options.destructiveOverwrite)
+    const QFileInfo outputInfo(outputPath);
+    if (outputInfo.isDir())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("output.destination-is-directory"),
+                         PDFToolTranslationContext::tr("Output '%1' is a directory.").arg(outputPath),
+                         QJsonObject{{QStringLiteral("path"), outputPath}});
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
+    if (outputInfo.exists() && !options.destructiveOverwrite)
     {
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,
@@ -1764,12 +1776,31 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
 
 PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutputs(const PDFToolOptions& options, const QStringList& outputPaths) const
 {
-    for (const QString& outputPath : outputPaths)
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts(outputPaths, !options.destructiveOverwrite);
+    for (const pdf::PDFOutputConflict& conflict : conflicts)
     {
-        if (const PDFToolExitCode blocked = validateDestructiveOutput(options, outputPath))
+        if (conflict.code == QStringLiteral("output.destination-exists"))
         {
-            return blocked;
+            return validateDestructiveOutput(options, conflict.path);
         }
+
+        QString message;
+        if (conflict.code == QStringLiteral("output.empty-path"))
+        {
+            message = PDFToolTranslationContext::tr("Output document file name is not set.");
+        }
+        else if (conflict.code == QStringLiteral("output.destination-is-directory"))
+        {
+            message = PDFToolTranslationContext::tr("Output '%1' is a directory.").arg(conflict.path);
+        }
+        else
+        {
+            message = PDFToolTranslationContext::tr("Output '%1' is planned more than once.").arg(conflict.path);
+        }
+
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, conflict.code, message,
+                         QJsonObject{{QStringLiteral("path"), conflict.path}});
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     return PDFToolExitCode::Success;
