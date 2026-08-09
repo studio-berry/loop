@@ -332,15 +332,21 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             DESTINATION ${PDF4QT_INSTALL_TRANS_DIR})
 
     if(WIN32)
-        install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
-                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
-                FILES_MATCHING
-                PATTERN *.png)
-
-        install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
-                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
-                FILES_MATCHING
-                PATTERN *.png)
+        if(PDF4QT_LOUPE_DISTRIBUTION)
+            install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44)
+            install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150)
+        else()
+            install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
+                    RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
+                    FILES_MATCHING
+                    PATTERN *.png)
+            install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
+                    RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
+                    FILES_MATCHING
+                    PATTERN *.png)
+        endif()
 
         configure_file(${CMAKE_CURRENT_SOURCE_DIR}/AppxManifest.xml.in ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml)
         install(FILES ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml DESTINATION ${PDF4QT_INSTALL_BIN_DIR})
@@ -348,25 +354,34 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.desktop
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.svg
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
+        if(PDF4QT_LOUPE_DISTRIBUTION)
+            install(FILES Desktop/io.github.mberrys.Loupe-pdf.desktop
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
+            install(FILES Desktop/io.github.mberrys.Loupe-pdf.svg
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
+        else()
+            install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
+                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
+                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
+                          Desktop/io.github.mberrys.Loupe-pdf.desktop
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
+            install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
+                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
+                          Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
+                          Desktop/io.github.mberrys.Loupe-pdf.svg
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
+        endif()
         install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.png
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
+        if(PDF4QT_LOUPE_DISTRIBUTION)
+            install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.png
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
+        else()
+            install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
+                          Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
+                          Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
+                          Desktop/128x128/io.github.mberrys.Loupe-pdf.png
+                          DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
+        endif()
     endif()
 
 endif()
