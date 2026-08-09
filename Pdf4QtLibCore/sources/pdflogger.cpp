@@ -52,6 +52,7 @@ struct LogState
     QString directory;
     QFile file;
     QMutex mutex;
+    bool healthy = true;
 };
 
 std::atomic<LogState*> g_state{ nullptr };
@@ -189,19 +190,45 @@ QString rotatedLogFilePath(const QString& baseLogFilePath, int index)
 /// Shifts ".log.1" -> ".log.2" and ".log" -> ".log.1", pruning anything
 /// beyond ".log.2" so the rotation footprint never grows unbounded even if a
 /// stray file from an older build is present.
-void rotateLogFiles(LogState& state)
+bool rotateLogFiles(LogState& state)
 {
     state.file.close();
 
     const QString baseLogFilePath = QDir(state.directory).filePath(state.applicationId + QStringLiteral(".log"));
 
-    QFile::remove(rotatedLogFilePath(baseLogFilePath, 3));
-    QFile::remove(rotatedLogFilePath(baseLogFilePath, 2));
-    QFile::rename(rotatedLogFilePath(baseLogFilePath, 1), rotatedLogFilePath(baseLogFilePath, 2));
-    QFile::rename(baseLogFilePath, rotatedLogFilePath(baseLogFilePath, 1));
+    if (QFileInfo::exists(rotatedLogFilePath(baseLogFilePath, 3)))
+    {
+        if (!QFile::remove(rotatedLogFilePath(baseLogFilePath, 3)))
+        {
+            state.file.setFileName(baseLogFilePath);
+            state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+            return false;
+        }
+    }
+    if (QFileInfo::exists(rotatedLogFilePath(baseLogFilePath, 2))
+        && !QFile::remove(rotatedLogFilePath(baseLogFilePath, 2)))
+    {
+        state.file.setFileName(baseLogFilePath);
+        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        return false;
+    }
+    if (QFileInfo::exists(rotatedLogFilePath(baseLogFilePath, 1))
+        && !QFile::rename(rotatedLogFilePath(baseLogFilePath, 1), rotatedLogFilePath(baseLogFilePath, 2)))
+    {
+        state.file.setFileName(baseLogFilePath);
+        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        return false;
+    }
+    if (QFileInfo::exists(baseLogFilePath)
+        && !QFile::rename(baseLogFilePath, rotatedLogFilePath(baseLogFilePath, 1)))
+    {
+        state.file.setFileName(baseLogFilePath);
+        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        return false;
+    }
 
     state.file.setFileName(baseLogFilePath);
-    state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+    return state.file.open(QIODevice::Append | QIODevice::WriteOnly);
 }
 
 void writeLogLine(LogState& state, PDFLogSession::Level level, const QString& category, const QString& scrubbedMessage)
@@ -213,17 +240,31 @@ void writeLogLine(LogState& state, PDFLogSession::Level level, const QString& ca
         return;
     }
 
-    if (state.file.size() >= LOG_ROTATION_SIZE_BYTES)
-    {
-        rotateLogFiles(state);
-    }
-
     const QString timestamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
     const QString line = QStringLiteral("%1  %2  [%3]  %4  %5\n")
                              .arg(timestamp, levelLetter(level), state.applicationId, category, scrubbedMessage);
+    QByteArray encoded = line.toUtf8();
+    if (encoded.size() > LOG_ROTATION_SIZE_BYTES)
+    {
+        // A hostile or accidental single message must not create an
+        // unbounded individual write. Keep the line framing and cap it at the
+        // same bounded size as the rotating file.
+        encoded.truncate(int(LOG_ROTATION_SIZE_BYTES - 1));
+        encoded.append('\n');
+    }
 
-    state.file.write(line.toUtf8());
-    state.file.flush();
+    if (state.file.size() + encoded.size() > LOG_ROTATION_SIZE_BYTES)
+    {
+        if (!rotateLogFiles(state))
+        {
+            state.healthy = false;
+        }
+    }
+
+    if (state.file.write(encoded) != encoded.size() || !state.file.flush())
+    {
+        state.healthy = false;
+    }
 }
 
 /// Minimal replacement for Qt's built-in handler, used when no other handler
@@ -270,11 +311,17 @@ PDFLogSession::PDFLogSession(const QString& applicationId)
     state->applicationId = applicationId;
     state->directory = resolveLogDirectory();
 
-    QDir().mkpath(state->directory);
+    if (!QDir().mkpath(state->directory))
+    {
+        state->healthy = false;
+    }
 
     const QString logFilePath = QDir(state->directory).filePath(applicationId + QStringLiteral(".log"));
     state->file.setFileName(logFilePath);
-    state->file.open(QIODevice::Append | QIODevice::WriteOnly);
+    if (!state->file.open(QIODevice::Append | QIODevice::WriteOnly))
+    {
+        state->healthy = false;
+    }
 
     g_level.store(static_cast<int>(resolveInitialLevel()), std::memory_order_relaxed);
 
@@ -303,6 +350,23 @@ PDFLogSession::~PDFLogSession()
 void PDFLogSession::setLevel(Level level)
 {
     g_level.store(static_cast<int>(level), std::memory_order_relaxed);
+}
+
+PDFLogSession::Level PDFLogSession::level()
+{
+    return static_cast<Level>(g_level.load(std::memory_order_relaxed));
+}
+
+bool PDFLogSession::isHealthy()
+{
+    LogState* state = g_state.load(std::memory_order_acquire);
+    if (!state)
+    {
+        return false;
+    }
+
+    QMutexLocker locker(&state->mutex);
+    return state->healthy;
 }
 
 QString PDFLogSession::logDirectory()

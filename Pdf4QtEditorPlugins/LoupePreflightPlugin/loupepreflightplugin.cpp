@@ -23,11 +23,17 @@
 #include "loupepreflightplugin.h"
 #include "preflightreportdockwidget.h"
 #include "preflightsidecarutils.h"
+#include "repairpreviewdialog.h"
 #include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
+#include "pdfimagedownsamplefixup.h"
 #include "pdfrgbtocmykfixup.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
+#include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
+#include "pdfsafefilewriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
 #include "pdfuitheme.h"
@@ -44,6 +50,8 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QCryptographicHash>
+#include <QTemporaryDir>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QFile>
@@ -58,7 +66,7 @@
 #include <QPen>
 #include <QProcess>
 #include <QPushButton>
-#include <QTemporaryDir>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 #ifndef LOUPE_PREFLIGHT_PROFILES_RELATIVE_PATH
@@ -108,6 +116,18 @@ QString defaultRgbToCmykOutputPath(const QString& sourcePath)
 
     return sourceInfo.absolutePath() + QDir::separator()
         + sourceInfo.completeBaseName() + QStringLiteral("_cmyk.") + sourceInfo.suffix();
+}
+
+QString defaultDownsampleOutputPath(const QString& sourcePath)
+{
+    const QFileInfo sourceInfo(sourcePath);
+    if (!sourceInfo.isFile())
+    {
+        return QString();
+    }
+
+    return sourceInfo.absolutePath() + QDir::separator()
+        + sourceInfo.completeBaseName() + QStringLiteral("_downsampled.") + sourceInfo.suffix();
 }
 
 }   // namespace
@@ -210,8 +230,8 @@ void LoupePreflightPlugin::ensureDockWidget()
     connect(m_reportDockWidget, &PreflightReportDockWidget::findingSelectionChanged,
             this, &LoupePreflightPlugin::onFindingSelectionChanged);
 
-    connect(m_reportDockWidget, &PreflightReportDockWidget::applyBleedFixupRequested,
-            this, &LoupePreflightPlugin::onApplyBleedFixupRequested);
+    connect(m_reportDockWidget, &PreflightReportDockWidget::applyFixupRequested,
+            this, &LoupePreflightPlugin::onApplyFixupRequested);
 }
 
 void LoupePreflightPlugin::updateActions()
@@ -741,6 +761,22 @@ void LoupePreflightPlugin::onFindingSelectionChanged(int row)
     updateOverlayGraphics();
 }
 
+void LoupePreflightPlugin::onApplyFixupRequested(const QString& id)
+{
+    if (id == QStringLiteral("add-bleed"))
+    {
+        onApplyBleedFixupRequested();
+    }
+    else if (id == QStringLiteral("rgb-to-cmyk"))
+    {
+        onApplyRgbToCmykFixupRequested();
+    }
+    else if (id == QStringLiteral("downsample-images"))
+    {
+        onApplyDownsampleImagesRequested();
+    }
+}
+
 void LoupePreflightPlugin::onApplyBleedFixupRequested()
 {
     if (!m_document || !m_reportDockWidget)
@@ -838,28 +874,106 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
         }
     }
 
-    pdf::PDFDocument fixedDocument = *m_document;
-    pdf::PDFBleedFixupSettings settings;
-    settings.mode = pdf::PDFBleedFixupMode(modeCombo->currentData().toInt());
     const qreal bleedMm = bleedSpin->value();
-    settings.bleedMM = QMarginsF(bleedMm, bleedMm, bleedMm, bleedMm);
-    settings.force = true;
-
-    const pdf::PDFOperationResult fixupResult = pdf::PDFBleedFixup::apply(&fixedDocument, settings);
-    if (!fixupResult)
+    const QString mode = modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::PixelRepeat)
+        ? QStringLiteral("pixel-repeat")
+        : modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::Stretch)
+            ? QStringLiteral("stretch")
+            : QStringLiteral("mirror");
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    if (!operation)
     {
-        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), fixupResult.getErrorMessage());
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The add-bleed repair operation is unavailable."));
         return;
     }
 
-    // The atomic safe write below replaces an existing file (if any) only after
-    // the new bytes are durable; do not delete the previous output up front.
+    pdf::PDFRepairTransaction transaction(*m_document);
+    const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
+        { QStringLiteral("mode"), mode },
+        { QStringLiteral("bleed_mm"), bleedMm },
+        { QStringLiteral("force"), true }
+    });
+    if (!addResult || !transaction.analyze() || !transaction.apply())
+    {
+        const QString message = !addResult ? addResult.getErrorMessage()
+            : tr("The bleed repair could not be planned or applied.");
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), message);
+        return;
+    }
 
-    pdf::PDFDocumentWriter writer(nullptr);
-    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &fixedDocument, true);
+    // Serialize and reopen the candidate before showing it to the operator. The
+    // dialog must review the bytes that will be committed, not only the copied
+    // in-memory document.
+    QTemporaryDir previewDirectory;
+    if (!previewDirectory.isValid())
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("Unable to create a private repair-preview directory."));
+        return;
+    }
+
+    const QString previewPath = QDir(previewDirectory.path()).filePath(QStringLiteral("candidate.pdf"));
+    pdf::PDFRepairDiffOptions diffOptions;
+    diffOptions.renderDirectory = previewDirectory.path();
+    pdf::PDFRepairDiffReport diffReport;
+    const pdf::PDFOperationResult candidateResult = transaction.compareCandidate(previewPath, diffOptions, &diffReport);
+    if (!candidateResult)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), candidateResult.getErrorMessage());
+        return;
+    }
+
+    QFile previewFile(previewPath);
+    if (!previewFile.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The repair candidate could not be read after serialization."));
+        return;
+    }
+    const QByteArray previewData = previewFile.readAll();
+    previewFile.close();
+    const QByteArray previewHash = QCryptographicHash::hash(previewData, QCryptographicHash::Sha256);
+
+    RepairPreviewDialog previewDialog(m_widget);
+    previewDialog.setReport(diffReport, previewDirectory.path());
+    if (previewDialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    QFile candidateFile(previewPath);
+    if (!candidateFile.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The reviewed repair candidate is no longer available."));
+        return;
+    }
+    const QByteArray candidateData = candidateFile.readAll();
+    candidateFile.close();
+    if (QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The repair candidate changed after preview. Review it again."));
+        return;
+    }
+
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        outputPath, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
         QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), writeResult.getErrorMessage());
+        return;
+    }
+
+    QFile finalFile(outputPath);
+    if (!finalFile.open(QIODevice::ReadOnly) ||
+        QCryptographicHash::hash(finalFile.readAll(), QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The final output does not match the approved repair candidate."));
+        return;
+    }
+    finalFile.close();
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    finalReader.readFromFile(outputPath);
+    if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), tr("The final serialized output could not be reopened for verification."));
         return;
     }
 
@@ -884,6 +998,153 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
                          m_documentRevision,
                          true,
                          tr("Post-fix results for: %1").arg(QDir::toNativeSeparators(outputPath)));
+}
+
+void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
+{
+    if (!m_document || !m_reportDockWidget || !m_widget)
+    {
+        return;
+    }
+
+    const PreflightFixupEntry* fixup = m_reportDockWidget->fixup(QStringLiteral("downsample-images"));
+    if (!fixup)
+    {
+        return;
+    }
+
+    QDialog dialog(m_widget);
+    dialog.setWindowTitle(tr("Downsample Images"));
+    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    QFormLayout* form = new QFormLayout();
+
+    QSpinBox* dpiSpin = new QSpinBox(&dialog);
+    dpiSpin->setRange(72, 1200);
+    dpiSpin->setSuffix(tr(" DPI"));
+    dpiSpin->setValue(qBound(72, fixup->params.value(QStringLiteral("target_dpi")).toInt(300), 1200));
+    form->addRow(tr("Target resolution"), dpiSpin);
+
+    QSpinBox* qualitySpin = new QSpinBox(&dialog);
+    qualitySpin->setRange(50, 100);
+    qualitySpin->setSuffix(tr("%"));
+    qualitySpin->setValue(qBound(50, fixup->params.value(QStringLiteral("quality")).toInt(90), 100));
+    form->addRow(tr("JPEG quality"), qualitySpin);
+
+    const int candidateCount = fixup->params.value(QStringLiteral("candidate_count")).toInt(0);
+    if (candidateCount > 0)
+    {
+        QLabel* candidateLabel = new QLabel(
+            tr("%1 image(s) are significantly above the target resolution.").arg(candidateCount), &dialog);
+        candidateLabel->setWordWrap(true);
+        layout->addWidget(candidateLabel);
+    }
+
+    QLabel* safetyLabel = new QLabel(
+        tr("Only images significantly above the target resolution will be resampled. "
+           "Color mode and transparency are preserved; larger re-encodings are discarded."),
+        &dialog);
+    safetyLabel->setWordWrap(true);
+    layout->addWidget(safetyLabel);
+
+    QLineEdit* outputPathEdit = new QLineEdit(
+        defaultDownsampleOutputPath(m_dataExchangeInterface->getOriginalFileName()), &dialog);
+    QPushButton* browseButton = new QPushButton(tr("Browse..."), &dialog);
+    QHBoxLayout* outputLayout = new QHBoxLayout();
+    outputLayout->addWidget(outputPathEdit, 1);
+    outputLayout->addWidget(browseButton);
+    form->addRow(tr("Output file"), outputLayout);
+
+    QCheckBox* rerunCheckBox = new QCheckBox(tr("Re-run preflight after fixing"), &dialog);
+    rerunCheckBox->setChecked(true);
+    layout->addLayout(form);
+    layout->addWidget(rerunCheckBox);
+
+    QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(browseButton, &QPushButton::clicked, &dialog, [&dialog, outputPathEdit]()
+    {
+        const QString selectedPath = QFileDialog::getSaveFileName(
+            &dialog, QObject::tr("Save downsampled PDF"), outputPathEdit->text(), QObject::tr("PDF files (*.pdf)"));
+        if (!selectedPath.isEmpty())
+        {
+            outputPathEdit->setText(selectedPath);
+        }
+    });
+
+    pdf::PDFWidgetUtils::style(&dialog);
+    if (dialog.exec() != QDialog::Accepted)
+    {
+        return;
+    }
+
+    const QString outputPath = outputPathEdit->text().trimmed();
+    if (outputPath.isEmpty())
+    {
+        QMessageBox::warning(m_widget, tr("Downsample Images"), tr("Choose an output file path."));
+        return;
+    }
+    if (QFile::exists(outputPath)
+        && QMessageBox::warning(m_widget, tr("Downsample Images"),
+                                tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
+                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    pdf::PDFDocument candidate = *m_document;
+    pdf::PDFImageDownsampleFixupSettings settings;
+    settings.targetDpi = dpiSpin->value();
+    settings.jpegQuality = qualitySpin->value();
+    settings.keepOriginalIfLarger = true;
+    settings.preserveTransparency = true;
+    settings.preserveColorMode = true;
+
+    pdf::PDFImageDownsampleFixupReport report;
+    const pdf::PDFOperationResult fixupResult = pdf::PDFImageDownsampleFixup::apply(&candidate, settings, &report);
+    if (!fixupResult)
+    {
+        QMessageBox::critical(m_widget, tr("Downsample Images"), fixupResult.getErrorMessage());
+        return;
+    }
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
+    if (!writeResult)
+    {
+        QMessageBox::critical(m_widget, tr("Downsample Images"), writeResult.getErrorMessage());
+        return;
+    }
+
+    const qint64 bytesSaved = report.originalBytes - report.resultingBytes;
+    const double reduction = report.originalBytes > 0
+        ? 100.0 * double(bytesSaved) / double(report.originalBytes)
+        : 0.0;
+    QMessageBox::information(
+        m_widget,
+        tr("Downsample Images"),
+        tr("%1 image(s) changed.\n%2 image(s) left unchanged.\nImage data reduced by %3%.\nSaved to %4. The open document was not modified.")
+            .arg(report.imagesChanged)
+            .arg(report.imagesSkipped)
+            .arg(reduction, 0, 'f', 1)
+            .arg(QDir::toNativeSeparators(outputPath)));
+
+    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    {
+        return;
+    }
+
+    QString pdfToolPath;
+    QString profilePath;
+    if (resolvePreflightPaths(&pdfToolPath, &profilePath))
+    {
+        startPreflightOnFile(outputPath,
+                             profilePath,
+                             m_documentRevision,
+                             true,
+                             tr("Post-fix results for: %1").arg(QDir::toNativeSeparators(outputPath)));
+    }
 }
 
 void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()

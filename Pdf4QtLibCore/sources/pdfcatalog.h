@@ -643,6 +643,7 @@ public:
     const QString& getLanguage() const { return m_language; }
     const PDFWebCaptureInfo& getWebCaptureInfo() const { return m_webCaptureInfo; }
     const std::vector<PDFOutputIntent>& getOutputIntents() const { return m_outputIntents; }
+    bool hasMalformedOutputIntents() const { return m_outputIntentsMalformed; }
     const PDFObject& getPieceInfo() const { return m_pieceInfo; }
     const PDFObject& getPerms() const { return m_perms; }
     const PDFLegalAttestation* getLegalAttestation() const { return m_legalAttestation.has_value() ? &m_legalAttestation.value() : nullptr; }
@@ -757,6 +758,7 @@ private:
     QString m_language;
     PDFWebCaptureInfo m_webCaptureInfo;
     std::vector<PDFOutputIntent> m_outputIntents;
+    bool m_outputIntentsMalformed = false;
     PDFObject m_pieceInfo;
     PDFObject m_perms;
     std::optional<PDFLegalAttestation> m_legalAttestation;

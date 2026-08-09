@@ -22,10 +22,11 @@
 
 #include "preflightengine.h"
 #include "pdfcolorinventory.h"
-#include "pdfinkcoverageprobe.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
+#include "pdfimage.h"
+#include "pdfinkcoverageprobe.h"
 
 #include <QtTest>
 #include <QFile>
@@ -43,12 +44,18 @@ class PreflightEngineTest : public QObject
 private slots:
     void parseProfile_rejectsMissingName();
     void parseProfile_rejectsEmptyChecks();
+    void parseProfile_rejectsInvalidDownsampleTargetDpi();
     void parseProfile_rejectsInkCoverageWithoutPositiveMax();
-    void parseProfile_rejectsInkCoverageInvalidParameters();
     void parseProfile_acceptsInkCoverageDefaults();
+    void parseProfile_rejectsInvalidInkCoverageParameters();
+    void parseProfile_acceptsInkCoverageAnalysisBox();
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
+    void parseProfile_acceptsPDFXTargetAndRevision();
+    void parseProfile_rejectsUnknownPDFXTarget();
+    void run_pdfxWithoutDocumentIsIncompleteAndSerialized();
+    void run_pdfxEmitsStableRuleIdsAndEvidence();
     void run_bleedCheckFailsWhenBoxMissing();
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
@@ -65,8 +72,11 @@ private slots:
     void run_whiteOverprint_emitsWarningInsideFormXObject();
     void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
     void run_inkCoverage_passesBelowLimitFixture();
-    void run_inkCoverage_exactLimitDoesNotFail();
-    void run_inkCoverage_budgetAbortMarksInspectionIncomplete();
+    void run_inkCoverage_budgetAbortIsIncomplete();
+    void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
+    void run_downsampleFixupAdvertisedForHighDpiImage();
+    void run_downsampleFixupHiddenWhenNoCandidateExists();
+    void run_downsampleFixupCarriesTargetDpi();
     void run_colorRgbFixtureFailsColorMode();
     void colorInventory_isRegisteredAndInfoOnly();
     void colorInventory_rejectsInvalidParameters();
@@ -77,6 +87,9 @@ private slots:
     void run_outputIntent_identifierNotInAllowListEmitsIdentityFinding();
     void run_outputIntent_profileCsDisagreesWithEmbeddedProfile();
     void run_outputIntent_conflictingIntentsEmitConflictFinding();
+    void run_outputIntent_strictMultipleIntentsEmitAmbiguityFinding();
+    void run_outputIntent_optionalEmbeddedProfileCanBeAbsent();
+    void run_outputIntent_malformedArrayEntryEmitsFinding();
     void run_outputIntent_severityWarningRoutesToWarnings();
 };
 
@@ -205,6 +218,51 @@ QJsonObject tieredBleedProfile(bool rasterConfirm)
     return profile;
 }
 
+pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 144, 144));
+
+    QImage image(sourcePixels, sourcePixels, QImage::Format_ARGB32);
+    for (int y = 0; y < sourcePixels; ++y)
+    {
+        for (int x = 0; x < sourcePixels; ++x)
+        {
+            image.setPixel(x, y, qRgb((x * 17 + y * 13) % 256,
+                                      (x * 7 + y * 29) % 256,
+                                      (x * 31 + y * 3) % 256));
+        }
+    }
+
+    pdf::PDFImage::ImageEncodeOptions imageOptions;
+    imageOptions.compression = pdf::PDFImage::ImageCompression::Flate;
+    imageOptions.colorMode = pdf::PDFImage::ImageColorMode::Preserve;
+    const pdf::PDFObjectReference imageReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+            pdf::PDFImage::createStreamFromImage(image, imageOptions))));
+
+    const QByteArray content("q 144 0 0 144 0 0 cm /Im1 Do Q");
+    pdf::PDFDictionary contentDictionary;
+    contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                                pdf::PDFObject::createInteger(content.size()));
+    const pdf::PDFObjectReference contentReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
+            pdf::PDFStream(std::move(contentDictionary), content))));
+
+    pdf::PDFDictionary xObject;
+    xObject.addEntry(pdf::PDFInplaceOrMemoryString("Im1"), pdf::PDFObject::createReference(imageReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObject))));
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(pageReference,
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+    return builder.build();
+}
+
 } // namespace
 
 void PreflightEngineTest::parseProfile_rejectsMissingName()
@@ -231,6 +289,31 @@ void PreflightEngineTest::parseProfile_rejectsEmptyChecks()
     QVERIFY(!errorMessage.isEmpty());
 }
 
+void PreflightEngineTest::parseProfile_rejectsInvalidDownsampleTargetDpi()
+{
+    pdf::PreflightEngine engine(nullptr);
+    for (const QJsonValue& targetDpi : { QJsonValue(0), QJsonValue(71), QJsonValue(1201), QJsonValue(300.5), QJsonValue(QStringLiteral("300")) })
+    {
+        pdf::PreflightProfileData profile;
+        QString errorMessage;
+        const QJsonObject profileObject{
+            { QStringLiteral("name"), QStringLiteral("Downsample") },
+            { QStringLiteral("checks"), QJsonArray{
+                QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
+            } },
+            { QStringLiteral("fixups"), QJsonArray{
+                QJsonObject{
+                    { QStringLiteral("id"), QStringLiteral("downsample-images") },
+                    { QStringLiteral("target_dpi"), targetDpi }
+                }
+            } }
+        };
+
+        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+        QVERIFY(errorMessage.contains(QStringLiteral("target_dpi")));
+    }
+}
+
 void PreflightEngineTest::parseProfile_rejectsInkCoverageWithoutPositiveMax()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -253,43 +336,6 @@ void PreflightEngineTest::parseProfile_rejectsInkCoverageWithoutPositiveMax()
     }
 }
 
-void PreflightEngineTest::parseProfile_rejectsInkCoverageInvalidParameters()
-{
-    pdf::PreflightEngine engine(nullptr);
-
-    const auto parseCheck = [&](const QJsonObject& checkObject)
-    {
-        QJsonObject profileObject{
-            { QStringLiteral("name"), QStringLiteral("Ink coverage") },
-            { QStringLiteral("checks"), QJsonArray{ checkObject } }
-        };
-        pdf::PreflightProfileData profile;
-        QString errorMessage;
-        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
-        QVERIFY(!errorMessage.isEmpty());
-    };
-
-    parseCheck(QJsonObject{
-        { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-        { QStringLiteral("max_ink_pct"), QStringLiteral("300") }
-    });
-    parseCheck(QJsonObject{
-        { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-        { QStringLiteral("max_ink_pct"), 300 },
-        { QStringLiteral("min_region_area_pct"), -0.1 }
-    });
-    parseCheck(QJsonObject{
-        { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-        { QStringLiteral("max_ink_pct"), 300 },
-        { QStringLiteral("max_regions_per_page"), -1 }
-    });
-    parseCheck(QJsonObject{
-        { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-        { QStringLiteral("max_ink_pct"), 300 },
-        { QStringLiteral("analysis_box"), QStringLiteral("slug") }
-    });
-}
-
 void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -310,8 +356,64 @@ void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
     QCOMPARE(profile.checks.first().probeDpi, 150);
     QCOMPARE(profile.checks.first().minRegionAreaPct, 0.05);
     QCOMPARE(profile.checks.first().maxRegionsPerPage, 20);
-    QCOMPARE(profile.checks.first().maxRasterPixels, qint64(250) * 1000 * 1000);
-    QCOMPARE(profile.checks.first().analysisBox, pdf::PDFInkCoverageAnalysisBox::Bleed);
+    QCOMPARE(profile.checks.first().inkCoverageAnalysisBox, QStringLiteral("bleed"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsInvalidInkCoverageParameters()
+{
+    const QList<QPair<QString, QJsonValue>> invalidValues{
+        { QStringLiteral("max_ink_pct"), QJsonValue(QStringLiteral("300")) },
+        { QStringLiteral("max_ink_pct"), QJsonValue(true) },
+        { QStringLiteral("probe_dpi"), QJsonValue(0) },
+        { QStringLiteral("probe_dpi"), QJsonValue(150.5) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(-1) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(101) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(QStringLiteral("0.05")) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(0) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(1.5) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(QStringLiteral("20")) },
+        { QStringLiteral("analysis_box"), QJsonValue(QStringLiteral("art")) },
+        { QStringLiteral("analysis_box"), QJsonValue(42) }
+    };
+
+    for (const auto& invalid : invalidValues)
+    {
+        pdf::PreflightEngine engine(nullptr);
+        pdf::PreflightProfileData profile;
+        QString errorMessage;
+        const QJsonObject check{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 },
+            { invalid.first, invalid.second }
+        };
+        const QJsonObject profileObject{
+            { QStringLiteral("name"), QStringLiteral("Ink coverage") },
+            { QStringLiteral("checks"), QJsonArray{ check } }
+        };
+
+        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+        QVERIFY2(!errorMessage.isEmpty(), qPrintable(invalid.first));
+    }
+}
+
+void PreflightEngineTest::parseProfile_acceptsInkCoverageAnalysisBox()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                { QStringLiteral("max_ink_pct"), 300 },
+                { QStringLiteral("analysis_box"), QStringLiteral("media") }
+            }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(profile.checks.first().inkCoverageAnalysisBox, QStringLiteral("media"));
 }
 
 void PreflightEngineTest::parseProfile_acceptsThinStrokeOverridesAndDefaults()
@@ -415,6 +517,108 @@ void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpa
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("unknown allowed color space")));
+}
+
+void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") },
+            { QStringLiteral("policyVersion"), 1 }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(profile.pdfx.has_value());
+    QCOMPARE(profile.pdfx->flavor, pdf::PDFXFlavor::X4);
+    QCOMPARE(profile.pdfx->policyVersion, QStringLiteral("1"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsUnknownPDFXTarget()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Unknown PDF/X") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-3:2002") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("Unsupported PDF/X target")));
+}
+
+void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
+{
+    pdf::PreflightEngine engine(nullptr);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(result.pdfx.has_value());
+    QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::Incomplete);
+    QVERIFY(!result.pdfx->incompleteRuleIds.isEmpty());
+    QVERIFY(result.toJson().contains(QStringLiteral("pdfx")));
+    QVERIFY(!result.toJson().value(QStringLiteral("pdfx")).toObject()
+                .value(QStringLiteral("incompleteRuleIds")).toArray().isEmpty());
+}
+
+void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
+{
+    const QByteArray profileContent = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!profileContent.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
+        { QStringLiteral("pdfx"), QJsonObject{
+            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
+        } },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pdfx.has_value());
+    QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::NonConformant);
+    QVERIFY(result.pdfx->failedRuleIds.contains(QStringLiteral("pdfx.metadata.identification")));
+    QVERIFY(std::any_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+    {
+        return finding.checkId == QStringLiteral("pdfx")
+            && finding.evidence.value(QStringLiteral("rule_id")).toString() == QStringLiteral("pdfx.metadata.identification");
+    }));
+
+    const QJsonObject report = result.toJson();
+    const QJsonObject pdfx = report.value(QStringLiteral("pdfx")).toObject();
+    QCOMPARE(pdfx.value(QStringLiteral("target")).toString(), QStringLiteral("PDF/X-4"));
+    QCOMPARE(pdfx.value(QStringLiteral("policyVersion")).toString(), QStringLiteral("1"));
+    QCOMPARE(pdfx.value(QStringLiteral("status")).toString(), QStringLiteral("non-conformant"));
 }
 
 void PreflightEngineTest::run_bleedCheckFailsWhenBoxMissing()
@@ -858,52 +1062,23 @@ void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
     QCOMPARE(result.warnings.size(), 0);
 }
 
-void PreflightEngineTest::run_inkCoverage_exactLimitDoesNotFail()
-{
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-over.pdf");
-    QVERIFY(QFile::exists(fixturePath));
-
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
-    pdf::PDFDocument document = reader.readFromFile(fixturePath);
-    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
-
-    pdf::PDFDocumentSession session(&document);
-    pdf::PDFInkCoverageProbe probe(&session);
-    pdf::PDFInkCoverageProbeSettings settings;
-    settings.maxInkCoverage = 0.0;
-    settings.minRegionAreaRatio = 0.0;
-    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
-    const pdf::PDFInkCoverageProbeResult baseline = probe.probe(page, 0, settings);
-    QVERIFY(baseline.rasterized);
-    QVERIFY(baseline.peakInkCoverage > 0.0);
-
-    settings.maxInkCoverage = baseline.peakInkCoverage;
-    const pdf::PDFInkCoverageProbeResult atLimit = probe.probe(page, 0, settings);
-    QVERIFY(atLimit.rasterized);
-    QCOMPARE(atLimit.regions.size(), size_t(0));
-
-    settings.maxInkCoverage = baseline.peakInkCoverage - 0.0001;
-    const pdf::PDFInkCoverageProbeResult aboveLimit = probe.probe(page, 0, settings);
-    QVERIFY(aboveLimit.rasterized);
-    QVERIFY(!aboveLimit.regions.empty());
-}
-
-void PreflightEngineTest::run_inkCoverage_budgetAbortMarksInspectionIncomplete()
+void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
 {
     pdf::PDFDocumentBuilder builder;
-    builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.appendPage(QRectF(0, 0, 20000, 20000));
     pdf::PDFDocument document = builder.build();
 
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
+
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Ink coverage budget") },
         { QStringLiteral("checks"), QJsonArray{
             QJsonObject{
                 { QStringLiteral("id"), QStringLiteral("ink-coverage") },
                 { QStringLiteral("max_ink_pct"), 300 },
-                { QStringLiteral("max_raster_pixels"), 1 },
-                { QStringLiteral("severity"), QStringLiteral("warning") }
+                { QStringLiteral("probe_dpi"), 72 },
+                { QStringLiteral("analysis_box"), QStringLiteral("media") }
             }
         } }
     };
@@ -913,15 +1088,109 @@ void PreflightEngineTest::run_inkCoverage_budgetAbortMarksInspectionIncomplete()
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.errors.size(), 0);
     QCOMPARE(result.warnings.size(), 1);
-    QCOMPARE(result.warnings.first().type, QStringLiteral("ink-coverage-skipped"));
-    QCOMPARE(result.warnings.first().checkId, QStringLiteral("ink-coverage"));
+    QCOMPARE(result.warnings.first().type, QStringLiteral("check-incomplete"));
     QCOMPARE(result.checkStatuses.size(), 1);
     QCOMPARE(result.checkStatuses.first().status, QStringLiteral("skipped"));
-    QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("raster pixel budget exceeded"));
+    QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("rasterization incomplete"));
+}
 
-    const QJsonObject report = result.toJson();
-    QVERIFY(!report.value(QStringLiteral("inspection_complete")).toBool());
-    QCOMPARE(report.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("status")).toString(), QStringLiteral("skipped"));
+void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 10000, 10000));
+    builder.setPageBleedBox(pageReference, QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFInkCoverageProbe probe(&session);
+    pdf::PDFInkCoverageProbeSettings settings;
+    settings.dpi = 72;
+    settings.maxRasterPixels = 1000000;
+    settings.analysisBox = pdf::PDFInkCoverageAnalysisBox::Bleed;
+
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    const pdf::PDFInkCoverageProbeResult bleedResult = probe.probe(page, 0, settings);
+    QVERIFY(bleedResult.rasterized);
+    QVERIFY(!bleedResult.budgetExceeded);
+
+    settings.analysisBox = pdf::PDFInkCoverageAnalysisBox::Media;
+    const pdf::PDFInkCoverageProbeResult mediaResult = probe.probe(page, 0, settings);
+    QVERIFY(!mediaResult.rasterized);
+    QVERIFY(mediaResult.budgetExceeded);
+}
+
+void PreflightEngineTest::run_downsampleFixupAdvertisedForHighDpiImage()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Downsample candidate") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.fixupsAvailable.size(), 1);
+    QCOMPARE(result.fixupsAvailable.first().id, QStringLiteral("downsample-images"));
+    QCOMPARE(result.fixupsAvailable.first().params.value(QStringLiteral("target_dpi")).toInt(), 300);
+    QCOMPARE(result.fixupsAvailable.first().params.value(QStringLiteral("candidate_count")).toInt(), 1);
+}
+
+void PreflightEngineTest::run_downsampleFixupHiddenWhenNoCandidateExists()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 144, 144));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("No downsample candidate") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(std::none_of(result.fixupsAvailable.cbegin(), result.fixupsAvailable.cend(), [](const pdf::PreflightFixupConfig& fixup)
+    {
+        return fixup.id == QStringLiteral("downsample-images");
+    }));
+}
+
+void PreflightEngineTest::run_downsampleFixupCarriesTargetDpi()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Downsample custom target") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 450 } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.fixupsAvailable.size(), 1);
+    const pdf::PreflightFixupConfig& fixup = result.fixupsAvailable.first();
+    QCOMPARE(fixup.params.value(QStringLiteral("target_dpi")).toInt(), 450);
+    QCOMPARE(fixup.params.value(QStringLiteral("quality")).toInt(), 90);
+    QCOMPARE(fixup.params.value(QStringLiteral("preserve_color")).toBool(), true);
+    QCOMPARE(fixup.params.value(QStringLiteral("preserve_transparency")).toBool(), true);
 }
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
@@ -1182,6 +1451,86 @@ void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding
     });
     QVERIFY(conflict != result.errors.cend());
     QVERIFY(conflict->message.contains(QStringLiteral("CMYK, RGB")));
+}
+
+void PreflightEngineTest::run_outputIntent_strictMultipleIntentsEmitAmbiguityFinding()
+{
+    const QByteArray cmykProfile = loadOutputIntentProfile(
+        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+    QVERIFY(!cmykProfile.isEmpty());
+
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("first"), QByteArrayLiteral("CMYK"), cmykProfile },
+        { QByteArrayLiteral("second"), QByteArrayLiteral("CMYK"), cmykProfile }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Strict output intent cardinality") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") },
+            { QStringLiteral("allow_multiple"), false }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const auto ambiguity = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
+        return finding.type == QStringLiteral("output-intent-ambiguous");
+    });
+    QVERIFY(ambiguity != result.errors.cend());
+    QVERIFY(ambiguity->message.contains(QStringLiteral("intent 0")));
+    QVERIFY(ambiguity->message.contains(QStringLiteral("intent 1")));
+}
+
+void PreflightEngineTest::run_outputIntent_optionalEmbeddedProfileCanBeAbsent()
+{
+    pdf::PDFDocument document = buildOutputIntentDocument({
+        { QByteArrayLiteral("metadata-only"), QByteArrayLiteral("CMYK"), QByteArray(), false }
+    });
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Optional embedded output profile") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") },
+            { QStringLiteral("require_embedded_profile"), false }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+}
+
+void PreflightEngineTest::run_outputIntent_malformedArrayEntryEmitsFinding()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFArray outputIntents;
+    outputIntents.appendItem(pdf::PDFObject::createInteger(42));
+    pdf::PDFDictionary catalog;
+    catalog.addEntry(pdf::PDFInplaceOrMemoryString("OutputIntents"),
+                     pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(outputIntents))));
+    builder.mergeTo(builder.getCatalogReference(),
+                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(catalog))));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Malformed output intents") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("output-intent") }
+        } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const auto malformed = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
+        return finding.type == QStringLiteral("output-intent-malformed");
+    });
+    QVERIFY(malformed != result.errors.cend());
 }
 
 void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()

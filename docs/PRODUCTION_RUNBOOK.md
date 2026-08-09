@@ -140,7 +140,7 @@ Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via
 
 **Level:** default `Warning`. Override with the `LOUPE_LOG_LEVEL` environment variable (`Off|Error|Warning|Info|Debug`), or persistently via Editor → Options → Security → Diagnostics → Log level (stored under the `diagnostics/logLevel` settings key, which PdfTool also reads — no Editor dependency required).
 
-**Privacy:** every line is scrubbed (home/temp directory, login name, host name, other absolute paths — basename dropped, extension kept — email addresses, IPv4 literals) before it is written; scrubbing happens in the log sink itself, not at each call site. See `SECURITY.md`.
+**Privacy:** every line is scrubbed (home/temp directory, login name, host name, other absolute paths — basename dropped, extension kept — email addresses, IPv4/IPv6 literals) before it is written; scrubbing happens in the log sink itself, not at each call site. See `SECURITY.md`.
 
 **Support:** ask users to run `PdfTool diagnostics --output <dir>` (or Editor → Help → Collect Diagnostics…) and attach the resulting bundle. See §5 below — this replaces asking for a raw terminal paste.
 
@@ -154,12 +154,12 @@ For a customer-reported failure, prefer a diagnostics bundle over asking for a r
 
 ```bash
 PdfTool diagnostics --output <dir>          # writes <dir>/loupe-diagnostics-pdftool-<UTC timestamp>/
-PdfTool diagnostics --output <dir> --no-logs --no-settings   # bundle contents only, no logs/settings.ini
+PdfTool diagnostics --output <dir> --no-logs                 # metadata-only bundle
 ```
 
 **Editor:** Help → Collect Diagnostics… — shows a consent dialog listing exactly what is collected, then a folder picker, then writes the bundle and offers to open it.
 
-**Bundle contents:** `manifest.json` (schema version, generator app/version, per-file SHA-256), `system-info.json` (app/Qt/OS/dependency versions, locale), `plugins.json` (Editor only, when plugins are loaded), `logs/*.log` (scrubbed), `settings.ini` (scrubbed, with the recent-files list, default open directory, and custom author name removed), `README.txt`.
+**Bundle contents:** `manifest.json` (versioned app/runtime/diagnostics metadata and per-file SHA-256), `system-info.json` (app/Qt/OS/dependency versions, locale), `plugins.json` (Editor only, when plugins are loaded), `logs/*.log` (scrubbed), and `README.txt`. Arbitrary settings, recent files, environment variables, command-line arguments, PDFs, and crash dumps are excluded by default. See `docs/DIAGNOSTICS.md` for the full privacy boundary.
 
 **Never included:** any PDF or document content, the recent-files list, or crash minidumps (those remain a separate, opt-in Sentry mechanism — §4.2 — with different, weaker privacy properties).
 

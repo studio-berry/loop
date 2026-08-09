@@ -90,6 +90,11 @@ class PdfToolContractTest : public QObject
 private slots:
     void helpIsWrapped();
     void equalsFormIsDetected();
+    void capabilitiesIsWrapped();
+    void capabilitiesCanFilterCommand();
+    void capabilitiesRejectUnknownCommand();
+    void capabilitiesAreDeterministicallySorted();
+    void capabilitiesExposeSensitiveOptionMetadata();
     void unknownCommandIsInvalidInvocation();
     void malformedInvocationIsWrapped();
     void defaultPreflightMalformedInvocationIsWrapped();
@@ -108,6 +113,78 @@ void PdfToolContractTest::equalsFormIsDetected()
 {
     const ToolRun run = runPdfTool({QStringLiteral("help"), QStringLiteral("--console-format=json")});
     verifyEnvelope(run, 0, QStringLiteral("help"));
+}
+
+void PdfToolContractTest::capabilitiesIsWrapped()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("capabilities")});
+    verifyEnvelope(run, 0, QStringLiteral("capabilities"));
+
+    const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.value(QStringLiteral("discovery_schema_version")).toInt(), 1);
+    QCOMPARE(data.value(QStringLiteral("product")).toObject().value(QStringLiteral("name")).toString(), QStringLiteral("PdfTool"));
+    QVERIFY(!data.value(QStringLiteral("commands")).toArray().isEmpty());
+    QVERIFY(!data.value(QStringLiteral("build_capabilities")).toArray().isEmpty());
+    QVERIFY(!data.value(QStringLiteral("schemas")).toArray().isEmpty());
+}
+
+void PdfToolContractTest::capabilitiesCanFilterCommand()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("preflight")});
+    verifyEnvelope(run, 0, QStringLiteral("capabilities"));
+
+    const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+    const QJsonArray commands = data.value(QStringLiteral("commands")).toArray();
+    QCOMPARE(commands.size(), 1);
+    QCOMPARE(commands.front().toObject().value(QStringLiteral("id")).toString(), QStringLiteral("preflight"));
+    QVERIFY(commands.front().toObject().value(QStringLiteral("options")).isArray());
+    QVERIFY(commands.front().toObject().value(QStringLiteral("positionals")).isArray());
+}
+
+void PdfToolContractTest::capabilitiesRejectUnknownCommand()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("does-not-exist")});
+    verifyEnvelope(run, 2, QStringLiteral("capabilities"));
+    QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
+    const QJsonArray diagnostics = run.json.value(QStringLiteral("diagnostics")).toArray();
+    QVERIFY(!diagnostics.isEmpty());
+    QCOMPARE(diagnostics.front().toObject().value(QStringLiteral("code")).toString(), QStringLiteral("cli.unknown-discovery-command"));
+}
+
+void PdfToolContractTest::capabilitiesAreDeterministicallySorted()
+{
+    const ToolRun first = runPdfTool({QStringLiteral("capabilities")});
+    const ToolRun second = runPdfTool({QStringLiteral("capabilities")});
+    verifyEnvelope(first, 0, QStringLiteral("capabilities"));
+    verifyEnvelope(second, 0, QStringLiteral("capabilities"));
+
+    const QJsonArray firstCommands = first.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray();
+    const QJsonArray secondCommands = second.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray();
+    QVERIFY(firstCommands == secondCommands);
+    for (int i = 1; i < firstCommands.size(); ++i)
+    {
+        QVERIFY(firstCommands.at(i - 1).toObject().value(QStringLiteral("id")).toString()
+                < firstCommands.at(i).toObject().value(QStringLiteral("id")).toString());
+    }
+}
+
+void PdfToolContractTest::capabilitiesExposeSensitiveOptionMetadata()
+{
+    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("info")});
+    verifyEnvelope(run, 0, QStringLiteral("capabilities"));
+
+    const QJsonArray options = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray().front().toObject().value(QStringLiteral("options")).toArray();
+    bool foundPassword = false;
+    for (const QJsonValue& value : options)
+    {
+        const QJsonObject option = value.toObject();
+        if (option.value(QStringLiteral("id")).toString() == QStringLiteral("pswd"))
+        {
+            foundPassword = true;
+            QVERIFY(option.value(QStringLiteral("sensitive")).toBool());
+        }
+    }
+    QVERIFY(foundPassword);
 }
 
 void PdfToolContractTest::unknownCommandIsInvalidInvocation()

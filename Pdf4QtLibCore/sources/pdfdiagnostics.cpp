@@ -25,7 +25,6 @@
 #include "pdflogger.h"
 #include "pdflogscrubber.h"
 #include "pdfsentry.h"
-#include "pdfsettings.h"
 #include "pdfutils.h"
 
 #include <QCryptographicHash>
@@ -38,9 +37,8 @@
 #include <QJsonObject>
 #include <QLocale>
 #include <QSaveFile>
-#include <QSettings>
 #include <QSysInfo>
-#include <QTemporaryFile>
+#include <QTemporaryDir>
 
 #include <vector>
 
@@ -84,9 +82,23 @@ QString sanitizeForDirectoryName(const QString& text)
     return result.isEmpty() ? QStringLiteral("app") : result;
 }
 
-QJsonObject buildSystemInfo()
+QString logLevelName(PDFLogSession::Level level)
+{
+    switch (level)
+    {
+        case PDFLogSession::Off: return QStringLiteral("off");
+        case PDFLogSession::Error: return QStringLiteral("error");
+        case PDFLogSession::Warning: return QStringLiteral("warning");
+        case PDFLogSession::Info: return QStringLiteral("info");
+        case PDFLogSession::Debug: return QStringLiteral("debug");
+    }
+    return QStringLiteral("unknown");
+}
+
+QJsonObject buildSystemInfo(const QString& applicationId)
 {
     QJsonObject root;
+    root[QStringLiteral("applicationId")] = applicationId;
     root[QStringLiteral("applicationName")] = QCoreApplication::applicationName();
     root[QStringLiteral("applicationVersion")] = QCoreApplication::applicationVersion();
     root[QStringLiteral("qtVersionCompileTime")] = QStringLiteral(QT_VERSION_STR);
@@ -98,9 +110,13 @@ QJsonObject buildSystemInfo()
     root[QStringLiteral("cpuArchitecture")] = QSysInfo::currentCpuArchitecture();
     root[QStringLiteral("buildAbi")] = QSysInfo::buildAbi();
     root[QStringLiteral("locale")] = QLocale::system().name();
-    root[QStringLiteral("logDirectory")] = PDFLogScrubber::scrub(PDFLogSession::logDirectory());
-    root[QStringLiteral("settingsPath")] = PDFLogScrubber::scrub(PDFSettings::getSettingsPath());
-    root[QStringLiteral("sentryActive")] = PDFSentrySession::isGloballyActive();
+
+    QJsonObject diagnostics;
+    diagnostics[QStringLiteral("logLevel")] = logLevelName(PDFLogSession::level());
+    diagnostics[QStringLiteral("logHealthy")] = PDFLogSession::isHealthy();
+    diagnostics[QStringLiteral("sentryActive")] = PDFSentrySession::isGloballyActive();
+    diagnostics[QStringLiteral("privacyScrubber")] = QStringLiteral("v1");
+    root[QStringLiteral("diagnostics")] = diagnostics;
 
     QJsonArray dependencies;
     for (const PDFDependentLibraryInfo& info : PDFDependentLibraryInfo::getLibraryInfo())
@@ -127,58 +143,12 @@ QJsonObject buildPlugins(const PDFPluginInfos& plugins)
         entry[QStringLiteral("author")] = plugin.author;
         entry[QStringLiteral("version")] = plugin.version;
         entry[QStringLiteral("license")] = plugin.license;
-        entry[QStringLiteral("file")] = plugin.pluginFile;
         array.append(entry);
     }
 
     QJsonObject root;
     root[QStringLiteral("plugins")] = array;
     return root;
-}
-
-/// Copies the user's QSettings INI into a fresh, in-memory INI with the
-/// path/name-bearing keys removed. The recent-files list and default
-/// directory reveal which documents the user has opened and where they keep
-/// them; the custom author name is, deliberately, a real name.
-QByteArray buildFilteredSettingsIni()
-{
-    static const QSet<QString> denylistKeys = {
-        QStringLiteral("RecentFiles/RecentFileList"),
-        QStringLiteral("ViewerSettings/defaultDirectory"),
-        QStringLiteral("ViewerSettings/customAuthorName"),
-    };
-
-    const QSettings source(QSettings::IniFormat, QSettings::UserScope, QCoreApplication::organizationName(), QCoreApplication::applicationName());
-
-    QTemporaryFile temporaryIni;
-    if (!temporaryIni.open())
-    {
-        return QByteArray();
-    }
-    const QString temporaryPath = temporaryIni.fileName();
-    temporaryIni.close();
-
-    {
-        QSettings filtered(temporaryPath, QSettings::IniFormat);
-        for (const QString& key : source.allKeys())
-        {
-            if (!denylistKeys.contains(key))
-            {
-                filtered.setValue(key, source.value(key));
-            }
-        }
-        filtered.sync();
-    }
-
-    QFile filteredFile(temporaryPath);
-    QByteArray content;
-    if (filteredFile.open(QIODevice::ReadOnly))
-    {
-        content = filteredFile.readAll();
-    }
-    QFile::remove(temporaryPath);
-
-    return content;
 }
 
 QByteArray buildReadme()
@@ -192,17 +162,16 @@ QByteArray buildReadme()
     text += QStringLiteral("  - system-info.json   app/Qt/OS versions, dependency versions, locale\n");
     text += QStringLiteral("  - plugins.json       loaded editor plugins (when applicable)\n");
     text += QStringLiteral("  - logs/*.log         rotated application log files\n");
-    text += QStringLiteral("  - settings.ini       application settings, with the recent-files list,\n");
-    text += QStringLiteral("                       default open directory, and custom author name removed\n\n");
     text += QStringLiteral("Not included:\n");
     text += QStringLiteral("  - Any PDF or document content\n");
+    text += QStringLiteral("  - Application settings, environment variables, and command-line arguments\n");
     text += QStringLiteral("  - The recent-files list\n");
     text += QStringLiteral("  - Crash minidumps: these are a separate, opt-in mechanism (SENTRY_DSN) with\n");
     text += QStringLiteral("    different privacy properties - a minidump can contain PDF content and file\n");
     text += QStringLiteral("    paths, and nothing in the Sentry SDK can scrub that. See SECURITY.md and\n");
     text += QStringLiteral("    R-008 in docs/V1_RELEASE_READINESS.md.\n\n");
-    text += QStringLiteral("Log lines and settings.ini paths are scrubbed of the home/temp directory,\n");
-    text += QStringLiteral("login name, host name, other absolute paths, email addresses, and IPv4\n");
+    text += QStringLiteral("Log lines are scrubbed of the home/temp directory,\n");
+    text += QStringLiteral("login name, host name, other absolute paths, email addresses, and IPv4/IPv6\n");
     text += QStringLiteral("literals before they are written. Absolute paths keep only their file\n");
     text += QStringLiteral("extension - the file name itself is dropped.\n");
 
@@ -215,28 +184,55 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
 {
     PDFDiagnosticsResult result;
 
-    if (options.outputDirectory.isEmpty())
+    if (options.outputDirectory.isEmpty() && options.destinationPath.isEmpty())
     {
         result.errorMessage = tr("Output directory is not set.");
         return result;
     }
 
-    const QString applicationSlug = sanitizeForDirectoryName(QCoreApplication::applicationName());
+    const QString applicationId = options.applicationId.isEmpty()
+        ? QCoreApplication::applicationName()
+        : options.applicationId;
+    const QString applicationSlug = sanitizeForDirectoryName(applicationId);
     const QString timestamp = QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss"));
-    const QString bundleDirectory = QDir(options.outputDirectory).filePath(QStringLiteral("loupe-diagnostics-%1-%2").arg(applicationSlug, timestamp));
-
-    if (!QDir().mkpath(bundleDirectory))
+    const QString bundleDirectory = options.destinationPath.isEmpty()
+        ? QDir(options.outputDirectory).filePath(QStringLiteral("loupe-diagnostics-%1-%2").arg(applicationSlug, timestamp))
+        : QFileInfo(options.destinationPath).absoluteFilePath();
+    QDir outputDirectory(QFileInfo(bundleDirectory).absolutePath());
+    if (!outputDirectory.exists() && !QDir().mkpath(outputDirectory.absolutePath()))
     {
-        result.errorMessage = tr("Could not create diagnostics directory '%1'.").arg(bundleDirectory);
+        result.errorMessage = tr("Could not create the diagnostics output directory.");
         return result;
     }
+
+    if (QFileInfo::exists(bundleDirectory))
+    {
+        result.errorMessage = tr("The diagnostics bundle destination already exists.");
+        return result;
+    }
+
+    QTemporaryDir stagingDirectory(outputDirectory.filePath(QStringLiteral(".loupe-support-XXXXXX.partial")));
+    stagingDirectory.setAutoRemove(false);
+    if (!stagingDirectory.isValid())
+    {
+        result.errorMessage = tr("Could not create diagnostics staging directory.");
+        return result;
+    }
+    const QString stagingPath = stagingDirectory.path();
+    const auto removeStaging = [&]()
+    {
+        QDir(stagingPath).removeRecursively();
+    };
 
     std::vector<WrittenFileInfo> writtenFiles;
 
     auto writeFile = [&](const QString& relativeName, const QByteArray& content) -> bool
     {
-        const QString fullPath = QDir(bundleDirectory).filePath(relativeName);
-        QDir().mkpath(QFileInfo(fullPath).absolutePath());
+        const QString fullPath = QDir(stagingPath).filePath(relativeName);
+        if (!QDir().mkpath(QFileInfo(fullPath).absolutePath()))
+        {
+            return false;
+        }
 
         QSaveFile file(fullPath);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
@@ -261,7 +257,7 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
         return true;
     };
 
-    bool ok = writeFile(QStringLiteral("system-info.json"), QJsonDocument(buildSystemInfo()).toJson(QJsonDocument::Indented));
+    bool ok = writeFile(QStringLiteral("system-info.json"), QJsonDocument(buildSystemInfo(applicationId)).toJson(QJsonDocument::Indented));
 
     if (ok && !options.plugins.empty())
     {
@@ -275,21 +271,23 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
             QFile logFile(logFilePath);
             if (!logFile.open(QIODevice::ReadOnly))
             {
-                continue;
+                ok = false;
+                break;
             }
 
             const QString scrubbedContent = PDFLogScrubber::scrub(QString::fromUtf8(logFile.readAll()));
-            ok = writeFile(QStringLiteral("logs/%1").arg(QFileInfo(logFilePath).fileName()), scrubbedContent.toUtf8());
+            const QString fileName = QFileInfo(logFilePath).fileName();
+            if (fileName.isEmpty() || fileName.contains(QLatin1Char('/')) || fileName.contains(QLatin1Char('\\')))
+            {
+                ok = false;
+                break;
+            }
+            ok = writeFile(QStringLiteral("logs/%1").arg(fileName), scrubbedContent.toUtf8());
             if (!ok)
             {
                 break;
             }
         }
-    }
-
-    if (ok && options.includeSettings)
-    {
-        ok = writeFile(QStringLiteral("settings.ini"), buildFilteredSettingsIni());
     }
 
     if (ok)
@@ -309,11 +307,26 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
             filesArray.append(entry);
         }
 
+        QJsonObject application;
+        application[QStringLiteral("id")] = applicationId;
+        application[QStringLiteral("version")] = QCoreApplication::applicationVersion();
+
         QJsonObject manifest;
-        manifest[QStringLiteral("schemaVersion")] = 1;
-        manifest[QStringLiteral("generatorApplication")] = QCoreApplication::applicationName();
-        manifest[QStringLiteral("generatorVersion")] = QCoreApplication::applicationVersion();
-        manifest[QStringLiteral("generatedAtUtc")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        manifest[QStringLiteral("schema_version")] = 1;
+        manifest[QStringLiteral("created_utc")] = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        manifest[QStringLiteral("application")] = application;
+        manifest[QStringLiteral("runtime")] = QJsonObject{
+            { QStringLiteral("os_product"), QSysInfo::productType() },
+            { QStringLiteral("os_version"), QSysInfo::productVersion() },
+            { QStringLiteral("cpu_arch"), QSysInfo::currentCpuArchitecture() },
+            { QStringLiteral("qt_runtime"), QString::fromLatin1(qVersion()) }
+        };
+        manifest[QStringLiteral("diagnostics")] = QJsonObject{
+            { QStringLiteral("log_level"), logLevelName(PDFLogSession::level()) },
+            { QStringLiteral("log_healthy"), PDFLogSession::isHealthy() },
+            { QStringLiteral("sentry_active"), PDFSentrySession::isGloballyActive() },
+            { QStringLiteral("privacy_scrubber"), QStringLiteral("v1") }
+        };
         manifest[QStringLiteral("files")] = filesArray;
 
         ok = writeFile(QStringLiteral("manifest.json"), QJsonDocument(manifest).toJson(QJsonDocument::Indented));
@@ -321,9 +334,17 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
 
     if (!ok)
     {
-        QDir(bundleDirectory).removeRecursively();
+        removeStaging();
         result.success = false;
-        result.errorMessage = tr("Failed to write the diagnostics bundle to '%1'.").arg(bundleDirectory);
+        result.errorMessage = tr("Failed to write the diagnostics bundle.");
+        return result;
+    }
+
+    if (!QDir().rename(stagingPath, bundleDirectory))
+    {
+        removeStaging();
+        result.success = false;
+        result.errorMessage = tr("Failed to publish the diagnostics bundle atomically.");
         return result;
     }
 

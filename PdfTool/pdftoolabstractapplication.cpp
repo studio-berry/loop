@@ -29,7 +29,10 @@
 #include <QCommandLineParser>
 #include <QFile>
 #include <QDir>
+#include <algorithm>
 #include <utility>
+
+#include <algorithm>
 
 namespace pdftool
 {
@@ -166,26 +169,467 @@ PDFToolAbstractApplication::PDFToolAbstractApplication(bool isDefault)
     PDFToolApplicationStorage::registerApplication(this, isDefault);
 }
 
-void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser* parser) const
+namespace
 {
-    Options optionFlags = getOptionsFlags();
+
+PDFToolOptionDescriptor makeOption(const QString& id,
+                                   const QStringList& names,
+                                   const QString& valueName = QString(),
+                                   PDFToolValueType valueType = PDFToolValueType::String,
+                                   const QStringList& allowedValues = {},
+                                   const QString& defaultValue = QString(),
+                                   bool required = false,
+                                   bool repeatable = false,
+                                   bool sensitive = false)
+{
+    return { id, names, valueName, valueType, allowedValues, defaultValue, required, repeatable, sensitive };
+}
+
+void appendOption(QList<PDFToolOptionDescriptor>& options, PDFToolOptionDescriptor option)
+{
+    for (const PDFToolOptionDescriptor& existing : options)
+    {
+        if (existing.id == option.id)
+        {
+            return;
+        }
+    }
+    options.append(std::move(option));
+}
+
+void appendPositional(QList<PDFToolPositionalDescriptor>& positionals, PDFToolPositionalDescriptor positional)
+{
+    for (const PDFToolPositionalDescriptor& existing : positionals)
+    {
+        if (existing.id == positional.id)
+        {
+            return;
+        }
+    }
+    positionals.append(std::move(positional));
+}
+
+void addDescribedOption(QCommandLineParser* parser,
+                        const QList<PDFToolOptionDescriptor>& descriptors,
+                        const QString& id,
+                        const QString& description)
+{
+    const auto found = std::find_if(descriptors.cbegin(), descriptors.cend(), [&](const auto& descriptor) {
+        return descriptor.id == id;
+    });
+    if (found == descriptors.cend())
+    {
+        return;
+    }
+
+    QStringList names;
+    for (const QString& name : found->names)
+    {
+        names.append(name.startsWith(QStringLiteral("--")) ? name.mid(2) : name.mid(1));
+    }
+    parser->addOption(QCommandLineOption(names, description, found->valueName, found->defaultValue));
+}
+
+} // namespace
+
+PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
+{
+    const QString command = getStandardString(Command);
+    PDFToolCommandDescriptor descriptor;
+    descriptor.id = command;
+    descriptor.name = getStandardString(Name);
+    descriptor.description = getStandardString(Description);
+    descriptor.options = describeOptions(getOptionsFlags());
+    descriptor.positionals = describePositionals(getOptionsFlags());
+    descriptor.capabilities = describeCapabilities(getOptionsFlags());
+
+    if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
+    {
+        descriptor.outputFormats = { QStringLiteral("json") };
+    }
+    else if (getOptionsFlags().testFlag(ConsoleFormat))
+    {
+        descriptor.outputFormats = { QStringLiteral("html"), QStringLiteral("json"), QStringLiteral("text"), QStringLiteral("xml") };
+    }
+    descriptor.outputFormats.sort();
+    return descriptor;
+}
+
+QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Options optionFlags)
+{
+    QList<PDFToolOptionDescriptor> options;
+    auto add = [&](const QString& id,
+                   const QStringList& names,
+                   const QString& valueName = QString(),
+                   PDFToolValueType valueType = PDFToolValueType::String,
+                   const QStringList& allowedValues = {},
+                   const QString& defaultValue = QString(),
+                   bool required = false,
+                   bool repeatable = false,
+                   bool sensitive = false) {
+        appendOption(options, makeOption(id, names, valueName, valueType, allowedValues, defaultValue, required, repeatable, sensitive));
+    };
 
     if (optionFlags.testFlag(ConsoleFormat))
     {
-        parser->addOption(QCommandLineOption("console-format", "Console output text format (valid values: text|xml|html|json).", "format", "text"));
-        parser->addOption(QCommandLineOption("text-codec", QString("Text codec used when writing text output to redirected standard output. UTF-8 is default."), "text codec", "UTF-8"));
+        add(QStringLiteral("console-format"), { QStringLiteral("--console-format") }, QStringLiteral("format"), PDFToolValueType::Enum,
+            { QStringLiteral("html"), QStringLiteral("json"), QStringLiteral("text"), QStringLiteral("xml") }, QStringLiteral("text"));
+        add(QStringLiteral("text-codec"), { QStringLiteral("--text-codec") }, QStringLiteral("text-codec"), PDFToolValueType::String, {}, QStringLiteral("UTF-8"));
+    }
+    if (optionFlags.testFlag(DateFormat))
+    {
+        add(QStringLiteral("date-format"), { QStringLiteral("--date-format") }, QStringLiteral("date-format"), PDFToolValueType::Enum,
+            { QStringLiteral("iso"), QStringLiteral("long"), QStringLiteral("rfc2822"), QStringLiteral("short") }, QStringLiteral("short"));
+    }
+    if (optionFlags.testFlag(OpenDocument))
+    {
+        add(QStringLiteral("pswd"), { QStringLiteral("--pswd") }, QStringLiteral("password"), PDFToolValueType::String, {}, {}, false, false, true);
+        add(QStringLiteral("no-permissive-reading"), { QStringLiteral("--no-permissive-reading") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(Redact))
+    {
+        add(QStringLiteral("redact-copy-title"), { QStringLiteral("--redact-copy-title") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("redact-copy-metadata"), { QStringLiteral("--redact-copy-metadata") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("redact-copy-outline"), { QStringLiteral("--redact-copy-outline") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(AddBleed))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("mode"), { QStringLiteral("--mode") }, QStringLiteral("mode"), PDFToolValueType::Enum,
+            { QStringLiteral("mirror"), QStringLiteral("pixel-repeat"), QStringLiteral("stretch") }, QStringLiteral("mirror"));
+        add(QStringLiteral("bleed-mm"), { QStringLiteral("--bleed-mm") }, QStringLiteral("mm"), PDFToolValueType::Number, {}, QStringLiteral("3"));
+        add(QStringLiteral("bleed-mm-ltrb"), { QStringLiteral("--bleed-mm-ltrb") }, QStringLiteral("ltrb"), PDFToolValueType::Csv);
+        add(QStringLiteral("reference-box"), { QStringLiteral("--reference-box") }, QStringLiteral("box"), PDFToolValueType::Enum,
+            { QStringLiteral("crop"), QStringLiteral("media"), QStringLiteral("trim") }, QStringLiteral("trim"));
+        add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("sample-pixels"), { QStringLiteral("--sample-pixels") }, QStringLiteral("n"), PDFToolValueType::Integer, {}, QStringLiteral("1"));
+        add(QStringLiteral("force"), { QStringLiteral("--force") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(RgbToCmyk))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("target-profile"), { QStringLiteral("--target-profile") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("source-rgb-profile"), { QStringLiteral("--source-rgb-profile") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("intent"), { QStringLiteral("--intent") }, QStringLiteral("intent"), PDFToolValueType::Enum,
+            { QStringLiteral("absolute"), QStringLiteral("perceptual"), QStringLiteral("relative"), QStringLiteral("saturation") }, QStringLiteral("relative"));
+        add(QStringLiteral("black-point-compensation"), { QStringLiteral("--black-point-compensation") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("no-black-point-compensation"), { QStringLiteral("--no-black-point-compensation") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("output-intent"), { QStringLiteral("--output-intent") }, QStringLiteral("policy"), PDFToolValueType::Enum,
+            { QStringLiteral("preserve-matching"), QStringLiteral("replace") }, QStringLiteral("replace"));
+    }
+    if (optionFlags.testFlag(DestructiveWrite))
+    {
+        add(QStringLiteral("dry-run"), { QStringLiteral("--dry-run") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("report"), { QStringLiteral("--report") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("overwrite"), { QStringLiteral("--overwrite") }, {}, PDFToolValueType::Boolean);
+        if (!optionFlags.testFlag(AddBleed))
+        {
+            add(QStringLiteral("force"), { QStringLiteral("--force") }, {}, PDFToolValueType::Boolean);
+        }
+    }
+    if (optionFlags.testFlag(PreflightProfile))
+    {
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path, {}, {}, true);
+    }
+    if (optionFlags.testFlag(CapabilityDiscovery))
+    {
+        add(QStringLiteral("command"), { QStringLiteral("--command") }, QStringLiteral("id"), PDFToolValueType::String);
+    }
+    if (optionFlags.testFlag(OcrOptions))
+    {
+        add(QStringLiteral("sidecar"), { QStringLiteral("--sidecar") }, QStringLiteral("path"), PDFToolValueType::Path);
+        add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("languages"), { QStringLiteral("--languages") }, QStringLiteral("codes"), PDFToolValueType::Csv, {}, QStringLiteral("en"));
+        add(QStringLiteral("min-text-chars"), { QStringLiteral("--min-text-chars") }, QStringLiteral("n"), PDFToolValueType::Integer, {}, QStringLiteral("20"));
+    }
+    if (optionFlags.testFlag(VerifyRedaction))
+    {
+        add(QStringLiteral("verify-redact-copy-title"), { QStringLiteral("--verify-redact-copy-title") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("verify-redact-copy-metadata"), { QStringLiteral("--verify-redact-copy-metadata") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("verify-redact-copy-outline"), { QStringLiteral("--verify-redact-copy-outline") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("verify-redact-allow-incremental"), { QStringLiteral("--verify-redact-allow-incremental") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(Diagnostics))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("dir"), PDFToolValueType::Path);
+        add(QStringLiteral("no-logs"), { QStringLiteral("--no-logs") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("no-settings"), { QStringLiteral("--no-settings") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(SignatureVerification))
+    {
+        add(QStringLiteral("ver-no-user-cert"), { QStringLiteral("--ver-no-user-cert") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("ver-no-sys-cert"), { QStringLiteral("--ver-no-sys-cert") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("ver-no-cert-check"), { QStringLiteral("--ver-no-cert-check") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("ver-details"), { QStringLiteral("--ver-details") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("ver-ignore-exp-date"), { QStringLiteral("--ver-ignore-exp-date") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(XmlExport))
+    {
+        add(QStringLiteral("xml-export-streams"), { QStringLiteral("--xml-export-streams") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("xml-export-streams-as-text"), { QStringLiteral("--xml-export-streams-as-text") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("xml-use-indent"), { QStringLiteral("--xml-use-indent") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("xml-always-binary"), { QStringLiteral("--xml-always-binary") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(Attachments))
+    {
+        add(QStringLiteral("att-save-n"), { QStringLiteral("--att-save-n") }, QStringLiteral("number"), PDFToolValueType::Integer);
+        add(QStringLiteral("att-save-file"), { QStringLiteral("--att-save-file") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("att-save-all"), { QStringLiteral("--att-save-all") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("att-target-dir"), { QStringLiteral("--att-target-dir") }, QStringLiteral("directory"), PDFToolValueType::Path);
+        add(QStringLiteral("att-target-file"), { QStringLiteral("--att-target-file") }, QStringLiteral("target"), PDFToolValueType::Path);
+    }
+    if (optionFlags.testFlag(ComputeHashes))
+    {
+        add(QStringLiteral("compute-hashes"), { QStringLiteral("--compute-hashes") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(PageSelector))
+    {
+        add(QStringLiteral("page-first"), { QStringLiteral("--page-first") }, QStringLiteral("number"), PDFToolValueType::Integer);
+        add(QStringLiteral("page-last"), { QStringLiteral("--page-last") }, QStringLiteral("number"), PDFToolValueType::Integer);
+        add(QStringLiteral("page-select"), { QStringLiteral("--page-select") }, QStringLiteral("number"), PDFToolValueType::Csv);
+    }
+    if (optionFlags.testFlag(TextAnalysis))
+    {
+        add(QStringLiteral("text-analysis-alg"), { QStringLiteral("--text-analysis-alg") }, QStringLiteral("algorithm"), PDFToolValueType::Enum,
+            { QStringLiteral("auto"), QStringLiteral("content"), QStringLiteral("layout"), QStringLiteral("structure") }, QStringLiteral("auto"));
+    }
+    if (optionFlags.testFlag(TextShow))
+    {
+        for (const QString& id : { QStringLiteral("text-show-page-numbers"), QStringLiteral("text-show-struct-title"), QStringLiteral("text-show-struct-lang"),
+                                   QStringLiteral("text-show-struct-alt-desc"), QStringLiteral("text-show-struct-expanded-form"), QStringLiteral("text-show-struct-act-text"),
+                                   QStringLiteral("text-show-phoneme") })
+        {
+            add(id, { QStringLiteral("--") + id }, {}, PDFToolValueType::Boolean);
+        }
+    }
+    if (optionFlags.testFlag(VoiceSelector))
+    {
+        for (const QString& id : { QStringLiteral("voice-name"), QStringLiteral("voice-gender"), QStringLiteral("voice-age"), QStringLiteral("voice-lang-code") })
+        {
+            add(id, { QStringLiteral("--") + id }, QStringLiteral("value"));
+        }
+    }
+    if (optionFlags.testFlag(TextSpeech))
+    {
+        add(QStringLiteral("audio-format"), { QStringLiteral("--audio-format") }, QStringLiteral("audio-format"), PDFToolValueType::Enum,
+            { QStringLiteral("mp3"), QStringLiteral("wav") }, QStringLiteral("mp3"));
+        for (const QString& id : { QStringLiteral("mark-page-numbers"), QStringLiteral("say-page-numbers"), QStringLiteral("say-struct-titles"),
+                                   QStringLiteral("say-struct-alt-desc"), QStringLiteral("say-struct-exp-form"), QStringLiteral("say-struct-act-text") })
+        {
+            add(id, { QStringLiteral("--") + id }, {}, PDFToolValueType::Boolean);
+        }
+    }
+    if (optionFlags.testFlag(CharacterMaps))
+    {
+        add(QStringLiteral("character-maps"), { QStringLiteral("--character-maps") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(ImageWriterSettings))
+    {
+        add(QStringLiteral("image-format"), { QStringLiteral("--image-format") }, QStringLiteral("format"), PDFToolValueType::String, {}, QStringLiteral("png"));
+        add(QStringLiteral("image-subtype"), { QStringLiteral("--image-subtype") }, QStringLiteral("subtype"));
+        add(QStringLiteral("image-compress-lvl"), { QStringLiteral("--image-compress-lvl") }, QStringLiteral("level"), PDFToolValueType::Integer, {}, QStringLiteral("9"));
+        add(QStringLiteral("image-quality"), { QStringLiteral("--image-quality") }, QStringLiteral("quality"), PDFToolValueType::Integer, {}, QStringLiteral("100"));
+        add(QStringLiteral("image-optimized-write"), { QStringLiteral("--image-optimized-write") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("image-progressive-scan-write"), { QStringLiteral("--image-progressive-scan-write") }, {}, PDFToolValueType::Boolean);
+    }
+    if (optionFlags.testFlag(ImageExportSettingsFiles))
+    {
+        add(QStringLiteral("image-output-dir"), { QStringLiteral("--image-output-dir") }, QStringLiteral("dir"), PDFToolValueType::Path);
+        add(QStringLiteral("image-template-fn"), { QStringLiteral("--image-template-fn") }, QStringLiteral("template-file-name"), PDFToolValueType::String, {}, QStringLiteral("Image_%"));
+    }
+    if (optionFlags.testFlag(ImageExportSettingsResolution))
+    {
+        add(QStringLiteral("image-res-mode"), { QStringLiteral("--image-res-mode") }, QStringLiteral("mode"), PDFToolValueType::Enum,
+            { QStringLiteral("dpi"), QStringLiteral("pixel") }, QStringLiteral("dpi"));
+        add(QStringLiteral("image-res-dpi"), { QStringLiteral("--image-res-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer);
+        add(QStringLiteral("image-res-pixel"), { QStringLiteral("--image-res-pixel") }, QStringLiteral("pixel"), PDFToolValueType::Integer);
+    }
+    if (optionFlags.testFlag(ColorManagementSystem))
+    {
+        add(QStringLiteral("cms"), { QStringLiteral("--cms") }, QStringLiteral("cms"), PDFToolValueType::Enum,
+            { QStringLiteral("generic"), QStringLiteral("lcms") }, QStringLiteral("lcms"));
+        add(QStringLiteral("cms-accuracy"), { QStringLiteral("--cms-accuracy") }, QStringLiteral("accuracy"), PDFToolValueType::Enum,
+            { QStringLiteral("high"), QStringLiteral("low"), QStringLiteral("medium") }, QStringLiteral("medium"));
+        add(QStringLiteral("cms-color-adaptation"), { QStringLiteral("--cms-color-adaptation") }, QStringLiteral("color-adaptation-method"), PDFToolValueType::Enum,
+            { QStringLiteral("bradford"), QStringLiteral("cat02"), QStringLiteral("cat97"), QStringLiteral("none"), QStringLiteral("xyzscaling") }, QStringLiteral("bradford"));
+        add(QStringLiteral("cms-intent"), { QStringLiteral("--cms-intent") }, QStringLiteral("intent"), PDFToolValueType::Enum,
+            { QStringLiteral("abs"), QStringLiteral("auto"), QStringLiteral("perceptual"), QStringLiteral("rel"), QStringLiteral("saturation") }, QStringLiteral("auto"));
+        add(QStringLiteral("cms-black-compensated"), { QStringLiteral("--cms-black-compensated") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("cms-white-paper-trans"), { QStringLiteral("--cms-white-paper-trans") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("0"));
+        add(QStringLiteral("cms-consider-output-intents"), { QStringLiteral("--cms-consider-output-intents") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("cms-profile-output"), { QStringLiteral("--cms-profile-output") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("cms-profile-gray"), { QStringLiteral("--cms-profile-gray") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("cms-profile-rgb"), { QStringLiteral("--cms-profile-rgb") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("cms-profile-cmyk"), { QStringLiteral("--cms-profile-cmyk") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("cms-profile-dir"), { QStringLiteral("--cms-profile-dir") }, QStringLiteral("directory"), PDFToolValueType::Path);
+    }
+    if (optionFlags.testFlag(RenderFlags))
+    {
+        for (const PDFToolOptions::RenderFeatureInfo& info : PDFToolOptions::getRenderFeatures())
+        {
+            add(info.option, { QStringLiteral("--") + info.option }, QStringLiteral("bool"), PDFToolValueType::Boolean);
+        }
+        add(QStringLiteral("render-hw-accel"), { QStringLiteral("--render-hw-accel") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("render-show-page-stat"), { QStringLiteral("--render-show-page-stat") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("render-msaa-samples"), { QStringLiteral("--render-msaa-samples") }, QStringLiteral("samples"), PDFToolValueType::Integer, {}, QStringLiteral("4"));
+        add(QStringLiteral("render-rasterizers"), { QStringLiteral("--render-rasterizers") }, QStringLiteral("rasterizers"), PDFToolValueType::Integer);
+    }
+    if (optionFlags.testFlag(Optimize))
+    {
+        for (const PDFToolOptions::OptimizeFeatureInfo& info : PDFToolOptions::getOptimizeFlagInfos())
+        {
+            add(info.option, { QStringLiteral("--") + info.option }, {}, PDFToolValueType::Boolean);
+        }
+        add(QStringLiteral("opt-images"), { QStringLiteral("--opt-images") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("opt-images-mode"), { QStringLiteral("--opt-images-mode") }, QStringLiteral("mode"), PDFToolValueType::Enum,
+            { QStringLiteral("auto"), QStringLiteral("custom") }, QStringLiteral("auto"));
+        add(QStringLiteral("opt-images-color-mode"), { QStringLiteral("--opt-images-color-mode") }, QStringLiteral("mode"), PDFToolValueType::Enum,
+            { QStringLiteral("auto"), QStringLiteral("bitonal"), QStringLiteral("color"), QStringLiteral("gray"), QStringLiteral("preserve") }, QStringLiteral("auto"));
+        add(QStringLiteral("opt-images-goal"), { QStringLiteral("--opt-images-goal") }, QStringLiteral("goal"), PDFToolValueType::Enum,
+            { QStringLiteral("quality"), QStringLiteral("size") }, QStringLiteral("quality"));
+        add(QStringLiteral("opt-images-keep-original"), { QStringLiteral("--opt-images-keep-original") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("opt-images-preserve-alpha"), { QStringLiteral("--opt-images-preserve-alpha") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("opt-images-color-alg"), { QStringLiteral("--opt-images-color-alg") }, QStringLiteral("algorithm"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-color-dpi"), { QStringLiteral("--opt-images-color-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("150"));
+        add(QStringLiteral("opt-images-color-jpeg-quality"), { QStringLiteral("--opt-images-color-jpeg-quality") }, QStringLiteral("quality"), PDFToolValueType::Integer, {}, QStringLiteral("85"));
+        add(QStringLiteral("opt-images-color-jpx-rate"), { QStringLiteral("--opt-images-color-jpx-rate") }, QStringLiteral("rate"), PDFToolValueType::Number, {}, QStringLiteral("0"));
+        add(QStringLiteral("opt-images-color-resample"), { QStringLiteral("--opt-images-color-resample") }, QStringLiteral("filter"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-color-png-predictor"), { QStringLiteral("--opt-images-color-png-predictor") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("opt-images-gray-alg"), { QStringLiteral("--opt-images-gray-alg") }, QStringLiteral("algorithm"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-gray-dpi"), { QStringLiteral("--opt-images-gray-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("150"));
+        add(QStringLiteral("opt-images-gray-jpeg-quality"), { QStringLiteral("--opt-images-gray-jpeg-quality") }, QStringLiteral("quality"), PDFToolValueType::Integer, {}, QStringLiteral("85"));
+        add(QStringLiteral("opt-images-gray-jpx-rate"), { QStringLiteral("--opt-images-gray-jpx-rate") }, QStringLiteral("rate"), PDFToolValueType::Number, {}, QStringLiteral("0"));
+        add(QStringLiteral("opt-images-gray-resample"), { QStringLiteral("--opt-images-gray-resample") }, QStringLiteral("filter"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-gray-png-predictor"), { QStringLiteral("--opt-images-gray-png-predictor") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("opt-images-bitonal-alg"), { QStringLiteral("--opt-images-bitonal-alg") }, QStringLiteral("algorithm"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-bitonal-dpi"), { QStringLiteral("--opt-images-bitonal-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("opt-images-bitonal-threshold"), { QStringLiteral("--opt-images-bitonal-threshold") }, QStringLiteral("threshold"), PDFToolValueType::Integer, {}, QStringLiteral("-1"));
+        add(QStringLiteral("opt-images-bitonal-resample"), { QStringLiteral("--opt-images-bitonal-resample") }, QStringLiteral("filter"), PDFToolValueType::Enum);
+        add(QStringLiteral("opt-images-bitonal-png-predictor"), { QStringLiteral("--opt-images-bitonal-png-predictor") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+    }
+    if (optionFlags.testFlag(CertStore))
+    {
+        add(QStringLiteral("list-user-certs"), { QStringLiteral("--list-user-certs") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("1"));
+        add(QStringLiteral("list-system-certs"), { QStringLiteral("--list-system-certs") }, QStringLiteral("bool"), PDFToolValueType::Boolean, {}, QStringLiteral("0"));
+    }
+    if (optionFlags.testFlag(Encrypt))
+    {
+        add(QStringLiteral("enc-algorithm"), { QStringLiteral("--enc-algorithm") }, QStringLiteral("encryption-algorithm"), PDFToolValueType::Enum,
+            { QStringLiteral("aes-128"), QStringLiteral("aes-256"), QStringLiteral("rc4") }, QStringLiteral("aes-256"));
+        add(QStringLiteral("enc-contents"), { QStringLiteral("--enc-contents") }, QStringLiteral("encryption-contents"), PDFToolValueType::Enum,
+            { QStringLiteral("all"), QStringLiteral("all-except-metadata"), QStringLiteral("only-embedded-files") }, QStringLiteral("all"));
+        add(QStringLiteral("enc-user-password"), { QStringLiteral("--enc-user-password") }, QStringLiteral("user-password"), PDFToolValueType::String, {}, {}, false, false, true);
+        add(QStringLiteral("enc-owner-password"), { QStringLiteral("--enc-owner-password") }, QStringLiteral("owner-password"), PDFToolValueType::String, {}, {}, false, false, true);
+        add(QStringLiteral("enc-permissions"), { QStringLiteral("--enc-permissions") }, QStringLiteral("permissions"), PDFToolValueType::Integer);
+    }
+
+    std::sort(options.begin(), options.end(), [](const auto& left, const auto& right) { return left.id < right.id; });
+    return options;
+}
+
+QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositionals(Options optionFlags)
+{
+    QList<PDFToolPositionalDescriptor> positionals;
+    if (optionFlags.testFlag(OpenDocument))
+    {
+        appendPositional(positionals, { QStringLiteral("document"), PDFToolValueType::Path, true, false });
+    }
+    if (optionFlags.testFlag(Separate))
+    {
+        appendPositional(positionals, { QStringLiteral("pattern"), PDFToolValueType::String, true, false });
+    }
+    if (optionFlags.testFlag(Unite))
+    {
+        appendPositional(positionals, { QStringLiteral("source"), PDFToolValueType::Path, true, true });
+        appendPositional(positionals, { QStringLiteral("target"), PDFToolValueType::Path, true, false });
+    }
+    if (optionFlags.testFlag(Diff))
+    {
+        appendPositional(positionals, { QStringLiteral("left"), PDFToolValueType::Path, true, false });
+        appendPositional(positionals, { QStringLiteral("right"), PDFToolValueType::Path, true, false });
+    }
+    if (optionFlags.testFlag(Redact))
+    {
+        appendPositional(positionals, { QStringLiteral("redacteddocument"), PDFToolValueType::Path, true, false });
+    }
+    if (optionFlags.testFlag(VerifyRedaction))
+    {
+        appendPositional(positionals, { QStringLiteral("original"), PDFToolValueType::Path, true, false });
+        appendPositional(positionals, { QStringLiteral("redacted"), PDFToolValueType::Path, true, false });
+    }
+    if (optionFlags.testFlag(CertStoreInstall))
+    {
+        appendPositional(positionals, { QStringLiteral("certificate"), PDFToolValueType::Path, true, false });
+    }
+    return positionals;
+}
+
+QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags)
+{
+    QStringList capabilities;
+    auto add = [&](Option option, const QString& id) {
+        if (optionFlags.testFlag(option))
+        {
+            capabilities.append(id);
+        }
+    };
+    add(ConsoleFormat, QStringLiteral("output.console"));
+    add(OpenDocument, QStringLiteral("document.read"));
+    add(SignatureVerification, QStringLiteral("document.signatures"));
+    add(XmlExport, QStringLiteral("document.xml"));
+    add(Attachments, QStringLiteral("document.attachments"));
+    add(ComputeHashes, QStringLiteral("document.hashes"));
+    add(PageSelector, QStringLiteral("page.selection"));
+    add(TextAnalysis, QStringLiteral("text.analysis"));
+    add(TextSpeech, QStringLiteral("text.speech"));
+    add(VoiceSelector, QStringLiteral("text.voice"));
+    add(CharacterMaps, QStringLiteral("font.character-maps"));
+    add(ImageWriterSettings, QStringLiteral("image.write"));
+    add(ImageExportSettingsFiles, QStringLiteral("image.export"));
+    add(ImageExportSettingsResolution, QStringLiteral("image.resolution"));
+    add(ColorManagementSystem, QStringLiteral("color.management"));
+    add(RenderFlags, QStringLiteral("render"));
+    add(Separate, QStringLiteral("document.split"));
+    add(Unite, QStringLiteral("document.merge"));
+    add(Diff, QStringLiteral("document.compare"));
+    add(Optimize, QStringLiteral("document.optimize"));
+    add(CertStore, QStringLiteral("certificates.store"));
+    add(CertStoreInstall, QStringLiteral("certificates.install"));
+    add(Encrypt, QStringLiteral("document.encrypt"));
+    add(Redact, QStringLiteral("document.redact"));
+    add(VerifyRedaction, QStringLiteral("document.redaction.verify"));
+    add(DestructiveWrite, QStringLiteral("document.write.destructive"));
+    add(AddBleed, QStringLiteral("fixup.add-bleed"));
+    add(RgbToCmyk, QStringLiteral("fixup.rgb-to-cmyk"));
+    add(PreflightProfile, QStringLiteral("preflight.run"));
+    add(OcrOptions, QStringLiteral("ocr.client"));
+    add(Diagnostics, QStringLiteral("diagnostics.bundle"));
+    add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
+    capabilities.sort();
+    return capabilities;
+}
+
+void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser* parser) const
+{
+    Options optionFlags = getOptionsFlags();
+    const QList<PDFToolOptionDescriptor> optionDescriptors = describeOptions(optionFlags);
+
+    if (optionFlags.testFlag(ConsoleFormat))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("console-format"), QStringLiteral("Console output text format (valid values: text|xml|html|json)."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("text-codec"), QStringLiteral("Text codec used when writing text output to redirected standard output. UTF-8 is default."));
     }
 
     if (optionFlags.testFlag(DateFormat))
     {
-        parser->addOption(QCommandLineOption("date-format", "Console output date/time format (valid values: short|long|iso|rfc2822).", "date format", "short"));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("date-format"), QStringLiteral("Console output date/time format (valid values: short|long|iso|rfc2822)."));
     }
 
     if (optionFlags.testFlag(OpenDocument))
     {
-        parser->addOption(QCommandLineOption("pswd", "Password for encrypted document.", "password"));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("pswd"), QStringLiteral("Password for encrypted document."));
         parser->addPositionalArgument("document", "Processed document.");
-        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("no-permissive-reading"), QStringLiteral("Do not attempt to fix damaged documents."));
     }
 
     if (optionFlags.testFlag(Separate))
@@ -205,6 +649,43 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addPositionalArgument("right", "Right (new) document to be compared.");
     }
 
+    if (optionFlags.testFlag(RepairDiff))
+    {
+        parser->addPositionalArgument("before", "Source document used as the repair baseline.");
+        parser->addPositionalArgument("after", "Serialized candidate document to compare.");
+        parser->addOption(QCommandLineOption("pswd", "Password for encrypted documents.", "password"));
+        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+        parser->addOption(QCommandLineOption("render-dpi", "Deterministic comparison render resolution.", "dpi", "144"));
+        parser->addOption(QCommandLineOption("no-visual", "Only produce the semantic structural report."));
+        parser->addOption(QCommandLineOption("render-dir", "Directory for before/after/diff PNG artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("max-rendered-pages", "Maximum number of pages rendered.", "pages", "200"));
+        parser->addOption(QCommandLineOption("max-render-pixels", "Maximum total pixels rendered.", "pixels", "250000000"));
+        parser->addOption(QCommandLineOption("channel-tolerance", "Per-channel visual diff tolerance.", "delta", "2"));
+        parser->addOption(QCommandLineOption("allow-page-boxes", "Classify page-box changes as expected."));
+        parser->addOption(QCommandLineOption("allow-page-content", "Classify page-content changes as expected."));
+        parser->addOption(QCommandLineOption("allow-images", "Classify image changes as expected."));
+        parser->addOption(QCommandLineOption("allow-fonts", "Classify font changes as expected."));
+        parser->addOption(QCommandLineOption("allow-color-spaces", "Classify color-space changes as expected."));
+        parser->addOption(QCommandLineOption("allow-output-intent", "Classify output-intent changes as expected."));
+        parser->addOption(QCommandLineOption("allow-metadata", "Classify metadata changes as expected."));
+        parser->addOption(QCommandLineOption("allow-annotations", "Classify annotation changes as expected."));
+        parser->addOption(QCommandLineOption("allow-signatures", "Classify signature changes as expected."));
+    }
+
+    if (optionFlags.testFlag(Repair))
+    {
+        parser->addPositionalArgument("document", "Source PDF for the repair transaction.");
+        parser->addOption(QCommandLineOption("operation", "Registered repair operation id.", "id"));
+        parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
+        parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
+        parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("list-operations", "List registered repair operation descriptors."));
+        parser->addOption(QCommandLineOption("allow-incomplete", "Allow an incomplete diff result to be returned for review; never auto-commit it."));
+        parser->addOption(QCommandLineOption("pswd", "Password for an encrypted source PDF.", "password"));
+        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+    }
+
     if (optionFlags.testFlag(Redact))
     {
         parser->addPositionalArgument("redacteddocument", "Output redacted document filename.");
@@ -215,25 +696,25 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(AddBleed))
     {
-        parser->addOption(QCommandLineOption(QStringList() << "o" << "output", "Output document filename.", "file"));
-        parser->addOption(QCommandLineOption("mode", "Bleed fill mode: mirror|pixel-repeat|stretch.", "mode", "mirror"));
-        parser->addOption(QCommandLineOption("bleed-mm", "Uniform bleed distance in millimeters.", "mm", "3"));
-        parser->addOption(QCommandLineOption("bleed-mm-ltrb", "Per-side bleed in millimeters as left,top,right,bottom.", "ltrb"));
-        parser->addOption(QCommandLineOption("reference-box", "Reference content box: trim|crop|media.", "box", "trim"));
-        parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for edge sampling.", "dpi", "300"));
-        parser->addOption(QCommandLineOption("sample-pixels", "Edge sample depth in pixels for pixel-repeat/stretch.", "n", "1"));
-        parser->addOption(QCommandLineOption("force", "Ignore skip-if-already-bleeding heuristic."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output document filename."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("mode"), QStringLiteral("Bleed fill mode: mirror|pixel-repeat|stretch."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("bleed-mm"), QStringLiteral("Uniform bleed distance in millimeters."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("bleed-mm-ltrb"), QStringLiteral("Per-side bleed in millimeters as left,top,right,bottom."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("reference-box"), QStringLiteral("Reference content box: trim|crop|media."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization DPI for edge sampling."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("sample-pixels"), QStringLiteral("Edge sample depth in pixels for pixel-repeat/stretch."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("force"), QStringLiteral("Ignore skip-if-already-bleeding heuristic."));
     }
 
     if (optionFlags.testFlag(RgbToCmyk))
     {
-        parser->addOption(QCommandLineOption(QStringList() << "o" << "output", "Output document filename.", "file"));
-        parser->addOption(QCommandLineOption("target-profile", "Target CMYK ICC profile.", "file"));
-        parser->addOption(QCommandLineOption("source-rgb-profile", "Optional source RGB ICC profile for untagged DeviceRGB.", "file"));
-        parser->addOption(QCommandLineOption("intent", "Rendering intent: perceptual|relative|absolute|saturation.", "intent", "relative"));
-        parser->addOption(QCommandLineOption("black-point-compensation", "Enable black-point compensation."));
-        parser->addOption(QCommandLineOption("no-black-point-compensation", "Disable black-point compensation."));
-        parser->addOption(QCommandLineOption("output-intent", "OutputIntent policy: replace|preserve-matching.", "policy", "replace"));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output document filename."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("target-profile"), QStringLiteral("Target CMYK ICC profile."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("source-rgb-profile"), QStringLiteral("Optional source RGB ICC profile for untagged DeviceRGB."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("intent"), QStringLiteral("Rendering intent: perceptual|relative|absolute|saturation."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("black-point-compensation"), QStringLiteral("Enable black-point compensation."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("no-black-point-compensation"), QStringLiteral("Disable black-point compensation."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output-intent"), QStringLiteral("OutputIntent policy: replace|preserve-matching."));
     }
 
     if (optionFlags.testFlag(DestructiveWrite))
@@ -242,12 +723,23 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         // registerDestructiveWriteOptions(); it does not register the legacy --force
         // alias because --force there already means "ignore skip-if-already-bleeding".
         const bool registerForceAlias = !optionFlags.testFlag(AddBleed);
-        registerDestructiveWriteOptions(parser, registerForceAlias);
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("dry-run"), QStringLiteral("Compute the result but do not write an output file."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("report"), QStringLiteral("Print a summary of the pending write operation."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("overwrite"), QStringLiteral("Overwrite an existing output file without confirmation."));
+        if (registerForceAlias)
+        {
+            addDescribedOption(parser, optionDescriptors, QStringLiteral("force"), QStringLiteral("Overwrite an existing output file without confirmation (legacy alias of --overwrite)."));
+        }
     }
 
     if (optionFlags.testFlag(PreflightProfile))
     {
-        parser->addOption(QCommandLineOption("profile", "Loupe preflight profile (JSON).", "profile"));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Loupe preflight profile (JSON)."));
+    }
+
+    if (optionFlags.testFlag(CapabilityDiscovery))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("command"), QStringLiteral("Limit discovery to one stable command ID."));
     }
 
     if (optionFlags.testFlag(OcrOptions))
@@ -272,7 +764,6 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addOption(QCommandLineOption("output", "Directory the diagnostics bundle directory is created under (default: current directory).", "dir"));
         parser->addOption(QCommandLineOption("no-logs", "Do not include the rotated log files in the bundle."));
-        parser->addOption(QCommandLineOption("no-settings", "Do not include a filtered settings.ini copy in the bundle."));
     }
 
     if (optionFlags.testFlag(SignatureVerification))
@@ -502,7 +993,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         if (!parser->isSet("console-format"))
         {
             const QString command = getStandardString(Command);
-            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr"))
+            if (command == QStringLiteral("preflight") || command == QStringLiteral("ocr") || command == QStringLiteral("capabilities"))
             {
                 options.outputStyle = PDFOutputFormatter::Style::Json;
             }
@@ -716,6 +1207,11 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightProfilePath = parser->value("profile");
     }
 
+    if (optionFlags.testFlag(CapabilityDiscovery))
+    {
+        options.capabilitiesCommand = parser->value("command").trimmed();
+    }
+
     if (optionFlags.testFlag(OcrOptions))
     {
         options.ocrSidecarPath = parser->value("sidecar");
@@ -743,7 +1239,6 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     {
         options.diagnosticsOutputDirectory = parser->isSet("output") ? parser->value("output") : QDir::currentPath();
         options.diagnosticsIncludeLogs = !parser->isSet("no-logs");
-        options.diagnosticsIncludeSettings = !parser->isSet("no-settings");
     }
 
     if (optionFlags.testFlag(VerifyRedaction))
@@ -1248,6 +1743,43 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(Diff))
     {
         options.diffFiles = positionalArguments;
+    }
+
+    if (optionFlags.testFlag(RepairDiff))
+    {
+        options.repairDiffFiles = positionalArguments;
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
+        options.repairDiffOptions.renderDpi = std::max(1, parser->value("render-dpi").toInt());
+        options.repairDiffOptions.renderVisualDiff = !parser->isSet("no-visual");
+        options.repairDiffOptions.renderDirectory = parser->value("render-dir");
+        options.repairDiffOptions.maxRenderedPages = std::max(0, parser->value("max-rendered-pages").toInt());
+        options.repairDiffOptions.maxRenderPixels = std::max<qint64>(0, parser->value("max-render-pixels").toLongLong());
+        options.repairDiffOptions.channelTolerance = std::max(0, parser->value("channel-tolerance").toInt());
+        options.repairDiffOptions.expected.pageBoxes = parser->isSet("allow-page-boxes");
+        options.repairDiffOptions.expected.pageContent = parser->isSet("allow-page-content");
+        options.repairDiffOptions.expected.images = parser->isSet("allow-images");
+        options.repairDiffOptions.expected.fonts = parser->isSet("allow-fonts");
+        options.repairDiffOptions.expected.colorSpaces = parser->isSet("allow-color-spaces");
+        options.repairDiffOptions.expected.outputIntent = parser->isSet("allow-output-intent");
+        options.repairDiffOptions.expected.metadata = parser->isSet("allow-metadata");
+        options.repairDiffOptions.expected.annotations = parser->isSet("allow-annotations");
+        options.repairDiffOptions.expected.signatures = parser->isSet("allow-signatures");
+    }
+
+    if (optionFlags.testFlag(Repair))
+    {
+        options.repairFiles = positionalArguments;
+        options.repairOperationId = parser->value("operation");
+        options.repairParameterAssignments = parser->values("param");
+        options.repairOutputDocument = parser->value("output");
+        options.repairReportFile = parser->value("report-file");
+        options.repairRenderDirectory = parser->value("render-dir");
+        options.repairListOperations = parser->isSet("list-operations");
+        options.repairAllowIncomplete = parser->isSet("allow-incomplete");
+        options.preflightProfilePath = parser->value("profile");
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
     }
 
     if (optionFlags.testFlag(Optimize))

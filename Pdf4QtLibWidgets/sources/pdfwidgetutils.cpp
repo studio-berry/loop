@@ -21,21 +21,18 @@
 // SOFTWARE.
 
 #include "pdfwidgetutils.h"
+#include "pdfaccessibility.h"
 #include "pdfuitheme.h"
 #include "pdfcolorconvertor.h"
 
-#include <map>
-#include <set>
-#include <optional>
-
 #include <QMenu>
 #include <QAction>
+#include <QMainWindow>
 #include <QDialog>
 #include <QLayout>
 #include <QPainter>
 #include <QPixmap>
 #include <QGroupBox>
-#include <QMessageBox>
 #include <QApplication>
 #include <QStyleHints>
 #include <QStyleFactory>
@@ -357,78 +354,26 @@ QIcon PDFWidgetUtils::convertIconForDarkTheme(QIcon icon, QSize iconSize, qreal 
 
 void PDFWidgetUtils::checkMenuAccessibility(QWidget* widget)
 {
-    return;
-
-    QList<QMenu*> menus = widget->findChildren<QMenu*>();
-
-    for (QMenu* menu : menus)
+    if (!widget)
     {
-        checkMenuAccessibility(menu);
+        return;
+    }
+
+    if (QMainWindow* window = qobject_cast<QMainWindow*>(widget))
+    {
+        Q_UNUSED(PDFAccessibility::auditMenus(window));
+        return;
+    }
+
+    for (QMenu* menu : widget->findChildren<QMenu*>())
+    {
+        Q_UNUSED(PDFAccessibility::auditMenu(menu));
     }
 }
 
 void PDFWidgetUtils::checkMenuAccessibility(QMenu* menu)
 {
-    QStringList actionsDuplicities;
-    QStringList actionsWithNoAmpersands;
-    std::map<QChar, std::set<QAction*>> actions;
-
-    for (QAction* action : menu->actions())
-    {
-        if (action->isSeparator())
-        {
-            continue;
-        }
-
-        if (QMenu* submenu = action->menu())
-        {
-            checkMenuAccessibility(submenu);
-        }
-
-        QString text = action->text();
-        int i = text.indexOf(QChar('&'));
-
-        if (text.isEmpty())
-        {
-            continue;
-        }
-
-        if (i == -1)
-        {
-            actionsWithNoAmpersands << text;
-        }
-        else
-        {
-            QString accesibilityChar = text.mid(i + 1, 1);
-            if (accesibilityChar.size() == 1)
-            {
-                actions[accesibilityChar.front().toUpper()].insert(action);
-            }
-        }
-    }
-
-    for (const auto& actionItem : actions)
-    {
-        if (actionItem.second.size() > 1)
-        {
-            QStringList actionTexts;
-            for (QAction* action : actionItem.second)
-            {
-                actionTexts << action->text();
-            }
-
-            actionsDuplicities << QString("'%1': Duplicities = '%2'").arg(QString(actionItem.first), actionTexts.join("', '"));
-        }
-    }
-
-    QStringList errors;
-    errors.append(std::move(actionsDuplicities));
-    errors.append(std::move(actionsWithNoAmpersands));
-
-    if (!errors.isEmpty())
-    {
-        QMessageBox::warning(nullptr, "Accesibility Check", errors.join("<br>"));
-    }
+    Q_UNUSED(PDFAccessibility::auditMenu(menu));
 }
 
 QColor PDFUITheme::severityErrorColor()
@@ -448,15 +393,26 @@ QColor PDFUITheme::severityInfoColor()
 
 QColor PDFUITheme::severityTextColor(const QString& severity)
 {
+    const bool darkTheme = PDFWidgetUtils::isDarkTheme();
     if (severity == QStringLiteral("error"))
     {
-        return severityErrorColor();
+        return darkTheme ? QColor(248, 113, 113) : QColor(176, 0, 32);
     }
     if (severity == QStringLiteral("warning"))
     {
-        return severityWarningColor();
+        return darkTheme ? QColor(255, 170, 0) : QColor(150, 75, 0);
     }
-    return severityInfoColor();
+    return darkTheme ? QColor(120, 170, 255) : QColor(0, 75, 150);
+}
+
+double PDFUITheme::contrastRatio(const QColor& foreground, const QColor& background)
+{
+    return PDFAccessibility::contrastRatio(foreground, background);
+}
+
+bool PDFUITheme::meetsContrast(const QColor& foreground, const QColor& background, double requiredRatio)
+{
+    return PDFAccessibility::meetsContrast(foreground, background, requiredRatio);
 }
 
 QColor PDFUITheme::errorTextColor(const QPalette& palette)

@@ -409,11 +409,14 @@ PDFProgramController::PDFProgramController(QObject* parent) :
     m_mainWindowInterface(nullptr),
     m_pdfWidget(nullptr),
     m_settings(new PDFViewerSettings(this)),
+    m_recoveryManager(new PDFRecoveryManager(this)),
     m_undoRedoManager(nullptr),
     m_recentFileManager(new PDFRecentFileManager(this)),
     m_optionalContentActivity(nullptr),
     m_textToSpeech(nullptr),
     m_isDocumentSetInProgress(false),
+    m_isRecoveredDocument(false),
+    m_documentRevision(0),
     m_futureWatcher(nullptr),
     m_CMSManager(new pdf::PDFCMSManager(this)),
     m_toolManager(nullptr),
@@ -480,6 +483,13 @@ void PDFProgramController::initialize(Features features,
     m_progress = progress;
     m_mainWindow = mainWindow;
     m_mainWindowInterface = mainWindowInterface;
+
+    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message) {
+        if (m_mainWindowInterface)
+        {
+            m_mainWindowInterface->setStatusBarMessage(tr("Recovery checkpoint unavailable: %1").arg(message), 6000);
+        }
+    });
 
     if (QAction* action = m_actionManager->getAction(PDFActionManager::GoToDocumentStart))
     {
@@ -1312,6 +1322,11 @@ void PDFProgramController::performSaveAs()
 
 void PDFProgramController::performSave()
 {
+    if (m_isRecoveredDocument)
+    {
+        performSaveAs();
+        return;
+    }
     saveDocument(m_fileInfo.originalFileName);
 }
 
@@ -1329,6 +1344,8 @@ void PDFProgramController::saveDocument(const QString& fileName)
         }
 
         updateFileInfo(fileName);
+        m_isRecoveredDocument = false;
+        m_recoveryManager->markSaved(fileName, m_documentRevision);
         updateTitle();
 
         if (m_recentFileManager)
@@ -1397,6 +1414,7 @@ bool PDFProgramController::askForSaveDocumentBeforeClose()
             }
 
             case QMessageBox::No:
+                m_recoveryManager->discardSession();
                 return true;
 
             case QMessageBox::Cancel:
@@ -1408,6 +1426,29 @@ bool PDFProgramController::askForSaveDocumentBeforeClose()
         }
     }
 
+    return true;
+}
+
+bool PDFProgramController::restoreRecovery(const RecoveryCandidate& candidate, QString* errorMessage)
+{
+    pdf::PDFDocumentPointer recoveredDocument;
+    if (!m_recoveryManager->restoreCandidate(candidate, &recoveredDocument, errorMessage))
+    {
+        return false;
+    }
+
+    m_isRecoveredDocument = true;
+    m_documentRevision = candidate.documentRevision;
+    m_signatures.clear();
+    updateFileInfo(candidate.sourcePath);
+    m_pdfDocument = qMove(recoveredDocument);
+    pdf::PDFModifiedDocument document(m_pdfDocument.data(), m_optionalContentActivity);
+    setDocument(document, {}, false);
+    updateTitle();
+    const QString recoveryMessage = candidate.signedDocument
+        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
+        : tr("Recovered session restored. Save As is required to create a new output.");
+    m_mainWindowInterface->setStatusBarMessage(recoveryMessage, 6000);
     return true;
 }
 
@@ -1483,12 +1524,9 @@ void PDFProgramController::onActionCollectDiagnosticsTriggered()
         m_mainWindow,
         tr("Collect Diagnostics"),
         tr("This collects a support bundle containing application/system/dependency "
-           "version info, the loaded plugin list, the rotated log files, and a copy of "
-           "your settings.\n\n"
-           "The log files and settings copy have the home/temp directory, login name, "
-           "host name, other absolute paths, email addresses, and IPv4 literals scrubbed; "
-           "the settings copy also drops the recent-files list, default open directory, "
-           "and custom author name.\n\n"
+           "version info, the loaded plugin list, and the rotated log files.\n\n"
+           "The log files are scrubbed centrally before persistence and again while "
+           "the bundle is copied.\n\n"
            "No PDF or document content, and no crash minidumps, are included. You choose "
            "where the bundle is saved and can inspect it before sending it to anyone.\n\n"
            "Continue?"),
@@ -1507,6 +1545,7 @@ void PDFProgramController::onActionCollectDiagnosticsTriggered()
     }
 
     pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("editor");
     options.outputDirectory = outputDirectory;
     options.plugins = m_plugins;
 
@@ -2247,7 +2286,7 @@ void PDFProgramController::updateFileWatcher(bool forceDisable)
     QStringList newFiles;
 
     QAction* action = m_actionManager->getAction(PDFActionManager::AutomaticDocumentRefresh);
-    if (!forceDisable && !m_fileInfo.absoluteFilePath.isEmpty() && action && action->isChecked())
+    if (!forceDisable && !m_isRecoveredDocument && !m_fileInfo.absoluteFilePath.isEmpty() && action && action->isChecked())
     {
         newFiles << m_fileInfo.absoluteFilePath;
     }
@@ -2331,8 +2370,11 @@ void PDFProgramController::onDocumentReadingFinished()
 
             m_pdfDocument = qMove(result.document);
             m_signatures = qMove(result.signatures);
+            m_isRecoveredDocument = false;
+            m_documentRevision = 0;
             pdf::PDFModifiedDocument document(m_pdfDocument.data(), m_optionalContentActivity);
             setDocument(document, m_signatures, true);
+            m_recoveryManager->attach(m_fileInfo.absoluteFilePath, m_pdfDocument, m_documentRevision, true, !m_signatures.empty());
 
             if (m_formManager)
             {
@@ -2404,13 +2446,25 @@ void PDFProgramController::onDocumentModified(pdf::PDFModifiedDocument document)
     m_pdfDocument = document;
     document.setOptionalContentActivity(m_optionalContentActivity);
     setDocument(document, {}, false);
+    ++m_documentRevision;
+    m_recoveryManager->markDirty(m_pdfDocument, m_documentRevision);
 }
 
 void PDFProgramController::onDocumentUndoRedo(pdf::PDFModifiedDocument document)
 {
     m_pdfDocument = document;
     document.setOptionalContentActivity(m_optionalContentActivity);
-    setDocument(document, {}, false);
+    const bool isCurrentSaved = m_undoRedoManager && m_undoRedoManager->isCurrentSaved();
+    setDocument(document, {}, isCurrentSaved);
+    ++m_documentRevision;
+    if (isCurrentSaved)
+    {
+        m_recoveryManager->markSaved(m_fileInfo.originalFileName, m_documentRevision);
+    }
+    else
+    {
+        m_recoveryManager->markDirty(m_pdfDocument, m_documentRevision);
+    }
 }
 
 void PDFProgramController::setDocument(pdf::PDFModifiedDocument document, std::vector<pdf::PDFSignatureVerificationResult> signatureVerificationResult, bool isCurrentSaved)
@@ -2536,6 +2590,9 @@ void PDFProgramController::closeDocument()
     }
 
     m_signatures.clear();
+    m_recoveryManager->discardSession();
+    m_isRecoveredDocument = false;
+    m_documentRevision = 0;
     setDocument(pdf::PDFModifiedDocument(), {}, true);
     m_pdfDocument.reset();
     updateActionsAvailability();
@@ -2577,6 +2634,11 @@ void PDFProgramController::updateTitle()
         if (title.isEmpty())
         {
             title = m_fileInfo.fileName;
+        }
+
+        if (m_isRecoveredDocument)
+        {
+            title = tr("Recovered — %1").arg(title);
         }
 
         if (m_undoRedoManager && !m_undoRedoManager->isCurrentSaved())

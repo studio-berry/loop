@@ -84,6 +84,7 @@ public:
     virtual void showEvent(QShowEvent* event) override;
 
     PDFProgramController* getProgramController() const { return m_programController; }
+    void showRecoveryCandidates();
 
     virtual void updateUI(bool fullUpdate) override;
     virtual QMenu* addToolMenu(QString name) override;

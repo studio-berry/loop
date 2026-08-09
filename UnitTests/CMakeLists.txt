@@ -34,6 +34,67 @@ set_target_properties(UnitTests PROPERTIES
 )
 add_test(UnitTests  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTests")
 
+add_executable(UnitTestsRecovery
+    tst_recoverytest.cpp
+)
+
+target_link_libraries(UnitTestsRecovery PRIVATE
+    Pdf4QtLibCore
+    Pdf4QtLibGui
+    Pdf4QtLibWidgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_include_directories(UnitTestsRecovery PRIVATE
+    ${CMAKE_SOURCE_DIR}/Pdf4QtLibGui
+    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
+)
+
+set_target_properties(UnitTestsRecovery PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsRecovery "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRecovery")
+
+add_executable(UnitTestsProcessingBudget
+    tst_processingbudgettest.cpp
+)
+
+target_link_libraries(UnitTestsProcessingBudget PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsProcessingBudget PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+
+add_executable(UnitTestsAccessibility
+    tst_accessibilitytest.cpp
+)
+
+target_link_libraries(UnitTestsAccessibility PRIVATE
+    Pdf4QtLibWidgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+set_target_properties(UnitTestsAccessibility PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsProcessingBudget "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsProcessingBudget")
+add_test(UnitTestsAccessibility "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsAccessibility")
+
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
 )
@@ -47,6 +108,20 @@ set_target_properties(UnitTestsImageOptimizer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsImageOptimizer  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsImageOptimizer")
+
+add_executable(UnitTestsImageDownsampleFixup
+    tst_imagedownsamplefixuptest.cpp
+)
+
+target_link_libraries(UnitTestsImageDownsampleFixup PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsImageDownsampleFixup PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsImageDownsampleFixup "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsImageDownsampleFixup")
 
 add_executable(UnitTestsBleedFixup
 	tst_bleedfixuptest.cpp
@@ -128,6 +203,36 @@ add_test(UnitTestsContentEditor  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/
 
 
 add_test(UnitTestsDocumentSession "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsDocumentSession")
+
+add_executable(UnitTestsRepairDiff
+    tst_repairdifftest.cpp
+)
+
+target_link_libraries(UnitTestsRepairDiff PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsRepairDiff PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsRepairDiff "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRepairDiff")
+
+add_executable(UnitTestsRepairOperation
+    tst_repairoperationtest.cpp
+)
+
+target_link_libraries(UnitTestsRepairOperation PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsRepairOperation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsRepairOperation "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRepairOperation")
 
 add_executable(UnitTestsPreflightEngine
 	tst_preflightenginetest.cpp

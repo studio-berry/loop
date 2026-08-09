@@ -33,6 +33,10 @@
       "type": "string",
       "description": "Optional path or basename of the checked PDF."
     },
+    "pdfx": {
+      "$ref": "#/$defs/pdfx",
+      "description": "Optional normalized PDF/X conformance result. Present only when the profile requested a PDF/X target."
+    },
     "errors": {
       "type": "array",
       "description": "Failing findings with severity error (or mapped to error).",
@@ -55,6 +59,51 @@
     }
   },
   "$defs": {
+    "pdfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "policyVersion", "status", "failedRuleIds", "incompleteRuleIds", "rules"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["PDF/X-1a:2001", "PDF/X-4"]
+        },
+        "policyVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["conformant", "non-conformant", "incomplete"]
+        },
+        "failedRuleIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "incompleteRuleIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pdfx_rule" }
+        }
+      }
+    },
+    "pdfx_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mandatory", "state"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^pdfx\\.[a-z0-9.-]+$" },
+        "mandatory": { "type": "boolean" },
+        "state": { "type": "string", "enum": ["passed", "failed", "not-inspected", "not-applicable"] },
+        "evidence": { "type": "object", "additionalProperties": true },
+        "diagnostic": { "type": "string" }
+      }
+    },
     "bbox": {
       "type": "array",
       "description": "Axis-aligned box in PDF user space (points), page coordinates: [x0, y0, x1, y1] with x0 <= x1 and y0 <= y1. Origin is the page media-box lower-left (PDF convention). Present only when the engine has a meaningful page-space region to highlight.",
@@ -95,6 +144,11 @@
         "check_id": {
           "type": "string",
           "description": "Optional profile check id that produced this finding."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional structured evidence for deterministic diagnostics."
         }
       }
     },
@@ -136,6 +190,11 @@
         "check_id": {
           "type": "string",
           "description": "Optional profile check id that produced this finding."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional structured evidence for deterministic diagnostics."
         }
       }
     },
@@ -158,7 +217,7 @@
         "status": {
           "type": "string",
           "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile. unsupported: unknown check id."
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id."
         },
         "reason": {
           "type": "string",
