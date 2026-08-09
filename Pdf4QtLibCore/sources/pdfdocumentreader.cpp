@@ -41,14 +41,24 @@
 namespace pdf
 {
 
-PDFDocumentReader::PDFDocumentReader(PDFProgress* progress, const std::function<QString(bool*)>& getPasswordCallback, bool permissive, bool authorizeOwnerOnly) :
+PDFDocumentReader::PDFDocumentReader(PDFProgress* progress,
+                                     const std::function<QString(bool*)>& getPasswordCallback,
+                                     bool permissive,
+                                     bool authorizeOwnerOnly,
+                                     PDFProcessingLimits processingLimits) :
     m_result(Result::OK),
     m_getPasswordCallback(getPasswordCallback),
     m_progress(progress),
     m_permissive(permissive),
-    m_authorizeOwnerOnly(authorizeOwnerOnly)
+    m_authorizeOwnerOnly(authorizeOwnerOnly),
+    m_processingBudget(std::move(processingLimits))
 {
 
+}
+
+void PDFDocumentReader::setProcessingLimits(const PDFProcessingLimits& limits)
+{
+    m_processingBudget.setLimits(limits);
 }
 
 PDFDocument PDFDocumentReader::readFromFile(const QString& fileName)
@@ -84,10 +94,37 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
 {
     reset();
 
+    auto rejectOversizedDevice = [this, device]() -> bool
+    {
+        const qint64 deviceSize = device->size();
+        if (deviceSize < 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            m_processingBudget.chargeInputBytes(static_cast<uint64_t>(deviceSize), tr("PDF input"));
+        }
+        catch (const PDFBudgetExceededException& exception)
+        {
+            m_result = Result::Failed;
+            m_errorMessage = exception.getMessage();
+            m_warnings << m_errorMessage;
+            return true;
+        }
+
+        return false;
+    };
+
     if (device->isOpen())
     {
         if (device->isReadable())
         {
+            if (rejectOversizedDevice())
+            {
+                return PDFDocument();
+            }
             // Do not close the device, it was not opened by us.
             return readFromBuffer(device->readAll());
         }
@@ -99,6 +136,11 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
     }
     else if (device->open(QIODevice::ReadOnly))
     {
+        if (rejectOversizedDevice())
+        {
+            device->close();
+            return PDFDocument();
+        }
         QByteArray byteArray = device->readAll();
         device->close();
         return readFromBuffer(byteArray);
@@ -298,6 +340,7 @@ PDFDocumentReader::Result PDFDocumentReader::processReferenceTableEntries(PDFXRe
         {
             try
             {
+                m_processingBudget.chargeObject(PDFTranslationContext::tr("PDF object"));
                 PDFParsingContext context(objectFetcher);
                 PDFObject object = getObject(&context, entry.offset, entry.reference);
 
@@ -483,7 +526,7 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
             const PDFInteger n = nObject.getInteger();
             const PDFInteger first = firstObject.getInteger();
 
-            QByteArray objectStreamData = PDFStreamFilterStorage::getDecodedStream(objectStream, m_securityHandler.data());
+            QByteArray objectStreamData = PDFStreamFilterStorage::getDecodedStream(objectStream, m_securityHandler.data(), &m_processingBudget);
 
             // The object count /N is attacker-controlled. Each index entry in
             // the decoded stream consists of at least two tokens (object
@@ -519,6 +562,7 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
 
             for (size_t i = 0; i < objectNumberAndOffset.size(); ++i)
             {
+                m_processingBudget.chargeObject(PDFTranslationContext::tr("object stream entry"));
                 const PDFInteger objectNumber = objectNumberAndOffset[i].first;
                 const PDFInteger offset = objectNumberAndOffset[i].second;
                 if (objectNumber < 0 || static_cast<size_t>(objectNumber) >= objects.size())
@@ -558,6 +602,8 @@ PDFDocument PDFDocumentReader::readFromBuffer(const QByteArray& buffer)
 
     try
     {
+        reset();
+        m_processingBudget.chargeInputBytes(static_cast<uint64_t>(buffer.size()), tr("PDF input"));
         m_source = buffer;
 
         // FOOTER CHECKING
@@ -602,9 +648,20 @@ PDFDocument PDFDocumentReader::readFromBuffer(const QByteArray& buffer)
         // then document can't be restored (user can't be asked multiple times for password).
         shouldTryPermissiveReading = !m_securityHandler || m_securityHandler->getMode() == EncryptionMode::None;
         processObjectStreams(&xrefTable, objects);
+        if (m_result != Result::OK)
+        {
+            return PDFDocument();
+        }
 
         PDFObjectStorage storage(std::move(objects), PDFObject(xrefTable.getTrailerDictionary()), qMove(m_securityHandler));
         return PDFDocument(std::move(storage), m_version, hash(buffer));
+    }
+    catch (const PDFBudgetExceededException& budgetException)
+    {
+        m_result = Result::Failed;
+        m_errorMessage = budgetException.getMessage();
+        m_warnings << m_errorMessage;
+        return PDFDocument();
     }
     catch (const PDFException &parserException)
     {
@@ -817,6 +874,7 @@ void PDFDocumentReader::reset()
     m_version = PDFVersion();
     m_source = QByteArray();
     m_securityHandler = nullptr;
+    m_processingBudget.reset();
 }
 
 int PDFDocumentReader::findFromEnd(const char* what, const QByteArray& byteArray, int limit)

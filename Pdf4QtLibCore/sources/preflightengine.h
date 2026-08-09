@@ -128,6 +128,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
     QString id;
     QString status;
     QString reason;
+    QString budgetKind;
+    qint64 budgetLimit = 0;
+    qint64 budgetAttempted = 0;
+    QString budgetContext;
 };
 
 /// Result of a preflight run.
