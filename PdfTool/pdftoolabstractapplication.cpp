@@ -224,6 +224,17 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("force", "Ignore skip-if-already-bleeding heuristic."));
     }
 
+    if (optionFlags.testFlag(RgbToCmyk))
+    {
+        parser->addOption(QCommandLineOption(QStringList() << "o" << "output", "Output document filename.", "file"));
+        parser->addOption(QCommandLineOption("target-profile", "Target CMYK ICC profile.", "file"));
+        parser->addOption(QCommandLineOption("source-rgb-profile", "Optional source RGB ICC profile for untagged DeviceRGB.", "file"));
+        parser->addOption(QCommandLineOption("intent", "Rendering intent: perceptual|relative|absolute|saturation.", "intent", "relative"));
+        parser->addOption(QCommandLineOption("black-point-compensation", "Enable black-point compensation."));
+        parser->addOption(QCommandLineOption("no-black-point-compensation", "Disable black-point compensation."));
+        parser->addOption(QCommandLineOption("output-intent", "OutputIntent policy: replace|preserve-matching.", "policy", "replace"));
+    }
+
     if (optionFlags.testFlag(DestructiveWrite))
     {
         // add-bleed keeps --overwrite/--dry-run/--report shared with unite/separate via
@@ -661,6 +672,42 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.addBleedSettings.skipIfAlreadyBleeding = false;
         }
+    }
+
+    if (optionFlags.testFlag(RgbToCmyk))
+    {
+        options.rgbToCmykOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
+        options.rgbToCmykSettings = pdf::PDFRgbToCmykSettings();
+        options.rgbToCmykSettings.targetProfileName = parser->value("target-profile");
+        options.rgbToCmykSettings.fallbackRgbIccId = parser->value("source-rgb-profile").toUtf8();
+        options.rgbToCmykSettings.blackPointCompensation = !parser->isSet("no-black-point-compensation");
+        if (parser->isSet("black-point-compensation"))
+        {
+            options.rgbToCmykSettings.blackPointCompensation = true;
+        }
+
+        const QString intent = parser->value("intent").trimmed().toLower();
+        if (intent == QStringLiteral("perceptual"))
+        {
+            options.rgbToCmykSettings.intent = pdf::RenderingIntent::Perceptual;
+        }
+        else if (intent == QStringLiteral("absolute"))
+        {
+            options.rgbToCmykSettings.intent = pdf::RenderingIntent::AbsoluteColorimetric;
+        }
+        else if (intent == QStringLiteral("saturation"))
+        {
+            options.rgbToCmykSettings.intent = pdf::RenderingIntent::Saturation;
+        }
+        else
+        {
+            options.rgbToCmykSettings.intent = pdf::RenderingIntent::RelativeColorimetric;
+        }
+
+        const QString outputIntentPolicy = parser->value("output-intent").trimmed().toLower();
+        options.rgbToCmykSettings.outputIntentPolicy = outputIntentPolicy == QStringLiteral("preserve-matching")
+            ? pdf::PDFRgbToCmykOutputIntentPolicy::PreserveMatching
+            : pdf::PDFRgbToCmykOutputIntentPolicy::Replace;
     }
 
     if (optionFlags.testFlag(PreflightProfile))

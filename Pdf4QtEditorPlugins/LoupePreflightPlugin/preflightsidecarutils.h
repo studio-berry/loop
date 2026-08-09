@@ -183,7 +183,8 @@ private:
 
 inline bool isImplementedFixupId(const QString& fixupId)
 {
-    return fixupId == QStringLiteral("add-bleed");
+    return fixupId == QStringLiteral("add-bleed")
+        || fixupId == QStringLiteral("rgb-to-cmyk");
 }
 
 inline QJsonObject filterAdvertisedFixups(const QJsonObject& report)

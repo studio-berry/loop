@@ -123,6 +123,27 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
+## ICC-managed RGB-to-CMYK fixup
+
+The shared Core fixup is available to applications as `PDFRgbToCmykFixup` and
+to headless workflows as:
+
+```bash
+PdfTool rgb-to-cmyk input.pdf \
+  --target-profile GRACoL2013_CRPC6.icc \
+  --intent relative \
+  --dry-run \
+  --report \
+  --console-format json
+```
+
+The target profile is mandatory and must be a valid CMYK ICC profile. DeviceRGB
+vector paints are transformed through the existing LittleCMS implementation;
+unsupported RGB images or extended color constructs fail closed and are listed
+in the report. A successful non-dry-run embeds the selected profile as the
+document OutputIntent and performs a candidate postflight before replacing the
+source document.
+
 ## Versioning
 
 Bump `schema_version` only together with engine + plugin releases so the JSON contract stays in sync (see [docs/PACKAGING_LICENSING.md](../docs/PACKAGING_LICENSING.md) and the hybrid sidecar plan in Linear).

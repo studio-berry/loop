@@ -42,7 +42,7 @@ private slots:
     void isNormalizedReport_rejectsInvalidScopeCombinations();
     void findingHasVisualOverlay_respectsScopeAndBbox();
     void filterAdvertisedFixups_removesUnimplementedFixups();
-    void isImplementedFixupId_onlyAdvertisesAddBleed();
+    void isImplementedFixupId_advertisesImplementedFixups();
     void sidecarStreamBuffer_spillsToDiskAboveWatermark();
     void sidecarStreamBuffer_rejectsOverflowBeyondMax();
     void sidecarStreamBuffer_spillRoundTripsContent();
@@ -234,14 +234,15 @@ void PreflightPluginTest::filterAdvertisedFixups_removesUnimplementedFixups()
 
     const QJsonObject filtered = pdfplugin::preflight::filterAdvertisedFixups(report);
     const QJsonArray filteredFixups = filtered.value(QStringLiteral("fixups_available")).toArray();
-    QCOMPARE(filteredFixups.size(), 1);
-    QCOMPARE(filteredFixups.first().toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+    QCOMPARE(filteredFixups.size(), 2);
+    QCOMPARE(filteredFixups.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("rgb-to-cmyk"));
+    QCOMPARE(filteredFixups.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
 }
 
-void PreflightPluginTest::isImplementedFixupId_onlyAdvertisesAddBleed()
+void PreflightPluginTest::isImplementedFixupId_advertisesImplementedFixups()
 {
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("add-bleed")));
-    QVERIFY(!pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
+    QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
     QVERIFY(!pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
 }
 
