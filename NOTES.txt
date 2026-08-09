@@ -22,8 +22,11 @@ Section 8: Issues
  - 8.6.5.8 default rendering intent is perceptual instead of relative colorimetric
  - 8.6.5.9 Black point compensation is user setting, graphic state setting
    is not respected (it is ignored)
- - 8.6.7 Overprint rendering is pinned by Output Preview render goldens and
-   direct blend tests; Qt painter-path rendering remains deferred (MIC-320)
+ - 8.6.7 Output Preview is the authoritative separation/overprint renderer.
+   OPM 0/1 process and spot behavior is pinned by direct blend tests and
+   render goldens. Unsupported non-Normal overprint combinations are surfaced
+   as fallback/unsupported diagnostics; Qt painter-path rendering remains
+   deferred (MIC-320)
  - 8.10.2 Some form dictionary entries, in table 93, are not all being processed
  - 8.10.4 Reference XObject is not supported. Instead, proxy is displayed.
 

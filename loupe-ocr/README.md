@@ -38,6 +38,14 @@ PdfTool ocr scan.pdf --console-format json --sidecar loupe-ocr\tools\dev_ocr_sid
 
 Send one JSON line per request on stdin, read one JSON line per response on stdout.
 
+The sidecar protocol is strict. Requests require page >= 1, a non-empty image,
+1 <= dpi <= 1200, a positive finite media_box, and rotation of 0, 90, 180, or
+270. languages must be an array; values are trimmed, lower-cased, deduplicated,
+and sorted. Successful responses require a boolean ok, the matching page,
+string text, and an array of lines with finite confidence and non-negative
+finite bounding-box dimensions. Invalid requests or OCR failures return
+ok: false with an error string.
+
 ## Build PyInstaller bundle
 
 ```powershell
@@ -48,6 +56,11 @@ pyinstaller tools\pyinstaller.spec --distpath prebuilt --workpath build\pyinstal
 Output: `prebuilt/LoupeOcrService/LoupeOcrService.exe`
 
 Enable CMake install with `-DPDF4QT_BUNDLE_OCR_SERVICE=ON` (copies `prebuilt/LoupeOcrService` next to `PdfTool`).
+The runtime sidecar uses a language-keyed EasyOCR reader cache and disables
+model downloads. Run `tools/download_models.py` during the build or staging
+step with network access to preload the selected models; production OCR then
+fails explicitly if the requested model set is absent instead of downloading
+at first use.
 
 ## Mock sidecar (tests / CI)
 
@@ -60,11 +73,14 @@ Or `tools\mock_ocr_sidecar.cmd` on Windows.
 ## IPC request (stdin)
 
 ```json
-{"image": "C:/temp/page-1.png", "page": 1, "dpi": 300, "languages": ["en"], "media_box": {"x": 0, "y": 0, "width": 612, "height": 792}}
+{"image": "C:/temp/page-1.png", "page": 1, "dpi": 300, "languages": ["en"], "media_box": {"x": 0, "y": 0, "width": 612, "height": 792}, "rotation": 0}
 ```
 
 ## IPC response (stdout)
 
 ```json
 {"page": 1, "ok": true, "text": "Hello", "lines": [{"text": "Hello", "confidence": 0.95, "bbox": {"x": 72, "y": 700, "width": 40, "height": 12}}]}
+
+Run python -m unittest discover loupe-ocr/tests for the dependency-free
+request, language, coordinate, rotation, and finite-number contract tests.
 ```
