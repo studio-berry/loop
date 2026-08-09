@@ -23,6 +23,7 @@
 #include "pdfrepairdiff.h"
 
 #include "pdfcms.h"
+#include "pdfconstants.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 #include "pdffont.h"
