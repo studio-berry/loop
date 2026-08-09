@@ -94,19 +94,19 @@ PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
     {
-        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        if (options.executionContext)
         {
             options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("unite")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
         }
-        else
-        {
-            PDFConsole::writeText(PDFToolTranslationContext::tr("Would merge %1 document(s) into '%2'.")
-                                    .arg(files.size())
-                                    .arg(targetFile),
-                                options.outputCodec);
-        }
+    }
+    else if (options.destructiveReport)
+    {
+        PDFConsole::writeText(PDFToolTranslationContext::tr("Would merge %1 document(s) into '%2'.")
+                                .arg(files.size())
+                                .arg(targetFile),
+                            options.outputCodec);
     }
 
     if (options.destructiveDryRun)

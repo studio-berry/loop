@@ -628,21 +628,11 @@ PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
         report.pass = false;
     }
 
-    const QByteArray reportJson = QJsonDocument(report.toJson()).toJson(QJsonDocument::Compact);
-
-    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    if (options.executionContext)
     {
-        if (options.executionContext)
-        {
-            options.executionContext->setData(QJsonObject{
-                { QStringLiteral("report"), report.toJson() }
-            });
-        }
-    }
-    else
-    {
-        PDFConsole::writeData(reportJson);
-        PDFConsole::writeData(QByteArray("\n"));
+        options.executionContext->setData(QJsonObject{
+            { QStringLiteral("report"), report.toJson() }
+        });
     }
 
     if (cancelled)

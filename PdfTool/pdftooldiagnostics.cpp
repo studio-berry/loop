@@ -74,6 +74,10 @@ PDFToolExitCode PDFToolDiagnostics::execute(const PDFToolOptions& options)
         for (const QString& file : result.files)
         {
             files.append(file);
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("diagnostics"),
+                                                  file,
+                                                  QStringLiteral("written") });
         }
 
         options.executionContext->setData(QJsonObject{
