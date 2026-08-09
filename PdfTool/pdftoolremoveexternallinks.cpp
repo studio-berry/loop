@@ -152,6 +152,12 @@ PDFToolExitCode PDFToolRemoveExternalLinks::execute(const PDFToolOptions& option
         return PDFToolExitCode::Success;
     }
 
+    if (!result.document)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), PDFToolTranslationContext::tr("Failed to create modified document."));
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     formatter.writeText("removed-count", PDFToolTranslationContext::tr("External link annotations removed: %1.").arg(result.removed));
     formatter.endDocument();
     if (options.outputStyle == PDFOutputFormatter::Style::Json)
@@ -166,12 +172,6 @@ PDFToolExitCode PDFToolRemoveExternalLinks::execute(const PDFToolOptions& option
         PDFConsole::writeText(formatter.getString(), options.outputCodec);
     }
 
-    if (!result.document)
-    {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to create modified document."), options.outputCodec);
-        return PDFToolExitCode::ProcessingFailure;
-    }
-
     // In-place rewrite of the source document: guard it like the other
     // destructive commands instead of silently replacing the original file.
     if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document))
@@ -179,11 +179,20 @@ PDFToolExitCode PDFToolRemoveExternalLinks::execute(const PDFToolOptions& option
         return blocked;
     }
 
+    if (options.destructiveDryRun)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+        }
+        return PDFToolExitCode::Success;
+    }
+
     pdf::PDFDocumentWriter writer(nullptr);
     pdf::PDFOperationResult writeResult = writer.write(options.document, result.document.data(), true);
     if (!writeResult)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write document. %1").arg(writeResult.getErrorMessage()), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write document. %1").arg(writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.document}});
         return PDFToolExitCode::ProcessingFailure;
     }
 

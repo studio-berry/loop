@@ -194,6 +194,11 @@ struct PDFToolOptions
     QString ocrLanguages = QStringLiteral("en");
     int ocrMinTextChars = 20;
 
+    // For option 'Diagnostics'
+    QString diagnosticsOutputDirectory;
+    bool diagnosticsIncludeLogs = true;
+    bool diagnosticsIncludeSettings = true;
+
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
     // themselves. Null when not running under the contract.
@@ -247,44 +252,45 @@ public:
 
     enum StandardString
     {
-        Command,        ///< Command, by which is this application invoked
-        Name,           ///< Name of application
-        Description     ///< Description (what this application does)
+        Command,   ///< Command, by which is this application invoked
+        Name,   ///< Name of application
+        Description   ///< Description (what this application does)
     };
 
-    enum Option
+    enum Option : quint32
     {
-        ConsoleFormat                   = 0x00000001,       ///< Set format of console output (text, xml or html)
-        OpenDocument                    = 0x00000002,       ///< Flags for document reading
-        SignatureVerification           = 0x00000004,       ///< Flags for signature verification,
-        XmlExport                       = 0x00000008,       ///< Flags for xml export
-        Attachments                     = 0x00000010,       ///< Flags for attachments manipulating
-        DateFormat                      = 0x00000020,       ///< Date format
-        ComputeHashes                   = 0x00000040,       ///< Compute hashes
-        PageSelector                    = 0x00000080,       ///< Select page range (or all pages)
-        TextAnalysis                    = 0x00000100,       ///< Text analysis options
-        TextShow                        = 0x00000200,       ///< Text extract and show options
-        VoiceSelector                   = 0x00000400,       ///< Select voice from SAPI
-        TextSpeech                      = 0x00000800,       ///< Text speech options
-        CharacterMaps                   = 0x00001000,       ///< Character maps for embedded fonts
-        ImageWriterSettings             = 0x00002000,       ///< Settings for writing images (for example, format, etc.)
-        ImageExportSettingsFiles        = 0x00004000,       ///< Settings for exporting page images to files
-        ImageExportSettingsResolution   = 0x00008000,       ///< Settings for resolution of exported images
-        ColorManagementSystem           = 0x00010000,       ///< Color management system settings
-        RenderFlags                     = 0x00020000,       ///< Render flags for page image rasterizer
-        Separate                        = 0x00040000,       ///< Settings for Separate tool
-        Unite                           = 0x00080000,       ///< Settings for Unite tool
-        Optimize                        = 0x00100000,       ///< Settings for Optimize tool
-        CertStore                       = 0x00200000,       ///< Settings for certificate store tool
-        CertStoreInstall                = 0x00400000,       ///< Settings for certificate store install certificate tool
-        Encrypt                         = 0x00800000,       ///< Encryption settings
-        Diff                            = 0x01000000,       ///< Diff settings (compare documents)
-        Redact                          = 0x02000000,       ///< Settings for Redact tool
-        AddBleed                        = 0x04000000,       ///< Settings for add-bleed tool
-        PreflightProfile                = 0x08000000,       ///< Loupe preflight profile path
-        VerifyRedaction                 = 0x10000000,       ///< Settings for verify-redaction tool
-        DestructiveWrite                = 0x20000000,       ///< Shared --dry-run/--report/--force for overwrite commands
-        OcrOptions                      = 0x40000000,       ///< Loupe OCR sidecar settings
+        ConsoleFormat = 0x00000001,   ///< Set format of console output (text, xml or html)
+        OpenDocument = 0x00000002,   ///< Flags for document reading
+        SignatureVerification = 0x00000004,   ///< Flags for signature verification,
+        XmlExport = 0x00000008,   ///< Flags for xml export
+        Attachments = 0x00000010,   ///< Flags for attachments manipulating
+        DateFormat = 0x00000020,   ///< Date format
+        ComputeHashes = 0x00000040,   ///< Compute hashes
+        PageSelector = 0x00000080,   ///< Select page range (or all pages)
+        TextAnalysis = 0x00000100,   ///< Text analysis options
+        TextShow = 0x00000200,   ///< Text extract and show options
+        VoiceSelector = 0x00000400,   ///< Select voice from SAPI
+        TextSpeech = 0x00000800,   ///< Text speech options
+        CharacterMaps = 0x00001000,   ///< Character maps for embedded fonts
+        ImageWriterSettings = 0x00002000,   ///< Settings for writing images (for example, format, etc.)
+        ImageExportSettingsFiles = 0x00004000,   ///< Settings for exporting page images to files
+        ImageExportSettingsResolution = 0x00008000,   ///< Settings for resolution of exported images
+        ColorManagementSystem = 0x00010000,   ///< Color management system settings
+        RenderFlags = 0x00020000,   ///< Render flags for page image rasterizer
+        Separate = 0x00040000,   ///< Settings for Separate tool
+        Unite = 0x00080000,   ///< Settings for Unite tool
+        Optimize = 0x00100000,   ///< Settings for Optimize tool
+        CertStore = 0x00200000,   ///< Settings for certificate store tool
+        CertStoreInstall = 0x00400000,   ///< Settings for certificate store install certificate tool
+        Encrypt = 0x00800000,   ///< Encryption settings
+        Diff = 0x01000000,   ///< Diff settings (compare documents)
+        Redact = 0x02000000,   ///< Settings for Redact tool
+        AddBleed = 0x04000000,   ///< Settings for add-bleed tool
+        PreflightProfile = 0x08000000,   ///< Loupe preflight profile path
+        VerifyRedaction = 0x10000000,   ///< Settings for verify-redaction tool
+        DestructiveWrite = 0x20000000,   ///< Shared --dry-run/--report/--force for overwrite commands
+        OcrOptions = 0x40000000,   ///< Loupe OCR sidecar settings
+        Diagnostics = 0x80000000,   ///< Loupe diagnostics bundle collection
     };
     Q_DECLARE_FLAGS(Options, Option)
 
@@ -299,8 +305,8 @@ public:
 
 protected:
     /// Reports a structured diagnostic to the execution context (JSON mode) and,
-    /// in human modes, keeps the existing stderr behavior. Errors and warnings
-    /// are never written to stderr when an execution context exists.
+    /// in human modes, keeps the existing stderr behavior. JSON mode does not
+    /// duplicate handled diagnostics on stderr.
     /// \param options Options (carries execution context and output style)
     /// \param severity Diagnostic severity
     /// \param code Stable diagnostic identifier (e.g. "pdf.document-unreadable")
@@ -348,7 +354,6 @@ protected:
 class PDFToolApplicationStorage
 {
 public:
-
     /// Returns application by command. If application for given command is not found,
     /// then nullptr is returned.
     /// \param command Command
@@ -380,4 +385,4 @@ private:
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdftool::PDFToolAbstractApplication::Options)
 
-#endif // PDFTOOLABSTRACTAPPLICATION_H
+#endif   // PDFTOOLABSTRACTAPPLICATION_H

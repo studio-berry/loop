@@ -1,0 +1,25 @@
+{
+    "checks": [
+        {
+            "id": "output-intent",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "output-intent",
+            "message": "Output intent 'CGATS TR 001' ICC profile color space RGB is not allowed (allowed: CMYK).",
+            "scope": "document",
+            "severity": "error",
+            "type": "output-intent-color-mismatch"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loupe Test - Output Intent",
+    "schema_version": 3,
+    "warnings": [
+    ]
+}
