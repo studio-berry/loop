@@ -84,7 +84,7 @@
         },
         "code": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$",
+          "pattern": "^[a-z][a-z0-9.-]*$",
           "description": "Stable machine identifier. Machine consumers branch on this, never on message."
         },
         "message": {
