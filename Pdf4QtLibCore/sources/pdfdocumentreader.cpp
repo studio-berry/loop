@@ -485,6 +485,11 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
 
             QByteArray objectStreamData = PDFStreamFilterStorage::getDecodedStream(objectStream, m_securityHandler.data());
 
+            if (n < 0 || n > objectStreamData.size() / 2)
+            {
+                throw PDFException(PDFTranslationContext::tr("Object stream %1 is invalid.").arg(objectStreamReference.objectNumber));
+            }
+
             PDFParsingContext::PDFParsingContextGuard guard(&context, objectStreamReference);
             PDFParser parser(objectStreamData, &context, PDFParser::AllowStreams);
 

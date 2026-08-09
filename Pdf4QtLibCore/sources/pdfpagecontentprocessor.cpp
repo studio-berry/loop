@@ -37,6 +37,14 @@
 namespace pdf
 {
 
+namespace
+{
+
+// Keep this in sync with PREFLIGHT_MAX_FORM_DEPTH in preflightengine.cpp.
+constexpr int MAXIMUM_CONTENT_STREAM_NESTING_DEPTH = 32;
+
+}
+
 // Graphic state operators - mapping from PDF name to the enum, splitted into groups.
 // Please see Table 4.1 in PDF Reference 1.7, chapter 4.1 - Graphic Objects.
 //
@@ -255,6 +263,7 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
     m_patternBaseMatrix(pagePointToDevicePointMatrix),
     m_pagePointToDevicePointMatrix(pagePointToDevicePointMatrix),
     m_meshQualitySettings(meshQualitySettings),
+    m_contentStreamDepth(0),
     m_structuralParentKey(0)
 {
     Q_ASSERT(page);
@@ -569,6 +578,13 @@ void PDFPageContentProcessor::performInterceptInstruction(Operator currentOperat
 
 void PDFPageContentProcessor::processContent(const QByteArray& content)
 {
+    if (m_contentStreamDepth >= MAXIMUM_CONTENT_STREAM_NESTING_DEPTH)
+    {
+        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Maximum content stream nesting depth exceeded."));
+        return;
+    }
+
+    PDFTemporaryValueChange contentStreamDepthGuard(&m_contentStreamDepth, m_contentStreamDepth + 1);
     PDFLexicalAnalyzer parser(content.constBegin(), content.constEnd());
 
     while (!parser.isAtEnd() && !isProcessingCancelled())
@@ -3190,7 +3206,25 @@ void PDFPageContentProcessor::operatorPaintXObject(PDFOperandName name)
                     throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Form of type %1 not supported.").arg(formType));
                 }
 
-                processForm(stream);
+                if (reference.isValid())
+                {
+                    if (m_activeFormReferences.contains(reference))
+                    {
+                        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Recursive Form XObject reference detected."));
+                        return;
+                    }
+
+                    m_activeFormReferences.insert(reference);
+                    auto activeFormGuard = qScopeGuard([this, reference]
+                    {
+                        m_activeFormReferences.erase(reference);
+                    });
+                    processForm(stream);
+                }
+                else
+                {
+                    processForm(stream);
+                }
             }
             else
             {
