@@ -230,6 +230,20 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("allow-signatures", "Classify signature changes as expected."));
     }
 
+    if (optionFlags.testFlag(Repair))
+    {
+        parser->addPositionalArgument("document", "Source PDF for the repair transaction.");
+        parser->addOption(QCommandLineOption("operation", "Registered repair operation id.", "id"));
+        parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
+        parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
+        parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
+        parser->addOption(QCommandLineOption("list-operations", "List registered repair operation descriptors."));
+        parser->addOption(QCommandLineOption("allow-incomplete", "Allow an incomplete diff result to be returned for review; never auto-commit it."));
+        parser->addOption(QCommandLineOption("pswd", "Password for an encrypted source PDF.", "password"));
+        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+    }
+
     if (optionFlags.testFlag(Redact))
     {
         parser->addPositionalArgument("redacteddocument", "Output redacted document filename.");
@@ -1295,6 +1309,21 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.repairDiffOptions.expected.metadata = parser->isSet("allow-metadata");
         options.repairDiffOptions.expected.annotations = parser->isSet("allow-annotations");
         options.repairDiffOptions.expected.signatures = parser->isSet("allow-signatures");
+    }
+
+    if (optionFlags.testFlag(Repair))
+    {
+        options.repairFiles = positionalArguments;
+        options.repairOperationId = parser->value("operation");
+        options.repairParameterAssignments = parser->values("param");
+        options.repairOutputDocument = parser->value("output");
+        options.repairReportFile = parser->value("report-file");
+        options.repairRenderDirectory = parser->value("render-dir");
+        options.repairListOperations = parser->isSet("list-operations");
+        options.repairAllowIncomplete = parser->isSet("allow-incomplete");
+        options.preflightProfilePath = parser->value("profile");
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
     }
 
     if (optionFlags.testFlag(Optimize))
