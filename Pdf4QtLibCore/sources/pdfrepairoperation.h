@@ -25,6 +25,13 @@
 
 #include "pdfrepairdiff.h"
 
+#if defined(_MSC_VER)
+#pragma push_macro("analyze")
+#pragma push_macro("apply")
+#undef analyze
+#undef apply
+#endif
+
 #include <QByteArray>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -74,6 +81,7 @@ enum class PDFRepairDomain : quint32
     Structure = 1u << 10
 };
 Q_DECLARE_FLAGS(PDFRepairDomains, PDFRepairDomain)
+Q_DECLARE_OPERATORS_FOR_FLAGS(PDFRepairDomains)
 
 enum class PDFRepairValidatorKind
 {
@@ -197,6 +205,8 @@ public:
 
 private:
     PDFRepairRegistry() = default;
+    PDFRepairRegistry(const PDFRepairRegistry&) = delete;
+    PDFRepairRegistry& operator=(const PDFRepairRegistry&) = delete;
     std::map<QString, std::unique_ptr<PDFRepairOperation>> m_operations;
 };
 
@@ -262,5 +272,10 @@ QString pdfRepairValidatorName(PDFRepairValidatorKind validator);
 } // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFRepairDomains)
+
+#if defined(_MSC_VER)
+#pragma pop_macro("apply")
+#pragma pop_macro("analyze")
+#endif
 
 #endif // PDFREPAIROPERATION_H

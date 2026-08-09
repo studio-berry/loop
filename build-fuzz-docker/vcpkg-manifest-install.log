@@ -1,0 +1,77 @@
+Detecting compiler hash for triplet x64-linux...
+Compiler found: /usr/bin/c++
+The following packages are already installed:
+  * asmjit:x64-linux@2025-12-13
+    blend2d[core,jit]:x64-linux@2025-11-29
+  * brotli:x64-linux@1.2.0
+  * bzip2[core,tool]:x64-linux@1.0.8#6
+    freetype[core,zlib,png,bzip2,brotli]:x64-linux@2.14.3
+    lcms:x64-linux@2.19.1#1
+    libjpeg-turbo:x64-linux@3.2.0
+    libpng:x64-linux@1.0.0
+    openjpeg:x64-linux@2.5.4
+    openssl:x64-linux@3.6.3
+    tbb:x64-linux@2023.0.0
+  * vcpkg-cmake:x64-linux@2024-04-23
+  * vcpkg-cmake-config:x64-linux@2024-05-23
+  * vcpkg-cmake-get-vars:x64-linux@2025-05-29
+  * vcpkg-tool-meson:x64-linux@1.9.0#10
+    zlib:x64-linux@1.3.2#1
+blend2d provides CMake targets:
+
+    find_package(blend2d CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE blend2d::blend2d)
+
+zlib is compatible with built-in CMake targets:
+
+  find_package(ZLIB REQUIRED)
+  target_link_libraries(main PRIVATE ZLIB::ZLIB)
+
+freetype is compatible with built-in CMake targets:
+
+    find_package(Freetype REQUIRED)
+    target_link_libraries(main PRIVATE Freetype::Freetype) # since CMake 3.10
+
+The package lcms provides CMake targets:
+
+    find_package(lcms2 CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE lcms2::lcms2)
+
+libjpeg-turbo is compatible with built-in implementation-agnostic CMake targets:
+
+    find_package(JPEG REQUIRED)
+    target_link_libraries(main PRIVATE JPEG::JPEG)
+
+libjpeg-turbo provides CMake targets for the TurboJPEG C API:
+
+    find_package(libjpeg-turbo CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE $<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>)
+
+openjpeg provides CMake targets:
+
+  find_package(OpenJPEG CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE openjp2)
+
+openjpeg provides pkg-config modules:
+
+  # JPEG2000 library
+  libopenjp2
+
+openssl is compatible with built-in CMake targets:
+
+  find_package(OpenSSL REQUIRED)
+  target_link_libraries(main PRIVATE OpenSSL::SSL)
+  target_link_libraries(main PRIVATE OpenSSL::Crypto)
+
+tbb provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(TBB CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE TBB::tbb TBB::tbbmalloc)
+
+tbb provides pkg-config modules:
+
+  # C++ library for parallel programming on multi-core processors.
+  tbb
+
+All requested installations completed successfully in: 5.32 ms

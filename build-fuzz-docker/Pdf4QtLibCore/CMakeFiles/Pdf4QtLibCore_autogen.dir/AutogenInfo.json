@@ -1,0 +1,726 @@
+{
+	"BUILD_DIR" : "/work/build-fuzz-docker/Pdf4QtLibCore/Pdf4QtLibCore_autogen",
+	"CMAKE_BINARY_DIR" : "/work/build-fuzz-docker",
+	"CMAKE_CURRENT_BINARY_DIR" : "/work/build-fuzz-docker/Pdf4QtLibCore",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/work/Pdf4QtLibCore",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_LIST_FILES" : 
+	[
+		"/work/Pdf4QtLibCore/CMakeLists.txt",
+		"/usr/share/cmake-3.28/Modules/GenerateExportHeader.cmake",
+		"/usr/share/cmake-3.28/Modules/CheckCompilerFlag.cmake",
+		"/usr/share/cmake-3.28/Modules/Internal/CheckCompilerFlag.cmake",
+		"/usr/share/cmake-3.28/Modules/CheckSourceCompiles.cmake",
+		"/usr/share/cmake-3.28/Modules/Internal/CheckSourceCompiles.cmake",
+		"/usr/share/cmake-3.28/Modules/CheckCCompilerFlag.cmake",
+		"/usr/share/cmake-3.28/Modules/Internal/CheckCompilerFlag.cmake",
+		"/usr/share/cmake-3.28/Modules/CheckCSourceCompiles.cmake",
+		"/usr/share/cmake-3.28/Modules/Internal/CheckSourceCompiles.cmake",
+		"/usr/share/cmake-3.28/Modules/CheckCXXCompilerFlag.cmake",
+		"/usr/share/cmake-3.28/Modules/exportheader.cmake.in",
+		"/work/Pdf4QtLibCore/cmaps.qrc",
+		"/work/Pdf4QtLibCore/aatl.qrc",
+		"/work/Pdf4QtLibCore/fonts.qrc"
+	],
+	"CMAKE_SOURCE_DIR" : "/work",
+	"DEP_FILE" : "/work/build-fuzz-docker/Pdf4QtLibCore/Pdf4QtLibCore_autogen/deps",
+	"DEP_FILE_RULE_NAME" : "Pdf4QtLibCore_autogen/timestamp",
+	"HEADERS" : 
+	[
+		[
+			"/work/Pdf4QtLibCore/sources/pdfaction.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfaction.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfalgorithmlcs.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfalgorithmlcs.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfannotation.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfannotation.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfapplicationtranslator.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfapplicationtranslator.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfbleedfixup.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfbleedfixup.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfbleedmarginprobe.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfbleedmarginprobe.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfblendfunction.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfblendfunction.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfblpainter.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfblpainter.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcatalog.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcatalog.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfccittfaxdecoder.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfccittfaxdecoder.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcertificatemanager.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcertificatemanager.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcertificatestore.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcertificatestore.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcms.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcms.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcolorconvertor.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcolorconvertor.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfcolorspaces.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfcolorspaces.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdiff.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdiff.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocument.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocument.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentbuilder.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentbuilder.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentmanipulator.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentmanipulator.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentreader.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentreader.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentsanitizer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentsanitizer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentsession.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentsession.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumenttextflow.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumenttextflow.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumenttextfloweditormodel.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumenttextfloweditormodel.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumentwriter.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfdocumentwriter.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfeditorfallbackfont.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfeditorfallbackfont.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfencoding.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfencoding.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfexecutionpolicy.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfexecutionpolicy.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdffile.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdffile.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdffilenamesanitizer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdffilenamesanitizer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdffont.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdffont.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfform.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfform.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdffunction.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdffunction.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfglobal.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfglobal.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdficontheme.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdficontheme.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfimage.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfimage.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfimagecompressor.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfimagecompressor.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfimageconversion.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfimageconversion.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfimageoptimizer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfimageoptimizer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfjavascriptscanner.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfjavascriptscanner.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfjbig2decoder.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfjbig2decoder.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfmultimedia.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfmultimedia.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfnametounicode.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfnametounicode.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfobject.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfobject.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfobjecteditormodel.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfobjecteditormodel.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfobjectutils.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfobjectutils.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfocrpagegate.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfocrpagegate.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfocrreport.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfocrreport.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfoptimizer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfoptimizer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfoptionalcontent.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfoptionalcontent.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfoutline.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfoutline.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpage.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpage.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagecontenteditorcontentstreambuilder.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagecontenteditorcontentstreambuilder.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagecontenteditorprocessor.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagecontenteditorprocessor.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagecontentprocessor.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagecontentprocessor.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagegeometry.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagegeometry.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagemasterexport.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagemasterexport.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagenavigation.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagenavigation.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagetransition.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpagetransition.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpainter.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpainter.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpainterutils.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpainterutils.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfparser.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfparser.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpattern.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpattern.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfplugin.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfplugin.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpreflightchecks.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfpreflightchecks.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfprogress.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfprogress.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfredact.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfredact.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfredactverifier.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfredactverifier.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfrenderer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfrenderer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsafefilewriter.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsafefilewriter.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsecurityhandler.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsecurityhandler.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsentry.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsentry.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsettings.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsettings.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsignaturehandler.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsignaturehandler.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfsnapper.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfsnapper.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfstreamfilters.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfstreamfilters.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfstructuretree.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfstructuretree.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdftextlayout.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdftextlayout.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdftextlayoutgenerator.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdftextlayoutgenerator.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdftransparencyrenderer.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdftransparencyrenderer.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfutils.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfutils.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfvisitor.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfvisitor.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfwidgetsnapshot.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfwidgetsnapshot.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfxfaengine.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfxfaengine.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfxreftable.h",
+			"MU",
+			"EXY53EAHJJ/moc_pdfxreftable.cpp",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/preflightengine.h",
+			"MU",
+			"EXY53EAHJJ/moc_preflightengine.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/work/build-fuzz-docker/Pdf4QtLibCore/Pdf4QtLibCore_autogen/include",
+	"MOC_COMPILATION_FILE" : "/work/build-fuzz-docker/Pdf4QtLibCore/Pdf4QtLibCore_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"PDF4QT_PROJECT_VERSION=\"1.6.0.0\"",
+		"Pdf4QtLibCore_EXPORTS",
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NO_DEBUG",
+		"QT_NO_EMIT",
+		"QT_SVG_LIB",
+		"QT_XML_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/work/build-fuzz-docker",
+		"/opt/Qt/6.11.1/gcc_64/include/QtCore",
+		"/opt/Qt/6.11.1/gcc_64/include",
+		"/opt/Qt/6.11.1/gcc_64/mkspecs/linux-g++",
+		"/opt/Qt/6.11.1/gcc_64/include/QtGui",
+		"/opt/Qt/6.11.1/gcc_64/include/QtXml",
+		"/opt/Qt/6.11.1/gcc_64/include/QtSvg",
+		"/work/.docker-vcpkg-installed/x64-linux/include",
+		"/work/.docker-vcpkg-installed/x64-linux/include/openjpeg-2.5",
+		"/usr/include",
+		"/usr/include/c++/13",
+		"/usr/include/x86_64-linux-gnu/c++/13",
+		"/usr/include/c++/13/backward",
+		"/usr/lib/llvm-18/lib/clang/18/include",
+		"/usr/local/include",
+		"/usr/include/x86_64-linux-gnu"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT",
+		"Q_GADGET_EXPORT",
+		"Q_ENUM_NS"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/clang++",
+		"-std=gnu++20",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.28/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/work/build-fuzz-docker/Pdf4QtLibCore/Pdf4QtLibCore_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 12,
+	"PARSE_CACHE_FILE" : "/work/build-fuzz-docker/Pdf4QtLibCore/CMakeFiles/Pdf4QtLibCore_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/opt/Qt/6.11.1/gcc_64/libexec/moc",
+	"QT_UIC_EXECUTABLE" : "",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 11,
+	"SETTINGS_FILE" : "/work/build-fuzz-docker/Pdf4QtLibCore/CMakeFiles/Pdf4QtLibCore_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[ "/work/Pdf4QtLibCore/sources/pdfaction.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfalgorithmlcs.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfannotation.cpp", "MU", null ],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfapplicationtranslator.cpp",
+			"MU",
+			null
+		],
+		[ "/work/Pdf4QtLibCore/sources/pdfbleedfixup.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfbleedmarginprobe.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfblendfunction.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfblpainter.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcatalog.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfccittfaxdecoder.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcertificatemanager.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcertificatestore.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcms.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcolorconvertor.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfcolorspaces.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdiff.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocument.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentbuilder.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentmanipulator.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentreader.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentsanitizer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentsession.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumenttextflow.cpp", "MU", null ],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfdocumenttextfloweditormodel.cpp",
+			"MU",
+			null
+		],
+		[ "/work/Pdf4QtLibCore/sources/pdfdocumentwriter.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfeditorfallbackfont.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfencoding.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfexecutionpolicy.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdffile.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdffilenamesanitizer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdffont.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfform.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdffunction.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdficontheme.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfimage.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfimagecompressor.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfimageconversion.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfimageoptimizer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfjavascriptscanner.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfjbig2decoder.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfmultimedia.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfnametounicode.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfobject.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfobjecteditormodel.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfobjectutils.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfocrpagegate.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfocrreport.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfoptimizer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfoptionalcontent.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfoutline.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpage.cpp", "MU", null ],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagecontenteditorcontentstreambuilder.cpp",
+			"MU",
+			null
+		],
+		[
+			"/work/Pdf4QtLibCore/sources/pdfpagecontenteditorprocessor.cpp",
+			"MU",
+			null
+		],
+		[ "/work/Pdf4QtLibCore/sources/pdfpagecontentprocessor.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpagegeometry.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpagemasterexport.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpagenavigation.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpagetransition.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpainter.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpainterutils.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfparser.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfpattern.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfplugin.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfprogress.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfredact.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfredactverifier.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfrenderer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsafefilewriter.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsecurityhandler.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsentry.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsettings.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsignaturehandler.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfsnapper.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfstreamfilters.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfstructuretree.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdftextlayout.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdftextlayoutgenerator.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdftransparencyrenderer.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfutils.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfvisitor.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfwidgetsnapshot.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfxfaengine.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/pdfxreftable.cpp", "MU", null ],
+		[ "/work/Pdf4QtLibCore/sources/preflightengine.cpp", "MU", null ]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}

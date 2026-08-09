@@ -178,7 +178,7 @@ bool validateValue(const QJsonValue& value,
 
     if (schema.value(QStringLiteral("additionalProperties")).toBool(true) == false)
     {
-        for (auto it = object.cbegin(); it != object.cend(); ++it)
+        for (auto it = object.begin(); it != object.end(); ++it)
         {
             if (!properties.contains(it.key()))
             {
@@ -188,7 +188,7 @@ bool validateValue(const QJsonValue& value,
     }
 
     bool valid = true;
-    for (auto it = object.cbegin(); it != object.cend(); ++it)
+    for (auto it = object.begin(); it != object.end(); ++it)
     {
         if (properties.contains(it.key()))
         {
@@ -204,7 +204,7 @@ QJsonValue resolveValue(const QJsonValue& value, const QJsonObject& bindings, QS
     {
         QJsonObject result;
         const QJsonObject source = value.toObject();
-        for (auto it = source.cbegin(); it != source.cend(); ++it)
+        for (auto it = source.begin(); it != source.end(); ++it)
         {
             result.insert(it.key(), resolveValue(it.value(), bindings, errors));
         }
@@ -505,7 +505,7 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
 
         if (!step.condition.isEmpty())
         {
-            for (auto it = step.condition.cbegin(); it != step.condition.cend(); ++it)
+            for (auto it = step.condition.begin(); it != step.condition.end(); ++it)
             {
                 if (it.key() != QStringLiteral("enabled") &&
                     it.key() != QStringLiteral("findingExists") &&

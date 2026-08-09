@@ -24,6 +24,7 @@
 #define PDFPROCESSINGBUDGET_H
 
 #include "pdfexception.h"
+#include "pdfglobal.h"
 
 #include <QString>
 
