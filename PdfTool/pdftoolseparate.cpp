@@ -91,7 +91,22 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InvalidInvocation;
     }
 
+    QStringList plannedOutputs;
+    plannedOutputs.reserve(int(pageIndices.size()));
+    for (pdf::PDFInteger pageIndex : pageIndices)
+    {
+        QString fileName = options.separatePagePattern;
+        fileName.replace('%', QString::number(pageIndex + 1));
+        plannedOutputs.append(fileName);
+    }
+
+    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs))
+    {
+        return blocked;
+    }
+
     size_t failedWrites = 0;
+    int plannedOutputIndex = 0;
 
     for (pdf::PDFInteger pageIndex : pageIndices)
     {
@@ -99,6 +114,8 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
         {
             return PDFToolExitCode::Cancelled;
         }
+
+        const QString fileName = plannedOutputs.at(plannedOutputIndex++);
 
         try
         {
@@ -119,14 +136,6 @@ PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
             optimizer.setDocument(&singlePageDocument);
             optimizer.optimize();
             singlePageDocument = optimizer.takeOptimizedDocument();
-
-            QString fileName = options.separatePagePattern;
-            fileName.replace('%', QString::number(pageIndex + 1));
-
-            if (const PDFToolExitCode blocked = validateDestructiveOutput(options, fileName))
-            {
-                return blocked;
-            }
 
             if (options.destructiveReport)
             {

@@ -29,41 +29,11 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMimeDatabase>
-#include <QSet>
 
 namespace pdftool
 {
 
 static PDFToolAttachmentsApplication s_attachmentsApplication;
-
-/// Returns the first "base (n).ext" variant of \p fileName that is neither claimed
-/// in this run (via \p usedPaths) nor present on disk. Returns \p fileName unchanged
-/// when it already satisfies both.
-static QString makeRunUniqueFileName(const QString& fileName, const QSet<QString>& usedPaths)
-{
-    if (!usedPaths.contains(fileName) && !QFile::exists(fileName))
-    {
-        return fileName;
-    }
-
-    const QFileInfo info(fileName);
-    const QString baseName = info.completeBaseName();
-    const QString suffix = info.suffix();
-    const QString directory = info.absolutePath();
-
-    for (qint64 n = 1; n < 100000; ++n)
-    {
-        QString candidate = QDir(directory).filePath(suffix.isEmpty()
-                                            ? QStringLiteral("%1 (%2)").arg(baseName).arg(n)
-                                            : QStringLiteral("%1 (%2).%3").arg(baseName).arg(n).arg(suffix));
-        if (!usedPaths.contains(candidate) && !QFile::exists(candidate))
-        {
-            return candidate;
-        }
-    }
-
-    return fileName;
-}
 
 QString PDFToolAttachmentsApplication::getStandardString(StandardString standardString) const
 {
@@ -207,7 +177,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
         }
 
         // Guard every planned output up front: a name already on disk needs
-        // --overwrite; names are re-checked (and uniquified) again in the loop.
+        // --overwrite, and duplicate normalized names are rejected before any write.
         QStringList plannedOutputs;
         for (const FileInfo& info : embeddedFiles)
         {
@@ -243,7 +213,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
 
         bool anyAttachmentSkipped = false;
         size_t writtenCount = 0;
-        QSet<QString> usedPaths;
+        int plannedOutputIndex = 0;
         for (const FileInfo& info : embeddedFiles)
         {
             if (!info.isSaved)
@@ -252,37 +222,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
                 continue;
             }
 
-            QString outputFile = pdf::PDFFilenameSanitizer::sanitize(info.fileName);
-            if (!options.attachmentsTargetFile.isEmpty())
-            {
-                outputFile = options.attachmentsTargetFile;
-            }
-
-            if (!options.attachmentsOutputDirectory.isEmpty())
-            {
-                outputFile = QDir(options.attachmentsOutputDirectory).filePath(outputFile);
-
-                if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
-                {
-                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.path-outside-directory"), PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName));
-                    anyAttachmentSkipped = true;
-                    continue;
-                }
-            }
-
-            // Names colliding within a single run must not clobber each other:
-            // append a unique suffix instead of overwriting the sibling output.
-            // Existing on-disk files are reused intentionally (see --overwrite).
-            while (usedPaths.contains(outputFile))
-            {
-                const QString unique = makeRunUniqueFileName(outputFile, usedPaths);
-                if (unique == outputFile)
-                {
-                    break;
-                }
-                outputFile = unique;
-            }
-            usedPaths.insert(outputFile);
+            const QString outputFile = plannedOutputs.at(plannedOutputIndex++);
 
             if (options.destructiveDryRun)
             {

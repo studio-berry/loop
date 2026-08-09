@@ -200,7 +200,7 @@ QString sanitizeOutputFileName(QString fileName)
 
 QString normalizedOutputPathKey(const QString& fileName)
 {
-    return QDir::cleanPath(fileName).toCaseFolded();
+    return QDir::cleanPath(QFileInfo(fileName).absoluteFilePath()).toCaseFolded();
 }
 
 int pageRotationToInt(pdf::PageRotation rotation)

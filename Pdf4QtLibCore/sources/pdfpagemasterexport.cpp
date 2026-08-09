@@ -110,6 +110,54 @@ QString resolveManifestPath(const PDFPageMasterExportJob& job)
     return QDir(firstOutput.absolutePath()).filePath(QString(MANIFEST_FILE_NAME));
 }
 
+QStringList plannedOutputPaths(const PDFPageMasterExportJob& job, const QString& manifestPath)
+{
+    QStringList paths;
+    paths.reserve(int(job.outputFileNames.size()) * 3 + (manifestPath.isEmpty() ? 0 : 1));
+    for (const QString& outputPath : job.outputFileNames)
+    {
+        paths.append(outputPath);
+        if (job.hasPreflightGate && !job.preflightProfilePath.isEmpty())
+        {
+            paths.append(outputPath + QStringLiteral(".preflight.json"));
+            if (job.revalidatePreflightAfterFixups)
+            {
+                paths.append(outputPath + QStringLiteral(".preflight-final.json"));
+            }
+        }
+    }
+    if (!manifestPath.isEmpty())
+    {
+        paths.append(manifestPath);
+    }
+    return paths;
+}
+
+QString outputConflictMessage(const PDFOutputConflict& conflict)
+{
+    if (conflict.code == QStringLiteral("output.duplicate-planned-path"))
+    {
+        return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                           "Output path '%1' is planned more than once.").arg(conflict.path);
+    }
+    if (conflict.code == QStringLiteral("output.destination-is-directory"))
+    {
+        return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                           "Output path '%1' is a directory.").arg(conflict.path);
+    }
+    return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                       "Output path '%1' already exists.").arg(conflict.path);
+}
+
+QString normalizedOutputPath(const QString& path)
+{
+    QString normalized = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    normalized = normalized.toCaseFolded();
+#endif
+    return normalized;
+}
+
 bool writeFileAtomically(const QString& finalPath, const QByteArray& payload)
 {
     const PDFOperationResult result = PDFSafeFileWriter::writeData(finalPath, payload, PDFSafeFileWriter::OverwritePolicy::Overwrite);
@@ -352,7 +400,7 @@ bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterE
     for (int index = 0; index < outputs.size(); ++index)
     {
         const QString manifestPath = outputs.at(index).toObject().value(QStringLiteral("path")).toString();
-        if (QFileInfo(manifestPath).absoluteFilePath() != QFileInfo(job.outputFileNames[size_t(index)]).absoluteFilePath())
+        if (normalizedOutputPath(manifestPath) != normalizedOutputPath(job.outputFileNames[size_t(index)]))
         {
             return false;
         }
@@ -364,11 +412,11 @@ bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterE
 int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
 {
     const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
-    const QString absolutePath = QFileInfo(fileName).absoluteFilePath();
+    const QString absolutePath = normalizedOutputPath(fileName);
     for (int index = 0; index < outputs.size(); ++index)
     {
         const QString entryPath = outputs.at(index).toObject().value(QStringLiteral("path")).toString();
-        if (QFileInfo(entryPath).absoluteFilePath() == absolutePath)
+        if (normalizedOutputPath(entryPath) == absolutePath)
         {
             return index;
         }
@@ -432,6 +480,12 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     }
 
     const QString manifestPath = resolveManifestPath(job);
+    const QStringList plannedPaths = plannedOutputPaths(job, manifestPath);
+    for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, false))
+    {
+        return createExportError(outputConflictMessage(conflict));
+    }
+
     QJsonObject manifest;
     QString batchId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
@@ -453,6 +507,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             // Stale or mismatched batch — start a fresh manifest for this job.
             job.resume = false;
+            for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, !job.overwriteFiles))
+            {
+                return createExportError(outputConflictMessage(conflict));
+            }
             manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
             if (!persistManifest(manifestPath, manifest))
             {
@@ -468,6 +526,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     else
     {
         job.resume = false;
+        for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, !job.overwriteFiles))
+        {
+            return createExportError(outputConflictMessage(conflict));
+        }
         manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
         if (!manifestPath.isEmpty() && !persistManifest(manifestPath, manifest))
         {
