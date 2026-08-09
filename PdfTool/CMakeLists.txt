@@ -78,6 +78,8 @@ add_executable(PdfTool
     pdftoolrepairdiff.h
     pdftoolrepair.cpp
     pdftoolrepair.h
+    pdftoolactionlist.cpp
+    pdftoolactionlist.h
 )
 
 target_link_libraries(PdfTool PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml)
