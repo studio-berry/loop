@@ -59,14 +59,14 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
     {
         if (readDocument(options, document, &sourceData, false))
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Authorization as owner failed. Encryption removal is not permitted if authorized as user only."), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.owner-authorization-required"), PDFToolTranslationContext::tr("Authorization as owner failed. Encryption removal is not permitted if authorized as user only."));
         }
         return PDFToolExitCode::InputError;
     }
 
     if (document.getStorage().getSecurityHandler()->getMode() == pdf::EncryptionMode::None)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document is not encrypted."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Warning, QStringLiteral("pdf.not-encrypted"), PDFToolTranslationContext::tr("Document is not encrypted."));
         return PDFToolExitCode::Success;
     }
 
@@ -77,7 +77,14 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
 
     if (options.destructiveReport)
     {
-        PDFConsole::writeText(PDFToolTranslationContext::tr("Would decrypt '%1'.").arg(options.document), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("decrypt")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+        else
+        {
+            PDFConsole::writeText(PDFToolTranslationContext::tr("Would decrypt '%1'.").arg(options.document), options.outputCodec);
+        }
     }
 
     if (options.destructiveDryRun)
@@ -109,7 +116,7 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
 
     if (!result)
     {
-        PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), options.document}});
         return PDFToolExitCode::ProcessingFailure;
     }
 

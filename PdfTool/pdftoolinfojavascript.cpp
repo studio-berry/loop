@@ -63,7 +63,7 @@ PDFToolExitCode PDFToolInfoJavaScriptApplication::execute(const PDFToolOptions& 
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 

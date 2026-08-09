@@ -134,7 +134,7 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.copy-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to copy content."));
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -143,7 +143,7 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -151,7 +151,7 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
     Options optionFlags = getOptionsFlags();
     if (!options.imageExportSettings.validate(&errorMessage, false, optionFlags.testFlag(ImageExportSettingsFiles), optionFlags.testFlag(ImageExportSettingsResolution)))
     {
-        PDFConsole::writeError(errorMessage, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), errorMessage);
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -289,8 +289,12 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
         if (!writeResult)
         {
             m_failedWrites.fetch_add(1);
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
-                                       .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError), options.outputCodec);
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.write-failed"),
+                             PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
+                                 .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError),
+                             QJsonObject{{QStringLiteral("path"), image.fileName}});
         }
 
         if (options.executionContext)
