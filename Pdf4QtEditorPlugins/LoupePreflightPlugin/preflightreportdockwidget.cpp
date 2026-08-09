@@ -95,9 +95,24 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     m_fixupsList->setMaximumHeight(120);
     reportLayout->addWidget(m_fixupsList);
 
-    m_applyFixupButton = new QPushButton(tr("Apply Bleed Fix..."), reportPage);
+    m_applyFixupButton = new QPushButton(tr("Apply Fixup..."), reportPage);
     m_applyFixupButton->setEnabled(false);
-    connect(m_applyFixupButton, &QPushButton::clicked, this, &PreflightReportDockWidget::applyBleedFixupRequested);
+    connect(m_applyFixupButton, &QPushButton::clicked, this, [this]
+    {
+        QListWidgetItem* item = m_fixupsList ? m_fixupsList->currentItem() : nullptr;
+        if (!item && m_fixupsList && m_fixupsList->count() > 0)
+        {
+            item = m_fixupsList->item(0);
+        }
+        if (item)
+        {
+            const QString id = item->data(Qt::UserRole).toString();
+            if (!id.isEmpty())
+            {
+                Q_EMIT applyFixupRequested(id);
+            }
+        }
+    });
     reportLayout->addWidget(m_applyFixupButton);
 
     m_contentStack->addWidget(reportPage);
@@ -192,7 +207,8 @@ void PreflightReportDockWidget::refreshFixups()
         const QString label = fixup.safe
                                   ? tr("%1 — %2 (safe)").arg(fixup.id, fixup.description)
                                   : tr("%1 — %2").arg(fixup.id, fixup.description);
-        m_fixupsList->addItem(label);
+        QListWidgetItem* item = new QListWidgetItem(label, m_fixupsList);
+        item->setData(Qt::UserRole, fixup.id);
     }
 
     if (m_fixupsList->count() == 0)
@@ -208,8 +224,7 @@ void PreflightReportDockWidget::refreshApplyFixupButton()
         return;
     }
 
-    m_applyFixupButton->setEnabled(m_model.hasReport()
-                                   && (m_model.hasAddBleedFixup() || m_model.hasRgbToCmykFixup()));
+    m_applyFixupButton->setEnabled(m_model.hasReport() && !m_model.fixups().isEmpty());
 }
 
 void PreflightReportDockWidget::refreshEmptyState()

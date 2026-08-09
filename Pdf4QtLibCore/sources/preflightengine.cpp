@@ -34,6 +34,7 @@
 #include "pdffont.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
+#include "pdfimageoptimizer.h"
 #include "pdfinkcoverageprobe.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfoptionalcontent.h"
@@ -849,7 +850,47 @@ bool hasBleedGapFinding(const QList<PreflightFinding>& findings)
     return false;
 }
 
-void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
+bool hasDownsampleCandidate(const PDFDocument* document,
+                            int targetDpi,
+                            int* candidateCount = nullptr)
+{
+    if (candidateCount)
+    {
+        *candidateCount = 0;
+    }
+    if (!document || targetDpi < 72 || targetDpi > 1200)
+    {
+        return false;
+    }
+
+    const std::vector<PDFImageOptimizer::ImageInfo> images = PDFImageOptimizer::collectImageInfos(document);
+    constexpr double qualityThreshold = 1.15;
+    int count = 0;
+    for (const PDFImageOptimizer::ImageInfo& image : images)
+    {
+        if (image.isImageMask)
+        {
+            continue;
+        }
+        const double dpiX = image.minimalDpi.x();
+        const double dpiY = image.minimalDpi.y();
+        const bool highX = std::isfinite(dpiX) && dpiX > targetDpi * qualityThreshold;
+        const bool highY = std::isfinite(dpiY) && dpiY > targetDpi * qualityThreshold;
+        if (highX || highY)
+        {
+            ++count;
+        }
+    }
+
+    if (candidateCount)
+    {
+        *candidateCount = count;
+    }
+    return count > 0;
+}
+
+void adjustFixupsAvailable(PDFDocumentSession* session,
+                           QList<PreflightFixupConfig>& fixups,
                            bool needsAddBleed,
                            qreal addBleedAmountPt,
                            const QList<PreflightFinding>& errors,
@@ -859,6 +900,8 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
     bool hasProfileAddBleed = false;
     PreflightFixupConfig rgbToCmykConfig;
     bool hasProfileRgbToCmyk = false;
+    PreflightFixupConfig downsampleConfig;
+    bool hasProfileDownsample = false;
 
     for (const PreflightFixupConfig& fixup : fixups)
     {
@@ -866,6 +909,16 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
         {
             addBleedConfig = fixup;
             hasProfileAddBleed = true;
+            break;
+        }
+    }
+
+    for (const PreflightFixupConfig& fixup : fixups)
+    {
+        if (fixup.id == QStringLiteral("downsample-images"))
+        {
+            downsampleConfig = fixup;
+            hasProfileDownsample = true;
             break;
         }
     }
@@ -940,6 +993,29 @@ void adjustFixupsAvailable(QList<PreflightFixupConfig>& fixups,
         params.insert(QStringLiteral("safe"), true);
         rgbToCmykConfig.params = params;
         fixups.push_back(rgbToCmykConfig);
+    }
+
+    const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
+    int candidateCount = 0;
+    if (hasProfileDownsample
+        && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
+    {
+        if (downsampleConfig.description.isEmpty())
+        {
+            downsampleConfig.description = PDFTranslationContext::tr(
+                "Downsample %1 oversized image(s) toward %2 DPI")
+                .arg(candidateCount)
+                .arg(targetDpi);
+        }
+
+        QJsonObject params = downsampleConfig.params;
+        params.insert(QStringLiteral("target_dpi"), targetDpi);
+        params.insert(QStringLiteral("candidate_count"), candidateCount);
+        params.insert(QStringLiteral("quality"), 90);
+        params.insert(QStringLiteral("preserve_color"), true);
+        params.insert(QStringLiteral("preserve_transparency"), true);
+        downsampleConfig.params = params;
+        fixups.push_back(downsampleConfig);
     }
 }
 
@@ -2882,7 +2958,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
     }
 
     const bool needsAddBleed = hasBleedGapFinding(result.errors) || hasBleedGapFinding(result.warnings);
-    adjustFixupsAvailable(result.fixupsAvailable,
+    adjustFixupsAvailable(m_session,
+                          result.fixupsAvailable,
                           needsAddBleed,
                           addBleedAmountPt,
                           result.errors,
@@ -3149,6 +3226,26 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         fixup.amountPt = fixupObject.value(QStringLiteral("amount_pt")).toDouble(0.0);
         fixup.description = fixupObject.value(QStringLiteral("description")).toString();
         fixup.params = fixupObject.value(QStringLiteral("params")).toObject();
+        if (fixupObject.contains(QStringLiteral("target_dpi"))
+            && !fixup.params.contains(QStringLiteral("target_dpi")))
+        {
+            fixup.params.insert(QStringLiteral("target_dpi"), fixupObject.value(QStringLiteral("target_dpi")));
+        }
+        if (fixup.id == QStringLiteral("downsample-images"))
+        {
+            const QJsonValue targetDpiValue = fixup.params.value(QStringLiteral("target_dpi"));
+            if (!targetDpiValue.isUndefined()
+                && (!targetDpiValue.isDouble()
+                    || !std::isfinite(targetDpiValue.toDouble())
+                    || std::floor(targetDpiValue.toDouble()) != targetDpiValue.toDouble()
+                    || targetDpiValue.toInt() < 72
+                    || targetDpiValue.toInt() > 1200))
+            {
+                errorMessage = PDFTranslationContext::tr(
+                    "Fixup 'downsample-images' requires an integral target_dpi between 72 and 1200.");
+                return false;
+            }
+        }
 
         profile.fixups.push_back(fixup);
     }
