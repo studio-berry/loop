@@ -41,6 +41,9 @@ Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 | `probe_threshold` | `content-bleed` |
 | `raster_white_threshold` | `content-bleed` |
 
+The `transparency-risk` check has no additional parameters; it observes
+transparency groups, blend modes, and blend-space crossings.
+
 ## Report JSON
 
 Required top-level fields: `pass`, `profile`, `errors`, `warnings`, `fixups_available`.
@@ -102,6 +105,18 @@ full-page rasterization and is intended for profiles that explicitly opt in.
 Pages exceeding the raster pixel budget emit an informational page-scope finding
 instead of silently passing.
 
+## Transparency risk checking
+
+The `transparency-risk` check observes actual page-content processing and emits
+page-scoped `transparency-blend-mode` and `transparency-blend-space` findings.
+Ordinary `Normal` transparency is legitimate and does not trigger a finding.
+The check flags risky non-separable or unsupported blend modes at transparency
+group boundaries and detects RGB/CMYK, process/Spot, and Gray-family crossings
+using the group's effective blend space. Nested groups are evaluated at their
+real compositing boundaries, including Forms, tiling, shadings, images, text,
+and annotation appearance streams. These are appearance/production-risk
+advisories, not claims that the PDF is invalid.
+
 ## Intended CLI (MIC-133)
 
 ```bash
@@ -118,8 +133,7 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - Exit `0` when `pass` is true; exit `1` when `errors[]` is non-empty.
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
-- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `color-inventory` reports deterministic process/spot separations and page-scoped rich-black findings; `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
-- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **color-mode**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
+- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
 Other PdfTool commands accept `--console-format json` via `PDFOutputFormatter` (tree JSON, not the preflight report schema).
 
@@ -243,6 +257,12 @@ passes, and only the target check is exercised.
 | `content-bleed-three-of-four.pdf` | tiered-bleed | fail (warnings) | `content-bleed` (one empty edge only) |
 | `ink-coverage-over.pdf` | test-ink-coverage | warning | `ink-coverage` (over-limit TAC region) |
 | `ink-coverage-ok.pdf` | test-ink-coverage | pass | clean TAC below the threshold |
+| `transparency-normal-cmyk.pdf` | test-transparency-risk | pass | matching CMYK group/content is clean |
+| `transparency-hue.pdf` | test-transparency-risk | warning | `transparency-blend-mode` |
+| `transparency-rgb-group-cmyk.pdf` | test-transparency-risk | warning | `transparency-blend-space` |
+| `transparency-cmyk-group-rgb.pdf` | test-transparency-risk | warning | `transparency-blend-space` |
+| `transparency-cmyk-group-spot.pdf` | test-transparency-risk | warning | `transparency-blend-space` |
+| `transparency-annotation-appearance.pdf` | test-transparency-risk | warning | annotation `/AP` `transparency-blend-space` |
 
 The `bleed-*` pair above covers the `bleed` check, so every Loupe Default custom check has
 at least one known-pass and one known-fail (or warning) case.
