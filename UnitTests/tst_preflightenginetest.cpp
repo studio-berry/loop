@@ -25,6 +25,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
+#include "pdfinkcoverageprobe.h"
 
 #include <QtTest>
 #include <QFile>
@@ -44,6 +45,8 @@ private slots:
     void parseProfile_rejectsEmptyChecks();
     void parseProfile_rejectsInkCoverageWithoutPositiveMax();
     void parseProfile_acceptsInkCoverageDefaults();
+    void parseProfile_rejectsInvalidInkCoverageParameters();
+    void parseProfile_acceptsInkCoverageAnalysisBox();
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
@@ -63,6 +66,8 @@ private slots:
     void run_whiteOverprint_emitsWarningInsideFormXObject();
     void run_inkCoverage_emitsRegionalWarningForOverLimitFixture();
     void run_inkCoverage_passesBelowLimitFixture();
+    void run_inkCoverage_budgetAbortIsIncomplete();
+    void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
     void run_colorRgbFixtureFailsColorMode();
     void colorInventory_isRegisteredAndInfoOnly();
     void colorInventory_rejectsInvalidParameters();
@@ -269,6 +274,64 @@ void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
     QCOMPARE(profile.checks.first().probeDpi, 150);
     QCOMPARE(profile.checks.first().minRegionAreaPct, 0.05);
     QCOMPARE(profile.checks.first().maxRegionsPerPage, 20);
+    QCOMPARE(profile.checks.first().inkCoverageAnalysisBox, QStringLiteral("bleed"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsInvalidInkCoverageParameters()
+{
+    const QList<QPair<QString, QJsonValue>> invalidValues{
+        { QStringLiteral("max_ink_pct"), QJsonValue(QStringLiteral("300")) },
+        { QStringLiteral("max_ink_pct"), QJsonValue(true) },
+        { QStringLiteral("probe_dpi"), QJsonValue(0) },
+        { QStringLiteral("probe_dpi"), QJsonValue(150.5) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(-1) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(101) },
+        { QStringLiteral("min_region_area_pct"), QJsonValue(QStringLiteral("0.05")) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(0) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(1.5) },
+        { QStringLiteral("max_regions_per_page"), QJsonValue(QStringLiteral("20")) },
+        { QStringLiteral("analysis_box"), QJsonValue(QStringLiteral("art")) },
+        { QStringLiteral("analysis_box"), QJsonValue(42) }
+    };
+
+    for (const auto& invalid : invalidValues)
+    {
+        pdf::PreflightEngine engine(nullptr);
+        pdf::PreflightProfileData profile;
+        QString errorMessage;
+        const QJsonObject check{
+            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+            { QStringLiteral("max_ink_pct"), 300 },
+            { invalid.first, invalid.second }
+        };
+        const QJsonObject profileObject{
+            { QStringLiteral("name"), QStringLiteral("Ink coverage") },
+            { QStringLiteral("checks"), QJsonArray{ check } }
+        };
+
+        QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+        QVERIFY2(!errorMessage.isEmpty(), qPrintable(invalid.first));
+    }
+}
+
+void PreflightEngineTest::parseProfile_acceptsInkCoverageAnalysisBox()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                { QStringLiteral("max_ink_pct"), 300 },
+                { QStringLiteral("analysis_box"), QStringLiteral("media") }
+            }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(profile.checks.first().inkCoverageAnalysisBox, QStringLiteral("media"));
 }
 
 void PreflightEngineTest::parseProfile_acceptsThinStrokeOverridesAndDefaults()
@@ -813,6 +876,64 @@ void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
     QVERIFY(result.pass);
     QCOMPARE(result.errors.size(), 0);
     QCOMPARE(result.warnings.size(), 0);
+}
+
+void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 20000, 20000));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Ink coverage budget") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                { QStringLiteral("max_ink_pct"), 300 },
+                { QStringLiteral("probe_dpi"), 72 },
+                { QStringLiteral("analysis_box"), QStringLiteral("media") }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("check-incomplete"));
+    QCOMPARE(result.checkStatuses.size(), 1);
+    QCOMPARE(result.checkStatuses.first().status, QStringLiteral("skipped"));
+    QCOMPARE(result.checkStatuses.first().reason, QStringLiteral("rasterization incomplete"));
+}
+
+void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 10000, 10000));
+    builder.setPageBleedBox(pageReference, QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFInkCoverageProbe probe(&session);
+    pdf::PDFInkCoverageProbeSettings settings;
+    settings.dpi = 72;
+    settings.maxRasterPixels = 1000000;
+    settings.analysisBox = pdf::PDFInkCoverageAnalysisBox::Bleed;
+
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    const pdf::PDFInkCoverageProbeResult bleedResult = probe.probe(page, 0, settings);
+    QVERIFY(bleedResult.rasterized);
+    QVERIFY(!bleedResult.budgetExceeded);
+
+    settings.analysisBox = pdf::PDFInkCoverageAnalysisBox::Media;
+    const pdf::PDFInkCoverageProbeResult mediaResult = probe.probe(page, 0, settings);
+    QVERIFY(!mediaResult.rasterized);
+    QVERIFY(mediaResult.budgetExceeded);
 }
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
