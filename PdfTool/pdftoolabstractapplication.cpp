@@ -327,6 +327,12 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
             add(QStringLiteral("force"), { QStringLiteral("--force") }, {}, PDFToolValueType::Boolean);
         }
     }
+    if (optionFlags.testFlag(ActionList))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("output-dir"), { QStringLiteral("--output-dir") }, QStringLiteral("directory"), PDFToolValueType::Path);
+        add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
+    }
     if (optionFlags.testFlag(PreflightProfile))
     {
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path, {}, {}, true);
@@ -548,6 +554,12 @@ QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositiona
         appendPositional(positionals, { QStringLiteral("left"), PDFToolValueType::Path, true, false });
         appendPositional(positionals, { QStringLiteral("right"), PDFToolValueType::Path, true, false });
     }
+    if (optionFlags.testFlag(ActionList))
+    {
+        appendPositional(positionals, { QStringLiteral("subcommand"), PDFToolValueType::String, true, false });
+        appendPositional(positionals, { QStringLiteral("recipe"), PDFToolValueType::Path, true, false });
+        appendPositional(positionals, { QStringLiteral("input"), PDFToolValueType::Path, false, true });
+    }
     if (optionFlags.testFlag(Redact))
     {
         appendPositional(positionals, { QStringLiteral("redacteddocument"), PDFToolValueType::Path, true, false });
@@ -605,6 +617,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(OcrOptions, QStringLiteral("ocr.client"));
     add(Diagnostics, QStringLiteral("diagnostics.bundle"));
     add(CapabilityDiscovery, QStringLiteral("pdftool.discovery.v1"));
+    add(ActionList, QStringLiteral("action-list.execute"));
     capabilities.sort();
     return capabilities;
 }
@@ -683,6 +696,18 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         parser->addOption(QCommandLineOption("list-operations", "List registered repair operation descriptors."));
         parser->addOption(QCommandLineOption("allow-incomplete", "Allow an incomplete diff result to be returned for review; never auto-commit it."));
         parser->addOption(QCommandLineOption("pswd", "Password for an encrypted source PDF.", "password"));
+        parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
+    }
+
+    if (optionFlags.testFlag(ActionList))
+    {
+        parser->addPositionalArgument("subcommand", "Action List operation: validate|plan|run|batch.");
+        parser->addPositionalArgument("recipe", "Action List JSON recipe.");
+        parser->addPositionalArgument("input", "Input PDF (or multiple PDFs for batch).", "input.pdf ...");
+        parser->addOption(QCommandLineOption(QStringList{ QStringLiteral("o"), QStringLiteral("output") }, "Output PDF for action-list run.", "file"));
+        parser->addOption(QCommandLineOption("output-dir", "Output directory for action-list batch.", "directory"));
+        parser->addOption(QCommandLineOption("param", "Invocation binding as key=value; may be repeated.", "key=value"));
+        parser->addOption(QCommandLineOption("pswd", "Password for encrypted input PDFs.", "password"));
         parser->addOption(QCommandLineOption("no-permissive-reading", "Do not attempt to fix damaged documents."));
     }
 
@@ -1778,6 +1803,18 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.repairListOperations = parser->isSet("list-operations");
         options.repairAllowIncomplete = parser->isSet("allow-incomplete");
         options.preflightProfilePath = parser->value("profile");
+        options.password = parser->value("pswd");
+        options.permissiveReading = !parser->isSet("no-permissive-reading");
+    }
+
+    if (optionFlags.testFlag(ActionList))
+    {
+        options.actionListSubcommand = positionalArguments.value(0).trimmed().toLower();
+        options.actionListRecipe = positionalArguments.value(1);
+        options.actionListFiles = positionalArguments.mid(2);
+        options.actionListOutputDocument = parser->value("output");
+        options.actionListOutputDirectory = parser->value("output-dir");
+        options.actionListParameterAssignments = parser->values("param");
         options.password = parser->value("pswd");
         options.permissiveReading = !parser->isSet("no-permissive-reading");
     }
