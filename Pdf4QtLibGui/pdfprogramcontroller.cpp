@@ -1524,12 +1524,9 @@ void PDFProgramController::onActionCollectDiagnosticsTriggered()
         m_mainWindow,
         tr("Collect Diagnostics"),
         tr("This collects a support bundle containing application/system/dependency "
-           "version info, the loaded plugin list, the rotated log files, and a copy of "
-           "your settings.\n\n"
-           "The log files and settings copy have the home/temp directory, login name, "
-           "host name, other absolute paths, email addresses, and IPv4 literals scrubbed; "
-           "the settings copy also drops the recent-files list, default open directory, "
-           "and custom author name.\n\n"
+           "version info, the loaded plugin list, and the rotated log files.\n\n"
+           "The log files are scrubbed centrally before persistence and again while "
+           "the bundle is copied.\n\n"
            "No PDF or document content, and no crash minidumps, are included. You choose "
            "where the bundle is saved and can inspect it before sending it to anyone.\n\n"
            "Continue?"),
@@ -1548,6 +1545,7 @@ void PDFProgramController::onActionCollectDiagnosticsTriggered()
     }
 
     pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("editor");
     options.outputDirectory = outputDirectory;
     options.plugins = m_plugins;
 

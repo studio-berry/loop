@@ -157,9 +157,9 @@ Retention: none server-side; Sentry may retain crash minidumps if enabled. Minid
 Logging: PdfTool and Editor both write a rotating, privacy-scrubbed log file via
   pdf::PDFLogSession (2 MiB cap, 3 files kept); PdfTool's stderr/stdout is unchanged,
   the log handler chains to it. Scrubbing (home/temp dir, login name, host name, other
-  absolute paths with the basename dropped, email addresses, IPv4 literals) happens once,
+  absolute paths with the basename dropped, email addresses, IPv4/IPv6 literals) happens once,
   in the log sink, not at each call site. `PdfTool diagnostics` / Editor Help > Collect
-  Diagnostics build a bundle from the logs plus a filtered settings.ini - no PDF content,
+  Diagnostics build a bundle from the logs plus non-secret runtime metadata - no PDF content,
   no recent-files list, no crash minidumps (see R-008 above; a bundle is not a substitute
   for the same scrubbing guarantee on minidumps, which does not exist).
 ```
