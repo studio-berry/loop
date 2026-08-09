@@ -75,16 +75,16 @@ PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
     {
-        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        if (options.executionContext)
         {
             options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("decrypt")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
         }
-        else
-        {
-            PDFConsole::writeText(PDFToolTranslationContext::tr("Would decrypt '%1'.").arg(options.document), options.outputCodec);
-        }
+    }
+    else if (options.destructiveReport)
+    {
+        PDFConsole::writeText(PDFToolTranslationContext::tr("Would decrypt '%1'.").arg(options.document), options.outputCodec);
     }
 
     if (options.destructiveDryRun)
