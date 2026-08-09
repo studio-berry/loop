@@ -36,6 +36,7 @@
 #include "pdfbleedfixup.h"
 #include "pdfrgbtocmykfixup.h"
 #include "pdfrepairdiff.h"
+#include "pdfrepairoperation.h"
 
 #include <QtGlobal>
 #include <QList>
@@ -257,6 +258,16 @@ struct PDFToolOptions
     QStringList repairDiffFiles;
     pdf::PDFRepairDiffOptions repairDiffOptions;
 
+    // For option 'Repair'
+    QStringList repairFiles;
+    QString repairOperationId;
+    QStringList repairParameterAssignments;
+    QString repairOutputDocument;
+    QString repairReportFile;
+    QString repairRenderDirectory;
+    bool repairListOperations = false;
+    bool repairAllowIncomplete = false;
+
     // Structured result contract context owned by main.cpp. Commands populate
     // diagnostics, outputs, and data through it instead of writing the envelope
     // themselves. Null when not running under the contract.
@@ -352,6 +363,7 @@ public:
         RgbToCmyk = 0x100000000ULL,  ///< ICC-managed RGB-to-CMYK fixup
         CapabilityDiscovery = 0x200000000ULL, ///< Machine-readable command discovery
         RepairDiff = 0x400000000ULL, ///< Deterministic before/after repair comparison
+        Repair = 0x800000000ULL, ///< Transactional prepress-safe repair operation
     };
     Q_DECLARE_FLAGS(Options, Option)
 
