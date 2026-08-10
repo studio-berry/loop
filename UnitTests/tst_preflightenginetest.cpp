@@ -27,6 +27,7 @@
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
+#include "pdfthinpartprobe.h"
 
 #include <QtTest>
 #include <QFile>
@@ -53,6 +54,8 @@ private slots:
     void inkCoverageThreshold_isStrictlyGreater();
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
+    void parseProfile_acceptsThinPartsDefaultsAndClassOverrides();
+    void parseProfile_rejectsInvalidThinPartsClass();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void parseProfile_acceptsPDFXTargetAndRevision();
     void parseProfile_rejectsUnknownPDFXTarget();
@@ -64,6 +67,8 @@ private slots:
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
     void run_thinStrokes_detectsPaintedThinStroke();
+    void thinPartProbe_reportsBoundedWidthAndPrecision();
+    void run_thinParts_detectsPaintedThinFill();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
@@ -496,6 +501,56 @@ void PreflightEngineTest::parseProfile_rejectsInvalidThinStrokeThreshold()
     QCOMPARE(errorMessage, QStringLiteral("Check 'thin-strokes' requires positive min_effective_width_pt."));
 }
 
+void PreflightEngineTest::parseProfile_acceptsThinPartsDefaultsAndClassOverrides()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                { QStringLiteral("classes"), QJsonArray{
+                    QStringLiteral("thin-fill"),
+                    QStringLiteral("thin-negative-space")
+                } },
+                { QStringLiteral("severity_by_class"), QJsonObject{
+                    { QStringLiteral("thin-fill"), QStringLiteral("warning") },
+                    { QStringLiteral("thin-negative-space"), QStringLiteral("info") }
+                } }
+            }
+        } }
+    };
+
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(profile.checks.first().probeDpi, 600);
+    QCOMPARE(profile.checks.first().minEffectiveStrokeWidthPt, 0.25);
+    QCOMPARE(profile.checks.first().thinPartClasses,
+             QStringList({ QStringLiteral("thin-fill"), QStringLiteral("thin-negative-space") }));
+    QCOMPARE(profile.checks.first().thinPartSeverityByClass.value(QStringLiteral("thin-fill")), QStringLiteral("warning"));
+    QCOMPARE(profile.checks.first().thinPartSeverityByClass.value(QStringLiteral("thin-negative-space")), QStringLiteral("info"));
+}
+
+void PreflightEngineTest::parseProfile_rejectsInvalidThinPartsClass()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject profileObject{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                { QStringLiteral("classes"), QJsonArray{ QStringLiteral("unknown") } }
+            }
+        } }
+    };
+
+    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
+    QCOMPARE(errorMessage, QStringLiteral("Check 'thin-parts' has an invalid or duplicate thin-parts class."));
+}
+
 void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
 {
     pdf::PDFDocumentBuilder builder;
@@ -534,6 +589,63 @@ void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
     QCOMPARE(result.warnings.first().type, QStringLiteral("thin-stroke"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-strokes"));
     QVERIFY(result.warnings.first().bbox.isValid());
+}
+
+void PreflightEngineTest::thinPartProbe_reportsBoundedWidthAndPrecision()
+{
+    QPainterPath path;
+    path.addRect(QRectF(10, 20, 100, 4));
+
+    const pdf::PDFThinPartMeasurement measurement = pdf::measureThinPartPath(
+        path, 600, 1000000, false, QStringLiteral("unit-test"));
+    QVERIFY(measurement.measured);
+    QVERIFY(measurement.widthPt > 3.5);
+    QVERIFY(measurement.widthPt < 4.5);
+    QVERIFY(qFuzzyCompare(measurement.precisionPt, 72.0 / 600.0));
+    QCOMPARE(measurement.bbox, QRectF(10, 20, 100, 4));
+}
+
+void PreflightEngineTest::run_thinParts_detectsPaintedThinFill()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->drawRect(QRectF(20, 20, 120, 0.1));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                { QStringLiteral("min_effective_width_pt"), 0.5 },
+                { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-fill") } },
+                { QStringLiteral("severity_by_class"), QJsonObject{
+                    { QStringLiteral("thin-fill"), QStringLiteral("warning") }
+                } }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("thin-fill"));
+    QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-parts"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("class")).toString(), QStringLiteral("thin-fill"));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measuredWidthPt")));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measurementPrecisionPt")));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("thresholdPt")));
 }
 
 void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpace()

@@ -187,6 +187,24 @@ rotation, shear, nested Forms, and page `/UserUnit`. `hairline_severity` and
 when omitted. The default profile does not enable this check because the
 production threshold is job-specific.
 
+## Thin-part checking
+
+The opt-in `thin-parts` check extends the CTM-correct stroke path with bounded
+filled-geometry inspection. It measures local maxima in a filled-path distance
+transform, so a large object with one thin limb is not hidden by its global
+bounding-box width. Findings use the normalized classes `thin-stroke`,
+`thin-fill`, `thin-clipped-part`, `thin-annotation`, and
+`thin-negative-space`, and include `measuredWidthPt`,
+`measurementPrecisionPt`, and `thresholdPt` evidence.
+
+The default classes are `thin-stroke` and `thin-fill`. Clipped parts,
+annotation appearances, and negative-space gaps must be explicitly enabled in
+the profile. The default probe is 600 DPI; `max_raster_pixels` is charged
+before a bounded mask is allocated. A result within one probe pixel of the
+threshold is reported as `check-incomplete`, never as pass or fail, and a
+pixel-budget exception leaves the check incomplete with the standard budget
+metadata in the report.
+
 ## Intended CLI (MIC-133)
 
 ```bash
@@ -203,7 +221,7 @@ PdfTool preflight document.pdf --profile loupe-preflight/examples/profile-tiered
 - Exit `0` when `pass` is true; exit `1` when `errors[]` is non-empty.
 - stdout: single JSON document validating against `schemas/report.schema.json`.
 - Profiles: **JSON** at runtime today (`loupe-default.json` mirrors the YAML). YAML authoring is fine; convert or add a loader later.
-- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **thin-strokes** (opt-in hairline and effective-width detection), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
+- Implemented checks in `PreflightEngine`: **bleed**, **trim**, **page-size** (page boxes), **content-bleed** (tiered artwork bleed, optional `raster_confirm`), **ink-coverage** (opt-in TAC raster probe), **transparency-risk** (transparency blend-mode and blend-space risk), **thin-strokes** (opt-in hairline and effective-width detection), **thin-parts** (opt-in bounded stroke/fill/clip/annotation/negative-space inspection), **color-mode**, **color-inventory**, **image-resolution**, **embedded-fonts**, **white-overprint**, and **output-intent**. `trim` and `page-size` are **job-spec dependent** — each is skipped unless its profile check entry supplies both `expected_width_pt` and `expected_height_pt` (compared strictly, orientation-sensitive, within `tolerance_pt`). The generic `loupe-default.json` leaves them unset, so those two checks are no-ops there until a job-specific profile sets a size. `output-intent` inspects catalog-level `/OutputIntents`; page-level output intents are not currently covered.
 
 ## Output-intent validation
 
