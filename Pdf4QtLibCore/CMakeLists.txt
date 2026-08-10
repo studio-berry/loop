@@ -187,6 +187,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfnametounicode.h
     sources/pdffont.cpp
     sources/pdffont.h
+    sources/pdffontintegrity.cpp
+    sources/pdffontintegrity.h
     sources/pdfimagecompressor.cpp
     sources/pdfimagecompressor.h
     sources/pdfimageoptimizer.cpp
