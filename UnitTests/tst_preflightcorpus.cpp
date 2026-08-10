@@ -185,6 +185,20 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     report.remove(QStringLiteral("engine_version"));
     report.remove(QStringLiteral("pdf"));
     report.remove(QStringLiteral("profile_resolution"));
+    report.remove(QStringLiteral("document_revision_digest"));
+    report.remove(QStringLiteral("effective_profile_digest"));
+    report.remove(QStringLiteral("decisions"));
+    for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        QJsonArray findings = report.value(section).toArray();
+        for (int index = 0; index < findings.size(); ++index)
+        {
+            QJsonObject finding = findings.at(index).toObject();
+            finding.remove(QStringLiteral("id"));
+            findings.replace(index, finding);
+        }
+        report.insert(section, findings);
+    }
     return report;
 }
 

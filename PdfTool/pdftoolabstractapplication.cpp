@@ -348,6 +348,9 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
         add(QStringLiteral("job-context"), { QStringLiteral("--job-context") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("profile-store"), { QStringLiteral("--profile-store") }, QStringLiteral("directory"), PDFToolValueType::Path);
+        add(QStringLiteral("decisions"), { QStringLiteral("--decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("export-decisions"), { QStringLiteral("--export-decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("require-signoff"), { QStringLiteral("--require-signoff") }, {}, PDFToolValueType::Boolean);
         add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("job-type"), { QStringLiteral("--job-type") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -791,6 +794,9 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loupe preflight profile (JSON); bypasses contextual selection."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("job-context"), QStringLiteral("Structured production context JSON."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("export-decisions"), QStringLiteral("Write the normalized operator decision JSON after the run."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("require-signoff"), QStringLiteral("Require an active accept, waive, or override decision for every error finding."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("job-type"), QStringLiteral("Stable job-type identifier."));
@@ -1298,6 +1304,9 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightProfilePath = parser->value("profile");
         options.preflightJobContextPath = parser->value("job-context");
         options.preflightProfileStorePath = parser->value("profile-store");
+        options.preflightDecisionsPath = parser->value("decisions");
+        options.preflightDecisionsExportPath = parser->value("export-decisions");
+        options.preflightRequireSignoff = parser->isSet("require-signoff");
         options.preflightClientId = parser->value("client");
         options.preflightProductId = parser->value("product");
         options.preflightJobType = parser->value("job-type");
