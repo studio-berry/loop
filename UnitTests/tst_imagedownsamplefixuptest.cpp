@@ -22,12 +22,20 @@
 
 #include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
+#include "pdfdocumentsession.h"
+#include "pdfdocumentwriter.h"
 #include "pdfimagedownsamplefixup.h"
 #include "pdfimage.h"
 #include "pdfimageoptimizer.h"
+#include "preflightengine.h"
 
 #include <QtTest>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QTemporaryDir>
 
+#include <algorithm>
 #include <memory>
 
 namespace
@@ -126,6 +134,7 @@ private slots:
     void keepsOriginalWhenOutputIsLarger();
     void rejectsInvalidTargetDpi();
     void doesNotMutateSourceDocument();
+    void writesReopensAndPassesPostFixPreflight();
 };
 
 void ImageDownsampleFixupTest::thresholdBehavior_data()
@@ -251,6 +260,50 @@ void ImageDownsampleFixupTest::doesNotMutateSourceDocument()
                                                 pdf::PDFImageDownsampleFixupSettings(),
                                                 nullptr));
     QVERIFY(candidate != source);
+}
+
+void ImageDownsampleFixupTest::writesReopensAndPassesPostFixPreflight()
+{
+    const pdf::PDFDocument source = createDocumentWithImage(1200, true, false);
+    pdf::PDFDocument candidate = source;
+    pdf::PDFImageDownsampleFixupReport report;
+    QVERIFY(pdf::PDFImageDownsampleFixup::apply(&candidate,
+                                                pdf::PDFImageDownsampleFixupSettings(),
+                                                &report));
+    QCOMPARE(report.imagesChanged, 1);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString outputPath = directory.filePath(QStringLiteral("downsampled.pdf"));
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
+    QVERIFY2(writeResult, qPrintable(writeResult.getErrorMessage()));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument reopened = reader.readFromFile(outputPath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&reopened);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Post-fix image resolution") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                { QStringLiteral("min_dpi"), 300 },
+                { QStringLiteral("severity"), QStringLiteral("error") }
+            }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{} }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    QVERIFY(std::none_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+    {
+        return finding.checkId == QStringLiteral("image-resolution");
+    }));
 }
 
 QTEST_MAIN(ImageDownsampleFixupTest)
