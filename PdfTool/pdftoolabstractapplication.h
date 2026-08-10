@@ -240,6 +240,14 @@ struct PDFToolOptions
 
     // For option 'PreflightProfile'
     QString preflightProfilePath;
+    QString preflightJobContextPath;
+    QString preflightProfileStorePath;
+    QString preflightClientId;
+    QString preflightProductId;
+    QString preflightJobType;
+    QString preflightPressId;
+    QString preflightStockId;
+    QString preflightFinishingId;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;

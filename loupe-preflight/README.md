@@ -4,6 +4,11 @@ Standalone preflight **engine** for Loupe (sidecar CLI). Lives outside the PDF4Q
 
 This directory currently locks the **contract** (MIC-131). The CLI binary itself is MIC-133.
 
+Contextual profile selection is implemented in the shared Core resolver. See
+[`docs/PREFLIGHT_PROFILE_RESOLUTION.md`](../docs/PREFLIGHT_PROFILE_RESOLUTION.md)
+for the normalized context, local profile-store, precedence, merge, hashing,
+and provenance contract. Explicit `--profile` remains supported.
+
 ## Layout
 
 | Path | Purpose |

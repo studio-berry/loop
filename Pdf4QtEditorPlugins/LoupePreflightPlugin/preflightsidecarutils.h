@@ -314,7 +314,8 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
-        QStringLiteral("check_id")
+        QStringLiteral("check_id"),
+        QStringLiteral("evidence")
     };
     if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
     {
@@ -345,7 +346,8 @@ inline bool validateFindingV2(const QJsonObject& finding, const QString& context
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
-        QStringLiteral("check_id")
+        QStringLiteral("check_id"),
+        QStringLiteral("evidence")
     };
     if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
     {
@@ -487,6 +489,8 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         QStringLiteral("profile"),
         QStringLiteral("engine_version"),
         QStringLiteral("pdf"),
+        QStringLiteral("pdfx"),
+        QStringLiteral("profile_resolution"),
         QStringLiteral("errors"),
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),

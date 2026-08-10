@@ -335,7 +335,15 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
     }
     if (optionFlags.testFlag(PreflightProfile))
     {
-        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path, {}, {}, true);
+        add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
+        add(QStringLiteral("job-context"), { QStringLiteral("--job-context") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("profile-store"), { QStringLiteral("--profile-store") }, QStringLiteral("directory"), PDFToolValueType::Path);
+        add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("job-type"), { QStringLiteral("--job-type") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("press"), { QStringLiteral("--press") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("stock"), { QStringLiteral("--stock") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("finishing"), { QStringLiteral("--finishing") }, QStringLiteral("id"), PDFToolValueType::String);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
@@ -759,7 +767,15 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(PreflightProfile))
     {
-        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Loupe preflight profile (JSON)."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loupe preflight profile (JSON); bypasses contextual selection."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("job-context"), QStringLiteral("Structured production context JSON."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("job-type"), QStringLiteral("Stable job-type identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("press"), QStringLiteral("Stable press/device identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("stock"), QStringLiteral("Stable stock identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1230,6 +1246,14 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
     if (optionFlags.testFlag(PreflightProfile))
     {
         options.preflightProfilePath = parser->value("profile");
+        options.preflightJobContextPath = parser->value("job-context");
+        options.preflightProfileStorePath = parser->value("profile-store");
+        options.preflightClientId = parser->value("client");
+        options.preflightProductId = parser->value("product");
+        options.preflightJobType = parser->value("job-type");
+        options.preflightPressId = parser->value("press");
+        options.preflightStockId = parser->value("stock");
+        options.preflightFinishingId = parser->value("finishing");
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
