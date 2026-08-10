@@ -180,6 +180,7 @@ QJsonObject PDFRepairPlan::toJson() const
         { QStringLiteral("version"), operationVersion },
         { QStringLiteral("parameters"), parameters },
         { QStringLiteral("risk"), pdfRepairRiskName(risk) },
+        { QStringLiteral("save_policy"), savePolicy.toJson() },
         { QStringLiteral("domains"), domainArray(domains) },
         { QStringLiteral("targets"), targetArray(targets) },
         { QStringLiteral("expected_changes"), expectedChangesObject(expectedChanges) },
@@ -253,6 +254,7 @@ QJsonObject PDFRepairOperation::descriptor() const
         { QStringLiteral("id"), id() },
         { QStringLiteral("version"), version() },
         { QStringLiteral("risk"), pdfRepairRiskName(risk()) },
+        { QStringLiteral("save_policy"), savePolicy().toJson() },
         { QStringLiteral("domains"), domainArray(domains()) },
         { QStringLiteral("preflight_fixup"), isPreflightFixup() },
         { QStringLiteral("parameter_schema"), parameterSchema() },
@@ -354,6 +356,7 @@ PDFOperationResult PDFRepairTransaction::analyze()
         plan.operationVersion = entry.operation->version();
         plan.parameters = entry.parameters;
         plan.risk = entry.operation->risk();
+        plan.savePolicy = entry.operation->savePolicy();
         plan.domains = entry.operation->domains();
         const PDFOperationResult operationResult = entry.operation->analyze(*m_source, entry.parameters, &plan);
 
@@ -454,6 +457,16 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
         candidatePath,
         reopenedCandidate,
         candidateSha256);
+}
+
+PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const
+{
+    PDFOperationSavePolicy result = PDFOperationSavePolicy::incrementalAppend(QStringLiteral("empty transaction"));
+    for (const Entry& entry : m_entries)
+    {
+        result = mergePDFSavePolicies(result, entry.operation->savePolicy());
+    }
+    return result;
 }
 
 PDFRepairExpectedChanges PDFRepairTransaction::expectedChanges() const

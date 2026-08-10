@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfprogress.h"
+#include "pdfsavepolicy.h"
 #include "pdfutils.h"
 
 #include <QIODevice>
@@ -86,6 +87,12 @@ public:
     /// destructive operations must pass the corresponding opt-out flags.
     static WriteMode getRecommendedWriteMode(const PDFDocument* sourceDocument,
                                              bool requiresFullRewrite,
+                                             bool saveAsNewOutput);
+
+    /// Chooses a write mode from the operation-declared save policy. A policy
+    /// that is not incremental is never silently downgraded to an append.
+    static WriteMode getRecommendedWriteMode(const PDFDocument* sourceDocument,
+                                             const PDFOperationSavePolicy& policy,
                                              bool saveAsNewOutput);
 
     /// Calculates document file size, as if it is written to the disk.

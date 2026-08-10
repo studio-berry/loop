@@ -81,6 +81,8 @@ public:
 
     bool hasReport() const { return m_hasReport; }
     bool pass() const { return m_pass; }
+    QString verdictState() const { return m_verdictState; }
+    QString verdictReason() const { return m_verdictReason; }
     QString profileName() const { return m_profileName; }
     int errorCount() const { return m_errorCount; }
     int warningCount() const { return m_warningCount; }
@@ -107,6 +109,8 @@ private:
     QVector<PreflightFixupEntry> m_fixups;
     bool m_hasReport = false;
     bool m_pass = true;
+    QString m_verdictState = QStringLiteral("pass");
+    QString m_verdictReason;
     QString m_profileName;
     int m_schemaVersion = 2;
     int m_errorCount = 0;

@@ -28,6 +28,7 @@
 #include "pdfartifactstore.h"
 #include "pdfoperationhistorystore.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 #include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
@@ -401,8 +402,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         }
         pdf::PDFDocumentSession session(&candidateDocument);
         const pdf::PreflightResult preflight = pdf::PreflightEngine(&session).run(profile);
+        const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(preflight);
         reportJson.insert(QStringLiteral("postflight"), preflight.toJson(candidatePath));
-        if (!preflight.inspectionComplete)
+        if (verdict.state == pdf::PreflightVerdictState::Incomplete)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
             reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{QStringLiteral("postflight-incomplete")});
@@ -413,7 +415,12 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                 return PDFToolExitCode::PartialOutput;
             }
         }
-        if (!preflight.pass)
+        if (verdict.state == pdf::PreflightVerdictState::Error)
+        {
+            reportJson.insert(QStringLiteral("status"), QStringLiteral("error"));
+            return PDFToolExitCode::PreflightError;
+        }
+        if (verdict.state == pdf::PreflightVerdictState::Fail)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
             if (!options.repairReportFile.isEmpty())
