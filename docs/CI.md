@@ -23,6 +23,18 @@ When a Windows test run fails, GitHub Actions uploads its CTest logs as the
 artifact in the related issue or release attachment; do not add local build or
 test output to the repository.
 
+## Generated dependency state
+
+The dependency source of truth remains `vcpkg.json`,
+`vcpkg-configuration.json`, and the reviewed overlay ports. Install trees,
+downloaded packages, and binary caches are generated state and must not be
+committed. CI stores its vcpkg downloads and install output in the GitHub
+Actions cache; local Docker/fuzz workflows may use ignored `.docker-vcpkg*`
+directories.
+
+`scripts/ci/check_generated_dependency_paths.py` inspects the Git index and
+fails CI if any known generated dependency path is tracked again.
+
 ## Updating pinned workflow dependencies
 
 Workflow actions, vcpkg, and binary packaging tools are pinned to exact
