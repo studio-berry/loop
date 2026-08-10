@@ -12,7 +12,7 @@
         "--socket=pulseaudio",
         "--device=dri",
         "--share=ipc",
-        "--filesystem=host",
+        "--filesystem=home",
         "--filesystem=xdg-run/speech-dispatcher",
         "--filesystem=xdg-cache/speech-dispatcher",
         "--talk-name=org.freedesktop.speech-dispatcher"
