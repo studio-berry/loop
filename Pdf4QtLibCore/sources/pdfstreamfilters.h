@@ -188,6 +188,12 @@ public:
                              const PDFObjectFetcher& objectFetcher,
                              const PDFObject& parameters,
                              const PDFSecurityHandler* securityHandler) const override;
+
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const override;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFAscii85DecodeFilter : public PDFStreamFilter
@@ -200,6 +206,12 @@ public:
                              const PDFObjectFetcher& objectFetcher,
                              const PDFObject& parameters,
                              const PDFSecurityHandler* securityHandler) const override;
+
+    virtual QByteArray applyWithBudget(const QByteArray& data,
+                                       const PDFObjectFetcher& objectFetcher,
+                                       const PDFObject& parameters,
+                                       const PDFSecurityHandler* securityHandler,
+                                       PDFProcessingBudget* budget) const override;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFLzwDecodeFilter : public PDFStreamFilter
