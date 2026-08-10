@@ -1,6 +1,9 @@
 # ADR-007: Qt Quick Controls foundation for the Loupe 1.2 shell
 
 **Status:** accepted
+**Implemented-at:** not implemented
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-08-09
 **Deciders:** Loupe #178 / 1.2 shell decision
 
