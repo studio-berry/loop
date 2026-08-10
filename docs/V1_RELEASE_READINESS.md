@@ -198,6 +198,13 @@ Logging: PdfTool and Editor both write a rotating, privacy-scrubbed log file via
 
 ---
 
+OCR is now protected by a release-profile CMake assertion: configuring with
+`PDF4QT_LOUPE_DISTRIBUTION=ON` and `PDF4QT_PLUGIN_OCR=ON` fails explicitly.
+The Windows and Linux artifact verifiers also require `PdfTool capabilities
+--command ocr` to advertise the CLI command and reject `OcrPlugin` and
+`LoupeOcrService` artifacts. This turns the CLI-only OCR decision from a
+packaging convention into a merge-durable check (issue #41).
+
 ## 3. Launch-risk register
 
 Sorted by severity. **Owner** defaults to release engineering unless noted.
