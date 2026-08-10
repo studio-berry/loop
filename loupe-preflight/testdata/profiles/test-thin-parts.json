@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "Loupe Test - Thin Parts",
+  "description": "Test-only profile for bounded thin-fill and thin-part measurements.",
+  "checks": [
+    {
+      "id": "thin-parts",
+      "severity": "error",
+      "min_effective_width_pt": 0.25,
+      "zero_width_epsilon_pt": 0.000001,
+      "probe_dpi": 600,
+      "classes": ["thin-stroke", "thin-fill"],
+      "severity_by_class": {
+        "thin-stroke": "error",
+        "thin-fill": "warning"
+      }
+    }
+  ]
+}
