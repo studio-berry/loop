@@ -165,6 +165,30 @@ rerun the normal preflight sidecar on that output. The golden
 `image-dpi-excessive` corpus fixture pins the advertised fixup, while the Core
 unit test writes, reopens, and revalidates a downsampled document.
 
+## Fixup advertisement contract
+
+Fixup availability has three independent gates:
+
+1. The current build implements the fixup in the shared Core registry.
+2. The active profile contains the fixup and the finding/document makes it
+   applicable. For example, `downsample-images` requires an oversized image,
+   while `rgb-to-cmyk` requires RGB content and `add-bleed` requires a bleed
+   gap.
+3. The surface is using that active profile. Editor sidecar filtering and
+   `PdfTool capabilities` both use the same Core registry, so they cannot
+   advertise a fixup that the build does not implement.
+
+The shipped `profiles/loupe-default.json` and its YAML authoring mirror list
+`rgb-to-cmyk`, `add-bleed`, and `downsample-images`. To inspect the build-level
+registry set used by CLI and Editor workflows, run:
+
+```bash
+PdfTool capabilities --console-format json | jq '.data.fixups'
+```
+
+The command reports build capability; the preflight report still applies the
+profile and finding/document gates before placing an item in `fixups_available`.
+
 ## Transparency risk checking
 
 The `transparency-risk` check observes actual page-content processing and emits

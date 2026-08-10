@@ -27,6 +27,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
+#include <QFile>
 
 class PreflightPluginTest : public QObject
 {
@@ -43,6 +45,7 @@ private slots:
     void findingHasVisualOverlay_respectsScopeAndBbox();
     void filterAdvertisedFixups_removesUnimplementedFixups();
     void isImplementedFixupId_advertisesImplementedFixups();
+    void shippedProfileFixups_areImplemented();
     void sidecarStreamBuffer_spillsToDiskAboveWatermark();
     void sidecarStreamBuffer_rejectsOverflowBeyondMax();
     void sidecarStreamBuffer_spillRoundTripsContent();
@@ -245,6 +248,37 @@ void PreflightPluginTest::isImplementedFixupId_advertisesImplementedFixups()
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("add-bleed")));
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
+}
+
+void PreflightPluginTest::shippedProfileFixups_areImplemented()
+{
+    const QDir profiles(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles"));
+    const QFileInfoList profileFiles = profiles.entryInfoList({ QStringLiteral("*.json") },
+                                                               QDir::Files,
+                                                               QDir::Name);
+    QVERIFY2(!profileFiles.isEmpty(), qPrintable(profiles.absolutePath()));
+
+    for (const QFileInfo& profileInfo : profileFiles)
+    {
+        QFile profileFile(profileInfo.absoluteFilePath());
+        QVERIFY2(profileFile.open(QIODevice::ReadOnly), qPrintable(profileInfo.absoluteFilePath()));
+
+        QJsonParseError parseError;
+        const QJsonDocument profile = QJsonDocument::fromJson(profileFile.readAll(), &parseError);
+        QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
+
+        const QJsonArray fixups = profile.object().value(QStringLiteral("fixups")).toArray();
+        QVERIFY2(!fixups.isEmpty(), qPrintable(profileInfo.absoluteFilePath()));
+        for (int index = 0; index < fixups.size(); ++index)
+        {
+            const QString id = fixups.at(index).toObject().value(QStringLiteral("id")).toString();
+            QVERIFY2(pdfplugin::preflight::isImplementedFixupId(id),
+                     qPrintable(QStringLiteral("%1: fixups[%2] = %3")
+                                    .arg(profileInfo.fileName())
+                                    .arg(index)
+                                    .arg(id)));
+        }
+    }
 }
 
 void PreflightPluginTest::sidecarStreamBuffer_spillsToDiskAboveWatermark()
