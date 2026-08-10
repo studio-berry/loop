@@ -162,6 +162,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     // color-mode parameters (e.g. ["CMYK", "Grayscale"]).
     QStringList allowedColorModes;
 
+    // Production processing-step requirements. Values use the normalized
+    // PDFProcessingStepType names, for example "cutting-die".
+    QStringList requiredProcessingStepTypes;
+
     // color-inventory parameters.
     int colorProbeDpi = 150;
     qreal richBlackKThreshold = 0.10;

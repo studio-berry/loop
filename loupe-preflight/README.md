@@ -175,6 +175,34 @@ real compositing boundaries, including Forms, tiling, shadings, images, text,
 and annotation appearance streams. These are appearance/production-risk
 advisories, not claims that the PDF is invalid.
 
+## Processing-step and dieline validation
+
+The Core detector exposes `detectProcessingSteps(const PDFDocument&)` for
+headless callers. It classifies ISO 19593-1 processing-step OCG metadata from
+`/Usage` (`/Type`, `CreatorInfo/Subtype`, and `PageElement`) and collects the
+associated path geometry in PDF page space. Legacy spot colors named
+`CutContour`, `Die`, `Dieline`, or `Thru-cut` are retained as
+`detection_method: legacy-spot-color`, so reports do not present legacy
+evidence as ISO conformance.
+
+Profiles can enable the normalized `processing-steps` check (the `dieline`
+alias is also accepted):
+
+```json
+{
+  "id": "processing-steps",
+  "severity": "error",
+  "required": true,
+  "required_types": ["cutting-die"]
+}
+```
+
+The check reports missing dielines, missing required processing-step types,
+and dieline geometry marked printable. Generated wide-format grommet marks
+are represented in the headless PageMaster production manifest using the same
+normalized `positions` processing-step vocabulary; GUI presentation remains
+deferred beyond 0.0.3.
+
 ## Hairline and thin-stroke checking
 
 The opt-in `thin-strokes` check observes actual stroking operations after the
