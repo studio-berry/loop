@@ -96,7 +96,7 @@ jobs:
           }
 
           ./vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg integrate install
+          ./vcpkg/vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -212,7 +212,7 @@ jobs:
           }
 
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          .\vcpkg integrate install
+          .\vcpkg\vcpkg.exe integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -230,7 +230,7 @@ jobs:
       - name: 'VCPKG: Install project dependencies'
         run: |
           $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'pdf4qt'
-          .\vcpkg install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
         
       - name: Install Qt
