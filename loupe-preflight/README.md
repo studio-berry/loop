@@ -77,6 +77,17 @@ Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 | `probe_threshold` | `content-bleed` |
 | `raster_white_threshold` | `content-bleed` |
 
+## Hidden and non-printing content
+
+The detection-only checks `invisible-content`, `hidden-layers`,
+`off-page-content`, and `obscured-content` are independently enable-able.
+The first three are exact graphics-state, optional-content, and geometry
+findings. `obscured-content` is deliberately reported at `info` severity with
+`confidence: heuristic` and is skipped by the processor when no opaque cover
+is observed; it does not claim full compositing equivalence. Off-page content
+is tolerated inside the page BleedBox, or inside the configured allowance when
+no BleedBox exists. These checks do not register corrective fixups.
+
 The `transparency-risk` check has no additional parameters; it observes
 transparency groups, blend modes, and blend-space crossings.
 
