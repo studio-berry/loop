@@ -305,6 +305,16 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("sample-pixels"), { QStringLiteral("--sample-pixels") }, QStringLiteral("n"), PDFToolValueType::Integer, {}, QStringLiteral("1"));
         add(QStringLiteral("force"), { QStringLiteral("--force") }, {}, PDFToolValueType::Boolean);
     }
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("raster-dpi"), { QStringLiteral("--raster-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("line-art-dpi"), { QStringLiteral("--line-art-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("600"));
+        add(QStringLiteral("text-dpi"), { QStringLiteral("--text-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("600"));
+        add(QStringLiteral("max-raster-pixels"), { QStringLiteral("--max-raster-pixels") }, QStringLiteral("pixels"), PDFToolValueType::Integer, {}, QStringLiteral("250000000"));
+        add(QStringLiteral("no-preserve-spots"), { QStringLiteral("--no-preserve-spots") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("preserve-text-vector"), { QStringLiteral("--preserve-text-vector") }, {}, PDFToolValueType::Boolean);
+    }
     if (optionFlags.testFlag(RgbToCmyk))
     {
         add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
@@ -620,6 +630,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(VerifyRedaction, QStringLiteral("document.redaction.verify"));
     add(DestructiveWrite, QStringLiteral("document.write.destructive"));
     add(AddBleed, QStringLiteral("fixup.add-bleed"));
+    add(FlattenTransparency, QStringLiteral("fixup.flatten-transparency"));
     add(RgbToCmyk, QStringLiteral("fixup.rgb-to-cmyk"));
     add(PreflightProfile, QStringLiteral("preflight.run"));
     add(OcrOptions, QStringLiteral("ocr.client"));
@@ -737,6 +748,16 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization DPI for edge sampling."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("sample-pixels"), QStringLiteral("Edge sample depth in pixels for pixel-repeat/stretch."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("force"), QStringLiteral("Ignore skip-if-already-bleeding heuristic."));
+    }
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output document filename."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("raster-dpi"), QStringLiteral("Resolution used to rasterize flattened pages."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("line-art-dpi"), QStringLiteral("Reserved vector/line-art resolution policy."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("text-dpi"), QStringLiteral("Reserved text resolution policy."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("max-raster-pixels"), QStringLiteral("Maximum pixels permitted for one flattened page."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("no-preserve-spots"), QStringLiteral("Allow process-color raster output when spot colors are present."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("preserve-text-vector"), QStringLiteral("Request vector/text preservation; currently rejected by the full-page production mode."));
     }
 
     if (optionFlags.testFlag(RgbToCmyk))
@@ -1205,6 +1226,35 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         {
             options.addBleedSettings.skipIfAlreadyBleeding = false;
         }
+    }
+
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        options.flattenTransparencyOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
+        options.flattenTransparencySettings = pdf::PDFTransparencyFlattenSettings();
+        bool ok = false;
+        const int rasterDpi = parser->value("raster-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.rasterizationDpi = rasterDpi;
+        }
+        const int lineArtDpi = parser->value("line-art-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.lineArtResolutionDpi = lineArtDpi;
+        }
+        const int textDpi = parser->value("text-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.textResolutionDpi = textDpi;
+        }
+        const qint64 maxPixels = parser->value("max-raster-pixels").toLongLong(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.maxRasterPixels = maxPixels;
+        }
+        options.flattenTransparencySettings.preserveSpotColors = !parser->isSet("no-preserve-spots");
+        options.flattenTransparencySettings.preserveTextAndVector = parser->isSet("preserve-text-vector");
     }
 
     if (optionFlags.testFlag(RgbToCmyk))

@@ -32,6 +32,7 @@
 #include "pdfpagegeometry.h"
 #include "preflightprofileresolver.h"
 #include "pdfproductiongeometry.h"
+#include "pdftransparencyflattener.h"
 
 #include <QImage>
 #include <QJsonObject>
@@ -112,6 +113,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     PDFPageGeometrySettings pageGeometrySettings;
     bool hasBleedFixupSettings = false;
     PDFBleedFixupSettings bleedFixupSettings;
+    bool hasTransparencyFlattenSettings = false;
+    PDFTransparencyFlattenSettings transparencyFlattenSettings;
     bool hasProductionGeometrySettings = false;
     PDFPageMasterProductionSettings productionGeometrySettings;
     PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicy = PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
@@ -151,7 +154,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportResult
 };
 
 /// Headless PageMaster export orchestrator (ADR-003).
-/// Locked stage order: assemble → preflight → page geometry → bleed fixup → image optimize → write.
+/// Locked stage order: assemble → preflight → page geometry → bleed fixup → transparency flatten → image optimize → write.
 /// Synchronous and not thread-safe; callers may invoke run() from a worker thread.
 class PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExport
 {
