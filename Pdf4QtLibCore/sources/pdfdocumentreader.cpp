@@ -117,6 +117,39 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
         return false;
     };
 
+    auto readDeviceChunks = [this, device]() -> QByteArray
+    {
+        constexpr qint64 CHUNK_SIZE = 1 << 20;
+        QByteArray buffer;
+        while (!device->atEnd())
+        {
+            const QByteArray chunk = device->read(CHUNK_SIZE);
+            if (chunk.isEmpty())
+            {
+                break;
+            }
+
+            m_processingBudget.chargeInputBytes(static_cast<uint64_t>(chunk.size()), tr("PDF input"));
+            buffer.append(chunk);
+        }
+        return buffer;
+    };
+
+    auto readDevice = [this, device, &readDeviceChunks]() -> PDFDocument
+    {
+        try
+        {
+            return readFromBuffer(readDeviceChunks());
+        }
+        catch (const PDFBudgetExceededException& exception)
+        {
+            m_result = Result::Failed;
+            m_errorMessage = exception.getMessage();
+            m_warnings << m_errorMessage;
+            return PDFDocument();
+        }
+    };
+
     if (device->isOpen())
     {
         if (device->isReadable())
@@ -126,7 +159,7 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
                 return PDFDocument();
             }
             // Do not close the device, it was not opened by us.
-            return readFromBuffer(device->readAll());
+            return readDevice();
         }
         else
         {
@@ -141,9 +174,9 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
             device->close();
             return PDFDocument();
         }
-        QByteArray byteArray = device->readAll();
+        PDFDocument document = readDevice();
         device->close();
-        return readFromBuffer(byteArray);
+        return document;
     }
     else
     {
@@ -235,7 +268,7 @@ PDFObject PDFDocumentReader::getObject(PDFParsingContext* context, PDFInteger of
 {
     PDFParsingContext::PDFParsingContextGuard guard(context, reference);
 
-    PDFParser parser(m_source, context, PDFParser::AllowStreams);
+    PDFParser parser(m_source, context, PDFParser::AllowStreams, &m_processingBudget);
     parser.seek(offset);
 
     PDFObject objectNumber = parser.getObject();
@@ -311,7 +344,7 @@ PDFObject PDFDocumentReader::readDamagedTrailerDictionary() const
         // Try to read trailer dictioanry
         try
         {
-            PDFParser parser(m_source, &context, PDFParser::None);
+            PDFParser parser(m_source, &context, PDFParser::None, &m_processingBudget);
             parser.seek(offset);
 
             PDFObject trailerDictionaryObject = parser.getObject();
@@ -541,7 +574,7 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
             }
 
             PDFParsingContext::PDFParsingContextGuard guard(&context, objectStreamReference);
-            PDFParser parser(objectStreamData, &context, PDFParser::AllowStreams);
+            PDFParser parser(objectStreamData, &context, PDFParser::AllowStreams, &m_processingBudget);
 
             std::vector<std::pair<PDFInteger, PDFInteger>> objectNumberAndOffset;
             objectNumberAndOffset.reserve(n);
@@ -776,7 +809,7 @@ bool PDFDocumentReader::restoreObjects(std::map<PDFObjectReference, PDFObject>& 
             const char* begin = m_source.constData() + startOffset;
             const char* end = m_source.constData() + endOffset;
 
-            PDFParser parser(begin, end, &context, PDFParser::AllowStreams);
+            PDFParser parser(begin, end, &context, PDFParser::AllowStreams, &m_processingBudget);
             PDFObject objectNumberObject = parser.getObject();
             PDFObject objectGenerationObject = parser.getObject();
             parser.fetchCommand(PDF_OBJECT_START_MARK);
