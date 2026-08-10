@@ -124,8 +124,45 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRollbackRequest
     QString targetArtifactSha256;
     QUuid targetExecutionId;
     QString reason;
+    PDFApprovalRecord approval;
 
     QJsonObject toJson() const;
+};
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFRollbackPoint
+{
+    QString rollbackId;
+    QUuid auditEventId;
+    QString documentRevisionDigest;
+    QDateTime createdAtUtc;
+    QString artifactPath;
+    qint64 artifactBytes = 0;
+    QString operationId;
+    QString planSummary;
+    bool isOriginalInput = false;
+    bool approvedOutput = false;
+    bool artifactEvicted = false;
+    QDateTime evictedAtUtc;
+
+    bool isValid() const;
+    QJsonObject toJson() const;
+};
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFHistoryRetentionPolicy
+{
+    int maxPointsPerJob = 20;
+    qint64 maxBytesPerJob = 2LL * 1024LL * 1024LL * 1024LL;
+    int maxAgeDays = 90;
+    bool keepOriginalInput = true;
+    bool keepApprovedOutputs = true;
+};
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFHistoryRetentionResult
+{
+    bool success = false;
+    int pointsEvicted = 0;
+    qint64 bytesEvicted = 0;
+    QString errorMessage;
 };
 
 PDF4QTLIBCORESHARED_EXPORT QByteArray computeOperationHistoryEventHash(

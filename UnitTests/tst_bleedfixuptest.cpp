@@ -188,6 +188,7 @@ void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()
     const QRectF media(0.0, 0.0, 100.0, 100.0);
     const pdf::PDFObjectReference pageReference = builder.appendPage(media);
     builder.setPageTrimBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
+    builder.setPageBleedBox(pageReference, QRectF(10.0, 10.0, 80.0, 80.0));
     pdf::PDFDocument document = builder.build();
 
     pdf::PDFBleedFixupSettings settings;
@@ -217,6 +218,7 @@ void BleedFixupTest::apply_normalLetterWithinBudget_preservesBleedSemantics()
     const QRectF media(0.0, 0.0, 8.5 * 72.0, 11.0 * 72.0);
     const pdf::PDFObjectReference pageReference = builder.appendPage(media);
     builder.setPageTrimBox(pageReference, media.adjusted(18, 18, -18, -18));
+    builder.setPageBleedBox(pageReference, media.adjusted(18, 18, -18, -18));
     pdf::PDFDocument document = builder.build();
 
     pdf::PDFBleedFixupSettings settings;

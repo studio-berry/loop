@@ -45,34 +45,36 @@ def main() -> int:
         try:
             request = json.loads(line)
         except json.JSONDecodeError as exc:
-            response = {"ok": False, "error": f"invalid json: {exc}"}
-        elif not isinstance(request, dict):
-            response = {"ok": False, "error": "request must be a JSON object"}
+            write_response({"ok": False, "error": f"invalid json: {exc}"})
+            continue
+        if not isinstance(request, dict):
+            write_response({"ok": False, "error": "request must be a JSON object"})
+            continue
+
+        if mode == "stderr-noise":
+            sys.stderr.write("mock sidecar diagnostic\n")
+            sys.stderr.flush()
+            response = handle_request(request)
+        elif mode == "malformed-json":
+            sys.stdout.write("{not valid json}\n")
+            sys.stdout.flush()
+            continue
+        elif mode == "wrong-page":
+            response = handle_request(request)
+            response["page"] = response.get("page", 0) + 1
+        elif mode == "missing-lines":
+            response = handle_request(request)
+            response.pop("lines", None)
+        elif mode == "explicit-error":
+            page = request.get("page", 0)
+            response = {"page": page, "ok": False, "error": "mock OCR failure"}
+        elif mode == "hang":
+            time.sleep(180)
+            continue
+        elif mode == "crash":
+            return 7
         else:
-            if mode == "stderr-noise":
-                sys.stderr.write("mock sidecar diagnostic\n")
-                sys.stderr.flush()
-                response = handle_request(request)
-            elif mode == "malformed-json":
-                sys.stdout.write("{not valid json}\n")
-                sys.stdout.flush()
-                continue
-            elif mode == "wrong-page":
-                response = handle_request(request)
-                response["page"] = response.get("page", 0) + 1
-            elif mode == "missing-lines":
-                response = handle_request(request)
-                response.pop("lines", None)
-            elif mode == "explicit-error":
-                page = request.get("page", 0)
-                response = {"page": page, "ok": False, "error": "mock OCR failure"}
-            elif mode == "hang":
-                time.sleep(180)
-                continue
-            elif mode == "crash":
-                return 7
-            else:
-                response = handle_request(request)
+            response = handle_request(request)
         write_response(response)
     return 0
 
