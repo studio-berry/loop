@@ -130,6 +130,8 @@ void PreflightPluginTest::isExpectedPreflightExitCode_acceptsPassAndFindings()
 {
     QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(0));
     QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(1));
+    QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(8));
+    QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(9));
     QVERIFY(!pdfplugin::preflight::isExpectedPreflightExitCode(2));
 }
 
@@ -193,6 +195,13 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncomplete
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
     report.insert(QStringLiteral("checks"), QJsonArray());
+    report.insert(QStringLiteral("verdict"), QJsonObject{
+        { QStringLiteral("state"), QStringLiteral("incomplete") },
+        { QStringLiteral("reason_code"), QStringLiteral("inspection-incomplete") },
+        { QStringLiteral("reason"), QStringLiteral("Required inspection evidence was not collected.") },
+        { QStringLiteral("blocking_finding_ids"), QJsonArray() },
+        { QStringLiteral("waived_finding_ids"), QJsonArray() }
+    });
 
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
 }

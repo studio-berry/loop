@@ -177,8 +177,13 @@ void PreflightReportDockWidget::refreshHeader()
         return;
     }
 
-    const QString statusText = m_model.pass() ? tr("Pass") : tr("Fail");
-    const QColor statusColor = m_model.pass()
+    const QString statusText = [&]() {
+        if (m_model.verdictState() == QStringLiteral("incomplete")) return tr("Incomplete");
+        if (m_model.verdictState() == QStringLiteral("error")) return tr("Error");
+        return m_model.pass() ? tr("Pass") : tr("Fail");
+    }();
+    const bool positive = m_model.pass();
+    const QColor statusColor = positive
                                    ? (pdf::PDFWidgetUtils::isDarkTheme() ? QColor(134, 239, 172) : QColor(0, 102, 51))
                                    : pdf::PDFUITheme::severityTextColor(QStringLiteral("error"));
     if (m_reportSourceLabel.isEmpty())
@@ -199,6 +204,20 @@ void PreflightReportDockWidget::refreshHeader()
                               .arg(m_model.warningCount());
 
     summaryText += QStringLiteral(" ");
+    if (m_model.verdictState() == QStringLiteral("incomplete"))
+    {
+        summaryText += tr("Could not finish inspecting the document.");
+        if (!m_model.verdictReason().isEmpty())
+        {
+            summaryText += QStringLiteral(" ") + m_model.verdictReason();
+        }
+        summaryText += QStringLiteral(" ");
+    }
+    else if (m_model.verdictState() == QStringLiteral("pass"))
+    {
+        summaryText += tr("No blocking problems found.");
+        summaryText += QStringLiteral(" ");
+    }
     summaryText += pdfplugin::preflight::overprintDisclosureText(m_model.hasWhiteOverprintFinding());
 
     m_summaryLabel->setText(summaryText);
