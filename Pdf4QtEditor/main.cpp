@@ -44,9 +44,9 @@ int main(int argc, char* argv[])
     QApplication application(argc, argv);
 
     QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("PDF4QT Editor");
+    QCoreApplication::setApplicationName("Loupe");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
-    QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT Editor"));
+    QApplication::setApplicationDisplayName(QApplication::translate("Application", "Loupe"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
 
