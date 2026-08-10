@@ -22,6 +22,7 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfrepairoperation.h"
+#include "pdfstandardconversion.h"
 
 #include <QJsonDocument>
 #include <QJsonValue>
@@ -62,6 +63,7 @@ private slots:
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
+    void standardTargets_areExplicitAndStable();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -70,7 +72,8 @@ void RepairOperationTest::builtInOperations_areRegistered()
     QVERIFY(registry.find(QStringLiteral("add-bleed")) != nullptr);
     QVERIFY(registry.find(QStringLiteral("downsample-images")) != nullptr);
     QVERIFY(registry.find(QStringLiteral("rgb-to-cmyk")) != nullptr);
-    QVERIFY(registry.descriptors().size() >= 3);
+    QVERIFY(registry.find(QStringLiteral("standards-convert")) != nullptr);
+    QVERIFY(registry.descriptors().size() >= 4);
     for (const QJsonValue& descriptorValue : registry.descriptors())
     {
         const QJsonObject descriptor = descriptorValue.toObject();
@@ -170,6 +173,17 @@ void RepairOperationTest::failedOperation_discardsCandidate()
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Failed);
     QVERIFY(transaction.candidate() == nullptr);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
+
+void RepairOperationTest::standardTargets_areExplicitAndStable()
+{
+    QCOMPARE(pdf::supportedPDFStandardTargets(), QStringList{
+        QStringLiteral("PDF/X-1a:2001"), QStringLiteral("PDF/X-3:2002"),
+        QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") });
+    pdf::PDFStandardTarget target = pdf::PDFStandardTarget::PDFX4;
+    QVERIFY(pdf::pdfStandardTargetFromString(QStringLiteral("PDF/X-3:2002"), &target));
+    QCOMPARE(target, pdf::PDFStandardTarget::PDFX3_2002);
+    QCOMPARE(pdf::pdfStandardTargetToString(pdf::PDFStandardTarget::PDFA2b), QStringLiteral("PDF/A-2b"));
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

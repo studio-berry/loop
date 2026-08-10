@@ -29,19 +29,26 @@ byte-for-byte and reopen verification.
 
 The first adapters use the existing bounded Core fixups:
 
-- `add-bleed` — page geometry and generated edge-extension content.
-- `downsample-images` — image resource optimization with target DPI and quality
+- `add-bleed` - page geometry and generated edge-extension content.
+- `downsample-images` - image resource optimization with target DPI and quality
   parameters.
-- `rgb-to-cmyk` — ICC-managed color conversion and output-intent handling; a
+- `rgb-to-cmyk` - ICC-managed color conversion and output-intent handling; a
   target ICC profile is required and unsupported constructs are reported rather
   than silently approximated.
+- `standards-convert` - shared PDF/X and PDF/A conversion for
+  `PDF/X-1a:2001`, `PDF/X-3:2002`, `PDF/X-4`, and `PDF/A-2b`. It produces a
+  pre-conversion change report and refuses to commit unless an explicitly
+  configured independent validator accepts the candidate. Validator arguments
+  must include `{input}`. Transparency flattening, font embedding, and
+  forbidden-action removal are not silently approximated; unsupported cases
+  fail closed.
 
-The preflight capability list is derived from the same registry: an operation is
-advertised only when its descriptor marks it as a preflight fixup. Profile
+The preflight capability list is derived from the same registry: an operation
+is advertised only when its descriptor marks it as a preflight fixup. Profile
 validation rejects unknown or unimplemented fixup IDs, so the report cannot
 advertise a remedy that the registered repair contract cannot execute.
 The fixup capability registry is the source of truth for the current build. The
-shipped Loupe Default profile lists these same three IDs, and the Editor sidecar
+shipped Loupe Default profile lists these registered IDs, and the Editor sidecar
 filter plus `PdfTool capabilities --console-format json` consume that registry.
 An operation is advertised only when it is implemented in the current build, is
 applicable to the raised finding/document, and is present in the active profile.
