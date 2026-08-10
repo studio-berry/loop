@@ -77,6 +77,12 @@ Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 | `probe_threshold` | `content-bleed` |
 | `raster_white_threshold` | `content-bleed` |
 
+The opt-in `font-integrity` check is separate from `embedded-fonts`. It parses
+embedded Type1, TrueType/OpenType, and composite font programs, reports
+defects with the font resource and object reference, and marks unsupported
+formats as incomplete rather than clean. Existing `embedded-fonts` ids and
+severity behavior are unchanged.
+
 The `transparency-risk` check has no additional parameters; it observes
 transparency groups, blend modes, and blend-space crossings.
 
