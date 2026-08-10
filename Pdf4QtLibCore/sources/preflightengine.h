@@ -147,6 +147,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal maxInkPct = 0.0;
     qreal minRegionAreaPct = 0.05;
     int maxRegionsPerPage = 20;
+    qint64 maxRasterPixels = 250LL * 1000 * 1000;
     QString inkCoverageAnalysisBox = QStringLiteral("bleed");
 
     // image-resolution parameters.
