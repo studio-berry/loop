@@ -43,6 +43,7 @@
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 #include "pdfprocessingbudget.h"
+#include "pdffixupregistry.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -1211,16 +1212,12 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         }
     }
 
-    // Remove advertised fixups; only implemented fixups are re-added below.
-    auto it = std::remove_if(fixups.begin(), fixups.end(), [](const PreflightFixupConfig& fixup)
-    {
-        return fixup.id == QStringLiteral("add-bleed")
-            || fixup.id == QStringLiteral("rgb-to-cmyk")
-            || fixup.id == QStringLiteral("downsample-images");
-    });
-    fixups.erase(it, fixups.end());
+    // Every registered preflight fixup is finding-driven. Clear the profile
+    // list after capturing its parameters so a fixup is advertised only when
+    // this document has the corresponding actionable finding.
+    fixups.clear();
 
-    if (needsAddBleed)
+    if (needsAddBleed && isImplementedFixupId(QStringLiteral("add-bleed")))
     {
         if (!hasProfileAddBleed)
         {
@@ -1255,7 +1252,8 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         });
     };
 
-    if (hasRgbFinding(errors) || hasRgbFinding(warnings))
+    if ((hasRgbFinding(errors) || hasRgbFinding(warnings))
+        && isImplementedFixupId(QStringLiteral("rgb-to-cmyk")))
     {
         if (!hasProfileRgbToCmyk)
         {
@@ -1276,6 +1274,7 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
     const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
     int candidateCount = 0;
     if (hasProfileDownsample
+        && isImplementedFixupId(QStringLiteral("downsample-images"))
         && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
     {
         if (downsampleConfig.description.isEmpty())
@@ -4263,6 +4262,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         if (fixup.id.isEmpty())
         {
             continue;
+        }
+        if (!isImplementedFixupId(fixup.id))
+        {
+            errorMessage = PDFTranslationContext::tr("Profile requests unimplemented fixup '%1'.").arg(fixup.id);
+            return false;
         }
 
         fixup.confirm = fixupObject.value(QStringLiteral("confirm")).toBool(true);

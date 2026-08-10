@@ -36,9 +36,14 @@ The first adapters use the existing bounded Core fixups:
   target ICC profile is required and unsupported constructs are reported rather
   than silently approximated.
 
+The preflight capability list is derived from the same registry: an operation is
+advertised only when its descriptor marks it as a preflight fixup. Profile
+validation rejects unknown or unimplemented fixup IDs, so the report cannot
+advertise a remedy that the registered repair contract cannot execute.
 The registry exposes descriptors through `PdfTool repair --list-operations`.
-The Editor's bleed workflow resolves `add-bleed` from the same registry and
-reviews its serialized candidate with the same diff engine as PdfTool.
+The Editor's preflight workflows resolve `add-bleed`, `downsample-images`, and
+`rgb-to-cmyk` from that registry and review a separate serialized candidate
+before writing it. PdfTool's `repair` command uses the same transaction contract.
 
 ## PdfTool contract
 
