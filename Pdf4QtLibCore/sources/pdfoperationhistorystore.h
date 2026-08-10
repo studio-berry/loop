@@ -24,6 +24,7 @@
 #define PDFOPERATIONHISTORYSTORE_H
 
 #include "pdfoperationhistory.h"
+#include "pdfutils.h"
 
 #include <QString>
 

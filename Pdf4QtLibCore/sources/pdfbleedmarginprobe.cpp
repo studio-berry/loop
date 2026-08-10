@@ -29,12 +29,14 @@
 #include "pdfpainter.h"
 #include "pdfrenderer.h"
 #include "pdffont.h"
+#include "pdfprocessingbudget.h"
 
 #include <QImage>
 #include <QPainter>
 #include <QtMath>
 
 #include <cmath>
+#include <limits>
 
 namespace pdf
 {
@@ -295,21 +297,34 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
     features.setFlag(PDFRenderer::ClipToCropBox, false);
     features.setFlag(PDFRenderer::DisplayAnnotations, false);
 
-    PDFMeshQualitySettings meshQualitySettings;
-    PDFRenderer renderer(document, &fontCache, cms.get(), &optionalContentActivity, features, meshQualitySettings);
-
     const QSizeF mediaSize = page->getRotatedMediaBox().size();
+    if (settings.dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height())
+        || mediaSize.width() <= 0.0 || mediaSize.height() <= 0.0)
+    {
+        return result;
+    }
+
     const PDFReal pointToPixel = settings.dpi / 72.0;
     const double fullWidthPxReal = std::ceil(mediaSize.width() * pointToPixel);
     const double fullHeightPxReal = std::ceil(mediaSize.height() * pointToPixel);
 
-    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal))
+    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal)
+        || fullWidthPxReal > static_cast<double>(std::numeric_limits<int>::max())
+        || fullHeightPxReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
 
     const int fullW = qMax(1, int(fullWidthPxReal));
     const int fullH = qMax(1, int(fullHeightPxReal));
+    PDFMeshQualitySettings meshQualitySettings;
+    PDFRenderer renderer(document,
+                         &fontCache,
+                         cms.get(),
+                         &optionalContentActivity,
+                         features,
+                         meshQualitySettings,
+                         m_session->getProcessingBudget());
     const QTransform pageToDevice = PDFRenderer::createPagePointToDevicePointMatrix(page, QRect(QPoint(0, 0), QSize(fullW, fullH)));
 
     const PDFBleedFixupSide sides[4] = {

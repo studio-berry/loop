@@ -41,10 +41,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFFixupCapability
 };
 
 /// Returns the fixups implemented by the current build.
-QList<PDFFixupCapability> getImplementedFixupCapabilities();
+PDF4QTLIBCORESHARED_EXPORT QList<PDFFixupCapability> getImplementedFixupCapabilities();
 
 /// Returns true when the ID is backed by an implemented fixup in this build.
-bool isImplementedFixupId(const QString& fixupId);
+PDF4QTLIBCORESHARED_EXPORT bool isImplementedFixupId(const QString& fixupId);
 
 } // namespace pdf
 
