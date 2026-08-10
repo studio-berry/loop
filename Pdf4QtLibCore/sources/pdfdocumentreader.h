@@ -184,7 +184,7 @@ private:
     /// reading fails)
     bool m_authorizeOwnerOnly;
 
-    PDFProcessingBudget m_processingBudget;
+    mutable PDFProcessingBudget m_processingBudget;
 
     /// Warnings
     QStringList m_warnings;
