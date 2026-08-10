@@ -130,6 +130,10 @@ jobs:
           cmake --build build --target all release_translations --config Release -j6
           cmake --install build
 
+      - name: Verify developer product surface
+        working-directory: pdf4qt
+        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/pdf4qt/build/install" -Profile developer
+
       - name: Run unit tests
         working-directory: pdf4qt/build
         run: |
@@ -244,6 +248,11 @@ jobs:
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
           cmake --install build --config Release
+
+      - name: Verify developer product surface
+        working-directory: pdf4qt
+        shell: pwsh
+        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin" -Profile developer
 
       - name: Run unit tests
         working-directory: pdf4qt/build
