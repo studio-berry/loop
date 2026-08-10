@@ -24,6 +24,7 @@
 #define PDFPAGEMASTEREXPORT_H
 
 #include "pdfglobal.h"
+#include "pdfactionlist.h"
 #include "pdfbleedfixup.h"
 #include "pdfdocument.h"
 #include "pdfdocumentmanipulator.h"
@@ -122,6 +123,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     QString preflightProfileStorePath;
     bool forcePreflight = false;
     bool revalidatePreflightAfterFixups = false;
+    /// Optional reusable recipe stage. When enabled, the recipe runs after the
+    /// initial preflight gate and before page geometry (ADR-003 amendment).
+    bool hasActionList = false;
+    PDFActionList actionList;
+    QJsonObject actionListBindings;
     PDFProgress* progress = nullptr;
     std::atomic_bool* cancelFlag = nullptr;
     std::atomic_bool* progressAlive = nullptr;
