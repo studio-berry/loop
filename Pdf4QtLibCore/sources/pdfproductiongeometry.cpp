@@ -62,7 +62,7 @@ PDFProcessingStepType processingStepTypeFromMetadata(const QList<QByteArray>& va
     for (const QByteArray& value : values)
     {
         const QString normalized = normalizedProcessingStepName(QString::fromLatin1(value));
-        if (normalized == QStringLiteral("cuttingdie") || normalized == QStringLiteral("cut") || normalized == QStringLiteral("dieline")) return PDFProcessingStepType::CuttingDie;
+        if (normalized == QStringLiteral("cuttingdie") || normalized == QStringLiteral("cutting") || normalized == QStringLiteral("cut") || normalized == QStringLiteral("dieline")) return PDFProcessingStepType::CuttingDie;
         if (normalized == QStringLiteral("perforatingcut") || normalized == QStringLiteral("perforation") || normalized == QStringLiteral("perf")) return PDFProcessingStepType::PerforatingCut;
         if (normalized == QStringLiteral("creasingbend") || normalized == QStringLiteral("creasing") || normalized == QStringLiteral("folding") || normalized == QStringLiteral("fold")) return PDFProcessingStepType::CreasingBend;
         if (normalized == QStringLiteral("partialcut") || normalized == QStringLiteral("partial")) return PDFProcessingStepType::PartialCut;
@@ -784,7 +784,8 @@ QList<PDFProcessingStep> detectProcessingSteps(const PDFDocument& document)
     QVector<ProcessingStepGeometry> ocgGeometry;
     QMap<QString, QPainterPath> legacyGeometry;
     QMap<QString, QVector<int>> legacyPages;
-    PDFDocumentSession session(&document);
+    // Session caches read-only page compilation artifacts; the document is not mutated.
+    PDFDocumentSession session(const_cast<PDFDocument*>(&document));
     for (size_t pageIndex = 0; pageIndex < document.getCatalog()->getPageCount(); ++pageIndex)
     {
         const PDFPage* page = document.getCatalog()->getPage(pageIndex);
@@ -1022,10 +1023,30 @@ PDFGrommetPlacementReport placeGrommets(const QRectF& productionRect, const PDFG
     appendEdgePoints(report.points, left, spec, true);
 
     const double minimumSpacing = qMax(spec.minimumSpacingPt, spec.diameterPt);
+    const double cornerTolerance = spec.edgeOffsetPt + 0.000001;
+    const QPointF corners[] = { rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft() };
+    auto cornerIndexForPoint = [&](const QPointF& point) -> int
+    {
+        for (int corner = 0; corner < 4; ++corner)
+        {
+            if (QLineF(point, corners[corner]).length() <= cornerTolerance)
+            {
+                return corner;
+            }
+        }
+        return -1;
+    };
+
     for (int first = 0; first < report.points.size(); ++first)
     {
         for (int second = first + 1; second < report.points.size(); ++second)
         {
+            const int sharedCorner = cornerIndexForPoint(report.points.at(first));
+            if (sharedCorner >= 0 && sharedCorner == cornerIndexForPoint(report.points.at(second)))
+            {
+                continue;
+            }
+
             if (QLineF(report.points.at(first), report.points.at(second)).length() + 0.000001 < minimumSpacing)
             {
                 addDiagnostic(report.diagnostics, QStringLiteral("production.grommet.collision"), PDFProductionDiagnosticSeverity::Error,

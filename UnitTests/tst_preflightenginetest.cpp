@@ -995,8 +995,12 @@ void PreflightEngineTest::decisionRejectsMissingJustification()
     QString errorMessage;
     QVERIFY(!pdf::PreflightDecision::fromJson(QJsonObject{
         { QStringLiteral("finding_id"), QStringLiteral("0123456789abcdef") },
-        decision,
-        errorMessage));
+        { QStringLiteral("kind"), QStringLiteral("waive") },
+        { QStringLiteral("operator"), QStringLiteral("m.berry") },
+        { QStringLiteral("timestamp_utc"), QStringLiteral("2026-08-09T14:22:03.000Z") },
+        { QStringLiteral("document_revision_digest"), QString(64, QLatin1Char('a')) },
+        { QStringLiteral("effective_profile_digest"), QString(64, QLatin1Char('b')) }
+    }, decision, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("justification")));
 }
 
