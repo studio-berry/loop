@@ -54,8 +54,8 @@
       "properties": {
         "target": {
           "type": "string",
-          "enum": ["PDF/X-1a:2001", "PDF/X-4"],
-          "description": "Audited PDF/X policy target. PDF/X-3:2002 is reserved for a future policy pack."
+          "enum": ["PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4"],
+          "description": "Audited PDF/X policy target."
         },
         "policyVersion": {
           "oneOf": [

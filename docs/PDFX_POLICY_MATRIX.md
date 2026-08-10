@@ -10,7 +10,7 @@ by PdfTool and the Editor plugin.
 | --- | --- | --- |
 | PDF/X-1a:2001 | `1` | Requires PDF 1.3, trailer IDs, PDF/X metadata, identified output condition, a GTS_PDFX output intent with a valid matching ICC profile, inherited TrimBox and BleedBox, embedded fonts, no DeviceRGB paint, no live transparency, inspectable overprint flags, and no active document/annotation actions. |
 | PDF/X-4 | `1` | Requires the same structural and output-intent evidence, permits PDF 1.4 or later, DeviceRGB content, and live transparency subject to the existing risk inspection. |
-| PDF/X-3:2002 | — | Reserved for a future policy pack; profile parsing rejects it rather than silently treating it as another target. |
+| PDF/X-3:2002 | `1` | Requires the shared PDF/X structural policy, PDF 1.3, an identified GTS_PDFX output intent, embedded fonts, TrimBox/BleedBox, inspectable overprint, no live transparency, and no active actions. |
 
 ## Stable rule registry
 
