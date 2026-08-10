@@ -21,8 +21,41 @@
 // SOFTWARE.
 
 #include "pdfprocessingbudget.h"
+#include "pdfdocumentreader.h"
+#include "pdfparser.h"
 
 #include <QTest>
+#include <QIODevice>
+
+#include <cstring>
+#include <utility>
+
+class SequentialByteDevice final : public QIODevice
+{
+public:
+    explicit SequentialByteDevice(QByteArray data) : m_data(std::move(data)) { }
+
+    bool isSequential() const override { return true; }
+
+protected:
+    qint64 readData(char* data, qint64 maxSize) override
+    {
+        const qint64 remaining = m_data.size() - m_offset;
+        const qint64 count = qMin(maxSize, remaining);
+        if (count > 0)
+        {
+            std::memcpy(data, m_data.constData() + m_offset, static_cast<size_t>(count));
+            m_offset += count;
+        }
+        return count;
+    }
+
+    qint64 writeData(const char*, qint64) override { return -1; }
+
+private:
+    QByteArray m_data;
+    qint64 m_offset = 0;
+};
 
 class ProcessingBudgetTest : public QObject
 {
@@ -32,6 +65,8 @@ private slots:
     void cumulativeDecodedBytesAreDocumentWide();
     void depthIsBoundedAndTyped();
     void elapsedTimeIsCooperativelyChecked();
+    void parserObjectDepthUsesConfiguredBudget();
+    void sequentialInputIsBoundedBeforeParsing();
 };
 
 void ProcessingBudgetTest::cumulativeDecodedBytesAreDocumentWide()
@@ -101,6 +136,40 @@ void ProcessingBudgetTest::elapsedTimeIsCooperativelyChecked()
         QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::ElapsedTime);
         QCOMPARE(exception.getDetail().limit, uint64_t(10));
     }
+}
+
+void ProcessingBudgetTest::parserObjectDepthUsesConfiguredBudget()
+{
+    pdf::PDFProcessingLimits limits;
+    limits.maxObjectDepth = 1;
+    pdf::PDFProcessingBudget budget(limits);
+    pdf::PDFParser parser(QByteArray("[[0]]"), nullptr, pdf::PDFParser::None, &budget);
+
+    try
+    {
+        parser.getObject();
+        QFAIL("expected parser object-depth budget failure");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::ObjectDepth);
+        QCOMPARE(exception.getDetail().limit, uint64_t(1));
+        QCOMPARE(exception.getDetail().context, QStringLiteral("PDF object nesting"));
+    }
+}
+
+void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
+{
+    pdf::PDFProcessingLimits limits;
+    limits.maxInputBytes = 4;
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false, limits);
+    SequentialByteDevice device(QByteArrayLiteral("0123456789"));
+    QVERIFY(device.open(QIODevice::ReadOnly));
+
+    reader.readFromDevice(&device);
+
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
+    QVERIFY(reader.getErrorMessage().contains(QStringLiteral("input-bytes")));
 }
 
 QTEST_MAIN(ProcessingBudgetTest)

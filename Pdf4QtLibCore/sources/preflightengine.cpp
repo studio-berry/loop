@@ -1680,7 +1680,7 @@ void runOutputIntentCheck(PDFDocumentSession* session,
             }
             else
             {
-                content = document->getDecodedStream(outputProfileObject.getStream());
+                content = document->getDecodedStream(outputProfileObject.getStream(), session->getProcessingBudget());
             }
         }
         catch (const PDFException&)
@@ -3130,7 +3130,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         QByteArray metadata;
         try
         {
-            metadata = document->getDecodedStream(metadataObject.getStream());
+            metadata = document->getDecodedStream(metadataObject.getStream(), session->getProcessingBudget());
         }
         catch (const PDFException& exception)
         {
@@ -3190,7 +3190,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             QByteArray profileBytes;
             try
             {
-                profileBytes = document->getDecodedStream(profileObject.getStream());
+                profileBytes = document->getDecodedStream(profileObject.getStream(), session->getProcessingBudget());
             }
             catch (const PDFException&)
             {

@@ -200,6 +200,14 @@ QList<PDFRenderError> PDFRenderer::render(QPainter* painter, const QTransform& m
     const PDFPage* page = catalog->getPage(pageIndex);
     Q_ASSERT(page);
 
+    if (m_processingBudget && painter && painter->device())
+    {
+        const uint64_t width = static_cast<uint64_t>(qMax(0, painter->device()->width()));
+        const uint64_t height = static_cast<uint64_t>(qMax(0, painter->device()->height()));
+        m_processingBudget->chargeRenderPixels(width * height, PDFTranslationContext::tr("render target"));
+        m_processingBudget->checkElapsed(PDFTranslationContext::tr("render"));
+    }
+
     PDFPainter processor(painter, m_features, matrix, page, m_document, m_fontCache, m_cms, m_optionalContentActivity, m_meshQualitySettings, m_processingBudget);
     processor.setOperationControl(m_operationControl);
     return processor.processContents();
