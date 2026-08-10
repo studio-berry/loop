@@ -2770,6 +2770,8 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     job.pageGeometrySettings = m_pageGeometrySettings;
     job.hasBleedFixupSettings = m_hasBleedFixupSettings;
     job.bleedFixupSettings = m_bleedFixupSettings;
+    job.hasProductionGeometrySettings = m_hasProductionGeometrySettings;
+    job.productionGeometrySettings = m_productionGeometrySettings;
     job.bleedConfirmationPolicy = m_bleedConfirmationPolicy;
     job.hasPreflightGate = m_hasPreflightGate;
     job.preflightProfilePath = m_preflightProfilePath;
@@ -3389,6 +3391,7 @@ QJsonObject MainWindow::createProjectJson() const
     bleedFixupObject["settings"] = bleedFixupSettingsToJson(m_bleedFixupSettings);
     bleedFixupObject["confirmationPolicy"] = bleedConfirmationPolicyToString(m_bleedConfirmationPolicy);
     settingsObject["bleedFixup"] = bleedFixupObject;
+    settingsObject["production"] = m_productionGeometrySettings.toJson();
     QJsonObject preflightObject;
     preflightObject["enabled"] = m_hasPreflightGate;
     preflightObject["profile"] = m_preflightProfilePath;
@@ -3545,6 +3548,9 @@ bool MainWindow::loadProjectJson(const QJsonObject& project, QString* errorMessa
         m_bleedFixupSettings = bleedFixupSettingsFromJson(bleedFixupObject["settings"].toObject());
     }
     m_bleedConfirmationPolicy = bleedConfirmationPolicyFromString(bleedFixupObject["confirmationPolicy"].toString());
+    const QJsonObject productionObject = settingsObject["production"].toObject();
+    m_productionGeometrySettings = pdf::PDFPageMasterProductionSettings::fromJson(productionObject);
+    m_hasProductionGeometrySettings = productionObject["enabled"].toBool(false);
     const QJsonObject preflightObject = settingsObject["preflight"].toObject();
     m_hasPreflightGate = preflightObject["enabled"].toBool(false);
     m_preflightProfilePath = preflightObject["profile"].toString();
