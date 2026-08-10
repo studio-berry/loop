@@ -64,6 +64,8 @@ private slots:
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
     void run_thinStrokes_detectsPaintedThinStroke();
+    void hiddenContent_checksAreRegistered();
+    void run_offPageContent_detectsMarksOutsideToleratedBox();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
@@ -533,6 +535,50 @@ void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
     QCOMPARE(result.warnings.first().scope, QStringLiteral("object"));
     QCOMPARE(result.warnings.first().type, QStringLiteral("thin-stroke"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-strokes"));
+    QVERIFY(result.warnings.first().bbox.isValid());
+}
+
+void PreflightEngineTest::hiddenContent_checksAreRegistered()
+{
+    pdf::PreflightEngine engine(nullptr);
+    QVERIFY(engine.hasCheck(QStringLiteral("invisible-content")));
+    QVERIFY(engine.hasCheck(QStringLiteral("hidden-layers")));
+    QVERIFY(engine.hasCheck(QStringLiteral("off-page-content")));
+    QVERIFY(engine.hasCheck(QStringLiteral("obscured-content")));
+}
+
+void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->drawRect(QRectF(300, 300, 20, 20));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Hidden content") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("off-page-content") },
+                { QStringLiteral("severity"), QStringLiteral("warning") },
+                { QStringLiteral("amount_pt"), 0 }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("off-page-content"));
+    QCOMPARE(result.warnings.first().checkId, QStringLiteral("off-page-content"));
     QVERIFY(result.warnings.first().bbox.isValid());
 }
 
