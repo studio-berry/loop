@@ -34,6 +34,20 @@ set_target_properties(UnitTests PROPERTIES
 )
 add_test(UnitTests  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTests")
 
+add_executable(UnitTestsIncrementalSave
+    tst_incrementalsavetest.cpp
+)
+
+target_link_libraries(UnitTestsIncrementalSave PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsIncrementalSave PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
+
 add_executable(UnitTestsRecovery
     tst_recoverytest.cpp
 )
@@ -60,6 +74,32 @@ set_target_properties(UnitTestsRecovery PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsRecovery "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsRecovery")
+
+add_executable(UnitTestsUndoRedoManager
+    tst_undoredomanagertest.cpp
+)
+
+target_link_libraries(UnitTestsUndoRedoManager PRIVATE
+    Pdf4QtLibCore
+    Pdf4QtLibGui
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+
+target_include_directories(UnitTestsUndoRedoManager PRIVATE
+    ${CMAKE_SOURCE_DIR}/Pdf4QtLibGui
+    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
+)
+
+set_target_properties(UnitTestsUndoRedoManager PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsUndoRedoManager "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsUndoRedoManager")
 
 add_executable(UnitTestsProcessingBudget
     tst_processingbudgettest.cpp
@@ -460,6 +500,20 @@ set_target_properties(UnitTestsPageMasterExport PROPERTIES
 )
 add_test(UnitTestsPageMasterExport "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPageMasterExport")
 
+add_executable(UnitTestsTransparencyFlattener
+    tst_transparencyflattenertest.cpp
+)
+
+target_link_libraries(UnitTestsTransparencyFlattener PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsTransparencyFlattener PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsTransparencyFlattener "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsTransparencyFlattener")
+
 add_executable(UnitTestsFilenameSanitizer
 	tst_filenamesanitizertest.cpp
 )
@@ -574,6 +628,8 @@ target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
     ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
     ${CMAKE_BINARY_DIR})
+target_compile_definitions(UnitTestsPreflightPlugin PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
 set_target_properties(UnitTestsPreflightPlugin PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -628,13 +684,16 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         tst_operatoracceptance.cpp
     )
 
-    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Test)
     add_dependencies(UnitTestsOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
         LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
-    target_include_directories(UnitTestsOperatorAcceptance PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
+    target_include_directories(UnitTestsOperatorAcceptance PRIVATE
+        ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+        ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
     set_target_properties(UnitTestsOperatorAcceptance PROPERTIES
         WIN32_EXECUTABLE OFF

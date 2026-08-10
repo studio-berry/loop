@@ -254,10 +254,12 @@ PDFOptionalContentGroup PDFOptionalContentGroup::create(const PDFDocument* docum
         }
     }
 
-    const PDFObject& usageDictionaryObject = dictionary->get("Usage");
+    const PDFObject& usageDictionaryObject = document->getObject(dictionary->get("Usage"));
     if (usageDictionaryObject.isDictionary())
     {
         const PDFDictionary* usageDictionary = usageDictionaryObject.getDictionary();
+
+        result.m_usageType = loader.readNameFromDictionary(usageDictionary, "Type");
 
         if (const PDFDictionary* creatorDictionary = document->getDictionaryFromObject(usageDictionary->get("CreatorInfo")))
         {

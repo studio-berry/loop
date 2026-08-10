@@ -96,7 +96,7 @@ enum class PDFRepairValidatorKind
     Custom
 };
 
-struct PDFRepairTarget
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairTarget
 {
     int pageIndex = -1;
     PDFObjectReference objectReference;
@@ -105,7 +105,7 @@ struct PDFRepairTarget
     QJsonObject toJson() const;
 };
 
-struct PDFRepairPlan
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairPlan
 {
     QString operationId;
     int operationVersion = 1;
@@ -124,7 +124,7 @@ struct PDFRepairPlan
     QJsonObject toJson() const;
 };
 
-struct PDFRepairChange
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairChange
 {
     PDFRepairTarget target;
     QString changeKind;
@@ -135,7 +135,7 @@ struct PDFRepairChange
     QJsonObject toJson() const;
 };
 
-struct PDFRepairValidationResult
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairValidationResult
 {
     PDFRepairStatus status = PDFRepairStatus::Incomplete;
     QString validatorId;
@@ -145,7 +145,7 @@ struct PDFRepairValidationResult
     QJsonObject toJson() const;
 };
 
-struct PDFRepairFindingDelta
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairFindingDelta
 {
     QStringList resolvedFindingIds;
     QStringList unchangedFindingIds;
@@ -155,7 +155,7 @@ struct PDFRepairFindingDelta
     QJsonObject toJson() const;
 };
 
-struct PDFRepairResult
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairResult
 {
     PDFRepairStatus status = PDFRepairStatus::Failed;
     QString operationId;
@@ -210,7 +210,7 @@ private:
     std::map<QString, std::unique_ptr<PDFRepairOperation>> m_operations;
 };
 
-struct PDFRepairTransactionOptions
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairTransactionOptions
 {
     bool requirePreview = true;
     bool requirePostflight = true;

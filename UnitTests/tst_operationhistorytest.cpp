@@ -40,6 +40,7 @@ private slots:
     void canonicalJsonIsStableAndRedacted();
     void artifactStoreStreamsAndDetectsTampering();
     void lifecycleApprovalAndRollbackResolution();
+    void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
 };
 
@@ -63,6 +64,7 @@ void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
     QCOMPARE(first.artifact.sha256, QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex()));
     QVERIFY(first.artifact.isValid());
     QVERIFY(store.verify(first.artifact));
+    QVERIFY(!(QFileInfo(store.pathFor(first.artifact)).permissions() & QFileDevice::WriteOwner));
 
     const pdf::PDFArtifactStoreResult second = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("copy.pdf") });
     QVERIFY(second.success);
@@ -70,9 +72,14 @@ void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
     QVERIFY(store.verify(second.artifact));
 
     QFile file(store.pathFor(first.artifact));
+    QVERIFY(QFile::setPermissions(file.fileName(),
+                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(file.open(QIODevice::Append));
     QVERIFY(file.write("tamper") > 0);
     file.close();
+    QVERIFY(QFile::setPermissions(file.fileName(),
+                                  QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(!store.verify(first.artifact));
 }
 
@@ -137,6 +144,97 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     QFile rollbackFile(rollbackPath);
     QVERIFY(rollbackFile.open(QIODevice::ReadOnly));
     QCOMPARE(rollbackFile.readAll(), QByteArray("output"));
+}
+
+void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto input = artifacts.importBytes("input", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    const auto middle = artifacts.importBytes("middle", { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
+    const auto final = artifacts.importBytes("final", { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
+    QVERIFY(input.success && middle.success && final.success);
+
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QVERIFY(history.open());
+    QVERIFY(history.registerOriginalInput(input.artifact));
+    QVERIFY(history.registerArtifact(middle.artifact));
+    QVERIFY(history.registerArtifact(final.artifact));
+
+    auto appendAccepted = [&](const pdf::PDFArtifactIdentity& source,
+                              const pdf::PDFArtifactIdentity& output,
+                              const QString& operation,
+                              bool approved,
+                              QUuid* executionId) {
+        pdf::PDFOperationHistoryExecution execution;
+        execution.operationId = operation;
+        execution.input = source;
+        if (!history.beginExecution(execution, executionId)) return false;
+        pdf::PDFOperationHistoryEvent event;
+        event.executionId = *executionId;
+        event.status = pdf::PDFOperationHistoryStatus::Accepted;
+        event.output = output;
+        if (approved)
+        {
+            event.approval.kind = pdf::PDFApprovalKind::Human;
+            event.approval.actorId = QStringLiteral("test-user");
+            event.approval.decision = QStringLiteral("approve");
+            event.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+        }
+        return static_cast<bool>(history.appendEvent(event));
+    };
+
+    QUuid middleExecution;
+    QUuid finalExecution;
+    QVERIFY(appendAccepted(input.artifact, middle.artifact, QStringLiteral("test.middle"), false, &middleExecution));
+    QVERIFY(appendAccepted(middle.artifact, final.artifact, QStringLiteral("test.final"), true, &finalExecution));
+    QCOMPARE(history.rollbackPoints().size(), 3);
+
+    pdf::PDFHistoryRetentionPolicy policy;
+    policy.maxPointsPerJob = 2;
+    policy.maxBytesPerJob = 1024 * 1024;
+    policy.maxAgeDays = 365;
+    const auto retention = history.enforceRetention(policy, artifacts);
+    QVERIFY(retention.success);
+    QCOMPARE(retention.pointsEvicted, 1);
+    QVERIFY(!artifacts.verify(middle.artifact));
+    QVERIFY(artifacts.verify(input.artifact));
+    QVERIFY(artifacts.verify(final.artifact));
+
+    QFile current(QDir(temporary.path()).filePath(QStringLiteral("current.pdf")));
+    QVERIFY(current.open(QIODevice::WriteOnly));
+    QVERIFY(current.write("input") == 5);
+    current.close();
+
+    pdf::PDFRollbackRequest rollback;
+    rollback.currentArtifactSha256 = input.artifact.sha256;
+    rollback.targetArtifactSha256 = final.artifact.sha256;
+    rollback.targetExecutionId = finalExecution;
+    rollback.reason = QStringLiteral("test rollback");
+    rollback.approval.kind = pdf::PDFApprovalKind::System;
+    rollback.approval.actorId = QStringLiteral("test-system");
+    rollback.approval.decision = QStringLiteral("approve");
+    rollback.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    QVERIFY(history.rollbackTo(rollback, artifacts, current.fileName()));
+    QVERIFY(current.open(QIODevice::ReadOnly));
+    QCOMPARE(current.readAll(), QByteArray("final"));
+    current.close();
+    QVERIFY(history.verify().verified);
+
+    QFile corrupt(artifacts.pathFor(final.artifact));
+    QVERIFY(QFile::setPermissions(corrupt.fileName(),
+                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
+    QVERIFY(corrupt.open(QIODevice::Append));
+    QVERIFY(corrupt.write("corrupt") > 0);
+    corrupt.close();
+    QVERIFY(QFile::setPermissions(corrupt.fileName(),
+                                  QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther));
+    QVERIFY(!history.rollbackTo(rollback, artifacts, current.fileName()));
+    QVERIFY(current.open(QIODevice::ReadOnly));
+    QCOMPARE(current.readAll(), QByteArray("final"));
 }
 
 void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
