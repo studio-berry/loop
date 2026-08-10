@@ -56,6 +56,8 @@ private slots:
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void parseProfile_acceptsPDFXTargetAndRevision();
     void parseProfile_rejectsUnknownPDFXTarget();
+    void pdfxStatusReduction_prioritizesFailureAndIncomplete();
+    void pdfxStatusReduction_marksMandatoryNotApplicableIncomplete();
     void run_pdfxWithoutDocumentIsIncompleteAndSerialized();
     void run_pdfxEmitsStableRuleIdsAndEvidence();
     void run_bleedCheckFailsWhenBoxMissing();
@@ -594,6 +596,31 @@ void PreflightEngineTest::parseProfile_rejectsUnknownPDFXTarget()
     QVERIFY(errorMessage.contains(QStringLiteral("Unsupported PDF/X target")));
 }
 
+void PreflightEngineTest::pdfxStatusReduction_prioritizesFailureAndIncomplete()
+{
+    const QVector<pdf::PDFXRuleResult> rules{
+        { QStringLiteral("pdfx.first"), true, pdf::PDFXRuleState::NotInspected },
+        { QStringLiteral("pdfx.second"), true, pdf::PDFXRuleState::Failed },
+    };
+    QStringList failed;
+    QStringList incomplete;
+
+    QCOMPARE(pdf::reducePDFXStatus(rules, &failed, &incomplete), pdf::PDFXConformanceStatus::NonConformant);
+    QCOMPARE(failed, QStringList{ QStringLiteral("pdfx.second") });
+    QCOMPARE(incomplete, QStringList{ QStringLiteral("pdfx.first") });
+}
+
+void PreflightEngineTest::pdfxStatusReduction_marksMandatoryNotApplicableIncomplete()
+{
+    const QVector<pdf::PDFXRuleResult> rules{
+        { QStringLiteral("pdfx.future-rule"), true, pdf::PDFXRuleState::NotApplicable },
+    };
+    QStringList incomplete;
+
+    QCOMPARE(pdf::reducePDFXStatus(rules, nullptr, &incomplete), pdf::PDFXConformanceStatus::Incomplete);
+    QCOMPARE(incomplete, QStringList{ QStringLiteral("pdfx.future-rule") });
+}
+
 void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -644,7 +671,7 @@ void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
     QVERIFY(result.pdfx->failedRuleIds.contains(QStringLiteral("pdfx.metadata.identification")));
     QVERIFY(std::any_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
     {
-        return finding.checkId == QStringLiteral("pdfx")
+        return finding.checkId == QStringLiteral("pdfx.metadata.identification")
             && finding.evidence.value(QStringLiteral("rule_id")).toString() == QStringLiteral("pdfx.metadata.identification");
     }));
 

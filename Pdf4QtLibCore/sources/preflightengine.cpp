@@ -117,6 +117,7 @@ bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& err
         { QStringLiteral("pdfx.document.encryption"), true },
         { QStringLiteral("pdfx.metadata.identification"), true },
         { QStringLiteral("pdfx.output-intent.present"), true },
+        { QStringLiteral("pdfx.output-intent.identity"), true },
         { QStringLiteral("pdfx.output-intent.subtype"), true },
         { QStringLiteral("pdfx.output-intent.profile"), true },
         { QStringLiteral("pdfx.output-intent.profile-space"), true },
@@ -129,6 +130,68 @@ bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& err
         { QStringLiteral("pdfx.annotation.forbidden-action"), true }
     };
     return true;
+}
+
+PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
+                                       QStringList* failedRuleIds,
+                                       QStringList* incompleteRuleIds)
+{
+    if (failedRuleIds)
+    {
+        failedRuleIds->clear();
+    }
+    if (incompleteRuleIds)
+    {
+        incompleteRuleIds->clear();
+    }
+
+    for (const PDFXRuleResult& rule : rules)
+    {
+        if (!rule.mandatory)
+        {
+            continue;
+        }
+
+        if (rule.state == PDFXRuleState::Failed)
+        {
+            if (failedRuleIds)
+            {
+                failedRuleIds->append(rule.ruleId);
+            }
+        }
+        else if (rule.state == PDFXRuleState::NotInspected
+                 || rule.state == PDFXRuleState::NotApplicable)
+        {
+            if (incompleteRuleIds)
+            {
+                incompleteRuleIds->append(rule.ruleId);
+            }
+        }
+    }
+
+    if (failedRuleIds && !failedRuleIds->isEmpty())
+    {
+        return PDFXConformanceStatus::NonConformant;
+    }
+    if (incompleteRuleIds && !incompleteRuleIds->isEmpty())
+    {
+        return PDFXConformanceStatus::Incomplete;
+    }
+
+    // Callers that do not request the ID lists still need the same reduction.
+    const bool hasFailure = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule) {
+        return rule.mandatory && rule.state == PDFXRuleState::Failed;
+    });
+    if (hasFailure)
+    {
+        return PDFXConformanceStatus::NonConformant;
+    }
+
+    const bool incomplete = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule) {
+        return rule.mandatory
+            && (rule.state == PDFXRuleState::NotInspected || rule.state == PDFXRuleState::NotApplicable);
+    });
+    return incomplete ? PDFXConformanceStatus::Incomplete : PDFXConformanceStatus::Conformant;
 }
 
 namespace
@@ -3072,12 +3135,16 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         const int major = parts.value(0).toInt(&majorOk);
         const int minor = parts.value(1).toInt(&minorOk);
         const bool validVersion = majorOk && minorOk;
+        // PDF/X-1a:2001 is based on PDF 1.3. PDF/X-4 permits PDF 1.4 and
+        // later; requiring 1.6 would reject otherwise valid PDF/X-4 files.
+        const QString minimumVersion = policy.flavor == PDFXFlavor::X4
+            ? QStringLiteral("1.4") : QStringLiteral("1.3");
         const bool allowed = validVersion && (policy.flavor == PDFXFlavor::X4
-                                                  ? (major > 1 || (major == 1 && minor >= 6))
+                                                  ? (major > 1 || (major == 1 && minor >= 4))
                                                   : (major == 1 && minor == 3));
         const QJsonObject evidence{
             { QStringLiteral("document_version"), version },
-            { QStringLiteral("minimum_version"), policy.flavor == PDFXFlavor::X4 ? QStringLiteral("1.6") : QStringLiteral("1.3") }
+            { QStringLiteral("minimum_version"), minimumVersion }
         };
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   allowed ? PDFXRuleState::Passed : PDFXRuleState::Failed,
@@ -3157,6 +3224,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
     }
 
     if (requirement.ruleId == QStringLiteral("pdfx.output-intent.present")
+        || requirement.ruleId == QStringLiteral("pdfx.output-intent.identity")
         || requirement.ruleId == QStringLiteral("pdfx.output-intent.subtype")
         || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile")
         || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
@@ -3170,11 +3238,18 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         }
 
         int subtypeFailures = 0;
+        int identityFailures = 0;
         int profileFailures = 0;
         int profileSpaceFailures = 0;
+        int profileSpaceUninspected = 0;
         QJsonArray spaces;
         for (const PDFOutputIntent& intent : intents)
         {
+            if (intent.getOutputConditionIdentifier().trimmed().isEmpty())
+            {
+                ++identityFailures;
+            }
+
             if (intent.getSubtype() != QByteArrayLiteral("GTS_PDFX"))
             {
                 ++subtypeFailures;
@@ -3184,6 +3259,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             if (!profileObject.isStream())
             {
                 ++profileFailures;
+                ++profileSpaceUninspected;
                 continue;
             }
 
@@ -3195,6 +3271,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             catch (const PDFException&)
             {
                 ++profileFailures;
+                ++profileSpaceUninspected;
                 continue;
             }
 
@@ -3202,6 +3279,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             if (!profile.isValid())
             {
                 ++profileFailures;
+                ++profileSpaceUninspected;
                 continue;
             }
 
@@ -3226,6 +3304,17 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                       subtypeFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must use the GTS_PDFX subtype."));
         }
 
+        if (requirement.ruleId == QStringLiteral("pdfx.output-intent.identity"))
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                      identityFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
+                                      QJsonObject{
+                                          { QStringLiteral("count"), int(intents.size()) },
+                                          { QStringLiteral("missing_identifiers"), identityFailures }
+                                      },
+                                      identityFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must identify its intended printing condition."));
+        }
+
         if (requirement.ruleId == QStringLiteral("pdfx.output-intent.profile"))
         {
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
@@ -3239,6 +3328,16 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
 
         if (requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
         {
+            if (profileSpaceUninspected > 0)
+            {
+                return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
+                                          PDFXRuleState::NotInspected,
+                                          QJsonObject{
+                                              { QStringLiteral("uninspected_profiles"), profileSpaceUninspected },
+                                              { QStringLiteral("mismatches"), profileSpaceFailures }
+                                          },
+                                          PDFTranslationContext::tr("The output-intent profile color space could not be verified for every intent."));
+            }
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                       profileSpaceFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                       QJsonObject{
@@ -3451,32 +3550,9 @@ PDFXConformanceResult evaluatePDFXPolicy(PDFDocumentSession* session, const PDFX
         }
 
         result.rules.push_back(rule);
-        if (!rule.mandatory)
-        {
-            continue;
-        }
-        if (rule.state == PDFXRuleState::Failed)
-        {
-            result.failedRuleIds.append(rule.ruleId);
-        }
-        else if (rule.state == PDFXRuleState::NotInspected)
-        {
-            result.incompleteRuleIds.append(rule.ruleId);
-        }
     }
 
-    if (!result.failedRuleIds.isEmpty())
-    {
-        result.status = PDFXConformanceStatus::NonConformant;
-    }
-    else if (!result.incompleteRuleIds.isEmpty())
-    {
-        result.status = PDFXConformanceStatus::Incomplete;
-    }
-    else
-    {
-        result.status = PDFXConformanceStatus::Conformant;
-    }
+    result.status = reducePDFXStatus(result.rules, &result.failedRuleIds, &result.incompleteRuleIds);
 
     return result;
 }
@@ -3487,7 +3563,10 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
 {
     for (const PDFXRuleResult& rule : result.rules)
     {
-        if (rule.state != PDFXRuleState::Failed && rule.state != PDFXRuleState::NotInspected)
+        const bool mandatoryNotApplicable = rule.mandatory && rule.state == PDFXRuleState::NotApplicable;
+        if (rule.state != PDFXRuleState::Failed
+            && rule.state != PDFXRuleState::NotInspected
+            && !mandatoryNotApplicable)
         {
             continue;
         }
@@ -3508,7 +3587,9 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
             ? QStringLiteral("pdfx-conformance") : QStringLiteral("pdfx-incomplete");
         finding.severity = rule.state == PDFXRuleState::Failed
             ? QStringLiteral("error") : QStringLiteral("warning");
-        finding.checkId = QStringLiteral("pdfx");
+        // Keep the stable rule ID in the canonical finding field so callers do
+        // not need to parse prose or inspect nested evidence to route it.
+        finding.checkId = rule.ruleId;
         finding.evidence = evidence;
         finding.message = rule.state == PDFXRuleState::Failed
             ? PDFTranslationContext::tr("PDF/X rule '%1' failed: %2").arg(rule.ruleId, rule.diagnostic)
@@ -3797,6 +3878,13 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         else
         {
             pdfxStatus.status = QStringLiteral("ok");
+        }
+        if (!pdfxResult.incompleteRuleIds.isEmpty())
+        {
+            // A definite failure wins the normalized PDF/X status, but any
+            // missing mandatory evidence still makes the overall inspection
+            // incomplete and must remain visible to callers.
+            result.inspectionComplete = false;
         }
         result.checkStatuses.push_back(pdfxStatus);
     }

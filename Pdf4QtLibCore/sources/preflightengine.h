@@ -124,6 +124,12 @@ PDF4QTLIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
                                                      PDFXPolicy& policy,
                                                      QString& errorMessage);
 
+/// Reduces mandatory PDF/X rule states. A definite failure takes precedence
+/// over missing evidence; a mandatory not-applicable rule is incomplete.
+PDF4QTLIBCORESHARED_EXPORT PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
+                                                                  QStringList* failedRuleIds = nullptr,
+                                                                  QStringList* incompleteRuleIds = nullptr);
+
 /// Configuration for a single preflight check, parsed from a profile.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
 {
