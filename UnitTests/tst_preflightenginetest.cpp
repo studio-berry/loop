@@ -887,6 +887,7 @@ void PreflightEngineTest::run_doesNotAdvertiseUnimplementedFixups()
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("rgb-to-cmyk") } });
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("add-bleed") }, { QStringLiteral("amount_pt"), 9 } });
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } });
+    fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("stale-fixup") } });
     profile.insert(QStringLiteral("fixups"), fixups);
 
     pdf::PreflightResult result = engine.run(profile);

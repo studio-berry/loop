@@ -32,6 +32,7 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdffont.h"
+#include "pdffixupregistry.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
 #include "pdfimageoptimizer.h"
@@ -1296,16 +1297,12 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         }
     }
 
-    // Remove advertised fixups; only implemented fixups are re-added below.
-    auto it = std::remove_if(fixups.begin(), fixups.end(), [](const PreflightFixupConfig& fixup)
-    {
-        return fixup.id == QStringLiteral("add-bleed")
-            || fixup.id == QStringLiteral("rgb-to-cmyk")
-            || fixup.id == QStringLiteral("downsample-images");
-    });
-    fixups.erase(it, fixups.end());
+    // Rebuild the list from the shared registry and document findings. This
+    // keeps the CLI report on the same contract that the Editor sidecar filter
+    // uses and prevents stale or unknown profile IDs from being advertised.
+    fixups.clear();
 
-    if (needsAddBleed)
+    if (needsAddBleed && isImplementedFixupId(QStringLiteral("add-bleed")))
     {
         if (!hasProfileAddBleed)
         {
@@ -1340,7 +1337,8 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         });
     };
 
-    if (hasRgbFinding(errors) || hasRgbFinding(warnings))
+    if ((hasRgbFinding(errors) || hasRgbFinding(warnings))
+        && isImplementedFixupId(QStringLiteral("rgb-to-cmyk")))
     {
         if (!hasProfileRgbToCmyk)
         {
@@ -1361,6 +1359,7 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
     const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
     int candidateCount = 0;
     if (hasProfileDownsample
+        && isImplementedFixupId(QStringLiteral("downsample-images"))
         && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
     {
         if (downsampleConfig.description.isEmpty())
