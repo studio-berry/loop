@@ -24,6 +24,8 @@
 
 #include "pdftoolcancel.h"
 #include "pdfdocumentreader.h"
+#include "pdfartifactstore.h"
+#include "pdfoperationhistorystore.h"
 #include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
@@ -31,6 +33,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QDateTime>
 
 namespace pdftool
 {
@@ -136,6 +139,66 @@ PDFToolExitCode statusExitCode(const pdf::PDFActionListExecutionResult& result)
     if (result.status == QStringLiteral("cancelled")) return PDFToolExitCode::Cancelled;
     if (result.status == QStringLiteral("failed")) return PDFToolExitCode::ProcessingFailure;
     return PDFToolExitCode::Success;
+}
+
+bool recordActionListHistory(const QString& outputPath,
+                             const QByteArray& sourceData,
+                             const QByteArray& candidateData,
+                             const QString& operationId,
+                             const QJsonObject& parameters,
+                             const QJsonObject& summary,
+                             QString* error)
+{
+    const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    pdf::PDFArtifactStore artifacts(historyDirectory);
+    const auto input = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
+    const auto output = artifacts.importBytes(candidateData, { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
+    if (!input.success || !output.success)
+    {
+        if (error) *error = input.success ? output.errorMessage : input.errorMessage;
+        return false;
+    }
+    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+    QString historyError;
+    if (!history.open(&historyError) || !history.registerOriginalInput(input.artifact) || !history.registerArtifact(output.artifact))
+    {
+        if (error) *error = historyError.isEmpty() ? QStringLiteral("Could not register Action List history artifacts.") : historyError;
+        return false;
+    }
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = operationId;
+    execution.input = input.artifact;
+    execution.parameters = parameters;
+    QUuid executionId;
+    if (!history.beginExecution(execution, &executionId))
+    {
+        if (error) *error = QStringLiteral("Could not begin Action List history.");
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    if (!history.appendEvent(running))
+    {
+        if (error) *error = QStringLiteral("Could not append Action List history start.");
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent accepted;
+    accepted.executionId = executionId;
+    accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    accepted.output = output.artifact;
+    accepted.resultSummary = summary;
+    accepted.approval.kind = pdf::PDFApprovalKind::System;
+    accepted.approval.actorId = QStringLiteral("PdfTool");
+    accepted.approval.decision = QStringLiteral("approve");
+    accepted.approval.rationale = QStringLiteral("Action List execution completed successfully.");
+    accepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    if (!history.appendEvent(accepted))
+    {
+        if (error) *error = QStringLiteral("Could not append Action List accepted history.");
+        return false;
+    }
+    return true;
 }
 
 } // namespace
@@ -266,6 +329,17 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                         aggregateCode = PDFToolExitCode::ProcessingFailure;
                         item.insert(QStringLiteral("error"), serializeResult.getErrorMessage());
                     }
+                    else
+                    {
+                        QString historyError;
+                        if (!recordActionListHistory(output, sourceData, candidateData, actionList.id,
+                                                     QJsonObject{{QStringLiteral("recipe"), options.actionListRecipe}, {QStringLiteral("bindings"), bindings}},
+                                                     item, &historyError))
+                        {
+                            aggregateCode = PDFToolExitCode::ProcessingFailure;
+                            item.insert(QStringLiteral("error"), historyError);
+                        }
+                    }
                 }
             }
             items.append(std::move(item));
@@ -327,6 +401,14 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             return PDFToolExitCode::ProcessingFailure;
         }
         data.insert(QStringLiteral("output"), QJsonObject{{QStringLiteral("path"), options.actionListOutputDocument}, {QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex())}});
+        QString historyError;
+        if (!recordActionListHistory(options.actionListOutputDocument, sourceData, candidateData, actionList.id,
+                                     QJsonObject{{QStringLiteral("recipe"), options.actionListRecipe}, {QStringLiteral("bindings"), bindings}},
+                                     data, &historyError))
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"), historyError);
+            return PDFToolExitCode::ProcessingFailure;
+        }
         if (options.executionContext) options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.actionListOutputDocument, QStringLiteral("written")});
     }
     if (options.executionContext) options.executionContext->setData(data);

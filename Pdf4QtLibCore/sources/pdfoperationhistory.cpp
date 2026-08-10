@@ -180,7 +180,33 @@ QJsonObject PDFRollbackRequest::toJson() const
         { QStringLiteral("currentArtifactSha256"), currentArtifactSha256 },
         { QStringLiteral("targetArtifactSha256"), targetArtifactSha256 },
         { QStringLiteral("targetExecutionId"), targetExecutionId.toString(QUuid::WithoutBraces) },
-        { QStringLiteral("reason"), reason }
+        { QStringLiteral("reason"), reason },
+        { QStringLiteral("approval"), approval.toJson() }
+    };
+}
+
+bool PDFRollbackPoint::isValid() const
+{
+    return !rollbackId.trimmed().isEmpty() && isPDFSha256(documentRevisionDigest) &&
+           createdAtUtc.isValid() && artifactBytes >= 0 && !artifactPath.contains(QStringLiteral("..")) &&
+           (!isOriginalInput || auditEventId.isNull());
+}
+
+QJsonObject PDFRollbackPoint::toJson() const
+{
+    return QJsonObject{
+        { QStringLiteral("rollbackId"), rollbackId },
+        { QStringLiteral("auditEventId"), auditEventId.toString(QUuid::WithoutBraces) },
+        { QStringLiteral("documentRevisionDigest"), documentRevisionDigest },
+        { QStringLiteral("createdAtUtc"), dateTimeString(createdAtUtc) },
+        { QStringLiteral("artifactPath"), artifactPath },
+        { QStringLiteral("artifactBytes"), artifactBytes },
+        { QStringLiteral("operationId"), operationId },
+        { QStringLiteral("planSummary"), planSummary },
+        { QStringLiteral("isOriginalInput"), isOriginalInput },
+        { QStringLiteral("approvedOutput"), approvedOutput },
+        { QStringLiteral("artifactEvicted"), artifactEvicted },
+        { QStringLiteral("evictedAtUtc"), dateTimeString(evictedAtUtc) }
     };
 }
 
