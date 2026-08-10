@@ -1,6 +1,9 @@
 # ADR-004: PageMaster batch manifest and atomic per-output writes
 
-**Status:** accepted
+**Status:** implemented
+**Implemented-at:** fed0e6a30b3e67e2f39ecd941dde728b4e72a561
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-309 / Cycle 2 sprint plan
 

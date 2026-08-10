@@ -27,8 +27,6 @@
 #include "../pdftoolenvelopeutils.h"
 
 #include "pdfbleedfixup.h"
-#include "pdfimagedownsamplefixup.h"
-#include "pdfrgbtocmykfixup.h"
 #include "pdfdocumentwriter.h"
 #include "pdfdocumentreader.h"
 #include "pdfrepairdiff.h"
@@ -128,6 +126,87 @@ QString defaultDownsampleOutputPath(const QString& sourcePath)
 
     return sourceInfo.absolutePath() + QDir::separator()
         + sourceInfo.completeBaseName() + QStringLiteral("_downsampled.") + sourceInfo.suffix();
+}
+
+bool writeReviewedRepairCandidate(pdf::PDFRepairTransaction& transaction,
+                                  const QString& outputPath,
+                                  QWidget* parent,
+                                  const QString& title)
+{
+    QTemporaryDir previewDirectory;
+    if (!previewDirectory.isValid())
+    {
+        QMessageBox::critical(parent, title, QObject::tr("Unable to create a private repair-preview directory."));
+        return false;
+    }
+
+    const QString previewPath = QDir(previewDirectory.path()).filePath(QStringLiteral("candidate.pdf"));
+    pdf::PDFRepairDiffOptions diffOptions;
+    diffOptions.renderDirectory = previewDirectory.path();
+    pdf::PDFRepairDiffReport diffReport;
+    const pdf::PDFOperationResult candidateResult = transaction.compareCandidate(previewPath, diffOptions, &diffReport);
+    if (!candidateResult)
+    {
+        QMessageBox::critical(parent, title, candidateResult.getErrorMessage());
+        return false;
+    }
+
+    QFile previewFile(previewPath);
+    if (!previewFile.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::critical(parent, title, QObject::tr("The repair candidate could not be read after serialization."));
+        return false;
+    }
+    const QByteArray previewData = previewFile.readAll();
+    previewFile.close();
+    const QByteArray previewHash = QCryptographicHash::hash(previewData, QCryptographicHash::Sha256);
+
+    RepairPreviewDialog previewDialog(parent);
+    previewDialog.setReport(diffReport, previewDirectory.path());
+    if (previewDialog.exec() != QDialog::Accepted)
+    {
+        return false;
+    }
+
+    QFile candidateFile(previewPath);
+    if (!candidateFile.open(QIODevice::ReadOnly))
+    {
+        QMessageBox::critical(parent, title, QObject::tr("The reviewed repair candidate is no longer available."));
+        return false;
+    }
+    const QByteArray candidateData = candidateFile.readAll();
+    candidateFile.close();
+    if (QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(parent, title, QObject::tr("The repair candidate changed after preview. Review it again."));
+        return false;
+    }
+
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+        outputPath, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!writeResult)
+    {
+        QMessageBox::critical(parent, title, writeResult.getErrorMessage());
+        return false;
+    }
+
+    QFile finalFile(outputPath);
+    if (!finalFile.open(QIODevice::ReadOnly) ||
+        QCryptographicHash::hash(finalFile.readAll(), QCryptographicHash::Sha256) != previewHash)
+    {
+        QMessageBox::critical(parent, title, QObject::tr("The final output does not match the approved repair candidate."));
+        return false;
+    }
+    finalFile.close();
+
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    finalReader.readFromFile(outputPath);
+    if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        QMessageBox::critical(parent, title, QObject::tr("The final serialized output could not be reopened for verification."));
+        return false;
+    }
+    return true;
 }
 
 }   // namespace
@@ -1093,41 +1172,38 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
         return;
     }
 
-    pdf::PDFDocument candidate = *m_document;
-    pdf::PDFImageDownsampleFixupSettings settings;
-    settings.targetDpi = dpiSpin->value();
-    settings.jpegQuality = qualitySpin->value();
-    settings.keepOriginalIfLarger = true;
-    settings.preserveTransparency = true;
-    settings.preserveColorMode = true;
-
-    pdf::PDFImageDownsampleFixupReport report;
-    const pdf::PDFOperationResult fixupResult = pdf::PDFImageDownsampleFixup::apply(&candidate, settings, &report);
-    if (!fixupResult)
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("downsample-images"));
+    if (!operation)
     {
-        QMessageBox::critical(m_widget, tr("Downsample Images"), fixupResult.getErrorMessage());
+        QMessageBox::critical(m_widget, tr("Downsample Images"), tr("The downsample-images repair operation is unavailable."));
         return;
     }
 
-    pdf::PDFDocumentWriter writer(nullptr);
-    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
-    if (!writeResult)
+    pdf::PDFRepairTransaction transaction(*m_document);
+    const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
+        { QStringLiteral("target_dpi"), dpiSpin->value() },
+        { QStringLiteral("quality"), qualitySpin->value() }
+    });
+    if (!addResult || !transaction.analyze() || !transaction.apply())
     {
-        QMessageBox::critical(m_widget, tr("Downsample Images"), writeResult.getErrorMessage());
+        const QString message = !addResult ? addResult.getErrorMessage()
+            : tr("The downsample repair could not be planned or applied.");
+        QMessageBox::critical(m_widget, tr("Downsample Images"), message);
         return;
     }
 
-    const qint64 bytesSaved = report.originalBytes - report.resultingBytes;
-    const double reduction = report.originalBytes > 0
-        ? 100.0 * double(bytesSaved) / double(report.originalBytes)
-        : 0.0;
+    const int changedImages = transaction.results().isEmpty()
+        ? 0 : transaction.results().front().changes.size();
+    if (!writeReviewedRepairCandidate(transaction, outputPath, m_widget, tr("Downsample Images")))
+    {
+        return;
+    }
+
     QMessageBox::information(
         m_widget,
         tr("Downsample Images"),
-        tr("%1 image(s) changed.\n%2 image(s) left unchanged.\nImage data reduced by %3%.\nSaved to %4. The open document was not modified.")
-            .arg(report.imagesChanged)
-            .arg(report.imagesSkipped)
-            .arg(reduction, 0, 'f', 1)
+        tr("%1 image(s) changed.\nSaved to %2. The open document was not modified.")
+            .arg(changedImages)
             .arg(QDir::toNativeSeparators(outputPath)));
 
     if (!rerunCheckBox->isChecked() || m_preflightProcess)
@@ -1257,34 +1333,40 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
         profileData = profileFile.readAll();
     }
 
-    pdf::PDFDocument candidate = *m_document;
-    pdf::PDFRgbToCmykSettings settings;
-    settings.targetIccData = profileData;
-    settings.targetIccId = profile.id.toUtf8();
-    settings.targetProfileName = profile.name;
-    settings.intent = pdf::RenderingIntent(intentCombo->currentData().toInt());
-    settings.blackPointCompensation = blackPointCheck->isChecked();
-    settings.revalidate = true;
-
-    pdf::PDFRgbToCmykReport report;
-    const pdf::PDFOperationResult fixupResult = pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&candidate, settings, &report);
-    if (!fixupResult)
+    const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk"));
+    if (!operation)
     {
-        QMessageBox::critical(m_widget, tr("RGB to CMYK"), fixupResult.getErrorMessage());
+        QMessageBox::critical(m_widget, tr("RGB to CMYK"), tr("The rgb-to-cmyk repair operation is unavailable."));
         return;
     }
 
-    pdf::PDFDocumentWriter writer(nullptr);
-    const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
-    if (!writeResult)
+    pdf::PDFRepairTransaction transaction(*m_document);
+    const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
+        { QStringLiteral("target_icc_base64"), QString::fromLatin1(profileData.toBase64()) },
+        { QStringLiteral("target_icc_id"), QString::fromUtf8(profile.id) },
+        { QStringLiteral("target_profile_name"), profile.name },
+        { QStringLiteral("intent"), intentCombo->currentData().toInt() },
+        { QStringLiteral("black_point_compensation"), blackPointCheck->isChecked() },
+        { QStringLiteral("embed_output_intent"), true }
+    });
+    if (!addResult || !transaction.analyze() || !transaction.apply())
     {
-        QMessageBox::critical(m_widget, tr("RGB to CMYK"), writeResult.getErrorMessage());
+        const QString message = !addResult ? addResult.getErrorMessage()
+            : tr("The RGB-to-CMYK repair could not be planned or applied.");
+        QMessageBox::critical(m_widget, tr("RGB to CMYK"), message);
+        return;
+    }
+
+    const int changedAreas = transaction.results().isEmpty()
+        ? 0 : transaction.results().front().changes.size();
+    if (!writeReviewedRepairCandidate(transaction, outputPath, m_widget, tr("RGB to CMYK")))
+    {
         return;
     }
 
     QMessageBox::information(m_widget, tr("RGB to CMYK"),
-                             tr("Converted %1 vector paint(s) and saved the candidate PDF to %2. The open document was not modified.")
-                                 .arg(report.vectorPaintsConverted)
+                             tr("Applied %1 RGB-to-CMYK change(s) and saved the candidate PDF to %2. The open document was not modified.")
+                                 .arg(changedAreas)
                                  .arg(QDir::toNativeSeparators(outputPath)));
 
     if (!rerunCheckBox->isChecked() || m_preflightProcess)

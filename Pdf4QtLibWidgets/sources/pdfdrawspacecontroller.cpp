@@ -482,6 +482,7 @@ PDFDrawWidgetProxy::PDFDrawWidgetProxy(QObject* parent) :
     m_cacheClearTimer(new QTimer(this)),
     m_rendererEngine(RendererEngine::Blend2D_MultiThread)
 {
+    m_documentContext = std::make_unique<PDFDocumentContext>(static_cast<PDFDocument*>(nullptr), this);
     m_controller = new PDFDrawSpaceController(this);
     connect(m_controller, &PDFDrawSpaceController::drawSpaceChanged, this, &PDFDrawWidgetProxy::update);
     connect(m_controller, &PDFDrawSpaceController::repaintNeeded, this, &PDFDrawWidgetProxy::repaintNeeded);
@@ -499,11 +500,24 @@ PDFDrawWidgetProxy::~PDFDrawWidgetProxy()
 
 void PDFDrawWidgetProxy::setDocument(const PDFModifiedDocument& document, std::vector<PDFSignatureVerificationResult> signatureVerificationResult)
 {
-    if (getDocument() != document)
+    const PDFRevisionIdentity previousRevision = getDocumentRevision();
+    if (!m_documentContext)
+    {
+        m_documentContext = std::make_unique<PDFDocumentContext>(document.getDocument(), this);
+    }
+    else
+    {
+        m_documentContext->setDocument(document.getDocument(), document.getFlags());
+    }
+
+    if (getDocument() != document || previousRevision != getDocumentRevision())
     {
         m_cacheClearTimer->stop();
-        m_compiler->stop(document.hasReset() || document.hasPageContentsChanged());
-        m_textLayoutCompiler->stop(document.hasReset() || document.hasPageContentsChanged());
+        // Revision changes fence all in-flight work. Always clear these
+        // revision-bound caches; soft update hints must not allow stale data to
+        // survive a context boundary.
+        m_compiler->stop(true);
+        m_textLayoutCompiler->stop(true);
         m_controller->setDocument(document);
 
         if (PDFOptionalContentActivity* optionalContentActivity = document.getOptionalContentActivity())

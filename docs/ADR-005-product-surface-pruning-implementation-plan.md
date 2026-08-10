@@ -2,8 +2,9 @@
 
 **Branch:** `product-pruning`
 **Source decision:** [ADR-005: Product surface pruning classification](https://app.notion.com/p/3b69cb079ddb813492a8cb6f84f23d14?pvs=204)
-**Status:** 0.2B transitional packaging implemented; Editor workspace integration
-remains planned for 0.3.
+**Status:** 0.2B transitional packaging implemented; #192 establishes the
+workspace boundary and authoritative product-surface contract; Editor workspace
+integration remains planned for #193 / 0.0.1B.
 
 ## 0.2B transitional surface contract
 
@@ -26,6 +27,12 @@ desktop or AppX product entry.
 The Editor-facing Pages / Production and Compare seams must reuse the existing
 Core/PageMaster export and Core Diff contracts. This 0.2B slice does not move
 their visible UI into Editor; that workspace integration is a 0.3 deliverable.
+
+Issue #192 records the boundary in [LOUPE_WORKSPACES.md](LOUPE_WORKSPACES.md)
+and the profile-aware inventory in [product-surface.json](product-surface.json),
+validated by `scripts/verify-loupe-surface.ps1`. The manifest is the executable
+inventory for developer and `loupe-release` packaging profiles; this plan and
+ADR-005 remain the decision record.
 
 ## Objective
 
@@ -77,8 +84,8 @@ The implementation must follow the ADR-005 order:
 | Windows packaging | `WixInstaller/CMakeLists.txt` and `WixInstaller/Product.wxs.in` | Preserve conditional Viewer/PageMaster/Diff features; verify file associations resolve to Loupe when those features are absent. |
 | Editor menus | `Pdf4QtLibGui/pdfeditormainwindow.ui` and `pdfeditormainwindow.cpp` | Reorganize or hide inherited menus through the Editor shell; avoid deleting action implementations prematurely. |
 | Plugin registry/build | `Pdf4QtEditorPlugins/CMakeLists.txt` and `pdfprogramcontroller.cpp` | Separate retained production plugins from optional/deferred plugins without changing shared action contracts. |
-| LaunchPad | `Pdf4QtLaunchPad/` and `Desktop/io.github.mberrys.Loupe-pdf.desktop` | The current default desktop entry launches LaunchPad; the Loupe release profile should converge on the Editor entrypoint. |
-| Product manifest | `docs/adr/adr-005-product-surface-pruning-classification.md` | This file is the classification source of truth; implementation status must link back to it. |
+| LaunchPad | `Pdf4QtLaunchPad/` and `Desktop/io.github.mberrys.Loupe-pdf.desktop` | Compatibility target remains available for direct invocation; the release desktop entry launches Editor, and the developer profile may retain compatibility entries. |
+| Product manifest | `docs/product-surface.json` and `docs/schemas/product-surface.schema.json` | The profile-aware manifest is the executable inventory; ADR-005 remains the decision source and implementation status links both records. |
 
 ## Implementation phases
 
@@ -271,7 +278,7 @@ implementation begins, validate in this order:
 - Phase 1: Implemented — slim release flag is explicit in release CI/Flatpak and inherited targets remain source-preserved
 - Phase 2: Implemented — primary desktop/AppX surfaces and staged artifact checks are aligned; runtime packaging validation pending
 - Phase 3: Partial — release-only Developer menu gating is implemented; full Loupe information architecture remains follow-up work
-- Phase 4: Blocked pending product IA decisions for Pages and Compare
+- Phase 4: Boundary recorded; Editor workspace wiring remains deferred to #193
 - Phase 5: Deferred until level-3 removals are explicitly approved
 
 **Overall:** Initial implementation slice complete on `product-pruning`; build,

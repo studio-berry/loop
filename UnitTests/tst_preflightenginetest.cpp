@@ -27,6 +27,8 @@
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
+#include "pdffixupregistry.h"
+#include "pdfrepairoperation.h"
 
 #include <QtTest>
 #include <QFile>
@@ -54,6 +56,7 @@ private slots:
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
+    void parseProfile_rejectsUnimplementedFixup();
     void parseProfile_acceptsPDFXTargetAndRevision();
     void parseProfile_acceptsPDFX3Target();
     void pdfxStatusReduction_prioritizesFailureAndIncomplete();
@@ -64,12 +67,17 @@ private slots:
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
     void run_thinStrokes_detectsPaintedThinStroke();
+    void run_thinParts_detectsPaintedThinFill();
+    void thinPartProbe_reportsBoundedWidthAndPrecision();
+    void fontIntegrity_checkIsRegistered();
+    void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
     void hiddenContent_checksAreRegistered();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
-    void run_doesNotAdvertiseUnimplementedFixups();
+    void run_advertisesOnlyApplicableRegisteredFixups();
+    void fixupCapabilities_matchRepairRegistry();
     void run_invalidProfileEmitsDocumentScopeFinding();
     void findingStableId_ignoresMessageAndBbox();
     void decisionRejectsMissingJustification();
@@ -542,6 +550,93 @@ void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
     QVERIFY(result.warnings.first().bbox.isValid());
 }
 
+void PreflightEngineTest::thinPartProbe_reportsBoundedWidthAndPrecision()
+{
+    QPainterPath path;
+    path.addRect(QRectF(10, 20, 100, 4));
+
+    const pdf::PDFThinPartMeasurement measurement = pdf::measureThinPartPath(
+        path, 600, 1000000, false, QStringLiteral("unit-test"));
+    QVERIFY(measurement.measured);
+    QVERIFY(measurement.widthPt > 3.5);
+    QVERIFY(measurement.widthPt < 4.5);
+    QVERIFY(qFuzzyCompare(measurement.precisionPt, 72.0 / 600.0));
+    QCOMPARE(measurement.bbox, QRectF(10, 20, 100, 4));
+}
+
+void PreflightEngineTest::run_thinParts_detectsPaintedThinFill()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->drawRect(QRectF(20, 20, 120, 0.1));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                { QStringLiteral("min_effective_width_pt"), 0.5 },
+                { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-fill") } },
+                { QStringLiteral("severity_by_class"), QJsonObject{
+                    { QStringLiteral("thin-fill"), QStringLiteral("warning") }
+                } }
+            }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("thin-fill"));
+    QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-parts"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("class")).toString(), QStringLiteral("thin-fill"));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measuredWidthPt")));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measurementPrecisionPt")));
+    QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("thresholdPt")));
+}
+
+void PreflightEngineTest::fontIntegrity_checkIsRegistered()
+{
+    pdf::PreflightEngine engine(nullptr);
+    QVERIFY(engine.hasCheck(QStringLiteral("font-integrity")));
+}
+
+void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
+{
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Font integrity") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+    QVERIFY(result.warnings.isEmpty());
+}
+
 void PreflightEngineTest::hiddenContent_checksAreRegistered()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -603,6 +698,23 @@ void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpa
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("unknown allowed color space")));
+}
+
+void PreflightEngineTest::parseProfile_rejectsUnimplementedFixup()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QVERIFY(!engine.parseProfile(QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Unknown fixup") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("not-registered") } }
+        } }
+    }, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("unimplemented fixup")));
 }
 
 void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
@@ -916,7 +1028,7 @@ void PreflightEngineTest::run_removesAddBleedWhenNoGap()
     }
 }
 
-void PreflightEngineTest::run_doesNotAdvertiseUnimplementedFixups()
+void PreflightEngineTest::run_advertisesOnlyApplicableRegisteredFixups()
 {
     pdf::PDFDocumentBuilder builder;
     builder.appendPage(QRectF(0, 0, 200, 200));
@@ -948,6 +1060,23 @@ void PreflightEngineTest::run_doesNotAdvertiseUnimplementedFixups()
     const QJsonArray reportFixups = result.toJson().value(QStringLiteral("fixups_available")).toArray();
     QCOMPARE(reportFixups.size(), 1);
     QCOMPARE(reportFixups.first().toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+}
+
+void PreflightEngineTest::fixupCapabilities_matchRepairRegistry()
+{
+    const QList<pdf::PDFFixupCapability> capabilities = pdf::getImplementedFixupCapabilities();
+    QVERIFY(!capabilities.isEmpty());
+    for (const pdf::PDFFixupCapability& capability : capabilities)
+    {
+        QVERIFY(capability.implemented);
+        QVERIFY(pdf::isImplementedFixupId(capability.id));
+        QVERIFY(pdf::PDFRepairRegistry::instance().find(capability.id) != nullptr);
+        QVERIFY(pdf::PDFRepairRegistry::instance().find(capability.id)->isPreflightFixup());
+    }
+    QVERIFY(std::any_of(capabilities.cbegin(), capabilities.cend(), [](const pdf::PDFFixupCapability& capability)
+    {
+        return capability.id == QStringLiteral("downsample-images");
+    }));
 }
 
 void PreflightEngineTest::run_invalidProfileEmitsDocumentScopeFinding()

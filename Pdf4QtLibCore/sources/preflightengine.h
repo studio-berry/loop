@@ -31,6 +31,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QRectF>
 #include <QString>
 #include <QStringList>
@@ -184,6 +185,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     qreal zeroWidthEpsilonPt = 1.0e-6;
     QString hairlineSeverity;
     QString thinStrokeSeverity;
+
+    // thin-parts parameters. The default classes preserve the stroke/fill
+    // inspection surface; clipped parts and negative space are opt-in.
+    QStringList thinPartClasses;
+    QMap<QString, QString> thinPartSeverityByClass;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.
@@ -298,8 +304,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
 /// Result of a preflight run.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
 {
+    /// Legacy convenience value. Callers must use reducePreflightVerdict().
     bool pass = true;
     bool inspectionComplete = true;
+    QString errorCode;
+    QString errorMessage;
     QString profileName;
     QList<PreflightFinding> errors;
     QList<PreflightFinding> warnings;
