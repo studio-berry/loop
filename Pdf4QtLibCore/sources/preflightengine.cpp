@@ -45,6 +45,7 @@
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 #include "pdfprocessingbudget.h"
+#include "pdffixupregistry.h"
 #include "pdfproductiongeometry.h"
 
 #include <QCoreApplication>
@@ -1562,9 +1563,10 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         }
     }
 
-    // Rebuild the list from the shared registry and document findings. This
-    // keeps the CLI report on the same contract that the Editor sidecar filter
-    // uses and prevents stale or unknown profile IDs from being advertised.
+    // Rebuild the list from the shared registry and document findings. Every
+    // registered preflight fixup is finding-driven: clear the profile list after
+    // capturing its parameters so a fixup is advertised only when this document
+    // has the corresponding actionable finding.
     fixups.clear();
 
     if (needsAddBleed && isImplementedFixupId(QStringLiteral("add-bleed")))
@@ -4987,6 +4989,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         if (fixup.id.isEmpty())
         {
             continue;
+        }
+        if (!isImplementedFixupId(fixup.id))
+        {
+            errorMessage = PDFTranslationContext::tr("Profile requests unimplemented fixup '%1'.").arg(fixup.id);
+            return false;
         }
 
         fixup.confirm = fixupObject.value(QStringLiteral("confirm")).toBool(true);

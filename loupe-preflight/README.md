@@ -210,13 +210,22 @@ budget exhaustion never silently passes as a clean inspection.
 
 The profile's `downsample-images` fixup is advertised only when at least one
 image's effective DPI is strictly greater than `target_dpi * 1.15`. Images at or
-below that boundary remain untouched. Applying the fixup uses
+below that boundary remain untouched, and image masks are never resampled.
+Applying the fixup uses the shared Core `PDFImageDownsampleFixup` backed by
 `PDFImageOptimizer` with `PreferQuality`, bicubic resampling, preserved color
 characteristics and transparency, and `keepOriginalIfLarger=true`. The Editor
-always works on a document copy, writes a separate output PDF, and offers to
-rerun the normal preflight sidecar on that output. The golden
-`image-dpi-excessive` corpus fixture pins the advertised fixup, while the Core
-unit test writes, reopens, and revalidates a downsampled document.
+and `PdfTool repair --operation downsample-images` use the corrective-operation
+contract: analyze first, apply to an isolated candidate, preview the expected
+change, write a new output, and revalidate it. The Editor offers to rerun the
+normal preflight sidecar on that output. The golden `image-dpi-excessive` corpus
+fixture pins the advertised fixup, while the Core unit test writes, reopens, and
+revalidates a downsampled document.
+
+Not every finding is actionable. Embedded-font findings remain report-only
+until a font-preserving remediation is specified, and white overprint remains
+an operator warning because an automatic rewrite cannot safely preserve the
+intended knockout/overprint semantics. These findings therefore do not receive
+an advertised fixup merely because they are present.
 
 ## Fixup advertisement contract
 
@@ -357,8 +366,14 @@ stable step status, duration, diagnostics, affected scope, and repair result.
 
 ## ICC-managed RGB-to-CMYK fixup
 
-The shared Core fixup is available to applications as `PDFRgbToCmykFixup` and
-to headless workflows as:
+The shared Core fixup traverses painted vector colors, Forms and annotation
+appearances, images, indexed palettes, patterns, and shadings through
+LittleCMS. Spot colors and gray/black preservation policy remain explicit; an
+unsupported construct fails closed instead of being silently approximated.
+The registered corrective operation carries the destination ICC profile,
+rendering intent, black-point compensation, and output-intent policy. The
+Editor previews and revalidates a new output candidate, while the canonical
+headless workflow is:
 
 ```bash
 PdfTool rgb-to-cmyk input.pdf \
@@ -370,11 +385,11 @@ PdfTool rgb-to-cmyk input.pdf \
 ```
 
 The target profile is mandatory and must be a valid CMYK ICC profile. DeviceRGB
-vector paints are transformed through the existing LittleCMS implementation;
-unsupported RGB images or extended color constructs fail closed and are listed
-in the report. A successful non-dry-run embeds the selected profile as the
-document OutputIntent and performs a candidate postflight before replacing the
-source document.
+vector paints are transformed through the existing LittleCMS implementation.
+A successful non-dry-run embeds the selected profile as the document
+OutputIntent and performs a candidate postflight before publishing the output.
+For the normalized repair report and shared preview/revalidation lifecycle,
+use `PdfTool repair --operation rgb-to-cmyk` with typed `--param` values.
 
 ## Versioning
 

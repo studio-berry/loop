@@ -24,6 +24,7 @@
 #include "pdfrepairoperation.h"
 
 #include <QJsonDocument>
+#include <QJsonValue>
 #include <QtTest>
 
 namespace
@@ -69,6 +70,17 @@ void RepairOperationTest::builtInOperations_areRegistered()
     QVERIFY(registry.find(QStringLiteral("downsample-images")) != nullptr);
     QVERIFY(registry.find(QStringLiteral("rgb-to-cmyk")) != nullptr);
     QVERIFY(registry.descriptors().size() >= 3);
+    for (const QJsonValue& descriptorValue : registry.descriptors())
+    {
+        const QJsonObject descriptor = descriptorValue.toObject();
+        QVERIFY(descriptor.contains(QStringLiteral("preflight_fixup")));
+        if (descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("add-bleed")
+            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("downsample-images")
+            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("rgb-to-cmyk"))
+        {
+            QVERIFY(descriptor.value(QStringLiteral("preflight_fixup")).toBool());
+        }
+    }
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()
