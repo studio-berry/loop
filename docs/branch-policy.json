@@ -1,0 +1,17 @@
+{
+  "default_branch": "stable",
+  "release_branch": "stable",
+  "integration_branch": "dev",
+  "topic_branch_source": "dev",
+  "topic_branch_patterns": [
+    "gh-*",
+    "feature/*",
+    "fix/*",
+    "chore/*",
+    "docs/*"
+  ],
+  "protected_branches": [
+    "stable",
+    "dev"
+  ]
+}

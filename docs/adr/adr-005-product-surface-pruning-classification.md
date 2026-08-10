@@ -1,6 +1,9 @@
 # ADR-005: Product surface pruning classification (0.1.1A)
 
 **Status:** accepted
+**Implemented-at:** not implemented
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-08-07
 **Deciders:** Loupe 0.1.1 milestone (Notion: Product Convergence); 1.1A audit
 
@@ -27,6 +30,12 @@ Notion 1.1B (Viewer eliminated, Diff → Compare, PageMaster → in-app workspac
 That conflict is recorded in the manifest; this ADR does not rewrite `AGENTS.md`.
 
 ## Decision
+
+Implementation note (2026-08-09): issue #192 makes the profile-aware
+machine-readable inventory in `docs/product-surface.json` the executable
+packaging contract. The table below remains the decision snapshot; current
+artifact evidence is maintained in that manifest and checked by
+`scripts/verify-loupe-surface.ps1`.
 
 - **Deliverable:** the product-surface manifest — the authoritative inventory and
 classification for executables, editor plugins, core menu groups, and packaging
@@ -127,6 +136,12 @@ or named group).
 ---
 
 ## Packaging / distribution surfaces
+
+The desktop row below records the original 1.1A audit snapshot. For the current
+release/developer split, use `docs/product-surface.json`: the `loupe-release`
+profile has one Editor desktop entry and one Editor AppX application, while the
+developer profile retains compatibility entries without presenting them as the
+Loupe product shell.
 
 | Surface | Recommendation (Prune / Retain) | Current location (path) | PDF4QT origin | Notion disposition | Target Loupe surface | Pruning level recommended | Sync durability | Timing | Evidence | Open questions |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

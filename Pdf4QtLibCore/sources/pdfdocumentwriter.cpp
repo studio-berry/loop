@@ -632,7 +632,18 @@ PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PD
                                                                           bool requiresFullRewrite,
                                                                           bool saveAsNewOutput)
 {
-    if (requiresFullRewrite || saveAsNewOutput || !sourceDocument)
+    return getRecommendedWriteMode(sourceDocument,
+                                   requiresFullRewrite
+                                       ? PDFOperationSavePolicy::fullRewrite(QStringLiteral("legacy full-rewrite request"))
+                                       : PDFOperationSavePolicy::incrementalAppend(QStringLiteral("legacy incremental eligibility request")),
+                                   saveAsNewOutput);
+}
+
+PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PDFDocument* sourceDocument,
+                                                                          const PDFOperationSavePolicy& policy,
+                                                                          bool saveAsNewOutput)
+{
+    if (policy.mode != PDFSaveMode::IncrementalAppend || saveAsNewOutput || !sourceDocument)
     {
         return WriteMode::FullRewrite;
     }

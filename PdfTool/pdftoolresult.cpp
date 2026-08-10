@@ -141,6 +141,12 @@ QString pdfToolStatusName(PDFToolExitCode exitCode)
 
         case PDFToolExitCode::InternalError:
             return QStringLiteral("internal-error");
+
+        case PDFToolExitCode::PreflightIncomplete:
+            return QStringLiteral("preflight-incomplete");
+
+        case PDFToolExitCode::PreflightError:
+            return QStringLiteral("preflight-error");
     }
 
     return QStringLiteral("internal-error");

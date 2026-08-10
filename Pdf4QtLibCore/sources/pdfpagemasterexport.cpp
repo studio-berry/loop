@@ -25,6 +25,7 @@
 #include "pdfsafefilewriter.h"
 #include "pdfprogress.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 #include "pdfdocumentsession.h"
 #include "pdfcontourbleedfixup.h"
 #include "pdfoperationcontrol.h"
@@ -816,11 +817,12 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PreflightEngine engine(&session);
             PreflightResult preflightResult = engine.run(preflightProfile);
             preflightResult.profileResolution = preflightResolution;
+            const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("initial"), preflightReport);
             writePreflightReport(fileName, preflightReport);
 
-            if (!preflightResult.pass && !job.forcePreflight)
+            if (verdict.state != PreflightVerdictState::Pass && !job.forcePreflight)
             {
                 const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                     "Preflight failed for '%1'.").arg(fileName);
@@ -1035,12 +1037,13 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             PreflightEngine engine(&session);
             PreflightResult preflightResult = engine.run(preflightProfile);
             preflightResult.profileResolution = preflightResolution;
+            const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("revalidation"), preflightReport);
             writeFileAtomically(fileName + QStringLiteral(".preflight-final.json"),
                                 QJsonDocument(preflightReport).toJson(QJsonDocument::Indented));
 
-            if (!preflightResult.pass && !job.forcePreflight)
+            if (verdict.state != PreflightVerdictState::Pass && !job.forcePreflight)
             {
                 const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                     "Final preflight revalidation failed for '%1'.").arg(fileName);

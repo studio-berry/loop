@@ -24,6 +24,7 @@
 #define PREFLIGHTSIDECARUTILS_H
 
 #include "pdffixupregistry.h"
+#include "pdfpreflightverdict.h"
 
 #include <cmath>
 #include <memory>
@@ -59,7 +60,7 @@ inline QString getPdfToolFileName()
 
 inline bool isExpectedPreflightExitCode(int exitCode)
 {
-    return exitCode == 0 || exitCode == 1;
+    return exitCode == 0 || exitCode == 1 || exitCode == 8 || exitCode == 9;
 }
 
 inline constexpr int PREFLIGHT_SIDECAR_STDOUT_MAX_BYTES = 16 * 1024 * 1024;
@@ -556,6 +557,20 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
                 return setValidationError(errorMessage, QStringLiteral("checks[%1].status must be a string.").arg(i));
             }
         }
+
+        const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
+        const QString state = verdict.value(QStringLiteral("state")).toString();
+        if (!QSet<QString>{QStringLiteral("pass"), QStringLiteral("fail"), QStringLiteral("incomplete"), QStringLiteral("error")}.contains(state))
+        {
+            return setValidationError(errorMessage, QStringLiteral("verdict.state must be pass, fail, incomplete, or error."));
+        }
+        if (!verdict.value(QStringLiteral("reason_code")).isString()
+            || !verdict.value(QStringLiteral("reason")).isString()
+            || !verdict.value(QStringLiteral("blocking_finding_ids")).isArray()
+            || !verdict.value(QStringLiteral("waived_finding_ids")).isArray())
+        {
+            return setValidationError(errorMessage, QStringLiteral("verdict must contain machine-readable reason and finding arrays."));
+        }
     }
 
     if (!report.value(QStringLiteral("profile")).isString() || report.value(QStringLiteral("profile")).toString().isEmpty())
@@ -631,16 +646,16 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    const bool errorsEmpty = report.value(QStringLiteral("errors")).toArray().isEmpty();
-    bool expectedPass = errorsEmpty;
+    bool expectedPass = report.value(QStringLiteral("pass")).toBool();
     if (schemaVersionValue >= 3)
     {
-        expectedPass = errorsEmpty && report.value(QStringLiteral("inspection_complete")).toBool();
+        const QString state = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
+        expectedPass = state == QStringLiteral("pass");
     }
 
     if (report.value(QStringLiteral("pass")).toBool() != expectedPass)
     {
-        return setValidationError(errorMessage, QStringLiteral("pass must be true exactly when errors is empty and inspection is complete."));
+        return setValidationError(errorMessage, QStringLiteral("pass must be derived from verdict.state."));
     }
 
     return true;

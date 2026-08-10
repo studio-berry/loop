@@ -74,16 +74,24 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfbleedmarginprobe.h
     sources/pdfinkcoverageprobe.cpp
     sources/pdfinkcoverageprobe.h
+    sources/pdfthinpartprobe.cpp
+    sources/pdfthinpartprobe.h
     sources/pdfocrpagegate.cpp
     sources/pdfocrpagegate.h
     sources/pdfocrreport.cpp
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfdocumentcontext.cpp
+    sources/pdfdocumentcontext.h
     sources/pdfprocessingbudget.cpp
     sources/pdfprocessingbudget.h
+    sources/pdfjobscheduler.cpp
+    sources/pdfjobscheduler.h
     sources/preflightengine.cpp
     sources/preflightengine.h
+    sources/pdfpreflightverdict.cpp
+    sources/pdfpreflightverdict.h
     sources/preflightprofileresolver.cpp
     sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h
@@ -189,6 +197,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfnametounicode.h
     sources/pdffont.cpp
     sources/pdffont.h
+    sources/pdffontintegrity.cpp
+    sources/pdffontintegrity.h
     sources/pdfimagecompressor.cpp
     sources/pdfimagecompressor.h
     sources/pdfimageoptimizer.cpp
@@ -237,6 +247,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfoperationhistory.cpp
     sources/pdfoperationhistorystore.h
     sources/pdfoperationhistorystore.cpp
+    sources/pdfsavepolicy.h
+    sources/pdfsavepolicy.cpp
     fonts.qrc
 )
 
