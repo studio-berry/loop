@@ -43,6 +43,7 @@
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 #include "pdfprocessingbudget.h"
+#include "pdfproductiongeometry.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -822,6 +823,90 @@ void emitNeedsAutoBleedFinding(int pageNumber,
     finding.bbox = pageBbox;
     finding.message = PDFTranslationContext::tr("Page is a candidate for the add-bleed fixup");
     pushPreflightFinding(finding, finding.severity, errors, warnings);
+}
+
+void runProcessingStepsCheck(PDFDocumentSession* session,
+                             const PreflightCheckConfig& check,
+                             QList<PreflightFinding>& errors,
+                             QList<PreflightFinding>& warnings)
+{
+    if (!session || !session->getDocument())
+    {
+        return;
+    }
+
+    const QList<PDFProcessingStep> steps = detectProcessingSteps(*session->getDocument());
+    const auto addFinding = [&check, &errors, &warnings](const QString& type,
+                                                          const QString& message,
+                                                          const PDFProcessingStep* step,
+                                                          const QString& requiredType = QString())
+    {
+        PreflightFinding finding;
+        finding.scope = step && step->pageIndices.size() == 1
+                            ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE)
+                            : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.page = step && step->pageIndices.size() == 1 ? step->pageIndices.front() + 1 : 1;
+        finding.type = type;
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.message = message;
+        finding.bbox = step ? step->geometry.boundingRect() : QRectF();
+        if (step)
+        {
+            finding.evidence = QJsonObject{
+                { QStringLiteral("step_type"), pdfProcessingStepTypeToString(step->type) },
+                { QStringLiteral("detection_method"), step->detectionMethod },
+                { QStringLiteral("ocg_name"), step->ocgName },
+                { QStringLiteral("spot_color"), step->spotColorName },
+                { QStringLiteral("required_type"), requiredType },
+                { QStringLiteral("is_separation"), step->isSeparation }
+            };
+        }
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
+    const auto isDieline = [](const PDFProcessingStep& step)
+    {
+        return step.type == PDFProcessingStepType::CuttingDie ||
+               (step.isSeparation && step.detectionMethod == QStringLiteral("legacy-spot-color"));
+    };
+
+    if (check.required && std::none_of(steps.cbegin(), steps.cend(), isDieline))
+    {
+        addFinding(QStringLiteral("dieline-missing"),
+                   PDFTranslationContext::tr("No ISO 19593-1 cutting-die OCG or legacy dieline spot color was detected."),
+                   nullptr);
+    }
+
+    for (const QString& requiredType : check.requiredProcessingStepTypes)
+    {
+        const PDFProcessingStepType type = pdfProcessingStepTypeFromString(requiredType);
+        const PDFProcessingStep* match = nullptr;
+        for (const PDFProcessingStep& step : steps)
+        {
+            if (step.type == type)
+            {
+                match = &step;
+                break;
+            }
+        }
+        if (!match)
+        {
+            addFinding(QStringLiteral("processing-step-missing"),
+                       PDFTranslationContext::tr("Required processing step '%1' was not detected.").arg(requiredType),
+                       nullptr, requiredType);
+        }
+    }
+
+    for (const PDFProcessingStep& step : steps)
+    {
+        if (isDieline(step) && step.shouldPrint)
+        {
+            addFinding(QStringLiteral("dieline-printing"),
+                       PDFTranslationContext::tr("Dieline processing geometry is marked printable; it must be non-printing."),
+                       &step);
+        }
+    }
 }
 
 void runContentBleedCheck(PDFDocumentSession* session,
@@ -4182,6 +4267,20 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             return false;
         }
 
+        if (check.id == QStringLiteral("processing-steps") || check.id == QStringLiteral("dieline"))
+        {
+            const QJsonArray requiredTypes = checkObject.value(QStringLiteral("required_types")).toArray();
+            for (const QJsonValue& value : requiredTypes)
+            {
+                if (!value.isString() || pdfProcessingStepTypeFromString(value.toString()) == PDFProcessingStepType::Unknown)
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' contains an unknown processing step type.").arg(check.id);
+                    return false;
+                }
+                check.requiredProcessingStepTypes.append(value.toString());
+            }
+        }
+
         if (check.id == QStringLiteral("output-intent"))
         {
             for (const QString& mode : check.allowedColorModes)
@@ -4321,6 +4420,15 @@ void PreflightEngine::registerBuiltInChecks()
     {
         runSizeCheck(SizeCheckKind::PageSize, session, check, errors, warnings);
     };
+
+    m_checks[QStringLiteral("processing-steps")] = [](PDFDocumentSession* session,
+                                                       const PreflightCheckConfig& check,
+                                                       QList<PreflightFinding>& errors,
+                                                       QList<PreflightFinding>& warnings)
+    {
+        runProcessingStepsCheck(session, check, errors, warnings);
+    };
+    m_checks[QStringLiteral("dieline")] = m_checks.at(QStringLiteral("processing-steps"));
 
     m_checks[QStringLiteral("content-bleed")] = [](PDFDocumentSession* session,
                                                      const PreflightCheckConfig& check,
