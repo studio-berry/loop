@@ -2415,6 +2415,15 @@ void PDFProgramController::onDocumentReadingFinished()
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
+            // A recent-file entry can outlive a portal grant or the source
+            // document itself. Remove entries that are no longer reachable so
+            // the sandboxed app does not keep offering a dead path.
+            const QFileInfo fileInfo(m_fileInfo.absoluteFilePath);
+            if (!fileInfo.exists() || !fileInfo.isReadable())
+            {
+                m_recentFileManager->removeRecentFile(m_fileInfo.originalFileName);
+            }
+
             QMessageBox::critical(m_mainWindow, QApplication::applicationDisplayName(), tr("Document read error: %1").arg(result.errorMessage));
             break;
         }
