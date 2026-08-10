@@ -76,6 +76,13 @@ contains only fixups available in the current build.
 }
 ```
 
+The build-level fixup registry is available from `PdfTool capabilities
+--console-format json` at `.data.fixups`. Preflight `fixups_available` is the
+intersection of that implemented set with fixups present in the active profile
+and applicable to the current finding/document. The Editor sidecar applies the
+same registry filter, so CLI and Editor cannot advertise different build-level
+fixup IDs.
+
 | Field | Type | Meaning |
 |---|---|---|
 | `schema_version` | `integer` | PdfTool result-envelope schema version (`1`). Independent of nested `data.report.schema_version`. |

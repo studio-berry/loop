@@ -469,6 +469,7 @@ private:
     PDFTextToSpeech* m_textToSpeech;
     bool m_isDocumentSetInProgress;
     bool m_isRecoveredDocument;
+    bool m_requiresFullRewriteOnSave;
     quint64 m_documentRevision;
 
     QFuture<AsyncReadingResult> m_future;

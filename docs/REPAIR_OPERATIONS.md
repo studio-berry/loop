@@ -44,7 +44,19 @@ The first adapters use the existing bounded Core fixups:
   forbidden-action removal are not silently approximated; unsupported cases
   fail closed.
 
-The registry exposes descriptors through `PdfTool repair --list-operations`.
+The fixup capability registry is the source of truth for the current build. The
+shipped Loupe Default profile lists these same three IDs, and the Editor sidecar
+filter plus `PdfTool capabilities --console-format json` consume that registry.
+An operation is advertised only when it is implemented in the current build, is
+applicable to the raised finding/document, and is present in the active profile.
+Use the following command to inspect the build-level set before writing an
+operator runbook or automation policy:
+
+```bash
+PdfTool capabilities --console-format json | jq '.data.fixups'
+```
+
+The registry exposes repair descriptors through `PdfTool repair --list-operations`.
 The Editor's bleed workflow resolves `add-bleed` from the same registry and
 reviews its serialized candidate with the same diff engine as PdfTool.
 
