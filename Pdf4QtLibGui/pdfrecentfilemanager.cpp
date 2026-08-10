@@ -81,6 +81,14 @@ void PDFRecentFileManager::clearRecentFiles()
     update();
 }
 
+void PDFRecentFileManager::removeRecentFile(const QString& fileName)
+{
+    if (m_recentFiles.removeAll(fileName) > 0)
+    {
+        update();
+    }
+}
+
 const std::array<QAction*, PDFRecentFileManager::MAXIMUM_RECENT_FILES>& PDFRecentFileManager::getActions() const
 {
     return m_actions;

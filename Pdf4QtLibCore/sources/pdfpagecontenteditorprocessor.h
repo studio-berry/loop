@@ -35,6 +35,7 @@ namespace pdf
 class PDFEditedPageContentElementPath;
 class PDFEditedPageContentElementText;
 class PDFEditedPageContentElementImage;
+class PDFEditedPageContentElementInstruction;
 
 class PDF4QTLIBCORESHARED_EXPORT PDFEditedPageContentElement
 {
@@ -47,7 +48,8 @@ public:
     {
         Path,
         Text,
-        Image
+        Image,
+        Instruction
     };
 
     virtual Type getType() const = 0;
@@ -61,6 +63,9 @@ public:
 
     virtual PDFEditedPageContentElementImage* asImage() { return nullptr; }
     virtual const PDFEditedPageContentElementImage* asImage() const { return nullptr; }
+
+    virtual PDFEditedPageContentElementInstruction* asInstruction() { return nullptr; }
+    virtual const PDFEditedPageContentElementInstruction* asInstruction() const { return nullptr; }
 
     const PDFPageContentProcessorState& getState() const;
     void setState(const PDFPageContentProcessorState& newState);
@@ -193,9 +198,45 @@ private:
     QString m_itemsAsText;
 };
 
+/// Represents a content-stream instruction which is not modelled as a visual
+/// element. Structural instructions are written back verbatim so marked
+/// content, MCIDs, optional-content membership, and compatibility sections are
+/// not lost during an edit. Unsupported instructions carry a fatal diagnostic
+/// and prevent an unsafe rewrite.
+class PDF4QTLIBCORESHARED_EXPORT PDFEditedPageContentElementInstruction : public PDFEditedPageContentElement
+{
+public:
+    PDFEditedPageContentElementInstruction(PDFPageContentProcessorState state,
+                                            QByteArray content,
+                                            QString diagnostic = QString());
+    virtual ~PDFEditedPageContentElementInstruction() = default;
+
+    virtual Type getType() const override;
+    virtual PDFEditedPageContentElementInstruction* clone() const override;
+    virtual PDFEditedPageContentElementInstruction* asInstruction() override { return this; }
+    virtual const PDFEditedPageContentElementInstruction* asInstruction() const override { return this; }
+    virtual QRectF getBoundingBox() const override;
+
+    const QByteArray& getContent() const { return m_content; }
+    const QString& getDiagnostic() const { return m_diagnostic; }
+    bool isUnsupported() const { return !m_diagnostic.isEmpty(); }
+
+private:
+    QByteArray m_content;
+    QString m_diagnostic;
+};
+
 class PDF4QTLIBCORESHARED_EXPORT PDFEditedPageContent
 {
 public:
+    struct IntegrityReport
+    {
+        QStringList changed;
+        QStringList preserved;
+        QStringList requiresReview;
+        QStringList unsupported;
+    };
+
     PDFEditedPageContent() = default;
     PDFEditedPageContent(const PDFEditedPageContent&) = delete;
     PDFEditedPageContent(PDFEditedPageContent&&) = default;
@@ -209,6 +250,8 @@ public:
     void addContentPath(PDFPageContentProcessorState state, QPainterPath path, bool strokePath, bool fillPath);
     void addContentImage(PDFPageContentProcessorState state, PDFObject imageObject, QImage image);
     void addContentElement(std::unique_ptr<PDFEditedPageContentElement> element);
+    void addPreservedInstruction(PDFPageContentProcessorState state, QByteArray content, QString description);
+    void addUnsupportedContent(PDFPageContentProcessorState state, QString diagnostic);
 
     std::size_t getElementCount() const { return m_contentElements.size(); }
     PDFEditedPageContentElement* getElement(size_t index) const { return m_contentElements.at(index).get(); }
@@ -224,11 +267,14 @@ public:
     PDFDictionary getGraphicStateDictionary() const;
     void setGraphicStateDictionary(const PDFDictionary& newGraphicStateDictionary);
 
+    const IntegrityReport& getIntegrityReport() const { return m_integrityReport; }
+
 private:
     std::vector<std::unique_ptr<PDFEditedPageContentElement>> m_contentElements;
     PDFDictionary m_fontDictionary;
     PDFDictionary m_xobjectDictionary;
     PDFDictionary m_graphicStateDictionary;
+    IntegrityReport m_integrityReport;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFPageContentEditorProcessor : public PDFPageContentProcessor
@@ -254,11 +300,16 @@ protected:
     virtual bool isTilingPatternProcessingAllowed(PDFInteger tileCount) const override;
     virtual bool performOriginalImagePainting(const PDFImage& image, const PDFStream* stream, PDFObjectReference reference) override;
     virtual void performImagePainting(const QImage& image) override;
+    virtual void performBeginTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup) override;
+    virtual void performEndTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup) override;
     virtual void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override;
     virtual void performSaveGraphicState(ProcessOrder order) override;
     virtual void performRestoreGraphicState(ProcessOrder order) override;
     virtual void performUpdateGraphicsState(const PDFPageContentProcessorState& state) override;
     virtual void performProcessTextSequence(const TextSequence& textSequence, ProcessOrder order) override;
+
+private:
+    void addUnsupportedInstruction(const QByteArray& operatorAsText, const QString& reason);
 
 private:
     /// Maximum number of tiles of a tiling pattern, which is decomposed into

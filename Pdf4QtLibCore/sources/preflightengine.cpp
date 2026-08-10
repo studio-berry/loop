@@ -32,6 +32,7 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdffont.h"
+#include "pdffixupregistry.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
 #include "pdfimageoptimizer.h"
@@ -43,6 +44,7 @@
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 #include "pdfprocessingbudget.h"
+#include "pdfproductiongeometry.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -50,6 +52,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPair>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <lcms2.h>
@@ -63,6 +67,267 @@
 
 namespace pdf
 {
+
+namespace
+{
+
+bool isSha256Digest(const QString& value)
+{
+    static const QRegularExpression expression(QStringLiteral("^[0-9a-fA-F]{64}$"));
+    return expression.match(value).hasMatch();
+}
+
+} // namespace
+
+QString PreflightFinding::stableId() const
+{
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(checkId.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(scope.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(QByteArray::number(page));
+    hash.addData("\x1f", 1);
+    hash.addData(objectId.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(type.toUtf8());
+    return QString::fromLatin1(hash.result().toHex().left(16));
+}
+
+QString preflightDecisionKindToString(PreflightDecisionKind kind)
+{
+    switch (kind)
+    {
+        case PreflightDecisionKind::Accept:
+            return QStringLiteral("accept");
+        case PreflightDecisionKind::Waive:
+            return QStringLiteral("waive");
+        case PreflightDecisionKind::Override:
+            return QStringLiteral("override");
+        case PreflightDecisionKind::Reject:
+            return QStringLiteral("reject");
+        case PreflightDecisionKind::Reopen:
+            return QStringLiteral("reopen");
+    }
+
+    return QString();
+}
+
+bool preflightDecisionKindFromString(const QString& value, PreflightDecisionKind& kind)
+{
+    const QString normalized = value.trimmed().toLower();
+    const QList<QPair<QString, PreflightDecisionKind>> values = {
+        { QStringLiteral("accept"), PreflightDecisionKind::Accept },
+        { QStringLiteral("waive"), PreflightDecisionKind::Waive },
+        { QStringLiteral("override"), PreflightDecisionKind::Override },
+        { QStringLiteral("reject"), PreflightDecisionKind::Reject },
+        { QStringLiteral("reopen"), PreflightDecisionKind::Reopen }
+    };
+    for (const auto& valuePair : values)
+    {
+        if (normalized == valuePair.first)
+        {
+            kind = valuePair.second;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QString preflightDecisionStateToString(PreflightDecisionState state)
+{
+    switch (state)
+    {
+        case PreflightDecisionState::Active:
+            return QStringLiteral("active");
+        case PreflightDecisionState::StaleDocument:
+            return QStringLiteral("stale_document");
+        case PreflightDecisionState::StaleProfile:
+            return QStringLiteral("stale_profile");
+        case PreflightDecisionState::Invalid:
+            return QStringLiteral("invalid");
+    }
+
+    return QStringLiteral("invalid");
+}
+
+PreflightDecisionState PreflightDecision::resolveState(const QString& currentDocumentDigest,
+                                                       const QString& currentProfileDigest) const
+{
+    if (findingId.trimmed().isEmpty()
+        || justification.trimmed().size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH
+        || operatorIdentity.trimmed().isEmpty()
+        || !timestampUtc.isValid()
+        || !isSha256Digest(documentRevisionDigest)
+        || !isSha256Digest(effectiveProfileDigest)
+        || !isSha256Digest(currentDocumentDigest)
+        || !isSha256Digest(currentProfileDigest))
+    {
+        return PreflightDecisionState::Invalid;
+    }
+
+    if (documentRevisionDigest.compare(currentDocumentDigest, Qt::CaseInsensitive) != 0)
+    {
+        return PreflightDecisionState::StaleDocument;
+    }
+    if (effectiveProfileDigest.compare(currentProfileDigest, Qt::CaseInsensitive) != 0)
+    {
+        return PreflightDecisionState::StaleProfile;
+    }
+
+    return PreflightDecisionState::Active;
+}
+
+bool PreflightDecision::countsForSignoff(const QString& currentDocumentDigest,
+                                         const QString& currentProfileDigest) const
+{
+    const PreflightDecisionState state = resolveState(currentDocumentDigest, currentProfileDigest);
+    return state == PreflightDecisionState::Active
+        && (kind == PreflightDecisionKind::Accept
+            || kind == PreflightDecisionKind::Waive
+            || kind == PreflightDecisionKind::Override);
+}
+
+QJsonObject PreflightDecision::toJson(const QString& currentDocumentDigest,
+                                     const QString& currentProfileDigest) const
+{
+    QJsonObject object{
+        { QStringLiteral("finding_id"), findingId },
+        { QStringLiteral("kind"), preflightDecisionKindToString(kind) },
+        { QStringLiteral("justification"), justification },
+        { QStringLiteral("operator"), operatorIdentity },
+        { QStringLiteral("timestamp_utc"), timestampUtc.toUTC().toString(Qt::ISODateWithMs) },
+        { QStringLiteral("document_revision_digest"), documentRevisionDigest },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest }
+    };
+
+    if (!externalReference.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("external_reference"), externalReference);
+    }
+    if (!currentDocumentDigest.isEmpty() || !currentProfileDigest.isEmpty())
+    {
+        object.insert(QStringLiteral("state"), preflightDecisionStateToString(resolveState(currentDocumentDigest, currentProfileDigest)));
+    }
+
+    return object;
+}
+
+bool PreflightDecision::fromJson(const QJsonObject& object,
+                                 PreflightDecision& decision,
+                                 QString& errorMessage)
+{
+    decision = PreflightDecision();
+    errorMessage.clear();
+
+    decision.findingId = object.value(QStringLiteral("finding_id")).toString().trimmed();
+    if (decision.findingId.isEmpty())
+    {
+        errorMessage = QStringLiteral("Decision is missing finding_id.");
+        return false;
+    }
+
+    if (!preflightDecisionKindFromString(object.value(QStringLiteral("kind")).toString(), decision.kind))
+    {
+        errorMessage = QStringLiteral("Decision kind is invalid.");
+        return false;
+    }
+
+    decision.justification = object.value(QStringLiteral("justification")).toString().trimmed();
+    if (decision.justification.size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH)
+    {
+        errorMessage = QStringLiteral("Decision justification must contain at least %1 non-whitespace characters.")
+            .arg(PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH);
+        return false;
+    }
+
+    decision.operatorIdentity = object.value(QStringLiteral("operator")).toString().trimmed();
+    if (decision.operatorIdentity.isEmpty())
+    {
+        errorMessage = QStringLiteral("Decision is missing operator identity.");
+        return false;
+    }
+
+    const QString timestamp = object.value(QStringLiteral("timestamp_utc")).toString();
+    decision.timestampUtc = QDateTime::fromString(timestamp, Qt::ISODateWithMs);
+    if (!decision.timestampUtc.isValid())
+    {
+        decision.timestampUtc = QDateTime::fromString(timestamp, Qt::ISODate);
+    }
+    if (!decision.timestampUtc.isValid() || decision.timestampUtc.timeSpec() == Qt::LocalTime)
+    {
+        errorMessage = QStringLiteral("Decision timestamp_utc must be a valid ISO-8601 timestamp with an explicit UTC offset.");
+        return false;
+    }
+    decision.timestampUtc = decision.timestampUtc.toUTC();
+
+    decision.externalReference = object.value(QStringLiteral("external_reference")).toString().trimmed();
+    decision.documentRevisionDigest = object.value(QStringLiteral("document_revision_digest")).toString().trimmed().toLower();
+    decision.effectiveProfileDigest = object.value(QStringLiteral("effective_profile_digest")).toString().trimmed().toLower();
+    if (!isSha256Digest(decision.documentRevisionDigest) || !isSha256Digest(decision.effectiveProfileDigest))
+    {
+        errorMessage = QStringLiteral("Decision document and profile digests must be 64-character SHA-256 values.");
+        return false;
+    }
+
+    return true;
+}
+
+QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions)
+{
+    QJsonArray array;
+    for (const PreflightDecision& decision : decisions)
+    {
+        array.append(decision.toJson());
+    }
+    return QJsonObject{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("decisions"), array }
+    };
+}
+
+bool preflightDecisionsFromJson(const QJsonObject& object,
+                                QList<PreflightDecision>& decisions,
+                                QString& errorMessage)
+{
+    decisions.clear();
+    errorMessage.clear();
+    if (object.value(QStringLiteral("schema_version")).toInt() != 1)
+    {
+        errorMessage = QStringLiteral("Decision file schema_version must be 1.");
+        return false;
+    }
+
+    const QJsonValue value = object.value(QStringLiteral("decisions"));
+    if (!value.isArray())
+    {
+        errorMessage = QStringLiteral("Decision file decisions must be an array.");
+        return false;
+    }
+
+    const QJsonArray array = value.toArray();
+    for (int index = 0; index < array.size(); ++index)
+    {
+        if (!array.at(index).isObject())
+        {
+            errorMessage = QStringLiteral("Decision %1 must be an object.").arg(index);
+            decisions.clear();
+            return false;
+        }
+
+        PreflightDecision decision;
+        if (!PreflightDecision::fromJson(array.at(index).toObject(), decision, errorMessage))
+        {
+            errorMessage = QStringLiteral("Decision %1: %2").arg(index).arg(errorMessage);
+            decisions.clear();
+            return false;
+        }
+        decisions.append(decision);
+    }
+
+    return true;
+}
 
 QString pdfxFlavorToString(PDFXFlavor flavor)
 {
@@ -289,6 +554,7 @@ bool hasMeaningfulBbox(const QRectF& rect)
 QJsonObject findingToJson(const PreflightFinding& finding)
 {
     QJsonObject object;
+    object.insert(QStringLiteral("id"), finding.stableId());
     object.insert(QStringLiteral("scope"), finding.scope);
     object.insert(QStringLiteral("type"), finding.type);
     object.insert(QStringLiteral("severity"), finding.severity);
@@ -824,6 +1090,90 @@ void emitNeedsAutoBleedFinding(int pageNumber,
     pushPreflightFinding(finding, finding.severity, errors, warnings);
 }
 
+void runProcessingStepsCheck(PDFDocumentSession* session,
+                             const PreflightCheckConfig& check,
+                             QList<PreflightFinding>& errors,
+                             QList<PreflightFinding>& warnings)
+{
+    if (!session || !session->getDocument())
+    {
+        return;
+    }
+
+    const QList<PDFProcessingStep> steps = detectProcessingSteps(*session->getDocument());
+    const auto addFinding = [&check, &errors, &warnings](const QString& type,
+                                                          const QString& message,
+                                                          const PDFProcessingStep* step,
+                                                          const QString& requiredType = QString())
+    {
+        PreflightFinding finding;
+        finding.scope = step && step->pageIndices.size() == 1
+                            ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE)
+                            : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.page = step && step->pageIndices.size() == 1 ? step->pageIndices.front() + 1 : 1;
+        finding.type = type;
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.message = message;
+        finding.bbox = step ? step->geometry.boundingRect() : QRectF();
+        if (step)
+        {
+            finding.evidence = QJsonObject{
+                { QStringLiteral("step_type"), pdfProcessingStepTypeToString(step->type) },
+                { QStringLiteral("detection_method"), step->detectionMethod },
+                { QStringLiteral("ocg_name"), step->ocgName },
+                { QStringLiteral("spot_color"), step->spotColorName },
+                { QStringLiteral("required_type"), requiredType },
+                { QStringLiteral("is_separation"), step->isSeparation }
+            };
+        }
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
+    const auto isDieline = [](const PDFProcessingStep& step)
+    {
+        return step.type == PDFProcessingStepType::CuttingDie ||
+               (step.isSeparation && step.detectionMethod == QStringLiteral("legacy-spot-color"));
+    };
+
+    if (check.required && std::none_of(steps.cbegin(), steps.cend(), isDieline))
+    {
+        addFinding(QStringLiteral("dieline-missing"),
+                   PDFTranslationContext::tr("No ISO 19593-1 cutting-die OCG or legacy dieline spot color was detected."),
+                   nullptr);
+    }
+
+    for (const QString& requiredType : check.requiredProcessingStepTypes)
+    {
+        const PDFProcessingStepType type = pdfProcessingStepTypeFromString(requiredType);
+        const PDFProcessingStep* match = nullptr;
+        for (const PDFProcessingStep& step : steps)
+        {
+            if (step.type == type)
+            {
+                match = &step;
+                break;
+            }
+        }
+        if (!match)
+        {
+            addFinding(QStringLiteral("processing-step-missing"),
+                       PDFTranslationContext::tr("Required processing step '%1' was not detected.").arg(requiredType),
+                       nullptr, requiredType);
+        }
+    }
+
+    for (const PDFProcessingStep& step : steps)
+    {
+        if (isDieline(step) && step.shouldPrint)
+        {
+            addFinding(QStringLiteral("dieline-printing"),
+                       PDFTranslationContext::tr("Dieline processing geometry is marked printable; it must be non-printing."),
+                       &step);
+        }
+    }
+}
+
 void runContentBleedCheck(PDFDocumentSession* session,
                            const PreflightCheckConfig& check,
                            QList<PreflightFinding>& errors,
@@ -1211,16 +1561,12 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         }
     }
 
-    // Remove advertised fixups; only implemented fixups are re-added below.
-    auto it = std::remove_if(fixups.begin(), fixups.end(), [](const PreflightFixupConfig& fixup)
-    {
-        return fixup.id == QStringLiteral("add-bleed")
-            || fixup.id == QStringLiteral("rgb-to-cmyk")
-            || fixup.id == QStringLiteral("downsample-images");
-    });
-    fixups.erase(it, fixups.end());
+    // Rebuild the list from the shared registry and document findings. This
+    // keeps the CLI report on the same contract that the Editor sidecar filter
+    // uses and prevents stale or unknown profile IDs from being advertised.
+    fixups.clear();
 
-    if (needsAddBleed)
+    if (needsAddBleed && isImplementedFixupId(QStringLiteral("add-bleed")))
     {
         if (!hasProfileAddBleed)
         {
@@ -1255,7 +1601,8 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         });
     };
 
-    if (hasRgbFinding(errors) || hasRgbFinding(warnings))
+    if ((hasRgbFinding(errors) || hasRgbFinding(warnings))
+        && isImplementedFixupId(QStringLiteral("rgb-to-cmyk")))
     {
         if (!hasProfileRgbToCmyk)
         {
@@ -1276,6 +1623,7 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
     const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
     int candidateCount = 0;
     if (hasProfileDownsample
+        && isImplementedFixupId(QStringLiteral("downsample-images"))
         && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
     {
         if (downsampleConfig.description.isEmpty())
@@ -2696,6 +3044,221 @@ void runThinStrokesCheck(PDFDocumentSession* session,
     }
 }
 
+struct HiddenContentFinding
+{
+    QString type;
+    QRectF bbox;
+    QString detail;
+    bool heuristic = false;
+};
+
+class HiddenContentProcessor final : public PDFPageContentProcessor
+{
+public:
+    HiddenContentProcessor(const PDFPage* page,
+                           const PDFDocument* document,
+                           const PDFFontCache* fontCache,
+                           const PDFCMS* cms,
+                           const PDFOptionalContentActivity* optionalContentActivity,
+                           const PDFMeshQualitySettings& meshQualitySettings,
+                           PDFProcessingBudget* budget,
+                           qreal offPageAllowance) :
+        PDFPageContentProcessor(page,
+                                 document,
+                                 fontCache,
+                                 cms,
+                                 optionalContentActivity,
+                                 QTransform(),
+                                 meshQualitySettings,
+                                 budget)
+    {
+        if (page)
+        {
+            const QRectF media = page->getMediaBox().normalized();
+            const QRectF effective = preflight::resolveEffectiveBox(page->getTrimBox(), page->getCropBox(), media);
+            const QRectF bleed = page->getBleedBox().normalized();
+            m_toleratedBounds = bleed.isEmpty()
+                ? effective.adjusted(-offPageAllowance, -offPageAllowance, offPageAllowance, offPageAllowance)
+                : bleed;
+        }
+    }
+
+    const QList<HiddenContentFinding>& findings() const { return m_findings; }
+
+protected:
+    void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
+    {
+        if (tag != "OC" || !isContentSuppressed())
+        {
+            return;
+        }
+
+        QString name = QStringLiteral("unnamed optional-content group");
+        PDFObjectReference reference;
+        if (properties.isName() && getPropertiesDictionary())
+        {
+            const PDFObject property = getPropertiesDictionary()->get(properties.getString());
+            if (property.isReference())
+            {
+                reference = property.getReference();
+            }
+        }
+        if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        {
+            name = getDocument()->getCatalog()->getOptionalContentProperties()
+                ->getOptionalContentGroup(reference).getName();
+            if (name.isEmpty())
+            {
+                name = QStringLiteral("object %1 %2").arg(reference.objectNumber).arg(reference.generation);
+            }
+        }
+        if (!m_hiddenLayers.contains(name))
+        {
+            m_hiddenLayers.append(name);
+            m_findings.append({ QStringLiteral("hidden-layers"), QRectF(), name, false });
+        }
+    }
+
+    void performInterceptInstruction(Operator currentOperator,
+                                     ProcessOrder processOrder,
+                                     const QByteArray& operatorAsText) override
+    {
+        if (processOrder != ProcessOrder::BeforeOperation
+            || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
+        {
+            return;
+        }
+
+        switch (currentOperator)
+        {
+            case Operator::TextShowTextString:
+            case Operator::TextShowTextIndividualSpacing:
+            case Operator::TextNextLineShowText:
+            case Operator::TextSetSpacingAndShowText:
+                m_findings.append({ QStringLiteral("invisible-content"), QRectF(),
+                                    QStringLiteral("text render mode 3 (%1)").arg(QString::fromLatin1(operatorAsText)), false });
+                break;
+            default:
+                break;
+        }
+    }
+
+    void performBeforePathPainting(const QPainterPath& path,
+                                   bool stroke,
+                                   bool fill,
+                                   bool text,
+                                   Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(fillRule);
+        if (path.isEmpty() || (!stroke && !fill && !text))
+        {
+            return;
+        }
+
+        const QRectF bounds = getCurrentWorldMatrix().map(path).boundingRect().normalized();
+        const PDFPageContentProcessorState* state = getGraphicState();
+        if (state->getAlphaFilling() <= 0.0 || state->getAlphaStroking() <= 0.0)
+        {
+            m_findings.append({ QStringLiteral("invisible-content"), bounds,
+                                QStringLiteral("graphics-state alpha is zero"), false });
+        }
+
+        if (!m_toleratedBounds.isEmpty() && !m_toleratedBounds.intersects(bounds))
+        {
+            m_findings.append({ QStringLiteral("off-page-content"), bounds,
+                                QStringLiteral("mark lies outside the effective page/bleed box"), false });
+        }
+
+        if (fill && state->getAlphaFilling() >= 1.0 && !m_paintedBounds.isEmpty())
+        {
+            for (const QRectF& previous : m_paintedBounds)
+            {
+                if (bounds.contains(previous))
+                {
+                    m_findings.append({ QStringLiteral("obscured-content"), previous,
+                                        QStringLiteral("fully covered by later opaque paint"), true });
+                    break;
+                }
+            }
+        }
+        if (fill || stroke || text)
+        {
+            m_paintedBounds.append(bounds);
+        }
+    }
+
+private:
+    QRectF m_toleratedBounds;
+    QList<QRectF> m_paintedBounds;
+    QStringList m_hiddenLayers;
+    QList<HiddenContentFinding> m_findings;
+};
+
+void runHiddenContentCheck(PDFDocumentSession* session,
+                           const PreflightCheckConfig& check,
+                           QList<PreflightFinding>& errors,
+                           QList<PreflightFinding>& warnings)
+{
+    if (!session || !session->getDocument())
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    PDFOptionalContentActivity printActivity(document, OCUsage::Print, nullptr);
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+    PDFMeshQualitySettings meshQualitySettings;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        HiddenContentProcessor processor(page,
+                                         document,
+                                         session->getFontCache(),
+                                         session->getCMS(),
+                                         &printActivity,
+                                         meshQualitySettings,
+                                         session->getProcessingBudget(),
+                                         check.amountPt);
+        processor.processContents();
+
+        for (const HiddenContentFinding& source : processor.findings())
+        {
+            if (source.type != check.id)
+            {
+                continue;
+            }
+
+            PreflightFinding finding;
+            finding.scope = source.type == QStringLiteral("hidden-layers")
+                ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT)
+                : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+            finding.page = int(pageIndex + 1);
+            finding.type = source.type;
+            finding.checkId = check.id;
+            finding.bbox = source.bbox;
+            finding.severity = source.heuristic && check.severity == QStringLiteral("error")
+                ? QStringLiteral("info")
+                : check.severity;
+            finding.message = source.type == QStringLiteral("hidden-layers")
+                ? PDFTranslationContext::tr("Optional-content group '%1' is not printable by default.").arg(source.detail)
+                : PDFTranslationContext::tr("%1 on page %2.").arg(source.detail).arg(pageIndex + 1);
+            finding.evidence.insert(QStringLiteral("confidence"), source.heuristic ? QStringLiteral("heuristic") : QStringLiteral("exact"));
+            if (source.type == QStringLiteral("hidden-layers"))
+            {
+                finding.evidence.insert(QStringLiteral("ocg_name"), source.detail);
+            }
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
+        }
+    }
+}
+
 // Scans Font resource dictionaries on the page and nested Form XObjects /
 // annotation appearance streams (resource recursion with cycle guard).
 void runEmbeddedFontsCheck(PDFDocumentSession* session,
@@ -3653,9 +4216,24 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     {
         root.insert(QStringLiteral("pdf"), pdfPath);
     }
+    if (!documentRevisionDigest.isEmpty())
+    {
+        root.insert(QStringLiteral("document_revision_digest"), documentRevisionDigest);
+    }
+    if (!effectiveProfileDigest.isEmpty())
+    {
+        root.insert(QStringLiteral("effective_profile_digest"), effectiveProfileDigest);
+    }
     root.insert(QStringLiteral("errors"), errorsArray);
     root.insert(QStringLiteral("warnings"), warningsArray);
     root.insert(QStringLiteral("fixups_available"), fixupsArray);
+
+    QJsonArray decisionsArray;
+    for (const PreflightDecision& decision : decisions)
+    {
+        decisionsArray.append(decision.toJson(documentRevisionDigest, effectiveProfileDigest));
+    }
+    root.insert(QStringLiteral("decisions"), decisionsArray);
 
     if (!profileResolution.isEmpty())
     {
@@ -4182,6 +4760,20 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             return false;
         }
 
+        if (check.id == QStringLiteral("processing-steps") || check.id == QStringLiteral("dieline"))
+        {
+            const QJsonArray requiredTypes = checkObject.value(QStringLiteral("required_types")).toArray();
+            for (const QJsonValue& value : requiredTypes)
+            {
+                if (!value.isString() || pdfProcessingStepTypeFromString(value.toString()) == PDFProcessingStepType::Unknown)
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' contains an unknown processing step type.").arg(check.id);
+                    return false;
+                }
+                check.requiredProcessingStepTypes.append(value.toString());
+            }
+        }
+
         if (check.id == QStringLiteral("output-intent"))
         {
             for (const QString& mode : check.allowedColorModes)
@@ -4322,6 +4914,15 @@ void PreflightEngine::registerBuiltInChecks()
         runSizeCheck(SizeCheckKind::PageSize, session, check, errors, warnings);
     };
 
+    m_checks[QStringLiteral("processing-steps")] = [](PDFDocumentSession* session,
+                                                       const PreflightCheckConfig& check,
+                                                       QList<PreflightFinding>& errors,
+                                                       QList<PreflightFinding>& warnings)
+    {
+        runProcessingStepsCheck(session, check, errors, warnings);
+    };
+    m_checks[QStringLiteral("dieline")] = m_checks.at(QStringLiteral("processing-steps"));
+
     m_checks[QStringLiteral("content-bleed")] = [](PDFDocumentSession* session,
                                                      const PreflightCheckConfig& check,
                                                      QList<PreflightFinding>& errors,
@@ -4385,6 +4986,20 @@ void PreflightEngine::registerBuiltInChecks()
     {
         runEmbeddedFontsCheck(session, check, errors, warnings);
     };
+
+    for (const QString& id : { QStringLiteral("invisible-content"),
+                               QStringLiteral("hidden-layers"),
+                               QStringLiteral("off-page-content"),
+                               QStringLiteral("obscured-content") })
+    {
+        m_checks[id] = [](PDFDocumentSession* session,
+                          const PreflightCheckConfig& check,
+                          QList<PreflightFinding>& errors,
+                          QList<PreflightFinding>& warnings)
+        {
+            runHiddenContentCheck(session, check, errors, warnings);
+        };
+    }
 
     m_checks[QStringLiteral("image-resolution")] = [](PDFDocumentSession* session,
                                                        const PreflightCheckConfig& check,
