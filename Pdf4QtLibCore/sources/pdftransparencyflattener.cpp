@@ -315,7 +315,7 @@ PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
     }
 
     PDFDocumentSession session(document);
-    PDFDocumentBuilder builder(&document);
+    PDFDocumentBuilder builder(document);
     for (int pageIndex : pages)
     {
         const PDFPage* page = document->getCatalog()->getPage(size_t(pageIndex));
