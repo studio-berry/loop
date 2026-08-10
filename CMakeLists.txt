@@ -150,6 +150,12 @@ option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCAN
 # other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
 option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_PDF4QT_PLUGIN_OCR_DEFAULT})
 
+if(PDF4QT_LOUPE_DISTRIBUTION AND PDF4QT_PLUGIN_OCR)
+    message(FATAL_ERROR
+        "PDF4QT_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
+        "OCR is CLI-only in V1 (see issue #41 and ADR-005).")
+endif()
+
 if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
