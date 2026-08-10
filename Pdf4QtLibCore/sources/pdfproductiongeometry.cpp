@@ -21,9 +21,15 @@
 // SOFTWARE.
 
 #include "pdfproductiongeometry.h"
+#include "pdfcolorspaces.h"
+#include "pdfdocumentsession.h"
+#include "pdfoptionalcontent.h"
+#include "pdfpagecontentprocessor.h"
+#include "pdfdocument.h"
 
 #include <QLineF>
 #include <QJsonArray>
+#include <QMap>
 #include <QPolygonF>
 #include <QSet>
 #include <QVariantMap>
@@ -36,6 +42,192 @@ namespace pdf
 
 namespace
 {
+
+QString normalizedProcessingStepName(const QString& value)
+{
+    QString result;
+    result.reserve(value.size());
+    for (const QChar character : value.toLower())
+    {
+        if (character.isLetterOrNumber())
+        {
+            result.append(character);
+        }
+    }
+    return result;
+}
+
+PDFProcessingStepType processingStepTypeFromMetadata(const QList<QByteArray>& values)
+{
+    for (const QByteArray& value : values)
+    {
+        const QString normalized = normalizedProcessingStepName(QString::fromLatin1(value));
+        if (normalized == QStringLiteral("cuttingdie") || normalized == QStringLiteral("cutting") || normalized == QStringLiteral("cut") || normalized == QStringLiteral("dieline")) return PDFProcessingStepType::CuttingDie;
+        if (normalized == QStringLiteral("perforatingcut") || normalized == QStringLiteral("perforation") || normalized == QStringLiteral("perf")) return PDFProcessingStepType::PerforatingCut;
+        if (normalized == QStringLiteral("creasingbend") || normalized == QStringLiteral("creasing") || normalized == QStringLiteral("folding") || normalized == QStringLiteral("fold")) return PDFProcessingStepType::CreasingBend;
+        if (normalized == QStringLiteral("partialcut") || normalized == QStringLiteral("partial")) return PDFProcessingStepType::PartialCut;
+        if (normalized == QStringLiteral("scoringbend") || normalized == QStringLiteral("scoring") || normalized == QStringLiteral("score")) return PDFProcessingStepType::ScoringBend;
+        if (normalized == QStringLiteral("foregroundvarnish") || normalized == QStringLiteral("varnish")) return PDFProcessingStepType::ForegroundVarnish;
+        if (normalized == QStringLiteral("braille")) return PDFProcessingStepType::Braille;
+        if (normalized == QStringLiteral("white") || normalized == QStringLiteral("whiteink")) return PDFProcessingStepType::White;
+        if (normalized == QStringLiteral("legend")) return PDFProcessingStepType::Legend;
+        if (normalized == QStringLiteral("positions")) return PDFProcessingStepType::Positions;
+        if (normalized == QStringLiteral("positionsunspecified")) return PDFProcessingStepType::PositionsUnspecified;
+    }
+    return PDFProcessingStepType::Unknown;
+}
+
+PDFProcessingStepKind productionKindForType(PDFProcessingStepType type)
+{
+    switch (type)
+    {
+        case PDFProcessingStepType::CuttingDie:
+        case PDFProcessingStepType::PartialCut: return PDFProcessingStepKind::Cut;
+        case PDFProcessingStepType::PerforatingCut: return PDFProcessingStepKind::Perforation;
+        case PDFProcessingStepType::CreasingBend:
+        case PDFProcessingStepType::ScoringBend: return PDFProcessingStepKind::Crease;
+        case PDFProcessingStepType::ForegroundVarnish: return PDFProcessingStepKind::Varnish;
+        case PDFProcessingStepType::White: return PDFProcessingStepKind::WhiteInk;
+        case PDFProcessingStepType::Positions: return PDFProcessingStepKind::Registration;
+        case PDFProcessingStepType::Braille:
+        case PDFProcessingStepType::Legend:
+        case PDFProcessingStepType::PositionsUnspecified:
+        case PDFProcessingStepType::Unknown: return PDFProcessingStepKind::TechnicalNonPrinting;
+    }
+    return PDFProcessingStepKind::Custom;
+}
+
+struct ProcessingStepGeometry
+{
+    PDFObjectReference reference;
+    QPainterPath geometry;
+    QVector<int> pages;
+};
+
+bool validReference(const PDFObjectReference& reference)
+{
+    return reference.objectNumber > 0;
+}
+
+class ProcessingStepCollector final : public PDFPageContentProcessor
+{
+public:
+    ProcessingStepCollector(const PDFPage* page,
+                            const PDFDocument* document,
+                            const PDFFontCache* fontCache,
+                            const PDFCMS* cms,
+                            int pageIndex,
+                            QVector<ProcessingStepGeometry>* ocgGeometry,
+                            QMap<QString, QPainterPath>* legacyGeometry,
+                            QMap<QString, QVector<int>>* legacyPages) :
+        PDFPageContentProcessor(page, document, fontCache, cms, nullptr, QTransform(), {}, nullptr),
+        m_pageIndex(pageIndex),
+        m_ocgGeometry(ocgGeometry),
+        m_legacyGeometry(legacyGeometry),
+        m_legacyPages(legacyPages)
+    {
+    }
+
+protected:
+    void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
+    {
+        m_ocgStack.append(m_currentOcg);
+        if (tag == "OC")
+        {
+            PDFObject resolved = properties;
+            if (resolved.isName() && getPropertiesDictionary())
+            {
+                resolved = getPropertiesDictionary()->get(resolved.getString());
+            }
+            resolved = getDocument()->getObject(resolved);
+            if (resolved.isDictionary())
+            {
+                resolved = resolved.getDictionary()->get("OC");
+                resolved = getDocument()->getObject(resolved);
+            }
+            m_currentOcg = resolved.isReference() ? resolved.getReference() : PDFObjectReference();
+        }
+    }
+
+    void performMarkedContentEnd() override
+    {
+        if (!m_ocgStack.isEmpty())
+        {
+            m_currentOcg = m_ocgStack.takeLast();
+        }
+        else
+        {
+            m_currentOcg = PDFObjectReference();
+        }
+    }
+
+    void performBeforePathPainting(const QPainterPath& path,
+                                   bool stroke,
+                                   bool fill,
+                                   bool text,
+                                   Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(stroke);
+        Q_UNUSED(fill);
+        Q_UNUSED(text);
+        Q_UNUSED(fillRule);
+        const QPainterPath pagePath = getGraphicState()->getCurrentTransformationMatrix().map(path);
+        if (validReference(m_currentOcg))
+        {
+            auto it = std::find_if(m_ocgGeometry->begin(), m_ocgGeometry->end(), [this](const ProcessingStepGeometry& value)
+            {
+                return value.reference == m_currentOcg;
+            });
+            if (it == m_ocgGeometry->end())
+            {
+                m_ocgGeometry->append({ m_currentOcg, pagePath, { m_pageIndex } });
+            }
+            else
+            {
+                it->geometry.addPath(pagePath);
+                if (!it->pages.contains(m_pageIndex))
+                {
+                    it->pages.append(m_pageIndex);
+                }
+            }
+            return;
+        }
+
+        const PDFAbstractColorSpace* colorSpaces[] = {
+            getGraphicState()->getStrokeColorSpace(),
+            getGraphicState()->getFillColorSpace()
+        };
+        for (const PDFAbstractColorSpace* colorSpace : colorSpaces)
+        {
+            if (!colorSpace || colorSpace->getColorSpace() != PDFAbstractColorSpace::ColorSpace::Separation)
+            {
+                continue;
+            }
+            const auto* separation = static_cast<const PDFSeparationColorSpace*>(colorSpace);
+            const QString colorName = QString::fromLatin1(separation->getColorName());
+            const QString normalized = normalizedProcessingStepName(colorName);
+            if (normalized != QStringLiteral("cutcontour") && normalized != QStringLiteral("die") &&
+                normalized != QStringLiteral("dieline") && normalized != QStringLiteral("thrucut"))
+            {
+                continue;
+            }
+            m_legacyGeometry->operator[](colorName).addPath(pagePath);
+            QVector<int>& pages = m_legacyPages->operator[](colorName);
+            if (!pages.contains(m_pageIndex))
+            {
+                pages.append(m_pageIndex);
+            }
+        }
+    }
+
+private:
+    int m_pageIndex;
+    PDFObjectReference m_currentOcg;
+    QVector<PDFObjectReference> m_ocgStack;
+    QVector<ProcessingStepGeometry>* m_ocgGeometry;
+    QMap<QString, QPainterPath>* m_legacyGeometry;
+    QMap<QString, QVector<int>>* m_legacyPages;
+};
 
 QString severityToString(PDFProductionDiagnosticSeverity severity)
 {
@@ -376,6 +568,31 @@ PDFProcessingStepKind pdfProcessingStepKindFromString(const QString& value)
     return PDFProcessingStepKind::Custom;
 }
 
+QString pdfProcessingStepTypeToString(PDFProcessingStepType type)
+{
+    switch (type)
+    {
+        case PDFProcessingStepType::CuttingDie: return QStringLiteral("cutting-die");
+        case PDFProcessingStepType::PerforatingCut: return QStringLiteral("perforating-cut");
+        case PDFProcessingStepType::CreasingBend: return QStringLiteral("creasing-bend");
+        case PDFProcessingStepType::PartialCut: return QStringLiteral("partial-cut");
+        case PDFProcessingStepType::ScoringBend: return QStringLiteral("scoring-bend");
+        case PDFProcessingStepType::ForegroundVarnish: return QStringLiteral("foreground-varnish");
+        case PDFProcessingStepType::Braille: return QStringLiteral("braille");
+        case PDFProcessingStepType::White: return QStringLiteral("white");
+        case PDFProcessingStepType::Legend: return QStringLiteral("legend");
+        case PDFProcessingStepType::Positions: return QStringLiteral("positions");
+        case PDFProcessingStepType::PositionsUnspecified: return QStringLiteral("positions-unspecified");
+        case PDFProcessingStepType::Unknown: return QStringLiteral("unknown");
+    }
+    return QStringLiteral("unknown");
+}
+
+PDFProcessingStepType pdfProcessingStepTypeFromString(const QString& value)
+{
+    return processingStepTypeFromMetadata({ value.toLatin1() });
+}
+
 QJsonObject PDFProductionDiagnostic::toJson() const
 {
     QJsonObject object{{ QStringLiteral("id"), id },
@@ -414,13 +631,45 @@ PDFProductionContour PDFProductionContour::fromJson(const QJsonObject& object)
 
 QJsonObject PDFProcessingStep::toJson() const
 {
-    return QJsonObject{{ QStringLiteral("id"), id },
+    QJsonObject object{{ QStringLiteral("id"), id },
                         { QStringLiteral("kind"), pdfProcessingStepKindToString(kind) },
                         { QStringLiteral("displayName"), displayName },
                         { QStringLiteral("spotColorName"), spotColorName },
                         { QStringLiteral("shouldPrint"), shouldPrint },
                         { QStringLiteral("overprint"), overprint },
                         { QStringLiteral("vendorMetadata"), QJsonObject::fromVariantMap(vendorMetadata) }};
+    if (type != PDFProcessingStepType::Unknown)
+    {
+        object.insert(QStringLiteral("type"), pdfProcessingStepTypeToString(type));
+    }
+    if (!ocgName.isEmpty())
+    {
+        object.insert(QStringLiteral("ocgName"), ocgName);
+    }
+    if (validReference(ocg))
+    {
+        object.insert(QStringLiteral("ocgObject"), qint64(ocg.objectNumber));
+        object.insert(QStringLiteral("ocgGeneration"), qint64(ocg.generation));
+    }
+    if (!geometry.isEmpty())
+    {
+        object.insert(QStringLiteral("geometry"), pathToJson(geometry));
+    }
+    if (isSeparation)
+    {
+        object.insert(QStringLiteral("isSeparation"), true);
+    }
+    if (!detectionMethod.isEmpty())
+    {
+        object.insert(QStringLiteral("detectionMethod"), detectionMethod);
+    }
+    if (!pageIndices.isEmpty())
+    {
+        QJsonArray pages;
+        for (const int pageIndex : pageIndices) pages.append(pageIndex + 1);
+        object.insert(QStringLiteral("pages"), pages);
+    }
+    return object;
 }
 
 PDFProcessingStep PDFProcessingStep::fromJson(const QJsonObject& object)
@@ -433,6 +682,17 @@ PDFProcessingStep PDFProcessingStep::fromJson(const QJsonObject& object)
     step.shouldPrint = object.value(QStringLiteral("shouldPrint")).toBool(true);
     step.overprint = object.value(QStringLiteral("overprint")).toBool(false);
     step.vendorMetadata = object.value(QStringLiteral("vendorMetadata")).toObject().toVariantMap();
+    step.type = pdfProcessingStepTypeFromString(object.value(QStringLiteral("type")).toString());
+    step.ocgName = object.value(QStringLiteral("ocgName")).toString();
+    step.ocg = PDFObjectReference(object.value(QStringLiteral("ocgObject")).toInteger(),
+                                  object.value(QStringLiteral("ocgGeneration")).toInteger());
+    step.geometry = pathFromJson(object.value(QStringLiteral("geometry")).toObject());
+    step.isSeparation = object.value(QStringLiteral("isSeparation")).toBool(false);
+    step.detectionMethod = object.value(QStringLiteral("detectionMethod")).toString();
+    for (const QJsonValue& page : object.value(QStringLiteral("pages")).toArray())
+    {
+        step.pageIndices.append(page.toInt(1) - 1);
+    }
     return step;
 }
 
@@ -479,6 +739,116 @@ PDFProductionGeometryModel PDFProductionGeometryModel::fromJson(const QJsonObjec
     for (const QJsonValue& value : object.value(QStringLiteral("processingPaths")).toArray()) model.processingPaths.append(PDFProductionPath::fromJson(value.toObject()));
     model.vendorMetadata = object.value(QStringLiteral("vendorMetadata")).toObject().toVariantMap();
     return model;
+}
+
+QList<PDFProcessingStep> detectProcessingSteps(const PDFDocument& document)
+{
+    QList<PDFProcessingStep> result;
+    const PDFOptionalContentProperties* properties = document.getCatalog()->getOptionalContentProperties();
+    if (!properties)
+    {
+        return result;
+    }
+
+    struct ClassifiedGroup
+    {
+        PDFOptionalContentGroup group;
+        PDFProcessingStepType type = PDFProcessingStepType::Unknown;
+    };
+    QVector<ClassifiedGroup> groups;
+    PDFDocumentDataLoaderDecorator loader(&document);
+    for (const PDFObjectReference reference : properties->getAllOptionalContentGroups())
+    {
+        if (!properties->hasOptionalContentGroup(reference))
+        {
+            continue;
+        }
+        const PDFOptionalContentGroup& group = properties->getOptionalContentGroup(reference);
+        QList<QByteArray> metadata;
+        if (!group.getUsageType().isEmpty()) metadata.append(group.getUsageType());
+        if (!group.getSubtype().isEmpty()) metadata.append(group.getSubtype());
+        const QByteArray pageElement = loader.readName(group.getPageElement());
+        if (!pageElement.isEmpty()) metadata.append(pageElement);
+        const PDFProcessingStepType type = processingStepTypeFromMetadata(metadata);
+        const bool hasProcessingMetadata = !metadata.isEmpty() &&
+                                           !std::all_of(metadata.cbegin(), metadata.cend(), [](const QByteArray& value)
+        {
+            return value.compare("OCG", Qt::CaseInsensitive) == 0;
+        });
+        if (type != PDFProcessingStepType::Unknown || hasProcessingMetadata)
+        {
+            groups.append({ group, type });
+        }
+    }
+
+    QVector<ProcessingStepGeometry> ocgGeometry;
+    QMap<QString, QPainterPath> legacyGeometry;
+    QMap<QString, QVector<int>> legacyPages;
+    // Session caches read-only page compilation artifacts; the document is not mutated.
+    PDFDocumentSession session(const_cast<PDFDocument*>(&document));
+    for (size_t pageIndex = 0; pageIndex < document.getCatalog()->getPageCount(); ++pageIndex)
+    {
+        const PDFPage* page = document.getCatalog()->getPage(pageIndex);
+        try
+        {
+            ProcessingStepCollector collector(page, &document, session.getFontCache(), session.getCMS(),
+                                               int(pageIndex), &ocgGeometry, &legacyGeometry, &legacyPages);
+            collector.processContents();
+        }
+        catch (const std::exception&)
+        {
+            // A malformed page must not hide valid OCG metadata or legacy
+            // color evidence from the remaining pages.
+        }
+    }
+
+    for (const ClassifiedGroup& classified : groups)
+    {
+        PDFProcessingStep step;
+        step.id = QStringLiteral("ocg-%1-%2").arg(classified.group.getReference().objectNumber)
+                                              .arg(classified.group.getReference().generation);
+        step.kind = productionKindForType(classified.type);
+        step.type = classified.type;
+        step.displayName = classified.group.getName();
+        step.ocgName = classified.group.getName();
+        step.ocg = classified.group.getReference();
+        step.shouldPrint = classified.group.getUsagePrintState() != OCState::OFF;
+        step.detectionMethod = QStringLiteral("iso-19593-1");
+        step.vendorMetadata.insert(QStringLiteral("usageType"), QString::fromLatin1(classified.group.getUsageType()));
+        step.vendorMetadata.insert(QStringLiteral("creator"), classified.group.getCreator());
+        step.vendorMetadata.insert(QStringLiteral("subtype"), QString::fromLatin1(classified.group.getSubtype()));
+        for (const ProcessingStepGeometry& geometry : ocgGeometry)
+        {
+            if (geometry.reference == step.ocg)
+            {
+                step.geometry = geometry.geometry;
+                step.pageIndices = geometry.pages;
+                break;
+            }
+        }
+        result.append(step);
+    }
+
+    for (auto it = legacyGeometry.cbegin(); it != legacyGeometry.cend(); ++it)
+    {
+        PDFProcessingStep step;
+        step.id = QStringLiteral("spot-%1").arg(normalizedProcessingStepName(it.key()));
+        step.kind = PDFProcessingStepKind::Cut;
+        step.type = PDFProcessingStepType::CuttingDie;
+        step.displayName = it.key();
+        step.spotColorName = it.key();
+        step.geometry = it.value();
+        step.pageIndices = legacyPages.value(it.key());
+        step.shouldPrint = false;
+        step.isSeparation = true;
+        step.detectionMethod = QStringLiteral("legacy-spot-color");
+        step.vendorMetadata.insert(QStringLiteral("legacyAliases"), QStringList{
+            QStringLiteral("CutContour"), QStringLiteral("Die"),
+            QStringLiteral("Dieline"), QStringLiteral("Thru-cut") });
+        result.append(step);
+    }
+
+    return result;
 }
 
 QString PDFProcessingStepRegistry::canonicalKindForAlias(const QString& alias)
@@ -653,10 +1023,30 @@ PDFGrommetPlacementReport placeGrommets(const QRectF& productionRect, const PDFG
     appendEdgePoints(report.points, left, spec, true);
 
     const double minimumSpacing = qMax(spec.minimumSpacingPt, spec.diameterPt);
+    const double cornerTolerance = spec.edgeOffsetPt + 0.000001;
+    const QPointF corners[] = { rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft() };
+    auto cornerIndexForPoint = [&](const QPointF& point) -> int
+    {
+        for (int corner = 0; corner < 4; ++corner)
+        {
+            if (QLineF(point, corners[corner]).length() <= cornerTolerance)
+            {
+                return corner;
+            }
+        }
+        return -1;
+    };
+
     for (int first = 0; first < report.points.size(); ++first)
     {
         for (int second = first + 1; second < report.points.size(); ++second)
         {
+            const int sharedCorner = cornerIndexForPoint(report.points.at(first));
+            if (sharedCorner >= 0 && sharedCorner == cornerIndexForPoint(report.points.at(second)))
+            {
+                continue;
+            }
+
             if (QLineF(report.points.at(first), report.points.at(second)).length() + 0.000001 < minimumSpacing)
             {
                 addDiagnostic(report.diagnostics, QStringLiteral("production.grommet.collision"), PDFProductionDiagnosticSeverity::Error,

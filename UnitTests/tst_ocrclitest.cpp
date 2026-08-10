@@ -261,8 +261,8 @@ void OcrCliTest::malformedSidecarResponse_becomesPartialFailure()
     int exitCode = -1;
     QString error;
     QVERIFY2(runMockOcr(QStringLiteral("malformed-json"), envelope, exitCode, error), qPrintable(error));
-    QCOMPARE(exitCode, 1);
-    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+    QCOMPARE(exitCode, 5);
+    QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("partial-output"));
 
     const QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
                                    .value(QStringLiteral("report")).toObject();

@@ -35,6 +35,10 @@ are best-effort only and produce no official release artifacts.
 | Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/loupe/profiles/` in bundle |
 | Linux | `<prefix>/bin` | `<prefix>/lib/pdf4qt` | `/usr/share/loupe/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
 
+Flatpak packaging uses the bounded `--filesystem=home` permission; see
+`docs/FLATPAK_SANDBOX.md` for named-path overrides and the portal-only
+evaluation record.
+
 Editor must resolve **PdfTool** and **LoupePreflightPlugin** without a
 developer toolchain on PATH.
 
@@ -71,7 +75,7 @@ bundling** and **installer packaging** for modules that are already complete.
 | loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
 | UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
 | Windows MSI | In review (MIC-301) | ☐ | — | Clean VM smoke; redist. **V1 ships unsigned** (MIC-342 / MIC-345) |
-| Linux AppImage / Flatpak | Exists | — | ☐ | Smoke; Flatpak `--filesystem=host` documented. **`.deb` builds but doesn't run** (missing Qt runtime, glibc mismatch) — do not gate on it until fixed |
+| Linux AppImage / Flatpak | Exists | — | ☐ | Smoke; Flatpak sandbox workflows and portal behavior are tracked in [Flatpak sandbox policy](FLATPAK_SANDBOX.md). **`.deb` builds but doesn't run** (missing Qt runtime, glibc mismatch) — do not gate on it until fixed |
 | Sentry (optional) | Partial | ☐ | ☐ | Opt-in DSN only; DB path; no default PII |
 | OCR sidecar (optional) | Not V1-gated | ☐ | ☐ | Bundled-only guidance; do not block platform gate |
 | OcrPlugin (Editor UI) | **Not shipped in V1 — CLI-only, MIC-343** | ☐ | ☐ | `pdfplugins/OcrPlugin.dll` (or `.so`) must be **absent**. Built with `-DPDF4QT_PLUGIN_OCR=OFF`; `PdfTool ocr` is unaffected and remains available |
@@ -140,6 +144,7 @@ entry criteria for adding it in a later release, not as a V1 checklist.
 | Doc | Role |
 |-----|------|
 | This file | Platform policy + compatibility pass |
+| `docs/FLATPAK_SANDBOX.md` | Flatpak permissions, named-path overrides, and portal evaluation |
 | `README.md` | User-facing supported platforms and install pointers |
 | `docs/CI.md` | Which OS jobs run in GitHub Actions |
 | `docs/PACKAGING_LICENSING.md` | License / SBOM / default-bundle rules |
