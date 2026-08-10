@@ -43,6 +43,10 @@ jobs:
         working-directory: pdf4qt
         run: python3 scripts/ci/check_supply_chain_pins.py
 
+      - name: Verify generated dependency paths are untracked
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_generated_dependency_paths.py
+
       - name: Prepare vcpkg directories
         run: |
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
@@ -177,6 +181,12 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_supply_chain_pins.py
+
+      - name: Verify generated dependency paths are untracked
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_generated_dependency_paths.py
 
       - name: Prepare vcpkg directories
         shell: pwsh
