@@ -32,6 +32,13 @@
 namespace pdf
 {
 
+class PDFArtifactStore;
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFArtifactRegistrationOptions
+{
+    bool isOriginalInput = false;
+};
+
 struct PDF4QTLIBCORESHARED_EXPORT PDFOperationHistoryStoreOptions
 {
     int busyTimeoutMs = 5000;
@@ -53,7 +60,12 @@ public:
     const QString& databasePath() const { return m_databasePath; }
 
     /// Registers immutable artifact metadata before an execution can reference it.
-    PDFOperationResult registerArtifact(const PDFArtifactIdentity& artifact);
+    PDFOperationResult registerArtifact(const PDFArtifactIdentity& artifact,
+                                        PDFArtifactRegistrationOptions options = {});
+
+    /// Records the as-received input as a protected rollback point. It has no
+    /// producing audit event, because it predates the first operation.
+    PDFOperationResult registerOriginalInput(const PDFArtifactIdentity& artifact);
 
     /// Begins an execution. If executionId is null, a fresh UUID is assigned.
     /// Parameters are redacted and canonically serialized before persistence.
@@ -67,6 +79,19 @@ public:
 
     QList<PDFOperationHistoryEvent> events(QString* errorMessage = nullptr) const;
     PDFOperationHistoryVerification verify() const;
+
+    QList<PDFRollbackPoint> rollbackPoints(QString* errorMessage = nullptr) const;
+
+    PDFHistoryRetentionResult enforceRetention(const PDFHistoryRetentionPolicy& policy,
+                                               const PDFArtifactStore& artifacts,
+                                               QDateTime nowUtc = QDateTime::currentDateTimeUtc());
+
+    /// Verifies the target before using QSaveFile to replace the current
+    /// document, then appends a new rolled-back event. Existing events remain.
+    PDFOperationResult rollbackTo(const PDFRollbackRequest& request,
+                                  const PDFArtifactStore& artifacts,
+                                  const QString& destinationPath,
+                                  qint64* sequence = nullptr);
 
     /// Resolves a rollback target only when it is the output of an accepted event.
     PDFOperationResult resolveRollbackTarget(const PDFRollbackRequest& request,
