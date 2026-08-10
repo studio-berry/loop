@@ -24,6 +24,7 @@
 #define PDFREPAIROPERATION_H
 
 #include "pdfrepairdiff.h"
+#include "pdfsavepolicy.h"
 
 #if defined(_MSC_VER)
 #pragma push_macro("analyze")
@@ -111,6 +112,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRepairPlan
     int operationVersion = 1;
     QJsonObject parameters;
     PDFRepairRisk risk = PDFRepairRisk::Medium;
+    PDFOperationSavePolicy savePolicy = PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("conservative operation default"));
     PDFRepairDomains domains;
     QList<PDFRepairTarget> targets;
     QStringList preconditions;
@@ -178,6 +180,18 @@ public:
     virtual int version() const { return 1; }
     virtual PDFRepairRisk risk() const = 0;
     virtual PDFRepairDomains domains() const = 0;
+    /// Declares the serialization and signature consequences of this operation.
+    /// The conservative default prevents an unclassified operation from being
+    /// appended to a signed or revisioned source.
+    virtual PDFOperationSavePolicy savePolicy() const
+    {
+        return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+    }
+    /// True when this registered operation may be advertised by preflight as
+    /// an operator-facing fixup. Keeping this metadata on the operation makes
+    /// the preflight capability list derive from the same registry PdfTool and
+    /// Editor use to execute repairs.
+    virtual bool isPreflightFixup() const { return false; }
     /// JSON Schema fragment for the operation parameters.  Action Lists use
     /// this metadata to validate a complete recipe before any mutation.
     virtual QJsonObject parameterSchema() const;
@@ -241,6 +255,7 @@ public:
     const PDFDocument* candidate() const;
     const QList<PDFRepairPlan>& plans() const { return m_plans; }
     const QList<PDFRepairResult>& results() const { return m_results; }
+    PDFOperationSavePolicy savePolicy() const;
     PDFRepairStatus status() const { return m_status; }
 
 private:

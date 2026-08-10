@@ -33,6 +33,7 @@
 #include "pdfdbgheap.h"
 
 #include <execution>
+#include <utility>
 
 namespace pdf
 {
@@ -95,8 +96,12 @@ void PDFAsynchronousPageCompilerWorkerThread::run()
                     {
                         if (task.finished)
                         {
-                            isSomethingWritten = true;
-                            m_compiler->m_tasks[task.pageIndex] = std::move(task);
+                            const auto currentTask = m_compiler->m_tasks.find(task.pageIndex);
+                            if (currentTask == m_compiler->m_tasks.end() || currentTask->second.revision == task.revision)
+                            {
+                                isSomethingWritten = true;
+                                m_compiler->m_tasks[task.pageIndex] = std::move(task);
+                            }
                         }
                     }
 
@@ -122,7 +127,7 @@ void PDFAsynchronousPageCompilerWorkerThread::run()
 PDFAsynchronousPageCompiler::PDFAsynchronousPageCompiler(PDFDrawWidgetProxy* proxy) :
     BaseClass(proxy),
     m_proxy(proxy),
-    m_cache(new QCache<PDFInteger, PDFPrecompiledPage>())
+    m_cache(new QCache<QString, PDFPrecompiledPage>())
 {
     m_cache->setMaxCost(128 * 1024 * 1024);
 }
@@ -229,14 +234,16 @@ const PDFPrecompiledPage* PDFAsynchronousPageCompiler::getCompiledPage(PDFIntege
         return nullptr;
     }
 
-    PDFPrecompiledPage* page = m_cache->object(pageIndex);
+    const PDFRevisionIdentity revision = m_proxy->getDocumentRevision();
+    const QString key = cacheKey(revision, pageIndex);
+    PDFPrecompiledPage* page = m_cache->object(key);
 
     if (!page && compile)
     {
         QMutexLocker locker(&m_mutex);
-        if (!m_tasks.count(pageIndex))
+        if (!m_tasks.count(pageIndex) || m_tasks.at(pageIndex).revision != revision)
         {
-            m_tasks.insert(std::make_pair(pageIndex, CompileTask(pageIndex)));
+            m_tasks[pageIndex] = CompileTask(pageIndex, revision);
             m_waitCondition.wakeOne();
         }
     }
@@ -261,19 +268,29 @@ void PDFAsynchronousPageCompiler::smartClearCache(const int milisecondsLimit, co
 
     Q_ASSERT(std::is_sorted(activePages.cbegin(), activePages.cend()));
 
-    QList<PDFInteger> pageIndices = m_cache->keys();
-    for (const PDFInteger pageIndex : pageIndices)
+    const PDFRevisionIdentity revision = m_proxy->getDocumentRevision();
+    const QList<QString> cacheKeys = m_cache->keys();
+    for (const QString& key : cacheKeys)
     {
-        if (std::binary_search(activePages.cbegin(), activePages.cend(), pageIndex))
+        bool isActive = false;
+        for (const PDFInteger pageIndex : activePages)
+        {
+            if (key == cacheKey(revision, pageIndex))
+            {
+                isActive = true;
+                break;
+            }
+        }
+        if (isActive)
         {
             // We do not remove active page
             continue;
         }
 
-        const PDFPrecompiledPage* page = m_cache->object(pageIndex);
+        const PDFPrecompiledPage* page = m_cache->object(key);
         if (page && page->hasExpired(milisecondsLimit))
         {
-            m_cache->remove(pageIndex);
+            m_cache->remove(key);
         }
     }
 }
@@ -292,13 +309,13 @@ void PDFAsynchronousPageCompiler::onPageCompiled()
             CompileTask& task = it->second;
             if (task.finished)
             {
-                if (m_state == State::Active)
+                if (m_state == State::Active && task.revision == m_proxy->getDocumentRevision())
                 {
                     // If we are in active state, try to store precompiled page
                     PDFPrecompiledPage* page = new PDFPrecompiledPage(std::move(task.precompiledPage));
                     page->markAccessed();
                     qint64 memoryConsumptionEstimate = page->getMemoryConsumptionEstimate();
-                    if (m_cache->insert(it->first, page, memoryConsumptionEstimate))
+                    if (m_cache->insert(cacheKey(task.revision, it->first), page, memoryConsumptionEstimate))
                     {
                         compiledPages.push_back(it->first);
                     }
@@ -335,10 +352,16 @@ void PDFAsynchronousPageCompiler::onPageCompiled()
     }
 }
 
+QString PDFAsynchronousPageCompiler::cacheKey(const PDFRevisionIdentity& revision, PDFInteger pageIndex) const
+{
+    return revision.toString() + QStringLiteral("/") + QString::number(pageIndex);
+}
+
 PDFAsynchronousTextLayoutCompiler::PDFAsynchronousTextLayoutCompiler(PDFDrawWidgetProxy* proxy) :
     BaseClass(proxy),
     m_proxy(proxy),
     m_isRunning(false),
+    m_textLayoutRevision(),
     m_cache(std::bind(&PDFAsynchronousTextLayoutCompiler::createTextLayout, this, std::placeholders::_1))
 {
     connect(&m_textLayoutCompileFutureWatcher, &QFutureWatcher<PDFTextLayoutStorage>::finished, this, &PDFAsynchronousTextLayoutCompiler::onTextLayoutCreated);
@@ -544,6 +567,7 @@ void PDFAsynchronousTextLayoutCompiler::makeTextLayout()
     // Jakub Melka: Mark, that we are running (test for future is not enough,
     // because future can finish before this function exits, for example)
     m_isRunning = true;
+    m_textLayoutRevision = m_proxy->getDocumentRevision();
 
     ProgressStartupInfo info;
     info.showDialog = false;
@@ -593,9 +617,21 @@ void PDFAsynchronousTextLayoutCompiler::onTextLayoutCreated()
     m_proxy->getProgress()->finish();
     m_cache.clear();
 
-    m_textLayouts = m_textLayoutCompileFuture.result();
+    PDFTextLayoutStorage result = m_textLayoutCompileFuture.result();
+    const bool isCurrent = m_proxy->getDocumentRevision() == m_textLayoutRevision;
+    if (isCurrent)
+    {
+        m_textLayouts = std::move(result);
+    }
+    else
+    {
+        m_textLayouts = std::nullopt;
+    }
     m_isRunning = false;
-    Q_EMIT textLayoutChanged();
+    if (isCurrent)
+    {
+        Q_EMIT textLayoutChanged();
+    }
 }
 
 }   // namespace pdf

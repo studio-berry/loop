@@ -27,6 +27,7 @@
 #include "pdfcms.h"
 #include "pdfconstants.h"
 #include "pdfrenderer.h"
+#include "pdfdocumentcontext.h"
 
 #include <QCache>
 #include <QEvent>
@@ -140,6 +141,7 @@ private:
         QSize logicalSize;
         qreal devicePixelRatio = 1.0;
         quint64 epoch = 0;
+        pdf::PDFRevisionIdentity revision;
     };
 
     /// Result of one finished render request.
@@ -149,6 +151,7 @@ private:
         int row = -1;
         QImage image;
         quint64 epoch = 0;
+        pdf::PDFRevisionIdentity revision;
     };
     using RenderBatchResult = std::vector<RenderResult>;
 
@@ -162,6 +165,7 @@ private:
         pdf::PDFMeshQualitySettings meshQualitySettings;
         pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
         std::unique_ptr<pdf::PDFRasterizerPool> rasterizerPool;
+        pdf::PDFRevisionIdentity revision;
     };
 
     /// Returns true if the model row currently intersects the attached viewport.

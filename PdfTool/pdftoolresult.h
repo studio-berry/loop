@@ -39,7 +39,9 @@ enum class PDFToolExitCode : int
     ProcessingFailure = 4,
     PartialOutput = 5,
     Cancelled = 6,
-    InternalError = 7
+    InternalError = 7,
+    PreflightIncomplete = 8,
+    PreflightError = 9
 };
 
 enum class PDFToolDiagnosticSeverity

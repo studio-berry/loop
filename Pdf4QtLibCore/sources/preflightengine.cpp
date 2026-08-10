@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 
 #include "pdfbleedmarginprobe.h"
 #include "pdfblendfunction.h"
@@ -32,6 +33,7 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdffont.h"
+#include "pdffontintegrity.h"
 #include "pdffixupregistry.h"
 #include "pdfglobal.h"
 #include "pdfimage.h"
@@ -44,6 +46,8 @@
 #include "pdfpattern.h"
 #include "pdfpreflightchecks.h"
 #include "pdfprocessingbudget.h"
+#include "pdfthinpartprobe.h"
+#include "pdffixupregistry.h"
 #include "pdfproductiongeometry.h"
 
 #include <QCoreApplication>
@@ -349,6 +353,7 @@ QStringList supportedPDFXTargets()
 {
     return {
         pdfxFlavorToString(PDFXFlavor::X1a2001),
+        pdfxFlavorToString(PDFXFlavor::X3_2002),
         pdfxFlavorToString(PDFXFlavor::X4)
     };
 }
@@ -365,6 +370,10 @@ bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& err
     else if (target == pdfxFlavorToString(PDFXFlavor::X4))
     {
         flavor = PDFXFlavor::X4;
+    }
+    else if (target == pdfxFlavorToString(PDFXFlavor::X3_2002))
+    {
+        flavor = PDFXFlavor::X3_2002;
     }
     else
     {
@@ -1423,6 +1432,11 @@ void recordCheckFailure(PreflightResult& result,
     status.reason = reason;
     result.checkStatuses.push_back(status);
     result.inspectionComplete = false;
+    if (result.errorCode.isEmpty())
+    {
+        result.errorCode = QStringLiteral("check-error");
+        result.errorMessage = reason;
+    }
 
     PreflightFinding finding;
     finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
@@ -1561,9 +1575,10 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
         }
     }
 
-    // Rebuild the list from the shared registry and document findings. This
-    // keeps the CLI report on the same contract that the Editor sidecar filter
-    // uses and prevents stale or unknown profile IDs from being advertised.
+    // Rebuild the list from the shared registry and document findings. Every
+    // registered preflight fixup is finding-driven: clear the profile list after
+    // capturing its parameters so a fixup is advertised only when this document
+    // has the corresponding actionable finding.
     fixups.clear();
 
     if (needsAddBleed && isImplementedFixupId(QStringLiteral("add-bleed")))
@@ -3044,6 +3059,419 @@ void runThinStrokesCheck(PDFDocumentSession* session,
     }
 }
 
+struct ThinPartCandidate
+{
+    QString classification;
+    QPainterPath path;
+};
+
+class ThinFillProcessor : public PDFPageContentProcessor
+{
+public:
+    ThinFillProcessor(const PDFPage* page,
+                      const PDFDocument* document,
+                      const PDFFontCache* fontCache,
+                      const PDFCMS* cms,
+                      const PDFOptionalContentActivity* optionalContentActivity,
+                      const PDFMeshQualitySettings& meshQualitySettings,
+                      PDFProcessingBudget* budget) :
+        PDFPageContentProcessor(page, document, fontCache, cms, optionalContentActivity, QTransform(), meshQualitySettings, budget)
+    {
+        QRectF pageClip = page ? page->getCropBox().normalized() : QRectF();
+        if (pageClip.isEmpty() && page)
+        {
+            pageClip = page->getMediaBox().normalized();
+        }
+        if (!pageClip.isEmpty())
+        {
+            m_clipPath.addRect(pageClip);
+        }
+    }
+
+    void processFormStream(const PDFStream* stream)
+    {
+        if (stream && !isContentSuppressed())
+        {
+            processForm(stream);
+        }
+    }
+
+    void setProcessingAnnotation(bool processingAnnotation)
+    {
+        m_processingAnnotation = processingAnnotation;
+    }
+
+    const QList<ThinPartCandidate>& candidates() const { return m_candidates; }
+    const QList<QPainterPath>& fillPaths() const { return m_fillPaths; }
+    const QList<PDFRenderError>& renderErrors() const { return getRenderErrors(); }
+
+protected:
+    bool isContentKindSuppressed(ContentKind kind) const override
+    {
+        switch (kind)
+        {
+            case ContentKind::Shapes:
+            case ContentKind::Text:
+            case ContentKind::Forms:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    void performBeforePathPainting(const QPainterPath& path,
+                                   bool stroke,
+                                   bool fill,
+                                   bool text,
+                                   Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(stroke);
+        Q_UNUSED(fillRule);
+
+        if (!fill || text || path.isEmpty())
+        {
+            return;
+        }
+
+        QPainterPath pagePath = getCurrentWorldMatrix().map(path);
+        if (pagePath.isEmpty())
+        {
+            return;
+        }
+
+        QPainterPath visiblePath = pagePath;
+        if (!m_clipPath.isEmpty())
+        {
+            visiblePath = pagePath.intersected(m_clipPath);
+        }
+        if (visiblePath.isEmpty())
+        {
+            return;
+        }
+
+        m_fillPaths.push_back(visiblePath);
+        ThinPartCandidate candidate;
+        candidate.classification = m_processingAnnotation
+            ? QStringLiteral("thin-annotation")
+            : QStringLiteral("thin-fill");
+        candidate.path = visiblePath;
+        m_candidates.push_back(candidate);
+
+        if (!m_processingAnnotation
+            && visiblePath.boundingRect() != pagePath.boundingRect())
+        {
+            ThinPartCandidate clippedCandidate;
+            clippedCandidate.classification = QStringLiteral("thin-clipped-part");
+            clippedCandidate.path = visiblePath;
+            m_candidates.push_back(clippedCandidate);
+        }
+    }
+
+    void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(fillRule);
+        const QPainterPath pagePath = getCurrentWorldMatrix().map(path);
+        m_clipPath = m_clipPath.isEmpty() ? pagePath : m_clipPath.intersected(pagePath);
+    }
+
+    void performSaveGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::AfterOperation)
+        {
+            m_clipStack.push_back(m_clipPath);
+        }
+    }
+
+    void performRestoreGraphicState(ProcessOrder order) override
+    {
+        if (order == ProcessOrder::BeforeOperation && !m_clipStack.empty())
+        {
+            m_clipPath = m_clipStack.back();
+            m_clipStack.pop_back();
+        }
+    }
+
+private:
+    bool m_processingAnnotation = false;
+    QPainterPath m_clipPath;
+    std::vector<QPainterPath> m_clipStack;
+    QList<ThinPartCandidate> m_candidates;
+    QList<QPainterPath> m_fillPaths;
+};
+
+bool thinPartClassEnabled(const PreflightCheckConfig& check, const QString& classification)
+{
+    return check.thinPartClasses.contains(classification);
+}
+
+QString thinPartSeverity(const PreflightCheckConfig& check, const QString& classification)
+{
+    return check.thinPartSeverityByClass.value(classification, check.severity);
+}
+
+void appendThinPartIncomplete(const PreflightCheckConfig& check,
+                              int pageNumber,
+                              const QString& classification,
+                              qreal measuredWidthPt,
+                              qreal precisionPt,
+                              QList<PreflightFinding>& errors,
+                              QList<PreflightFinding>& warnings)
+{
+    PreflightFinding finding;
+    finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+    finding.page = pageNumber;
+    finding.type = QStringLiteral("check-incomplete");
+    finding.severity = QStringLiteral("info");
+    finding.checkId = check.id;
+    finding.message = PDFTranslationContext::tr(
+        "Thin-part measurement for %1 on page %2 is within one raster pixel of the %3 pt threshold.")
+        .arg(classification)
+        .arg(pageNumber)
+        .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+    finding.evidence = {
+        { QStringLiteral("class"), classification },
+        { QStringLiteral("measuredWidthPt"), measuredWidthPt },
+        { QStringLiteral("measurementPrecisionPt"), precisionPt },
+        { QStringLiteral("thresholdPt"), check.minEffectiveStrokeWidthPt },
+        { QStringLiteral("reason"), QStringLiteral("measurement-near-threshold") }
+    };
+    pushPreflightFinding(finding, check.severity, errors, warnings);
+}
+
+void runThinPartsCheck(PDFDocumentSession* session,
+                       const PreflightCheckConfig& check,
+                       QList<PreflightFinding>& errors,
+                       QList<PreflightFinding>& warnings)
+{
+    if (!session || check.minEffectiveStrokeWidthPt <= 0.0 || check.thinPartClasses.isEmpty())
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    if (!document)
+    {
+        return;
+    }
+
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+
+    PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
+    PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    PDFModifiedDocument md(document, &ocActivity);
+    fontCache.setDocument(md);
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+    PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(document);
+    PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    PDFMeshQualitySettings meshQuality;
+
+    const bool inspectStrokes = thinPartClassEnabled(check, QStringLiteral("thin-stroke"));
+    const bool inspectFills = thinPartClassEnabled(check, QStringLiteral("thin-fill"))
+        || thinPartClassEnabled(check, QStringLiteral("thin-clipped-part"))
+        || thinPartClassEnabled(check, QStringLiteral("thin-annotation"))
+        || thinPartClassEnabled(check, QStringLiteral("thin-negative-space"));
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        const int pageNumber = int(pageIndex + 1);
+        if (inspectStrokes)
+        {
+            ThinStrokeProcessor processor(page,
+                                          document,
+                                          &fontCache,
+                                          cms.get(),
+                                          &ocActivity,
+                                          meshQuality,
+                                          session->getProcessingBudget(),
+                                          check.minEffectiveStrokeWidthPt,
+                                          check.zeroWidthEpsilonPt);
+            const QList<PDFRenderError> pageErrors = processor.processContents();
+            throwIfThinStrokeProcessingIncomplete(pageErrors);
+            processor.setProcessingAnnotation(true);
+            processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
+                processor.processFormStream(formStream);
+            });
+            processor.setProcessingAnnotation(false);
+            throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
+
+            for (const ThinStrokeFinding& source : processor.findings())
+            {
+                const qreal measurementPrecisionPt = 72.0 / static_cast<qreal>(check.probeDpi);
+                if (std::abs(source.effectiveWidth - check.minEffectiveStrokeWidthPt) <= measurementPrecisionPt)
+                {
+                    appendThinPartIncomplete(check,
+                                             pageNumber,
+                                             source.classification,
+                                             source.effectiveWidth,
+                                             measurementPrecisionPt,
+                                             errors,
+                                             warnings);
+                    continue;
+                }
+
+                const QString severity = thinPartSeverity(check, source.classification);
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+                finding.page = pageNumber;
+                finding.type = source.type;
+                finding.severity = severity;
+                finding.checkId = check.id;
+                finding.bbox = source.bbox;
+                finding.message = PDFTranslationContext::tr(
+                    "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
+                    .arg(pageNumber)
+                    .arg(source.effectiveWidth, 0, 'f', 6)
+                    .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                finding.evidence = {
+                    { QStringLiteral("class"), source.classification },
+                    { QStringLiteral("measuredWidthPt"), source.effectiveWidth },
+                    { QStringLiteral("measurementPrecisionPt"), measurementPrecisionPt },
+                    { QStringLiteral("thresholdPt"), check.minEffectiveStrokeWidthPt }
+                };
+                pushPreflightFinding(finding, severity, errors, warnings);
+            }
+        }
+
+        if (!inspectFills)
+        {
+            continue;
+        }
+
+        ThinFillProcessor processor(page,
+                                    document,
+                                    &fontCache,
+                                    cms.get(),
+                                    &ocActivity,
+                                    meshQuality,
+                                    session->getProcessingBudget());
+        const QList<PDFRenderError> pageErrors = processor.processContents();
+        throwIfThinStrokeProcessingIncomplete(pageErrors);
+        processor.setProcessingAnnotation(true);
+        processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
+            processor.processFormStream(formStream);
+        });
+        processor.setProcessingAnnotation(false);
+        throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
+
+        for (const ThinPartCandidate& candidate : processor.candidates())
+        {
+            if (!thinPartClassEnabled(check, candidate.classification))
+            {
+                continue;
+            }
+
+            const PDFThinPartMeasurement measurement = measureThinPartPath(
+                candidate.path,
+                check.probeDpi,
+                check.maxRasterPixels,
+                false,
+                QStringLiteral("thin-parts page %1 %2").arg(pageNumber).arg(candidate.classification));
+            if (!measurement.measured)
+            {
+                continue;
+            }
+            if (std::abs(measurement.widthPt - check.minEffectiveStrokeWidthPt) <= measurement.precisionPt)
+            {
+                appendThinPartIncomplete(check,
+                                         pageNumber,
+                                         candidate.classification,
+                                         measurement.widthPt,
+                                         measurement.precisionPt,
+                                         errors,
+                                         warnings);
+                continue;
+            }
+            if (measurement.widthPt >= check.minEffectiveStrokeWidthPt)
+            {
+                continue;
+            }
+
+            const QString severity = thinPartSeverity(check, candidate.classification);
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+            finding.page = pageNumber;
+            finding.type = candidate.classification;
+            finding.severity = severity;
+            finding.checkId = check.id;
+            finding.bbox = measurement.bbox;
+            finding.message = PDFTranslationContext::tr(
+                "Thin %1 on page %2 has measured width %3 pt below %4 pt.")
+                .arg(candidate.classification)
+                .arg(pageNumber)
+                .arg(measurement.widthPt, 0, 'f', 6)
+                .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+            finding.evidence = {
+                { QStringLiteral("class"), candidate.classification },
+                { QStringLiteral("measuredWidthPt"), measurement.widthPt },
+                { QStringLiteral("measurementPrecisionPt"), measurement.precisionPt },
+                { QStringLiteral("thresholdPt"), check.minEffectiveStrokeWidthPt }
+            };
+            pushPreflightFinding(finding, severity, errors, warnings);
+        }
+
+        if (thinPartClassEnabled(check, QStringLiteral("thin-negative-space"))
+            && processor.fillPaths().size() > 1)
+        {
+            QPainterPath combined;
+            for (const QPainterPath& fillPath : processor.fillPaths())
+            {
+                combined = combined.isEmpty() ? fillPath : combined.united(fillPath);
+            }
+            const PDFThinPartMeasurement measurement = measureThinPartPath(
+                combined,
+                check.probeDpi,
+                check.maxRasterPixels,
+                true,
+                QStringLiteral("thin-parts page %1 thin-negative-space").arg(pageNumber));
+            if (measurement.measured)
+            {
+                if (std::abs(measurement.widthPt - check.minEffectiveStrokeWidthPt) <= measurement.precisionPt)
+                {
+                    appendThinPartIncomplete(check,
+                                             pageNumber,
+                                             QStringLiteral("thin-negative-space"),
+                                             measurement.widthPt,
+                                             measurement.precisionPt,
+                                             errors,
+                                             warnings);
+                }
+                else if (measurement.widthPt < check.minEffectiveStrokeWidthPt)
+                {
+                    const QString severity = thinPartSeverity(check, QStringLiteral("thin-negative-space"));
+                    PreflightFinding finding;
+                    finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+                    finding.page = pageNumber;
+                    finding.type = QStringLiteral("thin-negative-space");
+                    finding.severity = severity;
+                    finding.checkId = check.id;
+                    finding.bbox = measurement.bbox;
+                    finding.message = PDFTranslationContext::tr(
+                        "Thin negative space on page %1 has measured width %2 pt below %3 pt.")
+                        .arg(pageNumber)
+                        .arg(measurement.widthPt, 0, 'f', 6)
+                        .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                    finding.evidence = {
+                        { QStringLiteral("class"), QStringLiteral("thin-negative-space") },
+                        { QStringLiteral("measuredWidthPt"), measurement.widthPt },
+                        { QStringLiteral("measurementPrecisionPt"), measurement.precisionPt },
+                        { QStringLiteral("thresholdPt"), check.minEffectiveStrokeWidthPt }
+                    };
+                    pushPreflightFinding(finding, severity, errors, warnings);
+                }
+            }
+        }
+    }
+}
+
+
 struct HiddenContentFinding
 {
     QString type;
@@ -3469,6 +3897,137 @@ void runEmbeddedFontsCheck(PDFDocumentSession* session,
 // constructor is correct because we only read the CTM from content stream
 // operators, not render to a device. Page rotation is not explicitly handled
 // but the existing pattern in calculateDpi works with the CTM as-is.
+void runFontIntegrityCheck(PDFDocumentSession* session,
+                           const PreflightCheckConfig& check,
+                           QList<PreflightFinding>& errors,
+                           QList<PreflightFinding>& warnings)
+{
+    if (!session || !session->getDocument())
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    const PDFInteger pageCount = document->getCatalog()->getPageCount();
+    std::set<PDFObjectReference> processedFonts;
+    std::set<PDFObjectReference> processedResources;
+
+    auto emitFinding = [&](int pageNumber, const QString& fontName, const PDFObjectReference& reference,
+                           const PDFFontIntegrityResult& result)
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+        finding.page = pageNumber;
+        finding.type = QStringLiteral("font-integrity");
+        finding.checkId = check.id;
+        finding.objectId = QStringLiteral("%1 %2 R").arg(reference.objectNumber).arg(reference.generation);
+        finding.severity = result.inspectionComplete ? check.severity : QStringLiteral("error");
+        finding.message = PDFTranslationContext::tr("Font '%1' has integrity defects: %2")
+            .arg(fontName, result.defects.join(QStringLiteral(", ")));
+        finding.evidence.insert(QStringLiteral("font_resource"), fontName);
+        finding.evidence.insert(QStringLiteral("font_subtype"), result.subtype);
+        finding.evidence.insert(QStringLiteral("embedded"), true);
+        finding.evidence.insert(QStringLiteral("inspection_complete"), result.inspectionComplete);
+        QJsonArray defects;
+        for (const QString& defect : result.defects)
+        {
+            defects.append(defect);
+        }
+        finding.evidence.insert(QStringLiteral("defects"), defects);
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
+    std::function<void(const PDFObject&, int)> scanResources;
+    scanResources = [&](const PDFObject& resourcesObject, int pageNumber)
+    {
+        const PDFObject resources = document->getObject(resourcesObject);
+        if (!resources.isDictionary())
+        {
+            return;
+        }
+        if (resourcesObject.isReference())
+        {
+            const PDFObjectReference reference = resourcesObject.getReference();
+            if (processedResources.contains(reference))
+            {
+                return;
+            }
+            processedResources.insert(reference);
+        }
+
+        const PDFDictionary* fonts = document->getDictionaryFromObject(resources.getDictionary()->get("Font"));
+        if (fonts)
+        {
+            for (size_t index = 0; index < fonts->getCount(); ++index)
+            {
+                const PDFObject fontObject = fonts->getValue(index);
+                const PDFObjectReference reference = fontObject.isReference() ? fontObject.getReference() : PDFObjectReference();
+                if (reference.isValid() && processedFonts.contains(reference))
+                {
+                    continue;
+                }
+                if (reference.isValid())
+                {
+                    processedFonts.insert(reference);
+                }
+
+                try
+                {
+                    PDFFontPointer font = PDFFont::createFont(fontObject, fonts->getKey(index).getString(), document);
+                    if (!font || !font->getFontDescriptor() || !font->getFontDescriptor()->isEmbedded())
+                    {
+                        continue;
+                    }
+                    const PDFFontIntegrityResult result = inspectPDFFontIntegrity(*font);
+                    if (!result.isClean())
+                    {
+                        emitFinding(pageNumber,
+                                    QString::fromLatin1(fonts->getKey(index).getString()),
+                                    reference,
+                                    result);
+                    }
+                }
+                catch (const PDFException& exception)
+                {
+                    PDFFontIntegrityResult result;
+                    result.inspectionComplete = false;
+                    result.defects.append(QStringLiteral("ParserException:%1").arg(QString::fromUtf8(exception.what())));
+                    emitFinding(pageNumber, QString::fromLatin1(fonts->getKey(index).getString()), reference, result);
+                }
+            }
+        }
+
+        const PDFDictionary* xobjects = document->getDictionaryFromObject(resources.getDictionary()->get("XObject"));
+        if (!xobjects)
+        {
+            return;
+        }
+        PDFDocumentDataLoaderDecorator loader(document);
+        for (size_t index = 0; index < xobjects->getCount(); ++index)
+        {
+            const PDFObject xobject = document->getObject(xobjects->getValue(index));
+            if (!xobject.isStream() || loader.readNameFromDictionary(xobject.getStream()->getDictionary(), "Subtype") != "Form")
+            {
+                continue;
+            }
+            const PDFObject formResources = xobject.getStream()->getDictionary()->get("Resources");
+            if (!formResources.isNull())
+            {
+                scanResources(formResources, pageNumber);
+            }
+        }
+    };
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = document->getCatalog()->getPage(pageIndex);
+        if (page)
+        {
+            scanResources(page->getResources(), int(pageIndex + 1));
+        }
+    }
+}
+
 void runImageResolutionCheck(PDFDocumentSession* session,
                               const PreflightCheckConfig& check,
                               QList<PreflightFinding>& errors,
@@ -3774,7 +4333,9 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             || lowerMetadata.contains("pdf/x-");
         const bool hasTargetMarker = policy.flavor == PDFXFlavor::X1a2001
             ? (lowerMetadata.contains("pdfaid:part=\"1\"") || lowerMetadata.contains("pdf/x-1a"))
-            : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
+            : policy.flavor == PDFXFlavor::X3_2002
+                ? lowerMetadata.contains("pdf/x-3")
+                : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
         const bool identified = hasPdfxIdentification && hasTargetMarker;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   identified ? PDFXRuleState::Passed : PDFXRuleState::Failed,
@@ -4010,7 +4571,8 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             }
         }
 
-        const bool forbidden = policy.flavor == PDFXFlavor::X1a2001 && transparencyObjects > 0;
+        const bool forbidden = (policy.flavor == PDFXFlavor::X1a2001 || policy.flavor == PDFXFlavor::X3_2002)
+            && transparencyObjects > 0;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   forbidden ? PDFXRuleState::Failed : PDFXRuleState::Passed,
                                   QJsonObject{
@@ -4209,7 +4771,16 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     QJsonObject root;
     root.insert(QStringLiteral("schema_version"), PREFLIGHT_REPORT_SCHEMA_VERSION);
     root.insert(QStringLiteral("inspection_complete"), inspectionComplete);
-    root.insert(QStringLiteral("pass"), pass);
+    const PreflightVerdict verdict = reducePreflightVerdict(*this);
+    root.insert(QStringLiteral("pass"), verdict.isPass());
+    root.insert(QStringLiteral("verdict"), verdict.toJson());
+    if (!errorCode.isEmpty() || !errorMessage.isEmpty())
+    {
+        root.insert(QStringLiteral("error"), QJsonObject{
+            { QStringLiteral("code"), errorCode },
+            { QStringLiteral("message"), errorMessage }
+        });
+    }
     root.insert(QStringLiteral("profile"), profileName);
     root.insert(QStringLiteral("engine_version"), QCoreApplication::applicationVersion());
     if (!pdfPath.isEmpty())
@@ -4296,10 +4867,11 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
     QString errorMessage;
     if (!parseProfile(profile, data, errorMessage))
     {
-        // Profile parsing errors are treated as a failing preflight result so
-        // callers can surface them in the same report shape.
+        // Profile parsing errors are retained in the normalized report so the
+        // canonical reducer can classify them as an operator-visible error.
         PreflightResult result;
-        result.pass = false;
+        result.errorCode = QStringLiteral("profile-invalid");
+        result.errorMessage = errorMessage;
         result.profileName = profile.value(QStringLiteral("name")).toString();
 
         PreflightFinding finding;
@@ -4354,6 +4926,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             finding.checkId = check.id;
             finding.message = PDFTranslationContext::tr("Unknown preflight check '%1'.").arg(check.id);
             result.errors.push_back(finding);
+            if (result.errorCode.isEmpty())
+            {
+                result.errorCode = QStringLiteral("unsupported-check");
+                result.errorMessage = finding.message;
+            }
             continue;
         }
 
@@ -4472,7 +5049,6 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         result.checkStatuses.push_back(pdfxStatus);
     }
 
-    result.pass = result.errors.isEmpty() && result.inspectionComplete;
     result.fixupsAvailable = profile.fixups;
 
     qreal addBleedAmountPt = 0.0;
@@ -4492,6 +5068,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
                           addBleedAmountPt,
                           result.errors,
                           result.warnings);
+
+    result.pass = reducePreflightVerdict(result, &profile).isPass();
 
     return result;
 }
@@ -4742,6 +5320,109 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             }
         }
 
+        if (check.id == QStringLiteral("thin-parts"))
+        {
+            check.minEffectiveStrokeWidthPt = checkObject.value(QStringLiteral("min_effective_width_pt")).toDouble(0.25);
+            check.zeroWidthEpsilonPt = checkObject.value(QStringLiteral("zero_width_epsilon_pt")).toDouble(1.0e-6);
+
+            const QJsonValue classesValue = checkObject.value(QStringLiteral("classes"));
+            const QSet<QString> allowedClasses = {
+                QStringLiteral("thin-stroke"),
+                QStringLiteral("thin-fill"),
+                QStringLiteral("thin-clipped-part"),
+                QStringLiteral("thin-negative-space"),
+                QStringLiteral("thin-annotation")
+            };
+            if (classesValue.isUndefined())
+            {
+                check.thinPartClasses = {
+                    QStringLiteral("thin-stroke"),
+                    QStringLiteral("thin-fill")
+                };
+            }
+            else if (!classesValue.isArray())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires array classes.").arg(check.id);
+                return false;
+            }
+            else
+            {
+                for (const QJsonValue& classValue : classesValue.toArray())
+                {
+                    if (!classValue.isString() || !allowedClasses.contains(classValue.toString())
+                        || check.thinPartClasses.contains(classValue.toString()))
+                    {
+                        errorMessage = PDFTranslationContext::tr(
+                            "Check '%1' has an invalid or duplicate thin-parts class.").arg(check.id);
+                        return false;
+                    }
+                    check.thinPartClasses.push_back(classValue.toString());
+                }
+                if (check.thinPartClasses.isEmpty())
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' requires at least one class.").arg(check.id);
+                    return false;
+                }
+            }
+
+            const auto validSeverity = [](const QString& severity)
+            {
+                return severity == QStringLiteral("error")
+                    || severity == QStringLiteral("warning")
+                    || severity == QStringLiteral("info");
+            };
+            if (!std::isfinite(check.minEffectiveStrokeWidthPt) || check.minEffectiveStrokeWidthPt <= 0.0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive min_effective_width_pt.").arg(check.id);
+                return false;
+            }
+            if (!std::isfinite(check.zeroWidthEpsilonPt) || check.zeroWidthEpsilonPt < 0.0)
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative zero_width_epsilon_pt.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("probe_dpi"))
+                && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble()
+                    || check.probeDpi <= 0
+                    || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble())
+                        != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires integral positive probe_dpi.").arg(check.id);
+                return false;
+            }
+            if (checkObject.contains(QStringLiteral("max_raster_pixels")))
+            {
+                const double maxRasterPixels = maxRasterPixelsValue.toDouble(0.0);
+                if (!maxRasterPixelsValue.isDouble()
+                    || !std::isfinite(maxRasterPixels)
+                    || std::floor(maxRasterPixels) != maxRasterPixels
+                    || maxRasterPixels <= 0.0
+                    || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_raster_pixels.").arg(check.id);
+                    return false;
+                }
+                check.maxRasterPixels = static_cast<qint64>(maxRasterPixels);
+            }
+
+            const QJsonValue severityByClassValue = checkObject.value(QStringLiteral("severity_by_class"));
+            if (!severityByClassValue.isUndefined() && !severityByClassValue.isObject())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires object severity_by_class.").arg(check.id);
+                return false;
+            }
+            const QJsonObject severityByClass = severityByClassValue.toObject();
+            for (auto it = severityByClass.cbegin(); it != severityByClass.cend(); ++it)
+            {
+                if (!allowedClasses.contains(it.key()) || !it.value().isString() || !validSeverity(it.value().toString()))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' has invalid severity_by_class entry.").arg(check.id);
+                    return false;
+                }
+                check.thinPartSeverityByClass.insert(it.key(), it.value().toString());
+            }
+        }
+
         check.minDpi = checkObject.value(QStringLiteral("min_dpi")).toInt(0);
         if (check.id == QStringLiteral("image-resolution") && check.minDpi <= 0)
         {
@@ -4856,6 +5537,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         {
             continue;
         }
+        if (!isImplementedFixupId(fixup.id))
+        {
+            errorMessage = PDFTranslationContext::tr("Profile requests unimplemented fixup '%1'.").arg(fixup.id);
+            return false;
+        }
 
         fixup.confirm = fixupObject.value(QStringLiteral("confirm")).toBool(true);
         fixup.amountPt = fixupObject.value(QStringLiteral("amount_pt")).toDouble(0.0);
@@ -4963,6 +5649,14 @@ void PreflightEngine::registerBuiltInChecks()
         runThinStrokesCheck(session, check, errors, warnings);
     };
 
+    m_checks[QStringLiteral("thin-parts")] = [](PDFDocumentSession* session,
+                                                  const PreflightCheckConfig& check,
+                                                  QList<PreflightFinding>& errors,
+                                                  QList<PreflightFinding>& warnings)
+    {
+        runThinPartsCheck(session, check, errors, warnings);
+    };
+
     m_checks[QStringLiteral("color-inventory")] = [](PDFDocumentSession* session,
                                                        const PreflightCheckConfig& check,
                                                        QList<PreflightFinding>& errors,
@@ -4985,6 +5679,14 @@ void PreflightEngine::registerBuiltInChecks()
                                                      QList<PreflightFinding>& warnings)
     {
         runEmbeddedFontsCheck(session, check, errors, warnings);
+    };
+
+    m_checks[QStringLiteral("font-integrity")] = [](PDFDocumentSession* session,
+                                                      const PreflightCheckConfig& check,
+                                                      QList<PreflightFinding>& errors,
+                                                      QList<PreflightFinding>& warnings)
+    {
+        runFontIntegrityCheck(session, check, errors, warnings);
     };
 
     for (const QString& id : { QStringLiteral("invisible-content"),
