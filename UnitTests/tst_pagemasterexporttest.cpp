@@ -800,6 +800,7 @@ void PageMasterExportTest::manifest_persistFailure_removesNewOutput()
     // creator of the file and rollback is allowed to remove it.
     QVERIFY(QFile::remove(outputPath));
     QVERIFY(resetManifestOutputsToPending(manifestPath));
+    QVERIFY(!QFile::exists(outputPath));
 
     pdf::PDFDocument resumeSource = buildFilledPage();
     pdf::PDFPageMasterExportJob resumeJob;
@@ -825,7 +826,7 @@ void PageMasterExportTest::manifest_persistFailure_removesNewOutput()
 
     QVERIFY(!result.success);
     QVERIFY(result.errorMessage.contains(QStringLiteral("Manifest update failed")));
-    QVERIFY(result.errorMessage.contains(QStringLiteral("removed")));
+    QVERIFY(result.errorMessage.contains(QStringLiteral("removed"), Qt::CaseInsensitive));
     QVERIFY(result.writtenFiles.isEmpty());
     QVERIFY(observedValidWrittenDocument);
 
@@ -881,8 +882,9 @@ void PageMasterExportTest::manifest_persistFailure_keepsOverwrittenOutput()
 
     QVERIFY(!result.success);
     QVERIFY(result.errorMessage.contains(QStringLiteral("Manifest update failed")));
-    QVERIFY(result.errorMessage.contains(QStringLiteral("kept")));
-    QVERIFY(result.errorMessage.contains(QStringLiteral("stale")));
+    QVERIFY(result.errorMessage.contains(QStringLiteral("kept"), Qt::CaseInsensitive));
+    QVERIFY(result.errorMessage.contains(QStringLiteral("stale"), Qt::CaseInsensitive));
+    QVERIFY(result.errorMessage.contains(QStringLiteral("verify"), Qt::CaseInsensitive));
 
     // Removing this output would destroy the file it replaced, so it is kept and the
     // inconsistency is reported instead.

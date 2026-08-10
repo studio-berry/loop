@@ -38,7 +38,9 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSizeF>
 #include <QTemporaryDir>
+#include <QVector>
 
 namespace
 {
@@ -190,6 +192,55 @@ QByteArray fileSha256(const QString& path)
     return hash.result();
 }
 
+bool writeLargeFormatPdf(const QString& path, double widthInches, double heightInches)
+{
+    const int widthPt = static_cast<int>(widthInches * 72.0 + 0.5);
+    const int heightPt = static_cast<int>(heightInches * 72.0 + 0.5);
+    QByteArray pdf("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    QVector<int> offsets(5);
+
+    auto appendObject = [&pdf, &offsets](int number, const QByteArray& body)
+    {
+        offsets[number] = pdf.size();
+        pdf.append(QByteArray::number(number));
+        pdf.append(" 0 obj\n");
+        pdf.append(body);
+        if (!body.endsWith('\n'))
+        {
+            pdf.append('\n');
+        }
+        pdf.append("endobj\n");
+    };
+
+    appendObject(1, "<< /Type /Catalog /Pages 2 0 R >>\n");
+    appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
+    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ")
+                              + QByteArray::number(widthPt)
+                              + ' '
+                              + QByteArray::number(heightPt)
+                              + "] /TrimBox [0 0 "
+                              + QByteArray::number(widthPt)
+                              + ' '
+                              + QByteArray::number(heightPt)
+                              + "] /Resources << >> /Contents 4 0 R >>\n");
+    appendObject(4, "<< /Length 0 >>\nstream\n\nendstream\n");
+
+    const int xrefOffset = pdf.size();
+    pdf.append("xref\n0 5\n0000000000 65535 f \n");
+    for (int number = 1; number < offsets.size(); ++number)
+    {
+        pdf.append(QByteArray::number(offsets[number]).rightJustified(10, '0'));
+        pdf.append(" 00000 n \n");
+    }
+    pdf.append("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n");
+    pdf.append(QByteArray::number(xrefOffset));
+    pdf.append("\n%%EOF\n");
+
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+            && file.write(pdf) == pdf.size();
+}
+
 }   // namespace
 
 class OperatorAcceptanceTest : public QObject
@@ -206,6 +257,7 @@ private slots:
     void operatorLoop_preservesOriginalBytes();
 
     void overwriteExplicit_addBleedRequiresOverwriteFlag();
+    void addBleedDryRun_largeFormatPlansWithoutRasterOrOutput();
 
     void unicodeAndSpacePaths_preflightAndAddBleedSucceed();
 
@@ -545,6 +597,67 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     // yields the same bytes; the contract is that --overwrite unblocks the write
     // (exit 0 versus the refusal above), not that the bytes must differ.
     QVERIFY(!fileSha256(outputPath).isEmpty());
+}
+
+void OperatorAcceptanceTest::addBleedDryRun_largeFormatPlansWithoutRasterOrOutput()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    qint64 peakMemoryKb = -1;
+    for (const auto& size : { QSizeF(48.0, 96.0), QSizeF(240.0, 60.0) })
+    {
+        const QString inputPath = temporaryDirectory.filePath(
+                QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
+        const QString outputPath = temporaryDirectory.filePath(
+                QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
+        QVERIFY(writeLargeFormatPdf(inputPath, size.width(), size.height()));
+
+        QByteArray stdOut;
+        QByteArray stdErr;
+        int exitCode = -1;
+        qint64 childMemoryKb = -1;
+        QVERIFY(runPdfTool({ QStringLiteral("add-bleed"),
+                             inputPath,
+                             QStringLiteral("--output"),
+                             outputPath,
+                             QStringLiteral("--dry-run"),
+                             QStringLiteral("--console-format"),
+                             QStringLiteral("json"),
+                             QStringLiteral("--bleed-mm"),
+                             QStringLiteral("3"),
+                             QStringLiteral("--dpi"),
+                             QStringLiteral("300") },
+                           &stdOut,
+                           &stdErr,
+                           &exitCode,
+                           &childMemoryKb));
+        QCOMPARE(exitCode, 0);
+        QVERIFY2(stdErr.trimmed().isEmpty(), qPrintable(QString::fromUtf8(stdErr)));
+        QVERIFY(!QFile::exists(outputPath));
+        peakMemoryKb = qMax(peakMemoryKb, childMemoryKb);
+
+        QJsonParseError parseError;
+        const QJsonDocument json = QJsonDocument::fromJson(stdOut, &parseError);
+        QCOMPARE(parseError.error, QJsonParseError::NoError);
+        QVERIFY(json.isObject());
+        const QJsonObject envelope = json.object();
+        QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("add-bleed"));
+        QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+        QVERIFY(QString::fromUtf8(stdOut).contains(QStringLiteral("dry-run")));
+
+        const QJsonArray outputs = envelope.value(QStringLiteral("outputs")).toArray();
+        QCOMPARE(outputs.size(), 1);
+        QCOMPARE(outputs.first().toObject().value(QStringLiteral("state")).toString(), QStringLiteral("planned"));
+    }
+
+#ifdef Q_OS_LINUX
+    if (peakMemoryKb > 0)
+    {
+        QVERIFY2(peakMemoryKb < 1024 * 1024,
+                 qPrintable(QStringLiteral("large-format dry-run peak VmHWM was %1 kB").arg(peakMemoryKb)));
+    }
+#endif
 }
 
 void OperatorAcceptanceTest::unicodeAndSpacePaths_preflightAndAddBleedSucceed()
