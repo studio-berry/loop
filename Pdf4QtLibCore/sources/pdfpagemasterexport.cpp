@@ -197,6 +197,34 @@ QJsonObject productionReport(const PDFPageMasterProductionSettings& settings,
         }
     }
     report.insert(QStringLiteral("grommetPages"), grommetPages);
+
+    // Keep generated wide-format marks in the same normalized processing-step
+    // vocabulary as source-document OCGs.  The manifest is the headless
+    // hand-off consumed by PdfTool/PageMaster export; GUI presentation is not
+    // part of this phase.
+    QJsonArray generatedProcessingSteps;
+    for (const QJsonValue& pageValue : grommetPages)
+    {
+        const QJsonObject pageReport = pageValue.toObject();
+        const int pageNumber = pageReport.value(QStringLiteral("page")).toInt();
+        const QJsonArray points = pageReport.value(QStringLiteral("points")).toArray();
+        for (int pointIndex = 0; pointIndex < points.size(); ++pointIndex)
+        {
+            const QJsonObject point = points.at(pointIndex).toObject();
+            generatedProcessingSteps.append(QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("grommet-page-%1-%2").arg(pageNumber).arg(pointIndex + 1) },
+                { QStringLiteral("type"), QStringLiteral("positions") },
+                { QStringLiteral("kind"), QStringLiteral("registration") },
+                { QStringLiteral("displayName"), QStringLiteral("Grommet position") },
+                { QStringLiteral("ocgName"), QStringLiteral("Loupe Grommet Positions") },
+                { QStringLiteral("source"), QStringLiteral("loupe-production-generated") },
+                { QStringLiteral("nonPrinting"), true },
+                { QStringLiteral("page"), pageNumber },
+                { QStringLiteral("point"), point }
+            });
+        }
+    }
+    report.insert(QStringLiteral("processingSteps"), generatedProcessingSteps);
     return report;
 }
 

@@ -289,6 +289,7 @@ public:
     const PDFObject& getCreatorInfo() const { return m_creatorInfo; }
     const QString& getCreator() const { return m_creator; }
     const QByteArray& getSubtype() const { return m_subtype; }
+    const QByteArray& getUsageType() const { return m_usageType; }
     const QString& getLanguage() const { return m_language; }
     bool isLanguagePreferred() const { return m_languagePreferred; }
     PDFReal getUsageZoomMin() const { return m_usageZoomMin; }
@@ -308,6 +309,7 @@ private:
     PDFObject m_creatorInfo;
     QString m_creator;
     QByteArray m_subtype;
+    QByteArray m_usageType;
     QString m_language;
     QByteArray m_userType;
     QStringList m_userNames;
