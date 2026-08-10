@@ -178,6 +178,11 @@ public:
     virtual int version() const { return 1; }
     virtual PDFRepairRisk risk() const = 0;
     virtual PDFRepairDomains domains() const = 0;
+    /// True when this registered operation may be advertised by preflight as
+    /// an operator-facing fixup. Keeping this metadata on the operation makes
+    /// the preflight capability list derive from the same registry PdfTool and
+    /// Editor use to execute repairs.
+    virtual bool isPreflightFixup() const { return false; }
     /// JSON Schema fragment for the operation parameters.  Action Lists use
     /// this metadata to validate a complete recipe before any mutation.
     virtual QJsonObject parameterSchema() const;

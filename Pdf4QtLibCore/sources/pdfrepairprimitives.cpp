@@ -23,6 +23,7 @@
 #include "pdfrepairoperation.h"
 
 #include "pdfbleedfixup.h"
+#include "pdfimagedownsamplefixup.h"
 #include "pdfimageoptimizer.h"
 #include "pdfrgbtocmykfixup.h"
 
@@ -107,6 +108,7 @@ class PDFAddBleedRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("add-bleed"); }
+    bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
     QJsonObject parameterSchema() const override { return addBleedParameterSchema(); }
     PDFRepairDomains domains() const override
@@ -191,18 +193,14 @@ public:
     }
 };
 
-PDFImageOptimizer::Settings optimizerSettings(const QJsonObject& parameters)
+PDFImageDownsampleFixupSettings downsampleSettings(const QJsonObject& parameters)
 {
-    PDFImageOptimizer::Settings settings = PDFImageOptimizer::Settings::createDefault();
-    settings.enabled = true;
-    const int targetDpi = qBound(72, parameters.value(QStringLiteral("target_dpi")).toInt(300), 2400);
-    const int quality = qBound(1, parameters.value(QStringLiteral("quality")).toInt(90), 100);
-    settings.colorProfile.targetDpi = targetDpi;
-    settings.grayProfile.targetDpi = targetDpi;
-    settings.bitonalProfile.targetDpi = targetDpi;
-    settings.colorProfile.jpegQuality = quality;
-    settings.grayProfile.jpegQuality = quality;
-    settings.bitonalProfile.jpegQuality = quality;
+    PDFImageDownsampleFixupSettings settings;
+    settings.targetDpi = qBound(72, parameters.value(QStringLiteral("target_dpi")).toInt(300), 1200);
+    settings.jpegQuality = qBound(50, parameters.value(QStringLiteral("quality")).toInt(90), 100);
+    settings.keepOriginalIfLarger = true;
+    settings.preserveTransparency = true;
+    settings.preserveColorMode = true;
     return settings;
 }
 
@@ -215,11 +213,11 @@ QJsonObject downsampleImagesParameterSchema()
             { QStringLiteral("target_dpi"), QJsonObject{
                 { QStringLiteral("type"), QStringLiteral("integer") },
                 { QStringLiteral("minimum"), 72 },
-                { QStringLiteral("maximum"), 2400 }
+                { QStringLiteral("maximum"), 1200 }
             } },
             { QStringLiteral("quality"), QJsonObject{
                 { QStringLiteral("type"), QStringLiteral("integer") },
-                { QStringLiteral("minimum"), 1 },
+                { QStringLiteral("minimum"), 50 },
                 { QStringLiteral("maximum"), 100 }
             } }
         } }
@@ -230,6 +228,7 @@ class PDFDownsampleImagesRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("downsample-images"); }
+    bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
     QJsonObject parameterSchema() const override { return downsampleImagesParameterSchema(); }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
@@ -253,10 +252,16 @@ public:
                              PDFRepairValidatorKind::NormalPreflight };
 
         const std::vector<PDFImageOptimizer::ImageInfo> infos = PDFImageOptimizer::collectImageInfos(&source);
-        const int targetDpi = qBound(72, parameters.value(QStringLiteral("target_dpi")).toInt(300), 2400);
+        const int targetDpi = downsampleSettings(parameters).targetDpi;
         for (const PDFImageOptimizer::ImageInfo& info : infos)
         {
-            if (info.minimalDpi.x() > targetDpi || info.minimalDpi.y() > targetDpi)
+            if (info.isImageMask)
+            {
+                continue;
+            }
+            const bool highX = std::isfinite(info.minimalDpi.x()) && info.minimalDpi.x() > targetDpi * 1.15;
+            const bool highY = std::isfinite(info.minimalDpi.y()) && info.minimalDpi.y() > targetDpi * 1.15;
+            if (highX || highY)
             {
                 plan->targets.append({ -1, info.reference,
                                        QStringLiteral("resources/images/%1").arg(info.reference.objectNumber) });
@@ -277,11 +282,15 @@ public:
         {
             return PDFOperationResult(QStringLiteral("Image repair candidate or result is null."));
         }
-        PDFImageOptimizer optimizer;
-        std::vector<PDFImageOptimizer::ImageResult> imageResults;
-        PDFDocument optimized = optimizer.optimize(candidate, optimizerSettings(plan.parameters), {}, nullptr, nullptr, &imageResults);
-        *candidate = std::move(optimized);
-        for (const PDFImageOptimizer::ImageResult& image : imageResults)
+        PDFImageDownsampleFixupReport report;
+        const PDFOperationResult fixupResult = PDFImageDownsampleFixup::apply(candidate,
+                                                                               downsampleSettings(plan.parameters),
+                                                                               &report);
+        if (!fixupResult)
+        {
+            return fixupResult;
+        }
+        for (const PDFImageOptimizer::ImageResult& image : report.images)
         {
             if (!image.keptOriginal)
             {
@@ -307,6 +316,8 @@ PDFRgbToCmykSettings cmykSettings(const QJsonObject& parameters)
     settings.targetIccData = QByteArray::fromBase64(parameters.value(QStringLiteral("target_icc_base64")).toString().toLatin1());
     settings.targetIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loupe-cmyk")).toUtf8();
     settings.targetProfileName = parameters.value(QStringLiteral("target_profile_name")).toString();
+    const int intent = qBound(0, parameters.value(QStringLiteral("intent")).toInt(int(settings.intent)), 3);
+    settings.intent = static_cast<RenderingIntent>(intent);
     settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
     settings.embedOutputIntent = parameters.value(QStringLiteral("embed_output_intent")).toBool(true);
     return settings;
@@ -325,6 +336,11 @@ QJsonObject rgbToCmykParameterSchema()
             } },
             { QStringLiteral("target_icc_id"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
             { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+            { QStringLiteral("intent"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("integer") },
+                { QStringLiteral("minimum"), 0 },
+                { QStringLiteral("maximum"), 3 }
+            } },
             { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
             { QStringLiteral("embed_output_intent"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } }
         } }
@@ -335,6 +351,7 @@ class PDFRgbToCmykRepair final : public PDFRepairOperation
 {
 public:
     QString id() const override { return QStringLiteral("rgb-to-cmyk"); }
+    bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::High; }
     QJsonObject parameterSchema() const override { return rgbToCmykParameterSchema(); }
     PDFRepairDomains domains() const override
