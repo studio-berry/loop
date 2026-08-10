@@ -37,6 +37,11 @@
       "$ref": "#/$defs/pdfx",
       "description": "Optional normalized PDF/X conformance result. Present only when the profile requested a PDF/X target."
     },
+    "profile_resolution": {
+      "type": "object",
+      "description": "Optional deterministic profile selection and provenance record.",
+      "additionalProperties": true
+    },
     "errors": {
       "type": "array",
       "description": "Failing findings with severity error (or mapped to error).",

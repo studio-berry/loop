@@ -184,6 +184,7 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     // of the check behavior the snapshot is meant to pin down.
     report.remove(QStringLiteral("engine_version"));
     report.remove(QStringLiteral("pdf"));
+    report.remove(QStringLiteral("profile_resolution"));
     return report;
 }
 
