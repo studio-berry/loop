@@ -84,6 +84,25 @@ bool PDFArtifactStore::verify(const PDFArtifactIdentity& artifact) const
     return file.size() == artifact.size && QString::fromLatin1(hash.result().toHex()) == artifact.sha256.toLower();
 }
 
+bool PDFArtifactStore::publishReadOnly(const QString& path) const
+{
+    return QFile::setPermissions(path,
+                                 QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+}
+
+bool PDFArtifactStore::remove(const PDFArtifactIdentity& artifact) const
+{
+    const QString path = pathFor(artifact);
+    if (path.isEmpty() || !QFileInfo::exists(path))
+    {
+        return false;
+    }
+    QFile::setPermissions(path,
+                          QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                          QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    return QFile::remove(path);
+}
+
 PDFArtifactRestoreResult PDFArtifactStore::restoreToFile(const PDFArtifactIdentity& artifact,
                                                          const QString& destinationPath) const
 {
@@ -220,6 +239,7 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
     const QString token = artifactToken(sha256);
     const QString finalPath = QDir(m_rootDirectory).filePath(token);
     const QFileInfo finalInfo(finalPath);
+    bool newlyPublished = false;
     if (!QDir().mkpath(finalInfo.absolutePath()))
     {
         QFile::remove(temporary.fileName());
@@ -250,6 +270,23 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
     {
         QFile::remove(temporary.fileName());
         result.errorMessage = QStringLiteral("Could not atomically publish the artifact.");
+        return result;
+    }
+    else
+    {
+        newlyPublished = true;
+    }
+
+    if (!publishReadOnly(finalPath))
+    {
+        if (newlyPublished)
+        {
+            QFile::setPermissions(finalPath,
+                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                  QFileDevice::ReadGroup | QFileDevice::ReadOther);
+            QFile::remove(finalPath);
+        }
+        result.errorMessage = QStringLiteral("Could not publish the artifact as read-only.");
         return result;
     }
 
