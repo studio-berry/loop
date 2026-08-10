@@ -63,6 +63,8 @@ private slots:
     void test_other_resources_are_preserved();
     void test_numbers_are_not_written_in_exponential_notation();
     void test_complex_tiling_pattern_is_not_processed();
+    void test_structural_instructions_are_preserved();
+    void test_unsupported_instructions_are_fatal();
 
 private:
     enum class Variant
@@ -597,6 +599,18 @@ void ContentEditorTest::testVariant(Variant variant, bool clearImageObjects)
 {
     pdf::PDFDocument document = createDocumentWithImage(variant);
     pdf::PDFEditedPageContent content = processPageContent(&document);
+
+    if (!content.getIntegrityReport().unsupported.isEmpty())
+    {
+        pdf::PDFPageContentEditorContentStreamBuilder builder(&document);
+        for (size_t i = 0; i < content.getElementCount(); ++i)
+        {
+            builder.writeEditedElement(content.getElement(i));
+        }
+        QVERIFY(!builder.getFatalErrors().isEmpty());
+        return;
+    }
+
     ImagePlacement original = getImagePlacement(content);
 
     QVERIFY(original.firstSampleColor.isValid());
@@ -716,32 +730,24 @@ void ContentEditorTest::test_image_orientation_qt_generated_document()
 
 void ContentEditorTest::test_image_orientation_tiling_pattern()
 {
-    // Issue #238 - the image, which is painted by a tiling pattern, must not
-    // disappear, when the page content is edited and written back. The content
-    // of the pattern must be decomposed into the edited content elements and
-    // the image must be placed exactly as in the plain variant, which paints
-    // the same image directly.
-    pdf::PDFDocument plainDocument = createDocumentWithImage(Variant::Plain);
-    ImagePlacement plain = getImagePlacement(processPageContent(&plainDocument));
-    QVERIFY(plain.firstSampleColor.isValid());
-
+    // Tiling patterns are not reconstructed from flattened elements. The
+    // rewrite must fail closed instead of silently changing the pattern.
     pdf::PDFDocument document = createDocumentWithImage(Variant::TilingPattern);
     pdf::PDFEditedPageContent content = processPageContent(&document);
-    ImagePlacement original = getImagePlacement(content);
+    QVERIFY(!content.getIntegrityReport().unsupported.isEmpty());
 
-    QVERIFY(original.firstSampleColor.isValid());
-    QCOMPARE(original.firstSamplePoint, plain.firstSamplePoint);
-    QCOMPARE(original.lastSamplePoint, plain.lastSamplePoint);
-    QCOMPARE(original.firstSampleColor, plain.firstSampleColor);
-
-    testVariant(Variant::TilingPattern, false);
+    pdf::PDFPageContentEditorContentStreamBuilder builder(&document);
+    for (size_t i = 0; i < content.getElementCount(); ++i)
+    {
+        builder.writeEditedElement(content.getElement(i));
+    }
+    QVERIFY(!builder.getFatalErrors().isEmpty());
 }
 
 void ContentEditorTest::test_complex_tiling_pattern_is_not_processed()
 {
     // A tiling pattern with a huge number of tiles would produce an unusable
-    // amount of the edited content elements, so it is not processed at all.
-    // The processing must not hang and an error must be reported.
+    // amount of the edited content elements, so the rewrite must fail closed.
     pdf::PDFDocument document = createDocumentWithImage(Variant::ComplexTilingPattern);
 
     const pdf::PDFPage* page = document.getCatalog()->getPage(0);
@@ -756,7 +762,8 @@ void ContentEditorTest::test_complex_tiling_pattern_is_not_processed()
     QList<pdf::PDFRenderError> errors = processor.processContents();
     pdf::PDFEditedPageContent content = processor.takeEditedPageContent();
 
-    QCOMPARE(content.getElementCount(), size_t(0));
+    QVERIFY(content.getElementCount() > 0);
+    QVERIFY(!content.getIntegrityReport().unsupported.isEmpty());
     QVERIFY(!errors.isEmpty());
 }
 
@@ -772,6 +779,17 @@ void ContentEditorTest::test_rendered_page_is_unchanged()
     {
         pdf::PDFDocument document = createDocumentWithImage(variant);
         pdf::PDFEditedPageContent content = processPageContent(&document);
+
+        if (!content.getIntegrityReport().unsupported.isEmpty())
+        {
+            pdf::PDFPageContentEditorContentStreamBuilder builder(&document);
+            for (size_t i = 0; i < content.getElementCount(); ++i)
+            {
+                builder.writeEditedElement(content.getElement(i));
+            }
+            QVERIFY(!builder.getFatalErrors().isEmpty());
+            continue;
+        }
 
         pdf::PDFDocumentPointer modifiedDocument = rewritePageContent(&document, content, false, nullptr);
         QVERIFY(modifiedDocument);
@@ -851,6 +869,40 @@ void ContentEditorTest::test_numbers_are_not_written_in_exponential_notation()
     QCOMPARE(modified.firstSampleColor, original.firstSampleColor);
     QCOMPARE(modified.firstSamplePoint, original.firstSamplePoint);
     QCOMPARE(modified.lastSamplePoint, original.lastSamplePoint);
+}
+
+void ContentEditorTest::test_structural_instructions_are_preserved()
+{
+    pdf::PDFEditedPageContent content;
+    pdf::PDFPageContentProcessorState state;
+    content.addPreservedInstruction(state, QByteArrayLiteral("/Span <</MCID 7>> BDC\n"), QStringLiteral("Preserved BDC"));
+    content.addPreservedInstruction(state, QByteArrayLiteral("EMC\n"), QStringLiteral("Preserved EMC"));
+
+    pdf::PDFPageContentEditorContentStreamBuilder builder(nullptr);
+    for (size_t i = 0; i < content.getElementCount(); ++i)
+    {
+        builder.writeEditedElement(content.getElement(i));
+    }
+
+    QCOMPARE(builder.getOutputContent(), QByteArrayLiteral("/Span <</MCID 7>> BDC\nEMC\n"));
+    QVERIFY(builder.getFatalErrors().isEmpty());
+    QCOMPARE(content.getIntegrityReport().preserved.size(), 2);
+    QVERIFY(!content.getIntegrityReport().requiresReview.isEmpty());
+}
+
+void ContentEditorTest::test_unsupported_instructions_are_fatal()
+{
+    pdf::PDFEditedPageContent content;
+    pdf::PDFPageContentProcessorState state;
+    const QString diagnostic = QStringLiteral("Unsupported page-content construct 'sh': shading paint is not representable.");
+    content.addUnsupportedContent(state, diagnostic);
+
+    pdf::PDFPageContentEditorContentStreamBuilder builder(nullptr);
+    builder.writeEditedElement(content.getElement(0));
+
+    QVERIFY(builder.getOutputContent().isEmpty());
+    QCOMPARE(builder.getFatalErrors(), QStringList{ diagnostic });
+    QCOMPARE(content.getIntegrityReport().unsupported, QStringList{ diagnostic });
 }
 
 QTEST_MAIN(ContentEditorTest)

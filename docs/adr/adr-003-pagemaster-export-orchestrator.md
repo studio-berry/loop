@@ -3,7 +3,7 @@
 **Status:** accepted
 **Date:** 2026-07-20
 **Deciders:** MIC-311 / Cycle 2 sprint plan
-**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation)
+**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loupe #30 Action List stage)
 
 ## Context
 
@@ -22,6 +22,12 @@ changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
   `PDFBleedFixup::apply` (optional) → `PDFImageOptimizer::optimize` (optional) →
   `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
   assemble-all / optimize-all / write-all passes.
+- **Action List placement (#30):** PageMaster runs the existing
+  `PDFActionListExecutor` after the initial preflight gate and before page
+  geometry. The recipe is planned and executed against the isolated assembled
+  document; later geometry, production, bleed, optimization, and final
+  preflight stages operate on that candidate. A resumed batch is incompatible
+  when its recipe changes.
 - **Retention (MIC-307):** at most one live assembled `PDFDocument` at a time.
   After each successful write (or when that output fails), the document leaves
   scope — no cross-output `assembledDocumentStorage` vector.

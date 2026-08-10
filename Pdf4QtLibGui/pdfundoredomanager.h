@@ -27,6 +27,9 @@
 
 #include <QObject>
 
+#include <QStringList>
+#include <vector>
+
 namespace pdfviewer
 {
 
@@ -62,10 +65,25 @@ public:
     /// \param oldDocument Old document
     void createUndo(pdf::PDFModifiedDocument document, pdf::PDFDocumentPointer oldDocument);
 
+    /// Create a named undo action. The name is retained for a future history
+    /// surface; the current 0.0.2 implementation deliberately adds no GUI.
+    void createUndo(pdf::PDFModifiedDocument document,
+                     pdf::PDFDocumentPointer oldDocument,
+                     const QString& name);
+
     /// Sets maximum steps for undo/redo
     /// \param undoLimit Maximum undo steps
     /// \param redoLimit Maximum redo steps
     void setMaximumSteps(size_t undoLimit, size_t redoLimit);
+
+    /// Bounds retained history by estimated serialized document bytes in
+    /// addition to the step limits. A zero value disables the byte bound.
+    void setMemoryLimitBytes(size_t memoryLimitBytes);
+
+    size_t getMemoryLimitBytes() const { return m_memoryLimitBytes; }
+    size_t getHistoryMemoryBytes() const { return m_historyMemoryBytes; }
+    bool isHistoryTruncated() const { return m_historyTruncated; }
+    QStringList getUndoNames() const;
 
     /// Returns true, if document was saved
     bool isCurrentSaved() const;
@@ -77,6 +95,13 @@ signals:
     /// This signals are emitted, when undo/redo action availability has
     /// been changed (for example, user pressed undo/redo action)
     void undoRedoStateChanged();
+
+    /// Emitted when the bounded history changes, including when old entries
+    /// are evicted to stay within the configured memory budget.
+    void undoHistoryChanged();
+
+    /// Emitted when the memory or step bound evicts an undo/redo entry.
+    void undoHistoryTruncated();
 
     /// This signal is being emitted, when user performs undo/redo action.
     /// Before signal is emitted, this object is in corrected state, as action
@@ -91,10 +116,16 @@ private:
     struct UndoRedoItem
     {
         explicit inline UndoRedoItem() = default;
-        explicit inline UndoRedoItem(pdf::PDFDocumentPointer oldDocument, pdf::PDFDocumentPointer newDocument, pdf::PDFModifiedDocument::ModificationFlags flags) :
+        explicit inline UndoRedoItem(pdf::PDFDocumentPointer oldDocument,
+                                     pdf::PDFDocumentPointer newDocument,
+                                     pdf::PDFModifiedDocument::ModificationFlags flags,
+                                     QString name,
+                                     size_t estimatedBytes) :
             oldDocument(qMove(oldDocument)),
             newDocument(qMove(newDocument)),
-            flags(flags)
+            flags(flags),
+            name(qMove(name)),
+            estimatedBytes(estimatedBytes)
         {
 
         }
@@ -102,12 +133,20 @@ private:
         pdf::PDFDocumentPointer oldDocument;
         pdf::PDFDocumentPointer newDocument;
         pdf::PDFModifiedDocument::ModificationFlags flags = pdf::PDFModifiedDocument::None;
+        QString name;
+        size_t estimatedBytes = 0;
     };
+
+    static size_t estimateDocumentBytes(const pdf::PDFDocument* document);
+    void markHistoryTruncated();
 
     size_t m_undoLimit = 0;
     size_t m_redoLimit = 0;
+    size_t m_memoryLimitBytes = 256ULL * 1024ULL * 1024ULL;
+    size_t m_historyMemoryBytes = 0;
     std::vector<UndoRedoItem> m_undoSteps;
     std::vector<UndoRedoItem> m_redoSteps;
+    bool m_historyTruncated = false;
     bool m_isCurrentSaved = true;
 };
 

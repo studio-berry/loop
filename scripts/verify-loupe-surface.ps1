@@ -53,6 +53,33 @@ function Assert-Absent {
 Assert-Present "Pdf4QtEditor"
 Assert-Present "PdfTool"
 
+$pdfToolArtifact = @(Find-Artifact "PdfTool") | Select-Object -First 1
+if ($null -eq $pdfToolArtifact) {
+    throw "Could not resolve the installed PdfTool executable."
+}
+$pdfTool = $pdfToolArtifact.FullName
+$capabilityOutput = @(& $pdfTool capabilities --command ocr --console-format json 2>$null)
+$capabilityExit = $LASTEXITCODE
+if ($capabilityExit -ne 0) {
+    throw "PdfTool capabilities --command ocr failed with exit code $capabilityExit"
+}
+
+try {
+    $capabilities = ($capabilityOutput -join "`n") | ConvertFrom-Json
+} catch {
+    throw "PdfTool OCR capability discovery did not return valid JSON: $($_.Exception.Message)"
+}
+
+if ($capabilities.status -ne "success" -or $capabilities.exit_code -ne 0) {
+    throw "PdfTool OCR capability discovery returned an unsuccessful result."
+}
+
+$ocrCommands = @($capabilities.data.commands | Where-Object { $_.id -eq "ocr" })
+if ($ocrCommands.Count -ne 1 -or -not ($capabilities.data.build_capabilities -contains "ocr")) {
+    throw "Release PdfTool does not advertise the CLI-only ocr command."
+}
+Write-Output "OK: PdfTool ocr is available in the release surface"
+
 foreach ($name in @("DimensionsPlugin", "ObjectInspectorPlugin", "OutputPreviewPlugin", "RedactPlugin", "SignaturePlugin", "SoftProofingPlugin", "EditorPlugin", "LoupePreflightPlugin", "ScannerPlugin", "Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad")) {
     Assert-Present $name
 }

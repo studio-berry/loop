@@ -154,7 +154,9 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdftextlayout.cpp
     sources/pdftextlayout.h
     sources/pdftransparencyrenderer.cpp
+    sources/pdftransparencyflattener.cpp
     sources/pdftransparencyrenderer.h
+    sources/pdftransparencyflattener.h
     sources/pdfutils.cpp
     sources/pdfutils.h
     sources/pdfxfaengine.cpp
