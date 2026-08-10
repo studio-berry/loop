@@ -29,6 +29,7 @@ QList<PDFFixupCapability> getImplementedFixupCapabilities()
 {
     return {
         { QStringLiteral("add-bleed"), true, true, true, true },
+        { QStringLiteral("downsample-images"), true, true, true, true },
         { QStringLiteral("rgb-to-cmyk"), true, true, true, true }
     };
 }
