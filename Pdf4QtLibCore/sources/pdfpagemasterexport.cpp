@@ -26,6 +26,7 @@
 #include "pdfprogress.h"
 #include "preflightengine.h"
 #include "pdfdocumentsession.h"
+#include "pdfcontourbleedfixup.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -147,6 +148,56 @@ QString outputConflictMessage(const PDFOutputConflict& conflict)
     }
     return QCoreApplication::translate("pdf::PDFPageMasterExport",
                                        "Output path '%1' already exists.").arg(conflict.path);
+}
+
+QJsonObject productionReport(const PDFPageMasterProductionSettings& settings,
+                             const PDFDocument& document)
+{
+    const PDFProductionValidationReport validation = validateProductionGeometry(settings.geometry);
+    QJsonObject report = validation.toJson();
+    report.insert(QStringLiteral("schema"), QStringLiteral("loupe-production-report/1"));
+    report.insert(QStringLiteral("contourBleedEnabled"), settings.contourBleedEnabled);
+    report.insert(QStringLiteral("grommetsEnabled"), settings.grommetsEnabled);
+
+    QJsonArray contourBleedPlans;
+    if (settings.contourBleedEnabled)
+    {
+        for (const PDFProductionContour& contour : settings.geometry.contours)
+        {
+            const PDFContourBleedPlan plan = planContourBleed(contour, settings.contourBleed);
+            contourBleedPlans.append(plan.toJson());
+            report.insert(QStringLiteral("valid"), report.value(QStringLiteral("valid")).toBool() && plan.valid);
+        }
+    }
+    report.insert(QStringLiteral("contourBleedPlans"), contourBleedPlans);
+
+    QJsonArray grommetPages;
+    if (settings.grommetsEnabled && document.getCatalog())
+    {
+        for (size_t index = 0; index < document.getCatalog()->getPageCount(); ++index)
+        {
+            const PDFPage* page = document.getCatalog()->getPage(index);
+            if (!page)
+            {
+                continue;
+            }
+            const QRectF productionRect = page->getTrimBox().isValid() ? page->getTrimBox() : page->getCropBox();
+            QJsonObject pageReport = placeGrommets(productionRect, settings.grommets).toJson();
+            pageReport.insert(QStringLiteral("page"), int(index + 1));
+            const QJsonArray diagnostics = pageReport.value(QStringLiteral("diagnostics")).toArray();
+            for (const QJsonValue& diagnostic : diagnostics)
+            {
+                if (diagnostic.toObject().value(QStringLiteral("severity")).toString() == QStringLiteral("error"))
+                {
+                    report.insert(QStringLiteral("valid"), false);
+                    break;
+                }
+            }
+            grommetPages.append(pageReport);
+        }
+    }
+    report.insert(QStringLiteral("grommetPages"), grommetPages);
+    return report;
 }
 
 QString normalizedOutputPath(const QString& path)
@@ -444,6 +495,41 @@ bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObjec
 
 } // namespace
 
+QJsonObject PDFPageMasterProductionSettings::toJson() const
+{
+    return QJsonObject{
+        { QStringLiteral("enabled"), enabled },
+        { QStringLiteral("geometry"), geometry.toJson() },
+        { QStringLiteral("contourBleedEnabled"), contourBleedEnabled },
+        { QStringLiteral("contourBleed"), QJsonObject{
+            { QStringLiteral("amountPt"), contourBleed.amountPt },
+            { QStringLiteral("flatteningTolerancePt"), contourBleed.flatteningTolerancePt },
+            { QStringLiteral("maxSegments"), contourBleed.maxSegments },
+            { QStringLiteral("dpi"), contourBleedDpi },
+            { QStringLiteral("maxRasterPixels"), double(contourBleedMaxRasterPixels) }
+        } },
+        { QStringLiteral("grommetsEnabled"), grommetsEnabled },
+        { QStringLiteral("grommets"), grommets.toJson() }
+    };
+}
+
+PDFPageMasterProductionSettings PDFPageMasterProductionSettings::fromJson(const QJsonObject& object)
+{
+    PDFPageMasterProductionSettings settings;
+    settings.enabled = object.value(QStringLiteral("enabled")).toBool(false);
+    settings.geometry = PDFProductionGeometryModel::fromJson(object.value(QStringLiteral("geometry")).toObject());
+    settings.contourBleedEnabled = object.value(QStringLiteral("contourBleedEnabled")).toBool(false);
+    const QJsonObject contourBleed = object.value(QStringLiteral("contourBleed")).toObject();
+    settings.contourBleed.amountPt = contourBleed.value(QStringLiteral("amountPt")).toDouble(settings.contourBleed.amountPt);
+    settings.contourBleed.flatteningTolerancePt = contourBleed.value(QStringLiteral("flatteningTolerancePt")).toDouble(settings.contourBleed.flatteningTolerancePt);
+    settings.contourBleed.maxSegments = contourBleed.value(QStringLiteral("maxSegments")).toInt(settings.contourBleed.maxSegments);
+    settings.contourBleedDpi = contourBleed.value(QStringLiteral("dpi")).toInt(settings.contourBleedDpi);
+    settings.contourBleedMaxRasterPixels = qint64(contourBleed.value(QStringLiteral("maxRasterPixels")).toDouble(double(settings.contourBleedMaxRasterPixels)));
+    settings.grommetsEnabled = object.value(QStringLiteral("grommetsEnabled")).toBool(false);
+    settings.grommets = PDFGrommetSpec::fromJson(object.value(QStringLiteral("grommets")).toObject());
+    return settings;
+}
+
 PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 {
     if (isCancelRequested(job))
@@ -477,6 +563,11 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     {
         return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                              "Bleed fixup confirmation is required before starting the export batch."));
+    }
+
+    if (job.hasProductionGeometrySettings && !job.productionGeometrySettings.enabled)
+    {
+        job.hasProductionGeometrySettings = false;
     }
 
     const QString manifestPath = resolveManifestPath(job);
@@ -644,6 +735,55 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(geometryResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
+        if (job.hasProductionGeometrySettings)
+        {
+            QJsonObject report = productionReport(job.productionGeometrySettings, assembledDocument);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("production"), report);
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!report.value(QStringLiteral("valid")).toBool(false))
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Production geometry validation failed for '%1'.").arg(fileName);
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifest(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            if (job.productionGeometrySettings.contourBleedEnabled)
+            {
+                PDFContourBleedFixupSettings contourBleedSettings;
+                contourBleedSettings.amountPt = job.productionGeometrySettings.contourBleed.amountPt;
+                contourBleedSettings.flatteningTolerancePt = job.productionGeometrySettings.contourBleed.flatteningTolerancePt;
+                contourBleedSettings.maxSegments = job.productionGeometrySettings.contourBleed.maxSegments;
+                contourBleedSettings.dpi = job.productionGeometrySettings.contourBleedDpi;
+                contourBleedSettings.maxRasterPixels = job.productionGeometrySettings.contourBleedMaxRasterPixels;
+                PDFContourBleedFixupReport contourBleedReport;
+                const PDFOperationResult contourBleedResult = PDFContourBleedFixup::apply(&assembledDocument,
+                                                                                           job.productionGeometrySettings.geometry,
+                                                                                           contourBleedSettings,
+                                                                                           &contourBleedReport);
+                report.insert(QStringLiteral("contourBleedFixup"), contourBleedReport.toJson());
+                outputs = manifest.value(QStringLiteral("outputs")).toArray();
+                output = outputs.at(int(index)).toObject();
+                output.insert(QStringLiteral("production"), report);
+                outputs.replace(int(index), output);
+                manifest.insert(QStringLiteral("outputs"), outputs);
+                if (!contourBleedResult)
+                {
+                    const QString message = contourBleedResult.getErrorMessage();
+                    setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                    persistManifest(manifestPath, manifest);
+                    finishProgressIfActive(activeProgress(job));
+                    result.manifest = manifest;
+                    return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+                }
             }
         }
 
