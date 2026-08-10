@@ -42,6 +42,7 @@ private slots:
     void probeFast_pageWithFullBleed_returnsAllEdgesCovered();
     void probeFast_threeEdgesPresentOneEmpty_returnsSingleEmptyEdge();
     void probeFast_asymmetricBleedDepth_treatsZeroDepthAsNotApplicable();
+    void probeRaster_repeatIsDeterministicAndReportsCalibrationInputs();
     void renderer_emptyPage_returnsNoErrors();
 };
 
@@ -173,6 +174,38 @@ void BleedMarginProbeTest::probeFast_asymmetricBleedDepth_treatsZeroDepthAsNotAp
     QVERIFY(result.allEdgesCovered());
     QVERIFY(result.left.hasContent);
     QVERIFY(result.right.hasContent);
+}
+
+void BleedMarginProbeTest::probeRaster_repeatIsDeterministicAndReportsCalibrationInputs()
+{
+    pdf::PDFDocument document = buildThreeOfFourBleedPage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFBleedMarginProbe probe(&session);
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+
+    pdf::PDFBleedMarginProbeSettings settings;
+    settings.dpi = 150;
+    settings.threshold = 16;
+    settings.whiteCoverageThreshold = 0.9975;
+    settings.bleedMM = QMarginsF(3, 3, 3, 3);
+    settings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox;
+    settings.fastOnly = false;
+    settings.maxRasterPixels = 250LL * 1000 * 1000;
+
+    const pdf::PDFBleedMarginProbeResult first = probe.probe(page, 0, settings);
+    const pdf::PDFBleedMarginProbeResult second = probe.probe(page, 0, settings);
+    QCOMPARE(first.left.hasContent, second.left.hasContent);
+    QCOMPARE(first.right.hasContent, second.right.hasContent);
+    QCOMPARE(first.top.hasContent, second.top.hasContent);
+    QCOMPARE(first.bottom.hasContent, second.bottom.hasContent);
+    QCOMPARE(first.left.inkPixels, second.left.inkPixels);
+    QCOMPARE(first.right.inkPixels, second.right.inkPixels);
+    QCOMPARE(first.top.inkPixels, second.top.inkPixels);
+    QCOMPARE(first.bottom.inkPixels, second.bottom.inkPixels);
+    QVERIFY(first.left.totalPixels > 0);
+    QVERIFY(first.right.totalPixels > 0);
+    QVERIFY(first.top.totalPixels > 0);
+    QVERIFY(first.bottom.totalPixels > 0);
 }
 
 void BleedMarginProbeTest::renderer_emptyPage_returnsNoErrors()
