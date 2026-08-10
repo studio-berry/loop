@@ -313,12 +313,34 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
                                         qint64* peakChildMemoryKb) const
 {
     QProcess process;
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    QTemporaryDir captureDirectory;
+    if (!captureDirectory.isValid())
+    {
+        return false;
+    }
+
+    const QProcessEnvironment systemEnvironment = QProcessEnvironment::systemEnvironment();
+    QProcessEnvironment environment;
+    for (const QString& name : { QStringLiteral("PATH"), QStringLiteral("SystemRoot"),
+                                 QStringLiteral("TEMP"), QStringLiteral("TMP"),
+                                 QStringLiteral("USERPROFILE") })
+    {
+        if (systemEnvironment.contains(name))
+        {
+            environment.insert(name, systemEnvironment.value(name));
+        }
+    }
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"),
+                       QDir(QFileInfo(m_pdfToolPath).absolutePath()).filePath(QStringLiteral("platforms")));
     process.setProcessEnvironment(environment);
-    process.start(m_pdfToolPath, arguments);
+    process.setWorkingDirectory(QFileInfo(m_pdfToolPath).absolutePath());
+    process.setStandardOutputFile(captureDirectory.filePath(QStringLiteral("stdout.txt")));
+    process.setStandardErrorFile(captureDirectory.filePath(QStringLiteral("stderr.txt")));
+    process.start(QDir::toNativeSeparators(m_pdfToolPath), arguments);
     if (!process.waitForStarted(10000))
     {
+        qWarning().noquote() << "PdfTool failed to start:" << process.errorString() << m_pdfToolPath;
         return false;
     }
 
@@ -329,6 +351,7 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     {
         if (runTimer.elapsed() > 120000)
         {
+            qWarning().noquote() << "PdfTool timed out:" << arguments;
             process.kill();
             process.waitForFinished(5000);
             return false;
@@ -356,14 +379,26 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
         *exitCode = process.exitCode();
     }
 
+    auto readCapture = [](const QString& path) -> QByteArray
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return {};
+        }
+        return file.readAll();
+    };
+    const QByteArray capturedStdOut = readCapture(captureDirectory.filePath(QStringLiteral("stdout.txt")));
+    const QByteArray capturedStdErr = readCapture(captureDirectory.filePath(QStringLiteral("stderr.txt")));
+
     if (stdOut)
     {
-        *stdOut = process.readAllStandardOutput();
+        *stdOut = capturedStdOut;
     }
 
     if (stdErr)
     {
-        *stdErr = process.readAllStandardError();
+        *stdErr = capturedStdErr;
     }
 
     if (peakChildMemoryKb)
@@ -371,7 +406,14 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
         *peakChildMemoryKb = peakMemoryKb;
     }
 
-    return process.exitStatus() == QProcess::NormalExit;
+    if (process.exitStatus() != QProcess::NormalExit)
+    {
+        qWarning().noquote() << "PdfTool exited abnormally:" << process.errorString() << arguments
+                              << QString::fromUtf8(capturedStdErr);
+        return false;
+    }
+
+    return true;
 }
 
 bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,

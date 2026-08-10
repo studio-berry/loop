@@ -96,6 +96,7 @@ foreach ($surface in $installSurfaces) {
     }
 }
 
+
 # Catch first-party drift in either direction. Third-party Qt/vcpkg libraries
 # are intentionally outside this product-artifact namespace.
 $knownArtifacts = @($installSurfaces | Where-Object {
