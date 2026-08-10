@@ -236,6 +236,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
     QList<PreflightFixupConfig> fixupsAvailable;
     QList<PreflightCheckStatus> checkStatuses;
     std::optional<PDFXConformanceResult> pdfx;
+    QJsonObject profileResolution;
 
     QJsonObject toJson(const QString& pdfPath = QString()) const;
 };

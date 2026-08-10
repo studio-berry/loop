@@ -3657,6 +3657,11 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     root.insert(QStringLiteral("warnings"), warningsArray);
     root.insert(QStringLiteral("fixups_available"), fixupsArray);
 
+    if (!profileResolution.isEmpty())
+    {
+        root.insert(QStringLiteral("profile_resolution"), profileResolution);
+    }
+
     QJsonArray checksArray;
     for (const PreflightCheckStatus& status : checkStatuses)
     {

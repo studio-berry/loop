@@ -29,6 +29,7 @@
 #include "pdfdocumentmanipulator.h"
 #include "pdfimageoptimizer.h"
 #include "pdfpagegeometry.h"
+#include "preflightprofileresolver.h"
 #include "pdfproductiongeometry.h"
 
 #include <QImage>
@@ -113,6 +114,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     bool bleedConfirmationGranted = false;
     bool hasPreflightGate = false;
     QString preflightProfilePath;
+    bool hasPreflightContext = false;
+    PreflightJobContext preflightContext;
+    QString preflightProfileStorePath;
     bool forcePreflight = false;
     bool revalidatePreflightAfterFixups = false;
     PDFProgress* progress = nullptr;
