@@ -2777,6 +2777,9 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     job.preflightProfilePath = m_preflightProfilePath;
     job.forcePreflight = m_forcePreflight;
     job.revalidatePreflightAfterFixups = m_revalidatePreflightAfterFixups;
+    job.hasActionList = m_hasActionList;
+    job.actionList = m_actionList;
+    job.actionListBindings = m_actionListBindings;
     job.progress = m_exportProgress;
     m_exportCancelToken.cancel->store(false, std::memory_order_release);
     m_exportCancelToken.progressAlive->store(true, std::memory_order_release);
@@ -3398,6 +3401,12 @@ QJsonObject MainWindow::createProjectJson() const
     preflightObject["force"] = m_forcePreflight;
     preflightObject["revalidateAfterFixups"] = m_revalidatePreflightAfterFixups;
     settingsObject["preflight"] = preflightObject;
+    QJsonObject actionListObject;
+    actionListObject["enabled"] = m_hasActionList;
+    actionListObject["path"] = m_actionListPath;
+    actionListObject["recipe"] = m_actionList.toJson();
+    actionListObject["bindings"] = m_actionListBindings;
+    settingsObject["actionList"] = actionListObject;
     project["settings"] = settingsObject;
 
     return project;
@@ -3556,6 +3565,21 @@ bool MainWindow::loadProjectJson(const QJsonObject& project, QString* errorMessa
     m_preflightProfilePath = preflightObject["profile"].toString();
     m_forcePreflight = preflightObject["force"].toBool(false);
     m_revalidatePreflightAfterFixups = preflightObject["revalidateAfterFixups"].toBool(false);
+    const QJsonObject actionListObject = settingsObject["actionList"].toObject();
+    m_hasActionList = false;
+    m_actionListPath = actionListObject["path"].toString();
+    m_actionListBindings = actionListObject["bindings"].toObject();
+    if (actionListObject["enabled"].toBool(false) && actionListObject["recipe"].isObject())
+    {
+        pdf::PDFActionList loadedActionList;
+        QStringList validationErrors;
+        if (pdf::PDFActionList::fromJson(actionListObject["recipe"].toObject(), &loadedActionList)
+            && pdf::PDFActionListExecutor().validate(loadedActionList, {}, &validationErrors))
+        {
+            m_actionList = std::move(loadedActionList);
+            m_hasActionList = true;
+        }
+    }
 
     updateActions();
     return true;
@@ -3965,6 +3989,32 @@ void MainWindow::performOperation(Operation operation)
             form->addRow(QString(), revalidatePreflightCheck);
             QObject::connect(preflightCheck, &QCheckBox::toggled, revalidatePreflightCheck, &QWidget::setEnabled);
 
+            QCheckBox* actionListCheck = new QCheckBox(tr("Run Action List recipe after initial preflight"), &dialog);
+            actionListCheck->setChecked(m_hasActionList);
+            QLineEdit* actionListPathEdit = new QLineEdit(&dialog);
+            actionListPathEdit->setText(m_actionListPath);
+            actionListPathEdit->setPlaceholderText(tr("Path to loupe-action-list/1 JSON"));
+            QPushButton* actionListBrowseButton = new QPushButton(tr("Browse..."), &dialog);
+            auto* actionListPathWidget = new QWidget(&dialog);
+            auto* actionListPathLayout = new QHBoxLayout(actionListPathWidget);
+            actionListPathLayout->setContentsMargins(0, 0, 0, 0);
+            actionListPathLayout->addWidget(actionListPathEdit, 1);
+            actionListPathLayout->addWidget(actionListBrowseButton);
+            form->addRow(QString(), actionListCheck);
+            form->addRow(tr("Action List recipe"), actionListPathWidget);
+            QObject::connect(actionListCheck, &QCheckBox::toggled, actionListPathWidget, &QWidget::setEnabled);
+            actionListPathWidget->setEnabled(actionListCheck->isChecked());
+            QObject::connect(actionListBrowseButton, &QPushButton::clicked, &dialog, [&dialog, actionListPathEdit]()
+            {
+                const QString path = QFileDialog::getOpenFileName(&dialog, QObject::tr("Select Action List recipe"),
+                                                                   actionListPathEdit->text(),
+                                                                   QObject::tr("JSON files (*.json);;All files (*.*)"));
+                if (!path.isEmpty())
+                {
+                    actionListPathEdit->setText(path);
+                }
+            });
+
             layout->addLayout(form);
             QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
             layout->addWidget(buttons);
@@ -4009,6 +4059,39 @@ void MainWindow::performOperation(Operation operation)
                 m_preflightProfilePath = profileEdit->text().trimmed();
                 m_forcePreflight = forcePreflightCheck->isChecked();
                 m_revalidatePreflightAfterFixups = revalidatePreflightCheck->isChecked() && m_hasPreflightGate;
+
+                m_hasActionList = false;
+                m_actionListBindings = {};
+                if (actionListCheck->isChecked())
+                {
+                    const QString actionListPath = actionListPathEdit->text().trimmed();
+                    QFile actionListFile(actionListPath);
+                    if (actionListPath.isEmpty() || !actionListFile.open(QIODevice::ReadOnly))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("Choose a readable Action List recipe before enabling the stage."));
+                        break;
+                    }
+                    QJsonParseError parseError;
+                    const QJsonDocument actionListJson = QJsonDocument::fromJson(actionListFile.readAll(), &parseError);
+                    if (parseError.error != QJsonParseError::NoError || !actionListJson.isObject()
+                        || !pdf::PDFActionList::fromJson(actionListJson.object(), &m_actionList))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("The selected file is not a valid loupe-action-list/1 recipe: %1")
+                                                   .arg(parseError.errorString()));
+                        break;
+                    }
+                    QStringList validationErrors;
+                    if (!pdf::PDFActionListExecutor().validate(m_actionList, {}, &validationErrors))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("The Action List is invalid:\n%1").arg(validationErrors.join(QStringLiteral("\n"))));
+                        break;
+                    }
+                    m_actionListPath = actionListPath;
+                    m_hasActionList = true;
+                }
             }
             break;
         }

@@ -27,6 +27,7 @@
 #include "preflightengine.h"
 #include "pdfdocumentsession.h"
 #include "pdfcontourbleedfixup.h"
+#include "pdfoperationcontrol.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -231,6 +232,17 @@ QJsonObject createManifestObject(const QString& batchId, const QStringList& outp
         { QStringLiteral("batch_id"), batchId },
         { QStringLiteral("outputs"), outputs }
     };
+}
+
+QJsonObject createManifestObject(const QString& batchId, const QStringList& outputFileNames,
+                                 const PDFPageMasterExportJob& job)
+{
+    QJsonObject manifest = createManifestObject(batchId, outputFileNames);
+    if (job.hasActionList)
+    {
+        manifest.insert(QStringLiteral("action_list"), job.actionList.toJson());
+    }
+    return manifest;
 }
 
 bool persistManifest(const QString& manifestPath, const QJsonObject& manifest)
@@ -457,7 +469,48 @@ bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterE
         }
     }
 
+    const bool manifestHasActionList = manifest.contains(QStringLiteral("action_list"));
+    if (manifestHasActionList != job.hasActionList)
+    {
+        return false;
+    }
+    if (job.hasActionList && manifest.value(QStringLiteral("action_list")).toObject() != job.actionList.toJson())
+    {
+        return false;
+    }
+
     return true;
+}
+
+class PageMasterOperationControl final : public PDFOperationControl
+{
+public:
+    explicit PageMasterOperationControl(std::atomic_bool* cancelFlag) :
+        m_cancelFlag(cancelFlag)
+    {
+    }
+
+    bool isOperationCancelled() const override
+    {
+        return m_cancelFlag && m_cancelFlag->load(std::memory_order_acquire);
+    }
+
+private:
+    std::atomic_bool* m_cancelFlag = nullptr;
+};
+
+void setOutputActionListResult(QJsonObject& manifest, int index,
+                               const PDFActionListExecutionResult& actionListResult)
+{
+    QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return;
+    }
+    QJsonObject entry = outputs.at(index).toObject();
+    entry.insert(QStringLiteral("action_list_result"), actionListResult.toJson());
+    outputs.replace(index, entry);
+    manifest.insert(QStringLiteral("outputs"), outputs);
 }
 
 int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
@@ -607,7 +660,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             {
                 return createExportError(outputConflictMessage(conflict));
             }
-            manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
+            manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()), job);
             if (!persistManifestForJob(manifestPath, manifest))
             {
                 return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
@@ -626,7 +679,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             return createExportError(outputConflictMessage(conflict));
         }
-        manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
+        manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()), job);
         if (!manifestPath.isEmpty() && !persistManifestForJob(manifestPath, manifest))
         {
             return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
@@ -651,6 +704,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     }
 
     const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
+    PageMasterOperationControl actionListOperationControl(job.cancelFlag);
     QJsonObject preflightProfile;
     QJsonObject preflightResolution;
     if (runPreflight)
@@ -755,6 +809,44 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
+        if (job.hasActionList)
+        {
+            PDFActionListExecutionOptions actionListOptions;
+            actionListOptions.bindings = job.actionListBindings;
+            actionListOptions.operationControl = &actionListOperationControl;
+            PDFActionListExecutionResult actionListResult;
+            PDFDocument candidate;
+            const PDFOperationResult actionListExecution = PDFActionListExecutor().execute(
+                job.actionList, assembledDocument, actionListOptions, &candidate, &actionListResult);
+            setOutputActionListResult(manifest, int(index), actionListResult);
+            if (!actionListExecution)
+            {
+                if (actionListResult.status == QStringLiteral("cancelled") || isCancelRequested(job))
+                {
+                    persistManifestForJob(manifestPath, manifest);
+                    finishProgressIfActive(activeProgress(job));
+                    result.manifest = manifest;
+                    return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+                }
+                const QString message = actionListExecution.getErrorMessage();
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            assembledDocument = std::move(candidate);
+            if (!persistManifestForJob(manifestPath, manifest))
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Could not persist Action List diagnostics for '%1'.").arg(fileName);
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
         }
 
         if (job.hasPageGeometrySettings)
