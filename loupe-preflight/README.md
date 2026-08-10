@@ -129,12 +129,17 @@ connected region whose total ink coverage exceeds `max_ink_pct`. `max_ink_pct`
 is expressed as a percentage of summed colorant values, so `300` means 300% TAC.
 The finding is emitted only when the measured value is strictly greater than the
 threshold; an exact boundary is clean. Optional parameters are `probe_dpi`
-(default 150), `min_region_area_pct` (default 0.05% of the analyzed box), and
-`max_regions_per_page` (default 20). `analysis_box` defaults to `bleed` and falls
+(default 150), `min_region_area_pct` (default 0.05% of the analyzed box),
+`max_regions_per_page` (default 20; `0` deliberately suppresses region
+findings), and `max_raster_pixels` (default 250,000,000). The analysis is
+skipped and marked incomplete when that raster budget is exceeded.
+`analysis_box` defaults to `bleed` and falls
 back to `trim`, `crop`, then `media` when the requested box is not explicitly
 present; set it to `trim`, `crop`, or `media` to override that policy. The probe
 includes process and spot/DeviceN colorants, including overprint-aware output
-colorants, in the TAC sum.
+colorants, in the TAC sum. Each regional finding carries structured evidence
+for `peak_ink_pct`, `max_ink_pct`, `area_mm2`, `analysis_box`, and its stable
+region rank.
 
 This check is deliberately not enabled by `loupe-default.json`: it requires a
 full-page rasterization and is intended for profiles that explicitly opt in.

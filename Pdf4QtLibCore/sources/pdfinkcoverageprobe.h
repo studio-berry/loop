@@ -53,10 +53,18 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageProbeSettings
     qreal minRegionAreaRatio = 0.0005;
     /// Maximum number of regions reported per page; the largest are kept.
     int maxRegionsPerPage = 20;
+    /// Maximum raster pixel count before the probe returns budgetExceeded.
     qint64 maxRasterPixels = 250LL * 1000 * 1000;
     /// Production region to analyze. Bleed falls back to Trim, Crop, then Media.
     PDFInkCoverageAnalysisBox analysisBox = PDFInkCoverageAnalysisBox::Bleed;
 };
+
+/// TAC findings are emitted only when coverage strictly exceeds the limit;
+/// pixels exactly at the configured threshold are within policy.
+inline bool inkCoverageExceedsLimit(qreal inkCoverage, qreal maxInkCoverage)
+{
+    return inkCoverage > maxInkCoverage;
+}
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageRegion
 {
@@ -67,7 +75,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageRegion
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFInkCoverageProbeResult
 {
-    bool rasterized = false;     // false when the pixel budget was exceeded
+    bool rasterized = false;     // false when rasterization was unavailable or over budget
     bool budgetExceeded = false;
     qreal peakInkCoverage = 0.0; // page-wide max TAC
     qreal overLimitAreaMM2 = 0.0;
