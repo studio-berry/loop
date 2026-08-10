@@ -130,7 +130,7 @@ PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font)
             break;
         case FontType::Type1:
         case FontType::MMType1:
-            if (!program->startsWith("%!", Qt::CaseSensitive)
+            if (!program->startsWith("%!")
                 && !(program->size() >= 2 && uchar(program->at(0)) == 0x80 && uchar(program->at(1)) == 0x01))
             {
                 result.defects.append(QStringLiteral("UnreadableType1Program"));
