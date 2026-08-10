@@ -4,9 +4,9 @@
     Verifies the installed Loupe product surface.
 
 .DESCRIPTION
-    Checks that the release-profile install contains the supported desktop/CLI
-    entrypoints and retained production plugins, while rejecting only the
-    explicitly deferred OCR and AudioBook surfaces.
+    Checks that the release-profile install contains the supported Loupe
+    binaries and retained production plugins, while ensuring compatibility
+    applications are not exposed as separate product entrypoints.
 
     This is an artifact-level check. It does not build, launch, or validate the
     runtime behavior of the binaries.
@@ -35,14 +35,15 @@ function Find-Artifact {
 
 function Assert-Present {
     param([string]$Name)
-    if ((Find-Artifact $Name).Count -eq 0) {
+    $matches = @(Find-Artifact $Name)
+    if ($matches.Count -eq 0) {
         throw "Missing required Loupe artifact: $Name"
     }
 }
 
 function Assert-Absent {
     param([string]$Name)
-    $matches = Find-Artifact $Name
+    $matches = @(Find-Artifact $Name)
     if ($matches.Count -gt 0) {
         $paths = ($matches | ForEach-Object FullName) -join ", "
         throw "Forbidden inherited artifact present: $Name ($paths)"
@@ -61,20 +62,34 @@ foreach ($name in @("AudioBookPlugin", "OcrPlugin", "LoupeOcrService")) {
 }
 
 $desktopFiles = @($files | Where-Object { $_.Extension -eq ".desktop" })
-if ($desktopFiles.Count -gt 0) {
-    foreach ($name in @("Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtEditor")) {
-        if (-not ($desktopFiles | Where-Object { $_.Name -match [regex]::Escape($name) })) {
-            throw "Missing retained desktop entry: $name"
-        }
-    }
+if ($desktopFiles.Count -ne 1 -or $desktopFiles[0].Name -ne "io.github.mberrys.Loupe-pdf.desktop") {
+    $names = ($desktopFiles | ForEach-Object Name) -join ", "
+    throw "Release package must contain only the Loupe desktop entry; found: $names"
 }
 
 $loupeDesktop = @($desktopFiles | Where-Object { $_.Name -eq "io.github.mberrys.Loupe-pdf.desktop" })
 if ($loupeDesktop.Count -gt 0) {
     $desktopText = Get-Content -LiteralPath $loupeDesktop[0].FullName -Raw
-    if ($desktopText -notmatch "(?m)^Exec=Pdf4QtEditor(?:\.exe)? %f$") {
+    if ($desktopText -notmatch "(?m)^Exec=Pdf4QtEditor(?:\.exe)? %f\r?$") {
         throw "Loupe desktop entry does not launch Pdf4QtEditor: $($loupeDesktop[0].FullName)"
     }
 }
 
-Write-Output "Loupe surface verified: Editor, PdfTool, PageMaster, Viewer, Diff, LaunchPad, Scanner, and retained production plugins present; OCR and AudioBook surfaces absent."
+if ($files | Where-Object { $_.Extension -eq ".desktop" -and $_.Name -match "Pdf4Qt(Viewer|PageMaster|Diff|Editor)" }) {
+    throw "Release package contains inherited application desktop entries."
+}
+
+$appxManifest = @($files | Where-Object { $_.Name -eq "AppxManifest.xml" })
+if ($appxManifest.Count -gt 0) {
+    $appxText = Get-Content -LiteralPath $appxManifest[0].FullName -Raw
+    if ($appxText -notmatch '<Application\s+Id="Pdf4QtEditor"') {
+        throw "AppX manifest does not declare the Loupe Editor application."
+    }
+    foreach ($name in @("Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad")) {
+        if ($appxText -match ('<Application\s+Id="' + [regex]::Escape($name) + '"')) {
+            throw "AppX manifest exposes compatibility application: $name"
+        }
+    }
+}
+
+Write-Output "Loupe surface verified: Loupe, Loupe CLI compatibility, hidden Viewer/PageMaster/Diff/LaunchPad binaries, Scanner, and retained production plugins present; separate app entries absent."
