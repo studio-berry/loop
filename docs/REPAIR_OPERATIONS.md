@@ -40,7 +40,19 @@ The preflight capability list is derived from the same registry: an operation is
 advertised only when its descriptor marks it as a preflight fixup. Profile
 validation rejects unknown or unimplemented fixup IDs, so the report cannot
 advertise a remedy that the registered repair contract cannot execute.
-The registry exposes descriptors through `PdfTool repair --list-operations`.
+The fixup capability registry is the source of truth for the current build. The
+shipped Loupe Default profile lists these same three IDs, and the Editor sidecar
+filter plus `PdfTool capabilities --console-format json` consume that registry.
+An operation is advertised only when it is implemented in the current build, is
+applicable to the raised finding/document, and is present in the active profile.
+Use the following command to inspect the build-level set before writing an
+operator runbook or automation policy:
+
+```bash
+PdfTool capabilities --console-format json | jq '.data.fixups'
+```
+
+The registry exposes repair descriptors through `PdfTool repair --list-operations`.
 The Editor's preflight workflows resolve `add-bleed`, `downsample-images`, and
 `rgb-to-cmyk` from that registry and review a separate serialized candidate
 before writing it. PdfTool's `repair` command uses the same transaction contract.

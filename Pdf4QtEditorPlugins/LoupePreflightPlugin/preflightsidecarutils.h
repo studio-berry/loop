@@ -242,6 +242,12 @@ inline bool isContractIdentifier(const QString& value)
     return expression.match(value).hasMatch();
 }
 
+inline bool isStableFindingId(const QString& value)
+{
+    static const QRegularExpression expression(QStringLiteral("^[0-9a-f]{16}$"));
+    return expression.match(value).hasMatch();
+}
+
 inline bool isSupportedSchemaVersion(int schemaVersion)
 {
     return schemaVersion >= 1 && schemaVersion <= LOUPE_PREFLIGHT_SCHEMA_VERSION;
@@ -277,6 +283,12 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
     if (!finding.value(QStringLiteral("type")).isString() || !isContractIdentifier(type))
     {
         return setValidationError(errorMessage, QStringLiteral("%1.type must be a non-empty kebab-case identifier.").arg(context));
+    }
+
+    const QJsonValue id = finding.value(QStringLiteral("id"));
+    if (!id.isUndefined() && (!id.isString() || !isStableFindingId(id.toString())))
+    {
+        return setValidationError(errorMessage, QStringLiteral("%1.id must be a 16-character lowercase hexadecimal stable finding id.").arg(context));
     }
 
     const QString severity = finding.value(QStringLiteral("severity")).toString();
@@ -340,6 +352,7 @@ inline bool validateFindingV2(const QJsonObject& finding, const QString& context
 {
     static const QSet<QString> allowedProperties = {
         QStringLiteral("scope"),
+        QStringLiteral("id"),
         QStringLiteral("page"),
         QStringLiteral("object_id"),
         QStringLiteral("type"),
@@ -491,6 +504,9 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         QStringLiteral("pdf"),
         QStringLiteral("pdfx"),
         QStringLiteral("profile_resolution"),
+        QStringLiteral("document_revision_digest"),
+        QStringLiteral("effective_profile_digest"),
+        QStringLiteral("decisions"),
         QStringLiteral("errors"),
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),
@@ -553,6 +569,32 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         if (!value.isUndefined() && !value.isString())
         {
             return setValidationError(errorMessage, QStringLiteral("%1 must be a string.").arg(optionalString));
+        }
+    }
+
+    for (const QString& digestName : { QStringLiteral("document_revision_digest"), QStringLiteral("effective_profile_digest") })
+    {
+        const QJsonValue value = report.value(digestName);
+        if (!value.isUndefined() && (!value.isString() || !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(value.toString()).hasMatch()))
+        {
+            return setValidationError(errorMessage, QStringLiteral("%1 must be a lowercase SHA-256 digest.").arg(digestName));
+        }
+    }
+
+    const QJsonValue decisionsValue = report.value(QStringLiteral("decisions"));
+    if (!decisionsValue.isUndefined())
+    {
+        if (!decisionsValue.isArray())
+        {
+            return setValidationError(errorMessage, QStringLiteral("decisions must be an array."));
+        }
+        const QJsonArray decisions = decisionsValue.toArray();
+        for (int i = 0; i < decisions.size(); ++i)
+        {
+            if (!decisions.at(i).isObject())
+            {
+                return setValidationError(errorMessage, QStringLiteral("decisions[%1] must be an object.").arg(i));
+            }
         }
     }
 

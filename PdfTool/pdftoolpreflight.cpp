@@ -27,6 +27,7 @@
 #include "preflightengine.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -103,6 +104,80 @@ QString defaultProfileStorePath()
     return {};
 }
 
+bool loadDecisions(const QString& decisionsPath,
+                   QList<pdf::PreflightDecision>& decisions,
+                   QString& errorMessage)
+{
+    decisions.clear();
+    if (decisionsPath.isEmpty())
+    {
+        return true;
+    }
+
+    QFile file(decisionsPath);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        errorMessage = PDFToolTranslationContext::tr("Cannot open decisions file '%1'.").arg(decisionsPath);
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+    {
+        errorMessage = PDFToolTranslationContext::tr("Invalid decisions JSON in '%1': %2")
+            .arg(decisionsPath, parseError.errorString());
+        return false;
+    }
+
+    return pdf::preflightDecisionsFromJson(document.object(), decisions, errorMessage);
+}
+
+bool exportDecisions(const QString& decisionsPath,
+                     const QList<pdf::PreflightDecision>& decisions,
+                     QString& errorMessage)
+{
+    if (decisionsPath.isEmpty())
+    {
+        return true;
+    }
+
+    QFile file(decisionsPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        errorMessage = PDFToolTranslationContext::tr("Cannot write decisions file '%1'.").arg(decisionsPath);
+        return false;
+    }
+
+    const QByteArray payload = QJsonDocument(pdf::preflightDecisionsToJson(decisions)).toJson(QJsonDocument::Indented);
+    if (file.write(payload) != payload.size())
+    {
+        errorMessage = PDFToolTranslationContext::tr("Could not write decisions file '%1'.").arg(decisionsPath);
+        return false;
+    }
+
+    return true;
+}
+
+bool hasActiveSignoffForFinding(const pdf::PreflightFinding& finding,
+                                const QList<pdf::PreflightDecision>& decisions,
+                                const QString& documentDigest,
+                                const QString& profileDigest)
+{
+    const pdf::PreflightDecision* latest = nullptr;
+    for (const pdf::PreflightDecision& decision : decisions)
+    {
+        if (decision.findingId != finding.stableId()
+            || (latest && decision.timestampUtc < latest->timestampUtc))
+        {
+            continue;
+        }
+        latest = &decision;
+    }
+
+    return latest && latest->countsForSignoff(documentDigest, profileDigest);
+}
+
 } // namespace
 
 QString PDFToolPreflightApplication::getStandardString(StandardString standardString) const
@@ -144,6 +219,17 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          QStringLiteral("cli.invalid-arguments"),
                          PDFToolTranslationContext::tr("No document specified."));
         return PDFToolExitCode::InputError;
+    }
+
+    QList<pdf::PreflightDecision> decisions;
+    QString decisionsError;
+    if (!loadDecisions(options.preflightDecisionsPath, decisions, decisionsError))
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         decisionsError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     const bool hasContextInput = !options.preflightJobContextPath.isEmpty()
@@ -266,6 +352,35 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
 
     pdf::PreflightResult result = engine.run(profileJson);
     result.profileResolution = resolved.provenance();
+    result.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    result.effectiveProfileDigest = QString::fromLatin1(resolved.effectiveHash);
+    result.decisions = decisions;
+
+    PDFToolExitCode resultExitCode = result.pass ? PDFToolExitCode::Success : PDFToolExitCode::Findings;
+    if (options.preflightRequireSignoff)
+    {
+        for (const pdf::PreflightFinding& finding : result.errors)
+        {
+            if (!hasActiveSignoffForFinding(finding,
+                                            result.decisions,
+                                            result.documentRevisionDigest,
+                                            result.effectiveProfileDigest))
+            {
+                resultExitCode = PDFToolExitCode::Findings;
+                break;
+            }
+            resultExitCode = PDFToolExitCode::Success;
+        }
+    }
+
+    if (!exportDecisions(options.preflightDecisionsExportPath, result.decisions, decisionsError))
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.output-failed"),
+                         decisionsError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
 
     if (options.executionContext)
     {
@@ -274,7 +389,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         });
     }
 
-    return result.pass ? PDFToolExitCode::Success : PDFToolExitCode::Findings;
+    return resultExitCode;
 }
 
 PDFToolAbstractApplication::Options PDFToolPreflightApplication::getOptionsFlags() const

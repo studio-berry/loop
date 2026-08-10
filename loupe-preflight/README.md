@@ -77,6 +77,17 @@ Check params used by Phase 1 plans (open-ended via `additionalProperties`):
 | `probe_threshold` | `content-bleed` |
 | `raster_white_threshold` | `content-bleed` |
 
+## Hidden and non-printing content
+
+The detection-only checks `invisible-content`, `hidden-layers`,
+`off-page-content`, and `obscured-content` are independently enable-able.
+The first three are exact graphics-state, optional-content, and geometry
+findings. `obscured-content` is deliberately reported at `info` severity with
+`confidence: heuristic` and is skipped by the processor when no opaque cover
+is observed; it does not claim full compositing equivalence. Off-page content
+is tolerated inside the page BleedBox, or inside the configured allowance when
+no BleedBox exists. These checks do not register corrective fixups.
+
 The `transparency-risk` check has no additional parameters; it observes
 transparency groups, blend modes, and blend-space crossings.
 
@@ -91,6 +102,7 @@ Every finding in `errors[]` / `warnings[]` **must** include:
 
 | Field | Notes |
 |-------|-------|
+| `id` | Stable 16-character content-addressed identity used by decisions and repair deltas; excludes translated message text and geometry. |
 | `scope` | `document` \| `page` \| `object` (v2) |
 | `type` | kebab-case machine id |
 | `severity` | `error` \| `warning` \| `info` |
@@ -101,6 +113,41 @@ Every finding in `errors[]` / `warnings[]` **must** include:
 `bbox` coordinates use PDF user space (points) with the page MediaBox lower-left as origin. Page-level issues without a specific region omit `bbox`. Regional/object issues include `bbox` when known.
 
 `object_id` is optional (string or null) and never substitutes for `scope`. `fixups_available[]` entries need `id`, `safe`, `description`.
+
+## Operator decisions and sign-off
+
+Preflight findings keep their severity and never change the report's `pass`
+value when an operator records a decision. Decisions are a separate,
+standalone JSON document:
+
+```json
+{
+  "schema_version": 1,
+  "decisions": [{
+    "finding_id": "0123456789abcdef",
+    "kind": "waive",
+    "justification": "Client approved the supplied artwork; see JOB-4471.",
+    "operator": "m.berry",
+    "timestamp_utc": "2026-08-09T14:22:03.000Z",
+    "external_reference": "JOB-4471",
+    "document_revision_digest": "<sha256>",
+    "effective_profile_digest": "<sha256>"
+  }]
+}
+```
+
+`PdfTool preflight --decisions decisions.json` imports decisions and emits
+them beside the findings. `--export-decisions path.json` writes the normalized
+standalone document. `--require-signoff` returns success only when every
+error-severity finding has a current `accept`, `waive`, or `override` decision;
+`reject` and `reopen` deliberately do not satisfy the gate. A document or
+effective-profile digest change marks a decision `stale_document` or
+`stale_profile`; stale records remain visible and are never discarded.
+
+The recorded operator identity is an attribution field, not authentication or
+cryptographic non-repudiation. Editor controls and waived-row presentation are
+deferred until after 0.0.3; the Core/CLI contract is intentionally usable
+without a GUI.
 
 ## Two-tier bleed checking
 
@@ -164,13 +211,39 @@ characteristics and transparency, and `keepOriginalIfLarger=true`. The Editor
 and `PdfTool repair --operation downsample-images` use the corrective-operation
 contract: analyze first, apply to an isolated candidate, preview the expected
 change, write a new output, and revalidate it. The Editor offers to rerun the
-normal preflight sidecar on that output.
+normal preflight sidecar on that output. The golden `image-dpi-excessive` corpus
+fixture pins the advertised fixup, while the Core unit test writes, reopens, and
+revalidates a downsampled document.
 
 Not every finding is actionable. Embedded-font findings remain report-only
 until a font-preserving remediation is specified, and white overprint remains
 an operator warning because an automatic rewrite cannot safely preserve the
 intended knockout/overprint semantics. These findings therefore do not receive
 an advertised fixup merely because they are present.
+
+## Fixup advertisement contract
+
+Fixup availability has three independent gates:
+
+1. The current build implements the fixup in the shared Core registry.
+2. The active profile contains the fixup and the finding/document makes it
+   applicable. For example, `downsample-images` requires an oversized image,
+   while `rgb-to-cmyk` requires RGB content and `add-bleed` requires a bleed
+   gap.
+3. The surface is using that active profile. Editor sidecar filtering and
+   `PdfTool capabilities` both use the same Core registry, so they cannot
+   advertise a fixup that the build does not implement.
+
+The shipped `profiles/loupe-default.json` and its YAML authoring mirror list
+`rgb-to-cmyk`, `add-bleed`, and `downsample-images`. To inspect the build-level
+registry set used by CLI and Editor workflows, run:
+
+```bash
+PdfTool capabilities --console-format json | jq '.data.fixups'
+```
+
+The command reports build capability; the preflight report still applies the
+profile and finding/document gates before placing an item in `fixups_available`.
 
 ## Transparency risk checking
 
@@ -183,6 +256,34 @@ using the group's effective blend space. Nested groups are evaluated at their
 real compositing boundaries, including Forms, tiling, shadings, images, text,
 and annotation appearance streams. These are appearance/production-risk
 advisories, not claims that the PDF is invalid.
+
+## Processing-step and dieline validation
+
+The Core detector exposes `detectProcessingSteps(const PDFDocument&)` for
+headless callers. It classifies ISO 19593-1 processing-step OCG metadata from
+`/Usage` (`/Type`, `CreatorInfo/Subtype`, and `PageElement`) and collects the
+associated path geometry in PDF page space. Legacy spot colors named
+`CutContour`, `Die`, `Dieline`, or `Thru-cut` are retained as
+`detection_method: legacy-spot-color`, so reports do not present legacy
+evidence as ISO conformance.
+
+Profiles can enable the normalized `processing-steps` check (the `dieline`
+alias is also accepted):
+
+```json
+{
+  "id": "processing-steps",
+  "severity": "error",
+  "required": true,
+  "required_types": ["cutting-die"]
+}
+```
+
+The check reports missing dielines, missing required processing-step types,
+and dieline geometry marked printable. Generated wide-format grommet marks
+are represented in the headless PageMaster production manifest using the same
+normalized `positions` processing-step vocabulary; GUI presentation remains
+deferred beyond 0.0.3.
 
 ## Hairline and thin-stroke checking
 
