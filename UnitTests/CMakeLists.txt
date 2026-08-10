@@ -574,6 +574,8 @@ target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
     ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
     ${CMAKE_BINARY_DIR})
+target_compile_definitions(UnitTestsPreflightPlugin PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
 set_target_properties(UnitTestsPreflightPlugin PROPERTIES
     WIN32_EXECUTABLE OFF

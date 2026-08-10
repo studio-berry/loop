@@ -68,7 +68,12 @@ Run on a supported Windows or Linux machine with a release or dev build that bun
 
 ## Known limitations (V1)
 
-- Only **add-bleed** is implemented in the plugin; other advertised fixups are filtered out.
+- Fixups are advertised only when all three gates pass: the current build implements
+  the fixup in the shared Core registry, the finding/document makes it applicable,
+  and the active profile includes it. The shipped Loupe Default profile currently
+  contains `rgb-to-cmyk`, `add-bleed`, and `downsample-images`; use
+  `PdfTool capabilities --console-format json` to inspect the current build's
+  registry set.
 - Post-fix preflight uses the bundled default profile, not a custom profile path.
 - Mirror bleed can show seams on high-contrast corners (see `docs/bleed-stress-test-results.md`).
 - **Overprint is not simulated in standard page rendering** (MIC-320). Overprint-accurate compositing exists only in the transparency renderer behind **Output Preview**. Preflight still *detects* white/near-white overprint and the report panel says so, but the page view will not show it. Do not use the page view to proof overprint-bearing prepress work.
