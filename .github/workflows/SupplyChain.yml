@@ -1,0 +1,22 @@
+name: Supply Chain Policy
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Run supply-chain policy
+        run: python3 scripts/ci/check_supply_chain_pins.py
+
+      - name: Run policy regression tests
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'

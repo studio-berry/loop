@@ -39,12 +39,18 @@ inline. Its layout:
 4. Update `packaging-tools.json` so the diff shows the old/new identity and
    old/new digest together.
 5. Run `python3 scripts/ci/check_supply_chain_pins.py`, the affected packaging
-   workflow, and the existing AppImage/MSI/MSIX smoke tests.
+   workflow, and `python3 -m unittest discover -s scripts/ci -p 'test_*.py'`.
+   Then run the existing AppImage/MSI/MSIX smoke tests.
 6. Record the reviewed version and evidence in the commit or pull request
    description before merging.
 
 Never replace an immutable pin with a moving tag such as `main`, `latest`, or
 `continuous`.
+
+The policy checker scans workflow and packaging-script text for mutable release
+download URLs. The verified-download helpers also require HTTPS, validate the
+asset/hash arguments before downloading, write to a temporary sibling, verify
+the bytes, and only then promote the file to its requested output path.
 
 ## Unpinned signing toolchain
 
