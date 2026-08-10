@@ -628,13 +628,16 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         tst_operatoracceptance.cpp
     )
 
-    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Test)
     add_dependencies(UnitTestsOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
         LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
-    target_include_directories(UnitTestsOperatorAcceptance PRIVATE ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin)
+    target_include_directories(UnitTestsOperatorAcceptance PRIVATE
+        ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+        ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
     set_target_properties(UnitTestsOperatorAcceptance PROPERTIES
         WIN32_EXECUTABLE OFF

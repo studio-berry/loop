@@ -54,7 +54,7 @@ enum class PDFActionListFailurePolicy
 QString pdfActionListStepStatusName(PDFActionListStepStatus status);
 QString pdfActionListFailurePolicyName(PDFActionListFailurePolicy policy);
 
-struct PDFActionListStep
+struct PDF4QTLIBCORESHARED_EXPORT PDFActionListStep
 {
     QString id;
     QString operationId;
@@ -65,7 +65,7 @@ struct PDFActionListStep
     QJsonObject toJson() const;
 };
 
-struct PDFActionList
+struct PDF4QTLIBCORESHARED_EXPORT PDFActionList
 {
     QString schema = QStringLiteral("loupe-action-list/1");
     QString id;
@@ -77,7 +77,7 @@ struct PDFActionList
     QJsonObject toJson() const;
 };
 
-struct PDFActionListStepResult
+struct PDF4QTLIBCORESHARED_EXPORT PDFActionListStepResult
 {
     QString stepId;
     QString operationId;
@@ -92,7 +92,7 @@ struct PDFActionListStepResult
     QJsonObject toJson() const;
 };
 
-struct PDFActionListExecutionResult
+struct PDF4QTLIBCORESHARED_EXPORT PDFActionListExecutionResult
 {
     QString schema = QStringLiteral("loupe-action-list-result/1");
     QString actionListId;
