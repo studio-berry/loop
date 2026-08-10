@@ -26,6 +26,7 @@
 #include "pdfdocumentsession.h"
 #include "pdffont.h"
 #include "pdfoptionalcontent.h"
+#include "pdfprocessingbudget.h"
 #include "pdfrenderer.h"
 
 #include <QtTest>
@@ -42,6 +43,7 @@ private slots:
     void probeFast_pageWithFullBleed_returnsAllEdgesCovered();
     void probeFast_threeEdgesPresentOneEmpty_returnsSingleEmptyEdge();
     void probeFast_asymmetricBleedDepth_treatsZeroDepthAsNotApplicable();
+    void probeRaster_chargesStripPixelsToSessionBudget();
     void renderer_emptyPage_returnsNoErrors();
 };
 
@@ -173,6 +175,29 @@ void BleedMarginProbeTest::probeFast_asymmetricBleedDepth_treatsZeroDepthAsNotAp
     QVERIFY(result.allEdgesCovered());
     QVERIFY(result.left.hasContent);
     QVERIFY(result.right.hasContent);
+}
+
+void BleedMarginProbeTest::probeRaster_chargesStripPixelsToSessionBudget()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 200, 200));
+    builder.setPageTrimBox(pageReference, QRectF(10, 10, 180, 180));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PDFProcessingLimits limits = pdf::PDFProcessingLimits::conservativeDefaults();
+    limits.maxRenderPixels = 1;
+    session.setProcessingLimits(limits);
+
+    pdf::PDFBleedMarginProbe probe(&session);
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+
+    pdf::PDFBleedMarginProbeSettings settings;
+    settings.dpi = 72;
+    settings.bleedMM = QMarginsF(3, 3, 3, 3);
+    settings.referenceBox = pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox;
+
+    QVERIFY_THROWS_EXCEPTION(pdf::PDFBudgetExceededException, probe.probe(page, 0, settings));
 }
 
 void BleedMarginProbeTest::renderer_emptyPage_returnsNoErrors()
