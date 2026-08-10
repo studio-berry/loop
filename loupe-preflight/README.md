@@ -91,6 +91,7 @@ Every finding in `errors[]` / `warnings[]` **must** include:
 
 | Field | Notes |
 |-------|-------|
+| `id` | Stable 16-character content-addressed identity used by decisions and repair deltas; excludes translated message text and geometry. |
 | `scope` | `document` \| `page` \| `object` (v2) |
 | `type` | kebab-case machine id |
 | `severity` | `error` \| `warning` \| `info` |
@@ -101,6 +102,41 @@ Every finding in `errors[]` / `warnings[]` **must** include:
 `bbox` coordinates use PDF user space (points) with the page MediaBox lower-left as origin. Page-level issues without a specific region omit `bbox`. Regional/object issues include `bbox` when known.
 
 `object_id` is optional (string or null) and never substitutes for `scope`. `fixups_available[]` entries need `id`, `safe`, `description`.
+
+## Operator decisions and sign-off
+
+Preflight findings keep their severity and never change the report's `pass`
+value when an operator records a decision. Decisions are a separate,
+standalone JSON document:
+
+```json
+{
+  "schema_version": 1,
+  "decisions": [{
+    "finding_id": "0123456789abcdef",
+    "kind": "waive",
+    "justification": "Client approved the supplied artwork; see JOB-4471.",
+    "operator": "m.berry",
+    "timestamp_utc": "2026-08-09T14:22:03.000Z",
+    "external_reference": "JOB-4471",
+    "document_revision_digest": "<sha256>",
+    "effective_profile_digest": "<sha256>"
+  }]
+}
+```
+
+`PdfTool preflight --decisions decisions.json` imports decisions and emits
+them beside the findings. `--export-decisions path.json` writes the normalized
+standalone document. `--require-signoff` returns success only when every
+error-severity finding has a current `accept`, `waive`, or `override` decision;
+`reject` and `reopen` deliberately do not satisfy the gate. A document or
+effective-profile digest change marks a decision `stale_document` or
+`stale_profile`; stale records remain visible and are never discarded.
+
+The recorded operator identity is an attribution field, not authentication or
+cryptographic non-repudiation. Editor controls and waived-row presentation are
+deferred until after 0.0.3; the Core/CLI contract is intentionally usable
+without a GUI.
 
 ## Two-tier bleed checking
 

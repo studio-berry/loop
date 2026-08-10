@@ -69,6 +69,10 @@ private slots:
     void run_removesAddBleedWhenNoGap();
     void run_doesNotAdvertiseUnimplementedFixups();
     void run_invalidProfileEmitsDocumentScopeFinding();
+    void findingStableId_ignoresMessageAndBbox();
+    void decisionRejectsMissingJustification();
+    void decisionRoundTripAndStalenessAreDeterministic();
+    void decisionReopenDoesNotCountForSignoff();
     void run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed();
     void run_contentBleedRasterConfirm_emitsBleedMarginEmptyAndNeedsAutoBleed();
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
@@ -916,6 +920,87 @@ void PreflightEngineTest::run_invalidProfileEmitsDocumentScopeFinding()
     QCOMPARE(finding.value(QStringLiteral("scope")).toString(), QStringLiteral("document"));
     QVERIFY(!finding.contains(QStringLiteral("page")));
     QVERIFY(!finding.contains(QStringLiteral("bbox")));
+}
+
+void PreflightEngineTest::findingStableId_ignoresMessageAndBbox()
+{
+    pdf::PreflightFinding first;
+    first.scope = QStringLiteral("page");
+    first.page = 2;
+    first.objectId = QStringLiteral("12 0 R");
+    first.type = QStringLiteral("bleed");
+    first.checkId = QStringLiteral("bleed");
+    first.message = QStringLiteral("English message");
+    first.bbox = QRectF(1.0, 2.0, 3.0, 4.0);
+
+    pdf::PreflightFinding second = first;
+    second.message = QStringLiteral("Translated message");
+    second.bbox = QRectF(50.0, 60.0, 70.0, 80.0);
+    QCOMPARE(first.stableId(), second.stableId());
+
+    second.checkId = QStringLiteral("trim");
+    QVERIFY(first.stableId() != second.stableId());
+}
+
+void PreflightEngineTest::decisionRejectsMissingJustification()
+{
+    pdf::PreflightDecision decision;
+    QString errorMessage;
+    QVERIFY(!pdf::PreflightDecision::fromJson(QJsonObject{
+        { QStringLiteral("finding_id"), QStringLiteral("0123456789abcdef") },
+        decision,
+        errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("justification")));
+}
+
+void PreflightEngineTest::decisionRoundTripAndStalenessAreDeterministic()
+{
+    const QString documentDigest(64, QLatin1Char('a'));
+    const QString profileDigest(64, QLatin1Char('b'));
+    pdf::PreflightDecision original;
+    original.findingId = QStringLiteral("0123456789abcdef");
+    original.kind = pdf::PreflightDecisionKind::Waive;
+    original.justification = QStringLiteral("Client approved the supplied artwork.");
+    original.operatorIdentity = QStringLiteral("m.berry");
+    original.timestampUtc = QDateTime::fromString(QStringLiteral("2026-08-09T14:22:03.000Z"), Qt::ISODateWithMs);
+    original.externalReference = QStringLiteral("JOB-4471");
+    original.documentRevisionDigest = documentDigest;
+    original.effectiveProfileDigest = profileDigest;
+
+    const QJsonObject exported = original.toJson(documentDigest, profileDigest);
+    QCOMPARE(exported.value(QStringLiteral("state")).toString(), QStringLiteral("active"));
+
+    pdf::PreflightDecision imported;
+    QString errorMessage;
+    QVERIFY(pdf::PreflightDecision::fromJson(exported, imported, errorMessage));
+    QCOMPARE(imported.findingId, original.findingId);
+    QCOMPARE(imported.justification, original.justification);
+    QCOMPARE(imported.timestampUtc, original.timestampUtc);
+    QCOMPARE(imported.resolveState(documentDigest, profileDigest), pdf::PreflightDecisionState::Active);
+    QCOMPARE(imported.resolveState(QString(64, QLatin1Char('c')), profileDigest), pdf::PreflightDecisionState::StaleDocument);
+    QCOMPARE(imported.resolveState(documentDigest, QString(64, QLatin1Char('d'))), pdf::PreflightDecisionState::StaleProfile);
+
+    QList<pdf::PreflightDecision> decisions{ original };
+    const QJsonObject document = pdf::preflightDecisionsToJson(decisions);
+    QList<pdf::PreflightDecision> roundTripped;
+    QVERIFY(pdf::preflightDecisionsFromJson(document, roundTripped, errorMessage));
+    QCOMPARE(roundTripped.size(), 1);
+    QCOMPARE(roundTripped.first().toJson(), original.toJson());
+}
+
+void PreflightEngineTest::decisionReopenDoesNotCountForSignoff()
+{
+    const QString documentDigest(64, QLatin1Char('a'));
+    const QString profileDigest(64, QLatin1Char('b'));
+    pdf::PreflightDecision decision;
+    decision.findingId = QStringLiteral("0123456789abcdef");
+    decision.kind = pdf::PreflightDecisionKind::Reopen;
+    decision.justification = QStringLiteral("Reopened for review.");
+    decision.operatorIdentity = QStringLiteral("m.berry");
+    decision.timestampUtc = QDateTime::currentDateTimeUtc();
+    decision.documentRevisionDigest = documentDigest;
+    decision.effectiveProfileDigest = profileDigest;
+    QVERIFY(!decision.countsForSignoff(documentDigest, profileDigest));
 }
 
 void PreflightEngineTest::run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed()
