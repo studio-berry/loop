@@ -26,6 +26,15 @@
 #include <QJsonDocument>
 #include <QtTest>
 
+class CancelActionListControl final : public pdf::PDFOperationControl
+{
+public:
+    bool isOperationCancelled() const override
+    {
+        return true;
+    }
+};
+
 class ActionListTest : public QObject
 {
     Q_OBJECT
@@ -35,6 +44,7 @@ private slots:
     void rejectsUnknownOperationAndWrongParameterType();
     void dryRunDoesNotMutateSource();
     void executesRegisteredOperationOnCandidate();
+    void cancellationLeavesSourceUntouched();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -138,6 +148,35 @@ void ActionListTest::executesRegisteredOperationOnCandidate()
     QVERIFY(candidate.getCatalog() != nullptr);
     QVERIFY(candidate.getCatalog()->getPage(0)->getMediaBox().width() > 100.0);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
+
+void ActionListTest::cancellationLeavesSourceUntouched()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
+        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("id"), QStringLiteral("cancel") },
+        { QStringLiteral("name"), QStringLiteral("Cancel") },
+        { QStringLiteral("steps"), QJsonArray{QJsonObject{
+            { QStringLiteral("id"), QStringLiteral("bleed") },
+            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+            { QStringLiteral("params"), QJsonObject{{QStringLiteral("bleed_mm"), 3.0}, {QStringLiteral("force"), true}}}
+        }} }
+    }, &actionList));
+
+    CancelActionListControl control;
+    pdf::PDFActionListExecutionOptions options;
+    options.operationControl = &control;
+    pdf::PDFActionListExecutionResult result;
+    pdf::PDFDocument candidate;
+    QVERIFY(!pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
+    QCOMPARE(result.status, QStringLiteral("cancelled"));
+    QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Cancelled);
+    QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+    QVERIFY(candidate.getCatalog() == nullptr);
 }
 
 QTEST_GUILESS_MAIN(ActionListTest)

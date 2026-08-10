@@ -68,12 +68,16 @@ public:
     QString pathFor(const PDFArtifactIdentity& artifact) const;
     bool contains(const PDFArtifactIdentity& artifact) const;
     bool verify(const PDFArtifactIdentity& artifact) const;
+    /// Removes exactly one digest-addressed artifact. Callers must first decide
+    /// retention eligibility in the operation-history ledger.
+    bool remove(const PDFArtifactIdentity& artifact) const;
     PDFArtifactRestoreResult restoreToFile(const PDFArtifactIdentity& artifact,
                                            const QString& destinationPath) const;
 
 private:
     PDFArtifactStoreResult importDevice(QIODevice* source,
                                         const PDFArtifactImportOptions& options) const;
+    bool publishReadOnly(const QString& path) const;
     QString artifactToken(const QString& sha256) const;
 
     QString m_rootDirectory;
