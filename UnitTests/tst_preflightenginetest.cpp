@@ -27,6 +27,8 @@
 #include "pdfdocumentsession.h"
 #include "pdfimage.h"
 #include "pdfinkcoverageprobe.h"
+#include "pdffixupregistry.h"
+#include "pdfrepairoperation.h"
 
 #include <QtTest>
 #include <QFile>
@@ -54,6 +56,7 @@ private slots:
     void parseProfile_acceptsThinStrokeOverridesAndDefaults();
     void parseProfile_rejectsInvalidThinStrokeThreshold();
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
+    void parseProfile_rejectsUnimplementedFixup();
     void parseProfile_acceptsPDFXTargetAndRevision();
     void parseProfile_rejectsUnknownPDFXTarget();
     void pdfxStatusReduction_prioritizesFailureAndIncomplete();
@@ -67,7 +70,8 @@ private slots:
     void run_includesProfileFixups();
     void run_synthesizesAddBleedWhenGapAndNoProfileFixup();
     void run_removesAddBleedWhenNoGap();
-    void run_doesNotAdvertiseUnimplementedFixups();
+    void run_advertisesOnlyApplicableRegisteredFixups();
+    void fixupCapabilities_matchRepairRegistry();
     void run_invalidProfileEmitsDocumentScopeFinding();
     void run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed();
     void run_contentBleedRasterConfirm_emitsBleedMarginEmptyAndNeedsAutoBleed();
@@ -555,6 +559,23 @@ void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpa
     QVERIFY(errorMessage.contains(QStringLiteral("unknown allowed color space")));
 }
 
+void PreflightEngineTest::parseProfile_rejectsUnimplementedFixup()
+{
+    pdf::PreflightEngine engine(nullptr);
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    QVERIFY(!engine.parseProfile(QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Unknown fixup") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
+        } },
+        { QStringLiteral("fixups"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("not-registered") } }
+        } }
+    }, profile, errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("unimplemented fixup")));
+}
+
 void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
 {
     pdf::PreflightEngine engine(nullptr);
@@ -865,7 +886,7 @@ void PreflightEngineTest::run_removesAddBleedWhenNoGap()
     }
 }
 
-void PreflightEngineTest::run_doesNotAdvertiseUnimplementedFixups()
+void PreflightEngineTest::run_advertisesOnlyApplicableRegisteredFixups()
 {
     pdf::PDFDocumentBuilder builder;
     builder.appendPage(QRectF(0, 0, 200, 200));
@@ -896,6 +917,23 @@ void PreflightEngineTest::run_doesNotAdvertiseUnimplementedFixups()
     const QJsonArray reportFixups = result.toJson().value(QStringLiteral("fixups_available")).toArray();
     QCOMPARE(reportFixups.size(), 1);
     QCOMPARE(reportFixups.first().toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+}
+
+void PreflightEngineTest::fixupCapabilities_matchRepairRegistry()
+{
+    const QList<pdf::PDFFixupCapability> capabilities = pdf::getImplementedFixupCapabilities();
+    QVERIFY(!capabilities.isEmpty());
+    for (const pdf::PDFFixupCapability& capability : capabilities)
+    {
+        QVERIFY(capability.implemented);
+        QVERIFY(pdf::isImplementedFixupId(capability.id));
+        QVERIFY(pdf::PDFRepairRegistry::instance().find(capability.id) != nullptr);
+        QVERIFY(pdf::PDFRepairRegistry::instance().find(capability.id)->isPreflightFixup());
+    }
+    QVERIFY(std::any_of(capabilities.cbegin(), capabilities.cend(), [](const pdf::PDFFixupCapability& capability)
+    {
+        return capability.id == QStringLiteral("downsample-images");
+    }));
 }
 
 void PreflightEngineTest::run_invalidProfileEmitsDocumentScopeFinding()

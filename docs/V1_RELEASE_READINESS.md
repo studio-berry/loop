@@ -233,7 +233,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 | ID | Impact | Linear | Notes |
 |----|--------|--------|-------|
 | **R-012** | Mirror bleed seams on high-contrast art | MIC-339 (Done) | Known V1 limitation (`docs/bleed-stress-test-results.md`, `PRODUCTION_RUNBOOK.md:233`). Operators can switch to pixel-repeat/stretch (MIC-122) |
-| **R-013** | Only `add-bleed` fixup in plugin UI | MIC-338 | Other fixups filtered by design. Not yet stated in user-facing docs |
+| **R-013** | Preflight fixups must remain executable end to end | MIC-338 / GitHub #166 | **Resolved in #166.** Editor, PdfTool, and the preflight capability report use the registered `add-bleed`, `downsample-images`, and `rgb-to-cmyk` operations; profile validation rejects unregistered fixup IDs. Each Editor action previews and revalidates a separate output candidate |
 | **R-014** | No macOS CI | MIC-336 | macOS is not a V1 platform; source builds are best-effort (`docs/PLATFORM_SUPPORT.md`). **ID note:** MIC-336 previously reused R-014 to mean "add macOS support, High" — the inverse of this row. R-IDs are now immutable; that override has been removed |
 | **R-016** | V1 MSI ships unsigned | **MIC-342** (docs) · **MIC-345** (post-V1) | **Not a launch gate — reaffirmed 2026-08-02.** V1 / 1.0 ships unsigned by design (normal for solo/OSS GitHub Releases). SmartScreen disclosure + `SHA256SUMS.txt` remain (MIC-342). Certificate procurement is commercial/post-V1 only (MIC-345). Earlier “escalated to launch gate” wording in this register was incorrect and is struck |
 
