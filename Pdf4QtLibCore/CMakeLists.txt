@@ -223,6 +223,14 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdflogscrubber.cpp
     sources/pdfdiagnostics.h
     sources/pdfdiagnostics.cpp
+    sources/pdfartifactidentity.h
+    sources/pdfartifactidentity.cpp
+    sources/pdfartifactstore.h
+    sources/pdfartifactstore.cpp
+    sources/pdfoperationhistory.h
+    sources/pdfoperationhistory.cpp
+    sources/pdfoperationhistorystore.h
+    sources/pdfoperationhistorystore.cpp
     fonts.qrc
 )
 
@@ -233,7 +241,7 @@ GENERATE_EXPORT_HEADER(Pdf4QtLibCore
                        PDF4QTLIBCORESHARED_EXPORT
                        EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}/pdf4qtlibcore_export.h")
 
-target_link_libraries(Pdf4QtLibCore PRIVATE Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg)
+target_link_libraries(Pdf4QtLibCore PRIVATE Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg Qt6::Sql)
 target_link_libraries(Pdf4QtLibCore PRIVATE ${LCMS2_LIBRARIES})
 target_link_libraries(Pdf4QtLibCore PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_link_libraries(Pdf4QtLibCore PRIVATE ZLIB::ZLIB)
