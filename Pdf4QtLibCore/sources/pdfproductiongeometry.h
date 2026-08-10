@@ -26,6 +26,7 @@
 #include "pdfglobal.h"
 
 #include <QJsonObject>
+#include <QList>
 #include <QVariantMap>
 #include <QPainterPath>
 #include <QPointF>
@@ -35,6 +36,8 @@
 
 namespace pdf
 {
+
+class PDFDocument;
 
 constexpr int PDFProductionGeometrySchemaVersion = 1;
 
@@ -59,6 +62,27 @@ enum class PDFProcessingStepKind
 
 PDF4QTLIBCORESHARED_EXPORT QString pdfProcessingStepKindToString(PDFProcessingStepKind kind);
 PDF4QTLIBCORESHARED_EXPORT PDFProcessingStepKind pdfProcessingStepKindFromString(const QString& value);
+
+/// ISO 19593-1 processing-step classification. The production kind remains
+/// the stable application-facing compatibility category.
+enum class PDFProcessingStepType
+{
+    CuttingDie,
+    PerforatingCut,
+    CreasingBend,
+    PartialCut,
+    ScoringBend,
+    ForegroundVarnish,
+    Braille,
+    White,
+    Legend,
+    Positions,
+    PositionsUnspecified,
+    Unknown
+};
+
+PDF4QTLIBCORESHARED_EXPORT QString pdfProcessingStepTypeToString(PDFProcessingStepType type);
+PDF4QTLIBCORESHARED_EXPORT PDFProcessingStepType pdfProcessingStepTypeFromString(const QString& value);
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFProductionDiagnostic
 {
@@ -95,6 +119,15 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFProcessingStep
     bool shouldPrint = true;
     bool overprint = false;
     QVariantMap vendorMetadata;
+
+    // Optional source-document evidence populated by detectProcessingSteps().
+    PDFProcessingStepType type = PDFProcessingStepType::Unknown;
+    QString ocgName;
+    PDFObjectReference ocg;
+    QPainterPath geometry;
+    bool isSeparation = false;
+    QString detectionMethod;
+    QVector<int> pageIndices;
 
     QJsonObject toJson() const;
     static PDFProcessingStep fromJson(const QJsonObject& object);
@@ -152,6 +185,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFProductionValidationReport
 PDF4QTLIBCORESHARED_EXPORT PDFProductionValidationReport validateProductionGeometry(
         const PDFProductionGeometryModel& model,
         const PDFProductionValidationOptions& options = {});
+
+/// Detects ISO 19593-1 processing-step OCGs and legacy dieline spot colors.
+/// The returned geometry is flattened into page space and the detection
+/// mechanism is explicit: "iso-19593-1" or "legacy-spot-color".
+PDF4QTLIBCORESHARED_EXPORT QList<PDFProcessingStep> detectProcessingSteps(const PDFDocument& document);
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFContourBleedSettings
 {

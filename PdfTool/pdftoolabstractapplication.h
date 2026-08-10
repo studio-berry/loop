@@ -34,6 +34,7 @@
 #include "pdfimageoptimizer.h"
 #include "pdfredact.h"
 #include "pdfbleedfixup.h"
+#include "pdftransparencyflattener.h"
 #include "pdfrgbtocmykfixup.h"
 #include "pdfrepairdiff.h"
 #include "pdfrepairoperation.h"
@@ -226,6 +227,10 @@ struct PDFToolOptions
     pdf::PDFBleedFixupSettings addBleedSettings;
     QString addBleedOutputDocument;
 
+    // For option 'FlattenTransparency'
+    pdf::PDFTransparencyFlattenSettings flattenTransparencySettings;
+    QString flattenTransparencyOutputDocument;
+
     // For option 'RgbToCmyk'
     pdf::PDFRgbToCmykSettings rgbToCmykSettings;
     QString rgbToCmykOutputDocument;
@@ -242,6 +247,9 @@ struct PDFToolOptions
     QString preflightProfilePath;
     QString preflightJobContextPath;
     QString preflightProfileStorePath;
+    QString preflightDecisionsPath;
+    QString preflightDecisionsExportPath;
+    bool preflightRequireSignoff = false;
     QString preflightClientId;
     QString preflightProductId;
     QString preflightJobType;
@@ -371,6 +379,7 @@ public:
         Diff = 0x01000000,   ///< Diff settings (compare documents)
         Redact = 0x02000000,   ///< Settings for Redact tool
         AddBleed = 0x04000000,   ///< Settings for add-bleed tool
+        FlattenTransparency = 0x2000000000ULL, ///< Settings for flatten-transparency tool
         PreflightProfile = 0x08000000,   ///< Loupe preflight profile path
         VerifyRedaction = 0x10000000,   ///< Settings for verify-redaction tool
         DestructiveWrite = 0x20000000,   ///< Shared --dry-run/--report/--force for overwrite commands

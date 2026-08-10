@@ -56,7 +56,7 @@ enum class PDFRepairChangeClass
     Informational
 };
 
-struct PDFRepairExpectedChanges
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairExpectedChanges
 {
     bool pageBoxes = false;
     bool pageContent = false;
@@ -69,14 +69,14 @@ struct PDFRepairExpectedChanges
     bool signatures = false;
 };
 
-struct PDFRepairAllowedRegion
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairAllowedRegion
 {
     int pageIndex = -1;
     QRectF pageRect;
     QString reason;
 };
 
-struct PDFRepairChangeManifest
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairChangeManifest
 {
     QString repairId;
     QJsonObject parameters;
@@ -86,7 +86,7 @@ struct PDFRepairChangeManifest
     PDFRepairExpectedChanges expected;
 };
 
-struct PDFRepairDiffOptions
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairDiffOptions
 {
     int renderDpi = 144;
     bool renderVisualDiff = true;
@@ -103,7 +103,7 @@ struct PDFRepairDiffOptions
     const PDFOperationControl* operationControl = nullptr;
 };
 
-struct PDFRepairPageVisualDiff
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairPageVisualDiff
 {
     int pageIndex = -1;
     QSize pixelSize;
@@ -123,7 +123,7 @@ struct PDFRepairPageVisualDiff
     QString diffImagePath;
 };
 
-struct PDFRepairStructuralChange
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairStructuralChange
 {
     QString path;
     QString kind;
@@ -132,7 +132,7 @@ struct PDFRepairStructuralChange
     PDFRepairChangeClass classification = PDFRepairChangeClass::Informational;
 };
 
-struct PDFRepairDiffReport
+struct PDF4QTLIBCORESHARED_EXPORT PDFRepairDiffReport
 {
     int schemaVersion = 1;
     PDFRepairDiffStatus status = PDFRepairDiffStatus::Complete;
