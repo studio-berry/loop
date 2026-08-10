@@ -3,6 +3,6 @@
   "name": "Loupe Ink Coverage",
   "description": "Opt-in total ink coverage preflight using the Output Preview transparency renderer.",
   "checks": [
-    { "id": "ink-coverage", "max_ink_pct": 300, "probe_dpi": 150, "min_region_area_pct": 0.05, "max_regions_per_page": 20, "analysis_box": "bleed", "severity": "error" }
+    { "id": "ink-coverage", "max_ink_pct": 300, "probe_dpi": 150, "min_region_area_pct": 0.05, "max_regions_per_page": 20, "max_raster_pixels": 250000000, "analysis_box": "bleed", "severity": "error" }
   ]
 }

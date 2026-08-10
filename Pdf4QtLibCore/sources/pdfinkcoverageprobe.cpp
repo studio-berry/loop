@@ -189,7 +189,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         {
             const qreal inkCoverage = bitmap.getPixelInkCoverage(x, y);
             result.peakInkCoverage = qMax(result.peakInkCoverage, inkCoverage);
-            if (inkCoverage > settings.maxInkCoverage)
+            if (inkCoverageExceedsLimit(inkCoverage, settings.maxInkCoverage))
             {
                 overLimit[y * bitmapWidth + x] = true;
                 ++overLimitPixels;
