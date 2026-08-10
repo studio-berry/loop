@@ -2696,6 +2696,221 @@ void runThinStrokesCheck(PDFDocumentSession* session,
     }
 }
 
+struct HiddenContentFinding
+{
+    QString type;
+    QRectF bbox;
+    QString detail;
+    bool heuristic = false;
+};
+
+class HiddenContentProcessor final : public PDFPageContentProcessor
+{
+public:
+    HiddenContentProcessor(const PDFPage* page,
+                           const PDFDocument* document,
+                           const PDFFontCache* fontCache,
+                           const PDFCMS* cms,
+                           const PDFOptionalContentActivity* optionalContentActivity,
+                           const PDFMeshQualitySettings& meshQualitySettings,
+                           PDFProcessingBudget* budget,
+                           qreal offPageAllowance) :
+        PDFPageContentProcessor(page,
+                                 document,
+                                 fontCache,
+                                 cms,
+                                 optionalContentActivity,
+                                 QTransform(),
+                                 meshQualitySettings,
+                                 budget)
+    {
+        if (page)
+        {
+            const QRectF media = page->getMediaBox().normalized();
+            const QRectF effective = preflight::resolveEffectiveBox(page->getTrimBox(), page->getCropBox(), media);
+            const QRectF bleed = page->getBleedBox().normalized();
+            m_toleratedBounds = bleed.isEmpty()
+                ? effective.adjusted(-offPageAllowance, -offPageAllowance, offPageAllowance, offPageAllowance)
+                : bleed;
+        }
+    }
+
+    const QList<HiddenContentFinding>& findings() const { return m_findings; }
+
+protected:
+    void performMarkedContentBegin(const QByteArray& tag, const PDFObject& properties) override
+    {
+        if (tag != "OC" || !isContentSuppressed())
+        {
+            return;
+        }
+
+        QString name = QStringLiteral("unnamed optional-content group");
+        PDFObjectReference reference;
+        if (properties.isName() && getPropertiesDictionary())
+        {
+            const PDFObject property = getPropertiesDictionary()->get(properties.getString());
+            if (property.isReference())
+            {
+                reference = property.getReference();
+            }
+        }
+        if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
+        {
+            name = getDocument()->getCatalog()->getOptionalContentProperties()
+                ->getOptionalContentGroup(reference).getName();
+            if (name.isEmpty())
+            {
+                name = QStringLiteral("object %1 %2").arg(reference.objectNumber).arg(reference.generation);
+            }
+        }
+        if (!m_hiddenLayers.contains(name))
+        {
+            m_hiddenLayers.append(name);
+            m_findings.append({ QStringLiteral("hidden-layers"), QRectF(), name, false });
+        }
+    }
+
+    void performInterceptInstruction(Operator currentOperator,
+                                     ProcessOrder processOrder,
+                                     const QByteArray& operatorAsText) override
+    {
+        if (processOrder != ProcessOrder::BeforeOperation
+            || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
+        {
+            return;
+        }
+
+        switch (currentOperator)
+        {
+            case Operator::TextShowTextString:
+            case Operator::TextShowTextIndividualSpacing:
+            case Operator::TextNextLineShowText:
+            case Operator::TextSetSpacingAndShowText:
+                m_findings.append({ QStringLiteral("invisible-content"), QRectF(),
+                                    QStringLiteral("text render mode 3 (%1)").arg(QString::fromLatin1(operatorAsText)), false });
+                break;
+            default:
+                break;
+        }
+    }
+
+    void performBeforePathPainting(const QPainterPath& path,
+                                   bool stroke,
+                                   bool fill,
+                                   bool text,
+                                   Qt::FillRule fillRule) override
+    {
+        Q_UNUSED(fillRule);
+        if (path.isEmpty() || (!stroke && !fill && !text))
+        {
+            return;
+        }
+
+        const QRectF bounds = getCurrentWorldMatrix().map(path).boundingRect().normalized();
+        const PDFPageContentProcessorState* state = getGraphicState();
+        if (state->getAlphaFilling() <= 0.0 || state->getAlphaStroking() <= 0.0)
+        {
+            m_findings.append({ QStringLiteral("invisible-content"), bounds,
+                                QStringLiteral("graphics-state alpha is zero"), false });
+        }
+
+        if (!m_toleratedBounds.isEmpty() && !m_toleratedBounds.intersects(bounds))
+        {
+            m_findings.append({ QStringLiteral("off-page-content"), bounds,
+                                QStringLiteral("mark lies outside the effective page/bleed box"), false });
+        }
+
+        if (fill && state->getAlphaFilling() >= 1.0 && !m_paintedBounds.isEmpty())
+        {
+            for (const QRectF& previous : m_paintedBounds)
+            {
+                if (bounds.contains(previous))
+                {
+                    m_findings.append({ QStringLiteral("obscured-content"), previous,
+                                        QStringLiteral("fully covered by later opaque paint"), true });
+                    break;
+                }
+            }
+        }
+        if (fill || stroke || text)
+        {
+            m_paintedBounds.append(bounds);
+        }
+    }
+
+private:
+    QRectF m_toleratedBounds;
+    QList<QRectF> m_paintedBounds;
+    QStringList m_hiddenLayers;
+    QList<HiddenContentFinding> m_findings;
+};
+
+void runHiddenContentCheck(PDFDocumentSession* session,
+                           const PreflightCheckConfig& check,
+                           QList<PreflightFinding>& errors,
+                           QList<PreflightFinding>& warnings)
+{
+    if (!session || !session->getDocument())
+    {
+        return;
+    }
+
+    PDFDocument* document = session->getDocument();
+    PDFOptionalContentActivity printActivity(document, OCUsage::Print, nullptr);
+    const PDFCatalog* catalog = document->getCatalog();
+    const PDFInteger pageCount = catalog->getPageCount();
+    PDFMeshQualitySettings meshQualitySettings;
+
+    for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+    {
+        const PDFPage* page = catalog->getPage(pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        HiddenContentProcessor processor(page,
+                                         document,
+                                         session->getFontCache(),
+                                         session->getCMS(),
+                                         &printActivity,
+                                         meshQualitySettings,
+                                         session->getProcessingBudget(),
+                                         check.amountPt);
+        processor.processContents();
+
+        for (const HiddenContentFinding& source : processor.findings())
+        {
+            if (source.type != check.id)
+            {
+                continue;
+            }
+
+            PreflightFinding finding;
+            finding.scope = source.type == QStringLiteral("hidden-layers")
+                ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT)
+                : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+            finding.page = int(pageIndex + 1);
+            finding.type = source.type;
+            finding.checkId = check.id;
+            finding.bbox = source.bbox;
+            finding.severity = source.heuristic && check.severity == QStringLiteral("error")
+                ? QStringLiteral("info")
+                : check.severity;
+            finding.message = source.type == QStringLiteral("hidden-layers")
+                ? PDFTranslationContext::tr("Optional-content group '%1' is not printable by default.").arg(source.detail)
+                : PDFTranslationContext::tr("%1 on page %2.").arg(source.detail).arg(pageIndex + 1);
+            finding.evidence.insert(QStringLiteral("confidence"), source.heuristic ? QStringLiteral("heuristic") : QStringLiteral("exact"));
+            if (source.type == QStringLiteral("hidden-layers"))
+            {
+                finding.evidence.insert(QStringLiteral("ocg_name"), source.detail);
+            }
+            pushPreflightFinding(finding, finding.severity, errors, warnings);
+        }
+    }
+}
+
 // Scans Font resource dictionaries on the page and nested Form XObjects /
 // annotation appearance streams (resource recursion with cycle guard).
 void runEmbeddedFontsCheck(PDFDocumentSession* session,
@@ -4385,6 +4600,20 @@ void PreflightEngine::registerBuiltInChecks()
     {
         runEmbeddedFontsCheck(session, check, errors, warnings);
     };
+
+    for (const QString& id : { QStringLiteral("invisible-content"),
+                               QStringLiteral("hidden-layers"),
+                               QStringLiteral("off-page-content"),
+                               QStringLiteral("obscured-content") })
+    {
+        m_checks[id] = [](PDFDocumentSession* session,
+                          const PreflightCheckConfig& check,
+                          QList<PreflightFinding>& errors,
+                          QList<PreflightFinding>& warnings)
+        {
+            runHiddenContentCheck(session, check, errors, warnings);
+        };
+    }
 
     m_checks[QStringLiteral("image-resolution")] = [](PDFDocumentSession* session,
                                                        const PreflightCheckConfig& check,
