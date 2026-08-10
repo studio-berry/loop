@@ -28,6 +28,7 @@
 #include <QtTest>
 #include "pdfsafefilewriter.h"
 
+#include <atomic>
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
@@ -71,6 +72,7 @@ private slots:
     void writeData_fail_rejectsExistingFile();
     void writeData_overwrite_replacesExistingFile();
     void writeDevice_producerFailure_leavesOriginalUntouched();
+    void writeDevice_cancelledProducer_leavesOriginalUntouched();
     void writeDevice_fullWrite_isSuccess();
     void findOutputConflicts_rejectsDuplicateNormalizedPaths();
     void findOutputConflicts_rejectsExistingDestinationsWithoutOverwrite();
@@ -142,6 +144,31 @@ void SafeFileWriterTest::writeDevice_producerFailure_leavesOriginalUntouched()
     QVERIFY(!result);
     QVERIFY(!result.getErrorMessage().isEmpty());
     QVERIFY(QFile::exists(path));
+    QCOMPARE(readFileContent(path), original);
+}
+
+void SafeFileWriterTest::writeDevice_cancelledProducer_leavesOriginalUntouched()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString path = temporaryDirectory.filePath(QStringLiteral("cancelled.bin"));
+    const QByteArray original("original bytes survive cancellation");
+    QVERIFY(writeRawContent(path, original));
+
+    std::atomic_bool cancelled{ true };
+    const pdf::PDFOperationResult result = pdf::PDFSafeFileWriter::writeDevice(
+        path,
+        [&cancelled](QIODevice* device) -> bool
+        {
+            if (cancelled.load(std::memory_order_acquire))
+            {
+                return false;
+            }
+
+            return device->write("replacement") == 11;
+        },
+        pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    QVERIFY(!result);
     QCOMPARE(readFileContent(path), original);
 }
 
