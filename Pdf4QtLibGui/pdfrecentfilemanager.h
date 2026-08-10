@@ -65,6 +65,10 @@ public:
     /// Removes all recent files
     void clearRecentFiles();
 
+    /// Removes a file from the recent list when it is no longer reachable.
+    /// \param fileName File name to remove
+    void removeRecentFile(const QString& fileName);
+
     /// Returns list of recent files actions
     const std::array<QAction*, MAXIMUM_RECENT_FILES>& getActions() const;
 
