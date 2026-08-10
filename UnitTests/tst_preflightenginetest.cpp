@@ -64,6 +64,8 @@ private slots:
     void run_bleedCheckPassesWhenBoxAdequate();
     void run_unknownCheckIdIsIgnored();
     void run_thinStrokes_detectsPaintedThinStroke();
+    void fontIntegrity_checkIsRegistered();
+    void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
     void hiddenContent_checksAreRegistered();
     void run_offPageContent_detectsMarksOutsideToleratedBox();
     void run_includesProfileFixups();
@@ -540,6 +542,36 @@ void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
     QCOMPARE(result.warnings.first().type, QStringLiteral("thin-stroke"));
     QCOMPARE(result.warnings.first().checkId, QStringLiteral("thin-strokes"));
     QVERIFY(result.warnings.first().bbox.isValid());
+}
+
+void PreflightEngineTest::fontIntegrity_checkIsRegistered()
+{
+    pdf::PreflightEngine engine(nullptr);
+    QVERIFY(engine.hasCheck(QStringLiteral("font-integrity")));
+}
+
+void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
+{
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf");
+    QVERIFY(QFile::exists(fixturePath));
+
+    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Font integrity") },
+        { QStringLiteral("checks"), QJsonArray{
+            QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } }
+        } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.pass);
+    QVERIFY(result.errors.isEmpty());
+    QVERIFY(result.warnings.isEmpty());
 }
 
 void PreflightEngineTest::hiddenContent_checksAreRegistered()
