@@ -34,6 +34,20 @@ set_target_properties(UnitTests PROPERTIES
 )
 add_test(UnitTests  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTests")
 
+add_executable(UnitTestsIncrementalSave
+    tst_incrementalsavetest.cpp
+)
+
+target_link_libraries(UnitTestsIncrementalSave PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsIncrementalSave PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
+
 add_executable(UnitTestsRecovery
     tst_recoverytest.cpp
 )

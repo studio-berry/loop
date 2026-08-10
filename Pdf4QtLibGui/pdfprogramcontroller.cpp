@@ -25,6 +25,7 @@
 #include "pdfannotation.h"
 #include "pdfform.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
 #include "pdfadvancedtools.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfwidgetutils.h"
@@ -416,6 +417,7 @@ PDFProgramController::PDFProgramController(QObject* parent) :
     m_textToSpeech(nullptr),
     m_isDocumentSetInProgress(false),
     m_isRecoveredDocument(false),
+    m_requiresFullRewriteOnSave(false),
     m_documentRevision(0),
     m_futureWatcher(nullptr),
     m_CMSManager(new pdf::PDFCMSManager(this)),
@@ -1335,7 +1337,30 @@ void PDFProgramController::saveDocument(const QString& fileName)
     updateFileWatcher(true);
 
     pdf::PDFDocumentWriter writer(nullptr);
-    pdf::PDFOperationResult result = writer.write(fileName, m_pdfDocument.data(), true);
+    pdf::PDFOperationResult result(false);
+    const bool saveAsNewOutput = QFileInfo(fileName).absoluteFilePath() != m_fileInfo.absoluteFilePath;
+
+    if (saveAsNewOutput)
+    {
+        result = writer.write(fileName, m_pdfDocument.data(), true);
+    }
+    else
+    {
+        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+        pdf::PDFDocument sourceDocument = reader.readFromFile(fileName);
+        if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+        {
+            result = tr("The source PDF could not be validated before saving. %1").arg(reader.getErrorMessage());
+        }
+        else if (writer.getRecommendedWriteMode(&sourceDocument, m_requiresFullRewriteOnSave, false) == pdf::PDFDocumentWriter::WriteMode::Incremental)
+        {
+            result = writer.writeIncremental(fileName, &sourceDocument, m_pdfDocument.data(), true);
+        }
+        else
+        {
+            result = writer.write(fileName, m_pdfDocument.data(), true);
+        }
+    }
     if (result)
     {
         if (m_undoRedoManager)
@@ -1344,6 +1369,7 @@ void PDFProgramController::saveDocument(const QString& fileName)
         }
 
         updateFileInfo(fileName);
+        m_requiresFullRewriteOnSave = false;
         m_isRecoveredDocument = false;
         m_recoveryManager->markSaved(fileName, m_documentRevision);
         updateTitle();
@@ -1599,6 +1625,7 @@ void PDFProgramController::onActionOptimizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1611,6 +1638,7 @@ void PDFProgramController::onActionOptimizeImagesTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1623,6 +1651,7 @@ void PDFProgramController::onActionSanitizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeSanitizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1826,6 +1855,7 @@ void PDFProgramController::onActionCreateBitonalDocumentTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeBitonaldDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1863,6 +1893,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         storage.setSecurityHandler(qMove(clonedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(qMove(storage), m_pdfDocument->getInfo()->version, QByteArray()));
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Authorization);
         onDocumentModified(qMove(document));
     }
@@ -1917,6 +1948,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         builder.setSecurityHandler(qMove(updatedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(builder.build()));
+        m_requiresFullRewriteOnSave = true;
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Reset);
         onDocumentModified(qMove(document));
     }
@@ -2469,6 +2501,11 @@ void PDFProgramController::onDocumentUndoRedo(pdf::PDFModifiedDocument document)
 
 void PDFProgramController::setDocument(pdf::PDFModifiedDocument document, std::vector<pdf::PDFSignatureVerificationResult> signatureVerificationResult, bool isCurrentSaved)
 {
+    if (isCurrentSaved)
+    {
+        m_requiresFullRewriteOnSave = false;
+    }
+
     if (document.hasReset())
     {
         if (m_optionalContentActivity)
