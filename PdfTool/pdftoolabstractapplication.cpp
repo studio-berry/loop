@@ -305,6 +305,16 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("sample-pixels"), { QStringLiteral("--sample-pixels") }, QStringLiteral("n"), PDFToolValueType::Integer, {}, QStringLiteral("1"));
         add(QStringLiteral("force"), { QStringLiteral("--force") }, {}, PDFToolValueType::Boolean);
     }
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("raster-dpi"), { QStringLiteral("--raster-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("line-art-dpi"), { QStringLiteral("--line-art-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("600"));
+        add(QStringLiteral("text-dpi"), { QStringLiteral("--text-dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("600"));
+        add(QStringLiteral("max-raster-pixels"), { QStringLiteral("--max-raster-pixels") }, QStringLiteral("pixels"), PDFToolValueType::Integer, {}, QStringLiteral("250000000"));
+        add(QStringLiteral("no-preserve-spots"), { QStringLiteral("--no-preserve-spots") }, {}, PDFToolValueType::Boolean);
+        add(QStringLiteral("preserve-text-vector"), { QStringLiteral("--preserve-text-vector") }, {}, PDFToolValueType::Boolean);
+    }
     if (optionFlags.testFlag(RgbToCmyk))
     {
         add(QStringLiteral("output"), { QStringLiteral("-o"), QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path);
@@ -338,6 +348,9 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("profile"), { QStringLiteral("--profile") }, QStringLiteral("profile"), PDFToolValueType::Path);
         add(QStringLiteral("job-context"), { QStringLiteral("--job-context") }, QStringLiteral("file"), PDFToolValueType::Path);
         add(QStringLiteral("profile-store"), { QStringLiteral("--profile-store") }, QStringLiteral("directory"), PDFToolValueType::Path);
+        add(QStringLiteral("decisions"), { QStringLiteral("--decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("export-decisions"), { QStringLiteral("--export-decisions") }, QStringLiteral("file"), PDFToolValueType::Path);
+        add(QStringLiteral("require-signoff"), { QStringLiteral("--require-signoff") }, {}, PDFToolValueType::Boolean);
         add(QStringLiteral("client"), { QStringLiteral("--client") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("product"), { QStringLiteral("--product") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("job-type"), { QStringLiteral("--job-type") }, QStringLiteral("id"), PDFToolValueType::String);
@@ -620,6 +633,7 @@ QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags
     add(VerifyRedaction, QStringLiteral("document.redaction.verify"));
     add(DestructiveWrite, QStringLiteral("document.write.destructive"));
     add(AddBleed, QStringLiteral("fixup.add-bleed"));
+    add(FlattenTransparency, QStringLiteral("fixup.flatten-transparency"));
     add(RgbToCmyk, QStringLiteral("fixup.rgb-to-cmyk"));
     add(PreflightProfile, QStringLiteral("preflight.run"));
     add(OcrOptions, QStringLiteral("ocr.client"));
@@ -738,6 +752,16 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("sample-pixels"), QStringLiteral("Edge sample depth in pixels for pixel-repeat/stretch."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("force"), QStringLiteral("Ignore skip-if-already-bleeding heuristic."));
     }
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output document filename."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("raster-dpi"), QStringLiteral("Resolution used to rasterize flattened pages."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("line-art-dpi"), QStringLiteral("Reserved vector/line-art resolution policy."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("text-dpi"), QStringLiteral("Reserved text resolution policy."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("max-raster-pixels"), QStringLiteral("Maximum pixels permitted for one flattened page."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("no-preserve-spots"), QStringLiteral("Allow process-color raster output when spot colors are present."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("preserve-text-vector"), QStringLiteral("Request vector/text preservation; currently rejected by the full-page production mode."));
+    }
 
     if (optionFlags.testFlag(RgbToCmyk))
     {
@@ -770,6 +794,9 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loupe preflight profile (JSON); bypasses contextual selection."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("job-context"), QStringLiteral("Structured production context JSON."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("export-decisions"), QStringLiteral("Write the normalized operator decision JSON after the run."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("require-signoff"), QStringLiteral("Require an active accept, waive, or override decision for every error finding."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("client"), QStringLiteral("Stable client identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("product"), QStringLiteral("Stable product identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("job-type"), QStringLiteral("Stable job-type identifier."));
@@ -1207,6 +1234,35 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         }
     }
 
+    if (optionFlags.testFlag(FlattenTransparency))
+    {
+        options.flattenTransparencyOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
+        options.flattenTransparencySettings = pdf::PDFTransparencyFlattenSettings();
+        bool ok = false;
+        const int rasterDpi = parser->value("raster-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.rasterizationDpi = rasterDpi;
+        }
+        const int lineArtDpi = parser->value("line-art-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.lineArtResolutionDpi = lineArtDpi;
+        }
+        const int textDpi = parser->value("text-dpi").toInt(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.textResolutionDpi = textDpi;
+        }
+        const qint64 maxPixels = parser->value("max-raster-pixels").toLongLong(&ok);
+        if (ok)
+        {
+            options.flattenTransparencySettings.maxRasterPixels = maxPixels;
+        }
+        options.flattenTransparencySettings.preserveSpotColors = !parser->isSet("no-preserve-spots");
+        options.flattenTransparencySettings.preserveTextAndVector = parser->isSet("preserve-text-vector");
+    }
+
     if (optionFlags.testFlag(RgbToCmyk))
     {
         options.rgbToCmykOutputDocument = parser->isSet("output") ? parser->value("output") : QString();
@@ -1248,6 +1304,9 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightProfilePath = parser->value("profile");
         options.preflightJobContextPath = parser->value("job-context");
         options.preflightProfileStorePath = parser->value("profile-store");
+        options.preflightDecisionsPath = parser->value("decisions");
+        options.preflightDecisionsExportPath = parser->value("export-decisions");
+        options.preflightRequireSignoff = parser->isSet("require-signoff");
         options.preflightClientId = parser->value("client");
         options.preflightProductId = parser->value("product");
         options.preflightJobType = parser->value("job-type");

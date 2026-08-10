@@ -27,6 +27,7 @@
 
 #include <QFile>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QSaveFile>
 
 #include "pdfdbgheap.h"
@@ -61,6 +62,23 @@ private:
 
     QIODevice* m_device;
 };
+
+namespace
+{
+
+bool dictionaryHasName(const PDFDocument* document, const PDFDictionary* dictionary, const char* key, const char* value);
+bool isSignedDocument(const PDFDocument* document);
+qint64 getPreviousXrefOffset(const QByteArray& data);
+
+struct IncrementalXrefEntry
+{
+    PDFInteger objectNumber = 0;
+    PDFInteger generation = 0;
+    qint64 offset = 0;
+    bool free = false;
+};
+
+} // namespace
 
 void PDFWriteObjectVisitor::visitNull()
 {
@@ -374,6 +392,259 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
     return true;
 }
 
+PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
+                                                        const PDFDocument* originalDocument,
+                                                        const PDFDocument* document,
+                                                        bool safeWrite)
+{
+    if (!originalDocument || !document)
+    {
+        return tr("Original and modified documents are required for an incremental save.");
+    }
+
+    QFile sourceFile(fileName);
+    if (!sourceFile.open(QIODevice::ReadOnly))
+    {
+        return tr("Source file '%1' can't be opened for incremental save. %2").arg(fileName, sourceFile.errorString());
+    }
+
+    const QByteArray originalData = sourceFile.readAll();
+    sourceFile.close();
+
+    if (safeWrite)
+    {
+        QSaveFile targetFile(fileName);
+        targetFile.setDirectWriteFallback(false);
+        if (!targetFile.open(QFile::WriteOnly | QFile::Truncate))
+        {
+            return tr("File '%1' can't be opened for incremental save. %2").arg(fileName, targetFile.errorString());
+        }
+
+        const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document);
+        if (result && !targetFile.commit())
+        {
+            return tr("File '%1' can't be committed after incremental save. %2").arg(fileName, targetFile.errorString());
+        }
+        if (!result)
+        {
+            targetFile.cancelWriting();
+        }
+        return result;
+    }
+
+    QFile targetFile(fileName);
+    if (!targetFile.open(QFile::WriteOnly | QFile::Truncate))
+    {
+        return tr("File '%1' can't be opened for incremental save. %2").arg(fileName, targetFile.errorString());
+    }
+
+    const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document);
+    targetFile.close();
+    return result;
+}
+
+PDFOperationResult PDFDocumentWriter::writeIncremental(QIODevice* device,
+                                                        const QByteArray& originalData,
+                                                        const PDFDocument* originalDocument,
+                                                        const PDFDocument* document)
+{
+    if (!device || !device->isWritable() || !originalDocument || !document)
+    {
+        return tr("A writable device and both original and modified documents are required for an incremental save.");
+    }
+
+    if (originalData.isEmpty() || !originalData.startsWith("%PDF-"))
+    {
+        return tr("The original PDF bytes are missing or invalid.");
+    }
+
+    const QByteArray sourceDataHash = originalDocument->getSourceDataHash();
+    if (!sourceDataHash.isEmpty() && QCryptographicHash::hash(originalData, QCryptographicHash::Sha256) != sourceDataHash)
+    {
+        return tr("The source PDF changed before the incremental save; refusing to append to a different file.");
+    }
+
+    const qint64 previousXrefOffset = getPreviousXrefOffset(originalData);
+    if (previousXrefOffset < 0)
+    {
+        return tr("The original PDF does not contain a readable startxref offset.");
+    }
+
+    const PDFObjectStorage::PDFObjects& originalObjects = originalDocument->getStorage().getObjects();
+    const PDFObjectStorage::PDFObjects& modifiedObjects = document->getStorage().getObjects();
+    if (modifiedObjects.size() < originalObjects.size())
+    {
+        return tr("The modified document removed object slots; a full rewrite is required.");
+    }
+
+    if (originalDocument->getStorage().getSecurityHandler()->getMode() != document->getStorage().getSecurityHandler()->getMode())
+    {
+        return tr("The encryption state changed; a full rewrite is required.");
+    }
+
+    std::vector<IncrementalXrefEntry> changedObjects;
+    changedObjects.reserve(modifiedObjects.size());
+    for (size_t i = 0; i < modifiedObjects.size(); ++i)
+    {
+        const bool changed = i >= originalObjects.size() || modifiedObjects[i] != originalObjects[i];
+        if (!changed)
+        {
+            continue;
+        }
+
+        const PDFObjectStorage::Entry& entry = modifiedObjects[i];
+        IncrementalXrefEntry xrefEntry;
+        xrefEntry.objectNumber = static_cast<PDFInteger>(i);
+        xrefEntry.generation = entry.generation;
+        xrefEntry.free = entry.object.isNull();
+        changedObjects.emplace_back(xrefEntry);
+    }
+
+    if (isSignedDocument(originalDocument))
+    {
+        for (const IncrementalXrefEntry& xrefEntry : changedObjects)
+        {
+            if (xrefEntry.free)
+            {
+                continue;
+            }
+
+            const PDFObject& object = document->getObjectByReference(PDFObjectReference(xrefEntry.objectNumber, xrefEntry.generation));
+            if (object.isDictionary() && (dictionaryHasName(document, object.getDictionary(), "Type", "Sig") ||
+                                          dictionaryHasName(document, object.getDictionary(), "FT", "Sig")))
+            {
+                return tr("The signature object changed; refusing an incremental save that cannot preserve signature coverage.");
+            }
+        }
+    }
+
+    if (changedObjects.empty())
+    {
+        return device->write(originalData) == originalData.size()
+                   ? PDFOperationResult(true)
+                   : PDFOperationResult(tr("Failed to copy the original PDF bytes."));
+    }
+
+    if (device->write(originalData) != originalData.size())
+    {
+        return tr("Failed to copy the original PDF bytes before incremental save.");
+    }
+
+    if (!originalData.endsWith('\n') && !originalData.endsWith('\r'))
+    {
+        writeCRLF(device);
+    }
+
+    const bool isEncrypted = document->getStorage().getSecurityHandler()->getMode() != EncryptionMode::None;
+    PDFObjectReference encryptObjectReference;
+    const PDFObject encryptObject = document->getTrailerDictionary()->get("Encrypt");
+    if (encryptObject.isReference())
+    {
+        encryptObjectReference = encryptObject.getReference();
+    }
+
+    for (IncrementalXrefEntry& xrefEntry : changedObjects)
+    {
+        const PDFObjectStorage::Entry& entry = modifiedObjects.at(static_cast<size_t>(xrefEntry.objectNumber));
+        if (xrefEntry.free)
+        {
+            continue;
+        }
+
+        xrefEntry.offset = device->pos();
+        if (xrefEntry.offset < 0 || xrefEntry.offset > 9999999999LL)
+        {
+            return tr("The incremental xref offset cannot be represented by a classic xref table.");
+        }
+
+        PDFObject objectToWrite = entry.object;
+        const PDFObjectReference reference(xrefEntry.objectNumber, xrefEntry.generation);
+        if (isEncrypted && reference != encryptObjectReference)
+        {
+            objectToWrite = document->getStorage().getSecurityHandler()->encryptObject(objectToWrite, reference);
+        }
+
+        writeObjectHeader(device, reference);
+        device->write(getSerializedObject(objectToWrite));
+        writeObjectFooter(device);
+    }
+
+    const qint64 xrefOffset = device->pos();
+    if (xrefOffset < 0 || xrefOffset > 9999999999LL)
+    {
+        return tr("The incremental xref offset cannot be represented by a classic xref table.");
+    }
+
+    device->write("xref");
+    writeCRLF(device);
+
+    for (size_t i = 0; i < changedObjects.size();)
+    {
+        size_t end = i + 1;
+        while (end < changedObjects.size() && changedObjects[end].objectNumber == changedObjects[end - 1].objectNumber + 1)
+        {
+            ++end;
+        }
+
+        device->write(QString("%1 %2").arg(changedObjects[i].objectNumber).arg(end - i).toLatin1());
+        writeCRLF(device);
+
+        for (; i < end; ++i)
+        {
+            const IncrementalXrefEntry& xrefEntry = changedObjects[i];
+            const QString offset = QString::number(xrefEntry.free ? 0 : xrefEntry.offset).rightJustified(10, QChar('0'), true);
+            const QString generation = QString::number(xrefEntry.generation).rightJustified(5, QChar('0'), true);
+            device->write(offset.toLatin1());
+            device->write(" ");
+            device->write(generation.toLatin1());
+            device->write(xrefEntry.free ? " f" : " n");
+            writeCRLF(device);
+        }
+    }
+
+    PDFDictionary trailer;
+    const PDFDictionary* modifiedTrailer = document->getTrailerDictionary();
+    for (const char* key : { "Root", "Encrypt", "Info", "ID" })
+    {
+        const PDFObject object = modifiedTrailer->get(key);
+        if (!object.isNull())
+        {
+            trailer.addEntry(PDFInplaceOrMemoryString(key), PDFObject(object));
+        }
+    }
+    trailer.setEntry(PDFInplaceOrMemoryString("Size"), PDFObject::createInteger(static_cast<PDFInteger>(modifiedObjects.size())));
+    trailer.setEntry(PDFInplaceOrMemoryString("Prev"), PDFObject::createInteger(previousXrefOffset));
+
+    device->write("trailer");
+    writeCRLF(device);
+    device->write(getSerializedObject(PDFObject::createDictionary(std::make_shared<PDFDictionary>(std::move(trailer)))));
+    writeCRLF(device);
+    device->write("startxref");
+    writeCRLF(device);
+    device->write(QString::number(xrefOffset).toLatin1());
+    writeCRLF(device);
+    device->write("%%EOF");
+
+    return true;
+}
+
+PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PDFDocument* sourceDocument,
+                                                                          bool requiresFullRewrite,
+                                                                          bool saveAsNewOutput)
+{
+    if (requiresFullRewrite || saveAsNewOutput || !sourceDocument)
+    {
+        return WriteMode::FullRewrite;
+    }
+
+    if (isSignedDocument(sourceDocument) || sourceDocument->getTrailerDictionary()->hasKey("Prev"))
+    {
+        return WriteMode::Incremental;
+    }
+
+    return WriteMode::FullRewrite;
+}
+
 void PDFDocumentWriter::writeCRLF(QIODevice* device)
 {
     device->write("\x0D\x0A");
@@ -391,6 +662,69 @@ void PDFDocumentWriter::writeObjectFooter(QIODevice* device)
     device->write("endobj");
     writeCRLF(device);
 }
+
+namespace
+{
+
+bool dictionaryHasName(const PDFDocument* document, const PDFDictionary* dictionary, const char* key, const char* value)
+{
+    if (!dictionary || !dictionary->hasKey(key))
+    {
+        return false;
+    }
+
+    const PDFObject& object = document->getObject(dictionary->get(key));
+    return object.isName() && object.getString() == value;
+}
+
+bool isSignedDocument(const PDFDocument* document)
+{
+    if (!document)
+    {
+        return false;
+    }
+
+    for (const PDFObjectStorage::Entry& entry : document->getStorage().getObjects())
+    {
+        if (!entry.object.isDictionary())
+        {
+            continue;
+        }
+
+        const PDFDictionary* dictionary = entry.object.getDictionary();
+        if (dictionaryHasName(document, dictionary, "Type", "Sig") ||
+            dictionaryHasName(document, dictionary, "FT", "Sig"))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+qint64 getPreviousXrefOffset(const QByteArray& data)
+{
+    const QByteArray marker = QByteArrayLiteral("startxref");
+    const qsizetype markerPosition = data.lastIndexOf(marker);
+    if (markerPosition < 0)
+    {
+        return -1;
+    }
+
+    qsizetype position = markerPosition + marker.size();
+    while (position < data.size() && (data.at(position) == '\r' || data.at(position) == '\n' || data.at(position) == ' ' || data.at(position) == '\t'))
+    {
+        ++position;
+    }
+
+    const qsizetype end = data.indexOf('\n', position);
+    const QByteArray value = data.mid(position, end < 0 ? -1 : end - position).trimmed();
+    bool ok = false;
+    const qint64 result = value.toLongLong(&ok);
+    return ok ? result : -1;
+}
+
+} // namespace
 
 class PDFSizeCounterIODevice : public QIODevice
 {

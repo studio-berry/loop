@@ -107,7 +107,6 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     reportLayout->addWidget(m_fixupsList);
 
     m_applyFixupButton = new QPushButton(tr("Apply Fixup..."), reportPage);
-    m_applyFixupButton = new QPushButton(tr("Apply Bleed Fix..."), reportPage);
     m_applyFixupButton->setObjectName(QStringLiteral("applyPreflightFixupButton"));
     m_applyFixupButton->setAccessibleName(tr("Apply selected preflight fixup"));
     m_applyFixupButton->setAccessibleDescription(tr("Apply the selected bounded fixup after reviewing its scope."));
