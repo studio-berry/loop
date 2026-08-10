@@ -2,7 +2,30 @@
 
 **Branch:** `product-pruning`
 **Source decision:** [ADR-005: Product surface pruning classification](https://app.notion.com/p/3b69cb079ddb813492a8cb6f84f23d14?pvs=204)
-**Status:** Planned; the ADR-005 audit itself remains classification-only.
+**Status:** 0.2B transitional packaging implemented; Editor workspace integration
+remains planned for 0.3.
+
+## 0.2B transitional surface contract
+
+The release package presents two product surfaces:
+
+- **Loupe** is the `Pdf4QtEditor` desktop shell. Opening a PDF provides the
+  normal viewing behavior; future Editor workspaces are named Pages /
+  Production, Compare, and Production Preview.
+- **Loupe CLI** is the product-facing name for `PdfTool`. The `PdfTool`
+  executable, command names, machine-readable contracts, and automation
+  compatibility remain unchanged.
+
+The release profile keeps the following targets buildable and installed for
+compatibility/direct invocation: `Pdf4QtViewer`, `Pdf4QtPageMaster`,
+`Pdf4QtDiff`, and `Pdf4QtLaunchPad`. CodeGenerator, JBIG2 Viewer,
+PdfExampleGenerator, and the Scanner plugin remain retained by the release
+build profile. None of these compatibility surfaces receives a separate Loupe
+desktop or AppX product entry.
+
+The Editor-facing Pages / Production and Compare seams must reuse the existing
+Core/PageMaster export and Core Diff contracts. This 0.2B slice does not move
+their visible UI into Editor; that workspace integration is a 0.3 deliverable.
 
 ## Objective
 
