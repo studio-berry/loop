@@ -156,7 +156,9 @@ below that boundary remain untouched. Applying the fixup uses
 `PDFImageOptimizer` with `PreferQuality`, bicubic resampling, preserved color
 characteristics and transparency, and `keepOriginalIfLarger=true`. The Editor
 always works on a document copy, writes a separate output PDF, and offers to
-rerun the normal preflight sidecar on that output.
+rerun the normal preflight sidecar on that output. The golden
+`image-dpi-excessive` corpus fixture pins the advertised fixup, while the Core
+unit test writes, reopens, and revalidates a downsampled document.
 
 ## Transparency risk checking
 
