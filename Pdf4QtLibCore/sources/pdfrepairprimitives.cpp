@@ -25,8 +25,10 @@
 #include "pdfbleedfixup.h"
 #include "pdfimageoptimizer.h"
 #include "pdfrgbtocmykfixup.h"
+#include "pdfstandardconversion.h"
 
 #include <QJsonValue>
+#include <QProcess>
 #include <QtMath>
 
 #include <cmath>
@@ -423,11 +425,152 @@ public:
     }
 };
 
+PDFStandardConversionSettings standardConversionSettings(const QJsonObject& parameters)
+{
+    PDFStandardConversionSettings settings;
+    pdfStandardTargetFromString(parameters.value(QStringLiteral("target")).toString(), &settings.target);
+    settings.outputIntentIccData = QByteArray::fromBase64(parameters.value(QStringLiteral("target_icc_base64")).toString().toLatin1());
+    settings.outputIntentIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loupe-output-intent")).toUtf8();
+    settings.outputIntentName = parameters.value(QStringLiteral("target_profile_name")).toString();
+    settings.normalizeColor = parameters.contains(QStringLiteral("normalize_color"))
+        ? parameters.value(QStringLiteral("normalize_color")).toBool()
+        : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
+    settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
+    settings.independentValidatorProgram = parameters.value(QStringLiteral("validator_program")).toString();
+    const QJsonValue validatorArguments = parameters.value(QStringLiteral("validator_arguments"));
+    if (validatorArguments.isArray())
+    {
+        for (const QJsonValue& value : validatorArguments.toArray()) settings.independentValidatorArguments.append(value.toString());
+    }
+    else
+    {
+        settings.independentValidatorArguments = QProcess::splitCommand(validatorArguments.toString());
+    }
+    settings.independentValidatorTimeoutMs = qBound(1000, parameters.value(QStringLiteral("validator_timeout_ms")).toInt(120000), 3600000);
+    settings.dryRunOnly = parameters.value(QStringLiteral("dry_run_only")).toBool(false);
+    return settings;
+}
+
+QJsonObject standardConversionParameterSchema()
+{
+    return QJsonObject{
+        { QStringLiteral("type"), QStringLiteral("object") },
+        { QStringLiteral("additionalProperties"), false },
+        { QStringLiteral("required"), QJsonArray{ QStringLiteral("target"), QStringLiteral("target_icc_base64") } },
+        { QStringLiteral("properties"), QJsonObject{
+            { QStringLiteral("target"), QJsonObject{
+                { QStringLiteral("type"), QStringLiteral("string") },
+                { QStringLiteral("enum"), QJsonArray::fromStringList(supportedPDFStandardTargets()) }
+            } },
+            { QStringLiteral("target_icc_base64"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }, { QStringLiteral("minLength"), 1 }} },
+            { QStringLiteral("target_icc_id"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
+            { QStringLiteral("target_profile_name"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
+            { QStringLiteral("normalize_color"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} },
+            { QStringLiteral("black_point_compensation"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} },
+            { QStringLiteral("validator_program"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
+            { QStringLiteral("validator_arguments"), QJsonObject{
+                { QStringLiteral("oneOf"), QJsonArray{
+                    QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }},
+                    QJsonObject{{ QStringLiteral("type"), QStringLiteral("array") }, { QStringLiteral("items"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} }}
+                } }
+            } },
+            { QStringLiteral("validator_timeout_ms"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 1000 }, { QStringLiteral("maximum"), 3600000 }} },
+            { QStringLiteral("dry_run_only"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} }
+        } }
+    };
+}
+
+class PDFStandardConversionRepair final : public PDFRepairOperation
+{
+public:
+    QString id() const override { return QStringLiteral("standards-convert"); }
+    int version() const override { return 1; }
+    PDFRepairRisk risk() const override { return PDFRepairRisk::Destructive; }
+    QJsonObject parameterSchema() const override { return standardConversionParameterSchema(); }
+    PDFRepairDomains domains() const override
+    {
+        return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images
+            | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
+    }
+
+    PDFOperationResult analyze(const PDFDocument& source,
+                               const QJsonObject& parameters,
+                               PDFRepairPlan* plan) const override
+    {
+        if (!plan)
+        {
+            return PDFOperationResult(QStringLiteral("Standard conversion plan is null."));
+        }
+        PDFStandardTarget target;
+        if (!pdfStandardTargetFromString(parameters.value(QStringLiteral("target")).toString(), &target))
+        {
+            return PDFOperationResult(QStringLiteral("A supported PDF/X or PDF/A target is required."));
+        }
+        const PDFStandardConversionSettings settings = standardConversionSettings(parameters);
+        plan->operationId = id();
+        plan->operationVersion = version();
+        plan->parameters = parameters;
+        plan->risk = risk();
+        plan->domains = domains();
+        plan->expectedChanges.metadata = true;
+        plan->expectedChanges.outputIntent = true;
+        plan->expectedChanges.pageBoxes = true;
+        plan->expectedChanges.colorSpaces = settings.normalizeColor;
+        plan->expectedChanges.pageContent = settings.normalizeColor;
+        plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
+                             PDFRepairValidatorKind::OutputIntent,
+                             PDFRepairValidatorKind::NormalPreflight,
+                             PDFRepairValidatorKind::Custom };
+        plan->warnings.append(QStringLiteral("An independent validator with a {input} argument is required before commit."));
+
+        PDFStandardConversionReport report;
+        const PDFOperationResult previewResult = PDFStandardConversion::preview(&source, settings, &report);
+        plan->warnings.append(report.warnings);
+        plan->unsupportedReasons.append(report.blockers);
+        for (const PDFStandardConversionChange& change : report.changes)
+        {
+            plan->targets.append({ -1, {}, QStringLiteral("document/%1").arg(change.id) });
+        }
+        return previewResult;
+    }
+
+    PDFOperationResult apply(PDFDocument* candidate,
+                             const PDFRepairPlan& plan,
+                             PDFRepairResult* result) const override
+    {
+        if (!candidate || !result)
+        {
+            return PDFOperationResult(QStringLiteral("Standard conversion candidate or result is null."));
+        }
+        PDFStandardConversionReport report;
+        const PDFOperationResult conversionResult = PDFStandardConversion::apply(candidate,
+                                                                                   standardConversionSettings(plan.parameters),
+                                                                                   &report);
+        result->warnings.append(report.warnings);
+        for (const PDFStandardConversionChange& change : report.changes)
+        {
+            result->changes.append({ { -1, {}, QStringLiteral("document/%1").arg(change.id) },
+                                     QStringLiteral("standard-conversion"),
+                                     change.before,
+                                     change.after,
+                                     true });
+        }
+        PDFRepairValidationResult validation;
+        validation.status = conversionResult ? PDFRepairStatus::Passed : PDFRepairStatus::Failed;
+        validation.validatorId = QStringLiteral("independent-standard-validator");
+        validation.summary = conversionResult ? QStringLiteral("Independent validator and postflight passed.")
+                                               : conversionResult.getErrorMessage();
+        result->validations.append(validation);
+        return conversionResult;
+    }
+};
+
 const bool registerBuiltInRepairOperations = []
 {
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFAddBleedRepair>());
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFDownsampleImagesRepair>());
     PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFRgbToCmykRepair>());
+    PDFRepairRegistry::instance().registerOperation(std::make_unique<PDFStandardConversionRepair>());
     return true;
 }();
 

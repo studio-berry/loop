@@ -857,6 +857,27 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             assembledDocument = imageOptimizer.optimize(&assembledDocument, optimizeSettings, {}, nullptr);
         }
 
+        if (job.hasStandardConversionSettings)
+        {
+            PDFStandardConversionReport conversionReport;
+            const PDFOperationResult conversionResult = PDFStandardConversion::apply(&assembledDocument,
+                                                                                       job.standardConversionSettings,
+                                                                                       &conversionReport);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("standardConversion"), conversionReport.toJson());
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!conversionResult)
+            {
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, conversionResult.getErrorMessage());
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(conversionResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
         if (runPreflight && job.revalidatePreflightAfterFixups)
         {
             PDFDocumentSession session(&assembledDocument);

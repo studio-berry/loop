@@ -84,6 +84,7 @@ QStringList supportedPDFXTargets()
 {
     return {
         pdfxFlavorToString(PDFXFlavor::X1a2001),
+        pdfxFlavorToString(PDFXFlavor::X3_2002),
         pdfxFlavorToString(PDFXFlavor::X4)
     };
 }
@@ -100,6 +101,10 @@ bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& err
     else if (target == pdfxFlavorToString(PDFXFlavor::X4))
     {
         flavor = PDFXFlavor::X4;
+    }
+    else if (target == pdfxFlavorToString(PDFXFlavor::X3_2002))
+    {
+        flavor = PDFXFlavor::X3_2002;
     }
     else
     {
@@ -3211,7 +3216,9 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             || lowerMetadata.contains("pdf/x-");
         const bool hasTargetMarker = policy.flavor == PDFXFlavor::X1a2001
             ? (lowerMetadata.contains("pdfaid:part=\"1\"") || lowerMetadata.contains("pdf/x-1a"))
-            : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
+            : policy.flavor == PDFXFlavor::X3_2002
+                ? lowerMetadata.contains("pdf/x-3")
+                : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
         const bool identified = hasPdfxIdentification && hasTargetMarker;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   identified ? PDFXRuleState::Passed : PDFXRuleState::Failed,
@@ -3447,7 +3454,8 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             }
         }
 
-        const bool forbidden = policy.flavor == PDFXFlavor::X1a2001 && transparencyObjects > 0;
+        const bool forbidden = (policy.flavor == PDFXFlavor::X1a2001 || policy.flavor == PDFXFlavor::X3_2002)
+            && transparencyObjects > 0;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   forbidden ? PDFXRuleState::Failed : PDFXRuleState::Passed,
                                   QJsonObject{

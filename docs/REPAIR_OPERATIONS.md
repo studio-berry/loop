@@ -36,6 +36,14 @@ The first adapters use the existing bounded Core fixups:
   target ICC profile is required and unsupported constructs are reported rather
   than silently approximated.
 
+- `standards-convert` — shared PDF/X and PDF/A conversion for
+  `PDF/X-1a:2001`, `PDF/X-3:2002`, `PDF/X-4`, and `PDF/A-2b`. It produces a
+  pre-conversion change report and refuses to commit unless an explicitly
+  configured independent validator accepts the candidate. Validator arguments
+  must include `{input}`. Transparency flattening, font embedding, and
+  forbidden-action removal are not silently approximated; unsupported cases
+  fail closed.
+
 The registry exposes descriptors through `PdfTool repair --list-operations`.
 The Editor's bleed workflow resolves `add-bleed` from the same registry and
 reviews its serialized candidate with the same diff engine as PdfTool.
