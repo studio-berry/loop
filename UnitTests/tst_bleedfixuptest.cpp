@@ -76,6 +76,7 @@ private slots:
     void buildEdgeFillImage_pixelRepeatTilesEdge();
     void buildEdgeFillImage_stretchScalesToBleedDepth();
     void apply_selectedSidesOnly_reportsAndExpandsSelectedEdges();
+    void apply_normalLetterWithinBudget_preservesBleedSemantics();
     void rasterPlan_largeFormatRejectsBeforeAllocation();
     void rasterPlan_budgetChangesWithDpiAndLimit();
     void rasterPlan_invalidDimensionsFailBeforeNarrowing();
@@ -210,6 +211,27 @@ void BleedFixupTest::apply_selectedSidesOnly_reportsAndExpandsSelectedEdges()
     QVERIFY(page.newBleedBox.left() < page.originalBleedBox.left());
 }
 
+void BleedFixupTest::apply_normalLetterWithinBudget_preservesBleedSemantics()
+{
+    pdf::PDFDocumentBuilder builder;
+    const QRectF media(0.0, 0.0, 8.5 * 72.0, 11.0 * 72.0);
+    const pdf::PDFObjectReference pageReference = builder.appendPage(media);
+    builder.setPageTrimBox(pageReference, media.adjusted(18, 18, -18, -18));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFBleedFixupSettings settings;
+    settings.force = true;
+    settings.dpi = 72;
+    settings.sides = pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+
+    pdf::PDFBleedFixupReport report;
+    const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QCOMPARE(report.pages.size(), 1);
+    QVERIFY(report.pages.front().sidesApplied.contains(pdf::PDFBleedFixupSide::Left));
+    QVERIFY(report.pages.front().newBleedBox.left() < report.pages.front().originalBleedBox.left());
+}
+
 void BleedFixupTest::rasterPlan_largeFormatRejectsBeforeAllocation()
 {
     pdf::PDFDocumentBuilder builder;
@@ -220,10 +242,13 @@ void BleedFixupTest::rasterPlan_largeFormatRejectsBeforeAllocation()
 
     pdf::PDFBleedFixupSettings settings;
     settings.force = true;
+    const QByteArray before = documentDigest(document);
+    QVERIFY(!before.isEmpty());
     pdf::PDFBleedFixupReport report;
     const pdf::PDFOperationResult applyResult = pdf::PDFBleedFixup::apply(&document, settings, &report);
     QVERIFY(!applyResult);
     QVERIFY(applyResult.getErrorMessage().contains(QStringLiteral("14400 x 28800")));
+    QCOMPARE(documentDigest(document), before);
 
     const pdf::PDFBleedFixupMath::PDFBleedRasterPlan plan = pdf::PDFBleedFixupMath::planRaster(
             QSizeF(48.0 * 72.0, 96.0 * 72.0), 300, 250LL * 1000 * 1000, false, true);
