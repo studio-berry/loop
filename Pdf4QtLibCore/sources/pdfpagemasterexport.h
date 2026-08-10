@@ -36,6 +36,7 @@
 #include <QStringList>
 
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -79,6 +80,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportCancelToken
 /// Documents and images are owned copies. progress / cancelFlag / progressAlive are borrowed (optional).
 struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
 {
+    using ManifestPersistFunction = std::function<bool(const QString&, const QJsonObject&)>;
+
     std::map<int, PDFDocument> documents;
     std::map<int, QImage> images;
     std::vector<PDFDocumentManipulator::AssembledPages> assembledDocuments;
@@ -102,6 +105,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     std::atomic_bool* progressAlive = nullptr;
     bool resume = false;
     QString manifestPath;
+
+    /// Optional deterministic manifest persistence seam for callers/tests. An empty
+    /// function uses the normal atomic file writer.
+    ManifestPersistFunction manifestPersist;
 };
 
 /// Result of PDFPageMasterExport::run().

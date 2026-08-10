@@ -446,6 +446,11 @@ bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObjec
 
 PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 {
+    const auto persistManifestForJob = [&job](const QString& path, const QJsonObject& value)
+    {
+        return job.manifestPersist ? job.manifestPersist(path, value) : persistManifest(path, value);
+    };
+
     if (isCancelRequested(job))
     {
         return createExportCancelled();
@@ -512,7 +517,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 return createExportError(outputConflictMessage(conflict));
             }
             manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
-            if (!persistManifest(manifestPath, manifest))
+            if (!persistManifestForJob(manifestPath, manifest))
             {
                 return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                      "Could not write batch manifest at %1.").arg(manifestPath));
@@ -531,7 +536,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportError(outputConflictMessage(conflict));
         }
         manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
-        if (!manifestPath.isEmpty() && !persistManifest(manifestPath, manifest))
+        if (!manifestPath.isEmpty() && !persistManifestForJob(manifestPath, manifest))
         {
             return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                  "Could not write batch manifest at %1.").arg(manifestPath));
@@ -591,7 +596,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         if (!currentResult)
         {
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, currentResult.getErrorMessage());
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(currentResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
@@ -620,7 +625,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                     "Preflight failed for '%1'.").arg(fileName);
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
@@ -640,7 +645,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             if (!geometryResult)
             {
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, geometryResult.getErrorMessage());
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(geometryResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
@@ -662,7 +667,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             {
                 setOutputBleedFailure(manifest, int(index), bleedResult.getErrorMessage());
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, bleedResult.getErrorMessage());
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(bleedResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
@@ -700,7 +705,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                 const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                     "Final preflight revalidation failed for '%1'.").arg(fileName);
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
@@ -720,7 +725,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                   "Document with filename '%1' already exists.").arg(fileName);
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
@@ -735,14 +740,14 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                 "Could not write document to '%1'.").arg(fileName);
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
         setOutputStatus(manifest, int(index), OUTPUT_STATUS_WRITTEN);
-        if (manifestPath.isEmpty() || !persistManifest(manifestPath, manifest))
+        if (manifestPath.isEmpty() || !persistManifestForJob(manifestPath, manifest))
         {
             // Roll back only an output this run created. When the write replaced a
             // pre-existing file, the original is already gone, so removing the new
@@ -764,7 +769,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             }
 
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
