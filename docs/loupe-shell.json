@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "issue": 193,
+  "gui_status": "deferred-until-0.0.3",
+  "shell_surface": "Pdf4QtEditor",
+  "ui_foundation": {
+    "candidate": "Qt Quick Controls",
+    "decision_issue": 178,
+    "decision_status": "pending"
+  },
+  "workspaces": [
+    { "id": "document", "manifest_surface": "loupe-document", "preserves": ["document", "preflight"] },
+    { "id": "preflight", "manifest_surface": "loupe-preflight", "preserves": ["document", "preflight"] },
+    { "id": "production-preview", "manifest_surface": "loupe-production-preview", "preserves": ["document", "preflight"] },
+    { "id": "pages", "manifest_surface": "loupe-pages-production", "preserves": ["document", "preflight"] },
+    { "id": "inspect", "manifest_surface": "loupe-inspect", "preserves": ["document", "preflight"] },
+    { "id": "fix", "manifest_surface": "loupe-fix", "preserves": ["document", "preflight"] },
+    { "id": "compare", "manifest_surface": "loupe-compare", "preserves": ["document", "preflight"] }
+  ],
+  "state_invariants": [
+    "A workspace switch changes visible context only; it never closes the document.",
+    "A workspace switch never discards a preflight report or changes its bound document revision.",
+    "Document state, production state, and preflight state remain separate and inspectable.",
+    "The shell owns navigation and context selection; Core and PdfTool remain the semantic owners of PDF operations.",
+    "Compare remains an explicit OPEN product decision until issue #193 and the release exit gate approve absorption.",
+    "A missing action disposition blocks shell integration instead of inventing a default route."
+  ],
+  "status_contract": {
+    "document": ["NO_DOCUMENT", "OPEN", "MODIFIED", "OUTPUT_PENDING", "OUTPUT_SAVED"],
+    "production": ["NOT_READY", "READY", "OPERATION_PENDING", "APPROVAL_REQUIRED", "OUTPUT_WRITTEN"],
+    "preflight": ["NOT_CHECKED", "RUNNING", "CANCELLED", "PASS", "FINDINGS", "STALE", "INCOMPLETE"]
+  },
+  "action_policy": "docs/loupe-shell-actions.json",
+  "plugin_action_policy": [
+    { "plugin": "DimensionsPlugin", "disposition": "ABSORB", "target": "Inspect" },
+    { "plugin": "ObjectInspectorPlugin", "disposition": "ADVANCED", "target": "Inspect" },
+    { "plugin": "OutputPreviewPlugin", "disposition": "ABSORB", "target": "Production" },
+    { "plugin": "SoftProofingPlugin", "disposition": "ABSORB", "target": "Production" },
+    { "plugin": "RedactPlugin", "disposition": "OPEN", "target": "Fix" },
+    { "plugin": "SignaturePlugin", "disposition": "ADVANCED", "target": "Inspect" },
+    { "plugin": "EditorPlugin", "disposition": "ABSORB", "target": "Document" },
+    { "plugin": "LoupePreflightPlugin", "disposition": "ABSORB", "target": "Preflight" },
+    { "plugin": "ScannerPlugin", "disposition": "ADVANCED", "target": "Document" },
+    { "plugin": "AudioBookPlugin", "disposition": "STOP-SHIPPING", "target": "Advanced" },
+    { "plugin": "OcrPlugin", "disposition": "STOP-SHIPPING", "target": "Advanced" }
+  ]
+}

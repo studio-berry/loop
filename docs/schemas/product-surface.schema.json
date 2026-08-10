@@ -5,7 +5,7 @@
   "description": "The machine-readable product disposition and release inventory for ADR-005.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "adr", "profiles", "surfaces", "packaging", "cli"],
+  "required": ["schema_version", "adr", "profiles", "surfaces", "packaging", "cli", "shell_contract"],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "adr": { "type": "string", "const": "docs/adr/adr-005-product-surface-pruning-classification.md" },
@@ -25,7 +25,8 @@
       "items": { "$ref": "#/$defs/surface" }
     },
     "packaging": { "$ref": "#/$defs/packaging" },
-    "cli": { "$ref": "#/$defs/cli" }
+    "cli": { "$ref": "#/$defs/cli" },
+    "shell_contract": { "const": "docs/loupe-shell.json" }
   },
   "$defs": {
     "profileState": { "enum": ["present", "absent"] },
