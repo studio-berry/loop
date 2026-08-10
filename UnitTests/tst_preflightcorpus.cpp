@@ -270,7 +270,12 @@ void PreflightCorpusTest::preflightMatchesManifest()
     runPreflight(pdfPath, profilePath, report, exitCode);
 
     QCOMPARE(report.value(QStringLiteral("pass")).toBool(), expectedPass);
-    QCOMPARE(exitCode, expectedPass ? 0 : 1);
+    const QString verdictState = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
+    const int expectedExitCode = verdictState == QStringLiteral("pass")
+        ? 0
+        : verdictState == QStringLiteral("fail") ? 1
+        : verdictState == QStringLiteral("incomplete") ? 8 : 9;
+    QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);
     for (const QString& expectedCheckId : expectedCheckIds)

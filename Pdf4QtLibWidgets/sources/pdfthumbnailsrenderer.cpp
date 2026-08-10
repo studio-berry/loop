@@ -46,6 +46,7 @@ struct PDFThumbnailsRenderer::DocumentRenderContext
     std::unique_ptr<PDFCMSManager> cmsManager;
     std::unique_ptr<PDFOptionalContentActivity> optionalContentActivity;
     PDFMeshQualitySettings meshQualitySettings;
+    PDFRevisionIdentity revision;
     PDFRenderer::Features features = PDFRenderer::getDefaultFeatures();
     std::unique_ptr<PDFRasterizerPool> rasterizerPool;
 };
@@ -86,7 +87,8 @@ private:
 PDFThumbnailsRenderer::PDFThumbnailsRenderer(const PDFDocument* document, QObject* parent) :
     QObject(parent),
     m_document(document),
-    m_pageImageCache(THUMBNAIL_CACHE_LIMIT_BYTES)
+    m_pageImageCache(THUMBNAIL_CACHE_LIMIT_BYTES),
+    m_revision(PDFRevisionIdentity { PDFArtifactIdentity::fromDocument(document), 0, 0, QString() })
 {
     connect(&m_renderWatcher, &QFutureWatcher<RenderBatchResult>::finished, this, &PDFThumbnailsRenderer::onRenderFinished);
 }
@@ -104,8 +106,35 @@ void PDFThumbnailsRenderer::setDocument(const PDFDocument* document)
 
     {
         QMutexLocker guard(&m_contextMutex);
+        QObject::disconnect(m_contextConnection);
+        m_documentContext = nullptr;
         m_document = document;
         m_context.reset();
+    }
+
+    m_pageImageCache.clear();
+    m_pendingKeys.clear();
+    m_requestQueue.clear();
+    m_keysByPage.clear();
+    ++m_renderEpoch;
+    m_revision = PDFRevisionIdentity { PDFArtifactIdentity::fromDocument(document), 0, m_renderEpoch, QString() };
+}
+
+void PDFThumbnailsRenderer::setDocumentContext(PDFDocumentContext* context)
+{
+    waitForCurrentRender();
+
+    {
+        QMutexLocker guard(&m_contextMutex);
+        QObject::disconnect(m_contextConnection);
+        m_documentContext = context;
+        m_document = context ? context->getDocument() : nullptr;
+        m_context.reset();
+        if (context)
+        {
+            m_revision = context->getRevision();
+            m_contextConnection = connect(context, &PDFDocumentContext::revisionChanged, this, &PDFThumbnailsRenderer::onContextRevisionChanged, Qt::UniqueConnection);
+        }
     }
 
     m_pageImageCache.clear();
@@ -127,6 +156,10 @@ void PDFThumbnailsRenderer::clear()
     m_requestQueue.clear();
     m_keysByPage.clear();
     ++m_renderEpoch;
+    if (!m_documentContext)
+    {
+        m_revision.cacheGeneration = m_renderEpoch;
+    }
 }
 
 QImage PDFThumbnailsRenderer::getPageImage(int pageIndex, int pixelSize)
@@ -158,6 +191,7 @@ QImage PDFThumbnailsRenderer::getPageImage(int pageIndex, int pixelSize)
     request.pageIndex = pageIndex;
     request.pixelSize = pixelSize;
     request.epoch = m_renderEpoch;
+    request.revision = currentRevision();
 
     m_pendingKeys.insert(key);
     m_requestQueue.push_back(std::move(request));
@@ -171,7 +205,12 @@ QImage PDFThumbnailsRenderer::getPageImage(int pageIndex, int pixelSize)
 
 QString PDFThumbnailsRenderer::getKey(int pageIndex, int pixelSize) const
 {
-    return QString("%1@%2").arg(pageIndex).arg(pixelSize);
+    return QStringLiteral("%1/%2@%3#e%4").arg(currentRevision().toString()).arg(pageIndex).arg(pixelSize).arg(m_renderEpoch);
+}
+
+PDFRevisionIdentity PDFThumbnailsRenderer::currentRevision() const
+{
+    return m_documentContext ? m_documentContext->getRevision() : m_revision;
 }
 
 bool PDFThumbnailsRenderer::ensureContextLocked()
@@ -188,6 +227,7 @@ bool PDFThumbnailsRenderer::ensureContextLocked()
 
     auto context = std::make_unique<DocumentRenderContext>();
     context->document = m_document;
+    context->revision = currentRevision();
     context->fontCache = std::make_unique<PDFFontCache>(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     context->cmsManager = std::make_unique<PDFCMSManager>(nullptr);
     context->optionalContentActivity = std::make_unique<PDFOptionalContentActivity>(m_document, OCUsage::View, nullptr);
@@ -268,6 +308,7 @@ PDFThumbnailsRenderer::RenderResult PDFThumbnailsRenderer::renderPageAsync(const
     result.key = request.key;
     result.pageIndex = request.pageIndex;
     result.epoch = request.epoch;
+    result.revision = request.revision;
 
     DocumentRenderContext* context = nullptr;
     {
@@ -399,7 +440,7 @@ void PDFThumbnailsRenderer::onRenderFinished()
 
         if (!result.image.isNull())
         {
-            const bool isCurrentResult = result.epoch == m_renderEpoch;
+            const bool isCurrentResult = result.epoch == m_renderEpoch && result.revision == currentRevision();
             if (isCurrentResult)
             {
                 if (!m_pageImageCache.contains(result.key))
@@ -413,6 +454,19 @@ void PDFThumbnailsRenderer::onRenderFinished()
     }
 
     startNextRequest();
+}
+
+void PDFThumbnailsRenderer::onContextRevisionChanged(const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current)
+{
+    Q_UNUSED(previous);
+    waitForCurrentRender();
+    {
+        QMutexLocker guard(&m_contextMutex);
+        m_document = m_documentContext ? m_documentContext->getDocument() : nullptr;
+        m_context.reset();
+        m_revision = current;
+    }
+    clear();
 }
 
 void PDFThumbnailsRenderer::invalidatePage(int pageIndex)

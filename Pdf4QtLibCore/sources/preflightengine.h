@@ -298,8 +298,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
 /// Result of a preflight run.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
 {
+    /// Legacy convenience value. Callers must use reducePreflightVerdict().
     bool pass = true;
     bool inspectionComplete = true;
+    QString errorCode;
+    QString errorMessage;
     QString profileName;
     QList<PreflightFinding> errors;
     QList<PreflightFinding> warnings;

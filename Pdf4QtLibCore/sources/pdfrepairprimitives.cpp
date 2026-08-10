@@ -110,6 +110,7 @@ public:
     QString id() const override { return QStringLiteral("add-bleed"); }
     bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("bleed correction must preserve the trusted source")); }
     QJsonObject parameterSchema() const override { return addBleedParameterSchema(); }
     PDFRepairDomains domains() const override
     {
@@ -230,6 +231,7 @@ public:
     QString id() const override { return QStringLiteral("downsample-images"); }
     bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::fullRewrite(QStringLiteral("image downsampling removes prior image data")); }
     QJsonObject parameterSchema() const override { return downsampleImagesParameterSchema(); }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
 
@@ -353,6 +355,7 @@ public:
     QString id() const override { return QStringLiteral("rgb-to-cmyk"); }
     bool isPreflightFixup() const override { return true; }
     PDFRepairRisk risk() const override { return PDFRepairRisk::High; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("color conversion creates a production candidate")); }
     QJsonObject parameterSchema() const override { return rgbToCmykParameterSchema(); }
     PDFRepairDomains domains() const override
     {

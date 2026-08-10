@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -1085,6 +1085,7 @@ PDFThumbnailsItemModel::PDFThumbnailsItemModel(const PDFDrawWidgetProxy* proxy, 
 {
     connect(proxy, &PDFDrawWidgetProxy::pageImageChanged, this, &PDFThumbnailsItemModel::onPageImageChanged);
     connect(m_thumbnailRenderer, &PDFThumbnailsRenderer::pageImageReady, this, &PDFThumbnailsItemModel::onThumbnailReady);
+    m_thumbnailRenderer->setDocumentContext(proxy->getDocumentContext());
 }
 
 bool PDFThumbnailsItemModel::isEmpty() const

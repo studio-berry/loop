@@ -78,10 +78,16 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfdocumentcontext.cpp
+    sources/pdfdocumentcontext.h
     sources/pdfprocessingbudget.cpp
     sources/pdfprocessingbudget.h
+    sources/pdfjobscheduler.cpp
+    sources/pdfjobscheduler.h
     sources/preflightengine.cpp
     sources/preflightengine.h
+    sources/pdfpreflightverdict.cpp
+    sources/pdfpreflightverdict.h
     sources/preflightprofileresolver.cpp
     sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h
@@ -237,6 +243,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfoperationhistory.cpp
     sources/pdfoperationhistorystore.h
     sources/pdfoperationhistorystore.cpp
+    sources/pdfsavepolicy.h
+    sources/pdfsavepolicy.cpp
     fonts.qrc
 )
 

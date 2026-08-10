@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 
 #include "pdfbleedmarginprobe.h"
 #include "pdfblendfunction.h"
@@ -1425,6 +1426,11 @@ void recordCheckFailure(PreflightResult& result,
     status.reason = reason;
     result.checkStatuses.push_back(status);
     result.inspectionComplete = false;
+    if (result.errorCode.isEmpty())
+    {
+        result.errorCode = QStringLiteral("check-error");
+        result.errorMessage = reason;
+    }
 
     PreflightFinding finding;
     finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
@@ -4343,7 +4349,16 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     QJsonObject root;
     root.insert(QStringLiteral("schema_version"), PREFLIGHT_REPORT_SCHEMA_VERSION);
     root.insert(QStringLiteral("inspection_complete"), inspectionComplete);
-    root.insert(QStringLiteral("pass"), pass);
+    const PreflightVerdict verdict = reducePreflightVerdict(*this);
+    root.insert(QStringLiteral("pass"), verdict.isPass());
+    root.insert(QStringLiteral("verdict"), verdict.toJson());
+    if (!errorCode.isEmpty() || !errorMessage.isEmpty())
+    {
+        root.insert(QStringLiteral("error"), QJsonObject{
+            { QStringLiteral("code"), errorCode },
+            { QStringLiteral("message"), errorMessage }
+        });
+    }
     root.insert(QStringLiteral("profile"), profileName);
     root.insert(QStringLiteral("engine_version"), QCoreApplication::applicationVersion());
     if (!pdfPath.isEmpty())
@@ -4430,10 +4445,11 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
     QString errorMessage;
     if (!parseProfile(profile, data, errorMessage))
     {
-        // Profile parsing errors are treated as a failing preflight result so
-        // callers can surface them in the same report shape.
+        // Profile parsing errors are retained in the normalized report so the
+        // canonical reducer can classify them as an operator-visible error.
         PreflightResult result;
-        result.pass = false;
+        result.errorCode = QStringLiteral("profile-invalid");
+        result.errorMessage = errorMessage;
         result.profileName = profile.value(QStringLiteral("name")).toString();
 
         PreflightFinding finding;
@@ -4488,6 +4504,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             finding.checkId = check.id;
             finding.message = PDFTranslationContext::tr("Unknown preflight check '%1'.").arg(check.id);
             result.errors.push_back(finding);
+            if (result.errorCode.isEmpty())
+            {
+                result.errorCode = QStringLiteral("unsupported-check");
+                result.errorMessage = finding.message;
+            }
             continue;
         }
 
@@ -4606,7 +4627,6 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         result.checkStatuses.push_back(pdfxStatus);
     }
 
-    result.pass = result.errors.isEmpty() && result.inspectionComplete;
     result.fixupsAvailable = profile.fixups;
 
     qreal addBleedAmountPt = 0.0;
@@ -4626,6 +4646,8 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
                           addBleedAmountPt,
                           result.errors,
                           result.warnings);
+
+    result.pass = reducePreflightVerdict(result, &profile).isPass();
 
     return result;
 }
