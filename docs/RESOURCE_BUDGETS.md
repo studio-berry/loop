@@ -11,6 +11,13 @@ decoded bytes, decompression ratio, object count, recursive content depth,
 render operations, rendered pixels, and elapsed processing time. The existing
 hard stream-filter ceilings remain active as a second line of defense.
 
+Reader input is accumulated in bounded chunks when the source is sequential;
+it is never passed through an unbounded `readAll()` path. Parser object nesting
+uses the configured object-depth budget, while content-stream recursion uses
+the recursive-content-depth budget. Filter chains charge decoded output once
+per produced stage; compressed source bytes are not misclassified as decoded
+output, and the existing per-stream and ratio checks remain in force.
+
 Trusted local workflows may explicitly choose a larger, finite profile:
 
 ```cpp

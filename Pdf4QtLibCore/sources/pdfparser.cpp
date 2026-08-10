@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfparser.h"
+#include "pdfprocessingbudget.h"
 #include "pdfconstants.h"
 #include "pdfexception.h"
 
@@ -31,6 +32,7 @@
 
 #include <cctype>
 #include <memory>
+#include <optional>
 
 namespace pdf
 {
@@ -691,29 +693,40 @@ void PDFParsingContext::endParsingObject(PDFObjectReference reference)
     m_activeParsedObjectSet.erase(reference);
 }
 
-PDFParser::PDFParser(const QByteArray& data, PDFParsingContext* context, Features features) :
+PDFParser::PDFParser(const QByteArray& data,
+                     PDFParsingContext* context,
+                     Features features,
+                     PDFProcessingBudget* processingBudget) :
     m_context(context),
     m_features(features),
-    m_lexicalAnalyzer(data.constData(), data.constData() + data.size())
+    m_lexicalAnalyzer(data.constData(), data.constData() + data.size()),
+    m_processingBudget(processingBudget)
 {
     m_lookAhead1 = fetch();
     m_lookAhead2 = fetch();
 }
 
-PDFParser::PDFParser(const char* begin, const char* end, PDFParsingContext* context, Features features) :
+PDFParser::PDFParser(const char* begin,
+                     const char* end,
+                     PDFParsingContext* context,
+                     Features features,
+                     PDFProcessingBudget* processingBudget) :
     m_context(context),
     m_features(features),
-    m_lexicalAnalyzer(begin, end)
+    m_lexicalAnalyzer(begin, end),
+    m_processingBudget(processingBudget)
 {
     m_lookAhead1 = fetch();
     m_lookAhead2 = fetch();
 }
 
-PDFParser::PDFParser(std::function<PDFLexicalAnalyzer::Token ()> tokenFetcher) :
+PDFParser::PDFParser(std::function<PDFLexicalAnalyzer::Token ()> tokenFetcher,
+                     PDFProcessingBudget* processingBudget) :
     m_tokenFetcher(qMove(tokenFetcher)),
     m_context(nullptr),
     m_features(None),
-    m_lexicalAnalyzer(nullptr, nullptr)
+    m_lexicalAnalyzer(nullptr, nullptr),
+    m_processingBudget(processingBudget)
 {
     m_lookAhead1 = fetch();
     m_lookAhead2 = fetch();
@@ -726,7 +739,14 @@ PDFObject PDFParser::getObject()
 
 PDFObject PDFParser::getObject(int nestingDepth)
 {
-    if (nestingDepth > MAXIMUM_PDF_OBJECT_NESTING_DEPTH)
+    std::optional<PDFProcessingBudget::DepthScope> budgetDepthScope;
+    if (m_processingBudget)
+    {
+        budgetDepthScope.emplace(*m_processingBudget,
+                                 PDFBudgetKind::ObjectDepth,
+                                 PDFTranslationContext::tr("PDF object nesting"));
+    }
+    else if (nestingDepth > MAXIMUM_PDF_OBJECT_NESTING_DEPTH)
     {
         error(tr("Maximum object nesting depth of %1 exceeded.").arg(MAXIMUM_PDF_OBJECT_NESTING_DEPTH));
     }

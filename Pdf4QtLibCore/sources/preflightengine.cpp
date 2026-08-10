@@ -949,14 +949,38 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                           QList<PreflightFinding>& errors,
                           QList<PreflightFinding>& warnings)
 {
+    auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false)
+    {
+        PreflightFinding finding;
+        finding.scope = pageNumber > 0
+            ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE)
+            : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.page = pageNumber;
+        finding.type = QStringLiteral("check-incomplete");
+        finding.severity = QStringLiteral("info");
+        finding.checkId = check.id;
+        finding.evidence = QJsonObject{
+            { QStringLiteral("reason"), reason },
+            { QStringLiteral("budget_exceeded"), budgetExceeded },
+            { QStringLiteral("analysis_box"), check.inkCoverageAnalysisBox },
+            { QStringLiteral("max_raster_pixels"), check.maxRasterPixels }
+        };
+        finding.message = pageNumber > 0
+            ? PDFTranslationContext::tr("Page %1 skipped: %2").arg(pageNumber).arg(reason)
+            : PDFTranslationContext::tr("Ink coverage skipped: %1").arg(reason);
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
     if (!session)
     {
+        emitIncomplete(0, PDFTranslationContext::tr("document session was unavailable"));
         return;
     }
 
     PDFDocument* document = session->getDocument();
     if (!document)
     {
+        emitIncomplete(0, PDFTranslationContext::tr("document was unavailable"));
         return;
     }
 
@@ -965,6 +989,7 @@ void runInkCoverageCheck(PDFDocumentSession* session,
     probeSettings.dpi = check.probeDpi;
     probeSettings.minRegionAreaRatio = check.minRegionAreaPct / 100.0;
     probeSettings.maxRegionsPerPage = check.maxRegionsPerPage;
+    probeSettings.maxRasterPixels = check.maxRasterPixels;
     if (check.inkCoverageAnalysisBox == QStringLiteral("trim"))
     {
         probeSettings.analysisBox = PDFInkCoverageAnalysisBox::Trim;
@@ -980,6 +1005,11 @@ void runInkCoverageCheck(PDFDocumentSession* session,
 
     PDFInkCoverageProbe probe(session);
     const PDFCatalog* catalog = document->getCatalog();
+    if (!catalog)
+    {
+        emitIncomplete(0, PDFTranslationContext::tr("catalog was unavailable"));
+        return;
+    }
     const PDFInteger pageCount = catalog->getPageCount();
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
@@ -987,26 +1017,22 @@ void runInkCoverageCheck(PDFDocumentSession* session,
         const PDFPage* page = catalog->getPage(pageIndex);
         if (!page)
         {
+            emitIncomplete(int(pageIndex + 1), PDFTranslationContext::tr("page could not be inspected"));
             continue;
         }
 
         const PDFInkCoverageProbeResult result = probe.probe(page, static_cast<size_t>(pageIndex), probeSettings);
         if (!result.rasterized)
         {
-            PreflightFinding finding;
-            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
-            finding.page = int(pageIndex + 1);
-            finding.objectId = QString();
-            finding.type = QStringLiteral("check-incomplete");
-            finding.severity = QStringLiteral("info");
-            finding.checkId = check.id;
-            finding.message = result.budgetExceeded
-                ? PDFTranslationContext::tr("Page %1 skipped: ink coverage raster exceeds the pixel budget").arg(pageIndex + 1)
-                : PDFTranslationContext::tr("Page %1 skipped: ink coverage rasterization was unavailable").arg(pageIndex + 1);
-            pushPreflightFinding(finding, finding.severity, errors, warnings);
+            emitIncomplete(int(pageIndex + 1),
+                           result.budgetExceeded
+                               ? PDFTranslationContext::tr("ink coverage raster exceeds the pixel budget")
+                               : PDFTranslationContext::tr("ink coverage rasterization was unavailable"),
+                           result.budgetExceeded);
             continue;
         }
 
+        int regionRank = 0;
         for (const PDFInkCoverageRegion& region : result.regions)
         {
             PreflightFinding finding;
@@ -1017,6 +1043,13 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             finding.severity = check.severity;
             finding.checkId = check.id;
             finding.bbox = region.bbox;
+            finding.evidence = QJsonObject{
+                { QStringLiteral("peak_ink_pct"), region.peakInkCoverage * 100.0 },
+                { QStringLiteral("max_ink_pct"), check.maxInkPct },
+                { QStringLiteral("area_mm2"), region.areaMM2 },
+                { QStringLiteral("analysis_box"), check.inkCoverageAnalysisBox },
+                { QStringLiteral("region_rank"), ++regionRank }
+            };
             finding.message = PDFTranslationContext::tr(
                 "Total ink coverage %1% exceeds maximum %2% over %3 mm^2 on page %4")
                 .arg(qRound(region.peakInkCoverage * 100.0))
@@ -1710,7 +1743,7 @@ void runOutputIntentCheck(PDFDocumentSession* session,
             }
             else
             {
-                content = document->getDecodedStream(outputProfileObject.getStream());
+                content = document->getDecodedStream(outputProfileObject.getStream(), session->getProcessingBudget());
             }
         }
         catch (const PDFException&)
@@ -3164,7 +3197,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         QByteArray metadata;
         try
         {
-            metadata = document->getDecodedStream(metadataObject.getStream());
+            metadata = document->getDecodedStream(metadataObject.getStream(), session->getProcessingBudget());
         }
         catch (const PDFException& exception)
         {
@@ -3233,7 +3266,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             QByteArray profileBytes;
             try
             {
-                profileBytes = document->getDecodedStream(profileObject.getStream());
+                profileBytes = document->getDecodedStream(profileObject.getStream(), session->getProcessingBudget());
             }
             catch (const PDFException&)
             {
@@ -3792,7 +3825,20 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         if (checkIncomplete)
         {
             status.status = QStringLiteral("skipped");
-            status.reason = QStringLiteral("rasterization incomplete");
+            status.reason = QStringLiteral("inspection incomplete");
+            const auto recordIncompleteReason = [&status](const PreflightFinding& finding)
+            {
+                if (finding.type == QStringLiteral("check-incomplete"))
+                {
+                    const QString reason = finding.evidence.value(QStringLiteral("reason")).toString();
+                    if (!reason.isEmpty())
+                    {
+                        status.reason = reason;
+                    }
+                }
+            };
+            std::for_each(result.errors.cbegin() + errorsBefore, result.errors.cend(), recordIncompleteReason);
+            std::for_each(result.warnings.cbegin() + warningsBefore, result.warnings.cend(), recordIncompleteReason);
             result.inspectionComplete = false;
         }
         else if (checkFailed)
@@ -3999,9 +4045,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         const QJsonValue maxInkValue = checkObject.value(QStringLiteral("max_ink_pct"));
         const QJsonValue minRegionAreaValue = checkObject.value(QStringLiteral("min_region_area_pct"));
         const QJsonValue maxRegionsValue = checkObject.value(QStringLiteral("max_regions_per_page"));
+        const QJsonValue maxRasterPixelsValue = checkObject.value(QStringLiteral("max_raster_pixels"));
         check.maxInkPct = maxInkValue.toDouble(0.0);
         check.minRegionAreaPct = minRegionAreaValue.toDouble(0.05);
         check.maxRegionsPerPage = maxRegionsValue.toInt(20);
+        check.maxRasterPixels = 250LL * 1000 * 1000;
         if (check.id == QStringLiteral("ink-coverage")
             && (!maxInkValue.isDouble()
                 || !std::isfinite(check.maxInkPct)
@@ -4034,10 +4082,24 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             if (checkObject.contains(QStringLiteral("max_regions_per_page"))
                 && (!maxRegionsValue.isDouble()
                     || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble()
-                    || check.maxRegionsPerPage < 1))
+                    || check.maxRegionsPerPage < 0))
             {
-                errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_regions_per_page.").arg(check.id);
+                errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative integral max_regions_per_page.").arg(check.id);
                 return false;
+            }
+            if (checkObject.contains(QStringLiteral("max_raster_pixels")))
+            {
+                const double maxRasterPixels = maxRasterPixelsValue.toDouble(0.0);
+                if (!maxRasterPixelsValue.isDouble()
+                    || !std::isfinite(maxRasterPixels)
+                    || std::floor(maxRasterPixels) != maxRasterPixels
+                    || maxRasterPixels <= 0.0
+                    || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
+                {
+                    errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_raster_pixels.").arg(check.id);
+                    return false;
+                }
+                check.maxRasterPixels = static_cast<qint64>(maxRasterPixels);
             }
 
             const QJsonValue analysisBoxValue = checkObject.value(QStringLiteral("analysis_box"));
