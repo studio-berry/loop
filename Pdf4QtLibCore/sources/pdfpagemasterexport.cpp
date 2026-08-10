@@ -849,6 +849,37 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
         }
 
+        if (job.hasTransparencyFlattenSettings)
+        {
+            PDFTransparencyFlattenReport transparencyReport;
+            PDFTransparencyFlattenSettings transparencySettings = job.transparencyFlattenSettings;
+            transparencySettings.analyzeOnly = false;
+            const PDFOperationResult transparencyResult = PDFTransparencyFlattener::apply(&assembledDocument,
+                                                                                            transparencySettings,
+                                                                                            &transparencyReport,
+                                                                                            nullptr);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("transparencyFlatten"), transparencyReport.toJson());
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!transparencyResult)
+            {
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, transparencyResult.getErrorMessage());
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(transparencyResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
+        if (isCancelRequested(job))
+        {
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
         if (job.optimizeImages)
         {
             PDFImageOptimizer imageOptimizer;
