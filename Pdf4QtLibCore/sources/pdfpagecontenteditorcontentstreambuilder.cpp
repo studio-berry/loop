@@ -553,6 +553,23 @@ void PDFPageContentEditorContentStreamBuilder::writeStateDifference(QTextStream&
 
 void PDFPageContentEditorContentStreamBuilder::writeEditedElement(const PDFEditedPageContentElement* element)
 {
+    if (const PDFEditedPageContentElementInstruction* instruction = element->asInstruction())
+    {
+        if (instruction->isUnsupported())
+        {
+            addFatalError(instruction->getDiagnostic());
+        }
+        else
+        {
+            m_outputContent.append(instruction->getContent());
+            if (!m_outputContent.endsWith('\n'))
+            {
+                m_outputContent.append('\n');
+            }
+        }
+        return;
+    }
+
     PDFPageContentProcessorState state = element->getState();
     state.setCurrentTransformationMatrix(element->getTransform());
 
@@ -1418,6 +1435,12 @@ QByteArray PDFPageContentEditorContentStreamBuilder::selectFont(const QByteArray
 void PDFPageContentEditorContentStreamBuilder::addError(const QString& error)
 {
     m_errors << error;
+}
+
+void PDFPageContentEditorContentStreamBuilder::addFatalError(const QString& error)
+{
+    addError(error);
+    m_fatalErrors << error;
 }
 
 void PDFPageContentEditorContentStreamBuilder::setFontDictionary(const PDFDictionary& newFontDictionary)

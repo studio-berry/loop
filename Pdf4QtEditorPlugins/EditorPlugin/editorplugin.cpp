@@ -310,6 +310,13 @@ bool EditorPlugin::updatePageContent(pdf::PDFInteger pageIndex,
         }
     }
 
+    const QStringList fatalErrors = contentStreamBuilder.getFatalErrors();
+    if (!fatalErrors.empty())
+    {
+        qWarning() << "Refusing to rewrite page content because the document contains unsupported constructs:" << fatalErrors;
+        return false;
+    }
+
     QStringList errors = contentStreamBuilder.getErrors();
     contentStreamBuilder.clearErrors();
 
