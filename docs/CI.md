@@ -1,10 +1,21 @@
 # CI and diagnostic artifacts
 
-Pull requests to `master` run the **Linux** and **Windows** build-and-test jobs.
+The inherited build workflow currently targets `master` for the **Linux** and
+**Windows** build-and-test jobs. That trigger drift is explicitly tracked in
+[GitHub issue #232](https://github.com/studio-berry/loupe/issues/232); it is not
+the active Loupe branch policy.
 These are the two platforms Loupe V1 supports; **macOS** CI is a **post-V1**
 track under [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are produced
 only for `master` pushes and manual workflow runs.
+
+The standalone `Documentation truth` workflow runs for the policy branches
+`dev` and `stable`
+pull requests and pushes. It checks every ADR's verification header and fails
+when [`docs/generated/architecture-catalog.json`](generated/architecture-catalog.json)
+is stale. The branch names above reflect the current branch policy; issue #232
+tracks the separate workflow-trigger migration from the inherited `master`
+configuration.
 
 Note that the `pull_request` trigger sets `paths-ignore` for `docs/**` and
 `**/*.md`, so documentation-only pull requests do not run `build_ubuntu` or
