@@ -22,16 +22,24 @@
 
 #include "pdffixupregistry.h"
 
+#include "pdfrepairoperation.h"
+
 namespace pdf
 {
 
 QList<PDFFixupCapability> getImplementedFixupCapabilities()
 {
-    return {
-        { QStringLiteral("add-bleed"), true, true, true, true },
-        { QStringLiteral("downsample-images"), true, true, true, true },
-        { QStringLiteral("rgb-to-cmyk"), true, true, true, true }
-    };
+    QList<PDFFixupCapability> result;
+    const PDFRepairRegistry& registry = PDFRepairRegistry::instance();
+    for (const QString& operationId : registry.operationIds())
+    {
+        const PDFRepairOperation* operation = registry.find(operationId);
+        if (operation && operation->isPreflightFixup())
+        {
+            result.append({ operationId, true, true, true, true });
+        }
+    }
+    return result;
 }
 
 bool isImplementedFixupId(const QString& fixupId)

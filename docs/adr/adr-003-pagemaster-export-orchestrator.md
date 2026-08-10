@@ -1,6 +1,9 @@
 # ADR-003: PageMaster export orchestrator
 
-**Status:** accepted
+**Status:** implemented
+**Implemented-at:** 5113b86fc7d0f1c5273f128075c84a00a016df8a
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-311 / Cycle 2 sprint plan
 **Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loupe #30 Action List stage)

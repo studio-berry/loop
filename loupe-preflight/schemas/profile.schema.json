@@ -295,9 +295,10 @@
           "description": "Fixup length in points (e.g. add-bleed)."
         },
         "target_dpi": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Downsample target DPI."
+          "type": "integer",
+          "minimum": 72,
+          "maximum": 1200,
+          "description": "Downsample target DPI; runtime profile validation also requires a registered fixup operation."
         },
         "params": {
           "type": "object",
