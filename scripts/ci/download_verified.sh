@@ -13,6 +13,28 @@
 
 set -euo pipefail
 
+temporary_output=""
+cleanup() {
+  if [[ -n "$temporary_output" ]]; then
+    rm -f -- "$temporary_output"
+  fi
+}
+trap cleanup EXIT
+
+is_hex_digest() {
+  [[ "$1" =~ ^[[:xdigit:]]{64}$ ]]
+}
+
+reject_mutable_url() {
+  local normalized="${1,,}"
+  case "$normalized" in
+    *"/releases/download/continuous"*|*"/releases/download/latest"*|*"/releases/latest"*)
+      echo "download_verified.sh: mutable release URL is forbidden: $1" >&2
+      exit 2
+      ;;
+  esac
+}
+
 mode="$1"
 shift
 
@@ -25,7 +47,12 @@ case "$mode" in
     repo="$1"
     asset_id="$2"
     output="$3"
-    expected_sha="$4"
+    expected_sha="${4,,}"
+
+    [[ "$repo" =~ ^[^/[:space:]]+/[^/[:space:]]+$ ]] || { echo "download_verified.sh: invalid GitHub repository: $repo" >&2; exit 2; }
+    [[ "$asset_id" =~ ^[1-9][0-9]*$ ]] || { echo "download_verified.sh: asset id must be positive: $asset_id" >&2; exit 2; }
+    is_hex_digest "$expected_sha" || { echo "download_verified.sh: expected SHA256 must be 64 hex characters" >&2; exit 2; }
+    temporary_output="${output}.download.$$"
 
     # GitHub requires an Accept header to receive the raw binary payload.
     # asset-id downloads are immutable and version-carrying.
@@ -33,7 +60,7 @@ case "$mode" in
       -H "Accept: application/octet-stream" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
       "https://api.github.com/repos/${repo}/releases/assets/${asset_id}" \
-      -o "$output"
+      -o "$temporary_output"
     ;;
 
   --url)
@@ -43,8 +70,12 @@ case "$mode" in
     fi
     url="$1"
     output="$2"
-    expected_sha="$3"
-    curl --fail --location "$url" -o "$output"
+    expected_sha="${3,,}"
+    [[ "$url" == https://* ]] || { echo "download_verified.sh: URL must use HTTPS: $url" >&2; exit 2; }
+    reject_mutable_url "$url"
+    is_hex_digest "$expected_sha" || { echo "download_verified.sh: expected SHA256 must be 64 hex characters" >&2; exit 2; }
+    temporary_output="${output}.download.$$"
+    curl --fail --location "$url" -o "$temporary_output"
     ;;
 
   *)
@@ -54,13 +85,14 @@ case "$mode" in
     ;;
 esac
 
-actual_sha="$(sha256sum "$output" | awk '{print $1}')"
+actual_sha="$(sha256sum "$temporary_output" | awk '{print $1}')"
 if [ "$actual_sha" != "$expected_sha" ]; then
   echo "download_verified.sh: SHA256 mismatch for '$output'" >&2
   echo "  expected: $expected_sha" >&2
   echo "  actual:   $actual_sha" >&2
-  rm -f "$output"
   exit 1
 fi
 
+mv -f -- "$temporary_output" "$output"
+temporary_output=""
 echo "download_verified.sh: verified $output (${actual_sha})"
