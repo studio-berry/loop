@@ -58,6 +58,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfrepairoperation.cpp
     sources/pdfrepairoperation.h
     sources/pdfrepairprimitives.cpp
+    sources/pdfstandardconversion.cpp
+    sources/pdfstandardconversion.h
     sources/pdfactionlist.cpp
     sources/pdfactionlist.h
     sources/pdffixupregistry.cpp

@@ -32,6 +32,7 @@
 #include "pdfpagegeometry.h"
 #include "preflightprofileresolver.h"
 #include "pdfproductiongeometry.h"
+#include "pdfstandardconversion.h"
 #include "pdftransparencyflattener.h"
 
 #include <QImage>
@@ -109,6 +110,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     PDFDocumentManipulator::OutlineMode outlineMode = PDFDocumentManipulator::OutlineMode::DocumentParts;
     bool optimizeImages = false;
     PDFImageOptimizer::Settings imageOptimizationSettings;
+    bool hasStandardConversionSettings = false;
+    PDFStandardConversionSettings standardConversionSettings;
     bool hasPageGeometrySettings = false;
     PDFPageGeometrySettings pageGeometrySettings;
     bool hasBleedFixupSettings = false;
@@ -154,7 +157,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportResult
 };
 
 /// Headless PageMaster export orchestrator (ADR-003).
+<<<<<<< HEAD
+/// Locked stage order: assemble → preflight → page geometry → bleed fixup → image optimize → standard conversion → write.
+=======
 /// Locked stage order: assemble → preflight → page geometry → bleed fixup → transparency flatten → image optimize → write.
+>>>>>>> origin/dev
 /// Synchronous and not thread-safe; callers may invoke run() from a worker thread.
 class PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExport
 {

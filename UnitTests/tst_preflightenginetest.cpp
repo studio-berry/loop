@@ -58,7 +58,7 @@ private slots:
     void parseProfile_rejectsOutputIntentInvalidAllowedColorSpace();
     void parseProfile_rejectsUnimplementedFixup();
     void parseProfile_acceptsPDFXTargetAndRevision();
-    void parseProfile_rejectsUnknownPDFXTarget();
+    void parseProfile_acceptsPDFX3Target();
     void pdfxStatusReduction_prioritizesFailureAndIncomplete();
     void pdfxStatusReduction_marksMandatoryNotApplicableIncomplete();
     void run_pdfxWithoutDocumentIsIncompleteAndSerialized();
@@ -739,7 +739,7 @@ void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
     QCOMPARE(profile.pdfx->policyVersion, QStringLiteral("1"));
 }
 
-void PreflightEngineTest::parseProfile_rejectsUnknownPDFXTarget()
+void PreflightEngineTest::parseProfile_acceptsPDFX3Target()
 {
     pdf::PreflightEngine engine(nullptr);
     pdf::PreflightProfileData profile;
@@ -754,8 +754,9 @@ void PreflightEngineTest::parseProfile_rejectsUnknownPDFXTarget()
         } }
     };
 
-    QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
-    QVERIFY(errorMessage.contains(QStringLiteral("Unsupported PDF/X target")));
+    QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
+    QVERIFY(profile.pdfx.has_value());
+    QCOMPARE(profile.pdfx->flavor, pdf::PDFXFlavor::X3_2002);
 }
 
 void PreflightEngineTest::pdfxStatusReduction_prioritizesFailureAndIncomplete()
