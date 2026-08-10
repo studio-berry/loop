@@ -29,6 +29,7 @@
 #include "pdfdocumentmanipulator.h"
 #include "pdfimageoptimizer.h"
 #include "pdfpagegeometry.h"
+#include "pdfproductiongeometry.h"
 
 #include <QImage>
 #include <QJsonObject>
@@ -44,6 +45,21 @@ namespace pdf
 {
 
 class PDFProgress;
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterProductionSettings
+{
+    bool enabled = false;
+    PDFProductionGeometryModel geometry;
+    bool contourBleedEnabled = false;
+    PDFContourBleedSettings contourBleed;
+    int contourBleedDpi = 300;
+    qint64 contourBleedMaxRasterPixels = 250LL * 1000 * 1000;
+    bool grommetsEnabled = false;
+    PDFGrommetSpec grommets;
+
+    QJsonObject toJson() const;
+    static PDFPageMasterProductionSettings fromJson(const QJsonObject& object);
+};
 
 enum class PDFPageMasterBleedConfirmationPolicy
 {
@@ -91,6 +107,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     PDFPageGeometrySettings pageGeometrySettings;
     bool hasBleedFixupSettings = false;
     PDFBleedFixupSettings bleedFixupSettings;
+    bool hasProductionGeometrySettings = false;
+    PDFPageMasterProductionSettings productionGeometrySettings;
     PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicy = PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
     bool bleedConfirmationGranted = false;
     bool hasPreflightGate = false;
