@@ -239,6 +239,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfoperationhistory.cpp
     sources/pdfoperationhistorystore.h
     sources/pdfoperationhistorystore.cpp
+    sources/pdfsavepolicy.h
+    sources/pdfsavepolicy.cpp
     fonts.qrc
 )
 

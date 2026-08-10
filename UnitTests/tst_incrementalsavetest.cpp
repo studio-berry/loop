@@ -35,6 +35,7 @@ private slots:
     void preservesOriginalPrefixAndChangedObjects();
     void rejectsChangedSourceBytes();
     void selectsSafeWritePolicy();
+    void explicitPoliciesCannotBeDowngradedToIncremental();
 };
 
 namespace
@@ -141,6 +142,32 @@ void IncrementalSaveTest::selectsSafeWritePolicy()
     const pdf::PDFDocument signedDocument = signedBuilder.build();
     QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&signedDocument, false, false),
              pdf::PDFDocumentWriter::WriteMode::Incremental);
+}
+
+void IncrementalSaveTest::explicitPoliciesCannotBeDowngradedToIncremental()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFDocument document = builder.build();
+
+    const pdf::PDFOperationSavePolicy incremental = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("annotation edit"));
+    QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&document, incremental, false),
+             pdf::PDFDocumentWriter::WriteMode::FullRewrite);
+
+    const pdf::PDFOperationSavePolicy full = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction"));
+    QCOMPARE(full.mode, pdf::PDFSaveMode::FullRewrite);
+    QVERIFY(full.invalidatesSignatures);
+    QVERIFY(!full.reversibleInSession);
+    QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&document, full, false),
+             pdf::PDFDocumentWriter::WriteMode::FullRewrite);
+
+    const pdf::PDFOperationSavePolicy newArtifact = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("production correction"));
+    QCOMPARE(newArtifact.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+    QVERIFY(newArtifact.invalidatesSignatures);
+    QVERIFY(newArtifact.reversibleInSession);
+    QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&document, newArtifact, false),
+             pdf::PDFDocumentWriter::WriteMode::FullRewrite);
+    QCOMPARE(QString::fromLatin1(pdf::getPDFSaveModeName(newArtifact.mode)), QStringLiteral("save-as-new-artifact"));
 }
 
 QTEST_MAIN(IncrementalSaveTest)
