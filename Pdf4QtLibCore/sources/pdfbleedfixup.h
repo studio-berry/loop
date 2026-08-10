@@ -31,6 +31,8 @@
 #include <QImage>
 #include <QMarginsF>
 #include <QRectF>
+#include <QSize>
+#include <QSizeF>
 #include <QString>
 #include <QVector>
 
@@ -129,6 +131,21 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupReport
 /// Shared helpers exposed for unit tests (rect / skip / strip image builders).
 namespace PDFBleedFixupMath
 {
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFBleedRasterPlan
+{
+    QSize imageSize;
+    double pixelCount = 0.0;
+    bool rasterRequired = false;
+    bool withinBudget = true;
+    QString errorMessage;
+};
+
+PDF4QTLIBCORESHARED_EXPORT PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
+                                                        int dpi,
+                                                        qint64 maxRasterPixels,
+                                                        bool analyzeOnly,
+                                                        bool hasEligibleSides);
 
 PDF4QTLIBCORESHARED_EXPORT QRectF referenceRect(const PDFPage* page, PDFBleedFixupSettings::ReferenceBox referenceBox);
 PDF4QTLIBCORESHARED_EXPORT QRectF targetBleedRect(const QRectF& reference, const QMarginsF& bleedMM);
