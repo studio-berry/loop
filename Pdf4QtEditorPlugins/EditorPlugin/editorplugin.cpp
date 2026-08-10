@@ -31,7 +31,6 @@
 #include "pdfpagecontenteditorprocessor.h"
 #include "pdfpagecontenteditorcontentstreambuilder.h"
 #include "pdfstreamfilters.h"
-#include "pdfoptimizer.h"
 
 #include <QAction>
 #include <QToolButton>
@@ -444,14 +443,6 @@ bool EditorPlugin::save()
         if (modifier.finalize())
         {
             pdf::PDFDocument document = *modifier.getDocument();
-            pdf::PDFOptimizer optimizer(pdf::PDFOptimizer::DereferenceSimpleObjects |
-                                        pdf::PDFOptimizer::RemoveNullObjects |
-                                        pdf::PDFOptimizer::RemoveUnusedObjects |
-                                        pdf::PDFOptimizer::MergeIdenticalObjects |
-                                        pdf::PDFOptimizer::ShrinkObjectStorage, nullptr);
-            optimizer.setDocument(&document);
-            optimizer.optimize();
-            document = optimizer.takeOptimizedDocument();
 
             const pdf::PDFModifiedDocument::ModificationFlags flags = modifier.getFlags() | pdf::PDFModifiedDocument::PreserveUndoRedo;
             Q_EMIT m_widget->getToolManager()->documentModified(pdf::PDFModifiedDocument(pdf::PDFDocumentPointer(new pdf::PDFDocument(std::move(document))), nullptr, flags));
