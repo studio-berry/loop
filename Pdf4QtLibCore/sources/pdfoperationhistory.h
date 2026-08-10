@@ -47,6 +47,20 @@ enum class PDFOperationHistoryStatus
     RolledBack
 };
 
+/// Canonical provenance kinds. Preflight and decision records are events in
+/// the operation-history chain, not a second audit ledger.
+enum class PDFOperationHistoryEventKind
+{
+    Operation,
+    DocumentOpened,
+    PreflightRun,
+    FixApplied,
+    DecisionRecorded,
+    DecisionInvalidated,
+    CertificateIssued,
+    CertificateInvalidated
+};
+
 enum class PDFApprovalKind
 {
     None,
@@ -57,6 +71,8 @@ enum class PDFApprovalKind
 
 PDF4QTLIBCORESHARED_EXPORT QString pdfOperationHistoryStatusToString(PDFOperationHistoryStatus status);
 PDF4QTLIBCORESHARED_EXPORT PDFOperationHistoryStatus pdfOperationHistoryStatusFromString(const QString& value);
+PDF4QTLIBCORESHARED_EXPORT QString pdfOperationHistoryEventKindToString(PDFOperationHistoryEventKind kind);
+PDF4QTLIBCORESHARED_EXPORT PDFOperationHistoryEventKind pdfOperationHistoryEventKindFromString(const QString& value);
 PDF4QTLIBCORESHARED_EXPORT QString pdfApprovalKindToString(PDFApprovalKind kind);
 PDF4QTLIBCORESHARED_EXPORT PDFApprovalKind pdfApprovalKindFromString(const QString& value);
 
@@ -68,6 +84,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFApprovalRecord
     QString policyId;
     QString rationale;
     QString evidenceSha256;
+    QString decisionReference;
     QDateTime decidedUtc;
 
     bool isValid() const;
@@ -92,7 +109,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFOperationHistoryEvent
     qint64 sequence = 0;
     QUuid entryId;
     QUuid executionId;
+    PDFOperationHistoryEventKind kind = PDFOperationHistoryEventKind::Operation;
     PDFOperationHistoryStatus status = PDFOperationHistoryStatus::Planned;
+    QString operatorIdentity;
+    QString documentRevisionDigest;
+    QString effectiveProfileDigest;
     QJsonObject resultSummary;
     std::optional<PDFArtifactIdentity> output;
     QStringList findingIds;
