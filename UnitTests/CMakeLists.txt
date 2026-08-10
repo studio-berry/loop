@@ -460,6 +460,20 @@ set_target_properties(UnitTestsPageMasterExport PROPERTIES
 )
 add_test(UnitTestsPageMasterExport "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPageMasterExport")
 
+add_executable(UnitTestsTransparencyFlattener
+    tst_transparencyflattenertest.cpp
+)
+
+target_link_libraries(UnitTestsTransparencyFlattener PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsTransparencyFlattener PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsTransparencyFlattener "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsTransparencyFlattener")
+
 add_executable(UnitTestsFilenameSanitizer
 	tst_filenamesanitizertest.cpp
 )
