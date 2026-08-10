@@ -24,6 +24,7 @@
 #define PDFCOMPILER_H
 
 #include "pdfglobal.h"
+#include "pdfdocumentcontext.h"
 #include "pdfwidgetsglobal.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
@@ -32,6 +33,8 @@
 #include <QFuture>
 #include <QFutureWatcher>
 #include <QWaitCondition>
+
+#include <utility>
 
 template <class Key, class T>
 class QCache;
@@ -137,12 +140,15 @@ private:
     struct CompileTask
     {
         CompileTask() = default;
-        CompileTask(PDFInteger pageIndex) : pageIndex(pageIndex) { }
+        CompileTask(PDFInteger pageIndex, PDFRevisionIdentity revision) : pageIndex(pageIndex), revision(std::move(revision)) { }
 
         PDFInteger pageIndex = 0;
+        PDFRevisionIdentity revision;
         bool finished = false;
         PDFPrecompiledPage precompiledPage;
     };
+
+    QString cacheKey(const PDFRevisionIdentity& revision, PDFInteger pageIndex) const;
 
     State m_state = State::Inactive;
     QMutex m_mutex;
@@ -150,7 +156,7 @@ private:
     PDFAsynchronousPageCompilerWorkerThread* m_thread = nullptr;
 
     PDFDrawWidgetProxy* m_proxy;
-    QCache<PDFInteger, PDFPrecompiledPage>* m_cache;
+    QCache<QString, PDFPrecompiledPage>* m_cache;
 
     /// This task is protected by mutex. Every access to this
     /// variable must be done with locked mutex.
@@ -229,6 +235,7 @@ private:
     PDFDrawWidgetProxy* m_proxy;
     State m_state = State::Inactive;
     bool m_isRunning;
+    PDFRevisionIdentity m_textLayoutRevision;
     std::optional<PDFTextLayoutStorage> m_textLayouts;
     QFuture<PDFTextLayoutStorage> m_textLayoutCompileFuture;
     QFutureWatcher<PDFTextLayoutStorage> m_textLayoutCompileFutureWatcher;

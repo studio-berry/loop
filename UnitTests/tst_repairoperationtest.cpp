@@ -22,8 +22,10 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfrepairoperation.h"
+#include "pdfstandardconversion.h"
 
 #include <QJsonDocument>
+#include <QJsonValue>
 #include <QtTest>
 
 namespace
@@ -57,9 +59,11 @@ class RepairOperationTest : public QObject
 
 private slots:
     void builtInOperations_areRegistered();
+    void builtInOperations_declareSavePolicies();
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
+    void standardTargets_areExplicitAndStable();
 };
 
 void RepairOperationTest::builtInOperations_areRegistered()
@@ -68,7 +72,50 @@ void RepairOperationTest::builtInOperations_areRegistered()
     QVERIFY(registry.find(QStringLiteral("add-bleed")) != nullptr);
     QVERIFY(registry.find(QStringLiteral("downsample-images")) != nullptr);
     QVERIFY(registry.find(QStringLiteral("rgb-to-cmyk")) != nullptr);
-    QVERIFY(registry.descriptors().size() >= 3);
+    QVERIFY(registry.find(QStringLiteral("standards-convert")) != nullptr);
+    QVERIFY(registry.descriptors().size() >= 4);
+    for (const QJsonValue& descriptorValue : registry.descriptors())
+    {
+        const QJsonObject descriptor = descriptorValue.toObject();
+        QVERIFY(descriptor.contains(QStringLiteral("preflight_fixup")));
+        QVERIFY(descriptor.contains(QStringLiteral("save_policy")));
+        const QJsonObject savePolicy = descriptor.value(QStringLiteral("save_policy")).toObject();
+        QVERIFY(savePolicy.contains(QStringLiteral("mode")));
+        QVERIFY(savePolicy.contains(QStringLiteral("invalidates_signatures")));
+        QVERIFY(savePolicy.contains(QStringLiteral("reversible_in_session")));
+        if (descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("add-bleed")
+            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("downsample-images")
+            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("rgb-to-cmyk"))
+        {
+            QVERIFY(descriptor.value(QStringLiteral("preflight_fixup")).toBool());
+        }
+    }
+}
+
+void RepairOperationTest::builtInOperations_declareSavePolicies()
+{
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    const auto policyMode = [&registry](const QString& id) {
+        return registry.find(id)->descriptor().value(QStringLiteral("save_policy")).toObject().value(QStringLiteral("mode")).toString();
+    };
+
+    QCOMPARE(policyMode(QStringLiteral("add-bleed")), QStringLiteral("save-as-new-artifact"));
+    QCOMPARE(policyMode(QStringLiteral("downsample-images")), QStringLiteral("full-rewrite"));
+    QCOMPARE(policyMode(QStringLiteral("rgb-to-cmyk")), QStringLiteral("save-as-new-artifact"));
+    QCOMPARE(policyMode(QStringLiteral("production.validate-wide-format")), QStringLiteral("incremental-append"));
+    QCOMPARE(policyMode(QStringLiteral("production.add-contour-bleed")), QStringLiteral("save-as-new-artifact"));
+    QCOMPARE(policyMode(QStringLiteral("production.place-grommets")), QStringLiteral("incremental-append"));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(registry.find(QStringLiteral("add-bleed")), QJsonObject{
+        { QStringLiteral("bleed_mm"), 3.0 },
+        { QStringLiteral("force"), true }
+    }));
+    QCOMPARE(transaction.savePolicy().mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+    QVERIFY(transaction.savePolicy().invalidatesSignatures);
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()
@@ -126,6 +173,17 @@ void RepairOperationTest::failedOperation_discardsCandidate()
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Failed);
     QVERIFY(transaction.candidate() == nullptr);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
+
+void RepairOperationTest::standardTargets_areExplicitAndStable()
+{
+    QCOMPARE(pdf::supportedPDFStandardTargets(), QStringList{
+        QStringLiteral("PDF/X-1a:2001"), QStringLiteral("PDF/X-3:2002"),
+        QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") });
+    pdf::PDFStandardTarget target = pdf::PDFStandardTarget::PDFX4;
+    QVERIFY(pdf::pdfStandardTargetFromString(QStringLiteral("PDF/X-3:2002"), &target));
+    QCOMPARE(target, pdf::PDFStandardTarget::PDFX3_2002);
+    QCOMPARE(pdf::pdfStandardTargetToString(pdf::PDFStandardTarget::PDFA2b), QStringLiteral("PDF/A-2b"));
 }
 
 QTEST_GUILESS_MAIN(RepairOperationTest)

@@ -24,6 +24,7 @@
 #define PDFTHUMBNAILSRENDERER_H
 
 #include "pdfwidgetsglobal.h"
+#include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdfmeshqualitysettings.h"
 
@@ -34,6 +35,7 @@
 #include <QList>
 #include <QMutex>
 #include <QObject>
+#include <QPointer>
 #include <QSet>
 
 #include <memory>
@@ -81,6 +83,10 @@ public:
      */
     void setDocument(const PDFDocument* document);
 
+    /// Binds the renderer to the shared document revision authority. The
+    /// renderer does not take ownership; the context must outlive it.
+    void setDocumentContext(PDFDocumentContext* context);
+
     /**
      * @brief Returns the cached thumbnail for a page, or a null image if it is
      *        not cached. If the thumbnail is missing, then a render request is
@@ -124,6 +130,7 @@ private:
         int pageIndex = -1;
         int pixelSize = 1;
         quint64 epoch = 0;
+        PDFRevisionIdentity revision;
     };
 
     /// Result of one finished render request.
@@ -133,11 +140,13 @@ private:
         int pageIndex = -1;
         QImage image;
         quint64 epoch = 0;
+        PDFRevisionIdentity revision;
     };
     using RenderBatchResult = std::vector<RenderResult>;
 
     /// Returns the cache key for the given page and pixel size.
     QString getKey(int pageIndex, int pixelSize) const;
+    PDFRevisionIdentity currentRevision() const;
 
     /// Creates/reuses the rendering context for the current document.
     bool ensureContextLocked();
@@ -156,6 +165,7 @@ private:
 
 private slots:
     void onRenderFinished();
+    void onContextRevisionChanged(const pdf::PDFRevisionIdentity& previous, const pdf::PDFRevisionIdentity& current);
 
 private:
     const PDFDocument* m_document;
@@ -165,6 +175,9 @@ private:
     QFutureWatcher<RenderBatchResult> m_renderWatcher;
     bool m_renderInProgress = false;
     quint64 m_renderEpoch = 0;
+    PDFRevisionIdentity m_revision;
+    QPointer<PDFDocumentContext> m_documentContext;
+    QMetaObject::Connection m_contextConnection;
 
     /// Cache keys (including pixel size) per page index, used to invalidate
     /// cached images for a page when its content changes.

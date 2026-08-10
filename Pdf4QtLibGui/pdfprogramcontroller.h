@@ -25,6 +25,7 @@
 
 #include "pdfviewerglobal.h"
 #include "pdfdocument.h"
+#include "pdfsavepolicy.h"
 #include "pdfsignaturehandler.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentpropertiesdialog.h"
@@ -469,7 +470,7 @@ private:
     PDFTextToSpeech* m_textToSpeech;
     bool m_isDocumentSetInProgress;
     bool m_isRecoveredDocument;
-    bool m_requiresFullRewriteOnSave;
+    pdf::PDFOperationSavePolicy m_savePolicy;
     quint64 m_documentRevision;
 
     QFuture<AsyncReadingResult> m_future;

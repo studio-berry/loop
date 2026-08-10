@@ -73,6 +73,7 @@ public:
     QString id() const override { return QStringLiteral("production.validate-wide-format"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Low; }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::Layers | PDFRepairDomain::PageGeometry; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("validation does not mutate printable content")); }
     QJsonObject parameterSchema() const override { return geometrySchema(); }
 
     PDFOperationResult analyze(const PDFDocument&, const QJsonObject& parameters, PDFRepairPlan* plan) const override
@@ -110,6 +111,7 @@ public:
     QString id() const override { return QStringLiteral("production.add-contour-bleed"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::High; }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::Images | PDFRepairDomain::PageGeometry; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("production bleed is a corrective candidate")); }
     QJsonObject parameterSchema() const override
     {
         QJsonObject schema = geometrySchema();
@@ -208,6 +210,7 @@ public:
     QString id() const override { return QStringLiteral("production.place-grommets"); }
     PDFRepairRisk risk() const override { return PDFRepairRisk::Medium; }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Paths | PDFRepairDomain::PageGeometry; }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::incrementalAppend(QStringLiteral("planning-only operation does not mutate the document")); }
     QJsonObject parameterSchema() const override
     {
         return QJsonObject{

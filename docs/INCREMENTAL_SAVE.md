@@ -8,12 +8,31 @@ byte-for-byte.
 
 ## Save policy
 
-- Save in place for a signed document or a document that already has a `/Prev`
-  chain uses incremental save.
+Save mode is declared by the operation through `PDFOperationSavePolicy`; it is
+not a global user preference. The policy has three explicit modes:
+
+- `incremental-append` for ordinary annotation/metadata edits where prior
+  signed byte ranges and revisions should remain valid;
+- `full-rewrite` for redaction, sanitization, destructive cleanup, conversion,
+  optimization, and any operation that must remove prior content; and
+- `save-as-new-artifact` for production corrections, where the trusted input
+  remains immutable and the candidate is written to a separate output artifact.
+
+Each registered `PDFRepairOperation` exposes this policy in its descriptor,
+including whether signatures/certificates are invalidated and whether the
+operation is reversible in-session. `PDFRepairTransaction::savePolicy()`
+combines the policies of all operations conservatively: a new-artifact policy
+outranks full rewrite, which outranks incremental append. An unclassified
+operation defaults to new-artifact rather than being silently appended.
+
+- An incremental policy may save in place for a signed document or a document
+  that already has a `/Prev` chain, preserving the original prefix.
 - Save As always uses the existing full-rewrite writer.
 - Redaction, sanitization, and other destructive operations must use the full
   writer. The redaction verifier continues to reject a redacted output that
   contains `/Prev`.
+- A new-artifact policy cannot overwrite the trusted source; the Editor routes
+  it to Save As and rejects an attempt to use the source path as the output.
 - If the source cannot be read again, the interactive save is refused rather
   than risking a full rewrite of a signed or revisioned source.
 - A changed signature dictionary, removed object slot, source-byte mismatch, or
