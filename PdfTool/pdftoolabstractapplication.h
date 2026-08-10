@@ -247,6 +247,9 @@ struct PDFToolOptions
     QString preflightProfilePath;
     QString preflightJobContextPath;
     QString preflightProfileStorePath;
+    QString preflightDecisionsPath;
+    QString preflightDecisionsExportPath;
+    bool preflightRequireSignoff = false;
     QString preflightClientId;
     QString preflightProductId;
     QString preflightJobType;

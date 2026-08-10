@@ -52,6 +52,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QPair>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <lcms2.h>
@@ -65,6 +67,267 @@
 
 namespace pdf
 {
+
+namespace
+{
+
+bool isSha256Digest(const QString& value)
+{
+    static const QRegularExpression expression(QStringLiteral("^[0-9a-fA-F]{64}$"));
+    return expression.match(value).hasMatch();
+}
+
+} // namespace
+
+QString PreflightFinding::stableId() const
+{
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(checkId.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(scope.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(QByteArray::number(page));
+    hash.addData("\x1f", 1);
+    hash.addData(objectId.toUtf8());
+    hash.addData("\x1f", 1);
+    hash.addData(type.toUtf8());
+    return QString::fromLatin1(hash.result().toHex().left(16));
+}
+
+QString preflightDecisionKindToString(PreflightDecisionKind kind)
+{
+    switch (kind)
+    {
+        case PreflightDecisionKind::Accept:
+            return QStringLiteral("accept");
+        case PreflightDecisionKind::Waive:
+            return QStringLiteral("waive");
+        case PreflightDecisionKind::Override:
+            return QStringLiteral("override");
+        case PreflightDecisionKind::Reject:
+            return QStringLiteral("reject");
+        case PreflightDecisionKind::Reopen:
+            return QStringLiteral("reopen");
+    }
+
+    return QString();
+}
+
+bool preflightDecisionKindFromString(const QString& value, PreflightDecisionKind& kind)
+{
+    const QString normalized = value.trimmed().toLower();
+    const QList<QPair<QString, PreflightDecisionKind>> values = {
+        { QStringLiteral("accept"), PreflightDecisionKind::Accept },
+        { QStringLiteral("waive"), PreflightDecisionKind::Waive },
+        { QStringLiteral("override"), PreflightDecisionKind::Override },
+        { QStringLiteral("reject"), PreflightDecisionKind::Reject },
+        { QStringLiteral("reopen"), PreflightDecisionKind::Reopen }
+    };
+    for (const auto& valuePair : values)
+    {
+        if (normalized == valuePair.first)
+        {
+            kind = valuePair.second;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QString preflightDecisionStateToString(PreflightDecisionState state)
+{
+    switch (state)
+    {
+        case PreflightDecisionState::Active:
+            return QStringLiteral("active");
+        case PreflightDecisionState::StaleDocument:
+            return QStringLiteral("stale_document");
+        case PreflightDecisionState::StaleProfile:
+            return QStringLiteral("stale_profile");
+        case PreflightDecisionState::Invalid:
+            return QStringLiteral("invalid");
+    }
+
+    return QStringLiteral("invalid");
+}
+
+PreflightDecisionState PreflightDecision::resolveState(const QString& currentDocumentDigest,
+                                                       const QString& currentProfileDigest) const
+{
+    if (findingId.trimmed().isEmpty()
+        || justification.trimmed().size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH
+        || operatorIdentity.trimmed().isEmpty()
+        || !timestampUtc.isValid()
+        || !isSha256Digest(documentRevisionDigest)
+        || !isSha256Digest(effectiveProfileDigest)
+        || !isSha256Digest(currentDocumentDigest)
+        || !isSha256Digest(currentProfileDigest))
+    {
+        return PreflightDecisionState::Invalid;
+    }
+
+    if (documentRevisionDigest.compare(currentDocumentDigest, Qt::CaseInsensitive) != 0)
+    {
+        return PreflightDecisionState::StaleDocument;
+    }
+    if (effectiveProfileDigest.compare(currentProfileDigest, Qt::CaseInsensitive) != 0)
+    {
+        return PreflightDecisionState::StaleProfile;
+    }
+
+    return PreflightDecisionState::Active;
+}
+
+bool PreflightDecision::countsForSignoff(const QString& currentDocumentDigest,
+                                         const QString& currentProfileDigest) const
+{
+    const PreflightDecisionState state = resolveState(currentDocumentDigest, currentProfileDigest);
+    return state == PreflightDecisionState::Active
+        && (kind == PreflightDecisionKind::Accept
+            || kind == PreflightDecisionKind::Waive
+            || kind == PreflightDecisionKind::Override);
+}
+
+QJsonObject PreflightDecision::toJson(const QString& currentDocumentDigest,
+                                     const QString& currentProfileDigest) const
+{
+    QJsonObject object{
+        { QStringLiteral("finding_id"), findingId },
+        { QStringLiteral("kind"), preflightDecisionKindToString(kind) },
+        { QStringLiteral("justification"), justification },
+        { QStringLiteral("operator"), operatorIdentity },
+        { QStringLiteral("timestamp_utc"), timestampUtc.toUTC().toString(Qt::ISODateWithMs) },
+        { QStringLiteral("document_revision_digest"), documentRevisionDigest },
+        { QStringLiteral("effective_profile_digest"), effectiveProfileDigest }
+    };
+
+    if (!externalReference.trimmed().isEmpty())
+    {
+        object.insert(QStringLiteral("external_reference"), externalReference);
+    }
+    if (!currentDocumentDigest.isEmpty() || !currentProfileDigest.isEmpty())
+    {
+        object.insert(QStringLiteral("state"), preflightDecisionStateToString(resolveState(currentDocumentDigest, currentProfileDigest)));
+    }
+
+    return object;
+}
+
+bool PreflightDecision::fromJson(const QJsonObject& object,
+                                 PreflightDecision& decision,
+                                 QString& errorMessage)
+{
+    decision = PreflightDecision();
+    errorMessage.clear();
+
+    decision.findingId = object.value(QStringLiteral("finding_id")).toString().trimmed();
+    if (decision.findingId.isEmpty())
+    {
+        errorMessage = QStringLiteral("Decision is missing finding_id.");
+        return false;
+    }
+
+    if (!preflightDecisionKindFromString(object.value(QStringLiteral("kind")).toString(), decision.kind))
+    {
+        errorMessage = QStringLiteral("Decision kind is invalid.");
+        return false;
+    }
+
+    decision.justification = object.value(QStringLiteral("justification")).toString().trimmed();
+    if (decision.justification.size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH)
+    {
+        errorMessage = QStringLiteral("Decision justification must contain at least %1 non-whitespace characters.")
+            .arg(PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH);
+        return false;
+    }
+
+    decision.operatorIdentity = object.value(QStringLiteral("operator")).toString().trimmed();
+    if (decision.operatorIdentity.isEmpty())
+    {
+        errorMessage = QStringLiteral("Decision is missing operator identity.");
+        return false;
+    }
+
+    const QString timestamp = object.value(QStringLiteral("timestamp_utc")).toString();
+    decision.timestampUtc = QDateTime::fromString(timestamp, Qt::ISODateWithMs);
+    if (!decision.timestampUtc.isValid())
+    {
+        decision.timestampUtc = QDateTime::fromString(timestamp, Qt::ISODate);
+    }
+    if (!decision.timestampUtc.isValid() || decision.timestampUtc.timeSpec() == Qt::LocalTime)
+    {
+        errorMessage = QStringLiteral("Decision timestamp_utc must be a valid ISO-8601 timestamp with an explicit UTC offset.");
+        return false;
+    }
+    decision.timestampUtc = decision.timestampUtc.toUTC();
+
+    decision.externalReference = object.value(QStringLiteral("external_reference")).toString().trimmed();
+    decision.documentRevisionDigest = object.value(QStringLiteral("document_revision_digest")).toString().trimmed().toLower();
+    decision.effectiveProfileDigest = object.value(QStringLiteral("effective_profile_digest")).toString().trimmed().toLower();
+    if (!isSha256Digest(decision.documentRevisionDigest) || !isSha256Digest(decision.effectiveProfileDigest))
+    {
+        errorMessage = QStringLiteral("Decision document and profile digests must be 64-character SHA-256 values.");
+        return false;
+    }
+
+    return true;
+}
+
+QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions)
+{
+    QJsonArray array;
+    for (const PreflightDecision& decision : decisions)
+    {
+        array.append(decision.toJson());
+    }
+    return QJsonObject{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("decisions"), array }
+    };
+}
+
+bool preflightDecisionsFromJson(const QJsonObject& object,
+                                QList<PreflightDecision>& decisions,
+                                QString& errorMessage)
+{
+    decisions.clear();
+    errorMessage.clear();
+    if (object.value(QStringLiteral("schema_version")).toInt() != 1)
+    {
+        errorMessage = QStringLiteral("Decision file schema_version must be 1.");
+        return false;
+    }
+
+    const QJsonValue value = object.value(QStringLiteral("decisions"));
+    if (!value.isArray())
+    {
+        errorMessage = QStringLiteral("Decision file decisions must be an array.");
+        return false;
+    }
+
+    const QJsonArray array = value.toArray();
+    for (int index = 0; index < array.size(); ++index)
+    {
+        if (!array.at(index).isObject())
+        {
+            errorMessage = QStringLiteral("Decision %1 must be an object.").arg(index);
+            decisions.clear();
+            return false;
+        }
+
+        PreflightDecision decision;
+        if (!PreflightDecision::fromJson(array.at(index).toObject(), decision, errorMessage))
+        {
+            errorMessage = QStringLiteral("Decision %1: %2").arg(index).arg(errorMessage);
+            decisions.clear();
+            return false;
+        }
+        decisions.append(decision);
+    }
+
+    return true;
+}
 
 QString pdfxFlavorToString(PDFXFlavor flavor)
 {
@@ -291,6 +554,7 @@ bool hasMeaningfulBbox(const QRectF& rect)
 QJsonObject findingToJson(const PreflightFinding& finding)
 {
     QJsonObject object;
+    object.insert(QStringLiteral("id"), finding.stableId());
     object.insert(QStringLiteral("scope"), finding.scope);
     object.insert(QStringLiteral("type"), finding.type);
     object.insert(QStringLiteral("severity"), finding.severity);
@@ -3737,9 +4001,24 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     {
         root.insert(QStringLiteral("pdf"), pdfPath);
     }
+    if (!documentRevisionDigest.isEmpty())
+    {
+        root.insert(QStringLiteral("document_revision_digest"), documentRevisionDigest);
+    }
+    if (!effectiveProfileDigest.isEmpty())
+    {
+        root.insert(QStringLiteral("effective_profile_digest"), effectiveProfileDigest);
+    }
     root.insert(QStringLiteral("errors"), errorsArray);
     root.insert(QStringLiteral("warnings"), warningsArray);
     root.insert(QStringLiteral("fixups_available"), fixupsArray);
+
+    QJsonArray decisionsArray;
+    for (const PreflightDecision& decision : decisions)
+    {
+        decisionsArray.append(decision.toJson(documentRevisionDigest, effectiveProfileDigest));
+    }
+    root.insert(QStringLiteral("decisions"), decisionsArray);
 
     if (!profileResolution.isEmpty())
     {
