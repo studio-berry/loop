@@ -25,6 +25,7 @@
 #include "pdfdocumentsession.h"
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -315,8 +316,9 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     if (!resolved.ok)
     {
         pdf::PreflightResult result;
-        result.pass = false;
         result.inspectionComplete = false;
+        result.errorCode = resolved.errorCode.isEmpty() ? QStringLiteral("profile-resolution") : resolved.errorCode;
+        result.errorMessage = profileError.isEmpty() ? resolved.errorMessage : profileError;
         result.profileName = QStringLiteral("Unresolved profile");
         pdf::PreflightFinding finding;
         finding.scope = QString::fromLatin1(pdf::PREFLIGHT_FINDING_SCOPE_DOCUMENT);
@@ -335,7 +337,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                 { QStringLiteral("report"), result.toJson(options.document) }
             });
         }
-        return PDFToolExitCode::Findings;
+        const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+        return verdict.state == pdf::PreflightVerdictState::Error
+            ? PDFToolExitCode::PreflightError
+            : PDFToolExitCode::PreflightIncomplete;
     }
 
     profileJson = resolved.effectiveProfile;
@@ -356,8 +361,25 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     result.effectiveProfileDigest = QString::fromLatin1(resolved.effectiveHash);
     result.decisions = decisions;
 
-    PDFToolExitCode resultExitCode = result.pass ? PDFToolExitCode::Success : PDFToolExitCode::Findings;
-    if (options.preflightRequireSignoff)
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    result.pass = verdict.isPass();
+    PDFToolExitCode resultExitCode = PDFToolExitCode::PreflightError;
+    switch (verdict.state)
+    {
+        case pdf::PreflightVerdictState::Pass:
+            resultExitCode = PDFToolExitCode::Success;
+            break;
+        case pdf::PreflightVerdictState::Fail:
+            resultExitCode = PDFToolExitCode::Findings;
+            break;
+        case pdf::PreflightVerdictState::Incomplete:
+            resultExitCode = PDFToolExitCode::PreflightIncomplete;
+            break;
+        case pdf::PreflightVerdictState::Error:
+            resultExitCode = PDFToolExitCode::PreflightError;
+            break;
+    }
+    if (options.preflightRequireSignoff && verdict.state == pdf::PreflightVerdictState::Fail)
     {
         for (const pdf::PreflightFinding& finding : result.errors)
         {

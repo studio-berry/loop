@@ -252,6 +252,17 @@ void PageItemPreviewRenderer::requestPreview(const PageGroupItem* item, const QR
             return;
     }
 
+    request.revision.cacheGeneration = m_renderEpoch;
+    if (request.pageType == PT_DocumentPage)
+    {
+        QMutexLocker guard(&m_contextMutex);
+        const auto it = m_documentContexts.find(request.documentIndex);
+        if (it != m_documentContexts.cend())
+        {
+            request.revision.artifact = it->second->revision.artifact;
+        }
+    }
+
     m_pendingKeys.insert(key);
     m_requestQueue.push_back(std::move(request));
     startNextRequest();
@@ -311,7 +322,7 @@ QString PageItemPreviewRenderer::getPageImageKey(const PageGroupItem* item, cons
     Q_ASSERT(!item->groups.empty());
 
     const PageGroupItem::GroupItem& groupItem = item->groups.front();
-    return QString("%1#%2#%3#%4#%5#%6#%7#%8#%9@%10x%11")
+    return QString("%1#%2#%3#%4#%5#%6#%7#%8#%9@%10x%11@r%12")
             .arg(groupItem.documentIndex)
             .arg(groupItem.imageIndex)
             .arg(int(groupItem.pageAdditionalRotation))
@@ -322,7 +333,8 @@ QString PageItemPreviewRenderer::getPageImageKey(const PageGroupItem* item, cons
             .arg(int(groupItem.cropMarginsMM.right() * 100.0))
             .arg(int(groupItem.cropMarginsMM.bottom() * 100.0))
             .arg(logicalSize.width())
-            .arg(logicalSize.height());
+            .arg(logicalSize.height())
+            .arg(m_renderEpoch);
 }
 
 bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
@@ -343,6 +355,7 @@ bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
 
     auto context = std::make_unique<DocumentRenderContext>();
     context->document = &it->second.document;
+    context->revision = pdf::PDFRevisionIdentity { pdf::PDFArtifactIdentity::fromDocument(context->document), 0, m_renderEpoch, QString() };
     context->fontCache = std::make_unique<pdf::PDFFontCache>(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     context->cmsManager = std::make_unique<pdf::PDFCMSManager>(nullptr);
     context->optionalContentActivity = std::make_unique<pdf::PDFOptionalContentActivity>(context->document, pdf::OCUsage::View, nullptr);
@@ -449,6 +462,7 @@ PageItemPreviewRenderer::RenderResult PageItemPreviewRenderer::renderPreviewAsyn
     result.key = request.key;
     result.row = request.row;
     result.epoch = request.epoch;
+    result.revision = request.revision;
 
     const QSize pixelSize = (QSizeF(request.logicalSize) * request.devicePixelRatio).toSize();
     if (!pixelSize.isValid())
@@ -654,7 +668,7 @@ void PageItemPreviewRenderer::onRenderFinished()
 
         if (!result.image.isNull())
         {
-            const bool isCurrentResult = result.epoch == m_renderEpoch || isRowVisible(result.row);
+            const bool isCurrentResult = result.epoch == m_renderEpoch && result.revision.cacheGeneration == m_renderEpoch;
             if (isCurrentResult)
             {
                 const int cost = qMax(1, int(qMin<qint64>(result.image.sizeInBytes(), std::numeric_limits<int>::max())));

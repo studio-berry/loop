@@ -132,7 +132,11 @@ void PreflightReportModel::setReport(const QJsonObject& report)
     m_findings.clear();
     m_fixups.clear();
     m_hasReport = true;
-    m_pass = report.value(QStringLiteral("pass")).toBool(true);
+    const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
+    m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(true)
+        ? QStringLiteral("pass") : QStringLiteral("fail"));
+    m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
+    m_pass = m_verdictState == QStringLiteral("pass");
     m_profileName = report.value(QStringLiteral("profile")).toString();
     m_schemaVersion = report.value(QStringLiteral("schema_version")).toInt(1);
     m_errorCount = 0;
@@ -173,6 +177,8 @@ void PreflightReportModel::clear()
     m_fixups.clear();
     m_hasReport = false;
     m_pass = true;
+    m_verdictState = QStringLiteral("pass");
+    m_verdictReason.clear();
     m_profileName.clear();
     m_schemaVersion = 2;
     m_errorCount = 0;

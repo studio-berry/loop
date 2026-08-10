@@ -1,6 +1,9 @@
 # ADR-005: Product surface pruning classification (0.1.1A)
 
 **Status:** accepted
+**Implemented-at:** not implemented
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-08-07
 **Deciders:** Loupe 0.1.1 milestone (Notion: Product Convergence); 1.1A audit
 

@@ -3,13 +3,12 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - dev
+      - stable
   pull_request:
     branches:
-      - master
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
+      - dev
+      - stable
       
   workflow_dispatch:
 
@@ -46,6 +45,9 @@ jobs:
       - name: Verify generated dependency paths are untracked
         working-directory: pdf4qt
         run: python3 scripts/ci/check_generated_dependency_paths.py
+      - name: Verify branch policy
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_branch_policy.py
 
       - name: Prepare vcpkg directories
         run: |
@@ -97,7 +99,7 @@ jobs:
           }
 
           ./vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg integrate install
+          ./vcpkg/vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -187,6 +189,11 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_generated_dependency_paths.py
+      - name: Verify branch policy
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_branch_policy.py
 
       - name: Prepare vcpkg directories
         shell: pwsh
@@ -213,7 +220,7 @@ jobs:
           }
 
           .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-          .\vcpkg integrate install
+          .\vcpkg\vcpkg.exe integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -231,7 +238,7 @@ jobs:
       - name: 'VCPKG: Install project dependencies'
         run: |
           $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'pdf4qt'
-          .\vcpkg install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
         
       - name: Install Qt
@@ -285,14 +292,12 @@ jobs:
 
   # Single always-running status check for branch protection.
   #
-  # The pull_request trigger sets paths-ignore for docs/** and **/*.md, so the build
-  # jobs are skipped entirely on documentation-only pull requests. Requiring them
-  # directly in branch protection would leave those pull requests pending forever, so
-  # require this job instead: it fails if either build job failed or was cancelled, and
-  # passes when they succeeded or were legitimately skipped.
+  # Require this job in branch protection instead of the platform-specific build jobs:
+  # it provides one stable status name for both branch targets and fails if either
+  # build job failed or was cancelled.
   #
-  # This gap is how a broken master went unnoticed: a docs-only pull request merged with
-  # no CI signal, and the pre-existing failure only surfaced on the push run.
+  # Running the full workflow for documentation changes keeps this required status
+  # present on every pull request.
   ci_ok:
     # Not `always()`: that also fires when concurrency cancel-in-progress supersedes the
     # run, reporting a red check against a commit nobody is waiting on. `!cancelled()`
@@ -301,7 +306,7 @@ jobs:
     if: ${{ !cancelled() }}
     needs: [build_ubuntu, build_windows]
     runs-on: ubuntu-latest
-    # Reads only the `needs` context; no repository access required.
+    # Reads only the needs context; no repository access required.
     permissions: {}
     steps:
       - name: Check build job results
