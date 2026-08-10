@@ -82,6 +82,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfprocessingbudget.h
     sources/preflightengine.cpp
     sources/preflightengine.h
+    sources/pdfpreflightverdict.cpp
+    sources/pdfpreflightverdict.h
     sources/preflightprofileresolver.cpp
     sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h
