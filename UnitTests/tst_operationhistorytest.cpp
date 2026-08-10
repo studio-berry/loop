@@ -42,6 +42,7 @@ private slots:
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
+    void provenanceKindsRoundTripAndMiddleDeletionCompromisesChain();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -217,7 +218,13 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     rollback.approval.actorId = QStringLiteral("test-system");
     rollback.approval.decision = QStringLiteral("approve");
     rollback.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    const auto eventsBeforeRollback = history.events();
+    QCOMPARE(eventsBeforeRollback.size(), 2);
     QVERIFY(history.rollbackTo(rollback, artifacts, current.fileName()));
+    const auto eventsAfterRollback = history.events();
+    QCOMPARE(eventsAfterRollback.size(), 4);
+    QCOMPARE(eventsAfterRollback.at(0).entryId, eventsBeforeRollback.at(0).entryId);
+    QCOMPARE(eventsAfterRollback.at(1).entryId, eventsBeforeRollback.at(1).entryId);
     QVERIFY(current.open(QIODevice::ReadOnly));
     QCOMPARE(current.readAll(), QByteArray("final"));
     current.close();
@@ -264,6 +271,75 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     QVERIFY(database.open());
     QSqlQuery query(database);
     QVERIFY(query.exec(QStringLiteral("UPDATE history_events SET result_json = '{\"changed\":true}' WHERE sequence = 1")));
+    database.close();
+    database = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
+
+    const auto verification = history.verify();
+    QVERIFY(!verification.verified);
+    QCOMPARE(verification.integrity, QStringLiteral("compromised"));
+}
+
+void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesChain()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY(input.success);
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(input.artifact));
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("provenance.test");
+    execution.input = input.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+
+    const QString digest(64, QLatin1Char('a'));
+    const QList<pdf::PDFOperationHistoryEventKind> kinds{
+        pdf::PDFOperationHistoryEventKind::DocumentOpened,
+        pdf::PDFOperationHistoryEventKind::PreflightRun,
+        pdf::PDFOperationHistoryEventKind::FixApplied,
+        pdf::PDFOperationHistoryEventKind::DecisionRecorded,
+        pdf::PDFOperationHistoryEventKind::DecisionInvalidated,
+        pdf::PDFOperationHistoryEventKind::CertificateIssued,
+        pdf::PDFOperationHistoryEventKind::CertificateInvalidated
+    };
+
+    for (const auto kind : kinds)
+    {
+        pdf::PDFOperationHistoryEvent event;
+        event.executionId = executionId;
+        event.kind = kind;
+        event.status = pdf::PDFOperationHistoryStatus::Rejected;
+        event.operatorIdentity = QStringLiteral("local-user:test");
+        event.documentRevisionDigest = digest;
+        event.effectiveProfileDigest = digest;
+        event.approval.decisionReference = QStringLiteral("decision-test");
+        QVERIFY(history.appendEvent(event));
+    }
+
+    const auto rows = history.events();
+    QCOMPARE(rows.size(), kinds.size());
+    for (int index = 0; index < kinds.size(); ++index)
+    {
+        QCOMPARE(static_cast<int>(rows.at(index).kind), static_cast<int>(kinds.at(index)));
+        QCOMPARE(rows.at(index).operatorIdentity, QStringLiteral("local-user:test"));
+        QCOMPARE(rows.at(index).documentRevisionDigest, digest);
+        QCOMPARE(rows.at(index).effectiveProfileDigest, digest);
+        QCOMPARE(rows.at(index).approval.decisionReference, QStringLiteral("decision-test"));
+    }
+    QVERIFY(history.verify().verified);
+
+    const QString connectionName = QStringLiteral("provenance-middle-delete-test");
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+    database.setDatabaseName(history.databasePath());
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral("DELETE FROM history_events WHERE sequence = 4")));
     database.close();
     database = QSqlDatabase();
     QSqlDatabase::removeDatabase(connectionName);

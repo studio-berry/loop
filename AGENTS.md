@@ -1,12 +1,15 @@
 # Agent Instructions
 
-Loupe-PDF is a fork of PDF4QT — a Qt6 / C++20 PDF toolkit (core library, widgets, GUI apps, CLI tools, editor plugins). Prefer minimal, local changes that match nearby code.
+Loupe is the canonical `studio-berry/loupe` repository, forked from PDF4QT — a
+Qt6 / C++20 PDF toolkit (core library, widgets, GUI apps, CLI tools, editor
+plugins). Prefer minimal, local changes that match nearby code.
 
 ## Loupe / project facts
 
 | Item | Value |
 |------|-------|
-| **Fork** | [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf) ← [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
+| **Repository** | [studio-berry/loupe](https://github.com/studio-berry/loupe) |
+| **Upstream** | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
 | **Version** | `1.6.0.0` (`PDF4QT_VERSION` in root `CMakeLists.txt`) |
 | **Language** | C++20 |
 | **Qt** | **6.11.1 minimum** (CI installs **6.11.1** via `jurplel/install-qt-action`; older versions are blocked because of Qt SVG security fixes) |
@@ -70,6 +73,22 @@ Loupe uses a **split surface** model — one core library (`Pdf4QtLibCore`), mul
 - Shared PDF logic used by multiple surfaces → **Core** (and `Pdf4QtLibWidgets/` / `Pdf4QtLibGui/` if UI helpers are needed)
 
 Do not make Viewer the primary shell or add plugin hosting to PageMaster without an explicit architecture change.
+
+## Branch policy
+
+The repository default and release branch is `stable`; `dev` is the protected
+integration branch. Short-lived topic branches start from `dev` and merge back
+to `dev` before release promotion. `master` is not an active Loupe branch.
+The machine-readable policy is [`docs/branch-policy.json`](docs/branch-policy.json)
+and the human-facing explanation is [`docs/BRANCH_POLICY.md`](docs/BRANCH_POLICY.md).
+
+When this file conflicts with current code on `dev` or an explicitly
+re-verified issue status block, follow the hierarchy in
+[`docs/architecture-source-of-truth.md`](docs/architecture-source-of-truth.md).
+The generated factual inventory is
+[`docs/generated/architecture-catalog.json`](docs/generated/architecture-catalog.json);
+regenerate it with `scripts/generate-architecture-catalogs.py` rather than
+hand-editing catalog entries.
 
 ## Page boxes and prepress fixups
 

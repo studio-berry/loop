@@ -417,7 +417,7 @@ PDFProgramController::PDFProgramController(QObject* parent) :
     m_textToSpeech(nullptr),
     m_isDocumentSetInProgress(false),
     m_isRecoveredDocument(false),
-    m_requiresFullRewriteOnSave(false),
+    m_savePolicy(pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit"))),
     m_documentRevision(0),
     m_futureWatcher(nullptr),
     m_CMSManager(new pdf::PDFCMSManager(this)),
@@ -1324,7 +1324,7 @@ void PDFProgramController::performSaveAs()
 
 void PDFProgramController::performSave()
 {
-    if (m_isRecoveredDocument)
+    if (m_isRecoveredDocument || m_savePolicy.mode == pdf::PDFSaveMode::SaveAsNewArtifact)
     {
         performSaveAs();
         return;
@@ -1340,6 +1340,14 @@ void PDFProgramController::saveDocument(const QString& fileName)
     pdf::PDFOperationResult result(false);
     const bool saveAsNewOutput = QFileInfo(fileName).absoluteFilePath() != m_fileInfo.absoluteFilePath;
 
+    if (!saveAsNewOutput && m_savePolicy.mode == pdf::PDFSaveMode::SaveAsNewArtifact)
+    {
+        QMessageBox::warning(m_mainWindow,
+                             tr("Save As required"),
+                             tr("This operation creates a new production artifact and cannot overwrite the trusted source."));
+        return;
+    }
+
     if (saveAsNewOutput)
     {
         result = writer.write(fileName, m_pdfDocument.data(), true);
@@ -1352,7 +1360,7 @@ void PDFProgramController::saveDocument(const QString& fileName)
         {
             result = tr("The source PDF could not be validated before saving. %1").arg(reader.getErrorMessage());
         }
-        else if (writer.getRecommendedWriteMode(&sourceDocument, m_requiresFullRewriteOnSave, false) == pdf::PDFDocumentWriter::WriteMode::Incremental)
+        else if (writer.getRecommendedWriteMode(&sourceDocument, m_savePolicy, false) == pdf::PDFDocumentWriter::WriteMode::Incremental)
         {
             result = writer.writeIncremental(fileName, &sourceDocument, m_pdfDocument.data(), true);
         }
@@ -1369,7 +1377,7 @@ void PDFProgramController::saveDocument(const QString& fileName)
         }
 
         updateFileInfo(fileName);
-        m_requiresFullRewriteOnSave = false;
+        m_savePolicy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("save completed"));
         m_isRecoveredDocument = false;
         m_recoveryManager->markSaved(fileName, m_documentRevision);
         updateTitle();
@@ -1625,7 +1633,7 @@ void PDFProgramController::onActionOptimizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("optimization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1638,7 +1646,7 @@ void PDFProgramController::onActionOptimizeImagesTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("optimization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1651,7 +1659,7 @@ void PDFProgramController::onActionSanitizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("sanitization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeSanitizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1855,7 +1863,7 @@ void PDFProgramController::onActionCreateBitonalDocumentTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("bitonal conversion operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeBitonaldDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1893,7 +1901,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         storage.setSecurityHandler(qMove(clonedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(qMove(storage), m_pdfDocument->getInfo()->version, QByteArray()));
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("decryption operation"));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Authorization);
         onDocumentModified(qMove(document));
     }
@@ -1948,7 +1956,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         builder.setSecurityHandler(qMove(updatedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(builder.build()));
-        m_requiresFullRewriteOnSave = true;
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("encryption operation"));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Reset);
         onDocumentModified(qMove(document));
     }
@@ -2512,7 +2520,7 @@ void PDFProgramController::setDocument(pdf::PDFModifiedDocument document, std::v
 {
     if (isCurrentSaved)
     {
-        m_requiresFullRewriteOnSave = false;
+        m_savePolicy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("current document revision is saved"));
     }
 
     if (document.hasReset())
