@@ -3193,7 +3193,7 @@ void PDFPageContentProcessor::processForm(const PDFStream* stream)
     QTransform transformationMatrix = loader.readMatrixFromDictionary(streamDictionary, "Matrix", QTransform());
 
     // Read the dictionary content
-    QByteArray content = m_document->getDecodedStream(stream);
+    QByteArray content = m_document->getDecodedStream(stream, m_processingBudget);
 
     // Read resources
     PDFObject resources = m_document->getObject(streamDictionary->get("Resources"));
