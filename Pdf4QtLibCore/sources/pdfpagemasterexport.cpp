@@ -117,7 +117,7 @@ QStringList plannedOutputPaths(const PDFPageMasterExportJob& job, const QString&
     for (const QString& outputPath : job.outputFileNames)
     {
         paths.append(outputPath);
-        if (job.hasPreflightGate && !job.preflightProfilePath.isEmpty())
+        if (job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext))
         {
             paths.append(outputPath + QStringLiteral(".preflight.json"));
             if (job.revalidatePreflightAfterFixups)
@@ -554,16 +554,42 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         progress->start(job.assembledDocuments.size(), std::move(info));
     }
 
-    const bool runPreflight = job.hasPreflightGate && !job.preflightProfilePath.isEmpty();
+    const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
     QJsonObject preflightProfile;
+    QJsonObject preflightResolution;
     if (runPreflight)
     {
+        PreflightProfileResolver resolver;
+        PreflightResolvedProfile resolved;
         QString profileError;
-        if (!PreflightEngine::loadProfile(job.preflightProfilePath, preflightProfile, profileError))
+        if (!job.preflightProfilePath.isEmpty())
+        {
+            if (!PreflightEngine::loadProfile(job.preflightProfilePath, preflightProfile, profileError))
+            {
+                finishProgressIfActive(activeProgress(job));
+                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            resolved = resolver.resolveExplicitProfile(preflightProfile,
+                                                       QFileInfo(job.preflightProfilePath).completeBaseName(),
+                                                       QStringLiteral("explicit"));
+        }
+        else
+        {
+            PreflightProfileSnapshot snapshot;
+            if (!PreflightProfileStore::loadDirectory(job.preflightProfileStorePath, snapshot, profileError))
+            {
+                finishProgressIfActive(activeProgress(job));
+                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            resolved = resolver.resolve(job.preflightContext, snapshot);
+        }
+        if (!resolved.ok)
         {
             finishProgressIfActive(activeProgress(job));
-            return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
+            return createExportError(resolved.errorMessage, std::move(result.writtenFiles), manifestPath, manifest);
         }
+        preflightProfile = resolved.effectiveProfile;
+        preflightResolution = resolved.provenance();
     }
 
     for (size_t index = 0; index < job.assembledDocuments.size(); ++index)
@@ -610,7 +636,8 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             PDFDocumentSession session(&assembledDocument);
             PreflightEngine engine(&session);
-            const PreflightResult preflightResult = engine.run(preflightProfile);
+            PreflightResult preflightResult = engine.run(preflightProfile);
+            preflightResult.profileResolution = preflightResolution;
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("initial"), preflightReport);
             writePreflightReport(fileName, preflightReport);
@@ -689,7 +716,8 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             PDFDocumentSession session(&assembledDocument);
             PreflightEngine engine(&session);
-            const PreflightResult preflightResult = engine.run(preflightProfile);
+            PreflightResult preflightResult = engine.run(preflightProfile);
+            preflightResult.profileResolution = preflightResolution;
             const QJsonObject preflightReport = preflightResult.toJson(fileName);
             setOutputPreflightReport(manifest, int(index), QStringLiteral("revalidation"), preflightReport);
             writeFileAtomically(fileName + QStringLiteral(".preflight-final.json"),
