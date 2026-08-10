@@ -40,7 +40,7 @@ namespace pdf
 namespace
 {
 
-constexpr int CurrentSchemaVersion = 2;
+constexpr int CurrentSchemaVersion = 3;
 
 QString connectionName()
 {
@@ -186,9 +186,14 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
     if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS artifacts (sha256 TEXT PRIMARY KEY, size_bytes INTEGER NOT NULL, media_type TEXT NOT NULL, logical_name TEXT, storage_token TEXT, created_utc TEXT NOT NULL, is_original_input INTEGER NOT NULL DEFAULT 0, artifact_evicted INTEGER NOT NULL DEFAULT 0)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS executions (execution_id TEXT PRIMARY KEY, parent_execution_id TEXT, operation_id TEXT NOT NULL, operation_version INTEGER NOT NULL, source_sha256 TEXT NOT NULL, source_revision INTEGER NOT NULL, parameters_json TEXT NOT NULL, started_utc TEXT NOT NULL, FOREIGN KEY(source_sha256) REFERENCES artifacts(sha256), FOREIGN KEY(parent_execution_id) REFERENCES executions(execution_id))"), &error) ||
-        !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS history_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL UNIQUE, execution_id TEXT NOT NULL, status TEXT NOT NULL, result_json TEXT NOT NULL, output_sha256 TEXT, finding_ids_json TEXT NOT NULL, report_sha256 TEXT, diff_sha256 TEXT, approval_json TEXT NOT NULL, previous_event_hash TEXT NOT NULL, event_hash TEXT NOT NULL, created_utc TEXT NOT NULL, FOREIGN KEY(execution_id) REFERENCES executions(execution_id), FOREIGN KEY(output_sha256) REFERENCES artifacts(sha256))"), &error) ||
+        !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS history_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL UNIQUE, execution_id TEXT NOT NULL, event_kind TEXT NOT NULL DEFAULT 'operation', status TEXT NOT NULL, operator_identity TEXT NOT NULL DEFAULT '', document_revision_digest TEXT NOT NULL DEFAULT '', effective_profile_digest TEXT NOT NULL DEFAULT '', result_json TEXT NOT NULL, output_sha256 TEXT, finding_ids_json TEXT NOT NULL, report_sha256 TEXT, diff_sha256 TEXT, approval_json TEXT NOT NULL, previous_event_hash TEXT NOT NULL, event_hash TEXT NOT NULL, created_utc TEXT NOT NULL, FOREIGN KEY(execution_id) REFERENCES executions(execution_id), FOREIGN KEY(output_sha256) REFERENCES artifacts(sha256))"), &error) ||
         (schemaVersion == 1 && (!exec(m_impl->database, QStringLiteral("ALTER TABLE artifacts ADD COLUMN is_original_input INTEGER NOT NULL DEFAULT 0"), &error) ||
                                 !exec(m_impl->database, QStringLiteral("ALTER TABLE artifacts ADD COLUMN artifact_evicted INTEGER NOT NULL DEFAULT 0"), &error))) ||
+        (schemaVersion > 0 && schemaVersion < 3 &&
+         (!exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN event_kind TEXT NOT NULL DEFAULT 'operation'"), &error) ||
+          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN operator_identity TEXT NOT NULL DEFAULT ''"), &error) ||
+          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN document_revision_digest TEXT NOT NULL DEFAULT ''"), &error) ||
+          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN effective_profile_digest TEXT NOT NULL DEFAULT ''"), &error))) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS rollback_points (rollback_id TEXT PRIMARY KEY, audit_event_id TEXT, document_revision_digest TEXT NOT NULL, created_utc TEXT NOT NULL, artifact_path TEXT NOT NULL, artifact_bytes INTEGER NOT NULL, operation_id TEXT NOT NULL, plan_summary TEXT NOT NULL, is_original_input INTEGER NOT NULL DEFAULT 0, approved_output INTEGER NOT NULL DEFAULT 0, artifact_evicted INTEGER NOT NULL DEFAULT 0, evicted_utc TEXT, FOREIGN KEY(audit_event_id) REFERENCES history_events(entry_id), FOREIGN KEY(document_revision_digest) REFERENCES artifacts(sha256))"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_history_execution ON history_events(execution_id, sequence)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_execution_source ON executions(source_sha256, source_revision)"), &error) ||
@@ -319,13 +324,16 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     if (event.entryId.isNull()) event.entryId = QUuid::createUuid();
     if (event.executionId.isNull() || !event.approval.isValid()) return PDFOperationResult(QStringLiteral("History event identity or approval is invalid."));
     if (!event.createdUtc.isValid()) event.createdUtc = QDateTime::currentDateTimeUtc();
-    if ((event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack) && !event.output)
+    if (event.kind == PDFOperationHistoryEventKind::Operation &&
+        (event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack) && !event.output)
     {
         return PDFOperationResult(QStringLiteral("Accepted history events require a durable output artifact."));
     }
     if (event.output && !event.output->isValid()) return PDFOperationResult(QStringLiteral("History output artifact identity is invalid."));
     if ((!event.reportArtifactSha256.isEmpty() && !isPDFSha256(event.reportArtifactSha256)) ||
-        (!event.diffArtifactSha256.isEmpty() && !isPDFSha256(event.diffArtifactSha256)))
+        (!event.diffArtifactSha256.isEmpty() && !isPDFSha256(event.diffArtifactSha256)) ||
+        (!event.documentRevisionDigest.isEmpty() && !isPDFSha256(event.documentRevisionDigest)) ||
+        (!event.effectiveProfileDigest.isEmpty() && !isPDFSha256(event.effectiveProfileDigest)))
     {
         return PDFOperationResult(QStringLiteral("History evidence digest is invalid."));
     }
@@ -343,10 +351,14 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     event.eventHash = computeOperationHistoryEventHash(event, previousHash);
 
     QSqlQuery query(m_impl->database);
-    query.prepare(QStringLiteral("INSERT INTO history_events(entry_id, execution_id, status, result_json, output_sha256, finding_ids_json, report_sha256, diff_sha256, approval_json, previous_event_hash, event_hash, created_utc) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    query.prepare(QStringLiteral("INSERT INTO history_events(entry_id, execution_id, event_kind, status, operator_identity, document_revision_digest, effective_profile_digest, result_json, output_sha256, finding_ids_json, report_sha256, diff_sha256, approval_json, previous_event_hash, event_hash, created_utc) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
     query.addBindValue(event.entryId.toString(QUuid::WithoutBraces));
     query.addBindValue(event.executionId.toString(QUuid::WithoutBraces));
+    query.addBindValue(pdfOperationHistoryEventKindToString(event.kind));
     query.addBindValue(pdfOperationHistoryStatusToString(event.status));
+    query.addBindValue(event.operatorIdentity);
+    query.addBindValue(event.documentRevisionDigest.toLower());
+    query.addBindValue(event.effectiveProfileDigest.toLower());
     query.addBindValue(QString::fromUtf8(canonicalJson(redactSensitiveJson(event.resultSummary))));
     query.addBindValue(event.output ? event.output->sha256.toLower() : QVariant());
     query.addBindValue(QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(event.findingIds)).toJson(QJsonDocument::Compact)));
@@ -408,7 +420,7 @@ QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorM
         return result;
     }
     QSqlQuery query(m_impl->database);
-    if (!query.exec(QStringLiteral("SELECT h.sequence, h.entry_id, h.execution_id, h.status, h.result_json, h.output_sha256, h.finding_ids_json, h.report_sha256, h.diff_sha256, h.approval_json, h.previous_event_hash, h.event_hash, h.created_utc, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM history_events h LEFT JOIN artifacts a ON a.sha256 = h.output_sha256 ORDER BY h.sequence")))
+    if (!query.exec(QStringLiteral("SELECT h.sequence, h.entry_id, h.execution_id, h.event_kind, h.status, h.operator_identity, h.document_revision_digest, h.effective_profile_digest, h.result_json, h.output_sha256, h.finding_ids_json, h.report_sha256, h.diff_sha256, h.approval_json, h.previous_event_hash, h.event_hash, h.created_utc, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM history_events h LEFT JOIN artifacts a ON a.sha256 = h.output_sha256 ORDER BY h.sequence")))
     {
         if (errorMessage) *errorMessage = queryError(query);
         return result;
@@ -419,27 +431,31 @@ QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorM
         event.sequence = query.value(0).toLongLong();
         event.entryId = QUuid(query.value(1).toString());
         event.executionId = QUuid(query.value(2).toString());
-        event.status = pdfOperationHistoryStatusFromString(query.value(3).toString());
-        event.resultSummary = parseObject(query.value(4).toString());
-        const QString outputSha = query.value(5).toString();
-        if (!outputSha.isEmpty() && !query.value(13).isNull())
+        event.kind = pdfOperationHistoryEventKindFromString(query.value(3).toString());
+        event.status = pdfOperationHistoryStatusFromString(query.value(4).toString());
+        event.operatorIdentity = query.value(5).toString();
+        event.documentRevisionDigest = query.value(6).toString();
+        event.effectiveProfileDigest = query.value(7).toString();
+        event.resultSummary = parseObject(query.value(8).toString());
+        const QString outputSha = query.value(9).toString();
+        if (!outputSha.isEmpty() && !query.value(17).isNull())
         {
             PDFArtifactIdentity artifact;
             artifact.sha256 = outputSha;
-            artifact.size = query.value(13).toLongLong();
-            artifact.mediaType = query.value(14).toString();
-            artifact.logicalName = query.value(15).toString();
-            artifact.storageToken = query.value(16).toString();
+            artifact.size = query.value(17).toLongLong();
+            artifact.mediaType = query.value(18).toString();
+            artifact.logicalName = query.value(19).toString();
+            artifact.storageToken = query.value(20).toString();
             event.output = artifact;
         }
-        const QJsonDocument findings = QJsonDocument::fromJson(query.value(6).toString().toUtf8());
+        const QJsonDocument findings = QJsonDocument::fromJson(query.value(10).toString().toUtf8());
         for (const QJsonValue& finding : findings.array()) event.findingIds.append(finding.toString());
-        event.reportArtifactSha256 = query.value(7).toString();
-        event.diffArtifactSha256 = query.value(8).toString();
-        event.approval = PDFApprovalRecord::fromJson(parseObject(query.value(9).toString()));
-        event.previousEventHash = decodeHash(query.value(10).toString());
-        event.eventHash = decodeHash(query.value(11).toString());
-        event.createdUtc = dateTimeFromString(query.value(12).toString());
+        event.reportArtifactSha256 = query.value(11).toString();
+        event.diffArtifactSha256 = query.value(12).toString();
+        event.approval = PDFApprovalRecord::fromJson(parseObject(query.value(13).toString()));
+        event.previousEventHash = decodeHash(query.value(14).toString());
+        event.eventHash = decodeHash(query.value(15).toString());
+        event.createdUtc = dateTimeFromString(query.value(16).toString());
         result.append(std::move(event));
     }
     return result;
