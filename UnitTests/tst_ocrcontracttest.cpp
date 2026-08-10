@@ -166,8 +166,8 @@ void OcrContractTest::sidecarResponse_rejectsWrongPageAndMalformedLine()
 void OcrContractTest::languageSets_areNormalizedAndDeduplicated()
 {
     QCOMPARE(pdftool::ocr::normalizeLanguages(QStringLiteral(" EN,fr,en,, FR ")),
-             QStringList{ QStringLiteral("en"), QStringLiteral("fr") });
-    QCOMPARE(pdftool::ocr::normalizeLanguages(QString()), QStringList{ QStringLiteral("en") });
+             QStringList({ QStringLiteral("en"), QStringLiteral("fr") }));
+    QCOMPARE(pdftool::ocr::normalizeLanguages(QString()), QStringList({ QStringLiteral("en") }));
 }
 
 QTEST_MAIN(OcrContractTest)
