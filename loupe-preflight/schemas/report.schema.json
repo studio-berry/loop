@@ -14,7 +14,7 @@
     },
     "inspection_complete": {
       "type": "boolean",
-      "description": "False when at least one check could not run to completion (unknown check id, or a check threw and was contained) — pass is forced false in that case even if no error findings were recorded."
+      "description": "False when at least one check could not run to completion (unknown check id, a check threw and was contained, or mandatory PDF/X evidence was unavailable) — pass is forced false in that case even if no error findings were recorded."
     },
     "pass": {
       "type": "boolean",
@@ -217,7 +217,7 @@
         "status": {
           "type": "string",
           "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
-          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id."
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
         },
         "reason": {
           "type": "string",

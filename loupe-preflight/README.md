@@ -41,7 +41,8 @@ The report then contains a deterministic `pdfx` object with the requested
 target, policy revision, `conformant`, `non-conformant`, or `incomplete`
 status, failed/incomplete stable rule IDs, and per-rule structured evidence.
 PDF/X failures also appear in the ordinary `errors[]` array with `check_id`
-`pdfx`, so existing Editor and PdfTool consumers keep one finding model.
+set to the stable PDF/X rule ID, so existing Editor and PdfTool consumers keep
+one finding model while automation can route each rule without parsing prose.
 
 The initial audited policy packs are PDF/X-1a:2001 and PDF/X-4. They reuse the
 existing output-intent/ICC, inherited page-box, recursive font, color-space,
