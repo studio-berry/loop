@@ -1,16 +1,22 @@
 # CI and diagnostic artifacts
 
 Pull requests to `dev` and `stable` run the **Linux** and **Windows**
-build-and-test jobs.
-These are the two platforms Loupe V1 supports; **macOS** CI is a **post-V1**
-track under [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
-[docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are produced
-only for `dev` and `stable` pushes and manual workflow runs.
+build-and-test jobs. These are the two platforms Loupe V1 supports; **macOS**
+CI is a **post-V1** track under [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
+[docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
+produced only for `dev` and `stable` pushes and manual workflow runs.
 
-The `ci_ok` job is the stable status check to require in branch protection;
-requiring the platform-specific build jobs directly would create multiple checks
-for the same gate. The workflow runs for all pull requests targeting `dev` or
-`stable`, including documentation-only changes.
+The standalone `Documentation truth` workflow runs for the policy branches
+`dev` and `stable` pull requests and pushes. It checks every ADR's verification
+header and fails when
+[`docs/generated/architecture-catalog.json`](generated/architecture-catalog.json)
+is stale.
+
+The `ci_ok` job is the stable status check required by the protected `stable`
+branch; requiring the platform-specific build jobs directly would create
+multiple checks for the same gate. The workflow runs for all pull requests
+targeting `dev` or `stable`, including documentation-only changes. `dev` does
+not require this check for merging.
 
 When a Windows test run fails, GitHub Actions uploads its CTest logs as the
 `windows-test-logs` artifact. Store any intentional, long-lived diagnostic
