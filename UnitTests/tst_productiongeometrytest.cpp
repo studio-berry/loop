@@ -22,6 +22,7 @@
 
 #include "pdfproductiongeometry.h"
 #include "pdfrepairoperation.h"
+#include "preflightengine.h"
 
 #include <QJsonDocument>
 #include <QtTest>
@@ -36,6 +37,8 @@ class ProductionGeometryTest final : public QObject
 
 private slots:
     void roundTripPreservesProcessingSemantics();
+    void normalizesProcessingStepTypes();
+    void processingStepChecksAreRegistered();
     void rejectsSelfIntersectingContours();
     void plansDeterministicContourBleedAndGrommets();
     void productionOperationsAreRegistered();
@@ -60,6 +63,22 @@ void ProductionGeometryTest::roundTripPreservesProcessingSemantics()
     QCOMPARE(reopened.processingSteps.front().kind, PDFProcessingStepKind::Cut);
     QCOMPARE(reopened.processingSteps.front().spotColorName, QStringLiteral("CutContour"));
     QCOMPARE(reopened.contours.front().sourceEvidence, QStringLiteral("explicit-selection"));
+}
+
+void ProductionGeometryTest::normalizesProcessingStepTypes()
+{
+    QCOMPARE(pdfProcessingStepTypeFromString(QStringLiteral("Cutting")), PDFProcessingStepType::CuttingDie);
+    QCOMPARE(pdfProcessingStepTypeFromString(QStringLiteral("perforating-cut")), PDFProcessingStepType::PerforatingCut);
+    QCOMPARE(pdfProcessingStepTypeFromString(QStringLiteral("Creasing")), PDFProcessingStepType::CreasingBend);
+    QCOMPARE(pdfProcessingStepTypeFromString(QStringLiteral("foreground_varnish")), PDFProcessingStepType::ForegroundVarnish);
+    QCOMPARE(pdfProcessingStepTypeFromString(QStringLiteral("not-a-step")), PDFProcessingStepType::Unknown);
+}
+
+void ProductionGeometryTest::processingStepChecksAreRegistered()
+{
+    PreflightEngine engine(nullptr);
+    QVERIFY(engine.hasCheck(QStringLiteral("processing-steps")));
+    QVERIFY(engine.hasCheck(QStringLiteral("dieline")));
 }
 
 void ProductionGeometryTest::rejectsSelfIntersectingContours()

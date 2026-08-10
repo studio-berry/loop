@@ -71,7 +71,8 @@ public:
     void setGraphicStateDictionary(const PDFDictionary& newGraphicStateDictionary);
 
     const QStringList& getErrors() const { return m_errors; }
-    void clearErrors() { m_errors.clear(); }
+    const QStringList& getFatalErrors() const { return m_fatalErrors; }
+    void clearErrors() { m_errors.clear(); m_fatalErrors.clear(); }
 
     void writeStyledPath(const QPainterPath& path,
                          const QPen& pen,
@@ -132,6 +133,7 @@ private:
 
     QByteArray selectFont(const QByteArray& font);
     void addError(const QString& error);
+    void addFatalError(const QString& error);
 
     PDFDocument* m_document = nullptr;
     PDFDictionary m_fontDictionary;
@@ -142,6 +144,7 @@ private:
     PDFFontPointer m_textFont;
     QHash<QByteArray, PDFFontPointer> m_fontOverrides;
     QStringList m_errors;
+    QStringList m_fatalErrors;
     PDFEditorFallbackFontManager m_fallbackFontManager;
     QByteArray m_currentTextFontKey;    ///< Resource key of the last written Tf operator
     PDFReal m_currentTextFontSize = 0.0;

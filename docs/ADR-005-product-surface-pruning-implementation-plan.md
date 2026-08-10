@@ -122,6 +122,8 @@ artifact inventory.
       production inspection plugins.
 - [ ] Keep OCR explicitly CLI-only in release packaging; do not disable
       `PdfTool ocr` when disabling the Editor OCR plugin.
+- [x] Enforce the OCR CLI-only surface with a release-profile CMake guard and
+      artifact-level plugin/sidecar/CLI checks (issue #41).
 - [ ] Add a static release-profile check that fails if a pruned target or
       plugin is built, installed, or packaged unexpectedly.
 - [ ] Keep a full developer configuration available for upstream comparison and
