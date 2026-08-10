@@ -406,5 +406,6 @@
     "discovery_command": "PdfTool capabilities --console-format json",
     "capability_field": "build_capabilities",
     "required_build_capabilities": ["core.pdf.read", "core.pdf.write", "pdftool.discovery.v1", "preflight"]
-  }
+  },
+  "shell_contract": "docs/loupe-shell.json"
 }

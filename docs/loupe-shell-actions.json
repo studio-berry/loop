@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "issue": 193,
+  "source_ui": "Pdf4QtLibGui/pdfeditormainwindow.ui",
+  "expected_action_count": 107,
+  "actions": [
+    {
+      "id": "actionAbout",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionAutomaticDocumentRefresh",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionBecomeASponsor",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionBleedFixup",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionBookmarkAutoGenerate",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionBookmarkExport",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionBookmarkImport",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionBookmarkPage",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCertificateManager",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionClearRecentFileHistory",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionClose",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCollectDiagnostics",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionColorBitonal",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionColorCustom",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionColorGrayscale",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionColorHighContrast",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionColorInvert",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionCopyText",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateBitonalDocument",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionCreateEllipse",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateFreehandCurve",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateHyperlink",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFit",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitB",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitBH",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitBV",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitH",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitR",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitV",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFXYZ",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFXYZInheritZoom",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionCreatePolygon",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreatePolyline",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateRectangle",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateStraightLine",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateTextHighlight",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateTextSquiggly",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateTextStrikeout",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionCreateTextUnderline",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionDeselectText",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionEncryption",
+      "disposition": "ABSORB",
+      "target": "Fix"
+    },
+    {
+      "id": "actionExtractImage",
+      "disposition": "ABSORB",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionFind",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFindNext",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFindPrevious",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFirstPageOnRightSide",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFitHeight",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFitPage",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFitWidth",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionFullscreenMode",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGetSource",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionGoToDocumentEnd",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGoToDocumentStart",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGotoNextBookmark",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGoToNextLine",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGoToNextPage",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGotoPreviousBookmark",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGoToPreviousLine",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionGoToPreviousPage",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionInlineText",
+      "disposition": "ABSORB",
+      "target": "Document"
+    },
+    {
+      "id": "actionInsertPageNumbers",
+      "disposition": "ABSORB",
+      "target": "Document"
+    },
+    {
+      "id": "actionMagnifier",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionOpen",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionOptimize",
+      "disposition": "ABSORB",
+      "target": "Fix"
+    },
+    {
+      "id": "actionOptimizeImages",
+      "disposition": "ABSORB",
+      "target": "Fix"
+    },
+    {
+      "id": "actionOptions",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionPageGeometry",
+      "disposition": "ABSORB",
+      "target": "Pages"
+    },
+    {
+      "id": "actionPageLayoutContinuous",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionPageLayoutSinglePage",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionPageLayoutTwoColumns",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionPageLayoutTwoPages",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionPrint",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionProperties",
+      "disposition": "KEEP",
+      "target": "Inspect"
+    },
+    {
+      "id": "actionQuit",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionRedo",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionRemoveExternalLinks",
+      "disposition": "ABSORB",
+      "target": "Fix"
+    },
+    {
+      "id": "actionRender_to_Images",
+      "disposition": "ABSORB",
+      "target": "Production"
+    },
+    {
+      "id": "actionRendering_Errors",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionAntialiasing",
+      "disposition": "KEEP",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionDisplayAnnotations",
+      "disposition": "KEEP",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionDisplayRenderTimes",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionIgnoreOptionalContentSettings",
+      "disposition": "KEEP",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionSmoothPictures",
+      "disposition": "KEEP",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRenderOptionTextAntialiasing",
+      "disposition": "KEEP",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionResetToFactorySettings",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionRotateLeft",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionRotateRight",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSanitize",
+      "disposition": "ABSORB",
+      "target": "Fix"
+    },
+    {
+      "id": "actionSave",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSave_As",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionScreenshot",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSelectTable",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSelectText",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSelectTextAll",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionSend_by_E_Mail",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionShow_Text_Blocks",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionShow_Text_Lines",
+      "disposition": "ADVANCED",
+      "target": "Advanced"
+    },
+    {
+      "id": "actionStickyNoteComment",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteHelp",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteInsert",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteKey",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteNewParagraph",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteNote",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionStickyNoteParagraph",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionUndo",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionZoom_In",
+      "disposition": "KEEP",
+      "target": "Document"
+    },
+    {
+      "id": "actionZoom_Out",
+      "disposition": "KEEP",
+      "target": "Document"
+    }
+  ]
+}
