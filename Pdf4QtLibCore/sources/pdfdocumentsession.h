@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfdocument.h"
+#include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
 #include "pdfcms.h"
@@ -35,6 +36,7 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <tuple>
 
 namespace pdf
 {
@@ -64,7 +66,7 @@ class PDFProcessingBudget;
 class PDF4QTLIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
-    explicit PDFDocumentSession(PDFDocument* document);
+    explicit PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context = nullptr);
     ~PDFDocumentSession();
 
     PDFDocumentSession(const PDFDocumentSession&) = delete;
@@ -72,6 +74,8 @@ public:
 
     /// Returns the document associated with this session.
     PDFDocument* getDocument() const;
+    PDFRevisionIdentity getRevision() const;
+    bool isCurrent(const PDFRevisionIdentity& revision) const;
 
     /// Returns true if the session is associated with a non-null document.
     bool isValid() const;
@@ -120,9 +124,35 @@ public:
     PDFOptionalContentActivity* getOptionalContentActivity() const;
 
 private:
+    struct PageCacheKey
+    {
+        PDFRevisionIdentity revision;
+        size_t pageIndex = 0;
+
+        bool operator<(const PageCacheKey& other) const
+        {
+            return std::tie(revision, pageIndex) < std::tie(other.revision, other.pageIndex);
+        }
+    };
+
+    struct StreamCacheKey
+    {
+        PDFRevisionIdentity revision;
+        PDFObjectReference reference;
+
+        bool operator<(const StreamCacheKey& other) const
+        {
+            return std::tie(revision, reference) < std::tie(other.revision, other.reference);
+        }
+    };
+
     void initializeRendering();
 
     PDFDocument* m_document;
+    PDFDocumentContext* m_context;
+    PDFArtifactIdentity m_localArtifact;
+    DocumentRevision m_localDocumentRevision = 0;
+    quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
 
@@ -132,10 +162,10 @@ private:
     std::unique_ptr<PDFFontCache> m_fontCache;
     std::unique_ptr<PDFRenderer> m_renderer;
 
-    std::map<size_t, PDFPrecompiledPage> m_compileCache;
-    std::deque<size_t> m_compileCacheOrder;
-    std::map<PDFObjectReference, QByteArray> m_streamCache;
-    std::deque<PDFObjectReference> m_streamCacheOrder;
+    std::map<PageCacheKey, PDFPrecompiledPage> m_compileCache;
+    std::deque<PageCacheKey> m_compileCacheOrder;
+    std::map<StreamCacheKey, QByteArray> m_streamCache;
+    std::deque<StreamCacheKey> m_streamCacheOrder;
 };
 
 } // namespace pdf
