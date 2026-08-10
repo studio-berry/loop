@@ -25,12 +25,16 @@
 #include "pdftoolcancel.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
+#include "pdfartifactstore.h"
+#include "pdfoperationhistorystore.h"
 #include "preflightengine.h"
 #include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
@@ -465,6 +469,50 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Cancelled;
     }
 
+    const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loupe-history");
+    pdf::PDFArtifactStore historyArtifacts(historyDirectory);
+    const auto historyInput = historyArtifacts.importBytes(sourceData,
+                                                            { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
+    const auto historyOutput = historyArtifacts.importBytes(candidateData,
+                                                             { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
+    if (!historyInput.success || !historyOutput.success)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.artifact-failed"),
+                         historyInput.success ? historyOutput.errorMessage : historyInput.errorMessage);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+    pdf::PDFOperationHistoryStore operationHistory(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+    QString historyError;
+    if (!operationHistory.open(&historyError) ||
+        !operationHistory.registerOriginalInput(historyInput.artifact) ||
+        !operationHistory.registerArtifact(historyOutput.artifact))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.open-failed"),
+                         historyError.isEmpty() ? QStringLiteral("Could not register the repair history artifacts.") : historyError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+    pdf::PDFOperationHistoryExecution historyExecution;
+    historyExecution.operationId = options.repairOperationId;
+    historyExecution.operationVersion = 1;
+    historyExecution.input = historyInput.artifact;
+    historyExecution.parameters = parameters;
+    QUuid historyExecutionId;
+    if (!operationHistory.beginExecution(historyExecution, &historyExecutionId))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.open-failed"),
+                         QStringLiteral("Could not begin the repair operation history."));
+        return PDFToolExitCode::ProcessingFailure;
+    }
+    pdf::PDFOperationHistoryEvent historyRunning;
+    historyRunning.executionId = historyExecutionId;
+    historyRunning.status = pdf::PDFOperationHistoryStatus::Running;
+    if (!operationHistory.appendEvent(historyRunning))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
+                         QStringLiteral("Could not append the repair history start event."));
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
         options.repairOutputDocument, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
@@ -491,11 +539,34 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                          QJsonObject{{QStringLiteral("path"), options.repairOutputDocument}});
         return PDFToolExitCode::ProcessingFailure;
     }
+    const QString outputSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
     reportJson.insert(QStringLiteral("status"), QStringLiteral("passed"));
     reportJson.insert(QStringLiteral("output"), QJsonObject{
         { QStringLiteral("path"), options.repairOutputDocument },
-        { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex()) }
+        { QStringLiteral("sha256"), outputSha256 }
     });
+    reportJson.insert(QStringLiteral("history"), QJsonObject{
+        { QStringLiteral("sidecar"), historyDirectory },
+        { QStringLiteral("database"), operationHistory.databasePath() }
+    });
+
+    pdf::PDFOperationHistoryEvent historyAccepted;
+    historyAccepted.executionId = historyExecutionId;
+    historyAccepted.status = pdf::PDFOperationHistoryStatus::Accepted;
+    historyAccepted.output = historyOutput.artifact;
+    historyAccepted.resultSummary = reportJson;
+    historyAccepted.approval.kind = pdf::PDFApprovalKind::Policy;
+    historyAccepted.approval.actorId = QStringLiteral("PdfTool");
+    historyAccepted.approval.decision = QStringLiteral("approve");
+    historyAccepted.approval.policyId = QStringLiteral("preflight-profile");
+    historyAccepted.approval.rationale = QStringLiteral("Repair candidate passed postflight and diff validation.");
+    historyAccepted.approval.decidedUtc = QDateTime::currentDateTimeUtc();
+    if (!operationHistory.appendEvent(historyAccepted))
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
+                         QStringLiteral("The repair output was written, but its accepted history event could not be persisted."));
+        return PDFToolExitCode::ProcessingFailure;
+    }
 
     if (!options.repairReportFile.isEmpty())
     {

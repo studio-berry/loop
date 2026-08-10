@@ -10,7 +10,7 @@
     "schema_version": {
       "type": "integer",
       "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Bump only with a coordinated engine + plugin release."
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, and stable finding IDs are additive fields in version 3."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -41,6 +41,21 @@
       "type": "object",
       "description": "Optional deterministic profile selection and provenance record.",
       "additionalProperties": true
+    },
+    "document_revision_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the exact PDF bytes inspected."
+    },
+    "effective_profile_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the effective profile JSON used for this run."
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Operator decisions imported for, or recorded beside, this run. Decision state is derived against the current digests.",
+      "items": { "$ref": "#/$defs/decision" }
     },
     "errors": {
       "type": "array",
@@ -162,6 +177,11 @@
       "additionalProperties": false,
       "required": ["scope", "type", "severity", "message"],
       "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Stable content-addressed finding identity."
+        },
         "scope": {
           "type": "string",
           "enum": ["document", "page", "object"],
@@ -253,6 +273,22 @@
           "additionalProperties": true,
           "description": "Optional parameters for automated fixup invocation (e.g. mode for add-bleed)."
         }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "kind", "justification", "operator", "timestamp_utc", "document_revision_digest", "effective_profile_digest"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["accept", "waive", "override", "reject", "reopen"] },
+        "justification": { "type": "string", "minLength": 3 },
+        "operator": { "type": "string", "minLength": 1 },
+        "timestamp_utc": { "type": "string", "format": "date-time" },
+        "external_reference": { "type": "string" },
+        "document_revision_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_profile_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "state": { "type": "string", "enum": ["active", "stale_document", "stale_profile", "invalid"] }
       }
     }
   }

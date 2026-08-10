@@ -27,6 +27,8 @@
 #include "pdfdocumentsession.h"
 
 #include <QByteArray>
+#include <QDateTime>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QRectF>
@@ -162,6 +164,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     // color-mode parameters (e.g. ["CMYK", "Grayscale"]).
     QStringList allowedColorModes;
 
+    // Production processing-step requirements. Values use the normalized
+    // PDFProcessingStepType names, for example "cutting-die".
+    QStringList requiredProcessingStepTypes;
+
     // color-inventory parameters.
     int colorProbeDpi = 150;
     qreal richBlackKThreshold = 0.10;
@@ -202,7 +208,71 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightFinding
     QRectF bbox;
     QString checkId;
     QJsonObject evidence;
+
+    /// Stable identity for this finding. The identity excludes translated
+    /// message text and geometry so it survives locale changes and fixups.
+    QString stableId() const;
 };
+
+/// Operator decision recorded against one finding and one inspected state.
+enum class PreflightDecisionKind
+{
+    Accept,
+    Waive,
+    Override,
+    Reject,
+    Reopen
+};
+
+/// Derived state of a decision against the current document/profile pair.
+enum class PreflightDecisionState
+{
+    Active,
+    StaleDocument,
+    StaleProfile,
+    Invalid
+};
+
+inline constexpr int PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH = 3;
+
+struct PDF4QTLIBCORESHARED_EXPORT PreflightDecision
+{
+    QString findingId;
+    PreflightDecisionKind kind = PreflightDecisionKind::Accept;
+    QString justification;
+    QString operatorIdentity;
+    QDateTime timestampUtc;
+    QString externalReference;
+    QString documentRevisionDigest;
+    QString effectiveProfileDigest;
+
+    /// Serializes the decision and derives state from the current digests.
+    QJsonObject toJson(const QString& currentDocumentDigest = QString(),
+                       const QString& currentProfileDigest = QString()) const;
+
+    /// Parses and validates one imported decision. Stored state is ignored;
+    /// state is always derived against the current run.
+    static bool fromJson(const QJsonObject& object,
+                         PreflightDecision& decision,
+                         QString& errorMessage);
+
+    PreflightDecisionState resolveState(const QString& currentDocumentDigest,
+                                        const QString& currentProfileDigest) const;
+
+    bool countsForSignoff(const QString& currentDocumentDigest,
+                          const QString& currentProfileDigest) const;
+};
+
+PDF4QTLIBCORESHARED_EXPORT QString preflightDecisionKindToString(PreflightDecisionKind kind);
+PDF4QTLIBCORESHARED_EXPORT bool preflightDecisionKindFromString(const QString& value,
+                                                                PreflightDecisionKind& kind);
+PDF4QTLIBCORESHARED_EXPORT QString preflightDecisionStateToString(PreflightDecisionState state);
+
+/// Standalone decision-file contract used by PdfTool import/export.
+PDF4QTLIBCORESHARED_EXPORT QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions);
+PDF4QTLIBCORESHARED_EXPORT bool preflightDecisionsFromJson(const QJsonObject& object,
+                                                           QList<PreflightDecision>& decisions,
+                                                           QString& errorMessage);
 
 /// Parsed preflight profile.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileData
@@ -237,6 +307,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
     QList<PreflightCheckStatus> checkStatuses;
     std::optional<PDFXConformanceResult> pdfx;
     QJsonObject profileResolution;
+    QString documentRevisionDigest;
+    QString effectiveProfileDigest;
+    QList<PreflightDecision> decisions;
 
     QJsonObject toJson(const QString& pdfPath = QString()) const;
 };

@@ -143,7 +143,7 @@ QJsonValue redactSensitiveJson(const QJsonValue& value)
     {
         QJsonObject result;
         const QJsonObject object = value.toObject();
-        for (auto it = object.cbegin(); it != object.cend(); ++it)
+        for (auto it = object.constBegin(); it != object.constEnd(); ++it)
         {
             result.insert(it.key(), isSensitiveKey(it.key())
                           ? QJsonValue(QStringLiteral("[REDACTED]"))

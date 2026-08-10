@@ -50,7 +50,7 @@ inline QString getPdfToolFileName()
 
 inline bool isExpectedOcrExitCode(int exitCode)
 {
-    return exitCode == 0 || exitCode == 1;
+    return exitCode == 0 || exitCode == 1 || exitCode == 5;
 }
 
 inline bool validateOcrReport(const QJsonObject& report, QString* errorMessage = nullptr)
@@ -94,7 +94,8 @@ inline bool extractOcrReport(const QJsonObject& envelope,
                              QJsonObject* report,
                              QString* errorMessage = nullptr)
 {
-    if (envelope.value(QStringLiteral("status")).toString() != QStringLiteral("success"))
+    const QString status = envelope.value(QStringLiteral("status")).toString();
+    if (status != QStringLiteral("success") && status != QStringLiteral("partial-output"))
     {
         if (errorMessage)
         {
