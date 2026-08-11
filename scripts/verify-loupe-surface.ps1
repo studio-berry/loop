@@ -113,9 +113,13 @@ foreach ($file in $firstPartyFiles) {
     }
 }
 
+$launcher = $manifest.packaging.loupe_launcher
+$desktopFiles = @()
+
 # .desktop entries are a freedesktop.org / Linux packaging concept; CMakeLists.txt
 # only installs them outside the WIN32 branch, so they never exist on a Windows
-# install surface. $IsLinux is a PowerShell 7+ automatic variable.
+# install surface. $IsLinux is a PowerShell 7+ automatic variable. $launcher stays
+# in scope outside this block: the AppX manifest check further down also reads it.
 if ($IsLinux) {
     $expectedDesktop = @(Get-ProfileValue $manifest.packaging.desktop_entries $Profile)
     $desktopFiles = @($files | Where-Object { $_.Extension -eq ".desktop" })
@@ -125,7 +129,6 @@ if ($IsLinux) {
         throw "Desktop entry inventory drift for $($Profile). Expected: $($expectedDesktopSorted -join ', '); found: $($actualDesktop -join ', ')"
     }
 
-    $launcher = $manifest.packaging.loupe_launcher
     $loupeDesktop = @($desktopFiles | Where-Object { $_.Name -eq "io.github.mberrys.Loupe-pdf.desktop" })
     if ($loupeDesktop.Count -eq 1) {
         $desktopText = Get-Content -LiteralPath $loupeDesktop[0].FullName -Raw
