@@ -187,6 +187,16 @@ jobs:
         with:
           path: pdf4qt
 
+      - name: Exclude workspace from Windows Defender real-time scanning
+        # CMake's install() does an atomic rename of freshly-built DLLs; Defender's
+        # real-time scanner can hold a brief lock on them right after MSBuild writes
+        # them, which surfaces as CMake's misleading "file INSTALL cannot find X:
+        # File exists" error. Best-effort: some runner policies don't allow this, so
+        # don't fail the build over it.
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${env:GITHUB_WORKSPACE}" -ErrorAction SilentlyContinue
+
       - name: Verify supply-chain pins
         working-directory: pdf4qt
         shell: pwsh
