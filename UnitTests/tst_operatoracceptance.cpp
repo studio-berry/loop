@@ -773,15 +773,26 @@ void OperatorAcceptanceTest::invalidProfile_returnsActionableError()
     badProfileFile.write("{ not valid json");
     badProfileFile.close();
 
+    // preflight defaults to JSON console output (see main.cpp), and
+    // PDFConsole::setDiagnosticSink() intentionally captures error output as
+    // structured diagnostics in that envelope instead of writing to stderr - so
+    // the actionable error lands in the JSON envelope on stdout, not stderr.
     int exitCode = -1;
-    QByteArray stdErr;
+    QByteArray stdOut;
     QVERIFY(runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), badProfilePath },
+                       &stdOut,
                        nullptr,
-                       &stdErr,
                        &exitCode));
     QVERIFY(exitCode != 0);
     QVERIFY(exitCode != 1);
-    QVERIFY(!stdErr.trimmed().isEmpty());
+
+    QJsonParseError parseError;
+    const QJsonDocument json = QJsonDocument::fromJson(stdOut, &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QVERIFY(json.isObject());
+    const QJsonArray diagnostics = json.object().value(QStringLiteral("diagnostics")).toArray();
+    QVERIFY(!diagnostics.isEmpty());
+    QVERIFY(!diagnostics.first().toObject().value(QStringLiteral("message")).toString().isEmpty());
 }
 
 void OperatorAcceptanceTest::profileSemanticMismatch_returnsProfileFinding()
