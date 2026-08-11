@@ -57,6 +57,7 @@
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QMessageBox>
