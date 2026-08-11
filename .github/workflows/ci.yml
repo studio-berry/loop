@@ -154,21 +154,19 @@ jobs:
         run: |
           ctest --output-on-failure
 
-      - name: TEMP regenerate preflight snapshots for review (not a real gate; removed before merge)
+      - name: TEMP regenerate preflight snapshots and print the diff (not a real gate; removed before merge)
         if: always()
-        working-directory: pdf4qt/build
+        working-directory: pdf4qt
         env:
           LOUPE_UPDATE_SNAPSHOTS: "1"
         run: |
-          ctest -R UnitTestsPreflightCorpus --output-on-failure || true
-
-      - name: TEMP upload regenerated preflight snapshots
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
-        with:
-          name: regenerated-preflight-snapshots
-          path: pdf4qt/loupe-preflight/testdata/snapshots/*.json
-          retention-days: 7
+          ctest --test-dir build -R UnitTestsPreflightCorpus --output-on-failure || true
+          echo "::group::git diff -- loupe-preflight/testdata/snapshots"
+          git --no-pager diff --no-color -- loupe-preflight/testdata/snapshots
+          echo "::endgroup::"
+          echo "::group::git status (untracked snapshots = new fixtures)"
+          git status --porcelain -- loupe-preflight/testdata/snapshots
+          echo "::endgroup::"
 
       - name: Run preflight corpus gate
         working-directory: pdf4qt/build
