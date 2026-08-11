@@ -96,8 +96,9 @@ QByteArray xmpForTarget(PDFStandardTarget target)
                              "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF "
                              "xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
                              "<rdf:Description xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\" "
-                             "pdfxid:GTS_PDFXVersion=\"") +
-           marker + QByteArrayLiteral("\"/></rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>\n");
+                             "pdfxid:GTS_PDFXVersion=\"")
+        + marker
+        + QByteArrayLiteral("\"/></rdf:RDF></x:xmpmeta>\n<?xpacket end=\"w\"?>\n");
 }
 
 QJsonObject pdfxProfile(PDFStandardTarget target)
@@ -105,7 +106,8 @@ QJsonObject pdfxProfile(PDFStandardTarget target)
     return QJsonObject{
         { QStringLiteral("name"), QStringLiteral("Loupe standard conversion preflight") },
         { QStringLiteral("pdfx"), QJsonObject{
-                                      { QStringLiteral("target"), pdfStandardTargetToString(target) } } }
+            { QStringLiteral("target"), pdfStandardTargetToString(target) }
+        } }
     };
 }
 
@@ -122,15 +124,19 @@ PDFOperationResult validateIcc(const PDFStandardConversionSettings& settings)
     {
         return PDFTranslationContext::tr("The output-intent ICC profile could not be opened.");
     }
-    const bool knownColorSpace = cmsGetColorSpace(profile) == cmsSigCmykData || cmsGetColorSpace(profile) == cmsSigRgbData || cmsGetColorSpace(profile) == cmsSigGrayData;
-    const bool cmykRequired = settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002 || settings.normalizeColor;
+    const bool knownColorSpace = cmsGetColorSpace(profile) == cmsSigCmykData
+        || cmsGetColorSpace(profile) == cmsSigRgbData
+        || cmsGetColorSpace(profile) == cmsSigGrayData;
+    const bool cmykRequired = settings.target == PDFStandardTarget::PDFX1a2001
+        || settings.target == PDFStandardTarget::PDFX3_2002
+        || settings.normalizeColor;
     const bool valid = knownColorSpace && (!cmykRequired || cmsGetColorSpace(profile) == cmsSigCmykData);
     cmsCloseProfile(profile);
     if (!valid)
     {
         return cmykRequired
-                   ? PDFTranslationContext::tr("PDF/X-1a and PDF/X-3 conversion requires a CMYK ICC profile.")
-                   : PDFTranslationContext::tr("The output-intent ICC profile has an unsupported color space.");
+            ? PDFTranslationContext::tr("PDF/X-1a and PDF/X-3 conversion requires a CMYK ICC profile.")
+            : PDFTranslationContext::tr("The output-intent ICC profile has an unsupported color space.");
     }
     return true;
 }
@@ -145,17 +151,10 @@ int profileComponents(const QByteArray& data)
     int components = 0;
     switch (cmsGetColorSpace(profile))
     {
-        case cmsSigCmykData:
-            components = 4;
-            break;
-        case cmsSigRgbData:
-            components = 3;
-            break;
-        case cmsSigGrayData:
-            components = 1;
-            break;
-        default:
-            break;
+        case cmsSigCmykData: components = 4; break;
+        case cmsSigRgbData: components = 3; break;
+        case cmsSigGrayData: components = 1; break;
+        default: break;
     }
     cmsCloseProfile(profile);
     return components;
@@ -174,8 +173,8 @@ void addOutputIntent(PDFDocumentBuilder* builder,
         PDFObject::createStream(std::make_shared<PDFStream>(qMove(profileDictionary), qMove(compressed))));
 
     const QString identifier = settings.outputIntentName.isEmpty()
-                                   ? QString::fromLatin1(QCryptographicHash::hash(settings.outputIntentIccData, QCryptographicHash::Sha256).toHex())
-                                   : settings.outputIntentName;
+        ? QString::fromLatin1(QCryptographicHash::hash(settings.outputIntentIccData, QCryptographicHash::Sha256).toHex())
+        : settings.outputIntentName;
     PDFDictionary intentDictionary;
     intentDictionary.addEntry(PDFInplaceOrMemoryString("Type"), PDFObject::createName("OutputIntent"));
     intentDictionary.addEntry(PDFInplaceOrMemoryString("S"), PDFObject::createName(isPDFX(settings.target) ? "GTS_PDFX" : "GTS_PDFA1"));
@@ -218,7 +217,16 @@ void collectPreflightBlockers(const PDFStandardConversionSettings& settings,
         {
             continue;
         }
-        const bool fixable = rule.ruleId == QStringLiteral("pdfx.metadata.identification") || rule.ruleId == QStringLiteral("pdfx.output-intent.present") || rule.ruleId == QStringLiteral("pdfx.output-intent.identity") || rule.ruleId == QStringLiteral("pdfx.output-intent.subtype") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile-space") || rule.ruleId == QStringLiteral("pdfx.page.trim-box") || rule.ruleId == QStringLiteral("pdfx.page.bleed-box") || rule.ruleId == QStringLiteral("pdfx.document.version") || (rule.ruleId == QStringLiteral("pdfx.color.device-rgb") && normalizeColor);
+        const bool fixable = rule.ruleId == QStringLiteral("pdfx.metadata.identification")
+            || rule.ruleId == QStringLiteral("pdfx.output-intent.present")
+            || rule.ruleId == QStringLiteral("pdfx.output-intent.identity")
+            || rule.ruleId == QStringLiteral("pdfx.output-intent.subtype")
+            || rule.ruleId == QStringLiteral("pdfx.output-intent.profile")
+            || rule.ruleId == QStringLiteral("pdfx.output-intent.profile-space")
+            || rule.ruleId == QStringLiteral("pdfx.page.trim-box")
+            || rule.ruleId == QStringLiteral("pdfx.page.bleed-box")
+            || rule.ruleId == QStringLiteral("pdfx.document.version")
+            || (rule.ruleId == QStringLiteral("pdfx.color.device-rgb") && normalizeColor);
         if (!fixable)
         {
             report->blockers.append(rule.ruleId + QStringLiteral(": ") + rule.diagnostic);
@@ -235,8 +243,7 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
         return PDFTranslationContext::tr("An independent validator is required; no output was committed.");
     }
     if (!std::any_of(settings.independentValidatorArguments.cbegin(), settings.independentValidatorArguments.cend(),
-                     [](const QString& argument)
-                     { return argument.contains(QStringLiteral("{input}")); }))
+                     [](const QString& argument) { return argument.contains(QStringLiteral("{input}")); }))
     {
         return PDFTranslationContext::tr("Independent validator arguments must contain the {input} placeholder.");
     }
@@ -292,20 +299,16 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
     return true;
 }
 
-}   // namespace
+} // namespace
 
 QString pdfStandardTargetToString(PDFStandardTarget target)
 {
     switch (target)
     {
-        case PDFStandardTarget::PDFX1a2001:
-            return QStringLiteral("PDF/X-1a:2001");
-        case PDFStandardTarget::PDFX3_2002:
-            return QStringLiteral("PDF/X-3:2002");
-        case PDFStandardTarget::PDFX4:
-            return QStringLiteral("PDF/X-4");
-        case PDFStandardTarget::PDFA2b:
-            return QStringLiteral("PDF/A-2b");
+        case PDFStandardTarget::PDFX1a2001: return QStringLiteral("PDF/X-1a:2001");
+        case PDFStandardTarget::PDFX3_2002: return QStringLiteral("PDF/X-3:2002");
+        case PDFStandardTarget::PDFX4: return QStringLiteral("PDF/X-4");
+        case PDFStandardTarget::PDFA2b: return QStringLiteral("PDF/A-2b");
     }
     return QString();
 }
@@ -317,16 +320,11 @@ bool pdfStandardTargetFromString(const QString& value, PDFStandardTarget* target
         return false;
     }
     const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("pdf/x-1a:2001"))
-        *target = PDFStandardTarget::PDFX1a2001;
-    else if (normalized == QStringLiteral("pdf/x-3:2002"))
-        *target = PDFStandardTarget::PDFX3_2002;
-    else if (normalized == QStringLiteral("pdf/x-4"))
-        *target = PDFStandardTarget::PDFX4;
-    else if (normalized == QStringLiteral("pdf/a-2b"))
-        *target = PDFStandardTarget::PDFA2b;
-    else
-        return false;
+    if (normalized == QStringLiteral("pdf/x-1a:2001")) *target = PDFStandardTarget::PDFX1a2001;
+    else if (normalized == QStringLiteral("pdf/x-3:2002")) *target = PDFStandardTarget::PDFX3_2002;
+    else if (normalized == QStringLiteral("pdf/x-4")) *target = PDFStandardTarget::PDFX4;
+    else if (normalized == QStringLiteral("pdf/a-2b")) *target = PDFStandardTarget::PDFA2b;
+    else return false;
     return true;
 }
 
@@ -338,16 +336,15 @@ QStringList supportedPDFStandardTargets()
 
 QJsonObject PDFStandardConversionChange::toJson() const
 {
-    return QJsonObject{ { QStringLiteral("id"), id },
+    return QJsonObject{{ QStringLiteral("id"), id },
                         { QStringLiteral("before"), before },
-                        { QStringLiteral("after"), after } };
+                        { QStringLiteral("after"), after }};
 }
 
 QJsonObject PDFStandardConversionReport::toJson() const
 {
     QJsonArray changesArray;
-    for (const PDFStandardConversionChange& change : changes)
-        changesArray.append(change.toJson());
+    for (const PDFStandardConversionChange& change : changes) changesArray.append(change.toJson());
     return QJsonObject{
         { QStringLiteral("target"), target },
         { QStringLiteral("conversion_attempted"), conversionAttempted },
@@ -504,4 +501,4 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
     return true;
 }
 
-}   // namespace pdf
+} // namespace pdf
