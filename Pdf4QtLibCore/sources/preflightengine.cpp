@@ -2212,9 +2212,9 @@ void runOutputIntentCheck(PDFDocumentSession* session,
     }
 }
 
-bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color)
+bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color, int recursionDepth = 0)
 {
-    if (!colorSpace)
+    if (!colorSpace || recursionDepth > 8)
     {
         return false;
     }
@@ -2227,6 +2227,49 @@ bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFCo
             return color[0] >= 0.99f && color[1] >= 0.99f && color[2] >= 0.99f;
         case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
             return color[0] <= 0.01f && color[1] <= 0.01f && color[2] <= 0.01f && color[3] <= 0.01f;
+
+        case PDFAbstractColorSpace::ColorSpace::ICCBased:
+        {
+            // ICCBased components share the alternate color space's semantics 1:1.
+            const PDFICCBasedColorSpace* iccColorSpace = static_cast<const PDFICCBasedColorSpace*>(colorSpace);
+            return isNearWhiteDevicePaint(iccColorSpace->getAlternateColorSpace(), color, recursionDepth + 1);
+        }
+
+        case PDFAbstractColorSpace::ColorSpace::Separation:
+        case PDFAbstractColorSpace::ColorSpace::DeviceN:
+        {
+            // Resolve through the tint transform so a near-white finding still fires when
+            // the alternate color space (not the tint value itself) is near-white/no-ink.
+            std::vector<PDFColorComponent> input(color.size());
+            for (size_t i = 0; i < color.size(); ++i)
+            {
+                input[i] = color[i];
+            }
+
+            PDFColorSpacePointer alternateColorSpace;
+            std::vector<PDFColorComponent> transformed;
+            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Separation)
+            {
+                const PDFSeparationColorSpace* separationColorSpace = static_cast<const PDFSeparationColorSpace*>(colorSpace);
+                alternateColorSpace = separationColorSpace->getAlternateColorSpace();
+                transformed = separationColorSpace->transformColorsToBaseColorSpace(PDFColorBuffer(input.data(), input.size()));
+            }
+            else
+            {
+                const PDFDeviceNColorSpace* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(colorSpace);
+                alternateColorSpace = deviceNColorSpace->getAlternateColorSpace();
+                transformed = deviceNColorSpace->transformColorsToBaseColorSpace(PDFColorBuffer(input.data(), input.size()));
+            }
+
+            PDFColor alternateColor;
+            alternateColor.resize(transformed.size());
+            for (size_t i = 0; i < transformed.size(); ++i)
+            {
+                alternateColor[i] = transformed[i];
+            }
+            return isNearWhiteDevicePaint(alternateColorSpace.data(), alternateColor, recursionDepth + 1);
+        }
+
         default:
             return false;
     }
