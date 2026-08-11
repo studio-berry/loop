@@ -92,7 +92,7 @@ QJsonObject parseObject(const QString& value)
     return document.isObject() ? document.object() : QJsonObject();
 }
 
-} // namespace
+}   // namespace
 
 class PDFOperationHistoryStore::Impl
 {
@@ -123,7 +123,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
     if (m_databasePath.isEmpty())
     {
         const QString error = QStringLiteral("Operation history database path is empty.");
-        if (errorMessage) *errorMessage = error;
+        if (errorMessage)
+            *errorMessage = error;
         return PDFOperationResult(error);
     }
 
@@ -133,7 +134,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         if (!QDir().mkpath(info.absolutePath()))
         {
             const QString error = QStringLiteral("Could not create the operation history database directory.");
-            if (errorMessage) *errorMessage = error;
+            if (errorMessage)
+                *errorMessage = error;
             return PDFOperationResult(error);
         }
     }
@@ -144,7 +146,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
     if (!m_impl->database.open())
     {
         const QString error = databaseError(m_impl->database);
-        if (errorMessage) *errorMessage = error;
+        if (errorMessage)
+            *errorMessage = error;
         close();
         return PDFOperationResult(error);
     }
@@ -156,7 +159,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         !exec(m_impl->database, QStringLiteral("PRAGMA busy_timeout = %1").arg(busyTimeout), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"), &error))
     {
-        if (errorMessage) *errorMessage = error;
+        if (errorMessage)
+            *errorMessage = error;
         close();
         return PDFOperationResult(error);
     }
@@ -178,7 +182,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
     }
     if (!error.isEmpty())
     {
-        if (errorMessage) *errorMessage = error;
+        if (errorMessage)
+            *errorMessage = error;
         close();
         return PDFOperationResult(error);
     }
@@ -203,7 +208,8 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         !exec(m_impl->database, QStringLiteral("COMMIT"), &error))
     {
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
-        if (errorMessage) *errorMessage = error;
+        if (errorMessage)
+            *errorMessage = error;
         close();
         return PDFOperationResult(error);
     }
@@ -234,8 +240,10 @@ bool PDFOperationHistoryStore::isOpen() const
 PDFOperationResult PDFOperationHistoryStore::registerArtifact(const PDFArtifactIdentity& artifact,
                                                               PDFArtifactRegistrationOptions options)
 {
-    if (!isOpen()) return PDFOperationResult(QStringLiteral("Operation history store is not open."));
-    if (!artifact.isValid()) return PDFOperationResult(QStringLiteral("Artifact identity is invalid."));
+    if (!isOpen())
+        return PDFOperationResult(QStringLiteral("Operation history store is not open."));
+    if (!artifact.isValid())
+        return PDFOperationResult(QStringLiteral("Artifact identity is invalid."));
     QSqlQuery query(m_impl->database);
     query.prepare(QStringLiteral("INSERT OR IGNORE INTO artifacts(sha256, size_bytes, media_type, logical_name, storage_token, created_utc, is_original_input, artifact_evicted) VALUES(?, ?, ?, ?, ?, ?, ?, 0)"));
     query.addBindValue(artifact.sha256.toLower());
@@ -245,18 +253,21 @@ PDFOperationResult PDFOperationHistoryStore::registerArtifact(const PDFArtifactI
     query.addBindValue(artifact.storageToken);
     query.addBindValue(dateTimeString(QDateTime::currentDateTimeUtc()));
     query.addBindValue(options.isOriginalInput ? 1 : 0);
-    if (!query.exec()) return PDFOperationResult(queryError(query));
+    if (!query.exec())
+        return PDFOperationResult(queryError(query));
 
     QSqlQuery check(m_impl->database);
     check.prepare(QStringLiteral("UPDATE artifacts SET is_original_input = MAX(is_original_input, ?), artifact_evicted = 0 WHERE sha256 = ?"));
     check.addBindValue(options.isOriginalInput ? 1 : 0);
     check.addBindValue(artifact.sha256.toLower());
-    if (!check.exec()) return PDFOperationResult(queryError(check));
+    if (!check.exec())
+        return PDFOperationResult(queryError(check));
 
     QSqlQuery metadata(m_impl->database);
     metadata.prepare(QStringLiteral("SELECT size_bytes, media_type FROM artifacts WHERE sha256 = ?"));
     metadata.addBindValue(artifact.sha256.toLower());
-    if (!metadata.exec() || !metadata.next()) return PDFOperationResult(queryError(metadata));
+    if (!metadata.exec() || !metadata.next())
+        return PDFOperationResult(queryError(metadata));
     if (metadata.value(0).toLongLong() != artifact.size || metadata.value(1).toString() != artifact.mediaType)
     {
         return PDFOperationResult(QStringLiteral("Artifact digest is already registered with different immutable metadata."));
@@ -274,8 +285,10 @@ PDFOperationResult PDFOperationHistoryStore::registerOriginalInput(const PDFArti
     QSqlQuery existing(m_impl->database);
     existing.prepare(QStringLiteral("SELECT 1 FROM rollback_points WHERE document_revision_digest = ? AND is_original_input = 1 LIMIT 1"));
     existing.addBindValue(artifact.sha256.toLower());
-    if (!existing.exec()) return PDFOperationResult(queryError(existing));
-    if (existing.next()) return true;
+    if (!existing.exec())
+        return PDFOperationResult(queryError(existing));
+    if (existing.next())
+        return true;
 
     QSqlQuery point(m_impl->database);
     point.prepare(QStringLiteral("INSERT INTO rollback_points(rollback_id, audit_event_id, document_revision_digest, created_utc, artifact_path, artifact_bytes, operation_id, plan_summary, is_original_input, approved_output, artifact_evicted) VALUES(?, NULL, ?, ?, ?, ?, ?, ?, 1, 0, 0)"));
@@ -290,46 +303,56 @@ PDFOperationResult PDFOperationHistoryStore::registerOriginalInput(const PDFArti
 }
 
 PDFOperationResult PDFOperationHistoryStore::beginExecution(PDFOperationHistoryExecution execution,
-                                                             QUuid* executionId)
+                                                            QUuid* executionId)
 {
-    if (!isOpen()) return PDFOperationResult(QStringLiteral("Operation history store is not open."));
-    if (execution.executionId.isNull()) execution.executionId = QUuid::createUuid();
+    if (!isOpen())
+        return PDFOperationResult(QStringLiteral("Operation history store is not open."));
+    if (execution.executionId.isNull())
+        execution.executionId = QUuid::createUuid();
     if (execution.operationId.trimmed().isEmpty() || execution.operationVersion <= 0 || !execution.input.isValid())
     {
         return PDFOperationResult(QStringLiteral("Execution identity or source artifact is invalid."));
     }
-    if (!execution.startedUtc.isValid()) execution.startedUtc = QDateTime::currentDateTimeUtc();
+    if (!execution.startedUtc.isValid())
+        execution.startedUtc = QDateTime::currentDateTimeUtc();
 
     QSqlQuery query(m_impl->database);
     query.prepare(QStringLiteral("INSERT INTO executions(execution_id, parent_execution_id, operation_id, operation_version, source_sha256, source_revision, parameters_json, started_utc) VALUES(?, ?, ?, ?, ?, ?, ?, ?)"));
     query.addBindValue(execution.executionId.toString(QUuid::WithoutBraces));
     query.addBindValue(execution.parentExecutionId
-                       ? QVariant(execution.parentExecutionId->toString(QUuid::WithoutBraces))
-                       : QVariant());
+                           ? QVariant(execution.parentExecutionId->toString(QUuid::WithoutBraces))
+                           : QVariant());
     query.addBindValue(execution.operationId.trimmed());
     query.addBindValue(execution.operationVersion);
     query.addBindValue(execution.input.sha256.toLower());
     query.addBindValue(qulonglong(execution.sourceDocumentRevision));
     query.addBindValue(QString::fromUtf8(canonicalJson(redactSensitiveJson(execution.parameters))));
     query.addBindValue(dateTimeString(execution.startedUtc));
-    if (!query.exec()) return PDFOperationResult(queryError(query));
-    if (executionId) *executionId = execution.executionId;
+    if (!query.exec())
+        return PDFOperationResult(queryError(query));
+    if (executionId)
+        *executionId = execution.executionId;
     return true;
 }
 
 PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEvent event,
                                                          qint64* sequence)
 {
-    if (!isOpen()) return PDFOperationResult(QStringLiteral("Operation history store is not open."));
-    if (event.entryId.isNull()) event.entryId = QUuid::createUuid();
-    if (event.executionId.isNull() || !event.approval.isValid()) return PDFOperationResult(QStringLiteral("History event identity or approval is invalid."));
-    if (!event.createdUtc.isValid()) event.createdUtc = QDateTime::currentDateTimeUtc();
+    if (!isOpen())
+        return PDFOperationResult(QStringLiteral("Operation history store is not open."));
+    if (event.entryId.isNull())
+        event.entryId = QUuid::createUuid();
+    if (event.executionId.isNull() || !event.approval.isValid())
+        return PDFOperationResult(QStringLiteral("History event identity or approval is invalid."));
+    if (!event.createdUtc.isValid())
+        event.createdUtc = QDateTime::currentDateTimeUtc();
     if (event.kind == PDFOperationHistoryEventKind::Operation &&
         (event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack) && !event.output)
     {
         return PDFOperationResult(QStringLiteral("Accepted history events require a durable output artifact."));
     }
-    if (event.output && !event.output->isValid()) return PDFOperationResult(QStringLiteral("History output artifact identity is invalid."));
+    if (event.output && !event.output->isValid())
+        return PDFOperationResult(QStringLiteral("History output artifact identity is invalid."));
     if ((!event.reportArtifactSha256.isEmpty() && !isPDFSha256(event.reportArtifactSha256)) ||
         (!event.diffArtifactSha256.isEmpty() && !isPDFSha256(event.diffArtifactSha256)) ||
         (!event.documentRevisionDigest.isEmpty() && !isPDFSha256(event.documentRevisionDigest)) ||
@@ -339,7 +362,8 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     }
 
     QString error;
-    if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error)) return PDFOperationResult(error);
+    if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error))
+        return PDFOperationResult(error);
     QSqlQuery previousQuery(m_impl->database);
     if (!previousQuery.exec(QStringLiteral("SELECT event_hash FROM history_events ORDER BY sequence DESC LIMIT 1")))
     {
@@ -381,6 +405,7 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     query.addBindValue(dateTimeString(event.createdUtc));
     if (!query.exec())
     {
+        qWarning().noquote() << "TEMP-DIAG appendEvent insert failed:" << queryError(query);
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
         return PDFOperationResult(queryError(query));
     }
@@ -408,8 +433,8 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
         {
             exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
             return PDFOperationResult(point.numRowsAffected() == 0
-                                      ? QStringLiteral("History output artifact is not registered.")
-                                      : queryError(point));
+                                          ? QStringLiteral("History output artifact is not registered.")
+                                          : queryError(point));
         }
     }
     if (!exec(m_impl->database, QStringLiteral("COMMIT"), &error))
@@ -418,7 +443,8 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
         return PDFOperationResult(error);
     }
     event.sequence = query.lastInsertId().toLongLong();
-    if (sequence) *sequence = event.sequence;
+    if (sequence)
+        *sequence = event.sequence;
     return true;
 }
 
@@ -427,13 +453,15 @@ QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorM
     QList<PDFOperationHistoryEvent> result;
     if (!isOpen())
     {
-        if (errorMessage) *errorMessage = QStringLiteral("Operation history store is not open.");
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Operation history store is not open.");
         return result;
     }
     QSqlQuery query(m_impl->database);
     if (!query.exec(QStringLiteral("SELECT h.sequence, h.entry_id, h.execution_id, h.event_kind, h.status, h.operator_identity, h.document_revision_digest, h.effective_profile_digest, h.result_json, h.output_sha256, h.finding_ids_json, h.report_sha256, h.diff_sha256, h.approval_json, h.previous_event_hash, h.event_hash, h.created_utc, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM history_events h LEFT JOIN artifacts a ON a.sha256 = h.output_sha256 ORDER BY h.sequence")))
     {
-        if (errorMessage) *errorMessage = queryError(query);
+        if (errorMessage)
+            *errorMessage = queryError(query);
         return result;
     }
     while (query.next())
@@ -460,7 +488,8 @@ QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorM
             event.output = artifact;
         }
         const QJsonDocument findings = QJsonDocument::fromJson(query.value(10).toString().toUtf8());
-        for (const QJsonValue& finding : findings.array()) event.findingIds.append(finding.toString());
+        for (const QJsonValue& finding : findings.array())
+            event.findingIds.append(finding.toString());
         event.reportArtifactSha256 = query.value(11).toString();
         event.diffArtifactSha256 = query.value(12).toString();
         event.approval = PDFApprovalRecord::fromJson(parseObject(query.value(13).toString()));
@@ -514,14 +543,16 @@ QList<PDFRollbackPoint> PDFOperationHistoryStore::rollbackPoints(QString* errorM
     QList<PDFRollbackPoint> result;
     if (!isOpen())
     {
-        if (errorMessage) *errorMessage = QStringLiteral("Operation history store is not open.");
+        if (errorMessage)
+            *errorMessage = QStringLiteral("Operation history store is not open.");
         return result;
     }
 
     QSqlQuery query(m_impl->database);
     if (!query.exec(QStringLiteral("SELECT rollback_id, audit_event_id, document_revision_digest, created_utc, artifact_path, artifact_bytes, operation_id, plan_summary, is_original_input, approved_output, artifact_evicted, evicted_utc FROM rollback_points ORDER BY created_utc, rollback_id")))
     {
-        if (errorMessage) *errorMessage = queryError(query);
+        if (errorMessage)
+            *errorMessage = queryError(query);
         return result;
     }
     while (query.next())
@@ -545,8 +576,8 @@ QList<PDFRollbackPoint> PDFOperationHistoryStore::rollbackPoints(QString* errorM
 }
 
 PDFHistoryRetentionResult PDFOperationHistoryStore::enforceRetention(const PDFHistoryRetentionPolicy& policy,
-                                                                      const PDFArtifactStore& artifacts,
-                                                                      QDateTime nowUtc)
+                                                                     const PDFArtifactStore& artifacts,
+                                                                     QDateTime nowUtc)
 {
     PDFHistoryRetentionResult result;
     if (!isOpen())
@@ -559,7 +590,8 @@ PDFHistoryRetentionResult PDFOperationHistoryStore::enforceRetention(const PDFHi
         result.errorMessage = QStringLiteral("History retention limits must not be negative.");
         return result;
     }
-    if (!nowUtc.isValid()) nowUtc = QDateTime::currentDateTimeUtc();
+    if (!nowUtc.isValid())
+        nowUtc = QDateTime::currentDateTimeUtc();
 
     QString error;
     if (!exec(m_impl->database, QStringLiteral("BEGIN IMMEDIATE"), &error))
@@ -624,8 +656,7 @@ PDFHistoryRetentionResult PDFOperationHistoryStore::enforceRetention(const PDFHi
             return result;
         }
         const bool shared = references.value(0).toInt() > 0;
-        if (!shared && artifacts.contains(PDFArtifactIdentity{candidate.digest, candidate.bytes,
-                                                               QStringLiteral("application/pdf"), {}, {}}))
+        if (!shared && artifacts.contains(PDFArtifactIdentity{ candidate.digest, candidate.bytes, QStringLiteral("application/pdf"), {}, {} }))
         {
             PDFArtifactIdentity identity;
             identity.sha256 = candidate.digest;
@@ -735,7 +766,7 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
         PDFOperationHistoryEvent failed;
         failed.executionId = executionId;
         failed.status = PDFOperationHistoryStatus::Failed;
-        failed.resultSummary = QJsonObject{{ QStringLiteral("error"), restoreResult.errorMessage }};
+        failed.resultSummary = QJsonObject{ { QStringLiteral("error"), restoreResult.errorMessage } };
         appendEvent(failed);
         return PDFOperationResult(restoreResult.errorMessage);
     }
@@ -753,15 +784,18 @@ PDFOperationResult PDFOperationHistoryStore::rollbackTo(const PDFRollbackRequest
 }
 
 PDFOperationResult PDFOperationHistoryStore::resolveRollbackTarget(const PDFRollbackRequest& request,
-                                                                    PDFArtifactIdentity* targetArtifact) const
+                                                                   PDFArtifactIdentity* targetArtifact) const
 {
-    if (!isOpen() || !targetArtifact) return PDFOperationResult(QStringLiteral("Operation history store or rollback target is invalid."));
-    if (!isPDFSha256(request.targetArtifactSha256) || request.targetExecutionId.isNull()) return PDFOperationResult(QStringLiteral("Rollback target identity is invalid."));
+    if (!isOpen() || !targetArtifact)
+        return PDFOperationResult(QStringLiteral("Operation history store or rollback target is invalid."));
+    if (!isPDFSha256(request.targetArtifactSha256) || request.targetExecutionId.isNull())
+        return PDFOperationResult(QStringLiteral("Rollback target identity is invalid."));
     QSqlQuery query(m_impl->database);
     query.prepare(QStringLiteral("SELECT a.sha256, a.size_bytes, a.media_type, a.logical_name, a.storage_token FROM history_events h JOIN artifacts a ON a.sha256 = h.output_sha256 JOIN rollback_points p ON p.audit_event_id = h.entry_id WHERE h.execution_id = ? AND h.status = 'accepted' AND h.output_sha256 = ? AND p.artifact_evicted = 0 ORDER BY h.sequence DESC LIMIT 1"));
     query.addBindValue(request.targetExecutionId.toString(QUuid::WithoutBraces));
     query.addBindValue(request.targetArtifactSha256.toLower());
-    if (!query.exec() || !query.next()) return PDFOperationResult(QStringLiteral("Rollback target is not an accepted immutable artifact."));
+    if (!query.exec() || !query.next())
+        return PDFOperationResult(QStringLiteral("Rollback target is not an accepted immutable artifact."));
     targetArtifact->sha256 = query.value(0).toString();
     targetArtifact->size = query.value(1).toLongLong();
     targetArtifact->mediaType = query.value(2).toString();
@@ -770,4 +804,4 @@ PDFOperationResult PDFOperationHistoryStore::resolveRollbackTarget(const PDFRoll
     return targetArtifact->isValid() ? PDFOperationResult(true) : PDFOperationResult(QStringLiteral("Rollback target artifact metadata is invalid."));
 }
 
-} // namespace pdf
+}   // namespace pdf
