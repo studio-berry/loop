@@ -54,7 +54,7 @@ pdf::PDFDocumentPointer createModifiedDocument(const pdf::PDFDocument& source)
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Rotate"), pdf::PDFObject::createInteger(90));
     modifier.getBuilder()->mergeTo(source.getCatalog()->getPage(0)->getPageReference(),
-                                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+                                   pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
     modifier.markPageContentsChanged();
     if (!modifier.finalize())
     {
@@ -66,7 +66,8 @@ pdf::PDFDocumentPointer createModifiedDocument(const pdf::PDFDocument& source)
 
 pdf::PDFDocument readDocument(const QByteArray& data)
 {
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     return reader.readFromBuffer(data);
 }
 
@@ -79,17 +80,18 @@ QByteArray writeDocument(const pdf::PDFDocument& document)
     // (its expansion is "false && (cond)"), so write() must be called on its own
     // line - wrapping the call directly in Q_ASSERT(...) silently never invokes it
     // in a release build, leaving buffer permanently empty.
-    const bool writeOk = writer.write(&buffer, &document);
-    Q_ASSERT(writeOk);
+    const pdf::PDFOperationResult writeResult = writer.write(&buffer, &document);
+    Q_ASSERT(static_cast<bool>(writeResult));
     return buffer.data();
 }
 
-} // namespace
+}   // namespace
 
 void IncrementalSaveTest::preservesOriginalPrefixAndChangedObjects()
 {
     const QByteArray originalData = writeDocument(createDocument());
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     const pdf::PDFDocument original = reader.readFromBuffer(originalData);
     QVERIFY(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
 
@@ -117,7 +119,8 @@ void IncrementalSaveTest::preservesOriginalPrefixAndChangedObjects()
 void IncrementalSaveTest::rejectsChangedSourceBytes()
 {
     const QByteArray originalData = writeDocument(createDocument());
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     const pdf::PDFDocument original = reader.readFromBuffer(originalData);
     const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
     QVERIFY(modified);
