@@ -1,4 +1,0 @@
-fuzz_images_autogen/timestamp: \
-	/work/Fuzz/CMakeLists.txt \
-	/work/Fuzz/fuzz_images.cpp \
-	/usr/bin/cmake

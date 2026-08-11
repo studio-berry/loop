@@ -1,4 +1,0 @@
-fuzz_pdf_parser_autogen/timestamp: \
-	/work/Fuzz/CMakeLists.txt \
-	/work/Fuzz/fuzz_pdf_parser.cpp \
-	/usr/bin/cmake
