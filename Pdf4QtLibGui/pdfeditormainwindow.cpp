@@ -72,6 +72,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QToolButton>
 #include <QActionGroup>
+#include <QPushButton>
 
 #include "pdfdbgheap.h"
 

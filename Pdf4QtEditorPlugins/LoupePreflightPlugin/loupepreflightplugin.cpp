@@ -1253,7 +1253,7 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
     for (const pdf::PDFColorProfileIdentifier& profile : profiles)
     {
         profileCombo->addItem(profile.name.isEmpty() ? profile.id : profile.name,
-                              QString::fromUtf8(profile.id));
+                              profile.id);
     }
     form->addRow(tr("Target CMYK profile"), profileCombo);
 
@@ -1343,7 +1343,7 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
         { QStringLiteral("target_icc_base64"), QString::fromLatin1(profileData.toBase64()) },
-        { QStringLiteral("target_icc_id"), QString::fromUtf8(profile.id) },
+        { QStringLiteral("target_icc_id"), profile.id },
         { QStringLiteral("target_profile_name"), profile.name },
         { QStringLiteral("intent"), intentCombo->currentData().toInt() },
         { QStringLiteral("black_point_compensation"), blackPointCheck->isChecked() },
