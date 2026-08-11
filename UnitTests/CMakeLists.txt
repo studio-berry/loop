@@ -651,7 +651,7 @@ add_executable(UnitTestsPreflightPlugin
     tst_preflightplugintest.cpp
 )
 
-target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Test Pdf4QtLibCore)
+target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test Pdf4QtLibCore)
 target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
