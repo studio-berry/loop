@@ -91,7 +91,7 @@ pdf::PDFDocument createDocumentWithImage(int pixels, bool noisy, bool withAlpha)
         pdf::PDFDictionary imageDictionary = *imageStream.getDictionary();
         imageDictionary.setEntry(pdf::PDFInplaceOrMemoryString("SMask"), pdf::PDFObject::createReference(maskReference));
         const QByteArray content = imageStream.getContent() ? *imageStream.getContent() : QByteArray();
-        imageStream = pdf::PDFStream(std::move(imageDictionary), content);
+        imageStream = pdf::PDFStream(std::move(imageDictionary), QByteArray(content));
     }
 
     const pdf::PDFObjectReference imageReference = builder.addObject(
@@ -102,7 +102,7 @@ pdf::PDFDocument createDocumentWithImage(int pixels, bool noisy, bool withAlpha)
                                 pdf::PDFObject::createInteger(pageContent.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            pdf::PDFStream(std::move(contentDictionary), pageContent))));
+            pdf::PDFStream(std::move(contentDictionary), QByteArray(pageContent)))));
 
     pdf::PDFDictionary xObject;
     xObject.addEntry(pdf::PDFInplaceOrMemoryString("Im1"), pdf::PDFObject::createReference(imageReference));
