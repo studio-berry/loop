@@ -2274,13 +2274,7 @@ void PDFToolAbstractApplication::reportDiagnostic(const PDFToolOptions& options,
         options.executionContext->addDiagnostic(std::move(diagnostic));
     }
 
-    // CLI-invocation failures (bad arguments, an unreadable/malformed profile
-    // file, ...) happen before any command-specific JSON envelope can be
-    // produced, so they must still reach stderr even when --console-format json
-    // was requested - otherwise a broken invocation produces no diagnostic
-    // output anywhere.
-    const bool isInvocationFailure = code.startsWith(QStringLiteral("cli."));
-    if (options.outputStyle != PDFOutputFormatter::Style::Json || isInvocationFailure)
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
     {
         PDFConsole::writeError(message, options.outputCodec);
     }
