@@ -191,4 +191,6 @@ void PreflightProfileResolverTest::rejectsUnknownSelectorField()
     QVERIFY(error.contains(QStringLiteral("not supported")));
 }
 
+QTEST_APPLESS_MAIN(PreflightProfileResolverTest)
+
 #include "tst_preflightprofileresolvertest.moc"
