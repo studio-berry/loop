@@ -122,9 +122,7 @@ void RgbToCmykFixupTest::analyzesWithoutMutating()
     pdf::PDFDocument document = buildRgbDocument();
     const QByteArray before = firstPageContent(document);
     pdf::PDFRgbToCmykReport report;
-    const pdf::PDFOperationResult writeResult = pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report);
-    qWarning().noquote() << "TEMP-DIAG writeRgbToCmyk(analyzesWithoutMutating):" << writeResult.getErrorMessage();
-    QVERIFY(writeResult);
+    QVERIFY(pdf::PDFRgbToCmykFixup::writeRgbToCmyk(&document, settings, &report));
     QCOMPARE(report.vectorPaintsConverted, 1);
     QCOMPARE(firstPageContent(document), before);
 }

@@ -75,7 +75,12 @@ QByteArray writeDocument(const pdf::PDFDocument& document)
     pdf::PDFDocumentWriter writer(nullptr);
     QBuffer buffer;
     buffer.open(QIODevice::WriteOnly);
-    Q_ASSERT(writer.write(&buffer, &document));
+    // Q_ASSERT's condition is short-circuited away entirely in release builds
+    // (its expansion is "false && (cond)"), so write() must be called on its own
+    // line - wrapping the call directly in Q_ASSERT(...) silently never invokes it
+    // in a release build, leaving buffer permanently empty.
+    const bool writeOk = writer.write(&buffer, &document);
+    Q_ASSERT(writeOk);
     return buffer.data();
 }
 
@@ -86,8 +91,6 @@ void IncrementalSaveTest::preservesOriginalPrefixAndChangedObjects()
     const QByteArray originalData = writeDocument(createDocument());
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
     const pdf::PDFDocument original = reader.readFromBuffer(originalData);
-    qWarning().noquote() << "TEMP-DIAG readFromBuffer error:" << reader.getErrorMessage()
-                         << "originalData.size()=" << originalData.size();
     QVERIFY(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
 
     const pdf::PDFDocumentPointer modified = createModifiedDocument(original);

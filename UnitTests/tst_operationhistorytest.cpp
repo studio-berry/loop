@@ -110,9 +110,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     pdf::PDFOperationHistoryEvent running;
     running.executionId = executionId;
     running.status = pdf::PDFOperationHistoryStatus::Running;
-    const pdf::PDFOperationResult runningResult = history.appendEvent(running);
-    qWarning().noquote() << "TEMP-DIAG appendEvent(running):" << runningResult.getErrorMessage();
-    QVERIFY(runningResult);
+    QVERIFY(history.appendEvent(running));
 
     pdf::PDFOperationHistoryEvent accepted;
     accepted.executionId = executionId;
