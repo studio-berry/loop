@@ -86,6 +86,8 @@ void IncrementalSaveTest::preservesOriginalPrefixAndChangedObjects()
     const QByteArray originalData = writeDocument(createDocument());
     pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
     const pdf::PDFDocument original = reader.readFromBuffer(originalData);
+    qWarning().noquote() << "TEMP-DIAG readFromBuffer error:" << reader.getErrorMessage()
+                         << "originalData.size()=" << originalData.size();
     QVERIFY(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
 
     const pdf::PDFDocumentPointer modified = createModifiedDocument(original);

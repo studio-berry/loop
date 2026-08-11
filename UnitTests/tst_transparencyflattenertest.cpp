@@ -64,6 +64,7 @@ void TransparencyFlattenerTest::flattenOpaquePage_reportsFullPageRegion()
 
     pdf::PDFTransparencyFlattenReport report;
     const pdf::PDFOperationResult result = pdf::PDFTransparencyFlattener::apply(&document, settings, &report);
+    qWarning().noquote() << "TEMP-DIAG flattenOpaquePage:" << result.getErrorMessage();
     QVERIFY(result);
     QVERIFY(report.changed);
     QVERIFY(report.fullyOpaque);
