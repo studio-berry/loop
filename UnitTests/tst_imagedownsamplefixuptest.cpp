@@ -237,6 +237,17 @@ void ImageDownsampleFixupTest::keepsOriginalWhenOutputIsLarger()
     QVERIFY(pdf::PDFImageDownsampleFixup::apply(&document,
                                                 pdf::PDFImageDownsampleFixupSettings(),
                                                 &report));
+    for (const pdf::PDFImageOptimizer::ImageResult& imageResult : report.images)
+    {
+        qWarning().noquote() << "TEMP-DIAG keepsOriginalWhenOutputIsLarger image:"
+                             << "keptOriginal=" << imageResult.keptOriginal
+                             << "originalBytes=" << imageResult.originalBytes
+                             << "newBytes=" << imageResult.newBytes
+                             << "message=" << imageResult.message;
+    }
+    qWarning().noquote() << "TEMP-DIAG keepsOriginalWhenOutputIsLarger totals: examined="
+                         << report.imagesExamined << "changed=" << report.imagesChanged
+                         << "skipped=" << report.imagesSkipped;
     QCOMPARE(report.imagesSkipped, 1);
     QCOMPARE(report.imagesChanged, 0);
 }
