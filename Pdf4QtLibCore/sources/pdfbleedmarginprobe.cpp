@@ -162,22 +162,30 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
     const bool upgradeBottom = !result.bottom.hasContent && rasterUpgradesEmptyEdge(rasterResult.bottom);
 
     // Raster confirmation may upgrade fast-path empty edges when strips have real content.
-    if (upgradeLeft)
+    // Even when an edge isn't upgraded (fast path already found content there), keep its
+    // raster calibration numbers (totalPixels/inkPixels/stripRect) so callers can inspect
+    // what the raster pass measured instead of the fast path's unset defaults.
+    auto mergeCalibration = [](PDFBleedMarginProbeEdgeResult& target,
+                               const PDFBleedMarginProbeEdgeResult& rasterEdge,
+                               bool upgrade)
     {
-        result.left = rasterResult.left;
-    }
-    if (upgradeRight)
-    {
-        result.right = rasterResult.right;
-    }
-    if (upgradeTop)
-    {
-        result.top = rasterResult.top;
-    }
-    if (upgradeBottom)
-    {
-        result.bottom = rasterResult.bottom;
-    }
+        if (upgrade)
+        {
+            target = rasterEdge;
+            return;
+        }
+        if (rasterEdge.totalPixels > 0)
+        {
+            target.inkPixels = rasterEdge.inkPixels;
+            target.totalPixels = rasterEdge.totalPixels;
+            target.stripRect = rasterEdge.stripRect;
+        }
+    };
+
+    mergeCalibration(result.left, rasterResult.left, upgradeLeft);
+    mergeCalibration(result.right, rasterResult.right, upgradeRight);
+    mergeCalibration(result.top, rasterResult.top, upgradeTop);
+    mergeCalibration(result.bottom, rasterResult.bottom, upgradeBottom);
 
     return result;
 }
