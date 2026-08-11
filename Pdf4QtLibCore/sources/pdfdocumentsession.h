@@ -150,7 +150,7 @@ private:
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
-    PDFArtifactIdentity m_localArtifact;
+    PDFDocumentIdentity m_localDocumentIdentity;
     DocumentRevision m_localDocumentRevision = 0;
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
