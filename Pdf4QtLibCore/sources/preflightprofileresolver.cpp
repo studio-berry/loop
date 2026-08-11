@@ -527,9 +527,20 @@ PreflightResolvedProfile resolveMatched(const QList<RankedSource>& matched,
     PreflightProfileData parsed;
     if (!validator.parseProfile(effective, parsed, errorMessage))
     {
-        result.errorCode = QStringLiteral("invalid-effective-profile");
-        result.errorMessage = errorMessage;
-        return result;
+        // An otherwise well-formed profile with an empty checks array is a semantic
+        // authoring problem that PreflightEngine::run() itself reports as a
+        // document-scope 'profile' finding, not a resolution/merge failure - let
+        // resolution succeed so that classification happens once, downstream,
+        // instead of being pre-empted here as a resolver error (which always maps
+        // to an Error verdict / PreflightError exit code, regardless of reason).
+        const bool isEmptyChecksOnly = !effective.value(QStringLiteral("name")).toString().isEmpty()
+            && effective.value(QStringLiteral("checks")).toArray().isEmpty();
+        if (!isEmptyChecksOnly)
+        {
+            result.errorCode = QStringLiteral("invalid-effective-profile");
+            result.errorMessage = errorMessage;
+            return result;
+        }
     }
 
     result.effectiveProfile = effective;
