@@ -13,6 +13,15 @@
     "pass": true,
     "profile": "Loupe Test - White Overprint",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
         {
             "check_id": "white-overprint",
