@@ -92,6 +92,7 @@ private:
     void addDefaultStep();
     void refreshStepList();
     void refreshOperationForm();
+    void syncCurrentStep();
     void syncStepToForm(int row);
     void syncHeaderToRecipe();
     void importRecipe();

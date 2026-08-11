@@ -24,8 +24,10 @@
 #include "actionlistdialog.h"
 
 #include "pdfdrawwidget.h"
+#include "pdfwidgettool.h"
 
 #include <QAction>
+#include <QMainWindow>
 
 namespace pdfplugin
 {
