@@ -4924,8 +4924,6 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         // Profile parsing errors are retained in the normalized report so the
         // canonical reducer can classify them as an operator-visible error.
         PreflightResult result;
-        result.errorCode = QStringLiteral("profile-invalid");
-        result.errorMessage = errorMessage;
         result.profileName = profile.value(QStringLiteral("name")).toString();
 
         PreflightFinding finding;
@@ -4936,6 +4934,21 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         finding.bbox = QRectF();
         result.errors.push_back(finding);
 
+        // A profile that parses as valid JSON but defines no checks has nothing
+        // structurally wrong with it - it is a semantic finding an operator can act
+        // on (add checks to the profile), not an engine failure. Leave errorCode/
+        // errorMessage unset so reducePreflightVerdict() classifies it through the
+        // normal blocking-findings path (verdict Fail, exit code Findings) instead
+        // of its unconditional errorCode-set-means-Error short circuit. Every other
+        // parse failure (missing name, bad severity, malformed pdfx block, ...) still
+        // reports a genuine engine error.
+        if (!profile.value(QStringLiteral("checks")).toArray().isEmpty())
+        {
+            result.errorCode = QStringLiteral("profile-invalid");
+            result.errorMessage = errorMessage;
+        }
+
+        result.pass = reducePreflightVerdict(result).isPass();
         return result;
     }
 
