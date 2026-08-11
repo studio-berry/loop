@@ -5412,7 +5412,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                 return false;
             }
             const QJsonObject severityByClass = severityByClassValue.toObject();
-            for (auto it = severityByClass.cbegin(); it != severityByClass.cend(); ++it)
+            for (auto it = severityByClass.constBegin(); it != severityByClass.constEnd(); ++it)
             {
                 if (!allowedClasses.contains(it.key()) || !it.value().isString() || !validSeverity(it.value().toString()))
                 {
