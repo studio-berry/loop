@@ -86,4 +86,6 @@ void TransparencyFlattenerTest::dryRun_doesNotMutateDocument()
     QVERIFY(document == before);
 }
 
+QTEST_GUILESS_MAIN(TransparencyFlattenerTest)
+
 #include "tst_transparencyflattenertest.moc"
