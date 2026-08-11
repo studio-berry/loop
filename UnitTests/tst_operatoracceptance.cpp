@@ -25,6 +25,7 @@
 // Editor plugin) and validates report handling helpers used by LoupePreflightPlugin.
 // GUI navigation/overlay/cancel flows are covered in docs/v1-operator-acceptance.md.
 
+#include "pdftoolenvelopeutils.h"
 #include "preflightsidecarutils.h"
 
 #include <QtTest>
@@ -439,9 +440,15 @@ bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
         return false;
     }
 
+    const QJsonObject envelope = document.object();
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")))
+    {
+        return false;
+    }
+
     if (report)
     {
-        *report = document.object();
+        *report = pdfplugin::pdftool::reportFromEnvelope(envelope);
     }
 
     return true;

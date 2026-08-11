@@ -721,6 +721,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     )
     target_include_directories(UnitTestsOperatorAcceptance PRIVATE
         ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+        ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
         ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
         ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
