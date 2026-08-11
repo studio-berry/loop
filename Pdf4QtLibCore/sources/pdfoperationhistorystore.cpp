@@ -375,11 +375,14 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     event.eventHash = computeOperationHistoryEventHash(event, previousHash);
 
     // history_events.operator_identity/document_revision_digest/effective_profile_digest
-    // are TEXT NOT NULL DEFAULT '' - the DEFAULT only applies when a column is
-    // omitted from the INSERT, not when it's explicitly bound to NULL. A default-
-    // constructed (null) QString binds as SQL NULL via the SQLite driver even
-    // though QString::isEmpty() is true for it, which violates the NOT NULL
-    // constraint, so coerce null QStrings to a non-null empty string before binding.
+    // are TEXT NOT NULL DEFAULT '', and previous_event_hash/event_hash are TEXT
+    // NOT NULL (no default) - a default-constructed (null) QString binds as SQL
+    // NULL via the SQLite driver even though QString::isEmpty() is true for it,
+    // and DEFAULT only applies when a column is omitted from the INSERT, not
+    // when it's explicitly bound to NULL. previous_event_hash in particular is
+    // null on the very first event ever appended (QByteArray().toHex() -> a
+    // null QString via fromLatin1), so coerce null QStrings to a non-null
+    // empty string before binding.
     const auto nonNullString = [](const QString& value)
     {
         return value.isNull() ? QString(QLatin1String("")) : value;
@@ -400,12 +403,11 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     query.addBindValue(event.reportArtifactSha256.toLower());
     query.addBindValue(event.diffArtifactSha256.toLower());
     query.addBindValue(QString::fromUtf8(canonicalJson(event.approval.toJson())));
-    query.addBindValue(QString::fromLatin1(previousHash.toHex()));
-    query.addBindValue(QString::fromLatin1(event.eventHash.toHex()));
+    query.addBindValue(nonNullString(QString::fromLatin1(previousHash.toHex())));
+    query.addBindValue(nonNullString(QString::fromLatin1(event.eventHash.toHex())));
     query.addBindValue(dateTimeString(event.createdUtc));
     if (!query.exec())
     {
-        qWarning().noquote() << "TEMP-DIAG appendEvent insert failed:" << queryError(query);
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
         return PDFOperationResult(queryError(query));
     }
