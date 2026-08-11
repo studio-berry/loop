@@ -511,7 +511,8 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         QStringLiteral("errors"),
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),
-        QStringLiteral("checks")
+        QStringLiteral("checks"),
+        QStringLiteral("verdict")
     };
     if (!hasOnlyProperties(report, allowedProperties, QStringLiteral("report"), errorMessage))
     {
