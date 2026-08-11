@@ -324,12 +324,20 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     QProcessEnvironment environment;
     for (const QString& name : { QStringLiteral("PATH"), QStringLiteral("SystemRoot"),
                                  QStringLiteral("TEMP"), QStringLiteral("TMP"),
-                                 QStringLiteral("USERPROFILE") })
+                                 QStringLiteral("USERPROFILE"), QStringLiteral("LANG"),
+                                 QStringLiteral("LC_ALL"), QStringLiteral("LC_CTYPE") })
     {
         if (systemEnvironment.contains(name))
         {
             environment.insert(name, systemEnvironment.value(name));
         }
+    }
+    if (!environment.contains(QStringLiteral("LANG")) && !environment.contains(QStringLiteral("LC_ALL")))
+    {
+        // Ensure the sidecar sees a UTF-8 locale: some CI runner images leave LANG/LC_ALL
+        // unset, and Qt writes a "Detected locale \"C\"..." warning to stderr in that case,
+        // which acceptance tests assert is empty.
+        environment.insert(QStringLiteral("LANG"), QStringLiteral("C.UTF-8"));
     }
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     environment.insert(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"),
