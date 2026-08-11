@@ -152,7 +152,11 @@ try {
 } catch {
     throw "CLI discovery command did not return valid JSON: $($manifest.cli.discovery_command)"
 }
-$capabilityProperty = $discoveryDocument.PSObject.Properties[$manifest.cli.capability_field]
+$discoveryData = $discoveryDocument.data
+if ($null -eq $discoveryData) {
+    throw "CLI discovery output is missing the data envelope."
+}
+$capabilityProperty = $discoveryData.PSObject.Properties[$manifest.cli.capability_field]
 if ($null -eq $capabilityProperty) {
     throw "CLI discovery output is missing capability field: $($manifest.cli.capability_field)"
 }
