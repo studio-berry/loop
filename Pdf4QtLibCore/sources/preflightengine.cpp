@@ -2809,6 +2809,7 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
 struct ThinStrokeFinding
 {
     QString type;
+    QString classification = QStringLiteral("thin-stroke");
     QRectF bbox;
     qreal declaredWidth = 0.0;
     qreal effectiveWidth = 0.0;
@@ -2851,6 +2852,11 @@ public:
 
     const QList<ThinStrokeFinding>& findings() const { return m_findings; }
     const QList<PDFRenderError>& renderErrors() const { return getRenderErrors(); }
+
+    void setProcessingAnnotation(bool processingAnnotation)
+    {
+        m_processingAnnotation = processingAnnotation;
+    }
 
 protected:
     bool isContentKindSuppressed(ContentKind kind) const override
@@ -2918,6 +2924,10 @@ protected:
 
         ThinStrokeFinding finding;
         finding.type = hairline ? QStringLiteral("hairline-stroke") : QStringLiteral("thin-stroke");
+        if (m_processingAnnotation)
+        {
+            finding.classification = QStringLiteral("thin-annotation");
+        }
         finding.bbox = visibleStroke.boundingRect();
         finding.declaredWidth = declaredWidth;
         finding.effectiveWidth = effectiveWidth;
@@ -2949,6 +2959,7 @@ protected:
     }
 
 private:
+    bool m_processingAnnotation = false;
     qreal m_minimumWidth = 0.0;
     qreal m_zeroWidthEpsilon = 1.0e-6;
     QPainterPath m_clipPath;
