@@ -166,8 +166,8 @@ public:
         QByteArray* candidateSha256 = nullptr);
 };
 
-QString pdfRepairDiffStatusName(PDFRepairDiffStatus status);
-QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass);
+PDF4QTLIBCORESHARED_EXPORT QString pdfRepairDiffStatusName(PDFRepairDiffStatus status);
+PDF4QTLIBCORESHARED_EXPORT QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass);
 
 } // namespace pdf
 

@@ -294,18 +294,27 @@ jobs:
         working-directory: pdf4qt
         shell: pwsh
         run: |
+          # pwsh, unlike bash's default -e, does not stop on a non-zero exit code from
+          # an external command (cmake here) -- it just keeps going to the next line.
+          # That previously let a real "cmake --build" link failure fall through
+          # silently into "cmake --install" failing on a DLL that was never produced,
+          # which read like a Windows install race instead of the build error it was.
+          # Check $LASTEXITCODE after each cmake invocation so a real failure stops
+          # the step immediately, at the command that actually failed.
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:Qt6_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON
-          cmake --build build --target release_translations --config Release -j6
-          cmake --build build --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
 
-          # cmake --install has failed here 3/3 times with CMake's misleading
-          # "file INSTALL cannot find <freshly-built .dll>: File exists" — a Windows
-          # file-handle-release race right after the linker writes the DLL, not a
-          # duplicate install() rule (verified: exactly one install(TARGETS ...) per
-          # target). Retry with a short backoff instead of failing the whole ~30-minute
-          # build over what a second attempt clears.
+          cmake --build build --target release_translations --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build (release_translations) failed with exit code $LASTEXITCODE." }
+
+          cmake --build build --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build failed with exit code $LASTEXITCODE." }
+
+          # Kept as defense-in-depth against genuine Windows install-time file-lock
+          # flakiness (antivirus/indexer), now that a real build failure can no longer
+          # hide behind it.
           $installSucceeded = $false
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
               cmake --install build --config Release
               if ($LASTEXITCODE -eq 0) {
                   $installSucceeded = $true
@@ -315,7 +324,7 @@ jobs:
               Start-Sleep -Seconds (5 * $attempt)
           }
           if (-not $installSucceeded) {
-              throw "cmake --install failed after 5 attempts."
+              throw "cmake --install failed after 3 attempts."
           }
 
       - name: Verify developer product surface

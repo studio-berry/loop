@@ -122,7 +122,7 @@ public:
     void chargeRenderPixels(std::uint64_t pixels, QString context = {});
     void checkElapsed(QString context = {}) const;
 
-    class DepthScope
+    class PDF4QTLIBCORESHARED_EXPORT DepthScope
     {
     public:
         DepthScope(PDFProcessingBudget& budget, PDFBudgetKind kind, QString context = {});
