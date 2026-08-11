@@ -21,9 +21,13 @@ changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
 - **API:** `PDFPageMasterExport::run(PDFPageMasterExportJob)` returns
   `PDFPageMasterExportResult`. Job owns source `PDFDocument` copies and `QImage`
   sources; optional `PDFProgress*` is borrowed.
-- **Stage order (locked):** assemble → `PDFPageGeometry::apply` (optional) →
-  `PDFBleedFixup::apply` (optional) → `PDFImageOptimizer::optimize` (optional) →
-  `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
+- **Stage order (locked):** assemble → preflight gate (optional) → Action List
+  (optional, see below) → `PDFPageGeometry::apply` (optional) → production
+  geometry validation / `PDFContourBleedFixup::apply` (optional) →
+  `PDFBleedFixup::apply` (optional) → `PDFTransparencyFlattener::apply`
+  (optional) → `PDFImageOptimizer::optimize` (optional) →
+  `PDFStandardConversion::apply` (optional) → preflight revalidation (optional)
+  → `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
   assemble-all / optimize-all / write-all passes.
 - **Action List placement (#30):** PageMaster runs the existing
   `PDFActionListExecutor` after the initial preflight gate and before page
