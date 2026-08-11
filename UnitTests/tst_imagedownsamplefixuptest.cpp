@@ -56,8 +56,7 @@ QImage makeImage(int pixels, bool noisy, bool withAlpha)
                 // trips PDFProcessingBudget's decompression-ratio guard (a
                 // legitimate DoS protection, see pdfstreamfilters.cpp) when the
                 // fixup re-decodes it to collect image statistics.
-                const quint32 hash = (static_cast<quint32>(x) * 2654435761u) ^ (static_cast<quint32>(y) * 2246822519u);
-                const int blue = 200 - static_cast<int>(hash % 16);
+                const int blue = (x * 31 + y * 3) % 256;
                 image.setPixel(x, y, withAlpha ? qRgba(30, 120, blue, 255) : qRgb(30, 120, blue));
                 continue;
             }
