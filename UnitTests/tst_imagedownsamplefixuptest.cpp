@@ -50,7 +50,14 @@ QImage makeImage(int pixels, bool noisy, bool withAlpha)
         {
             if (!noisy)
             {
-                image.setPixel(x, y, withAlpha ? qRgba(30, 120, 200, 255) : qRgb(30, 120, 200));
+                // Deliberately near-flat (not perfectly uniform) so the encoded
+                // stream stays small enough that downsampling can't shrink it
+                // further, without being so pathologically compressible that it
+                // trips PDFProcessingBudget's decompression-ratio guard (a
+                // legitimate DoS protection, see pdfstreamfilters.cpp) when the
+                // fixup re-decodes it to collect image statistics.
+                const int blue = 200 - ((x * 17 + y * 13) % 8);
+                image.setPixel(x, y, withAlpha ? qRgba(30, 120, blue, 255) : qRgb(30, 120, blue));
                 continue;
             }
 
@@ -74,8 +81,8 @@ pdf::PDFDocument createDocumentWithImage(int pixels, bool noisy, bool withAlpha)
     options.compression = pdf::PDFImage::ImageCompression::Flate;
     options.colorMode = pdf::PDFImage::ImageColorMode::Preserve;
     options.alphaHandling = withAlpha
-        ? pdf::PDFImage::AlphaHandling::DropAlphaPreserveColors
-        : pdf::PDFImage::AlphaHandling::FlattenToWhite;
+                                ? pdf::PDFImage::AlphaHandling::DropAlphaPreserveColors
+                                : pdf::PDFImage::AlphaHandling::FlattenToWhite;
     pdf::PDFStream imageStream = pdf::PDFImage::createStreamFromImage(image, options);
 
     if (withAlpha)
@@ -99,7 +106,7 @@ pdf::PDFDocument createDocumentWithImage(int pixels, bool noisy, bool withAlpha)
     const QByteArray pageContent("q 144 0 0 144 0 0 cm /Im1 Do Q");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                                pdf::PDFObject::createInteger(pageContent.size()));
+                               pdf::PDFObject::createInteger(pageContent.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
             pdf::PDFStream(std::move(contentDictionary), QByteArray(pageContent)))));
@@ -118,7 +125,7 @@ pdf::PDFDocument createDocumentWithImage(int pixels, bool noisy, bool withAlpha)
     return builder.build();
 }
 
-} // namespace
+}   // namespace
 
 class ImageDownsampleFixupTest : public QObject
 {
@@ -291,7 +298,8 @@ void ImageDownsampleFixupTest::writesReopensAndPassesPostFixPreflight()
     const pdf::PDFOperationResult writeResult = writer.write(outputPath, &candidate, true);
     QVERIFY2(writeResult, qPrintable(writeResult.getErrorMessage()));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument reopened = reader.readFromFile(outputPath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -300,21 +308,17 @@ void ImageDownsampleFixupTest::writesReopensAndPassesPostFixPreflight()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Post-fix image resolution") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("image-resolution") },
-                { QStringLiteral("min_dpi"), 300 },
-                { QStringLiteral("severity"), QStringLiteral("error") }
-            }
-        } },
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                            { QStringLiteral("min_dpi"), 300 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } },
         { QStringLiteral("fixups"), QJsonArray{} }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
     QVERIFY(std::none_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
-    {
-        return finding.checkId == QStringLiteral("image-resolution");
-    }));
+                         { return finding.checkId == QStringLiteral("image-resolution"); }));
 }
 
 QTEST_MAIN(ImageDownsampleFixupTest)
