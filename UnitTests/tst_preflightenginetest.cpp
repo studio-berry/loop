@@ -29,6 +29,7 @@
 #include "pdfinkcoverageprobe.h"
 #include "pdffixupregistry.h"
 #include "pdfrepairoperation.h"
+#include "pdfthinpartprobe.h"
 
 #include <QtTest>
 #include <QFile>
