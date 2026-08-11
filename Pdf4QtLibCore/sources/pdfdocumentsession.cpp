@@ -36,7 +36,7 @@ namespace pdf
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context) :
     m_document(document),
     m_context(context),
-    m_localArtifact(PDFArtifactIdentity::fromDocument(document)),
+    m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>())
 {
@@ -58,7 +58,7 @@ PDFRevisionIdentity PDFDocumentSession::getRevision() const
     }
 
     PDFRevisionIdentity revision;
-    revision.artifact = m_localArtifact;
+    revision.document = m_localDocumentIdentity;
     revision.documentRevision = m_localDocumentRevision;
     revision.cacheGeneration = m_localCacheGeneration;
     return revision;
