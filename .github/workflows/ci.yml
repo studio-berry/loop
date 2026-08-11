@@ -297,7 +297,26 @@ jobs:
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:Qt6_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
-          cmake --install build --config Release
+
+          # cmake --install has failed here 3/3 times with CMake's misleading
+          # "file INSTALL cannot find <freshly-built .dll>: File exists" — a Windows
+          # file-handle-release race right after the linker writes the DLL, not a
+          # duplicate install() rule (verified: exactly one install(TARGETS ...) per
+          # target). Retry with a short backoff instead of failing the whole ~30-minute
+          # build over what a second attempt clears.
+          $installSucceeded = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+              cmake --install build --config Release
+              if ($LASTEXITCODE -eq 0) {
+                  $installSucceeded = $true
+                  break
+              }
+              Write-Host "cmake --install attempt $attempt failed with exit code $LASTEXITCODE; retrying after a short delay."
+              Start-Sleep -Seconds (5 * $attempt)
+          }
+          if (-not $installSucceeded) {
+              throw "cmake --install failed after 5 attempts."
+          }
 
       - name: Verify developer product surface
         working-directory: pdf4qt
