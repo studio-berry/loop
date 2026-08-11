@@ -350,15 +350,26 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     event.previousEventHash = previousHash;
     event.eventHash = computeOperationHistoryEventHash(event, previousHash);
 
+    // history_events.operator_identity/document_revision_digest/effective_profile_digest
+    // are TEXT NOT NULL DEFAULT '' - the DEFAULT only applies when a column is
+    // omitted from the INSERT, not when it's explicitly bound to NULL. A default-
+    // constructed (null) QString binds as SQL NULL via the SQLite driver even
+    // though QString::isEmpty() is true for it, which violates the NOT NULL
+    // constraint, so coerce null QStrings to a non-null empty string before binding.
+    const auto nonNullString = [](const QString& value)
+    {
+        return value.isNull() ? QString(QLatin1String("")) : value;
+    };
+
     QSqlQuery query(m_impl->database);
     query.prepare(QStringLiteral("INSERT INTO history_events(entry_id, execution_id, event_kind, status, operator_identity, document_revision_digest, effective_profile_digest, result_json, output_sha256, finding_ids_json, report_sha256, diff_sha256, approval_json, previous_event_hash, event_hash, created_utc) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
     query.addBindValue(event.entryId.toString(QUuid::WithoutBraces));
     query.addBindValue(event.executionId.toString(QUuid::WithoutBraces));
     query.addBindValue(pdfOperationHistoryEventKindToString(event.kind));
     query.addBindValue(pdfOperationHistoryStatusToString(event.status));
-    query.addBindValue(event.operatorIdentity);
-    query.addBindValue(event.documentRevisionDigest.toLower());
-    query.addBindValue(event.effectiveProfileDigest.toLower());
+    query.addBindValue(nonNullString(event.operatorIdentity));
+    query.addBindValue(nonNullString(event.documentRevisionDigest.toLower()));
+    query.addBindValue(nonNullString(event.effectiveProfileDigest.toLower()));
     query.addBindValue(QString::fromUtf8(canonicalJson(redactSensitiveJson(event.resultSummary))));
     query.addBindValue(event.output ? event.output->sha256.toLower() : QVariant());
     query.addBindValue(QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(event.findingIds)).toJson(QJsonDocument::Compact)));

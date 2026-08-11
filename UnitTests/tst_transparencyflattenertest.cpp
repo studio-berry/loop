@@ -64,7 +64,19 @@ void TransparencyFlattenerTest::flattenOpaquePage_reportsFullPageRegion()
 
     pdf::PDFTransparencyFlattenReport report;
     const pdf::PDFOperationResult result = pdf::PDFTransparencyFlattener::apply(&document, settings, &report);
-    qWarning().noquote() << "TEMP-DIAG flattenOpaquePage:" << result.getErrorMessage();
+    qWarning().noquote() << "TEMP-DIAG flattenOpaquePage:" << result.getErrorMessage() << "warnings=" << report.warnings;
+    for (const pdf::PDFObjectStorage::Entry& entry : document.getStorage().getObjects())
+    {
+        if (const pdf::PDFDictionary* dictionary = document.getDictionaryFromObject(entry.object))
+        {
+            QStringList keys;
+            for (size_t i = 0; i < dictionary->getCount(); ++i)
+            {
+                keys << QString::fromLatin1(dictionary->getKey(i).getString());
+            }
+            qWarning().noquote() << "TEMP-DIAG object dict keys:" << keys.join(",");
+        }
+    }
     QVERIFY(result);
     QVERIFY(report.changed);
     QVERIFY(report.fullyOpaque);
