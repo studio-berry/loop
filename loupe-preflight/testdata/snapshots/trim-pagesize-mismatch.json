@@ -45,6 +45,17 @@
     "pass": false,
     "profile": "Loupe Test - Trim/Page Size",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "e706f630b3fcb901",
+            "83dc5ea39c83eb9f"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
     ]
 }

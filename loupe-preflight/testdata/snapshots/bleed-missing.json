@@ -1,6 +1,18 @@
 {
     "checks": [
         {
+            "id": "bleed",
+            "status": "failed"
+        },
+        {
+            "id": "color-inventory",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
+            "status": "ok"
+        },
+        {
             "id": "embedded-fonts",
             "status": "ok"
         },
@@ -9,23 +21,15 @@
             "status": "ok"
         },
         {
-            "id": "bleed",
-            "status": "failed"
-        },
-        {
-            "id": "trim",
-            "status": "ok"
-        },
-        {
             "id": "page-size",
             "status": "ok"
         },
         {
-            "id": "color-mode",
+            "id": "transparency-risk",
             "status": "ok"
         },
         {
-            "id": "color-inventory",
+            "id": "trim",
             "status": "ok"
         },
         {
@@ -64,6 +68,16 @@
     "pass": false,
     "profile": "Loupe Default",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "3a4460522d49cd5b"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
         {
             "check_id": "color-inventory",

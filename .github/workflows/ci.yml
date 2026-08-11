@@ -167,6 +167,12 @@ jobs:
           echo "::group::git status (untracked snapshots = new fixtures)"
           git status --porcelain -- loupe-preflight/testdata/snapshots
           echo "::endgroup::"
+          echo "::group::content of new (untracked) snapshots"
+          git status --porcelain -- loupe-preflight/testdata/snapshots | awk '/^\?\?/ {print $2}' | while read -r f; do
+            echo "----- $f -----"
+            cat "$f"
+          done
+          echo "::endgroup::"
 
       - name: Run preflight corpus gate
         working-directory: pdf4qt/build
