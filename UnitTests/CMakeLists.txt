@@ -713,7 +713,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         tst_operatoracceptance.cpp
     )
 
-    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Test)
+    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
     add_dependencies(UnitTestsOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
