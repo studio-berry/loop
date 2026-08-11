@@ -401,14 +401,19 @@ bool PDFPageContentEditorProcessor::isContentKindSuppressed(ContentKind kind) co
 
 bool PDFPageContentEditorProcessor::isTilingPatternProcessingAllowed(PDFInteger tileCount) const
 {
-    // Each tile is decomposed into the edited content elements, so a pattern
-    // with a huge number of tiles would produce an unusable amount of elements.
-    // Such patterns are not processed at all and an error is reported instead.
+    // Tiling patterns are decomposed into per-tile edited content elements so the
+    // page still renders correctly, but that flattening loses the pattern's paint
+    // semantics (tiling/repetition) - rewriting the flattened elements back out
+    // cannot reconstruct the pattern. Every tiling pattern use is therefore
+    // reported unsupported, regardless of tile count, so rewrite fails closed.
+    const_cast<PDFPageContentEditorProcessor*>(this)->addUnsupportedInstruction(
+        QByteArrayLiteral("tiling-pattern"),
+        QStringLiteral("Tiling patterns cannot be safely reconstructed from the page content editor's flattened elements."));
+
+    // A pattern with a huge number of tiles would also produce an unusable amount
+    // of edited content elements, so such patterns are not processed (flattened) at all.
     if (tileCount > MAXIMUM_TILING_PATTERN_TILE_COUNT)
     {
-        const_cast<PDFPageContentEditorProcessor*>(this)->addUnsupportedInstruction(
-            QByteArrayLiteral("tiling-pattern"),
-            QStringLiteral("Tiling pattern exceeds the page content editor complexity limit and cannot be safely reconstructed."));
         return false;
     }
 
