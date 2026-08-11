@@ -48,6 +48,12 @@ jobs:
       - name: Verify generated dependency paths are untracked
         working-directory: pdf4qt
         run: python3 scripts/ci/check_generated_dependency_paths.py
+      - name: Test source integrity checker
+        working-directory: pdf4qt
+        run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         run: python3 scripts/ci/check_branch_policy.py
@@ -196,6 +202,16 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_generated_dependency_paths.py
+      - name: Test source integrity checker
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         shell: pwsh
