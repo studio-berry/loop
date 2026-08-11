@@ -20,6 +20,16 @@
     "pass": false,
     "profile": "Loupe Test - Output Intent",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "a6b84f6769bb1713"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
     ]
 }

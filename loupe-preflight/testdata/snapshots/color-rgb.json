@@ -1,6 +1,18 @@
 {
     "checks": [
         {
+            "id": "bleed",
+            "status": "ok"
+        },
+        {
+            "id": "color-inventory",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
+            "status": "failed"
+        },
+        {
             "id": "embedded-fonts",
             "status": "ok"
         },
@@ -9,23 +21,15 @@
             "status": "ok"
         },
         {
-            "id": "bleed",
-            "status": "ok"
-        },
-        {
-            "id": "trim",
-            "status": "ok"
-        },
-        {
             "id": "page-size",
             "status": "ok"
         },
         {
-            "id": "color-mode",
-            "status": "failed"
+            "id": "transparency-risk",
+            "status": "ok"
         },
         {
-            "id": "color-inventory",
+            "id": "trim",
             "status": "ok"
         },
         {
@@ -44,11 +48,29 @@
         }
     ],
     "fixups_available": [
+        {
+            "description": "Convert RGB content to an ICC-managed CMYK output condition",
+            "id": "rgb-to-cmyk",
+            "params": {
+                "safe": true
+            },
+            "safe": false
+        }
     ],
     "inspection_complete": true,
     "pass": false,
     "profile": "Loupe Default",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "528d93f17acabe3d"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
         {
             "check_id": "color-inventory",
