@@ -332,6 +332,14 @@ jobs:
         shell: pwsh
         run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin" -Profile developer
 
+      - name: TEMP - run OperationHistory test directly for diagnostics
+        working-directory: pdf4qt/build
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          & ".\usr\bin\Release\UnitTestsOperationHistory.exe" 2>&1 | Tee-Object -FilePath operationhistory-direct.log
+          Write-Host "---- exit code: $LASTEXITCODE ----"
+
       - name: Run unit tests
         working-directory: pdf4qt/build
         shell: pwsh
