@@ -237,9 +237,22 @@ void OperationHistoryTest::diagArtifactStoreImportOnly()
         diagTrace("diagArtifactStoreImportOnly: toLocal8Bit() completed");
         const char* errPtr = errBytes.constData();
         diagTrace((errPtr && *errPtr) ? "diagArtifactStoreImportOnly: constData() non-empty" : "diagArtifactStoreImportOnly: constData() empty/null");
+        // TEMP-DIAG: print the actual failure text via our own already-proven-safe
+        // toLocal8Bit()/constData() path (not qPrintable/QVERIFY2) so we learn *why*
+        // importBytes() is failing without going anywhere near the call that crashes.
+        const QByteArray labeled = (QStringLiteral("diagArtifactStoreImportOnly: errorMessage text = [") +
+                                    first.errorMessage + QStringLiteral("]"))
+                                       .toLocal8Bit();
+        diagTrace(labeled.constData());
     }
-    diagTrace("diagArtifactStoreImportOnly: before QVERIFY2");
-    QVERIFY2(first.success, qPrintable(first.errorMessage));
+    // TEMP-DIAG: the previous run showed the crash happens somewhere inside
+    // QVERIFY2(first.success, qPrintable(first.errorMessage)) itself, even though
+    // every manual read of first.success/errorMessage above succeeded. Swap to a
+    // plain QVERIFY (no description argument) to learn whether ANY QTest failure
+    // report crashes on this Windows build, or specifically QVERIFY2's two-argument
+    // failure path with a qPrintable() description.
+    diagTrace("diagArtifactStoreImportOnly: before QVERIFY (no description)");
+    QVERIFY(first.success);
     diagTrace("diagArtifactStoreImportOnly: done");
 }
 
