@@ -23,8 +23,8 @@
 #include "pdfrgbtocmykfixup.h"
 
 #include "pdfdocumentbuilder.h"
-#include "pdfdocumentreader.h"
 
+#include <QFile>
 #include <QtTest>
 
 class RgbToCmykFixupTest : public QObject
@@ -42,23 +42,22 @@ namespace
 
 QByteArray loadCmykProfile()
 {
-    const QString fixture = QFINDTESTDATA("../loupe-preflight/testdata/fixtures/output-intent-cmyk.pdf");
-    if (fixture.isEmpty())
+    // The preflight corpus fixture output-intent-cmyk.pdf embeds only an ICC header
+    // placeholder (cmsCreateProfilePlaceholder). That is enough for structural
+    // output-intent checks, but cmsCreateTransform needs A2B/B2A tables. Use a
+    // dedicated synthetic CMYK profile that can actually drive the conversion.
+    const QString profilePath = QFINDTESTDATA("testdata/synthetic-cmyk.icc");
+    if (profilePath.isEmpty())
     {
         return QByteArray();
     }
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
-    pdf::PDFDocument document = reader.readFromFile(fixture);
-    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK
-        || document.getCatalog()->getOutputIntents().empty())
+    QFile file(profilePath);
+    if (!file.open(QIODevice::ReadOnly))
     {
         return QByteArray();
     }
-
-    const pdf::PDFObject profileObject = document.getObject(
-        document.getCatalog()->getOutputIntents().front().getOutputProfile());
-    return profileObject.isStream() ? document.getDecodedStream(profileObject.getStream()) : QByteArray();
+    return file.readAll();
 }
 
 pdf::PDFDocument buildRgbDocument()
@@ -116,7 +115,7 @@ void RgbToCmykFixupTest::analyzesWithoutMutating()
     pdf::PDFRgbToCmykSettings settings = settingsWithProfile();
     if (settings.targetIccData.isEmpty())
     {
-        QSKIP("CMYK output-intent fixture is unavailable.");
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
     }
     settings.dryRunOnly = true;
     pdf::PDFDocument document = buildRgbDocument();
@@ -132,7 +131,7 @@ void RgbToCmykFixupTest::convertsVectorPaintAndEmbedsOutputIntent()
     pdf::PDFRgbToCmykSettings settings = settingsWithProfile();
     if (settings.targetIccData.isEmpty())
     {
-        QSKIP("CMYK output-intent fixture is unavailable.");
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
     }
     pdf::PDFDocument document = buildRgbDocument();
     pdf::PDFRgbToCmykReport report;

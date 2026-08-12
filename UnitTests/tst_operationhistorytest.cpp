@@ -61,14 +61,14 @@ void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
     pdf::PDFArtifactStore store(temporary.path());
     const QByteArray payload("immutable artifact payload");
     const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
-    QVERIFY(first.success);
+    QVERIFY2(first.success, qPrintable(first.errorMessage));
     QCOMPARE(first.artifact.sha256, QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex()));
     QVERIFY(first.artifact.isValid());
     QVERIFY(store.verify(first.artifact));
     QVERIFY(!(QFileInfo(store.pathFor(first.artifact)).permissions() & QFileDevice::WriteOwner));
 
     const pdf::PDFArtifactStoreResult second = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("copy.pdf") });
-    QVERIFY(second.success);
+    QVERIFY2(second.success, qPrintable(second.errorMessage));
     QVERIFY(second.reused);
     QVERIFY(store.verify(second.artifact));
 
@@ -91,10 +91,12 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto output = artifacts.importBytes("output", { QStringLiteral("application/pdf"), QStringLiteral("output.pdf") });
-    QVERIFY(input.success && output.success);
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
+    QVERIFY2(output.success, qPrintable(output.errorMessage));
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
-    QVERIFY(history.open());
+    QString openError;
+    QVERIFY2(history.open(&openError), qPrintable(openError));
     QVERIFY(history.registerArtifact(input.artifact));
     QVERIFY(history.registerArtifact(output.artifact));
 
@@ -155,11 +157,14 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     const auto input = artifacts.importBytes("input", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto middle = artifacts.importBytes("middle", { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
     const auto final = artifacts.importBytes("final", { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
-    QVERIFY(input.success && middle.success && final.success);
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
+    QVERIFY2(middle.success, qPrintable(middle.errorMessage));
+    QVERIFY2(final.success, qPrintable(final.errorMessage));
 
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
-    QVERIFY(history.open());
+    QString openError;
+    QVERIFY2(history.open(&openError), qPrintable(openError));
     QVERIFY(history.registerOriginalInput(input.artifact));
     QVERIFY(history.registerArtifact(middle.artifact));
     QVERIFY(history.registerArtifact(final.artifact));
@@ -250,10 +255,11 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY(input.success);
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
-    QVERIFY(history.open());
+    QString openError;
+    QVERIFY2(history.open(&openError), qPrintable(openError));
     QVERIFY(history.registerArtifact(input.artifact));
     pdf::PDFOperationHistoryExecution execution;
     execution.operationId = QStringLiteral("tamper.test");
@@ -286,10 +292,11 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY(input.success);
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
-    QVERIFY(history.open());
+    QString openError;
+    QVERIFY2(history.open(&openError), qPrintable(openError));
     QVERIFY(history.registerArtifact(input.artifact));
 
     pdf::PDFOperationHistoryExecution execution;
