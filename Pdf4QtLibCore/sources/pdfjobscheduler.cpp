@@ -42,18 +42,24 @@ bool isTerminal(PDFJobStatus status)
            status == PDFJobStatus::Cancelled || status == PDFJobStatus::Stale;
 }
 
-} // namespace
+}   // namespace
 
 const char* getPDFJobPriorityName(PDFJobPriority priority)
 {
     switch (priority)
     {
-        case PDFJobPriority::Interaction: return "interaction";
-        case PDFJobPriority::VisiblePage: return "visible-page";
-        case PDFJobPriority::NearViewport: return "near-viewport";
-        case PDFJobPriority::Operator: return "operator";
-        case PDFJobPriority::Background: return "background";
-        case PDFJobPriority::Agent: return "agent";
+        case PDFJobPriority::Interaction:
+            return "interaction";
+        case PDFJobPriority::VisiblePage:
+            return "visible-page";
+        case PDFJobPriority::NearViewport:
+            return "near-viewport";
+        case PDFJobPriority::Operator:
+            return "operator";
+        case PDFJobPriority::Background:
+            return "background";
+        case PDFJobPriority::Agent:
+            return "agent";
     }
     return "unknown";
 }
@@ -62,14 +68,22 @@ const char* getPDFJobKindName(PDFJobKind kind)
 {
     switch (kind)
     {
-        case PDFJobKind::Rendering: return "rendering";
-        case PDFJobKind::Preflight: return "preflight";
-        case PDFJobKind::OCR: return "ocr";
-        case PDFJobKind::Export: return "export";
-        case PDFJobKind::Thumbnail: return "thumbnail";
-        case PDFJobKind::Batch: return "batch";
-        case PDFJobKind::Agent: return "agent";
-        case PDFJobKind::Other: return "other";
+        case PDFJobKind::Rendering:
+            return "rendering";
+        case PDFJobKind::Preflight:
+            return "preflight";
+        case PDFJobKind::OCR:
+            return "ocr";
+        case PDFJobKind::Export:
+            return "export";
+        case PDFJobKind::Thumbnail:
+            return "thumbnail";
+        case PDFJobKind::Batch:
+            return "batch";
+        case PDFJobKind::Agent:
+            return "agent";
+        case PDFJobKind::Other:
+            return "other";
     }
     return "unknown";
 }
@@ -78,12 +92,18 @@ const char* getPDFJobStatusName(PDFJobStatus status)
 {
     switch (status)
     {
-        case PDFJobStatus::Queued: return "queued";
-        case PDFJobStatus::Running: return "running";
-        case PDFJobStatus::Succeeded: return "succeeded";
-        case PDFJobStatus::Failed: return "failed";
-        case PDFJobStatus::Cancelled: return "cancelled";
-        case PDFJobStatus::Stale: return "stale";
+        case PDFJobStatus::Queued:
+            return "queued";
+        case PDFJobStatus::Running:
+            return "running";
+        case PDFJobStatus::Succeeded:
+            return "succeeded";
+        case PDFJobStatus::Failed:
+            return "failed";
+        case PDFJobStatus::Cancelled:
+            return "cancelled";
+        case PDFJobStatus::Stale:
+            return "stale";
     }
     return "unknown";
 }
@@ -163,7 +183,7 @@ struct PDFJobScheduler::JobEntry
 };
 
 bool PDFJobScheduler::JobCompare::operator()(const std::shared_ptr<JobEntry>& left,
-                                              const std::shared_ptr<JobEntry>& right) const
+                                             const std::shared_ptr<JobEntry>& right) const
 {
     if (left->spec.priority != right->spec.priority)
     {
@@ -185,7 +205,8 @@ PDFJobScheduler::PDFJobScheduler(int workerCount, QObject* parent) :
     m_workers.reserve(static_cast<size_t>(m_workerCount));
     for (int index = 0; index < m_workerCount; ++index)
     {
-        m_workers.emplace_back([this] { workerLoop(); });
+        m_workers.emplace_back([this]
+                               { workerLoop(); });
     }
 }
 
@@ -295,7 +316,8 @@ bool PDFJobScheduler::cancel(const QString& jobId)
 bool PDFJobScheduler::waitForFinished(const QString& jobId, int timeoutMs) const
 {
     std::unique_lock lock(m_mutex);
-    const auto exists = [this, &jobId] {
+    const auto exists = [this, &jobId]
+    {
         const auto it = m_jobs.find(jobId);
         return it != m_jobs.end() && isTerminal(it->second->status);
     };
@@ -329,13 +351,13 @@ QList<PDFJobSnapshot> PDFJobScheduler::queuedJobs() const
             result.append(snapshotLocked(*job.second));
         }
     }
-    std::sort(result.begin(), result.end(), [](const PDFJobSnapshot& left, const PDFJobSnapshot& right) {
+    std::sort(result.begin(), result.end(), [](const PDFJobSnapshot& left, const PDFJobSnapshot& right)
+              {
         if (left.priority != right.priority)
         {
             return static_cast<int>(left.priority) < static_cast<int>(right.priority);
         }
-        return left.queuedAtUtc < right.queuedAtUtc;
-    });
+        return left.queuedAtUtc < right.queuedAtUtc; });
     return result;
 }
 
@@ -367,9 +389,8 @@ QList<PDFJobTraceEvent> PDFJobScheduler::trace(const QString& jobId) const
     {
         result.append(events.second);
     }
-    std::sort(result.begin(), result.end(), [](const PDFJobTraceEvent& left, const PDFJobTraceEvent& right) {
-        return left.timestampUtc < right.timestampUtc;
-    });
+    std::sort(result.begin(), result.end(), [](const PDFJobTraceEvent& left, const PDFJobTraceEvent& right)
+              { return left.timestampUtc < right.timestampUtc; });
     return result;
 }
 
@@ -397,10 +418,17 @@ void PDFJobScheduler::workerLoop()
         PDFJobSnapshot startedSnapshot;
         {
             std::unique_lock lock(m_mutex);
-            m_condition.wait(lock, [this] {
+            m_condition.wait(lock, [this]
+                             {
+                // Always wake once shutdown is requested, even with an empty
+                // queue - otherwise, when the destructor sets m_stopping with
+                // nothing left queued (the common case: all jobs already
+                // finished), this predicate stays false forever and the
+                // worker never reaches the m_stopping-and-empty exit check
+                // below, so ~PDFJobScheduler()'s worker.join() hangs forever.
                 if (m_stopping)
                 {
-                    return !m_queue.empty();
+                    return true;
                 }
                 if (m_queue.empty())
                 {
@@ -408,8 +436,7 @@ void PDFJobScheduler::workerLoop()
                 }
                 const PDFJobPriority priority = m_queue.top()->spec.priority;
                 return m_workerCount <= 1 || priority < PDFJobPriority::Background ||
-                       m_activeBackgroundJobs < m_workerCount - 1;
-            });
+                       m_activeBackgroundJobs < m_workerCount - 1; });
             if (m_stopping && m_queue.empty())
             {
                 return;
@@ -430,8 +457,8 @@ void PDFJobScheduler::workerLoop()
                 job->errorMessage = QStringLiteral("Cancellation requested before execution.");
                 job->finishedAtUtc = QDateTime::currentDateTimeUtc();
                 job->cancellationLatencyMs = job->cancellationRequestedAtUtc.isValid()
-                                                  ? job->cancellationRequestedAtUtc.msecsTo(job->finishedAtUtc)
-                                                  : 0;
+                                                 ? job->cancellationRequestedAtUtc.msecsTo(job->finishedAtUtc)
+                                                 : 0;
                 appendTrace(job, PDFJobStatus::Cancelled);
                 const PDFJobSnapshot cancelledSnapshot = snapshotLocked(*job);
                 m_finishedCondition.notify_all();
@@ -462,7 +489,8 @@ void PDFJobScheduler::workerLoop()
 
         PDFJobContext context(job->cancellationToken,
                               job->spec.processingLimits,
-                              [this, job](int progress) {
+                              [this, job](int progress)
+                              {
                                   PDFJobSnapshot snapshot;
                                   {
                                       std::lock_guard lock(m_mutex);
@@ -629,4 +657,4 @@ QString PDFJobScheduler::resolvedDocumentKey(const PDFJobSpec& spec)
     return spec.artifact.logicalName;
 }
 
-} // namespace pdf
+}   // namespace pdf

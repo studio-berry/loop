@@ -71,7 +71,6 @@ void JobSchedulerTest::priorityOrdersQueuedJobs()
         } });
     QVERIFY(!blockerId.isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(blockerStarted.load(std::memory_order_acquire), 1000);
-    qWarning().noquote() << "TEMP-DIAG blocker started";
 
     pdf::PDFJobSpec background;
     background.jobId = QStringLiteral("background");
@@ -82,22 +81,11 @@ void JobSchedulerTest::priorityOrdersQueuedJobs()
     visible.jobId = QStringLiteral("visible");
     visible.priority = pdf::PDFJobPriority::VisiblePage;
     const QString visibleId = scheduler.submit(visible, [](pdf::PDFJobContext&) {});
-    qWarning().noquote() << "TEMP-DIAG submitted background/visible, ids:" << backgroundId << visibleId;
 
     releaseBlocker = true;
-    qWarning().noquote() << "TEMP-DIAG releaseBlocker set, waiting for blocker";
-    const bool blockerFinished = scheduler.waitForFinished(blockerId, 1000);
-    qWarning().noquote() << "TEMP-DIAG blocker waitForFinished ->" << blockerFinished
-                         << "snapshot status:" << static_cast<int>(scheduler.snapshot(blockerId).status);
-    QVERIFY(blockerFinished);
-    const bool visibleFinished = scheduler.waitForFinished(visibleId, 1000);
-    qWarning().noquote() << "TEMP-DIAG visible waitForFinished ->" << visibleFinished
-                         << "snapshot status:" << static_cast<int>(scheduler.snapshot(visibleId).status);
-    QVERIFY(visibleFinished);
-    const bool backgroundFinished = scheduler.waitForFinished(backgroundId, 1000);
-    qWarning().noquote() << "TEMP-DIAG background waitForFinished ->" << backgroundFinished
-                         << "snapshot status:" << static_cast<int>(scheduler.snapshot(backgroundId).status);
-    QVERIFY(backgroundFinished);
+    QVERIFY(scheduler.waitForFinished(blockerId, 1000));
+    QVERIFY(scheduler.waitForFinished(visibleId, 1000));
+    QVERIFY(scheduler.waitForFinished(backgroundId, 1000));
 
     QMutexLocker lock(&startedMutex);
     QCOMPARE(started, QStringList({ blockerId, visibleId, backgroundId }));
