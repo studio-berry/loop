@@ -30,11 +30,45 @@
 #include <QIODevice>
 #include <QSaveFile>
 #include <QTemporaryFile>
+#include <QThread>
+
+#ifdef Q_OS_WIN
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #include <utility>
 
 namespace pdf
 {
+
+#ifdef Q_OS_WIN
+static bool setWindowsReadOnlyAttribute(const QString& path, bool readOnly)
+{
+    const QString native = QDir::toNativeSeparators(path);
+    const DWORD attrs = GetFileAttributesW(reinterpret_cast<LPCWSTR>(native.utf16()));
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        return false;
+    }
+    const DWORD updated = readOnly ? (attrs | FILE_ATTRIBUTE_READONLY)
+                                   : (attrs & ~FILE_ATTRIBUTE_READONLY);
+    if (updated == attrs)
+    {
+        return true;
+    }
+    return SetFileAttributesW(reinterpret_cast<LPCWSTR>(native.utf16()), updated) != FALSE;
+}
+#endif
+
+static QString withFileError(const QString& message, const QString& errorString)
+{
+    if (errorString.isEmpty())
+    {
+        return message;
+    }
+    return QStringLiteral("%1 %2").arg(message, errorString);
+}
 
 PDFArtifactStore::PDFArtifactStore(QString rootDirectory) :
     m_rootDirectory(std::move(rootDirectory))
@@ -86,8 +120,19 @@ bool PDFArtifactStore::verify(const PDFArtifactIdentity& artifact) const
 
 bool PDFArtifactStore::publishReadOnly(const QString& path) const
 {
-    return QFile::setPermissions(path,
-                                 QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+    if (QFile::setPermissions(path,
+                              QFileDevice::ReadOwner | QFileDevice::ReadGroup | QFileDevice::ReadOther))
+    {
+        return true;
+    }
+#ifdef Q_OS_WIN
+    // Unix permission bits are not a reliable NTFS model. Map "published
+    // read-only artifact" to FILE_ATTRIBUTE_READONLY, which is what Qt's
+    // QFile::permissions() consults for the Write* bits on Windows.
+    return setWindowsReadOnlyAttribute(path, true);
+#else
+    return false;
+#endif
 }
 
 bool PDFArtifactStore::remove(const PDFArtifactIdentity& artifact) const
@@ -100,6 +145,9 @@ bool PDFArtifactStore::remove(const PDFArtifactIdentity& artifact) const
     QFile::setPermissions(path,
                           QFileDevice::ReadOwner | QFileDevice::WriteOwner |
                           QFileDevice::ReadGroup | QFileDevice::ReadOther);
+#ifdef Q_OS_WIN
+    setWindowsReadOnlyAttribute(path, false);
+#endif
     return QFile::remove(path);
 }
 
@@ -195,17 +243,21 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
     const QString artifactsDirectory = QDir(m_rootDirectory).filePath(QStringLiteral("artifacts"));
     if (!QDir().mkpath(artifactsDirectory))
     {
-        result.errorMessage = QStringLiteral("Could not create the artifact store directory.");
+        result.errorMessage = QStringLiteral("Could not create the artifact store directory '%1'.").arg(artifactsDirectory);
         return result;
     }
 
-    QTemporaryFile temporary(QDir(artifactsDirectory).filePath(QStringLiteral(".artifact-XXXXXX.tmp")));
+    QTemporaryFile temporary(QDir(artifactsDirectory).filePath(QStringLiteral("artifact-XXXXXX.tmp")));
     temporary.setAutoRemove(false);
     if (!temporary.open())
     {
-        result.errorMessage = QStringLiteral("Could not create an atomic artifact staging file.");
+        result.errorMessage = withFileError(QStringLiteral("Could not create an atomic artifact staging file."),
+                                            temporary.errorString());
         return result;
     }
+    // Materialize the name while the file is still open. On Windows, QTemporaryFile
+    // may delete the unnamed staging file on close() if fileName() was never called.
+    const QString stagedPath = temporary.fileName();
 
     QCryptographicHash hash(QCryptographicHash::Sha256);
     qint64 size = 0;
@@ -220,8 +272,9 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
         }
         if (temporary.write(chunk) != chunk.size())
         {
+            const QString error = temporary.errorString();
             temporary.remove();
-            result.errorMessage = QStringLiteral("Could not stage the artifact atomically.");
+            result.errorMessage = withFileError(QStringLiteral("Could not stage the artifact atomically."), error);
             return result;
         }
         hash.addData(chunk);
@@ -229,11 +282,11 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
     }
     if (!temporary.flush())
     {
+        const QString error = temporary.errorString();
         temporary.remove();
-        result.errorMessage = QStringLiteral("Could not flush the staged artifact.");
+        result.errorMessage = withFileError(QStringLiteral("Could not flush the staged artifact."), error);
         return result;
     }
-    temporary.close();
 
     const QString sha256 = QString::fromLatin1(hash.result().toHex());
     const QString token = artifactToken(sha256);
@@ -242,15 +295,15 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
     bool newlyPublished = false;
     if (!QDir().mkpath(finalInfo.absolutePath()))
     {
-        QFile::remove(temporary.fileName());
-        result.errorMessage = QStringLiteral("Could not create the artifact digest directory.");
+        temporary.remove();
+        result.errorMessage = QStringLiteral("Could not create the artifact digest directory '%1'.").arg(finalInfo.absolutePath());
         return result;
     }
 
     if (QFileInfo::exists(finalPath))
     {
         const bool sameSize = QFileInfo(finalPath).size() == size;
-        QFile::remove(temporary.fileName());
+        temporary.remove();
         if (!sameSize)
         {
             result.errorMessage = QStringLiteral("Artifact digest collision detected.");
@@ -266,28 +319,59 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
         }
         result.reused = true;
     }
-    else if (!QFile::rename(temporary.fileName(), finalPath))
-    {
-        QFile::remove(temporary.fileName());
-        result.errorMessage = QStringLiteral("Could not atomically publish the artifact.");
-        return result;
-    }
     else
     {
+        // QTemporaryFile::rename is the atomic same-volume publish API.
+        // QFile::rename(temporary.fileName(), ...) can fail on Windows with a
+        // sharing violation while the QTemporaryFile still owns the handle.
+        bool renamed = temporary.rename(finalPath);
+        if (!renamed)
+        {
+            QThread::msleep(50);
+            renamed = temporary.rename(finalPath);
+        }
+        temporary.setAutoRemove(false);
+        if (!renamed)
+        {
+            const QString error = temporary.errorString();
+            temporary.remove();
+            QFile::remove(stagedPath);
+            result.errorMessage = withFileError(QStringLiteral("Could not atomically publish the artifact '%1'.").arg(finalPath),
+                                                error);
+            return result;
+        }
         newlyPublished = true;
+        temporary.close();
     }
 
     if (!publishReadOnly(finalPath))
     {
-        if (newlyPublished)
+        PDFArtifactIdentity published;
+        published.sha256 = sha256;
+        published.size = size;
+#ifndef Q_OS_WIN
+        const bool keepVerifiedPublish = false;
+#else
+        // NTFS may refuse Unix-style chmod even after FILE_ATTRIBUTE_READONLY
+        // is set (or the attribute API itself may fail under a brief AV lock).
+        // Keep a verified artifact rather than deleting a successful publish.
+        const bool keepVerifiedPublish = verify(published);
+#endif
+        if (!keepVerifiedPublish)
         {
-            QFile::setPermissions(finalPath,
-                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                  QFileDevice::ReadGroup | QFileDevice::ReadOther);
-            QFile::remove(finalPath);
+            if (newlyPublished)
+            {
+                QFile::setPermissions(finalPath,
+                                      QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                      QFileDevice::ReadGroup | QFileDevice::ReadOther);
+#ifdef Q_OS_WIN
+                setWindowsReadOnlyAttribute(finalPath, false);
+#endif
+                QFile::remove(finalPath);
+            }
+            result.errorMessage = QStringLiteral("Could not publish the artifact as read-only.");
+            return result;
         }
-        result.errorMessage = QStringLiteral("Could not publish the artifact as read-only.");
-        return result;
     }
 
     result.success = true;
