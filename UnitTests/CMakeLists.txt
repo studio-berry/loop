@@ -330,27 +330,7 @@ set_target_properties(UnitTestsProductionGeometry PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 
-# TEMP-DIAG: split into one ctest entry per QTest slot (instead of a single
-# add_test running the whole binary) so a Windows-only crash pinpoints which
-# slot is responsible instead of just "test #18 failed, 0.05s, no output".
-# QTest binaries accept a bare function name to run only that slot; collapse
-# back to a single add_test() once the crashing slot is identified and fixed.
-foreach(_UnitTestsOperationHistorySlot IN ITEMS
-    canonicalJsonIsStableAndRedacted
-    diagTemporaryDirOnly
-    diagArtifactStoreConstructionOnly
-    diagArtifactStoreImportOnly
-    artifactStoreStreamsAndDetectsTampering
-    lifecycleApprovalAndRollbackResolution
-    rollbackPointsRetentionAndAtomicity
-    externalPayloadTamperingCompromisesChain
-    provenanceKindsRoundTripAndMiddleDeletionCompromisesChain
-)
-    add_test(UnitTestsOperationHistory_${_UnitTestsOperationHistorySlot}
-        "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOperationHistory"
-        ${_UnitTestsOperationHistorySlot}
-    )
-endforeach()
+add_test(UnitTestsOperationHistory "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOperationHistory")
 add_test(UnitTestsProductionGeometry "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsProductionGeometry")
 
 add_executable(UnitTestsPreflightEngine
