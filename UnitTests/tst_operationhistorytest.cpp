@@ -230,6 +230,15 @@ void OperationHistoryTest::diagArtifactStoreImportOnly()
     const QByteArray payload("immutable artifact payload");
     const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
     diagTrace("diagArtifactStoreImportOnly: after importBytes()");
+    diagTrace(first.success ? "diagArtifactStoreImportOnly: first.success == true" : "diagArtifactStoreImportOnly: first.success == false");
+    diagTrace(first.errorMessage.isNull() ? "diagArtifactStoreImportOnly: errorMessage isNull" : "diagArtifactStoreImportOnly: errorMessage not null");
+    {
+        const QByteArray errBytes = first.errorMessage.toLocal8Bit();
+        diagTrace("diagArtifactStoreImportOnly: toLocal8Bit() completed");
+        const char* errPtr = errBytes.constData();
+        diagTrace((errPtr && *errPtr) ? "diagArtifactStoreImportOnly: constData() non-empty" : "diagArtifactStoreImportOnly: constData() empty/null");
+    }
+    diagTrace("diagArtifactStoreImportOnly: before QVERIFY2");
     QVERIFY2(first.success, qPrintable(first.errorMessage));
     diagTrace("diagArtifactStoreImportOnly: done");
 }
