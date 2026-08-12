@@ -1,18 +1,6 @@
 {
     "checks": [
         {
-            "id": "bleed",
-            "status": "ok"
-        },
-        {
-            "id": "color-inventory",
-            "status": "ok"
-        },
-        {
-            "id": "color-mode",
-            "status": "ok"
-        },
-        {
             "id": "embedded-fonts",
             "status": "ok"
         },
@@ -21,7 +9,19 @@
             "status": "ok"
         },
         {
+            "id": "bleed",
+            "status": "ok"
+        },
+        {
+            "id": "trim",
+            "status": "ok"
+        },
+        {
             "id": "page-size",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
             "status": "ok"
         },
         {
@@ -29,7 +29,7 @@
             "status": "ok"
         },
         {
-            "id": "trim",
+            "id": "color-inventory",
             "status": "ok"
         },
         {
