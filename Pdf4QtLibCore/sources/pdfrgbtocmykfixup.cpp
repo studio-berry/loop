@@ -486,7 +486,16 @@ std::vector<StreamReference> collectPageStreams(const PDFDocument* document,
 {
     std::vector<StreamReference> result;
     std::vector<PDFObjectReference> references;
-    appendContentReferences(page->getContents(), &document->getStorage(), references);
+    // PDFPage::getContents() returns the already-dereferenced stream object, which loses
+    // reference identity and makes appendContentReferences() treat it as an inline stream
+    // (it only checks contentObject.isReference()). Read the raw, still-possibly-a-reference
+    // /Contents entry straight from the page dictionary instead, so the underlying object can
+    // actually be found and later rewritten via its PDFObjectReference.
+    const PDFObject pageDictionaryObject = document->getStorage().getObjectByReference(page->getPageReference());
+    const PDFObject rawContents = pageDictionaryObject.isDictionary()
+        ? pageDictionaryObject.getDictionary()->get("Contents")
+        : PDFObject();
+    appendContentReferences(rawContents, &document->getStorage(), references);
     for (const PDFObjectReference reference : references)
     {
         result.push_back(StreamReference{ reference, pageIndex, PDFRgbToCmykObjectKind::VectorPaint });
