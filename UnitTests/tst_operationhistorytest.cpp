@@ -32,6 +32,90 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
+#if defined(Q_OS_WIN)
+// TEMP-DIAG: UnitTestsOperationHistory dies on Windows CI with *zero* captured
+// output (no QtTest banner, no crash dialog text) even when the child process
+// is launched directly and stdout/stderr are redirected to separate files
+// outside of ctest. That signature - truly nothing written before the process
+// disappears - means whatever kills it bypasses ordinary C++/SEH unwinding
+// and buffered stdio flushing. These handlers are installed by a static
+// initializer (below), which runs during CRT startup before main() is even
+// entered, so they're live for the earliest possible failure window,
+// including failures during Qt/plugin static initialization.
+#include <windows.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <csignal>
+
+namespace
+{
+
+void diagFlushAndExit(int code)
+{
+    std::fflush(stderr);
+    std::fflush(stdout);
+    // _exit (not exit/abort) to skip further CRT/Qt teardown that could
+    // itself re-trigger whatever corrupted state caused the failure.
+    _exit(code);
+}
+
+LONG WINAPI diagUnhandledExceptionFilter(EXCEPTION_POINTERS* info)
+{
+    const DWORD exceptionCode = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionCode : 0;
+    const void* exceptionAddress = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionAddress : nullptr;
+    std::fprintf(stderr, "[diag] SetUnhandledExceptionFilter: code=0x%08lX address=%p\n",
+                 static_cast<unsigned long>(exceptionCode), exceptionAddress);
+    diagFlushAndExit(3);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+void diagInvalidParameterHandler(const wchar_t* expression, const wchar_t* function,
+                                 const wchar_t* file, unsigned int line, uintptr_t)
+{
+    std::fwprintf(stderr, L"[diag] _set_invalid_parameter_handler: expr=%ls func=%ls file=%ls line=%u\n",
+                  expression ? expression : L"?", function ? function : L"?",
+                  file ? file : L"?", line);
+    diagFlushAndExit(4);
+}
+
+void diagPurecallHandler()
+{
+    std::fprintf(stderr, "[diag] _set_purecall_handler: pure virtual function called\n");
+    diagFlushAndExit(5);
+}
+
+extern "C" void diagSignalHandler(int signalNumber)
+{
+    std::fprintf(stderr, "[diag] signal handler: signal=%d\n", signalNumber);
+    diagFlushAndExit(6);
+}
+
+struct DiagInstaller
+{
+    DiagInstaller()
+    {
+        // stderr can be fully buffered when redirected to a file/pipe (as
+        // ctest and our own diagnostic runs both do); force it unbuffered so
+        // a partial write survives even a hard crash a few lines later.
+        std::setvbuf(stderr, nullptr, _IONBF, 0);
+        std::fprintf(stderr, "[diag] handlers installing (static init)\n");
+        std::fflush(stderr);
+        SetUnhandledExceptionFilter(diagUnhandledExceptionFilter);
+        _set_invalid_parameter_handler(diagInvalidParameterHandler);
+        _set_purecall_handler(diagPurecallHandler);
+        std::signal(SIGABRT, diagSignalHandler);
+        std::signal(SIGSEGV, diagSignalHandler);
+        std::fprintf(stderr, "[diag] handlers installed\n");
+        std::fflush(stderr);
+    }
+};
+
+const DiagInstaller diagInstaller;
+
+}   // namespace
+#endif
+
 class OperationHistoryTest final : public QObject
 {
     Q_OBJECT
@@ -47,8 +131,8 @@ private slots:
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
 {
-    const QJsonObject first{{ QStringLiteral("z"), 1 }, { QStringLiteral("a"), QJsonObject{{ QStringLiteral("token"), QStringLiteral("secret") }} }};
-    const QJsonObject second{{ QStringLiteral("a"), QJsonObject{{ QStringLiteral("token"), QStringLiteral("secret") }} }, { QStringLiteral("z"), 1 }};
+    const QJsonObject first{ { QStringLiteral("z"), 1 }, { QStringLiteral("a"), QJsonObject{ { QStringLiteral("token"), QStringLiteral("secret") } } } };
+    const QJsonObject second{ { QStringLiteral("a"), QJsonObject{ { QStringLiteral("token"), QStringLiteral("secret") } } }, { QStringLiteral("z"), 1 } };
     QCOMPARE(pdf::canonicalJson(first), pdf::canonicalJson(second));
     const QJsonObject redacted = pdf::redactSensitiveJson(first).toObject();
     QCOMPARE(redacted.value(QStringLiteral("a")).toObject().value(QStringLiteral("token")).toString(), QStringLiteral("[REDACTED]"));
@@ -75,7 +159,7 @@ void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
     QFile file(store.pathFor(first.artifact));
     QVERIFY(QFile::setPermissions(file.fileName(),
                                   QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
+                                      QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(file.open(QIODevice::Append));
     QVERIFY(file.write("tamper") > 0);
     file.close();
@@ -105,7 +189,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     execution.operationVersion = 2;
     execution.input = input.artifact;
     execution.sourceDocumentRevision = 7;
-    execution.parameters = QJsonObject{{ QStringLiteral("password"), QStringLiteral("do-not-store") }, { QStringLiteral("mode"), QStringLiteral("safe") }};
+    execution.parameters = QJsonObject{ { QStringLiteral("password"), QStringLiteral("do-not-store") }, { QStringLiteral("mode"), QStringLiteral("safe") } };
     QUuid executionId;
     QVERIFY(history.beginExecution(execution, &executionId));
 
@@ -118,7 +202,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     accepted.executionId = executionId;
     accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     accepted.output = output.artifact;
-    accepted.resultSummary = QJsonObject{{ QStringLiteral("password"), QStringLiteral("do-not-store") }};
+    accepted.resultSummary = QJsonObject{ { QStringLiteral("password"), QStringLiteral("do-not-store") } };
     accepted.approval.kind = pdf::PDFApprovalKind::Human;
     accepted.approval.actorId = QStringLiteral("local-user:test");
     accepted.approval.decision = QStringLiteral("approve");
@@ -173,11 +257,13 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
                               const pdf::PDFArtifactIdentity& output,
                               const QString& operation,
                               bool approved,
-                              QUuid* executionId) {
+                              QUuid* executionId)
+    {
         pdf::PDFOperationHistoryExecution execution;
         execution.operationId = operation;
         execution.input = source;
-        if (!history.beginExecution(execution, executionId)) return false;
+        if (!history.beginExecution(execution, executionId))
+            return false;
         pdf::PDFOperationHistoryEvent event;
         event.executionId = *executionId;
         event.status = pdf::PDFOperationHistoryStatus::Accepted;
@@ -238,7 +324,7 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     QFile corrupt(artifacts.pathFor(final.artifact));
     QVERIFY(QFile::setPermissions(corrupt.fileName(),
                                   QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
+                                      QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(corrupt.open(QIODevice::Append));
     QVERIFY(corrupt.write("corrupt") > 0);
     corrupt.close();
