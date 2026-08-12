@@ -131,9 +131,9 @@ void PreflightCorpusTest::populateManifestRows()
         const QJsonObject entry = value.toObject();
         const QString id = entry.value(QStringLiteral("id")).toString();
         QTest::newRow(qPrintable(id)) << id
-                                       << entry.value(QStringLiteral("pdf")).toString()
-                                       << entry.value(QStringLiteral("profile")).toString()
-                                       << entry.value(QStringLiteral("pending")).toBool(false);
+                                      << entry.value(QStringLiteral("pdf")).toString()
+                                      << entry.value(QStringLiteral("profile")).toString()
+                                      << entry.value(QStringLiteral("pending")).toBool(false);
     }
 }
 
@@ -153,12 +153,12 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     process.setProcessEnvironment(environment);
     process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH),
-                   { QStringLiteral("preflight"),
-                     pdfPath,
-                     QStringLiteral("--profile"),
-                     profilePath,
-                     QStringLiteral("--console-format"),
-                     QStringLiteral("json") });
+                  { QStringLiteral("preflight"),
+                    pdfPath,
+                    QStringLiteral("--profile"),
+                    profilePath,
+                    QStringLiteral("--console-format"),
+                    QStringLiteral("json") });
     QVERIFY2(process.waitForFinished(30000), "PdfTool preflight timed out");
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
@@ -237,11 +237,11 @@ void PreflightCorpusTest::preflightMatchesManifest_data()
 
         const QString id = entry.value(QStringLiteral("id")).toString();
         QTest::newRow(qPrintable(id)) << id
-                                       << entry.value(QStringLiteral("pdf")).toString()
-                                       << entry.value(QStringLiteral("profile")).toString()
-                                       << expect.value(QStringLiteral("pass")).toBool()
-                                       << expectedCheckIds
-                                       << entry.value(QStringLiteral("pending")).toBool(false);
+                                      << entry.value(QStringLiteral("pdf")).toString()
+                                      << entry.value(QStringLiteral("profile")).toString()
+                                      << expect.value(QStringLiteral("pass")).toBool()
+                                      << expectedCheckIds
+                                      << entry.value(QStringLiteral("pending")).toBool(false);
     }
 }
 
@@ -272,9 +272,10 @@ void PreflightCorpusTest::preflightMatchesManifest()
     QCOMPARE(report.value(QStringLiteral("pass")).toBool(), expectedPass);
     const QString verdictState = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
     const int expectedExitCode = verdictState == QStringLiteral("pass")
-        ? 0
-        : verdictState == QStringLiteral("fail") ? 1
-        : verdictState == QStringLiteral("incomplete") ? 8 : 9;
+                                     ? 0
+                                 : verdictState == QStringLiteral("fail")       ? 1
+                                 : verdictState == QStringLiteral("incomplete") ? 8
+                                                                                : 9;
     QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);
@@ -333,14 +334,32 @@ void PreflightCorpusTest::preflightMatchesSnapshot()
     const QByteArray expectedJson = snapshotFile.readAll();
 
     // Normalize EOLs so Windows checkouts (eol=crlf) match QJsonDocument LF output.
-    auto normalizeNewlines = [](QByteArray data) {
+    auto normalizeNewlines = [](QByteArray data)
+    {
         data.replace("\r\n", "\n");
         data.replace('\r', '\n');
         return data;
     };
 
-    QCOMPARE(QString::fromUtf8(normalizeNewlines(actualJson)),
-             QString::fromUtf8(normalizeNewlines(expectedJson)));
+    const QString actualNormalized = QString::fromUtf8(normalizeNewlines(actualJson));
+    const QString expectedNormalized = QString::fromUtf8(normalizeNewlines(expectedJson));
+    if (actualNormalized != expectedNormalized)
+    {
+        const QStringList actualLines = actualNormalized.split(QLatin1Char('\n'));
+        const QStringList expectedLines = expectedNormalized.split(QLatin1Char('\n'));
+        const int maxLines = qMax(actualLines.size(), expectedLines.size());
+        for (int i = 0; i < maxLines; ++i)
+        {
+            const QString a = i < actualLines.size() ? actualLines.at(i) : QStringLiteral("<missing>");
+            const QString e = i < expectedLines.size() ? expectedLines.at(i) : QStringLiteral("<missing>");
+            if (a != e)
+            {
+                qWarning().noquote() << "TEMP-DIAG line" << i << "actual:  " << a;
+                qWarning().noquote() << "TEMP-DIAG line" << i << "expected:" << e;
+            }
+        }
+    }
+    QCOMPARE(actualNormalized, expectedNormalized);
 }
 
 QTEST_APPLESS_MAIN(PreflightCorpusTest)
