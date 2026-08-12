@@ -341,8 +341,25 @@ void PreflightCorpusTest::preflightMatchesSnapshot()
         return data;
     };
 
-    QCOMPARE(QString::fromUtf8(normalizeNewlines(actualJson)),
-             QString::fromUtf8(normalizeNewlines(expectedJson)));
+    const QString actualNormalized = QString::fromUtf8(normalizeNewlines(actualJson));
+    const QString expectedNormalized = QString::fromUtf8(normalizeNewlines(expectedJson));
+    if (actualNormalized != expectedNormalized)
+    {
+        const QStringList actualLines = actualNormalized.split(QLatin1Char('\n'));
+        const QStringList expectedLines = expectedNormalized.split(QLatin1Char('\n'));
+        const int maxLines = qMax(actualLines.size(), expectedLines.size());
+        for (int i = 0; i < maxLines; ++i)
+        {
+            const QString a = i < actualLines.size() ? actualLines.at(i) : QStringLiteral("<missing>");
+            const QString e = i < expectedLines.size() ? expectedLines.at(i) : QStringLiteral("<missing>");
+            if (a != e)
+            {
+                qWarning().noquote() << "TEMP-DIAG line" << i << "actual:  " << a;
+                qWarning().noquote() << "TEMP-DIAG line" << i << "expected:" << e;
+            }
+        }
+    }
+    QCOMPARE(actualNormalized, expectedNormalized);
 }
 
 QTEST_APPLESS_MAIN(PreflightCorpusTest)
