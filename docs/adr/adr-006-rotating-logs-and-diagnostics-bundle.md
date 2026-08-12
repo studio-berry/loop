@@ -5,7 +5,7 @@
 **Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
 **Superseded-by:** none
 **Date:** 2026-08-09
-**Deciders:** gh-15 (mirrors mberrys/Frisket-pdf#81)
+**Deciders:** gh-15 (mirrors upstream mberrys/Frisket-pdf, issue 81)
 
 ## Context
 
