@@ -159,6 +159,19 @@ struct DiagInstaller
 const DiagInstaller diagInstaller;
 
 }   // namespace
+
+// TEMP-DIAG: per-slot bisection (see UnitTests/CMakeLists.txt) showed every
+// slot that touches QTemporaryDir/PDFArtifactStore crashes on Windows while
+// the one slot that doesn't (canonicalJsonIsStableAndRedacted) passes. This
+// traces individual statements within the simplest failing slot so the next
+// Windows run pinpoints which specific line is the last one that ran.
+static void diagTrace(const char* text)
+{
+    std::fprintf(stderr, "[trace] %s\n", text);
+    std::fflush(stderr);
+}
+#else
+static void diagTrace(const char*) {}
 #endif
 
 class OperationHistoryTest final : public QObject
@@ -167,6 +180,10 @@ class OperationHistoryTest final : public QObject
 
 private slots:
     void canonicalJsonIsStableAndRedacted();
+    // TEMP-DIAG: finer bisection than artifactStoreStreamsAndDetectsTampering.
+    void diagTemporaryDirOnly();
+    void diagArtifactStoreConstructionOnly();
+    void diagArtifactStoreImportOnly();
     void artifactStoreStreamsAndDetectsTampering();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
@@ -183,18 +200,60 @@ void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
     QCOMPARE(redacted.value(QStringLiteral("a")).toObject().value(QStringLiteral("token")).toString(), QStringLiteral("[REDACTED]"));
 }
 
-void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
+void OperationHistoryTest::diagTemporaryDirOnly()
 {
+    diagTrace("diagTemporaryDirOnly: before QTemporaryDir()");
+    QTemporaryDir temporary;
+    diagTrace("diagTemporaryDirOnly: after QTemporaryDir()");
+    QVERIFY(temporary.isValid());
+    diagTrace("diagTemporaryDirOnly: after isValid()");
+}
+
+void OperationHistoryTest::diagArtifactStoreConstructionOnly()
+{
+    diagTrace("diagArtifactStoreConstructionOnly: before QTemporaryDir()");
+    QTemporaryDir temporary;
+    diagTrace("diagArtifactStoreConstructionOnly: after QTemporaryDir()");
+    QVERIFY(temporary.isValid());
+    diagTrace("diagArtifactStoreConstructionOnly: before PDFArtifactStore()");
+    pdf::PDFArtifactStore store(temporary.path());
+    diagTrace("diagArtifactStoreConstructionOnly: after PDFArtifactStore()");
+}
+
+void OperationHistoryTest::diagArtifactStoreImportOnly()
+{
+    diagTrace("diagArtifactStoreImportOnly: before QTemporaryDir()");
     QTemporaryDir temporary;
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore store(temporary.path());
+    diagTrace("diagArtifactStoreImportOnly: before importBytes()");
     const QByteArray payload("immutable artifact payload");
     const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    diagTrace("diagArtifactStoreImportOnly: after importBytes()");
+    QVERIFY2(first.success, qPrintable(first.errorMessage));
+    diagTrace("diagArtifactStoreImportOnly: done");
+}
+
+void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
+{
+    diagTrace("artifactStoreStreamsAndDetectsTampering: before QTemporaryDir()");
+    QTemporaryDir temporary;
+    diagTrace("artifactStoreStreamsAndDetectsTampering: after QTemporaryDir()");
+    QVERIFY(temporary.isValid());
+    diagTrace("artifactStoreStreamsAndDetectsTampering: before PDFArtifactStore()");
+    pdf::PDFArtifactStore store(temporary.path());
+    diagTrace("artifactStoreStreamsAndDetectsTampering: after PDFArtifactStore()");
+    const QByteArray payload("immutable artifact payload");
+    diagTrace("artifactStoreStreamsAndDetectsTampering: before first importBytes()");
+    const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    diagTrace("artifactStoreStreamsAndDetectsTampering: after first importBytes()");
     QVERIFY2(first.success, qPrintable(first.errorMessage));
     QCOMPARE(first.artifact.sha256, QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex()));
     QVERIFY(first.artifact.isValid());
     QVERIFY(store.verify(first.artifact));
+    diagTrace("artifactStoreStreamsAndDetectsTampering: before permissions check");
     QVERIFY(!(QFileInfo(store.pathFor(first.artifact)).permissions() & QFileDevice::WriteOwner));
+    diagTrace("artifactStoreStreamsAndDetectsTampering: after permissions check");
 
     const pdf::PDFArtifactStoreResult second = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("copy.pdf") });
     QVERIFY2(second.success, qPrintable(second.errorMessage));

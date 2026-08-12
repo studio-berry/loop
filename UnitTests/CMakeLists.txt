@@ -337,6 +337,9 @@ set_target_properties(UnitTestsProductionGeometry PROPERTIES
 # back to a single add_test() once the crashing slot is identified and fixed.
 foreach(_UnitTestsOperationHistorySlot IN ITEMS
     canonicalJsonIsStableAndRedacted
+    diagTemporaryDirOnly
+    diagArtifactStoreConstructionOnly
+    diagArtifactStoreImportOnly
     artifactStoreStreamsAndDetectsTampering
     lifecycleApprovalAndRollbackResolution
     rollbackPointsRetentionAndAtomicity
