@@ -416,7 +416,6 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     query.addBindValue(dateTimeString(event.createdUtc));
     if (!query.exec())
     {
-        qWarning().noquote() << "TEMP-DIAG appendEvent insert failed:" << queryError(query);
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
         return PDFOperationResult(queryError(query));
     }
@@ -538,11 +537,6 @@ PDFOperationHistoryVerification PDFOperationHistoryStore::verify() const
         if (event.sequence != expectedSequence || event.previousEventHash != previous ||
             event.eventHash != computeOperationHistoryEventHash(event, previous))
         {
-            qWarning().noquote() << "TEMP-DIAG verify mismatch: seq" << event.sequence << "expectedSeq" << expectedSequence
-                                 << "prevMatch" << (event.previousEventHash == previous)
-                                 << "hashMatch" << (event.eventHash == computeOperationHistoryEventHash(event, previous))
-                                 << "storedPrev" << event.previousEventHash.toHex() << "expectedPrev" << previous.toHex()
-                                 << "storedHash" << event.eventHash.toHex() << "recomputedHash" << computeOperationHistoryEventHash(event, previous).toHex();
             verification.verified = false;
             verification.integrity = QStringLiteral("compromised");
             verification.errorMessage = QStringLiteral("Operation history hash chain verification failed at sequence %1.").arg(event.sequence);
