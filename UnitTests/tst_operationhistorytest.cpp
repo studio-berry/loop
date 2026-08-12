@@ -54,62 +54,6 @@ void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
     QCOMPARE(redacted.value(QStringLiteral("a")).toObject().value(QStringLiteral("token")).toString(), QStringLiteral("[REDACTED]"));
 }
 
-void OperationHistoryTest::diagTemporaryDirOnly()
-{
-    diagTrace("diagTemporaryDirOnly: before QTemporaryDir()");
-    QTemporaryDir temporary;
-    diagTrace("diagTemporaryDirOnly: after QTemporaryDir()");
-    QVERIFY(temporary.isValid());
-    diagTrace("diagTemporaryDirOnly: after isValid()");
-}
-
-void OperationHistoryTest::diagArtifactStoreConstructionOnly()
-{
-    diagTrace("diagArtifactStoreConstructionOnly: before QTemporaryDir()");
-    QTemporaryDir temporary;
-    diagTrace("diagArtifactStoreConstructionOnly: after QTemporaryDir()");
-    QVERIFY(temporary.isValid());
-    diagTrace("diagArtifactStoreConstructionOnly: before PDFArtifactStore()");
-    pdf::PDFArtifactStore store(temporary.path());
-    diagTrace("diagArtifactStoreConstructionOnly: after PDFArtifactStore()");
-}
-
-void OperationHistoryTest::diagArtifactStoreImportOnly()
-{
-    diagTrace("diagArtifactStoreImportOnly: before QTemporaryDir()");
-    QTemporaryDir temporary;
-    QVERIFY(temporary.isValid());
-    pdf::PDFArtifactStore store(temporary.path());
-    diagTrace("diagArtifactStoreImportOnly: before importBytes()");
-    const QByteArray payload("immutable artifact payload");
-    const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
-    diagTrace("diagArtifactStoreImportOnly: after importBytes()");
-    diagTrace(first.success ? "diagArtifactStoreImportOnly: first.success == true" : "diagArtifactStoreImportOnly: first.success == false");
-    diagTrace(first.errorMessage.isNull() ? "diagArtifactStoreImportOnly: errorMessage isNull" : "diagArtifactStoreImportOnly: errorMessage not null");
-    {
-        const QByteArray errBytes = first.errorMessage.toLocal8Bit();
-        diagTrace("diagArtifactStoreImportOnly: toLocal8Bit() completed");
-        const char* errPtr = errBytes.constData();
-        diagTrace((errPtr && *errPtr) ? "diagArtifactStoreImportOnly: constData() non-empty" : "diagArtifactStoreImportOnly: constData() empty/null");
-        // TEMP-DIAG: print the actual failure text via our own already-proven-safe
-        // toLocal8Bit()/constData() path (not qPrintable/QVERIFY2) so we learn *why*
-        // importBytes() is failing without going anywhere near the call that crashes.
-        const QByteArray labeled = (QStringLiteral("diagArtifactStoreImportOnly: errorMessage text = [") +
-                                    first.errorMessage + QStringLiteral("]"))
-                                       .toLocal8Bit();
-        diagTrace(labeled.constData());
-    }
-    // TEMP-DIAG: the previous run showed the crash happens somewhere inside
-    // QVERIFY2(first.success, qPrintable(first.errorMessage)) itself, even though
-    // every manual read of first.success/errorMessage above succeeded. Swap to a
-    // plain QVERIFY (no description argument) to learn whether ANY QTest failure
-    // report crashes on this Windows build, or specifically QVERIFY2's two-argument
-    // failure path with a qPrintable() description.
-    diagTrace("diagArtifactStoreImportOnly: before QVERIFY (no description)");
-    QVERIFY(first.success);
-    diagTrace("diagArtifactStoreImportOnly: done");
-}
-
 void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
 {
     QTemporaryDir temporary;
@@ -160,7 +104,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QString openError;
-    const bool opened = history.open(&openError);
+    const pdf::PDFOperationResult opened = history.open(&openError);
     const QByteArray openErrorUtf8 = openError.toUtf8();
     QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
@@ -233,7 +177,7 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
     QString openError;
-    const bool opened = history.open(&openError);
+    const pdf::PDFOperationResult opened = history.open(&openError);
     const QByteArray openErrorUtf8 = openError.toUtf8();
     QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerOriginalInput(input.artifact));
@@ -333,7 +277,7 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
     QString openError;
-    const bool opened = history.open(&openError);
+    const pdf::PDFOperationResult opened = history.open(&openError);
     const QByteArray openErrorUtf8 = openError.toUtf8();
     QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
@@ -373,7 +317,7 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QString openError;
-    const bool opened = history.open(&openError);
+    const pdf::PDFOperationResult opened = history.open(&openError);
     const QByteArray openErrorUtf8 = openError.toUtf8();
     QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
