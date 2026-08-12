@@ -130,7 +130,8 @@ QByteArray loadOutputIntentProfile(const QString& fixturePath)
         return QByteArray();
     }
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK ||
         document.getCatalog()->getOutputIntents().empty())
@@ -225,14 +226,12 @@ QJsonObject tieredBleedProfile(bool rasterConfirm)
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("content-bleed") },
         { QStringLiteral("amount_pt"), 9 },
         { QStringLiteral("severity"), QStringLiteral("warning") },
-        { QStringLiteral("raster_confirm"), rasterConfirm }
-    });
+        { QStringLiteral("raster_confirm"), rasterConfirm } });
     profile.insert(QStringLiteral("checks"), checks);
     return profile;
 }
@@ -247,9 +246,7 @@ pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
     {
         for (int x = 0; x < sourcePixels; ++x)
         {
-            image.setPixel(x, y, qRgb((x * 17 + y * 13) % 256,
-                                      (x * 7 + y * 29) % 256,
-                                      (x * 31 + y * 3) % 256));
+            image.setPixel(x, y, qRgb((x * 17 + y * 13) % 256, (x * 7 + y * 29) % 256, (x * 31 + y * 3) % 256));
         }
     }
 
@@ -263,7 +260,7 @@ pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
     QByteArray content("q 144 0 0 144 0 0 cm /Im1 Do Q");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
-                                pdf::PDFObject::createInteger(content.size()));
+                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
             pdf::PDFStream(std::move(contentDictionary), std::move(content)))));
@@ -282,7 +279,7 @@ pdf::PDFDocument buildHighDpiImagePage(int sourcePixels = 1200)
     return builder.build();
 }
 
-} // namespace
+}   // namespace
 
 void PreflightEngineTest::parseProfile_rejectsMissingName()
 {
@@ -318,14 +315,8 @@ void PreflightEngineTest::parseProfile_rejectsInvalidDownsampleTargetDpi()
         const QJsonObject profileObject{
             { QStringLiteral("name"), QStringLiteral("Downsample") },
             { QStringLiteral("checks"), QJsonArray{
-                QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
-            } },
-            { QStringLiteral("fixups"), QJsonArray{
-                QJsonObject{
-                    { QStringLiteral("id"), QStringLiteral("downsample-images") },
-                    { QStringLiteral("target_dpi"), targetDpi }
-                }
-            } }
+                                            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } },
+            { QStringLiteral("fixups"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), targetDpi } } } }
         };
 
         QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
@@ -342,11 +333,9 @@ void PreflightEngineTest::parseProfile_rejectsInkCoverageWithoutPositiveMax()
         QJsonObject profileObject;
         profileObject.insert(QStringLiteral("name"), QStringLiteral("Ink coverage"));
         profileObject.insert(QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-                { QStringLiteral("max_ink_pct"), maxValue }
-            }
-        });
+                                                           QJsonObject{
+                                                               { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                                               { QStringLiteral("max_ink_pct"), maxValue } } });
 
         pdf::PreflightProfileData profile;
         QString errorMessage;
@@ -363,11 +352,9 @@ void PreflightEngineTest::parseProfile_acceptsInkCoverageDefaults()
     QJsonObject profileObject;
     profileObject.insert(QStringLiteral("name"), QStringLiteral("Ink coverage"));
     profileObject.insert(QStringLiteral("checks"), QJsonArray{
-        QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-            { QStringLiteral("max_ink_pct"), 300 }
-        }
-    });
+                                                       QJsonObject{
+                                                           { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                                           { QStringLiteral("max_ink_pct"), 300 } } });
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
     QCOMPARE(profile.checks.size(), 1);
@@ -426,13 +413,11 @@ void PreflightEngineTest::parseProfile_acceptsZeroInkCoverageRegionCap()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Ink coverage without region findings") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-                { QStringLiteral("max_ink_pct"), 300 },
-                { QStringLiteral("max_regions_per_page"), 0 },
-                { QStringLiteral("max_raster_pixels"), 1000000 }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("max_regions_per_page"), 0 },
+                                            { QStringLiteral("max_raster_pixels"), 1000000 } } } }
     };
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
@@ -455,12 +440,10 @@ void PreflightEngineTest::parseProfile_acceptsInkCoverageAnalysisBox()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Ink coverage") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-                { QStringLiteral("max_ink_pct"), 300 },
-                { QStringLiteral("analysis_box"), QStringLiteral("media") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("analysis_box"), QStringLiteral("media") } } } }
     };
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
@@ -475,14 +458,12 @@ void PreflightEngineTest::parseProfile_acceptsThinStrokeOverridesAndDefaults()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Thin strokes") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-                { QStringLiteral("severity"), QStringLiteral("warning") },
-                { QStringLiteral("min_effective_width_pt"), 0.25 },
-                { QStringLiteral("zero_width_epsilon_pt"), 0.0001 },
-                { QStringLiteral("hairline_severity"), QStringLiteral("error") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.25 },
+                                            { QStringLiteral("zero_width_epsilon_pt"), 0.0001 },
+                                            { QStringLiteral("hairline_severity"), QStringLiteral("error") } } } }
     };
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
@@ -500,11 +481,9 @@ void PreflightEngineTest::parseProfile_rejectsInvalidThinStrokeThreshold()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Thin strokes") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-                { QStringLiteral("min_effective_width_pt"), 0.0 }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.0 } } } }
     };
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
@@ -533,12 +512,10 @@ void PreflightEngineTest::run_thinStrokes_detectsPaintedThinStroke()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Thin strokes") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-strokes") },
-                { QStringLiteral("min_effective_width_pt"), 0.25 },
-                { QStringLiteral("thin_stroke_severity"), QStringLiteral("warning") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.25 },
+                                            { QStringLiteral("thin_stroke_severity"), QStringLiteral("warning") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -585,15 +562,22 @@ void PreflightEngineTest::run_thinParts_detectsPaintedThinFill()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Thin parts") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("thin-parts") },
-                { QStringLiteral("min_effective_width_pt"), 0.5 },
-                { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-fill") } },
-                { QStringLiteral("severity_by_class"), QJsonObject{
-                    { QStringLiteral("thin-fill"), QStringLiteral("warning") }
-                } }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.5 },
+                                            // Fill measurement is raster-based (unlike strokes, which are
+                                            // measured analytically from the CTM), so its precision is
+                                            // 72/probe_dpi. At the default 150 DPI that's 0.48pt - almost
+                                            // as large as the 0.5pt threshold itself, so a 0.1pt fill
+                                            // lands inside the "measurement near threshold" ambiguity
+                                            // window and only produces an info-level incomplete finding,
+                                            // not a warning. Use a high enough DPI that the precision
+                                            // window is comfortably smaller than the gap between the
+                                            // fixture's true width and the threshold.
+                                            { QStringLiteral("probe_dpi"), 1200 },
+                                            { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-fill") } },
+                                            { QStringLiteral("severity_by_class"), QJsonObject{
+                                                                                       { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -619,7 +603,8 @@ void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -628,8 +613,7 @@ void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Font integrity") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } }
-        } }
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("font-integrity") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -666,12 +650,10 @@ void PreflightEngineTest::run_offPageContent_detectsMarksOutsideToleratedBox()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Hidden content") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("off-page-content") },
-                { QStringLiteral("severity"), QStringLiteral("warning") },
-                { QStringLiteral("amount_pt"), 0 }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("off-page-content") },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") },
+                                            { QStringLiteral("amount_pt"), 0 } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -690,11 +672,9 @@ void PreflightEngineTest::parseProfile_rejectsOutputIntentInvalidAllowedColorSpa
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Output intent test") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("Lab") } }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("Lab") } } } } }
     };
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
@@ -707,14 +687,11 @@ void PreflightEngineTest::parseProfile_rejectsUnimplementedFixup()
     pdf::PreflightProfileData profile;
     QString errorMessage;
     QVERIFY(!engine.parseProfile(QJsonObject{
-        { QStringLiteral("name"), QStringLiteral("Unknown fixup") },
-        { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } }
-        } },
-        { QStringLiteral("fixups"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("not-registered") } }
-        } }
-    }, profile, errorMessage));
+                                     { QStringLiteral("name"), QStringLiteral("Unknown fixup") },
+                                     { QStringLiteral("checks"), QJsonArray{
+                                                                     QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } },
+                                     { QStringLiteral("fixups"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("not-registered") } } } } },
+                                 profile, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("unimplemented fixup")));
 }
 
@@ -726,12 +703,9 @@ void PreflightEngineTest::parseProfile_acceptsPDFXTargetAndRevision()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
         { QStringLiteral("pdfx"), QJsonObject{
-            { QStringLiteral("target"), QStringLiteral("PDF/X-4") },
-            { QStringLiteral("policyVersion"), 1 }
-        } },
-        { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
-        } }
+                                      { QStringLiteral("target"), QStringLiteral("PDF/X-4") },
+                                      { QStringLiteral("policyVersion"), 1 } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
     };
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
@@ -748,11 +722,8 @@ void PreflightEngineTest::parseProfile_acceptsPDFX3Target()
     const QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Unknown PDF/X") },
         { QStringLiteral("pdfx"), QJsonObject{
-            { QStringLiteral("target"), QStringLiteral("PDF/X-3:2002") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
-        } }
+                                      { QStringLiteral("target"), QStringLiteral("PDF/X-3:2002") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
     };
 
     QVERIFY(engine.parseProfile(profileObject, profile, errorMessage));
@@ -791,11 +762,8 @@ void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
         { QStringLiteral("pdfx"), QJsonObject{
-            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
-        } }
+                                      { QStringLiteral("target"), QStringLiteral("PDF/X-4") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -804,8 +772,7 @@ void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
     QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::Incomplete);
     QVERIFY(!result.pdfx->incompleteRuleIds.isEmpty());
     QVERIFY(result.toJson().contains(QStringLiteral("pdfx")));
-    QVERIFY(!result.toJson().value(QStringLiteral("pdfx")).toObject()
-                .value(QStringLiteral("incompleteRuleIds")).toArray().isEmpty());
+    QVERIFY(!result.toJson().value(QStringLiteral("pdfx")).toObject().value(QStringLiteral("incompleteRuleIds")).toArray().isEmpty());
 }
 
 void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
@@ -814,19 +781,14 @@ void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
         QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!profileContent.isEmpty());
 
-    pdf::PDFDocument document = buildOutputIntentDocument({
-        { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent }
-    });
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent } });
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("PDF/X-4") },
         { QStringLiteral("pdfx"), QJsonObject{
-            { QStringLiteral("target"), QStringLiteral("PDF/X-4") }
-        } },
-        { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } }
-        } }
+                                      { QStringLiteral("target"), QStringLiteral("PDF/X-4") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -834,10 +796,7 @@ void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
     QCOMPARE(result.pdfx->status, pdf::PDFXConformanceStatus::NonConformant);
     QVERIFY(result.pdfx->failedRuleIds.contains(QStringLiteral("pdfx.metadata.identification")));
     QVERIFY(std::any_of(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
-    {
-        return finding.checkId == QStringLiteral("pdfx.metadata.identification")
-            && finding.evidence.value(QStringLiteral("rule_id")).toString() == QStringLiteral("pdfx.metadata.identification");
-    }));
+                        { return finding.checkId == QStringLiteral("pdfx.metadata.identification") && finding.evidence.value(QStringLiteral("rule_id")).toString() == QStringLiteral("pdfx.metadata.identification"); }));
 
     const QJsonObject report = result.toJson();
     const QJsonObject pdfx = report.value(QStringLiteral("pdfx")).toObject();
@@ -861,8 +820,7 @@ void PreflightEngineTest::run_bleedCheckFailsWhenBoxMissing()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -888,8 +846,7 @@ void PreflightEngineTest::run_bleedCheckPassesWhenBoxAdequate()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -911,8 +868,7 @@ void PreflightEngineTest::run_unknownCheckIdIsIgnored()
     QJsonArray checks;
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("not-a-real-check") },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -939,14 +895,12 @@ void PreflightEngineTest::run_includesProfileFixups()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
     QJsonArray fixups;
     fixups.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("add-bleed") },
-        { QStringLiteral("amount_pt"), 9 }
-    });
+        { QStringLiteral("amount_pt"), 9 } });
     profile.insert(QStringLiteral("fixups"), fixups);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -977,8 +931,7 @@ void PreflightEngineTest::run_synthesizesAddBleedWhenGapAndNoProfileFixup()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -1011,14 +964,12 @@ void PreflightEngineTest::run_removesAddBleedWhenNoGap()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
     QJsonArray fixups;
     fixups.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("add-bleed") },
-        { QStringLiteral("amount_pt"), 9 }
-    });
+        { QStringLiteral("amount_pt"), 9 } });
     profile.insert(QStringLiteral("fixups"), fixups);
 
     pdf::PreflightResult result = engine.run(profile);
@@ -1044,8 +995,7 @@ void PreflightEngineTest::run_advertisesOnlyApplicableRegisteredFixups()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("bleed") },
         { QStringLiteral("amount_pt"), 9 },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
     QJsonArray fixups;
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("rgb-to-cmyk") } });
@@ -1075,17 +1025,14 @@ void PreflightEngineTest::fixupCapabilities_matchRepairRegistry()
         QVERIFY(pdf::PDFRepairRegistry::instance().find(capability.id)->isPreflightFixup());
     }
     QVERIFY(std::any_of(capabilities.cbegin(), capabilities.cend(), [](const pdf::PDFFixupCapability& capability)
-    {
-        return capability.id == QStringLiteral("downsample-images");
-    }));
+                        { return capability.id == QStringLiteral("downsample-images"); }));
 }
 
 void PreflightEngineTest::run_invalidProfileEmitsDocumentScopeFinding()
 {
     pdf::PreflightEngine engine(nullptr);
     const pdf::PreflightResult result = engine.run(QJsonObject{
-        { QStringLiteral("name"), QStringLiteral("Broken") }
-    });
+        { QStringLiteral("name"), QStringLiteral("Broken") } });
 
     QVERIFY(!result.pass);
     QCOMPARE(result.errors.size(), 1);
@@ -1125,13 +1072,13 @@ void PreflightEngineTest::decisionRejectsMissingJustification()
     pdf::PreflightDecision decision;
     QString errorMessage;
     QVERIFY(!pdf::PreflightDecision::fromJson(QJsonObject{
-        { QStringLiteral("finding_id"), QStringLiteral("0123456789abcdef") },
-        { QStringLiteral("kind"), QStringLiteral("waive") },
-        { QStringLiteral("operator"), QStringLiteral("m.berry") },
-        { QStringLiteral("timestamp_utc"), QStringLiteral("2026-08-09T14:22:03.000Z") },
-        { QStringLiteral("document_revision_digest"), QString(64, QLatin1Char('a')) },
-        { QStringLiteral("effective_profile_digest"), QString(64, QLatin1Char('b')) }
-    }, decision, errorMessage));
+                                                  { QStringLiteral("finding_id"), QStringLiteral("0123456789abcdef") },
+                                                  { QStringLiteral("kind"), QStringLiteral("waive") },
+                                                  { QStringLiteral("operator"), QStringLiteral("m.berry") },
+                                                  { QStringLiteral("timestamp_utc"), QStringLiteral("2026-08-09T14:22:03.000Z") },
+                                                  { QStringLiteral("document_revision_digest"), QString(64, QLatin1Char('a')) },
+                                                  { QStringLiteral("effective_profile_digest"), QString(64, QLatin1Char('b')) } },
+                                              decision, errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("justification")));
 }
 
@@ -1241,7 +1188,8 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverpr
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1253,8 +1201,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverpr
     QJsonArray checks;
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("white-overprint") },
-        { QStringLiteral("severity"), QStringLiteral("warning") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("warning") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1270,7 +1217,8 @@ void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-ok.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1282,8 +1230,7 @@ void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
     QJsonArray checks;
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("white-overprint") },
-        { QStringLiteral("severity"), QStringLiteral("warning") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("warning") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1297,7 +1244,8 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-form.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1309,8 +1257,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
     QJsonArray checks;
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("white-overprint") },
-        { QStringLiteral("severity"), QStringLiteral("warning") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("warning") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1326,7 +1273,8 @@ void PreflightEngineTest::run_inkCoverage_emitsRegionalWarningForOverLimitFixtur
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-over.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1336,15 +1284,13 @@ void PreflightEngineTest::run_inkCoverage_emitsRegionalWarningForOverLimitFixtur
     QJsonObject profile;
     profile.insert(QStringLiteral("name"), QStringLiteral("Ink coverage over limit"));
     profile.insert(QStringLiteral("checks"), QJsonArray{
-        QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-            { QStringLiteral("max_ink_pct"), 300 },
-            { QStringLiteral("probe_dpi"), 150 },
-            { QStringLiteral("min_region_area_pct"), 0.05 },
-            { QStringLiteral("max_regions_per_page"), 20 },
-            { QStringLiteral("severity"), QStringLiteral("warning") }
-        }
-    });
+                                                 QJsonObject{
+                                                     { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                                     { QStringLiteral("max_ink_pct"), 300 },
+                                                     { QStringLiteral("probe_dpi"), 150 },
+                                                     { QStringLiteral("min_region_area_pct"), 0.05 },
+                                                     { QStringLiteral("max_regions_per_page"), 20 },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } });
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.pass);
@@ -1368,7 +1314,8 @@ void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-ok.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1378,15 +1325,13 @@ void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
     QJsonObject profile;
     profile.insert(QStringLiteral("name"), QStringLiteral("Ink coverage below limit"));
     profile.insert(QStringLiteral("checks"), QJsonArray{
-        QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-            { QStringLiteral("max_ink_pct"), 300 },
-            { QStringLiteral("probe_dpi"), 150 },
-            { QStringLiteral("min_region_area_pct"), 0.05 },
-            { QStringLiteral("max_regions_per_page"), 20 },
-            { QStringLiteral("severity"), QStringLiteral("warning") }
-        }
-    });
+                                                 QJsonObject{
+                                                     { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                                     { QStringLiteral("max_ink_pct"), 300 },
+                                                     { QStringLiteral("probe_dpi"), 150 },
+                                                     { QStringLiteral("min_region_area_pct"), 0.05 },
+                                                     { QStringLiteral("max_regions_per_page"), 20 },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } });
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.pass);
@@ -1406,14 +1351,12 @@ void PreflightEngineTest::run_inkCoverage_budgetAbortIsIncomplete()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Ink coverage budget") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("ink-coverage") },
-                { QStringLiteral("max_ink_pct"), 300 },
-                { QStringLiteral("probe_dpi"), 72 },
-                { QStringLiteral("max_raster_pixels"), 1000000 },
-                { QStringLiteral("analysis_box"), QStringLiteral("media") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("ink-coverage") },
+                                            { QStringLiteral("max_ink_pct"), 300 },
+                                            { QStringLiteral("probe_dpi"), 72 },
+                                            { QStringLiteral("max_raster_pixels"), 1000000 },
+                                            { QStringLiteral("analysis_box"), QStringLiteral("media") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1462,11 +1405,8 @@ void PreflightEngineTest::run_downsampleFixupAdvertisedForHighDpiImage()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Downsample candidate") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
-        } },
-        { QStringLiteral("fixups"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
-        } }
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } },
+        { QStringLiteral("fixups"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1487,18 +1427,13 @@ void PreflightEngineTest::run_downsampleFixupHiddenWhenNoCandidateExists()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("No downsample candidate") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } }
-        } },
-        { QStringLiteral("fixups"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } }
-        } }
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") }, { QStringLiteral("amount_pt"), 9 } } } },
+        { QStringLiteral("fixups"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(std::none_of(result.fixupsAvailable.cbegin(), result.fixupsAvailable.cend(), [](const pdf::PreflightFixupConfig& fixup)
-    {
-        return fixup.id == QStringLiteral("downsample-images");
-    }));
+                         { return fixup.id == QStringLiteral("downsample-images"); }));
 }
 
 void PreflightEngineTest::run_downsampleFixupCarriesTargetDpi()
@@ -1510,11 +1445,8 @@ void PreflightEngineTest::run_downsampleFixupCarriesTargetDpi()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Downsample custom target") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } }
-        } },
-        { QStringLiteral("fixups"), QJsonArray{
-            QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 450 } }
-        } }
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") }, { QStringLiteral("min_dpi"), 300 } } } },
+        { QStringLiteral("fixups"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 450 } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1531,7 +1463,8 @@ void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
     const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
 
@@ -1544,8 +1477,7 @@ void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
     checks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("color-mode") },
         { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK"), QStringLiteral("Grayscale") } },
-        { QStringLiteral("severity"), QStringLiteral("error") }
-    });
+        { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1573,13 +1505,11 @@ void PreflightEngineTest::colorInventory_isRegisteredAndInfoOnly()
     QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Color inventory test") },
         { QStringLiteral("checks"), QJsonArray{
-              QJsonObject{
-                  { QStringLiteral("id"), QStringLiteral("color-inventory") },
-                  { QStringLiteral("severity"), QStringLiteral("info") },
-                  { QStringLiteral("probe_dpi"), 72 },
-                  { QStringLiteral("rich_black_k_percent"), 10 }
-              }
-          } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                            { QStringLiteral("severity"), QStringLiteral("info") },
+                                            { QStringLiteral("probe_dpi"), 72 },
+                                            { QStringLiteral("rich_black_k_percent"), 10 } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1603,11 +1533,9 @@ void PreflightEngineTest::colorInventory_rejectsInvalidParameters()
     QJsonObject profileObject{
         { QStringLiteral("name"), QStringLiteral("Invalid color inventory") },
         { QStringLiteral("checks"), QJsonArray{
-              QJsonObject{
-                  { QStringLiteral("id"), QStringLiteral("color-inventory") },
-                  { QStringLiteral("probe_dpi"), 0 }
-              }
-          } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                            { QStringLiteral("probe_dpi"), 0 } } } }
     };
 
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
@@ -1616,8 +1544,7 @@ void PreflightEngineTest::colorInventory_rejectsInvalidParameters()
     QJsonArray invalidPercentChecks;
     invalidPercentChecks.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("color-inventory") },
-        { QStringLiteral("rich_black_k_percent"), 101 }
-    });
+        { QStringLiteral("rich_black_k_percent"), 101 } });
     profileObject[QStringLiteral("checks")] = invalidPercentChecks;
     errorMessage.clear();
     QVERIFY(!engine.parseProfile(profileObject, profile, errorMessage));
@@ -1647,11 +1574,9 @@ void PreflightEngineTest::run_outputIntent_missingIntentEmitsError()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Output intent missing") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("severity"), QStringLiteral("error") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1672,11 +1597,9 @@ void PreflightEngineTest::run_outputIntent_notRequiredPassesWithoutIntent()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Optional output intent") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("required"), false }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("required"), false } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1717,11 +1640,9 @@ void PreflightEngineTest::run_outputIntent_identifierNotInAllowListEmitsIdentity
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Output intent identity allow list") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("allowed_identifiers"), QJsonArray{ QStringLiteral("CGATS TR 001") } }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("allowed_identifiers"), QJsonArray{ QStringLiteral("CGATS TR 001") } } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1742,11 +1663,9 @@ void PreflightEngineTest::run_outputIntent_profileCsDisagreesWithEmbeddedProfile
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Output intent profile CS") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("RGB") } }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("RGB") } } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1765,10 +1684,8 @@ void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding
     QVERIFY(!cmykProfile.isEmpty());
     QVERIFY(!rgbProfile.isEmpty());
 
-    pdf::PDFDocument document = buildOutputIntentDocument({
-        { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), cmykProfile },
-        { QByteArrayLiteral("sRGB"), QByteArrayLiteral("RGB"), rgbProfile }
-    });
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), cmykProfile },
+                                                            { QByteArrayLiteral("sRGB"), QByteArrayLiteral("RGB"), rgbProfile } });
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
     const QJsonObject profile{
@@ -1779,9 +1696,8 @@ void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
     QVERIFY(result.errors.size() >= 1);
-    const auto conflict = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
-        return finding.type == QStringLiteral("output-intent-conflict");
-    });
+    const auto conflict = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+                                       { return finding.type == QStringLiteral("output-intent-conflict"); });
     QVERIFY(conflict != result.errors.cend());
     QVERIFY(conflict->message.contains(QStringLiteral("CMYK, RGB")));
 }
@@ -1792,25 +1708,21 @@ void PreflightEngineTest::run_outputIntent_strictMultipleIntentsEmitAmbiguityFin
         QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!cmykProfile.isEmpty());
 
-    pdf::PDFDocument document = buildOutputIntentDocument({
-        { QByteArrayLiteral("first"), QByteArrayLiteral("CMYK"), cmykProfile },
-        { QByteArrayLiteral("second"), QByteArrayLiteral("CMYK"), cmykProfile }
-    });
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("first"), QByteArrayLiteral("CMYK"), cmykProfile },
+                                                            { QByteArrayLiteral("second"), QByteArrayLiteral("CMYK"), cmykProfile } });
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Strict output intent cardinality") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("output-intent") },
-            { QStringLiteral("allow_multiple"), false }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                        { QStringLiteral("allow_multiple"), false } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
-    const auto ambiguity = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
-        return finding.type == QStringLiteral("output-intent-ambiguous");
-    });
+    const auto ambiguity = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+                                        { return finding.type == QStringLiteral("output-intent-ambiguous"); });
     QVERIFY(ambiguity != result.errors.cend());
     QVERIFY(ambiguity->message.contains(QStringLiteral("intent 0")));
     QVERIFY(ambiguity->message.contains(QStringLiteral("intent 1")));
@@ -1818,17 +1730,14 @@ void PreflightEngineTest::run_outputIntent_strictMultipleIntentsEmitAmbiguityFin
 
 void PreflightEngineTest::run_outputIntent_optionalEmbeddedProfileCanBeAbsent()
 {
-    pdf::PDFDocument document = buildOutputIntentDocument({
-        { QByteArrayLiteral("metadata-only"), QByteArrayLiteral("CMYK"), QByteArray(), false }
-    });
+    pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("metadata-only"), QByteArrayLiteral("CMYK"), QByteArray(), false } });
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Optional embedded output profile") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("output-intent") },
-            { QStringLiteral("require_embedded_profile"), false }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                        { QStringLiteral("require_embedded_profile"), false } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -1854,15 +1763,13 @@ void PreflightEngineTest::run_outputIntent_malformedArrayEntryEmitsFinding()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Malformed output intents") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("output-intent") }
-        } } }
+                                        { QStringLiteral("id"), QStringLiteral("output-intent") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);
-    const auto malformed = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding) {
-        return finding.type == QStringLiteral("output-intent-malformed");
-    });
+    const auto malformed = std::find_if(result.errors.cbegin(), result.errors.cend(), [](const pdf::PreflightFinding& finding)
+                                        { return finding.type == QStringLiteral("output-intent-malformed"); });
     QVERIFY(malformed != result.errors.cend());
 }
 
@@ -1877,11 +1784,9 @@ void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Output intent warning") },
         { QStringLiteral("checks"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("output-intent") },
-                { QStringLiteral("severity"), QStringLiteral("warning") }
-            }
-        } }
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("output-intent") },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
