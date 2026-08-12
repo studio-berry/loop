@@ -337,8 +337,20 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
-          & ".\usr\bin\Release\UnitTestsOperationHistory.exe" 2>&1 | Tee-Object -FilePath operationhistory-direct.log
-          Write-Host "---- exit code: $LASTEXITCODE ----"
+          $ErrorActionPreference = 'Continue'
+          Write-Host "---- listing usr/bin/Release ----"
+          Get-ChildItem ".\usr\bin\Release" | Format-Table Name, Length
+          Write-Host "---- Qt6Sql*.dll on PATH? ----"
+          Get-Command Qt6Sql*.dll -ErrorAction SilentlyContinue | Format-Table Source
+          $exePath = (Resolve-Path ".\usr\bin\Release\UnitTestsOperationHistory.exe").Path
+          $proc = Start-Process -FilePath $exePath -NoNewWindow -Wait -PassThru `
+              -RedirectStandardOutput operationhistory-direct.out.log `
+              -RedirectStandardError operationhistory-direct.err.log
+          Write-Host "---- exit code: $($proc.ExitCode) ----"
+          Write-Host "---- stdout ----"
+          Get-Content operationhistory-direct.out.log -ErrorAction SilentlyContinue
+          Write-Host "---- stderr ----"
+          Get-Content operationhistory-direct.err.log -ErrorAction SilentlyContinue
 
       - name: Run unit tests
         working-directory: pdf4qt/build
