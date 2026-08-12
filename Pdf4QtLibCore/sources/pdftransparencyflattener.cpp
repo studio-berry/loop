@@ -52,16 +52,28 @@ bool isTransparencyDictionary(const PDFDictionary* dictionary,
         return false;
     }
 
-    bool transparent = loader.readNameFromDictionary(dictionary, "S") == QByteArrayLiteral("Transparency")
-        || dictionary->hasKey("SMask")
-        || dictionary->hasKey("ca")
-        || dictionary->hasKey("CA");
+    // SMask/ca/CA merely being present isn't enough - Qt's PDF writer backend
+    // emits a boilerplate ExtGState (ca=1, CA=1, SMask=/None) for ordinary image
+    // draws that carry no actual transparency. Check the values: SMask counts
+    // only when it isn't the explicit "no mask" name /None, and ca/CA count
+    // only when they represent a non-opaque alpha.
+    bool transparent = loader.readNameFromDictionary(dictionary, "S") == QByteArrayLiteral("Transparency");
+    if (dictionary->hasKey("SMask"))
+    {
+        transparent = transparent || loader.readNameFromDictionary(dictionary, "SMask") != QByteArrayLiteral("None");
+    }
+    if (dictionary->hasKey("ca"))
+    {
+        transparent = transparent || !qFuzzyCompare(loader.readNumberFromDictionary(dictionary, "ca", 1.0), PDFReal(1.0));
+    }
+    if (dictionary->hasKey("CA"))
+    {
+        transparent = transparent || !qFuzzyCompare(loader.readNumberFromDictionary(dictionary, "CA", 1.0), PDFReal(1.0));
+    }
     if (dictionary->hasKey("BM"))
     {
         const QByteArray blendMode = loader.readNameFromDictionary(dictionary, "BM");
-        transparent = transparent || (!blendMode.isEmpty()
-                                       && blendMode != QByteArrayLiteral("Normal")
-                                       && blendMode != QByteArrayLiteral("Compatible"));
+        transparent = transparent || (!blendMode.isEmpty() && blendMode != QByteArrayLiteral("Normal") && blendMode != QByteArrayLiteral("Compatible"));
     }
 
     if (transparent && finding)
@@ -146,8 +158,8 @@ void replacePageWithDeviceNImage(PDFDocumentBuilder& builder,
         {
             const PDFConstColorBuffer pixel = bitmap.getPixel(x, y);
             const PDFColorComponent opacity = qBound<PDFColorComponent>(0.0f,
-                                                                          pixel[format.getOpacityChannelIndex()] * pixel[format.getShapeChannelIndex()],
-                                                                          1.0f);
+                                                                        pixel[format.getOpacityChannelIndex()] * pixel[format.getShapeChannelIndex()],
+                                                                        1.0f);
             for (int channel = 0; channel < colorCount; ++channel)
             {
                 PDFColorComponent value = qBound<PDFColorComponent>(0.0f, pixel[size_t(channel)], 1.0f);
@@ -219,11 +231,7 @@ void replacePageWithDeviceNImage(PDFDocumentBuilder& builder,
     resources.addEntry(PDFInplaceOrMemoryString("XObject"), PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(xObjects))));
     PDFDictionary pageUpdate;
     pageUpdate.addEntry(PDFInplaceOrMemoryString("Resources"), PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(resources))));
-    const QByteArray content = QByteArrayLiteral("q\n")
-        + QByteArray::number(mediaBox.width()) + ' ' + QByteArrayLiteral("0 0 ")
-        + QByteArray::number(mediaBox.height()) + ' '
-        + QByteArray::number(mediaBox.left()) + ' ' + QByteArray::number(mediaBox.bottom())
-        + QByteArrayLiteral(" cm\n/Im0 Do\nQ\n");
+    const QByteArray content = QByteArrayLiteral("q\n") + QByteArray::number(mediaBox.width()) + ' ' + QByteArrayLiteral("0 0 ") + QByteArray::number(mediaBox.height()) + ' ' + QByteArray::number(mediaBox.left()) + ' ' + QByteArray::number(mediaBox.bottom()) + QByteArrayLiteral(" cm\n/Im0 Do\nQ\n");
     PDFDictionary contentDictionary;
     contentDictionary.addEntry(PDFInplaceOrMemoryString("Filter"), PDFObject::createName("FlateDecode"));
     const QByteArray compressedContent = PDFFlateDecodeFilter::compress(content);
@@ -234,7 +242,7 @@ void replacePageWithDeviceNImage(PDFDocumentBuilder& builder,
     builder.mergeTo(pageReference, PDFObject::createDictionary(std::make_shared<PDFDictionary>(qMove(pageUpdate))));
 }
 
-} // namespace
+}   // namespace
 
 QJsonObject PDFTransparencyFlattenRegionReport::toJson() const
 {
@@ -287,9 +295,9 @@ QJsonObject PDFTransparencyFlattenReport::toJson() const
 }
 
 PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
-                                                    const PDFTransparencyFlattenSettings& settings,
-                                                    PDFTransparencyFlattenReport* report,
-                                                    PDFProgress* progress)
+                                                   const PDFTransparencyFlattenSettings& settings,
+                                                   PDFTransparencyFlattenReport* report,
+                                                   PDFProgress* progress)
 {
     if (!document || !document->getCatalog())
     {
@@ -324,7 +332,9 @@ PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
         if (pixels > settings.maxRasterPixels)
         {
             return PDFTranslationContext::tr("Page %1 requires %2 raster pixels, exceeding the configured limit of %3.")
-                .arg(pageIndex + 1).arg(pixels).arg(settings.maxRasterPixels);
+                .arg(pageIndex + 1)
+                .arg(pixels)
+                .arg(settings.maxRasterPixels);
         }
 
         PDFTransparencyFlattenPageReport pageReport;
@@ -396,8 +406,8 @@ PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
             else
             {
                 PDFPageContentStreamBuilder contentBuilder(&builder,
-                                                            PDFContentStreamBuilder::CoordinateSystem::PDF,
-                                                            PDFPageContentStreamBuilder::Mode::Replace);
+                                                           PDFContentStreamBuilder::CoordinateSystem::PDF,
+                                                           PDFPageContentStreamBuilder::Mode::Replace);
                 QPainter* painter = contentBuilder.begin(page->getPageReference());
                 if (!painter)
                 {
@@ -427,9 +437,7 @@ PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
     if (!settings.analyzeOnly)
     {
         *document = builder.build();
-        PDFOptimizer optimizer(PDFOptimizer::OptimizationFlags(PDFOptimizer::RemoveNullObjects
-                                                                  | PDFOptimizer::RemoveUnusedObjects
-                                                                  | PDFOptimizer::ShrinkObjectStorage),
+        PDFOptimizer optimizer(PDFOptimizer::OptimizationFlags(PDFOptimizer::RemoveNullObjects | PDFOptimizer::RemoveUnusedObjects | PDFOptimizer::ShrinkObjectStorage),
                                nullptr);
         optimizer.setDocument(document);
         optimizer.optimize();
@@ -453,7 +461,7 @@ PDFOperationResult PDFTransparencyFlattener::apply(PDFDocument* document,
 }
 
 bool PDFTransparencyFlattener::hasLiveTransparency(const PDFDocument* document,
-                                                    QStringList* findings)
+                                                   QStringList* findings)
 {
     if (!document)
     {
@@ -476,4 +484,4 @@ bool PDFTransparencyFlattener::hasLiveTransparency(const PDFDocument* document,
     return found;
 }
 
-} // namespace pdf
+}   // namespace pdf
