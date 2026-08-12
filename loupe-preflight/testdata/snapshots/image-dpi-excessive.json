@@ -25,6 +25,10 @@
             "status": "ok"
         },
         {
+            "id": "transparency-risk",
+            "status": "ok"
+        },
+        {
             "id": "color-inventory",
             "status": "ok"
         },
