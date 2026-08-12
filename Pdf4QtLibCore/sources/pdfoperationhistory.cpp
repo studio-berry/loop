@@ -42,20 +42,28 @@ QDateTime dateTimeFromString(const QString& value)
     return QDateTime::fromString(value, Qt::ISODateWithMs).toUTC();
 }
 
-} // namespace
+}   // namespace
 
 QString pdfOperationHistoryStatusToString(PDFOperationHistoryStatus status)
 {
     switch (status)
     {
-        case PDFOperationHistoryStatus::Planned: return QStringLiteral("planned");
-        case PDFOperationHistoryStatus::Running: return QStringLiteral("running");
-        case PDFOperationHistoryStatus::Rejected: return QStringLiteral("rejected");
-        case PDFOperationHistoryStatus::Failed: return QStringLiteral("failed");
-        case PDFOperationHistoryStatus::Cancelled: return QStringLiteral("cancelled");
-        case PDFOperationHistoryStatus::Interrupted: return QStringLiteral("interrupted");
-        case PDFOperationHistoryStatus::Accepted: return QStringLiteral("accepted");
-        case PDFOperationHistoryStatus::RolledBack: return QStringLiteral("rolled-back");
+        case PDFOperationHistoryStatus::Planned:
+            return QStringLiteral("planned");
+        case PDFOperationHistoryStatus::Running:
+            return QStringLiteral("running");
+        case PDFOperationHistoryStatus::Rejected:
+            return QStringLiteral("rejected");
+        case PDFOperationHistoryStatus::Failed:
+            return QStringLiteral("failed");
+        case PDFOperationHistoryStatus::Cancelled:
+            return QStringLiteral("cancelled");
+        case PDFOperationHistoryStatus::Interrupted:
+            return QStringLiteral("interrupted");
+        case PDFOperationHistoryStatus::Accepted:
+            return QStringLiteral("accepted");
+        case PDFOperationHistoryStatus::RolledBack:
+            return QStringLiteral("rolled-back");
     }
     return QStringLiteral("failed");
 }
@@ -63,13 +71,20 @@ QString pdfOperationHistoryStatusToString(PDFOperationHistoryStatus status)
 PDFOperationHistoryStatus pdfOperationHistoryStatusFromString(const QString& value)
 {
     const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("planned")) return PDFOperationHistoryStatus::Planned;
-    if (normalized == QStringLiteral("running")) return PDFOperationHistoryStatus::Running;
-    if (normalized == QStringLiteral("rejected")) return PDFOperationHistoryStatus::Rejected;
-    if (normalized == QStringLiteral("cancelled") || normalized == QStringLiteral("canceled")) return PDFOperationHistoryStatus::Cancelled;
-    if (normalized == QStringLiteral("interrupted")) return PDFOperationHistoryStatus::Interrupted;
-    if (normalized == QStringLiteral("accepted")) return PDFOperationHistoryStatus::Accepted;
-    if (normalized == QStringLiteral("rolled-back") || normalized == QStringLiteral("rolledback")) return PDFOperationHistoryStatus::RolledBack;
+    if (normalized == QStringLiteral("planned"))
+        return PDFOperationHistoryStatus::Planned;
+    if (normalized == QStringLiteral("running"))
+        return PDFOperationHistoryStatus::Running;
+    if (normalized == QStringLiteral("rejected"))
+        return PDFOperationHistoryStatus::Rejected;
+    if (normalized == QStringLiteral("cancelled") || normalized == QStringLiteral("canceled"))
+        return PDFOperationHistoryStatus::Cancelled;
+    if (normalized == QStringLiteral("interrupted"))
+        return PDFOperationHistoryStatus::Interrupted;
+    if (normalized == QStringLiteral("accepted"))
+        return PDFOperationHistoryStatus::Accepted;
+    if (normalized == QStringLiteral("rolled-back") || normalized == QStringLiteral("rolledback"))
+        return PDFOperationHistoryStatus::RolledBack;
     return PDFOperationHistoryStatus::Failed;
 }
 
@@ -77,14 +92,22 @@ QString pdfOperationHistoryEventKindToString(PDFOperationHistoryEventKind kind)
 {
     switch (kind)
     {
-        case PDFOperationHistoryEventKind::Operation: return QStringLiteral("operation");
-        case PDFOperationHistoryEventKind::DocumentOpened: return QStringLiteral("DocumentOpened");
-        case PDFOperationHistoryEventKind::PreflightRun: return QStringLiteral("PreflightRun");
-        case PDFOperationHistoryEventKind::FixApplied: return QStringLiteral("FixApplied");
-        case PDFOperationHistoryEventKind::DecisionRecorded: return QStringLiteral("DecisionRecorded");
-        case PDFOperationHistoryEventKind::DecisionInvalidated: return QStringLiteral("DecisionInvalidated");
-        case PDFOperationHistoryEventKind::CertificateIssued: return QStringLiteral("CertificateIssued");
-        case PDFOperationHistoryEventKind::CertificateInvalidated: return QStringLiteral("CertificateInvalidated");
+        case PDFOperationHistoryEventKind::Operation:
+            return QStringLiteral("operation");
+        case PDFOperationHistoryEventKind::DocumentOpened:
+            return QStringLiteral("DocumentOpened");
+        case PDFOperationHistoryEventKind::PreflightRun:
+            return QStringLiteral("PreflightRun");
+        case PDFOperationHistoryEventKind::FixApplied:
+            return QStringLiteral("FixApplied");
+        case PDFOperationHistoryEventKind::DecisionRecorded:
+            return QStringLiteral("DecisionRecorded");
+        case PDFOperationHistoryEventKind::DecisionInvalidated:
+            return QStringLiteral("DecisionInvalidated");
+        case PDFOperationHistoryEventKind::CertificateIssued:
+            return QStringLiteral("CertificateIssued");
+        case PDFOperationHistoryEventKind::CertificateInvalidated:
+            return QStringLiteral("CertificateInvalidated");
     }
     return QStringLiteral("operation");
 }
@@ -92,13 +115,20 @@ QString pdfOperationHistoryEventKindToString(PDFOperationHistoryEventKind kind)
 PDFOperationHistoryEventKind pdfOperationHistoryEventKindFromString(const QString& value)
 {
     const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("documentopened")) return PDFOperationHistoryEventKind::DocumentOpened;
-    if (normalized == QStringLiteral("preflightrun")) return PDFOperationHistoryEventKind::PreflightRun;
-    if (normalized == QStringLiteral("fixapplied")) return PDFOperationHistoryEventKind::FixApplied;
-    if (normalized == QStringLiteral("decisionrecorded")) return PDFOperationHistoryEventKind::DecisionRecorded;
-    if (normalized == QStringLiteral("decisioninvalidated")) return PDFOperationHistoryEventKind::DecisionInvalidated;
-    if (normalized == QStringLiteral("certificateissued")) return PDFOperationHistoryEventKind::CertificateIssued;
-    if (normalized == QStringLiteral("certificateinvalidated")) return PDFOperationHistoryEventKind::CertificateInvalidated;
+    if (normalized == QStringLiteral("documentopened"))
+        return PDFOperationHistoryEventKind::DocumentOpened;
+    if (normalized == QStringLiteral("preflightrun"))
+        return PDFOperationHistoryEventKind::PreflightRun;
+    if (normalized == QStringLiteral("fixapplied"))
+        return PDFOperationHistoryEventKind::FixApplied;
+    if (normalized == QStringLiteral("decisionrecorded"))
+        return PDFOperationHistoryEventKind::DecisionRecorded;
+    if (normalized == QStringLiteral("decisioninvalidated"))
+        return PDFOperationHistoryEventKind::DecisionInvalidated;
+    if (normalized == QStringLiteral("certificateissued"))
+        return PDFOperationHistoryEventKind::CertificateIssued;
+    if (normalized == QStringLiteral("certificateinvalidated"))
+        return PDFOperationHistoryEventKind::CertificateInvalidated;
     return PDFOperationHistoryEventKind::Operation;
 }
 
@@ -106,10 +136,14 @@ QString pdfApprovalKindToString(PDFApprovalKind kind)
 {
     switch (kind)
     {
-        case PDFApprovalKind::None: return QStringLiteral("none");
-        case PDFApprovalKind::Human: return QStringLiteral("human");
-        case PDFApprovalKind::Policy: return QStringLiteral("policy");
-        case PDFApprovalKind::System: return QStringLiteral("system");
+        case PDFApprovalKind::None:
+            return QStringLiteral("none");
+        case PDFApprovalKind::Human:
+            return QStringLiteral("human");
+        case PDFApprovalKind::Policy:
+            return QStringLiteral("policy");
+        case PDFApprovalKind::System:
+            return QStringLiteral("system");
     }
     return QStringLiteral("none");
 }
@@ -117,9 +151,12 @@ QString pdfApprovalKindToString(PDFApprovalKind kind)
 PDFApprovalKind pdfApprovalKindFromString(const QString& value)
 {
     const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("human")) return PDFApprovalKind::Human;
-    if (normalized == QStringLiteral("policy")) return PDFApprovalKind::Policy;
-    if (normalized == QStringLiteral("system")) return PDFApprovalKind::System;
+    if (normalized == QStringLiteral("human"))
+        return PDFApprovalKind::Human;
+    if (normalized == QStringLiteral("policy"))
+        return PDFApprovalKind::Policy;
+    if (normalized == QStringLiteral("system"))
+        return PDFApprovalKind::System;
     return PDFApprovalKind::None;
 }
 
@@ -127,8 +164,12 @@ bool PDFApprovalRecord::isValid() const
 {
     if (kind == PDFApprovalKind::None)
     {
+        // decisionReference is deliberately exempt here: provenance events
+        // (DecisionInvalidated, CertificateInvalidated, etc.) reference a
+        // prior decision without themselves being an approval action, so
+        // kind stays None while decisionReference is set.
         return actorId.isEmpty() && decision.isEmpty() && policyId.isEmpty() &&
-               rationale.isEmpty() && evidenceSha256.isEmpty() && decisionReference.isEmpty() && !decidedUtc.isValid();
+               rationale.isEmpty() && evidenceSha256.isEmpty() && !decidedUtc.isValid();
     }
     if (actorId.trimmed().isEmpty() || decision.trimmed().isEmpty() || !decidedUtc.isValid())
     {
@@ -282,4 +323,4 @@ QByteArray computeOperationHistoryEventHash(const PDFOperationHistoryEvent& even
     return hash.result();
 }
 
-} // namespace pdf
+}   // namespace pdf

@@ -372,6 +372,14 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     }
     const QByteArray previousHash = previousQuery.next() ? decodeHash(previousQuery.value(0).toString()) : QByteArray();
     event.previousEventHash = previousHash;
+
+    // The event hash must be computed over exactly what verify() can later
+    // reconstruct from storage. result_json is persisted redacted (see the
+    // bind below), so the redaction has to happen before hashing too -
+    // otherwise verify() can never reproduce the original hash for any
+    // event with sensitive resultSummary fields, since the unredacted
+    // content is never persisted anywhere to read back.
+    event.resultSummary = redactSensitiveJson(event.resultSummary);
     event.eventHash = computeOperationHistoryEventHash(event, previousHash);
 
     // history_events.operator_identity/document_revision_digest/effective_profile_digest
