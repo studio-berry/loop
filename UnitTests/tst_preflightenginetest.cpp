@@ -997,11 +997,16 @@ void PreflightEngineTest::run_advertisesOnlyApplicableRegisteredFixups()
         { QStringLiteral("amount_pt"), 9 },
         { QStringLiteral("severity"), QStringLiteral("error") } });
     profile.insert(QStringLiteral("checks"), checks);
+    // Every id here must be a real, registered fixup - parseProfile() deliberately
+    // hard-rejects an unregistered fixup id for the whole profile (see
+    // parseProfile_rejectsUnimplementedFixup), it does not silently drop it. This
+    // test is about the OTHER axis: registered fixups that are inapplicable to the
+    // current document (no RGB paint, no image) must still be filtered out of
+    // fixupsAvailable, leaving only add-bleed.
     QJsonArray fixups;
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("rgb-to-cmyk") } });
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("add-bleed") }, { QStringLiteral("amount_pt"), 9 } });
     fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("downsample-images") }, { QStringLiteral("target_dpi"), 300 } });
-    fixups.append(QJsonObject{ { QStringLiteral("id"), QStringLiteral("stale-fixup") } });
     profile.insert(QStringLiteral("fixups"), fixups);
 
     pdf::PreflightResult result = engine.run(profile);
