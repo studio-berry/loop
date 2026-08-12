@@ -46,7 +46,9 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <csignal>
+#include <malloc.h>
 
 namespace
 {
@@ -60,12 +62,55 @@ void diagFlushAndExit(int code)
     _exit(code);
 }
 
+// A genuine stack overflow leaves only the reserved guard page of stack space
+// by the time this filter runs. CRT stdio (fprintf, locale-aware formatting,
+// stream locking, possible heap allocation) is not guaranteed to fit in that
+// budget and can silently re-fault before writing anything - which would
+// look identical to the "nothing ever gets to run" failures already ruled
+// out. Write via the raw Win32 API with a fixed-size stack buffer and no CRT
+// stdio involvement so the filter itself has the best chance of surviving.
+void diagRawWrite(const char* text)
+{
+    const HANDLE handle = GetStdHandle(STD_ERROR_HANDLE);
+    if (handle && handle != INVALID_HANDLE_VALUE)
+    {
+        DWORD written = 0;
+        WriteFile(handle, text, static_cast<DWORD>(std::strlen(text)), &written, nullptr);
+    }
+}
+
+void diagHexAppend(char* buffer, size_t& offset, size_t capacity, unsigned long value)
+{
+    static const char digits[] = "0123456789ABCDEF";
+    char temp[8];
+    for (int i = 7; i >= 0; --i)
+    {
+        temp[i] = digits[value & 0xF];
+        value >>= 4;
+    }
+    for (int i = 0; i < 8 && offset + 1 < capacity; ++i)
+        buffer[offset++] = temp[i];
+}
+
 LONG WINAPI diagUnhandledExceptionFilter(EXCEPTION_POINTERS* info)
 {
     const DWORD exceptionCode = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionCode : 0;
-    const void* exceptionAddress = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionAddress : nullptr;
-    std::fprintf(stderr, "[diag] SetUnhandledExceptionFilter: code=0x%08lX address=%p\n",
-                 static_cast<unsigned long>(exceptionCode), exceptionAddress);
+    if (exceptionCode == EXCEPTION_STACK_OVERFLOW)
+    {
+        // Reclaims the guard page so the handler below has real stack to run
+        // on; without this, code past this point can re-fault immediately.
+        _resetstkoflw();
+    }
+    char buffer[96];
+    size_t offset = 0;
+    const char prefix[] = "[diag] SetUnhandledExceptionFilter: code=0x";
+    for (const char* p = prefix; *p && offset + 1 < sizeof(buffer); ++p)
+        buffer[offset++] = *p;
+    diagHexAppend(buffer, offset, sizeof(buffer), exceptionCode);
+    if (offset + 1 < sizeof(buffer))
+        buffer[offset++] = '\n';
+    buffer[offset] = '\0';
+    diagRawWrite(buffer);
     diagFlushAndExit(3);
     return EXCEPTION_EXECUTE_HANDLER;
 }
