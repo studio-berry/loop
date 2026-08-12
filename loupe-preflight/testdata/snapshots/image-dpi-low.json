@@ -56,6 +56,15 @@
     },
     "warnings": [
         {
+            "check_id": "image-resolution",
+            "message": "Image resolution 25 DPI is below minimum 300 DPI on page 1",
+            "object_id": "6",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "image-resolution"
+        },
+        {
             "check_id": "color-inventory",
             "message": "Process output separation: Cyan",
             "object_id": "Cyan",
@@ -86,15 +95,6 @@
             "scope": "document",
             "severity": "info",
             "type": "separation"
-        },
-        {
-            "check_id": "image-resolution",
-            "message": "Image resolution 25 DPI is below minimum 300 DPI on page 1",
-            "object_id": "6",
-            "page": 1,
-            "scope": "object",
-            "severity": "warning",
-            "type": "image-resolution"
         }
     ]
 }
