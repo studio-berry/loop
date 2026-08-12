@@ -32,158 +32,12 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-#if defined(Q_OS_WIN)
-// TEMP-DIAG: UnitTestsOperationHistory dies on Windows CI with *zero* captured
-// output (no QtTest banner, no crash dialog text) even when the child process
-// is launched directly and stdout/stderr are redirected to separate files
-// outside of ctest. That signature - truly nothing written before the process
-// disappears - means whatever kills it bypasses ordinary C++/SEH unwinding
-// and buffered stdio flushing. These handlers are installed by a static
-// initializer (below), which runs during CRT startup before main() is even
-// entered, so they're live for the earliest possible failure window,
-// including failures during Qt/plugin static initialization.
-#include <windows.h>
-
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <csignal>
-#include <malloc.h>
-
-namespace
-{
-
-void diagFlushAndExit(int code)
-{
-    std::fflush(stderr);
-    std::fflush(stdout);
-    // _exit (not exit/abort) to skip further CRT/Qt teardown that could
-    // itself re-trigger whatever corrupted state caused the failure.
-    _exit(code);
-}
-
-// A genuine stack overflow leaves only the reserved guard page of stack space
-// by the time this filter runs. CRT stdio (fprintf, locale-aware formatting,
-// stream locking, possible heap allocation) is not guaranteed to fit in that
-// budget and can silently re-fault before writing anything - which would
-// look identical to the "nothing ever gets to run" failures already ruled
-// out. Write via the raw Win32 API with a fixed-size stack buffer and no CRT
-// stdio involvement so the filter itself has the best chance of surviving.
-void diagRawWrite(const char* text)
-{
-    const HANDLE handle = GetStdHandle(STD_ERROR_HANDLE);
-    if (handle && handle != INVALID_HANDLE_VALUE)
-    {
-        DWORD written = 0;
-        WriteFile(handle, text, static_cast<DWORD>(std::strlen(text)), &written, nullptr);
-    }
-}
-
-void diagHexAppend(char* buffer, size_t& offset, size_t capacity, unsigned long value)
-{
-    static const char digits[] = "0123456789ABCDEF";
-    char temp[8];
-    for (int i = 7; i >= 0; --i)
-    {
-        temp[i] = digits[value & 0xF];
-        value >>= 4;
-    }
-    for (int i = 0; i < 8 && offset + 1 < capacity; ++i)
-        buffer[offset++] = temp[i];
-}
-
-LONG WINAPI diagUnhandledExceptionFilter(EXCEPTION_POINTERS* info)
-{
-    const DWORD exceptionCode = (info && info->ExceptionRecord) ? info->ExceptionRecord->ExceptionCode : 0;
-    if (exceptionCode == EXCEPTION_STACK_OVERFLOW)
-    {
-        // Reclaims the guard page so the handler below has real stack to run
-        // on; without this, code past this point can re-fault immediately.
-        _resetstkoflw();
-    }
-    char buffer[96];
-    size_t offset = 0;
-    const char prefix[] = "[diag] SetUnhandledExceptionFilter: code=0x";
-    for (const char* p = prefix; *p && offset + 1 < sizeof(buffer); ++p)
-        buffer[offset++] = *p;
-    diagHexAppend(buffer, offset, sizeof(buffer), exceptionCode);
-    if (offset + 1 < sizeof(buffer))
-        buffer[offset++] = '\n';
-    buffer[offset] = '\0';
-    diagRawWrite(buffer);
-    diagFlushAndExit(3);
-    return EXCEPTION_EXECUTE_HANDLER;
-}
-
-void diagInvalidParameterHandler(const wchar_t* expression, const wchar_t* function,
-                                 const wchar_t* file, unsigned int line, uintptr_t)
-{
-    std::fwprintf(stderr, L"[diag] _set_invalid_parameter_handler: expr=%ls func=%ls file=%ls line=%u\n",
-                  expression ? expression : L"?", function ? function : L"?",
-                  file ? file : L"?", line);
-    diagFlushAndExit(4);
-}
-
-void diagPurecallHandler()
-{
-    std::fprintf(stderr, "[diag] _set_purecall_handler: pure virtual function called\n");
-    diagFlushAndExit(5);
-}
-
-extern "C" void diagSignalHandler(int signalNumber)
-{
-    std::fprintf(stderr, "[diag] signal handler: signal=%d\n", signalNumber);
-    diagFlushAndExit(6);
-}
-
-struct DiagInstaller
-{
-    DiagInstaller()
-    {
-        // stderr can be fully buffered when redirected to a file/pipe (as
-        // ctest and our own diagnostic runs both do); force it unbuffered so
-        // a partial write survives even a hard crash a few lines later.
-        std::setvbuf(stderr, nullptr, _IONBF, 0);
-        std::fprintf(stderr, "[diag] handlers installing (static init)\n");
-        std::fflush(stderr);
-        SetUnhandledExceptionFilter(diagUnhandledExceptionFilter);
-        _set_invalid_parameter_handler(diagInvalidParameterHandler);
-        _set_purecall_handler(diagPurecallHandler);
-        std::signal(SIGABRT, diagSignalHandler);
-        std::signal(SIGSEGV, diagSignalHandler);
-        std::fprintf(stderr, "[diag] handlers installed\n");
-        std::fflush(stderr);
-    }
-};
-
-const DiagInstaller diagInstaller;
-
-}   // namespace
-
-// TEMP-DIAG: per-slot bisection (see UnitTests/CMakeLists.txt) showed every
-// slot that touches QTemporaryDir/PDFArtifactStore crashes on Windows while
-// the one slot that doesn't (canonicalJsonIsStableAndRedacted) passes. This
-// traces individual statements within the simplest failing slot so the next
-// Windows run pinpoints which specific line is the last one that ran.
-static void diagTrace(const char* text)
-{
-    std::fprintf(stderr, "[trace] %s\n", text);
-    std::fflush(stderr);
-}
-#else
-static void diagTrace(const char*) {}
-#endif
-
 class OperationHistoryTest final : public QObject
 {
     Q_OBJECT
 
 private slots:
     void canonicalJsonIsStableAndRedacted();
-    // TEMP-DIAG: finer bisection than artifactStoreStreamsAndDetectsTampering.
-    void diagTemporaryDirOnly();
-    void diagArtifactStoreConstructionOnly();
-    void diagArtifactStoreImportOnly();
     void artifactStoreStreamsAndDetectsTampering();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
@@ -258,27 +112,25 @@ void OperationHistoryTest::diagArtifactStoreImportOnly()
 
 void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
 {
-    diagTrace("artifactStoreStreamsAndDetectsTampering: before QTemporaryDir()");
     QTemporaryDir temporary;
-    diagTrace("artifactStoreStreamsAndDetectsTampering: after QTemporaryDir()");
     QVERIFY(temporary.isValid());
-    diagTrace("artifactStoreStreamsAndDetectsTampering: before PDFArtifactStore()");
     pdf::PDFArtifactStore store(temporary.path());
-    diagTrace("artifactStoreStreamsAndDetectsTampering: after PDFArtifactStore()");
     const QByteArray payload("immutable artifact payload");
-    diagTrace("artifactStoreStreamsAndDetectsTampering: before first importBytes()");
     const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
-    diagTrace("artifactStoreStreamsAndDetectsTampering: after first importBytes()");
-    QVERIFY2(first.success, qPrintable(first.errorMessage));
+    const QByteArray firstError = first.errorMessage.toUtf8();
+    QVERIFY2(first.success, firstError.constData());
     QCOMPARE(first.artifact.sha256, QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex()));
     QVERIFY(first.artifact.isValid());
     QVERIFY(store.verify(first.artifact));
-    diagTrace("artifactStoreStreamsAndDetectsTampering: before permissions check");
-    QVERIFY(!(QFileInfo(store.pathFor(first.artifact)).permissions() & QFileDevice::WriteOwner));
-    diagTrace("artifactStoreStreamsAndDetectsTampering: after permissions check");
+    {
+        QFile published(store.pathFor(first.artifact));
+        QVERIFY2(!published.open(QIODevice::WriteOnly | QIODevice::Append),
+                 "Published artifact must not be writable");
+    }
 
     const pdf::PDFArtifactStoreResult second = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("copy.pdf") });
-    QVERIFY2(second.success, qPrintable(second.errorMessage));
+    const QByteArray secondError = second.errorMessage.toUtf8();
+    QVERIFY2(second.success, secondError.constData());
     QVERIFY(second.reused);
     QVERIFY(store.verify(second.artifact));
 
@@ -301,12 +153,16 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto output = artifacts.importBytes("output", { QStringLiteral("application/pdf"), QStringLiteral("output.pdf") });
-    QVERIFY2(input.success, qPrintable(input.errorMessage));
-    QVERIFY2(output.success, qPrintable(output.errorMessage));
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    const QByteArray outputError = output.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
+    QVERIFY2(output.success, outputError.constData());
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QString openError;
-    QVERIFY2(history.open(&openError), qPrintable(openError));
+    const bool opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
     QVERIFY(history.registerArtifact(output.artifact));
 
@@ -367,14 +223,19 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     const auto input = artifacts.importBytes("input", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto middle = artifacts.importBytes("middle", { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
     const auto final = artifacts.importBytes("final", { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
-    QVERIFY2(input.success, qPrintable(input.errorMessage));
-    QVERIFY2(middle.success, qPrintable(middle.errorMessage));
-    QVERIFY2(final.success, qPrintable(final.errorMessage));
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    const QByteArray middleError = middle.errorMessage.toUtf8();
+    const QByteArray finalError = final.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
+    QVERIFY2(middle.success, middleError.constData());
+    QVERIFY2(final.success, finalError.constData());
 
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
     QString openError;
-    QVERIFY2(history.open(&openError), qPrintable(openError));
+    const bool opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerOriginalInput(input.artifact));
     QVERIFY(history.registerArtifact(middle.artifact));
     QVERIFY(history.registerArtifact(final.artifact));
@@ -467,11 +328,14 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY2(input.success, qPrintable(input.errorMessage));
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
     QString openError;
-    QVERIFY2(history.open(&openError), qPrintable(openError));
+    const bool opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
     pdf::PDFOperationHistoryExecution execution;
     execution.operationId = QStringLiteral("tamper.test");
@@ -504,11 +368,14 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY2(input.success, qPrintable(input.errorMessage));
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QString openError;
-    QVERIFY2(history.open(&openError), qPrintable(openError));
+    const bool opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
 
     pdf::PDFOperationHistoryExecution execution;
