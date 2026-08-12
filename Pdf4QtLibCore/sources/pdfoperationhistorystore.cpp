@@ -379,7 +379,7 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     // otherwise verify() can never reproduce the original hash for any
     // event with sensitive resultSummary fields, since the unredacted
     // content is never persisted anywhere to read back.
-    event.resultSummary = redactSensitiveJson(event.resultSummary);
+    event.resultSummary = redactSensitiveJson(event.resultSummary).toObject();
     event.eventHash = computeOperationHistoryEventHash(event, previousHash);
 
     // history_events.operator_identity/document_revision_digest/effective_profile_digest
