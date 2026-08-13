@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "pdftoolocr.h"
+#include "ocrsidecarclient.h"
+#include "ocrsidecarprotocol.h"
 
 #include "pdftoolcancel.h"
 #include "pdfcatalog.h"
@@ -34,13 +36,9 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QElapsedTimer>
-#include <QFileInfo>
 #include <QImageWriter>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
-#include <QProcess>
 #include <QTemporaryDir>
 
 namespace pdftool
@@ -79,36 +77,6 @@ QString devOcrSidecarPath(const QString& applicationDirectory)
 }
 #endif
 
-bool sidecarIsScript(const QFileInfo& info)
-{
-    const QString suffix = info.suffix();
-#ifdef Q_OS_WIN
-    return suffix.compare(QStringLiteral("cmd"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("bat"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
-#else
-    return suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
-#endif
-}
-
-bool sidecarIsRunnable(const QString& path)
-{
-    const QFileInfo info(path);
-    if (!info.exists() || !info.isFile())
-    {
-        return false;
-    }
-#ifdef Q_OS_WIN
-    return true;
-#else
-    // Repo checkout often lacks +x on scripts, and .gitattributes forces CRLF
-    // which breaks shebang exec. Treat .sh/.py as runnable and launch via an
-    // interpreter in OcrSidecarClient::start.
-    return info.isExecutable() || sidecarIsScript(info);
-#endif
-}
-
 QString resolveOcrSidecarPath()
 {
     const QString applicationDirectory = QCoreApplication::applicationDirPath();
@@ -123,14 +91,14 @@ QString resolveOcrSidecarPath()
     }
 
     const QString bundledPath = bundledOcrSidecarPath(applicationDirectory);
-    if (sidecarIsRunnable(bundledPath))
+    if (OcrSidecarClient::isRunnable(bundledPath))
     {
         return bundledPath;
     }
 
 #ifndef NDEBUG
     const QString devPath = devOcrSidecarPath(applicationDirectory);
-    if (sidecarIsRunnable(devPath))
+    if (OcrSidecarClient::isRunnable(devPath))
     {
         return devPath;
     }
@@ -158,133 +126,27 @@ QRectF bboxFromJson(const QJsonObject& object)
                   object.value(QStringLiteral("height")).toDouble());
 }
 
-class OcrSidecarClient
+int pageRotationDegrees(const pdf::PDFPage* page)
 {
-public:
-    bool start(const QString& sidecarPath, QString& errorMessage)
+    if (!page)
     {
-        if (!sidecarIsRunnable(sidecarPath))
-        {
-            errorMessage = PDFToolTranslationContext::tr("OCR sidecar not found or not runnable: %1").arg(sidecarPath);
-            return false;
-        }
-
-        const QFileInfo info(sidecarPath);
-        const QString suffix = info.suffix();
-#ifndef Q_OS_WIN
-        // Prefer an interpreter so CRLF scripts and non-executable bits still work on CI.
-        if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
-        {
-            m_process.setProgram(QStringLiteral("python3"));
-            m_process.setArguments({ sidecarPath });
-        }
-        else if (suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0)
-        {
-            m_process.setProgram(QStringLiteral("bash"));
-            m_process.setArguments({ sidecarPath });
-        }
-        else
-        {
-            m_process.setProgram(sidecarPath);
-            m_process.setArguments({});
-        }
-#else
-        if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
-        {
-            m_process.setProgram(QStringLiteral("python"));
-            m_process.setArguments({ sidecarPath });
-        }
-        else
-        {
-            m_process.setProgram(sidecarPath);
-            m_process.setArguments({});
-        }
-#endif
-        m_process.setProcessChannelMode(QProcess::SeparateChannels);
-        m_process.start();
-        if (!m_process.waitForStarted(30000))
-        {
-            errorMessage = PDFToolTranslationContext::tr("Failed to start OCR sidecar: %1").arg(m_process.errorString());
-            return false;
-        }
-        return true;
+        return 0;
     }
 
-    bool sendRequest(const QJsonObject& request, QJsonObject& response, QString& errorMessage)
+    switch (page->getPageRotation())
     {
-        const QByteArray line = QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n';
-        if (m_process.write(line) != line.size())
-        {
-            errorMessage = PDFToolTranslationContext::tr("Failed to write OCR request to sidecar.");
-            return false;
-        }
-        if (!m_process.waitForBytesWritten(30000))
-        {
-            errorMessage = PDFToolTranslationContext::tr("Timed out writing OCR request to sidecar.");
-            return false;
-        }
-
-        // EasyOCR startup can take a while and native libs may emit blank
-        // stdout lines; keep reading until a JSON object line arrives.
-        QElapsedTimer timer;
-        timer.start();
-        while (timer.elapsed() < 120000)
-        {
-            if (!m_process.canReadLine())
-            {
-                if (!m_process.waitForReadyRead(qMax(1, 120000 - int(timer.elapsed()))))
-                {
-                    break;
-                }
-                continue;
-            }
-
-            const QByteArray outputLine = m_process.readLine().trimmed();
-            if (outputLine.isEmpty())
-            {
-                continue;
-            }
-
-            QJsonParseError parseError;
-            const QJsonDocument document = QJsonDocument::fromJson(outputLine, &parseError);
-            if (parseError.error != QJsonParseError::NoError || !document.isObject())
-            {
-                errorMessage = PDFToolTranslationContext::tr("Invalid OCR sidecar JSON: %1").arg(parseError.errorString());
-                return false;
-            }
-
-            response = document.object();
-            return true;
-        }
-
-        if (m_process.state() == QProcess::NotRunning)
-        {
-            errorMessage = PDFToolTranslationContext::tr("OCR sidecar process exited unexpectedly (exit code %1).").arg(m_process.exitCode());
-        }
-        else
-        {
-            errorMessage = PDFToolTranslationContext::tr("Timed out waiting for OCR sidecar response.");
-        }
-        return false;
+        case pdf::PageRotation::None:
+            return 0;
+        case pdf::PageRotation::Rotate90:
+            return 90;
+        case pdf::PageRotation::Rotate180:
+            return 180;
+        case pdf::PageRotation::Rotate270:
+            return 270;
     }
 
-    void stop()
-    {
-        if (m_process.state() != QProcess::NotRunning)
-        {
-            m_process.closeWriteChannel();
-            m_process.waitForFinished(5000);
-            if (m_process.state() != QProcess::NotRunning)
-            {
-                m_process.kill();
-                m_process.waitForFinished(3000);
-            }
-        }
-    }
-
-private:
-    QProcess m_process;
-};
+    return 0;
+}
 
 bool renderPageToPng(pdf::PDFDocument* document,
                      pdf::PDFInteger pageIndex,
@@ -390,19 +252,31 @@ PDFToolAbstractApplication::Options PDFToolOcrApplication::getOptionsFlags() con
     return ConsoleFormat | OpenDocument | PageSelector | OcrOptions;
 }
 
-int PDFToolOcrApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
 {
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("The OCR command only supports JSON output."));
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     if (options.document.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No document specified."), options.outputCodec);
-        return OcrContractError;
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("No document was specified."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -410,41 +284,63 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         options.getPageRange(document.getCatalog()->getPageCount(), parseError, true);
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
-        return OcrContractError;
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         parseError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     const QString sidecarPath = options.ocrSidecarPath.isEmpty() ? resolveOcrSidecarPath() : options.ocrSidecarPath;
-    OcrSidecarClient sidecar;
-    QString sidecarError;
-    if (!sidecar.start(sidecarPath, sidecarError))
-    {
-        PDFConsole::writeError(sidecarError, options.outputCodec);
-        return OcrSidecarUnavailable;
-    }
-
-    QTemporaryDir temporaryDirectory;
-    if (!temporaryDirectory.isValid())
-    {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."),
-                               options.outputCodec);
-        sidecar.stop();
-        return OcrContractError;
-    }
 
     pdf::PDFDocumentSession session(&document);
     pdf::PDFOcrPageGate::Settings gateSettings;
     gateSettings.minTextCharacters = options.ocrMinTextChars;
 
+    // Classify the whole selected range up front. The expensive EasyOCR sidecar
+    // (model load, first-run downloads) is only started when at least one page
+    // actually needs OCR: a fully text-based document must produce an all-skipped
+    // report without requiring a sidecar to be present at all.
+    const std::vector<pdf::PDFOcrPageGate::PageOcrNeed> pageNeeds =
+        pdf::PDFOcrPageGate::classifyPages(&session, pageIndices, gateSettings);
+
+    bool anyNeedsOcr = false;
+    for (const pdf::PDFOcrPageGate::PageOcrNeed need : pageNeeds)
+    {
+        if (need == pdf::PDFOcrPageGate::PageOcrNeed::NeedsOcr)
+        {
+            anyNeedsOcr = true;
+            break;
+        }
+    }
+
+    OcrSidecarClient sidecar;
+    QString sidecarError;
+    if (anyNeedsOcr && !sidecar.start(sidecarPath, sidecarError))
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("ocr.sidecar-unavailable"),
+                         sidecarError);
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
+    QTemporaryDir temporaryDirectory;
+    if (anyNeedsOcr && !temporaryDirectory.isValid())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("ocr.temporary-directory-unavailable"),
+                         PDFToolTranslationContext::tr("Could not create temporary directory for OCR images."));
+        sidecar.stop();
+        return PDFToolExitCode::ProcessingFailure;
+    }
+
     pdf::PDFOcrReport report;
     report.pdfPath = options.document;
     report.pass = true;
 
-    QStringList languages = options.ocrLanguages.split(',', Qt::SkipEmptyParts);
-    if (languages.isEmpty())
-    {
-        languages = QStringList{ QStringLiteral("en") };
-    }
+    const QStringList languages = ocr::normalizeLanguages(options.ocrLanguages);
 
     QJsonArray languagesArray;
     for (const QString& language : languages)
@@ -455,6 +351,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
     bool anyPageFailed = false;
     bool cancelled = false;
 
+    size_t needIndex = 0;
     for (pdf::PDFInteger pageIndex : pageIndices)
     {
         if (cancelRequested().load(std::memory_order_acquire))
@@ -464,8 +361,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         }
 
         const int oneBasedPage = int(pageIndex) + 1;
-        const pdf::PDFOcrPageGate::PageOcrNeed need =
-            pdf::PDFOcrPageGate::classifyPage(&session, pageIndex, gateSettings);
+        const pdf::PDFOcrPageGate::PageOcrNeed need = pageNeeds[needIndex++];
 
         if (need == pdf::PDFOcrPageGate::PageOcrNeed::Failed)
         {
@@ -528,6 +424,7 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         request.insert(QStringLiteral("dpi"), options.ocrDpi);
         request.insert(QStringLiteral("languages"), languagesArray);
         request.insert(QStringLiteral("media_box"), mediaBoxObject(page));
+        request.insert(QStringLiteral("rotation"), pageRotationDegrees(page));
 
         QJsonObject response;
         QString requestError;
@@ -549,9 +446,34 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
             continue;
         }
 
+        QString responseError;
+        if (!ocr::validateSidecarResponse(response, oneBasedPage, &responseError))
+        {
+            pdf::PDFOcrError error;
+            error.message = responseError;
+            error.page = oneBasedPage;
+            error.hasPage = true;
+            report.errors.push_back(error);
+
+            pdf::PDFOcrPageResult pageResult;
+            pageResult.page = oneBasedPage;
+            pageResult.status = QStringLiteral("failed");
+            pageResult.error = responseError;
+            report.pages.push_back(pageResult);
+            report.pass = false;
+            anyPageFailed = true;
+            continue;
+        }
+
         if (!response.value(QStringLiteral("ok")).toBool())
         {
             const QString errorText = response.value(QStringLiteral("error")).toString();
+            pdf::PDFOcrError error;
+            error.message = errorText;
+            error.page = oneBasedPage;
+            error.hasPage = true;
+            report.errors.push_back(error);
+
             pdf::PDFOcrPageResult pageResult;
             pageResult.page = oneBasedPage;
             pageResult.status = QStringLiteral("failed");
@@ -590,21 +512,24 @@ int PDFToolOcrApplication::execute(const PDFToolOptions& options)
         report.pass = false;
     }
 
-    const QByteArray reportJson = QJsonDocument(report.toJson()).toJson(QJsonDocument::Compact);
-    PDFConsole::writeData(reportJson);
-    PDFConsole::writeData(QByteArray("\n"));
+    if (options.executionContext)
+    {
+        options.executionContext->setData(QJsonObject{
+            { QStringLiteral("report"), report.toJson() }
+        });
+    }
 
     if (cancelled)
     {
-        return OcrCancelled;
+        return PDFToolExitCode::Cancelled;
     }
 
     if (anyPageFailed)
     {
-        return OcrPartialFailure;
+        return PDFToolExitCode::PartialOutput;
     }
 
-    return OcrSuccess;
+    return PDFToolExitCode::Success;
 }
 
 }   // namespace pdftool

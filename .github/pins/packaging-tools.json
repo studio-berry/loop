@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "appimagetool": {
+    "upstream": "AppImage/appimagetool",
+    "upstreamCommit": "8c8c91f762b412a19f4e8d2c4b35afb98f2d7c81",
+    "assetId": 324406882,
+    "assetName": "appimagetool-x86_64.AppImage",
+    "sha256": "a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0"
+  },
+  "appimageRuntime": {
+    "upstream": "AppImage/type2-runtime",
+    "upstreamCommit": "75849dce7cc37e4319b633df1f116ca895c71a12",
+    "assetId": 456065460,
+    "assetName": "runtime-x86_64",
+    "sha256": "1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf"
+  },
+  "linuxdeployqt": {
+    "upstream": "probonopd/linuxdeployqt",
+    "upstreamCommit": "5af5737e72046234daa1c855f1f4397da9979a75",
+    "assetId": 306987716,
+    "assetName": "linuxdeployqt-continuous-x86_64.AppImage",
+    "sha256": "974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b"
+  },
+  "wix": {
+    "version": "3.14.1",
+    "url": "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip",
+    "sha256": "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31"
+  },
+  "windowsSdk": {
+    "version": "10.0.26100.0",
+    "makeAppxSha256": "00fff202b71c1266b8c3899701e42b5468ea153b2b33a0a47215fe27695f16d0"
+  },
+  "digicertKeylocker": {
+    "version": null,
+    "url": null,
+    "sha256": null
+  },
+  "flatpak": {
+    "runner": "ubuntu-24.04",
+    "flatpakVersion": "1.14.6-1ubuntu0.1",
+    "flatpakBuilderVersion": "1.4.2-1build2"
+  },
+  "deb": {
+    "runner": "ubuntu-24.04",
+    "dpkgVersion": "1.22.6ubuntu6.6"
+  }
+}

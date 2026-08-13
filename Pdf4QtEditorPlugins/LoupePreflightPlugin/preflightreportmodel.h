@@ -81,14 +81,20 @@ public:
 
     bool hasReport() const { return m_hasReport; }
     bool pass() const { return m_pass; }
+    QString verdictState() const { return m_verdictState; }
+    QString verdictReason() const { return m_verdictReason; }
     QString profileName() const { return m_profileName; }
     int errorCount() const { return m_errorCount; }
     int warningCount() const { return m_warningCount; }
     int schemaVersion() const { return m_schemaVersion; }
     const QVector<PreflightFixupEntry>& fixups() const { return m_fixups; }
     const QVector<PreflightFindingEntry>& findings() const { return m_findings; }
+    bool hasFixup(const QString& id) const;
+    const PreflightFixupEntry* fixup(const QString& id) const;
     bool hasAddBleedFixup() const;
     const PreflightFixupEntry* addBleedFixup() const;
+    bool hasRgbToCmykFixup() const;
+    const PreflightFixupEntry* rgbToCmykFixup() const;
 
     /// Returns true if any finding reports white or near-white overprint. The report
     /// panel always steers the operator to Output Preview (MIC-320/MIC-330), since
@@ -103,6 +109,8 @@ private:
     QVector<PreflightFixupEntry> m_fixups;
     bool m_hasReport = false;
     bool m_pass = true;
+    QString m_verdictState = QStringLiteral("pass");
+    QString m_verdictReason;
     QString m_profileName;
     int m_schemaVersion = 2;
     int m_errorCount = 0;

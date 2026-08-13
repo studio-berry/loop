@@ -37,6 +37,8 @@ add_library(Pdf4QtLibGui SHARED
     pdfoptimizeimagesdialog.h
     pdfprogramcontroller.cpp
     pdfprogramcontroller.h
+    pdfrecoverymanager.cpp
+    pdfrecoverymanager.h
     pdfrecentfilemanager.cpp
     pdfrecentfilemanager.h
     pdfrendertoimagesdialog.cpp
@@ -88,6 +90,10 @@ add_library(Pdf4QtLibGui SHARED
 )
 
 add_compile_definitions(QT_INSTALL_DIRECTORY="${QT6_INSTALL_PREFIX}")
+
+if(PDF4QT_LOUPE_DISTRIBUTION)
+    target_compile_definitions(Pdf4QtLibGui PRIVATE PDF4QT_LOUPE_DISTRIBUTION)
+endif()
 
 include(GenerateExportHeader)
 

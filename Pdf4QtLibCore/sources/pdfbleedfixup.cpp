@@ -33,6 +33,7 @@
 #include <QtMath>
 
 #include <cmath>
+#include <limits>
 #include <set>
 
 namespace pdf
@@ -222,6 +223,69 @@ QString sideName(PDFBleedFixupSide side)
 
 namespace PDFBleedFixupMath
 {
+
+PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
+                              int dpi,
+                              qint64 maxRasterPixels,
+                              bool analyzeOnly,
+                              bool hasEligibleSides)
+{
+    PDFBleedRasterPlan plan;
+    plan.rasterRequired = hasEligibleSides && !analyzeOnly;
+    if (!plan.rasterRequired)
+    {
+        return plan;
+    }
+
+    if (dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height())
+        || !(mediaSize.width() > 0.0) || !(mediaSize.height() > 0.0))
+    {
+        plan.withinBudget = false;
+        plan.errorMessage = PDFTranslationContext::tr("Page has an invalid media box size for rasterization.");
+        return plan;
+    }
+
+    const double widthPxReal = std::ceil(mediaSize.width() * PDF_POINT_TO_INCH * dpi);
+    const double heightPxReal = std::ceil(mediaSize.height() * PDF_POINT_TO_INCH * dpi);
+    if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal)
+        || widthPxReal < 1.0 || heightPxReal < 1.0)
+    {
+        plan.withinBudget = false;
+        plan.errorMessage = PDFTranslationContext::tr("Page has invalid raster dimensions.");
+        return plan;
+    }
+
+    plan.pixelCount = widthPxReal * heightPxReal;
+    if (!std::isfinite(plan.pixelCount))
+    {
+        plan.withinBudget = false;
+        plan.errorMessage = PDFTranslationContext::tr("Page raster dimensions exceed the supported range.");
+        return plan;
+    }
+
+    constexpr double maxImageDimension = double((std::numeric_limits<int>::max)());
+    if (widthPxReal > maxImageDimension || heightPxReal > maxImageDimension)
+    {
+        plan.withinBudget = false;
+        plan.errorMessage = PDFTranslationContext::tr("Page raster dimensions exceed the supported image size.");
+        return plan;
+    }
+
+    if (maxRasterPixels > 0 && plan.pixelCount > double(maxRasterPixels))
+    {
+        plan.withinBudget = false;
+        plan.errorMessage = PDFTranslationContext::tr(
+                                    "Page requires a %1 x %2 px raster at %3 DPI for edge sampling, which exceeds the limit of %4 megapixels. Lower --dpi or raise the raster limit.")
+                                .arg(qint64(widthPxReal))
+                                .arg(qint64(heightPxReal))
+                                .arg(dpi)
+                                .arg(maxRasterPixels / 1000000);
+        return plan;
+    }
+
+    plan.imageSize = QSize(qMax(1, int(widthPxReal)), qMax(1, int(heightPxReal)));
+    return plan;
+}
 
 QRectF referenceRect(const PDFPage* page, PDFBleedFixupSettings::ReferenceBox referenceBox)
 {
@@ -461,6 +525,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         return PDFTranslationContext::tr("Sample pixel count must be positive.");
     }
 
+    if (settings.bleedMM.left() < 0.0 || settings.bleedMM.top() < 0.0
+        || settings.bleedMM.right() < 0.0 || settings.bleedMM.bottom() < 0.0)
+    {
+        return PDFTranslationContext::tr("Bleed margins must be non-negative.");
+    }
+
     QString pageSelectionError;
     const std::vector<PDFInteger> pageIndices = selectPageIndices(document, settings.pageRange, &pageSelectionError);
     if (!pageSelectionError.isEmpty())
@@ -525,7 +595,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
             return PDFTranslationContext::tr("Reference box on page %1 is invalid.").arg(pageIndex + 1);
         }
 
-        const QRectF targetBleed = PDFBleedFixupMath::targetBleedRect(reference, settings.bleedMM);
+        const QMarginsF effectiveBleedMM(
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Left) ? settings.bleedMM.left() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Top) ? settings.bleedMM.top() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Right) ? settings.bleedMM.right() : 0.0,
+                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Bottom) ? settings.bleedMM.bottom() : 0.0);
+        const QRectF targetBleed = PDFBleedFixupMath::targetBleedRect(reference, effectiveBleedMM);
         if (!targetBleed.isValid() || targetBleed.isEmpty())
         {
             return PDFTranslationContext::tr("Target bleed box on page %1 is invalid.").arg(pageIndex + 1);
@@ -540,11 +615,18 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
 
         for (PDFBleedFixupSide side : allSides)
         {
+            if (!isBleedFixupSideEnabled(settings.sides, side))
+            {
+                continue;
+            }
+
             const PDFReal depthMM = PDFBleedFixupMath::sideBleedMM(settings.bleedMM, side);
             if (!(depthMM > 0.0))
             {
                 continue;
             }
+
+            pageReport.sidesRequested |= bleedFixupSideBit(side);
 
             const PDFReal depthPt = depthMM * PDF_MM_TO_POINT;
             if (!settings.force && settings.skipIfAlreadyBleeding &&
@@ -555,6 +637,7 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                 continue;
             }
 
+            pageReport.sidesEligible |= bleedFixupSideBit(side);
             sidesToApply.push_back(SideWork{side, depthPt});
         }
 
@@ -609,38 +692,22 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
             return QRectF(rect.left() + translateX, rect.top() + translateY, rect.width(), rect.height());
         };
 
-        // Edge sampling needs a page raster whose cost grows with page area x dpi^2.
-        // A dry run reports box geometry only, so it must not pay that cost.
-        const bool needsRaster = !sidesToApply.empty() && !settings.analyzeOnly;
-
         QImage pageImage;
         QTransform pageToDevice;
-        if (needsRaster)
+        const PDFBleedFixupMath::PDFBleedRasterPlan rasterPlan = PDFBleedFixupMath::planRaster(
+                page->getRotatedMediaBox().size(),
+                settings.dpi,
+                settings.maxRasterPixels,
+                settings.analyzeOnly,
+                !sidesToApply.empty());
+        if (!rasterPlan.withinBudget)
         {
-            const QSizeF mediaSize = page->getRotatedMediaBox().size();
-            const double widthPxReal = std::ceil(mediaSize.width() * PDF_POINT_TO_INCH * settings.dpi);
-            const double heightPxReal = std::ceil(mediaSize.height() * PDF_POINT_TO_INCH * settings.dpi);
+            return PDFTranslationContext::tr("Page %1: %2").arg(pageIndex + 1).arg(rasterPlan.errorMessage);
+        }
 
-            if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal))
-            {
-                return PDFTranslationContext::tr("Page %1 has an invalid media box size.").arg(pageIndex + 1);
-            }
-
-            // Compare in double before narrowing: the pixel count for a crafted or
-            // very large media box overflows int.
-            const double pixelCount = qMax(1.0, widthPxReal) * qMax(1.0, heightPxReal);
-            if (settings.maxRasterPixels > 0 && pixelCount > double(settings.maxRasterPixels))
-            {
-                return PDFTranslationContext::tr(
-                           "Page %1 requires a %2 x %3 px raster at %4 DPI for edge sampling, which exceeds the limit of %5 megapixels. Lower --dpi or raise the raster limit.")
-                        .arg(pageIndex + 1)
-                        .arg(qint64(widthPxReal))
-                        .arg(qint64(heightPxReal))
-                        .arg(settings.dpi)
-                        .arg(settings.maxRasterPixels / 1000000);
-            }
-
-            const QSize imageSize(qMax(1, int(widthPxReal)), qMax(1, int(heightPxReal)));
+        if (rasterPlan.rasterRequired)
+        {
+            const QSize imageSize = rasterPlan.imageSize;
 
             PDFPrecompiledPage compiledPage;
             renderer.compile(&compiledPage, static_cast<size_t>(pageIndex));

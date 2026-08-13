@@ -27,6 +27,7 @@
 #include "pdfoptimizer.h"
 #include "pdfdocumentwriter.h"
 
+#include <QDir>
 #include <QFileInfo>
 
 namespace pdftool
@@ -55,24 +56,52 @@ QString PDFToolUnite::getStandardString(PDFToolAbstractApplication::StandardStri
     return QString();
 }
 
-int PDFToolUnite::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolUnite::execute(const PDFToolOptions& options)
 {
     if (options.uniteFiles.size() < 3)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("At least two documents and target (merged) document must be specified."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("At least two documents and target (merged) document must be specified."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QStringList files = options.uniteFiles;
     QString targetFile = files.back();
     files.pop_back();
 
-    if (const int blocked = validateDestructiveOutput(options, targetFile))
+    QString targetKey = QDir::cleanPath(QFileInfo(targetFile).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    targetKey = targetKey.toCaseFolded();
+#endif
+    for (const QString& inputFile : files)
+    {
+        QString inputKey = QDir::cleanPath(QFileInfo(inputFile).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+        inputKey = inputKey.toCaseFolded();
+#endif
+        if (inputKey == targetKey)
+        {
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.input-collision"),
+                             PDFToolTranslationContext::tr("Output '%1' must not overwrite an input document.").arg(targetFile),
+                             QJsonObject{{QStringLiteral("path"), targetFile}});
+            return PDFToolExitCode::InvalidInvocation;
+        }
+    }
+
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, targetFile); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("unite")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+    }
+    else if (options.destructiveReport)
     {
         PDFConsole::writeText(PDFToolTranslationContext::tr("Would merge %1 document(s) into '%2'.")
                                 .arg(files.size())
@@ -82,12 +111,16 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), targetFile, QStringLiteral("planned")});
+        }
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     try
@@ -108,14 +141,14 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
             pdf::PDFDocument document = reader.readFromFile(fileName);
             if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(fileName), options.outputCodec);
-                return ErrorDocumentReading;
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(fileName), QJsonObject{{QStringLiteral("path"), fileName}});
+                return PDFToolExitCode::InputError;
             }
 
             if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble))
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to assemble pages."), options.outputCodec);
-                return ErrorPermissions;
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.assemble-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to assemble pages."));
+                return PDFToolExitCode::ProcessingFailure;
             }
 
             pdf::PDFDocumentBuilder temporaryBuilder(&document);
@@ -230,25 +263,34 @@ int PDFToolUnite::execute(const PDFToolOptions& options)
 
         if (isCancelRequested())
         {
-            removePartialOutput(targetFile);
-            return ExitFailure;
+            return PDFToolExitCode::Cancelled;
         }
 
         pdf::PDFDocumentWriter writer(nullptr);
         pdf::PDFOperationResult result = writer.write(targetFile, &mergedDocument, true);
         if (!result)
         {
-            PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-            return ErrorFailedWriteToFile;
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), targetFile}});
+            return PDFToolExitCode::ProcessingFailure;
+        }
+
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("primary"),
+                targetFile,
+                QStringLiteral("written")
+            });
         }
     }
     catch (const pdf::PDFException &exception)
     {
-        PDFConsole::writeError(exception.getMessage(), options.outputCodec);
-        return ErrorUnknown;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), exception.getMessage());
+        return PDFToolExitCode::InternalError;
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolUnite::getOptionsFlags() const

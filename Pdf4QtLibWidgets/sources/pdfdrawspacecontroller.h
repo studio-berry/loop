@@ -27,6 +27,7 @@
 #include "pdfwidgetsglobal.h"
 #include "pdfglobal.h"
 #include "pdfdocument.h"
+#include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdffont.h"
 #include "pdfdocumentdrawinterface.h"
@@ -35,6 +36,8 @@
 #include <QRectF>
 #include <QObject>
 #include <QMarginsF>
+
+#include <memory>
 
 class QPainter;
 class QScrollBar;
@@ -341,6 +344,8 @@ public:
     static constexpr PDFReal ZOOM_STEP = 1.2;
 
     const PDFDocument* getDocument() const { return m_controller->getDocument(); }
+    PDFDocumentContext* getDocumentContext() const { return m_documentContext.get(); }
+    PDFRevisionIdentity getDocumentRevision() const { return m_documentContext ? m_documentContext->getRevision() : PDFRevisionIdentity(); }
     PDFFontCache* getFontCache() const { return m_controller->getFontCache(); }
     const PDFOptionalContentActivity* getOptionalContentActivity() const { return m_controller->getOptionalContentActivity(); }
     PDFRenderer::Features getFeatures() const;
@@ -551,6 +556,9 @@ private:
 
     /// Text layout compiler
     PDFAsynchronousTextLayoutCompiler* m_textLayoutCompiler;
+
+    /// Single artifact/revision authority shared by document-bound work.
+    std::unique_ptr<PDFDocumentContext> m_documentContext;
 
     /// Page image rasterizer for thumbnails
     PDFRasterizer* m_rasterizer;

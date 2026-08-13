@@ -50,12 +50,13 @@ inline QString getPdfToolFileName()
 
 inline bool isExpectedOcrExitCode(int exitCode)
 {
-    return exitCode == 0 || exitCode == 1;
+    return exitCode == 0 || exitCode == 1 || exitCode == 5;
 }
 
 inline bool validateOcrReport(const QJsonObject& report, QString* errorMessage = nullptr)
 {
-    if (!report.contains(QStringLiteral("schema_version")))
+    if (!report.contains(QStringLiteral("schema_version"))
+        || !report.value(QStringLiteral("schema_version")).isDouble())
     {
         if (errorMessage)
         {
@@ -73,15 +74,58 @@ inline bool validateOcrReport(const QJsonObject& report, QString* errorMessage =
         return false;
     }
 
-    if (!report.contains(QStringLiteral("pages")) || !report.value(QStringLiteral("pages")).isArray())
+    if (!report.value(QStringLiteral("pass")).isBool()
+        || !report.value(QStringLiteral("pdf")).isString()
+        || !report.value(QStringLiteral("pages")).isArray()
+        || !report.value(QStringLiteral("skipped_pages")).isArray()
+        || !report.value(QStringLiteral("errors")).isArray())
     {
         if (errorMessage)
         {
-            *errorMessage = QStringLiteral("OCR report missing pages array.");
+            *errorMessage = QStringLiteral("OCR report is missing required fields.");
         }
         return false;
     }
 
+    return true;
+}
+
+inline bool extractOcrReport(const QJsonObject& envelope,
+                             QJsonObject* report,
+                             QString* errorMessage = nullptr)
+{
+    const QString status = envelope.value(QStringLiteral("status")).toString();
+    if (status != QStringLiteral("success") && status != QStringLiteral("partial-output"))
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("PdfTool OCR operation did not succeed.");
+        }
+        return false;
+    }
+
+    const QJsonValue reportValue = envelope.value(QStringLiteral("data"))
+                                       .toObject()
+                                       .value(QStringLiteral("report"));
+    if (!reportValue.isObject())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = QStringLiteral("PdfTool response missing OCR report.");
+        }
+        return false;
+    }
+
+    QJsonObject parsedReport = reportValue.toObject();
+    if (!validateOcrReport(parsedReport, errorMessage))
+    {
+        return false;
+    }
+
+    if (report)
+    {
+        *report = parsedReport;
+    }
     return true;
 }
 

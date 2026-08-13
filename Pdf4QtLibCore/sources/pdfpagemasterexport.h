@@ -24,11 +24,16 @@
 #define PDFPAGEMASTEREXPORT_H
 
 #include "pdfglobal.h"
+#include "pdfactionlist.h"
 #include "pdfbleedfixup.h"
 #include "pdfdocument.h"
 #include "pdfdocumentmanipulator.h"
 #include "pdfimageoptimizer.h"
 #include "pdfpagegeometry.h"
+#include "preflightprofileresolver.h"
+#include "pdfproductiongeometry.h"
+#include "pdfstandardconversion.h"
+#include "pdftransparencyflattener.h"
 
 #include <QImage>
 #include <QJsonObject>
@@ -36,6 +41,7 @@
 #include <QStringList>
 
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -44,6 +50,27 @@ namespace pdf
 {
 
 class PDFProgress;
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterProductionSettings
+{
+    bool enabled = false;
+    PDFProductionGeometryModel geometry;
+    bool contourBleedEnabled = false;
+    PDFContourBleedSettings contourBleed;
+    int contourBleedDpi = 300;
+    qint64 contourBleedMaxRasterPixels = 250LL * 1000 * 1000;
+    bool grommetsEnabled = false;
+    PDFGrommetSpec grommets;
+
+    QJsonObject toJson() const;
+    static PDFPageMasterProductionSettings fromJson(const QJsonObject& object);
+};
+
+enum class PDFPageMasterBleedConfirmationPolicy
+{
+    Never,
+    BeforeBatch
+};
 
 /// Shared cancel / progress-lifetime flags for a PageMaster export run (MIC-308).
 /// UI owns the shared_ptrs; the worker borrows raw pointers via the job.
@@ -73,6 +100,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportCancelToken
 /// Documents and images are owned copies. progress / cancelFlag / progressAlive are borrowed (optional).
 struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
 {
+    using ManifestPersistFunction = std::function<bool(const QString&, const QJsonObject&)>;
+
     std::map<int, PDFDocument> documents;
     std::map<int, QImage> images;
     std::vector<PDFDocumentManipulator::AssembledPages> assembledDocuments;
@@ -81,18 +110,39 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportJob
     PDFDocumentManipulator::OutlineMode outlineMode = PDFDocumentManipulator::OutlineMode::DocumentParts;
     bool optimizeImages = false;
     PDFImageOptimizer::Settings imageOptimizationSettings;
+    bool hasStandardConversionSettings = false;
+    PDFStandardConversionSettings standardConversionSettings;
     bool hasPageGeometrySettings = false;
     PDFPageGeometrySettings pageGeometrySettings;
     bool hasBleedFixupSettings = false;
     PDFBleedFixupSettings bleedFixupSettings;
+    bool hasTransparencyFlattenSettings = false;
+    PDFTransparencyFlattenSettings transparencyFlattenSettings;
+    bool hasProductionGeometrySettings = false;
+    PDFPageMasterProductionSettings productionGeometrySettings;
+    PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicy = PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
+    bool bleedConfirmationGranted = false;
     bool hasPreflightGate = false;
     QString preflightProfilePath;
+    bool hasPreflightContext = false;
+    PreflightJobContext preflightContext;
+    QString preflightProfileStorePath;
     bool forcePreflight = false;
+    bool revalidatePreflightAfterFixups = false;
+    /// Optional reusable recipe stage. When enabled, the recipe runs after the
+    /// initial preflight gate and before page geometry (ADR-003 amendment).
+    bool hasActionList = false;
+    PDFActionList actionList;
+    QJsonObject actionListBindings;
     PDFProgress* progress = nullptr;
     std::atomic_bool* cancelFlag = nullptr;
     std::atomic_bool* progressAlive = nullptr;
     bool resume = false;
     QString manifestPath;
+
+    /// Optional deterministic manifest persistence seam for callers/tests. An empty
+    /// function uses the normal atomic file writer.
+    ManifestPersistFunction manifestPersist;
 };
 
 /// Result of PDFPageMasterExport::run().
@@ -107,7 +157,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportResult
 };
 
 /// Headless PageMaster export orchestrator (ADR-003).
-/// Locked stage order: assemble → preflight → page geometry → bleed fixup → image optimize → write.
+/// Locked stage order: assemble → preflight gate → Action List → page geometry →
+/// production geometry validation / contour bleed → bleed fixup → transparency
+/// flatten → image optimize → standard conversion → preflight revalidation → write.
 /// Synchronous and not thread-safe; callers may invoke run() from a worker thread.
 class PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExport
 {
@@ -117,6 +169,6 @@ public:
     static PDFPageMasterExportResult run(PDFPageMasterExportJob job);
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFPAGEMASTEREXPORT_H
+#endif   // PDFPAGEMASTEREXPORT_H

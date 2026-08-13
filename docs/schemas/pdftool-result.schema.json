@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://studio-berry.github.io/loupe/schemas/pdftool-result.schema.json",
+  "title": "PdfTool result envelope",
+  "description": "Machine-facing contract emitted by PdfTool to stdout when --console-format json is requested; preflight and OCR emit it by default. See docs/PDFTOOL_CLI_CONTRACT.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "version",
+    "status",
+    "exit_code",
+    "diagnostics",
+    "outputs",
+    "data"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "PdfTool automation-contract version. Independent of nested domain report schema_version fields."
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "findings",
+        "invalid-invocation",
+        "input-error",
+        "processing-failure",
+        "partial-output",
+        "cancelled",
+        "internal-error"
+      ]
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 7
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/diagnostic"
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/output"
+      }
+    },
+    "data": {
+      "type": "object",
+      "description": "Command-specific payload. Preflight/OCR carry their domain reports here as 'report'."
+    }
+  },
+  "definitions": {
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]*$",
+          "description": "Stable machine identifier. Machine consumers branch on this, never on message."
+        },
+        "message": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "role",
+        "path",
+        "state"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "e.g. 'file'"
+        },
+        "role": {
+          "type": "string",
+          "description": "e.g. 'primary'"
+        },
+        "path": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "written",
+            "planned",
+            "partial"
+          ]
+        }
+      }
+    }
+  }
+}

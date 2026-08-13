@@ -2,7 +2,6 @@
 set -euo pipefail
 
 MODE="${1:-build}"
-VCPKG_COMMIT="0878b5224d4a4968940ee296a2e7fae2d3b62983"
 
 export DEBIAN_FRONTEND=noninteractive
 export VCPKG_ROOT=/work/.docker-vcpkg
@@ -19,7 +18,29 @@ apt-get install -y --no-install-recommends \
     libc6-dev linux-libc-dev libcups2 libcups2-dev libfontconfig1-dev libtbb-dev ca-certificates \
     libglib2.0-0 libasan8 libubsan1 libclang-rt-18-dev libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev
 
+# Keep the Docker fuzz environment on the same vcpkg baseline as every CI
+# workflow. The repository manifest is the single source of truth.
+VCPKG_COMMIT="$(python3 - <<'PY'
+import json
+
+with open("/work/vcpkg-configuration.json", encoding="utf-8") as f:
+    print(json.load(f)["default-registry"]["baseline"])
+PY
+)"
+
+if [[ ! "$VCPKG_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Invalid vcpkg baseline: ${VCPKG_COMMIT}" >&2
+    exit 1
+fi
+
 mkdir -p "${VCPKG_DEFAULT_BINARY_CACHE}"
+
+if [[ -x "${VCPKG_ROOT}/vcpkg" ]]; then
+    ACTUAL="$(git -C "${VCPKG_ROOT}" rev-parse HEAD)"
+    if [[ "$ACTUAL" != "$VCPKG_COMMIT" ]]; then
+        rm -rf "${VCPKG_ROOT}"
+    fi
+fi
 
 if [[ ! -x "${VCPKG_ROOT}/vcpkg" ]]; then
     if [[ -d "${VCPKG_ROOT}" ]]; then
@@ -27,8 +48,21 @@ if [[ ! -x "${VCPKG_ROOT}/vcpkg" ]]; then
     fi
     git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
     cd "${VCPKG_ROOT}"
-    git checkout "${VCPKG_COMMIT}"
+    git checkout --detach "${VCPKG_COMMIT}"
+
+    ACTUAL="$(git rev-parse HEAD)"
+    if [[ "$ACTUAL" != "$VCPKG_COMMIT" ]]; then
+        echo "vcpkg checkout does not match manifest baseline" >&2
+        exit 1
+    fi
+
     ./bootstrap-vcpkg.sh -disableMetrics
+fi
+
+ACTUAL="$(git -C "${VCPKG_ROOT}" rev-parse HEAD)"
+if [[ "$ACTUAL" != "$VCPKG_COMMIT" ]]; then
+    echo "vcpkg checkout does not match manifest baseline" >&2
+    exit 1
 fi
 
 if [[ ! -x "${PDF4QT_QT_ROOT}/bin/qmake" ]]; then

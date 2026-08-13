@@ -25,6 +25,7 @@
 #include "pdfannotation.h"
 #include "pdfform.h"
 #include "pdfdocumentwriter.h"
+#include "pdfdocumentreader.h"
 #include "pdfadvancedtools.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfwidgetutils.h"
@@ -54,6 +55,7 @@
 #include "pdfactioncombobox.h"
 #include "pdffullscreenwidget.h"
 #include "pdfpagegeometry.h"
+#include "pdfdiagnostics.h"
 
 #include <QMenu>
 #include <QPrinter>
@@ -69,6 +71,7 @@
 #include <QFileInfo>
 #include <QApplication>
 #include <QFileDialog>
+#include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
 #include <QInputDialog>
 #include <QMainWindow>
@@ -97,7 +100,6 @@ PDFActionManager::PDFActionManager(QObject* parent) :
     m_actions(),
     m_actionGroups()
 {
-
 }
 
 QToolButton* PDFActionManager::createToolButtonForActionGroup(ActionGroup group, QWidget* parent) const
@@ -164,20 +166,19 @@ void PDFActionManager::setChecked(PDFActionManager::Action type, bool checked)
 
 std::vector<QAction*> PDFActionManager::getRenderingOptionActions() const
 {
-    return getActionList({
-         RenderOptionAntialiasing,
-         RenderOptionTextAntialiasing,
-         RenderOptionSmoothPictures,
-         RenderOptionIgnoreOptionalContentSettings,
-         RenderOptionDisplayRenderTimes,
-         RenderOptionDisplayAnnotations,
-         RenderOptionInvertColors,
-         RenderOptionGrayscale,
-         RenderOptionBitonal,
-         RenderOptionHighContrast,
-         RenderOptionCustomColors,
-         RenderOptionShowTextBlocks,
-         RenderOptionShowTextLines});
+    return getActionList({ RenderOptionAntialiasing,
+                           RenderOptionTextAntialiasing,
+                           RenderOptionSmoothPictures,
+                           RenderOptionIgnoreOptionalContentSettings,
+                           RenderOptionDisplayRenderTimes,
+                           RenderOptionDisplayAnnotations,
+                           RenderOptionInvertColors,
+                           RenderOptionGrayscale,
+                           RenderOptionBitonal,
+                           RenderOptionHighContrast,
+                           RenderOptionCustomColors,
+                           RenderOptionShowTextBlocks,
+                           RenderOptionShowTextLines });
 }
 
 std::vector<QAction*> PDFActionManager::getActions() const
@@ -409,11 +410,15 @@ PDFProgramController::PDFProgramController(QObject* parent) :
     m_mainWindowInterface(nullptr),
     m_pdfWidget(nullptr),
     m_settings(new PDFViewerSettings(this)),
+    m_recoveryManager(new PDFRecoveryManager(this)),
     m_undoRedoManager(nullptr),
     m_recentFileManager(new PDFRecentFileManager(this)),
     m_optionalContentActivity(nullptr),
     m_textToSpeech(nullptr),
     m_isDocumentSetInProgress(false),
+    m_isRecoveredDocument(false),
+    m_savePolicy(pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit"))),
+    m_documentRevision(0),
     m_futureWatcher(nullptr),
     m_CMSManager(new pdf::PDFCMSManager(this)),
     m_toolManager(nullptr),
@@ -481,6 +486,13 @@ void PDFProgramController::initialize(Features features,
     m_mainWindow = mainWindow;
     m_mainWindowInterface = mainWindowInterface;
 
+    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message) {
+        if (m_mainWindowInterface)
+        {
+            m_mainWindowInterface->setStatusBarMessage(tr("Recovery checkpoint unavailable: %1").arg(message), 6000);
+        }
+    });
+
     if (QAction* action = m_actionManager->getAction(PDFActionManager::GoToDocumentStart))
     {
         connect(action, &QAction::triggered, this, &PDFProgramController::onActionGoToDocumentStartTriggered);
@@ -544,6 +556,10 @@ void PDFProgramController::initialize(Features features,
     if (QAction* action = m_actionManager->getAction(PDFActionManager::About))
     {
         connect(action, &QAction::triggered, this, &PDFProgramController::onActionAboutTriggered);
+    }
+    if (QAction* action = m_actionManager->getAction(PDFActionManager::CollectDiagnostics))
+    {
+        connect(action, &QAction::triggered, this, &PDFProgramController::onActionCollectDiagnosticsTriggered);
     }
     if (QAction* action = m_actionManager->getAction(PDFActionManager::SendByMail))
     {
@@ -945,9 +961,10 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                     if (dangerousExtensions.contains(extension))
                     {
                         if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
-                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
-                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(QString::fromLatin1(winSpecification.file)),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                                                 tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                                    "This is potentially dangerous. Are you sure you want to proceed?")
+                                                     .arg(QString::fromLatin1(winSpecification.file)),
+                                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
                         {
                             continue;
                         }
@@ -985,9 +1002,10 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                     if (dangerousExtensions.contains(extension))
                     {
                         if (QMessageBox::warning(m_mainWindow, tr("Security Warning"),
-                                tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
-                                   "This is potentially dangerous. Are you sure you want to proceed?").arg(plaftormFileName),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                                                 tr("The PDF is requesting to launch '%1', which appears to be an executable or script. "
+                                                    "This is potentially dangerous. Are you sure you want to proceed?")
+                                                     .arg(plaftormFileName),
+                                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
                         {
                             continue;
                         }
@@ -1033,7 +1051,7 @@ void PDFProgramController::onActionTriggered(const pdf::PDFAction* action)
                 if (!allowedSchemes.contains(scheme))
                 {
                     QMessageBox::warning(m_mainWindow, tr("Open URL"),
-                        tr("URL scheme '%1' is not allowed. Only http, https, and mailto links are permitted.").arg(scheme));
+                                         tr("URL scheme '%1' is not allowed. Only http, https, and mailto links are permitted.").arg(scheme));
                     break;
                 }
 
@@ -1306,6 +1324,11 @@ void PDFProgramController::performSaveAs()
 
 void PDFProgramController::performSave()
 {
+    if (m_isRecoveredDocument || m_savePolicy.mode == pdf::PDFSaveMode::SaveAsNewArtifact)
+    {
+        performSaveAs();
+        return;
+    }
     saveDocument(m_fileInfo.originalFileName);
 }
 
@@ -1314,7 +1337,38 @@ void PDFProgramController::saveDocument(const QString& fileName)
     updateFileWatcher(true);
 
     pdf::PDFDocumentWriter writer(nullptr);
-    pdf::PDFOperationResult result = writer.write(fileName, m_pdfDocument.data(), true);
+    pdf::PDFOperationResult result(false);
+    const bool saveAsNewOutput = QFileInfo(fileName).absoluteFilePath() != m_fileInfo.absoluteFilePath;
+
+    if (!saveAsNewOutput && m_savePolicy.mode == pdf::PDFSaveMode::SaveAsNewArtifact)
+    {
+        QMessageBox::warning(m_mainWindow,
+                             tr("Save As required"),
+                             tr("This operation creates a new production artifact and cannot overwrite the trusted source."));
+        return;
+    }
+
+    if (saveAsNewOutput)
+    {
+        result = writer.write(fileName, m_pdfDocument.data(), true);
+    }
+    else
+    {
+        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+        pdf::PDFDocument sourceDocument = reader.readFromFile(fileName);
+        if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+        {
+            result = tr("The source PDF could not be validated before saving. %1").arg(reader.getErrorMessage());
+        }
+        else if (writer.getRecommendedWriteMode(&sourceDocument, m_savePolicy, false) == pdf::PDFDocumentWriter::WriteMode::Incremental)
+        {
+            result = writer.writeIncremental(fileName, &sourceDocument, m_pdfDocument.data(), true);
+        }
+        else
+        {
+            result = writer.write(fileName, m_pdfDocument.data(), true);
+        }
+    }
     if (result)
     {
         if (m_undoRedoManager)
@@ -1323,6 +1377,9 @@ void PDFProgramController::saveDocument(const QString& fileName)
         }
 
         updateFileInfo(fileName);
+        m_savePolicy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("save completed"));
+        m_isRecoveredDocument = false;
+        m_recoveryManager->markSaved(fileName, m_documentRevision);
         updateTitle();
 
         if (m_recentFileManager)
@@ -1391,6 +1448,7 @@ bool PDFProgramController::askForSaveDocumentBeforeClose()
             }
 
             case QMessageBox::No:
+                m_recoveryManager->discardSession();
                 return true;
 
             case QMessageBox::Cancel:
@@ -1402,6 +1460,29 @@ bool PDFProgramController::askForSaveDocumentBeforeClose()
         }
     }
 
+    return true;
+}
+
+bool PDFProgramController::restoreRecovery(const RecoveryCandidate& candidate, QString* errorMessage)
+{
+    pdf::PDFDocumentPointer recoveredDocument;
+    if (!m_recoveryManager->restoreCandidate(candidate, &recoveredDocument, errorMessage))
+    {
+        return false;
+    }
+
+    m_isRecoveredDocument = true;
+    m_documentRevision = candidate.documentRevision;
+    m_signatures.clear();
+    updateFileInfo(candidate.sourcePath);
+    m_pdfDocument = qMove(recoveredDocument);
+    pdf::PDFModifiedDocument document(m_pdfDocument.data(), m_optionalContentActivity);
+    setDocument(document, {}, false);
+    updateTitle();
+    const QString recoveryMessage = candidate.signedDocument
+        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
+        : tr("Recovered session restored. Save As is required to create a new output.");
+    m_mainWindowInterface->setStatusBarMessage(recoveryMessage, 6000);
     return true;
 }
 
@@ -1471,6 +1552,59 @@ void PDFProgramController::onActionAboutTriggered()
     dialog.exec();
 }
 
+void PDFProgramController::onActionCollectDiagnosticsTriggered()
+{
+    const QMessageBox::StandardButton consent = QMessageBox::question(
+        m_mainWindow,
+        tr("Collect Diagnostics"),
+        tr("This collects a support bundle containing application/system/dependency "
+           "version info, the loaded plugin list, and the rotated log files.\n\n"
+           "The log files are scrubbed centrally before persistence and again while "
+           "the bundle is copied.\n\n"
+           "No PDF or document content, and no crash minidumps, are included. You choose "
+           "where the bundle is saved and can inspect it before sending it to anyone.\n\n"
+           "Continue?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+
+    if (consent != QMessageBox::Yes)
+    {
+        return;
+    }
+
+    const QString outputDirectory = QFileDialog::getExistingDirectory(m_mainWindow, tr("Select Diagnostics Output Directory"));
+    if (outputDirectory.isEmpty())
+    {
+        return;
+    }
+
+    pdf::PDFDiagnosticsOptions options;
+    options.applicationId = QStringLiteral("editor");
+    options.outputDirectory = outputDirectory;
+    options.plugins = m_plugins;
+
+    const pdf::PDFDiagnosticsResult result = pdf::PDFDiagnosticsCollector::collect(options);
+
+    if (!result.success)
+    {
+        QMessageBox::critical(m_mainWindow, tr("Collect Diagnostics"), tr("Could not create the diagnostics bundle: %1").arg(result.errorMessage));
+        return;
+    }
+
+    QMessageBox successBox(QMessageBox::Information,
+                           tr("Collect Diagnostics"),
+                           tr("The diagnostics bundle was written to:\n%1").arg(result.bundleDirectory),
+                           QMessageBox::Ok,
+                           m_mainWindow);
+    QPushButton* openFolderButton = successBox.addButton(tr("Open Folder"), QMessageBox::ActionRole);
+    successBox.exec();
+
+    if (successBox.clickedButton() == openFolderButton)
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(result.bundleDirectory));
+    }
+}
+
 void PDFProgramController::onActionSendByEMailTriggered()
 {
     Q_ASSERT(m_pdfDocument);
@@ -1499,6 +1633,7 @@ void PDFProgramController::onActionOptimizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("optimization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1511,6 +1646,7 @@ void PDFProgramController::onActionOptimizeImagesTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("optimization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeOptimizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1523,6 +1659,7 @@ void PDFProgramController::onActionSanitizeTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("sanitization operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeSanitizedDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1726,6 +1863,7 @@ void PDFProgramController::onActionCreateBitonalDocumentTriggered()
 
     if (dialog.exec() == QDialog::Accepted)
     {
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("bitonal conversion operation"));
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(dialog.takeBitonaldDocument()));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::ModificationFlags(pdf::PDFModifiedDocument::Reset | pdf::PDFModifiedDocument::PreserveUndoRedo));
         onDocumentModified(qMove(document));
@@ -1743,7 +1881,7 @@ void PDFProgramController::onActionEncryptionTriggered()
     };
 
     // Check that we have owner access to the document
-    const pdf::PDFSecurityHandler* securityHandler =  m_pdfDocument->getStorage().getSecurityHandler();
+    const pdf::PDFSecurityHandler* securityHandler = m_pdfDocument->getStorage().getSecurityHandler();
     pdf::PDFSecurityHandler::AuthorizationResult authorizationResult = securityHandler->getAuthorizationResult();
     if (authorizationResult != pdf::PDFSecurityHandler::AuthorizationResult::OwnerAuthorized &&
         authorizationResult != pdf::PDFSecurityHandler::AuthorizationResult::NoAuthorizationRequired)
@@ -1763,6 +1901,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         storage.setSecurityHandler(qMove(clonedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(qMove(storage), m_pdfDocument->getInfo()->version, QByteArray()));
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("decryption operation"));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Authorization);
         onDocumentModified(qMove(document));
     }
@@ -1817,6 +1956,7 @@ void PDFProgramController::onActionEncryptionTriggered()
         builder.setSecurityHandler(qMove(updatedSecurityHandler));
 
         pdf::PDFDocumentPointer pointer(new pdf::PDFDocument(builder.build()));
+        m_savePolicy = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("encryption operation"));
         pdf::PDFModifiedDocument document(qMove(pointer), m_optionalContentActivity, pdf::PDFModifiedDocument::Reset);
         onDocumentModified(qMove(document));
     }
@@ -2061,6 +2201,7 @@ void PDFProgramController::updateActionsAvailability()
     m_actionManager->setEnabled(PDFActionManager::Options, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::ResetToFactorySettings, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::About, !isBusy);
+    m_actionManager->setEnabled(PDFActionManager::CollectDiagnostics, !isBusy);
     m_actionManager->setEnabled(PDFActionManager::FitPage, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::FitWidth, hasValidDocument);
     m_actionManager->setEnabled(PDFActionManager::FitHeight, hasValidDocument);
@@ -2099,6 +2240,7 @@ void PDFProgramController::onViewerSettingsChanged()
     m_annotationManager->setMeshQualitySettings(m_pdfWidget->getDrawWidgetProxy()->getMeshQualitySettings());
     pdf::PDFExecutionPolicy::setStrategy(m_settings->getMultithreadingStrategy());
     pdf::PDFAuthorSettings::setAuthorName(m_settings->getSettings().m_authorNameMode, m_settings->getSettings().m_customAuthorName);
+    pdf::PDFLogSession::setLevel(m_settings->getSettings().m_logLevel);
 
     updateRenderingOptionActions();
 }
@@ -2112,9 +2254,9 @@ void PDFProgramController::onFileChanged(const QString& fileName)
 {
     QAction* autoRefreshDocumentAction = m_actionManager->getAction(PDFActionManager::AutomaticDocumentRefresh);
 
-    if (!autoRefreshDocumentAction || // We do not have action
-        !autoRefreshDocumentAction->isChecked() || // Auto refresh is not enabled
-        m_fileInfo.originalFileName != fileName) // File is different
+    if (!autoRefreshDocumentAction ||   // We do not have action
+        !autoRefreshDocumentAction->isChecked() ||   // Auto refresh is not enabled
+        m_fileInfo.originalFileName != fileName)   // File is different
     {
         return;
     }
@@ -2184,7 +2326,7 @@ void PDFProgramController::updateFileWatcher(bool forceDisable)
     QStringList newFiles;
 
     QAction* action = m_actionManager->getAction(PDFActionManager::AutomaticDocumentRefresh);
-    if (!forceDisable && !m_fileInfo.absoluteFilePath.isEmpty() && action && action->isChecked())
+    if (!forceDisable && !m_isRecoveredDocument && !m_fileInfo.absoluteFilePath.isEmpty() && action && action->isChecked())
     {
         newFiles << m_fileInfo.absoluteFilePath;
     }
@@ -2268,8 +2410,11 @@ void PDFProgramController::onDocumentReadingFinished()
 
             m_pdfDocument = qMove(result.document);
             m_signatures = qMove(result.signatures);
+            m_isRecoveredDocument = false;
+            m_documentRevision = 0;
             pdf::PDFModifiedDocument document(m_pdfDocument.data(), m_optionalContentActivity);
             setDocument(document, m_signatures, true);
+            m_recoveryManager->attach(m_fileInfo.absoluteFilePath, m_pdfDocument, m_documentRevision, true, !m_signatures.empty());
 
             if (m_formManager)
             {
@@ -2310,12 +2455,21 @@ void PDFProgramController::onDocumentReadingFinished()
 
         case pdf::PDFDocumentReader::Result::Failed:
         {
+            // A recent-file entry can outlive a portal grant or the source
+            // document itself. Remove entries that are no longer reachable so
+            // the sandboxed app does not keep offering a dead path.
+            const QFileInfo fileInfo(m_fileInfo.absoluteFilePath);
+            if (!fileInfo.exists() || !fileInfo.isReadable())
+            {
+                m_recentFileManager->removeRecentFile(m_fileInfo.originalFileName);
+            }
+
             QMessageBox::critical(m_mainWindow, QApplication::applicationDisplayName(), tr("Document read error: %1").arg(result.errorMessage));
             break;
         }
 
         case pdf::PDFDocumentReader::Result::Cancelled:
-            break; // Do nothing, user cancelled the document reading
+            break;   // Do nothing, user cancelled the document reading
     }
     updateActionsAvailability();
 }
@@ -2341,17 +2495,34 @@ void PDFProgramController::onDocumentModified(pdf::PDFModifiedDocument document)
     m_pdfDocument = document;
     document.setOptionalContentActivity(m_optionalContentActivity);
     setDocument(document, {}, false);
+    ++m_documentRevision;
+    m_recoveryManager->markDirty(m_pdfDocument, m_documentRevision);
 }
 
 void PDFProgramController::onDocumentUndoRedo(pdf::PDFModifiedDocument document)
 {
     m_pdfDocument = document;
     document.setOptionalContentActivity(m_optionalContentActivity);
-    setDocument(document, {}, false);
+    const bool isCurrentSaved = m_undoRedoManager && m_undoRedoManager->isCurrentSaved();
+    setDocument(document, {}, isCurrentSaved);
+    ++m_documentRevision;
+    if (isCurrentSaved)
+    {
+        m_recoveryManager->markSaved(m_fileInfo.originalFileName, m_documentRevision);
+    }
+    else
+    {
+        m_recoveryManager->markDirty(m_pdfDocument, m_documentRevision);
+    }
 }
 
 void PDFProgramController::setDocument(pdf::PDFModifiedDocument document, std::vector<pdf::PDFSignatureVerificationResult> signatureVerificationResult, bool isCurrentSaved)
 {
+    if (isCurrentSaved)
+    {
+        m_savePolicy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("current document revision is saved"));
+    }
+
     if (document.hasReset())
     {
         if (m_optionalContentActivity)
@@ -2473,6 +2644,9 @@ void PDFProgramController::closeDocument()
     }
 
     m_signatures.clear();
+    m_recoveryManager->discardSession();
+    m_isRecoveredDocument = false;
+    m_documentRevision = 0;
     setDocument(pdf::PDFModifiedDocument(), {}, true);
     m_pdfDocument.reset();
     updateActionsAvailability();
@@ -2514,6 +2688,11 @@ void PDFProgramController::updateTitle()
         if (title.isEmpty())
         {
             title = m_fileInfo.fileName;
+        }
+
+        if (m_isRecoveredDocument)
+        {
+            title = tr("Recovered — %1").arg(title);
         }
 
         if (m_undoRedoManager && !m_undoRedoManager->isCurrentSaved())
@@ -2578,13 +2757,12 @@ void PDFProgramController::enterFullscreenMode()
 
     m_fullscreenWidget = new PDFFullscreenWidget(m_CMSManager, m_settings->getRendererEngine(), m_mainWindow);
     connect(m_fullscreenWidget, &PDFFullscreenWidget::exitRequested, this, [this]()
-    {
+            {
         if (QAction* action = m_actionManager->getAction(PDFActionManager::FullscreenMode))
         {
             action->setChecked(false);
         }
-        leaveFullscreenMode();
-    });
+        leaveFullscreenMode(); });
 
     pdf::PDFWidget* fullscreenPdfWidget = m_fullscreenWidget->getPdfWidget();
     fullscreenPdfWidget->updateCacheLimits(qsizetype(m_settings->getCompiledPageCacheLimit() * 1024LL),
@@ -2917,7 +3095,10 @@ void PDFProgramController::onActionBookmarkExport()
     QString saveFileName = QFileDialog::getSaveFileName(m_mainWindow, tr("Export Bookmarks As"), fileInfo.dir().absoluteFilePath(m_fileInfo.originalFileName).replace(".pdf", ".json"), tr("JSON (*.json);;All files (*.*)"));
     if (!saveFileName.isEmpty())
     {
-        m_bookmarkManager->saveToFile(saveFileName);
+        if (!m_bookmarkManager->saveToFile(saveFileName))
+        {
+            QMessageBox::critical(m_mainWindow, tr("Export Bookmarks"), tr("Failed to save bookmarks to file '%1'.").arg(saveFileName));
+        }
     }
 }
 

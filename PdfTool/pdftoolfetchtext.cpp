@@ -49,19 +49,19 @@ QString PDFToolFetchTextApplication::getStandardString(PDFToolAbstractApplicatio
     return QString();
 }
 
-int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.copy-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to copy content."));
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -69,8 +69,8 @@ int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocumentTextFlowFactory factory;
@@ -120,12 +120,22 @@ int PDFToolFetchTextApplication::execute(const PDFToolOptions& options)
 
     for (const pdf::PDFRenderError& error : factory.getErrors())
     {
-        PDFConsole::writeError(error.message, options.outputCodec);
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.text-extraction-failed"), error.message);
     }
 
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolFetchTextApplication::getOptionsFlags() const

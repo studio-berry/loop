@@ -24,6 +24,7 @@
 #include "pdfexception.h"
 #include "pdfconstants.h"
 #include "pdfparser.h"
+#include "pdfprocessingbudget.h"
 #include "pdfsecurityhandler.h"
 #include "pdfutils.h"
 
@@ -32,6 +33,7 @@
 #include <QtEndian>
 
 #include <algorithm>
+#include <limits>
 
 #include "pdfdbgheap.h"
 
@@ -52,17 +54,27 @@ int64_t maxAllowedDecompressedSize(int64_t compressedSize)
         return STREAM_FILTER_MAX_DECOMPRESSED_BYTES;
     }
 
-    const int64_t ratioBound = compressedSize * STREAM_FILTER_MAX_DECOMPRESSION_RATIO;
-    if (ratioBound < compressedSize)
+    if (compressedSize > STREAM_FILTER_MAX_DECOMPRESSED_BYTES / STREAM_FILTER_MAX_DECOMPRESSION_RATIO)
     {
         return STREAM_FILTER_MAX_DECOMPRESSED_BYTES;
     }
 
-    return std::min(ratioBound, STREAM_FILTER_MAX_DECOMPRESSED_BYTES);
+    return compressedSize * STREAM_FILTER_MAX_DECOMPRESSION_RATIO;
 }
 
-void throwIfDecompressedSizeExceeded(int64_t decompressedSize, int64_t compressedSize)
+void throwIfDecompressedSizeExceeded(int64_t decompressedSize,
+                                     int64_t compressedSize,
+                                     pdf::PDFProcessingBudget* budget = nullptr,
+                                     const QString& context = {})
 {
+    if (budget)
+    {
+        budget->checkDecodedStreamSize(static_cast<uint64_t>(decompressedSize),
+                                       static_cast<uint64_t>(compressedSize),
+                                       context);
+        return;
+    }
+
     const int64_t maxSize = maxAllowedDecompressedSize(compressedSize);
     if (decompressedSize > maxSize)
     {
@@ -74,6 +86,16 @@ void throwIfDecompressedSizeExceeded(int64_t decompressedSize, int64_t compresse
 
 namespace pdf
 {
+
+QByteArray PDFStreamFilter::applyWithBudget(const QByteArray& data,
+                                            const PDFObjectFetcher& objectFetcher,
+                                            const PDFObject& parameters,
+                                            const PDFSecurityHandler* securityHandler,
+                                            PDFProcessingBudget* budget) const
+{
+    Q_UNUSED(budget);
+    return apply(data, objectFetcher, parameters, securityHandler);
+}
 
 QByteArray PDFAsciiHexDecodeFilter::apply(const QByteArray& data,
                                           const PDFObjectFetcher& objectFetcher,
@@ -102,6 +124,21 @@ QByteArray PDFAsciiHexDecodeFilter::apply(const QByteArray& data,
     }
 
     return QByteArray::fromHex(QByteArray::fromRawData(data.constData(), size));
+}
+
+QByteArray PDFAsciiHexDecodeFilter::applyWithBudget(const QByteArray& data,
+                                                    const PDFObjectFetcher& objectFetcher,
+                                                    const PDFObject& parameters,
+                                                    const PDFSecurityHandler* securityHandler,
+                                                    PDFProcessingBudget* budget) const
+{
+    if (budget)
+    {
+        const uint64_t inputBytes = static_cast<uint64_t>(data.size());
+        const uint64_t upperBound = inputBytes / 2 + inputBytes % 2;
+        budget->checkDecodedStreamSize(upperBound, inputBytes, PDFTranslationContext::tr("ASCIIHex decoded stream"));
+    }
+    return apply(data, objectFetcher, parameters, securityHandler);
 }
 
 QByteArray PDFAscii85DecodeFilter::apply(const QByteArray& data,
@@ -203,10 +240,27 @@ QByteArray PDFAscii85DecodeFilter::apply(const QByteArray& data,
     return result;
 }
 
+QByteArray PDFAscii85DecodeFilter::applyWithBudget(const QByteArray& data,
+                                                   const PDFObjectFetcher& objectFetcher,
+                                                   const PDFObject& parameters,
+                                                   const PDFSecurityHandler* securityHandler,
+                                                   PDFProcessingBudget* budget) const
+{
+    if (budget)
+    {
+        const uint64_t inputBytes = static_cast<uint64_t>(data.size());
+        const uint64_t upperBound = inputBytes > std::numeric_limits<uint64_t>::max() / 4
+            ? std::numeric_limits<uint64_t>::max()
+            : inputBytes * 4;
+        budget->checkDecodedStreamSize(upperBound, inputBytes, PDFTranslationContext::tr("ASCII85 decoded stream"));
+    }
+    return apply(data, objectFetcher, parameters, securityHandler);
+}
+
 class PDFLzwStreamDecoder
 {
 public:
-    explicit PDFLzwStreamDecoder(const QByteArray& inputByteArray, uint32_t early);
+    explicit PDFLzwStreamDecoder(const QByteArray& inputByteArray, uint32_t early, PDFProcessingBudget* budget);
 
     QByteArray decompress();
 
@@ -245,9 +299,10 @@ private:
     char m_newCharacter;        ///< New character to be written
     int m_position;             ///< Position in the input array
     const QByteArray& m_inputByteArray;
+    PDFProcessingBudget* m_budget;
 };
 
-PDFLzwStreamDecoder::PDFLzwStreamDecoder(const QByteArray& inputByteArray, uint32_t early) :
+PDFLzwStreamDecoder::PDFLzwStreamDecoder(const QByteArray& inputByteArray, uint32_t early, PDFProcessingBudget* budget) :
     m_table(),
     m_sequence(),
     m_nextCode(0),
@@ -259,7 +314,8 @@ PDFLzwStreamDecoder::PDFLzwStreamDecoder(const QByteArray& inputByteArray, uint3
     m_first(false),
     m_newCharacter(0),
     m_position(0),
-    m_inputByteArray(inputByteArray)
+    m_inputByteArray(inputByteArray),
+    m_budget(budget)
 {
     for (size_t i = 0; i < 256; ++i)
     {
@@ -379,7 +435,10 @@ QByteArray PDFLzwStreamDecoder::decompress()
 
         // Copy the input array to the buffer
         const std::ptrdiff_t sequenceLength = std::distance(m_sequence.begin(), m_currentSequenceEnd);
-        throwIfDecompressedSizeExceeded(result.size() + sequenceLength, m_inputByteArray.size());
+        throwIfDecompressedSizeExceeded(result.size() + sequenceLength,
+                                        m_inputByteArray.size(),
+                                        m_budget,
+                                        PDFTranslationContext::tr("LZW decoded stream"));
         std::copy(m_sequence.begin(), m_currentSequenceEnd, std::back_inserter(result));
     }
 
@@ -443,8 +502,40 @@ QByteArray PDFLzwDecodeFilter::apply(const QByteArray& data,
     }
 
     PDFStreamPredictor predictor = PDFStreamPredictor::createPredictor(objectFetcher, parameters);
-    PDFLzwStreamDecoder decoder(data, early);
+    PDFLzwStreamDecoder decoder(data, early, nullptr);
     return predictor.apply(decoder.decompress());
+}
+
+QByteArray PDFLzwDecodeFilter::applyWithBudget(const QByteArray& data,
+                                               const PDFObjectFetcher& objectFetcher,
+                                               const PDFObject& parameters,
+                                               const PDFSecurityHandler* securityHandler,
+                                               PDFProcessingBudget* budget) const
+{
+    Q_UNUSED(securityHandler);
+
+    uint32_t early = 1;
+    const PDFObject& dereferencedParameters = objectFetcher(parameters);
+    if (dereferencedParameters.isDictionary())
+    {
+        const PDFDictionary* dictionary = dereferencedParameters.getDictionary();
+        const PDFObject& earlyChangeObject = objectFetcher(dictionary->get("EarlyChange"));
+        if (earlyChangeObject.isInt())
+        {
+            early = earlyChangeObject.getInteger();
+        }
+    }
+
+    PDFStreamPredictor predictor = PDFStreamPredictor::createPredictor(objectFetcher, parameters);
+    PDFLzwStreamDecoder decoder(data, early, budget);
+    QByteArray result = predictor.apply(decoder.decompress());
+    if (budget)
+    {
+        budget->checkDecodedStreamSize(static_cast<uint64_t>(result.size()),
+                                       static_cast<uint64_t>(data.size()),
+                                       PDFTranslationContext::tr("LZW predictor output"));
+    }
+    return result;
 }
 
 QByteArray PDFFlateDecodeFilter::apply(const QByteArray& data,
@@ -456,6 +547,24 @@ QByteArray PDFFlateDecodeFilter::apply(const QByteArray& data,
 
     PDFStreamPredictor predictor = PDFStreamPredictor::createPredictor(objectFetcher, parameters);
     return predictor.apply(uncompress(data));
+}
+
+QByteArray PDFFlateDecodeFilter::applyWithBudget(const QByteArray& data,
+                                                 const PDFObjectFetcher& objectFetcher,
+                                                 const PDFObject& parameters,
+                                                 const PDFSecurityHandler* securityHandler,
+                                                 PDFProcessingBudget* budget) const
+{
+    Q_UNUSED(securityHandler);
+    PDFStreamPredictor predictor = PDFStreamPredictor::createPredictor(objectFetcher, parameters);
+    QByteArray result = predictor.apply(uncompress(data, budget));
+    if (budget)
+    {
+        budget->checkDecodedStreamSize(static_cast<uint64_t>(result.size()),
+                                       static_cast<uint64_t>(data.size()),
+                                       PDFTranslationContext::tr("Flate predictor output"));
+    }
+    return result;
 }
 
 QByteArray PDFFlateDecodeFilter::compress(const QByteArray& decompressedData)
@@ -556,7 +665,7 @@ PDFInteger PDFFlateDecodeFilter::getStreamDataLength(const QByteArray& data, PDF
     return -1;
 }
 
-QByteArray PDFFlateDecodeFilter::uncompress(const QByteArray& data)
+QByteArray PDFFlateDecodeFilter::uncompress(const QByteArray& data, PDFProcessingBudget* budget)
 {
     QByteArray result;
 
@@ -581,7 +690,10 @@ QByteArray PDFFlateDecodeFilter::uncompress(const QByteArray& data)
 
         int bytesWritten = int(outputBuffer.size()) - stream.avail_out;
         result.append(reinterpret_cast<const char*>(outputBuffer.data()), bytesWritten);
-        throwIfDecompressedSizeExceeded(result.size(), data.size());
+        throwIfDecompressedSizeExceeded(result.size(),
+                                        data.size(),
+                                        budget,
+                                        PDFTranslationContext::tr("Flate decoded stream"));
     } while (error == Z_OK);
 
     QString errorMessage;
@@ -663,6 +775,58 @@ QByteArray PDFRunLengthDecodeFilter::apply(const QByteArray& data,
         }
     }
 
+    return result;
+}
+
+QByteArray PDFRunLengthDecodeFilter::applyWithBudget(const QByteArray& data,
+                                                     const PDFObjectFetcher& objectFetcher,
+                                                     const PDFObject& parameters,
+                                                     const PDFSecurityHandler* securityHandler,
+                                                     PDFProcessingBudget* budget) const
+{
+    Q_UNUSED(objectFetcher);
+    Q_UNUSED(parameters);
+    Q_UNUSED(securityHandler);
+
+    QByteArray result;
+    result.reserve(data.size() * 2);
+    auto itEnd = data.cend();
+    for (auto it = data.cbegin(); it != itEnd;)
+    {
+        const unsigned char current = static_cast<unsigned char>(*it++);
+        if (current == 128)
+        {
+            break;
+        }
+        else if (current < 128)
+        {
+            const int count = static_cast<int>(current) + 1;
+            if (std::distance(it, itEnd) < count)
+            {
+                throw PDFException(PDFTranslationContext::tr("Truncated RunLengthDecode stream."));
+            }
+            throwIfDecompressedSizeExceeded(result.size() + count,
+                                            data.size(),
+                                            budget,
+                                            PDFTranslationContext::tr("RunLength decoded stream"));
+            std::copy(it, std::next(it, count), std::back_inserter(result));
+            std::advance(it, count);
+        }
+        else
+        {
+            if (it == itEnd)
+            {
+                throw PDFException(PDFTranslationContext::tr("Truncated RunLengthDecode stream."));
+            }
+            const int count = 257 - current;
+            const char toBeCopied = *it++;
+            throwIfDecompressedSizeExceeded(result.size() + count,
+                                            data.size(),
+                                            budget,
+                                            PDFTranslationContext::tr("RunLength decoded stream"));
+            std::fill_n(std::back_inserter(result), count, toBeCopied);
+        }
+    }
     return result;
 }
 
@@ -760,13 +924,28 @@ PDFStreamFilterStorage::StreamFilters PDFStreamFilterStorage::getStreamFilters(c
 
 QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream, const PDFObjectFetcher& objectFetcher, const PDFSecurityHandler* securityHandler)
 {
-    StreamFilters streamFilters = getStreamFilters(stream, objectFetcher);
-    QByteArray result = *stream->getContent();
+    return getDecodedStream(stream, objectFetcher, securityHandler, nullptr);
+}
 
+QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream,
+                                                    const PDFObjectFetcher& objectFetcher,
+                                                    const PDFSecurityHandler* securityHandler,
+                                                    PDFProcessingBudget* budget)
+{
+    StreamFilters streamFilters = getStreamFilters(stream, objectFetcher);
     if (!streamFilters.valid)
     {
         // Stream filters are invalid
         return QByteArray();
+    }
+
+    QByteArray result = *stream->getContent();
+    if (budget && streamFilters.filterObjects.empty())
+    {
+        budget->checkDecodedStreamSize(static_cast<uint64_t>(result.size()),
+                                       static_cast<uint64_t>(result.size()),
+                                       PDFTranslationContext::tr("raw stream"));
+        budget->chargeDecodedBytes(static_cast<uint64_t>(result.size()), PDFTranslationContext::tr("raw stream"));
     }
 
     for (size_t i = 0, count = streamFilters.filterObjects.size(); i < count; ++i)
@@ -776,7 +955,11 @@ QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream, con
 
         if (streamFilter)
         {
-            result = streamFilter->apply(result, objectFetcher, streamFilterParameters, securityHandler);
+            result = streamFilter->applyWithBudget(result, objectFetcher, streamFilterParameters, securityHandler, budget);
+            if (budget)
+            {
+                budget->chargeDecodedBytes(static_cast<uint64_t>(result.size()), PDFTranslationContext::tr("decoded stream"));
+            }
         }
     }
 
@@ -785,7 +968,14 @@ QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream, con
 
 QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream, const PDFSecurityHandler* securityHandler)
 {
-    return getDecodedStream(stream, [](const PDFObject& object) -> const PDFObject& { return object; }, securityHandler);
+    return getDecodedStream(stream, [](const PDFObject& object) -> const PDFObject& { return object; }, securityHandler, nullptr);
+}
+
+QByteArray PDFStreamFilterStorage::getDecodedStream(const PDFStream* stream,
+                                                    const PDFSecurityHandler* securityHandler,
+                                                    PDFProcessingBudget* budget)
+{
+    return getDecodedStream(stream, [](const PDFObject& object) -> const PDFObject& { return object; }, securityHandler, budget);
 }
 
 PDFInteger PDFStreamFilterStorage::getStreamDataLength(const QByteArray& data, const QByteArray& filterName, PDFInteger offset)

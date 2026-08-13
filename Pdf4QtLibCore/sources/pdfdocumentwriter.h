@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfprogress.h"
+#include "pdfsavepolicy.h"
 #include "pdfutils.h"
 
 #include <QIODevice>
@@ -39,6 +40,12 @@ class PDF4QTLIBCORESHARED_EXPORT PDFDocumentWriter
     Q_DECLARE_TR_FUNCTIONS(pdf::PDFDocumentWriter)
 
 public:
+    enum class WriteMode
+    {
+        FullRewrite,
+        Incremental
+    };
+
     explicit inline PDFDocumentWriter(PDFProgress* progress)
     {
         Q_UNUSED(progress);
@@ -47,7 +54,7 @@ public:
     /// Writes document to the file. If \p safeWrite is true, then document is first
     /// written to the temporary file, and then renamed to original file name atomically,
     /// so no data can be lost on, for example, power failure. If it is not possible to
-    /// create temporary file, then writing operation will attempt to write to the file
+    /// create temporary file, the writing operation fails without touching the target
     /// directly.
     /// \param fileName File name
     /// \param document Document
@@ -59,6 +66,34 @@ public:
     /// \param device Output device
     /// \param document Document
     PDFOperationResult write(QIODevice* device, const PDFDocument* document);
+
+    /// Appends an incremental update to an existing PDF. The original bytes
+    /// are copied unchanged and only changed objects plus a new xref/trailer
+    /// section are appended.
+    PDFOperationResult writeIncremental(const QString& fileName,
+                                         const PDFDocument* originalDocument,
+                                         const PDFDocument* document,
+                                         bool safeWrite);
+
+    /// Writes an incremental update using the supplied original bytes. This
+    /// overload is useful for callers that already hold the source buffer and
+    /// for byte-preservation tests.
+    PDFOperationResult writeIncremental(QIODevice* device,
+                                         const QByteArray& originalData,
+                                         const PDFDocument* originalDocument,
+                                         const PDFDocument* document);
+
+    /// Chooses the default save mode for an existing document. Save As and
+    /// destructive operations must pass the corresponding opt-out flags.
+    static WriteMode getRecommendedWriteMode(const PDFDocument* sourceDocument,
+                                             bool requiresFullRewrite,
+                                             bool saveAsNewOutput);
+
+    /// Chooses a write mode from the operation-declared save policy. A policy
+    /// that is not incremental is never silently downgraded to an append.
+    static WriteMode getRecommendedWriteMode(const PDFDocument* sourceDocument,
+                                             const PDFOperationSavePolicy& policy,
+                                             bool saveAsNewOutput);
 
     /// Calculates document file size, as if it is written to the disk.
     /// No file is accessed by this function; document is written

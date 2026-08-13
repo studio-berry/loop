@@ -42,8 +42,10 @@ public:
 
     void setDocument(const pdf::PDFModifiedDocument& document);
 
-    void saveToFile(QString fileName);
-    bool loadFromFile(QString fileName);
+    /// Saves bookmarks to \p fileName atomically. Returns true on success; on
+    /// failure the previous file (if any) is left intact and false is returned.
+    bool saveToFile(const QString& fileName);
+    bool loadFromFile(const QString& fileName);
 
     struct Bookmark
     {

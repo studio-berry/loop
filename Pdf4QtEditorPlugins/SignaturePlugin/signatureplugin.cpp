@@ -29,6 +29,7 @@
 #include "pdfcertificatemanagerdialog.h"
 #include "signdialog.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsafefilewriter.h"
 
 #include <QBuffer>
 #include <QAction>
@@ -491,11 +492,13 @@ void SignaturePlugin::onSignDigitally()
         QString fileName = QFileDialog::getSaveFileName(m_dataExchangeInterface->getMainWindow(), tr("Save Signed Document"), getSignedFileName(), tr("Portable Document (*.pdf);;All files (*.*)"));
         if (!fileName.isEmpty())
         {
-            QFile signedFile(fileName);
-            if (signedFile.open(QFile::WriteOnly | QFile::Truncate))
+            // Atomic write through QSaveFile so a failed save never leaves a
+            // truncated document behind; report the failure instead of swallowing it.
+            const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+                fileName, buffer.data(), pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            if (!writeResult)
             {
-                signedFile.write(buffer.data());
-                signedFile.close();
+                QMessageBox::critical(m_widget, tr("Error"), tr("Failed to save signed document to '%1'. %2").arg(fileName, writeResult.getErrorMessage()));
             }
         }
     }

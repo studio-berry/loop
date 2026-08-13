@@ -203,7 +203,7 @@ void RedactPlugin::onCreateRedactedDocumentTriggered()
 
         pdf::PDFDocument redactedDocument = redactProcessor.perform(options);
         pdf::PDFDocumentWriter writer(m_widget->getDrawWidgetProxy()->getProgress());
-        pdf::PDFOperationResult result = writer.write(dialog.getFileName(), &redactedDocument, false);
+        pdf::PDFOperationResult result = writer.write(dialog.getFileName(), &redactedDocument, true);
         if (!result)
         {
             QMessageBox::critical(m_widget, tr("Error"), result.getErrorMessage());

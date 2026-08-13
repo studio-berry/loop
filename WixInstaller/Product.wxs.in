@@ -2,15 +2,15 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <?define MyInstallDir="${WIX_INSTALL_PREFIX}" ?>
 
-  <Product Id="*" Name="PDF4QT" Language="1033" Version="${PDF4QT_VERSION}" Manufacturer="Jakub Melka" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
-    <Package Id="*" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Jakub Melka" Keywords="pdf,editor,viewer" />
+  <Product Id="*" Name="Loupe" Language="1033" Version="${PDF4QT_VERSION}" Manufacturer="Michael Berry" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
+    <Package Id="*" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of PDF4QT is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <WixVariable Id="WixUILicenseRtf" Value="explic.rtf" />
 
-    <Feature Id="feature_PDF4QT_Framework" Title="PDF4QT" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Framework libraries and other data files required to run all other programs.">
+    <Feature Id="feature_PDF4QT_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, compatibility tools, and shared PDF services.">
       <ComponentGroupRef Id="PDF4QT_Framework" />
       <ComponentRef Id="ProgramMenuDir" />
 
@@ -45,7 +45,7 @@ ${PDF4QT_WIX_FEATURE_DIFF}
       </Directory>
       <Directory Id="DesktopFolder" Name="Desktop"/>
       <Directory Id="ProgramMenuFolder" Name="Programs">
-        <Directory Id="ProgramMenuDir" Name="PDF4QT">
+        <Directory Id="ProgramMenuDir" Name="Loupe">
           <Component Id="ProgramMenuDir" Guid="{33A118A2-C455-45C1-9E0C-710750A71335}">
             <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
             <RegistryValue Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Type="string" Value="" KeyPath="yes" />
@@ -75,6 +75,7 @@ ${PDF4QT_WIX_FEATURE_DIFF}
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
+${PDF4QT_WIX_COMPAT_LAUNCHPAD}
 ${PDF4QT_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Core" Directory="INSTALLFOLDER" Guid="{D8024726-7864-42BE-9E38-DFF782AC5C97}">
         <File Id="filQt6Core" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Core.dll" />
@@ -259,7 +260,7 @@ ${PDF4QT_WIX_ICU_COMPONENTS}
     <ComponentGroup Id="PDF4QT_Editor">
       <Component Id="cmpPdf4QtEditor" Directory="INSTALLFOLDER" Guid="{52D3CF62-F556-4E7A-BCEB-75E5E65ED786}">
         <File Id="filPdf4QtEditor" KeyPath="yes" Source="$(var.MyInstallDir)\Pdf4QtEditor.exe">
-          <Shortcut Id="PDF4QT_Editor_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT Editor" Description="Advanced PDF editor" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_VP_Icon.exe" IconIndex="0" Advertise="yes"/>
+          <Shortcut Id="PDF4QT_Editor_Shortcut" Directory="ProgramMenuDir" Name="Loupe" Description="Inspect and prepare production PDFs" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_VP_Icon.exe" IconIndex="0" Advertise="yes"/>
         </File>
         <ProgId Id='pdf4qt_default_editor.pdf' Description='PDF Document'>
           <Extension Id='pdf' ContentType='application/pdf'>

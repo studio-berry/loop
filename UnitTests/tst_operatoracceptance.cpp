@@ -25,6 +25,7 @@
 // Editor plugin) and validates report handling helpers used by LoupePreflightPlugin.
 // GUI navigation/overlay/cancel flows are covered in docs/v1-operator-acceptance.md.
 
+#include "pdftoolenvelopeutils.h"
 #include "preflightsidecarutils.h"
 
 #include <QtTest>
@@ -38,7 +39,9 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSizeF>
 #include <QTemporaryDir>
+#include <QVector>
 
 namespace
 {
@@ -190,6 +193,55 @@ QByteArray fileSha256(const QString& path)
     return hash.result();
 }
 
+bool writeLargeFormatPdf(const QString& path, double widthInches, double heightInches)
+{
+    const int widthPt = static_cast<int>(widthInches * 72.0 + 0.5);
+    const int heightPt = static_cast<int>(heightInches * 72.0 + 0.5);
+    QByteArray pdf("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+    QVector<int> offsets(5);
+
+    auto appendObject = [&pdf, &offsets](int number, const QByteArray& body)
+    {
+        offsets[number] = pdf.size();
+        pdf.append(QByteArray::number(number));
+        pdf.append(" 0 obj\n");
+        pdf.append(body);
+        if (!body.endsWith('\n'))
+        {
+            pdf.append('\n');
+        }
+        pdf.append("endobj\n");
+    };
+
+    appendObject(1, "<< /Type /Catalog /Pages 2 0 R >>\n");
+    appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
+    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ")
+                              + QByteArray::number(widthPt)
+                              + ' '
+                              + QByteArray::number(heightPt)
+                              + "] /TrimBox [0 0 "
+                              + QByteArray::number(widthPt)
+                              + ' '
+                              + QByteArray::number(heightPt)
+                              + "] /Resources << >> /Contents 4 0 R >>\n");
+    appendObject(4, "<< /Length 0 >>\nstream\n\nendstream\n");
+
+    const int xrefOffset = pdf.size();
+    pdf.append("xref\n0 5\n0000000000 65535 f \n");
+    for (int number = 1; number < offsets.size(); ++number)
+    {
+        pdf.append(QByteArray::number(offsets[number]).rightJustified(10, '0'));
+        pdf.append(" 00000 n \n");
+    }
+    pdf.append("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n");
+    pdf.append(QByteArray::number(xrefOffset));
+    pdf.append("\n%%EOF\n");
+
+    QFile file(path);
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+            && file.write(pdf) == pdf.size();
+}
+
 }   // namespace
 
 class OperatorAcceptanceTest : public QObject
@@ -204,6 +256,9 @@ private slots:
 
     void operatorLoop_bleedFixupAndRevalidate();
     void operatorLoop_preservesOriginalBytes();
+
+    void overwriteExplicit_addBleedRequiresOverwriteFlag();
+    void addBleedDryRun_largeFormatPlansWithoutRasterOrOutput();
 
     void unicodeAndSpacePaths_preflightAndAddBleedSucceed();
 
@@ -259,12 +314,42 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
                                         qint64* peakChildMemoryKb) const
 {
     QProcess process;
-    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    QTemporaryDir captureDirectory;
+    if (!captureDirectory.isValid())
+    {
+        return false;
+    }
+
+    const QProcessEnvironment systemEnvironment = QProcessEnvironment::systemEnvironment();
+    QProcessEnvironment environment;
+    for (const QString& name : { QStringLiteral("PATH"), QStringLiteral("SystemRoot"),
+                                 QStringLiteral("TEMP"), QStringLiteral("TMP"),
+                                 QStringLiteral("USERPROFILE"), QStringLiteral("LANG"),
+                                 QStringLiteral("LC_ALL"), QStringLiteral("LC_CTYPE") })
+    {
+        if (systemEnvironment.contains(name))
+        {
+            environment.insert(name, systemEnvironment.value(name));
+        }
+    }
+    if (!environment.contains(QStringLiteral("LANG")) && !environment.contains(QStringLiteral("LC_ALL")))
+    {
+        // Ensure the sidecar sees a UTF-8 locale: some CI runner images leave LANG/LC_ALL
+        // unset, and Qt writes a "Detected locale \"C\"..." warning to stderr in that case,
+        // which acceptance tests assert is empty.
+        environment.insert(QStringLiteral("LANG"), QStringLiteral("C.UTF-8"));
+    }
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"),
+                       QDir(QFileInfo(m_pdfToolPath).absolutePath()).filePath(QStringLiteral("platforms")));
     process.setProcessEnvironment(environment);
-    process.start(m_pdfToolPath, arguments);
+    process.setWorkingDirectory(QFileInfo(m_pdfToolPath).absolutePath());
+    process.setStandardOutputFile(captureDirectory.filePath(QStringLiteral("stdout.txt")));
+    process.setStandardErrorFile(captureDirectory.filePath(QStringLiteral("stderr.txt")));
+    process.start(QDir::toNativeSeparators(m_pdfToolPath), arguments);
     if (!process.waitForStarted(10000))
     {
+        qWarning().noquote() << "PdfTool failed to start:" << process.errorString() << m_pdfToolPath;
         return false;
     }
 
@@ -275,6 +360,7 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     {
         if (runTimer.elapsed() > 120000)
         {
+            qWarning().noquote() << "PdfTool timed out:" << arguments;
             process.kill();
             process.waitForFinished(5000);
             return false;
@@ -302,14 +388,26 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
         *exitCode = process.exitCode();
     }
 
+    auto readCapture = [](const QString& path) -> QByteArray
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return {};
+        }
+        return file.readAll();
+    };
+    const QByteArray capturedStdOut = readCapture(captureDirectory.filePath(QStringLiteral("stdout.txt")));
+    const QByteArray capturedStdErr = readCapture(captureDirectory.filePath(QStringLiteral("stderr.txt")));
+
     if (stdOut)
     {
-        *stdOut = process.readAllStandardOutput();
+        *stdOut = capturedStdOut;
     }
 
     if (stdErr)
     {
-        *stdErr = process.readAllStandardError();
+        *stdErr = capturedStdErr;
     }
 
     if (peakChildMemoryKb)
@@ -317,7 +415,14 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
         *peakChildMemoryKb = peakMemoryKb;
     }
 
-    return process.exitStatus() == QProcess::NormalExit;
+    if (process.exitStatus() != QProcess::NormalExit)
+    {
+        qWarning().noquote() << "PdfTool exited abnormally:" << process.errorString() << arguments
+                              << QString::fromUtf8(capturedStdErr);
+        return false;
+    }
+
+    return true;
 }
 
 bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
@@ -343,9 +448,15 @@ bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
         return false;
     }
 
+    const QJsonObject envelope = document.object();
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")))
+    {
+        return false;
+    }
+
     if (report)
     {
-        *report = document.object();
+        *report = pdfplugin::pdftool::reportFromEnvelope(envelope);
     }
 
     return true;
@@ -502,6 +613,110 @@ void OperatorAcceptanceTest::operatorLoop_preservesOriginalBytes()
     QVERIFY(fileSha256(outputPath) != beforeHash);
 }
 
+void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
+{
+    // Overwrite-explicit contract (MIC-310): a second add-bleed run writing to an
+    // existing output must be refused unless --overwrite is passed, and the
+    // existing file must survive the refused run.
+    const QString pdfPath = fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::exists(pdfPath));
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("bleed-fixed.pdf"));
+
+    int firstExitCode = -1;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                       nullptr, nullptr, &firstExitCode));
+    QCOMPARE(firstExitCode, 0);
+    QVERIFY(QFile::exists(outputPath));
+    const QByteArray firstHash = fileSha256(outputPath);
+    QVERIFY(!firstHash.isEmpty());
+
+    int refusedExitCode = -1;
+    QByteArray refusedError;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
+                        nullptr, &refusedError, &refusedExitCode));
+    QVERIFY2(refusedExitCode != 0, "add-bleed must not overwrite the existing output without --overwrite.");
+    QVERIFY(!refusedError.trimmed().isEmpty());
+    QCOMPARE(fileSha256(outputPath), firstHash);
+
+    int overwriteExitCode = -1;
+    QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
+                         QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
+                         QStringLiteral("--overwrite") },
+                        nullptr, nullptr, &overwriteExitCode));
+    QCOMPARE(overwriteExitCode, 0);
+    QVERIFY(QFile::exists(outputPath));
+    // add-bleed is deterministic, so a re-run of the same input legitimately
+    // yields the same bytes; the contract is that --overwrite unblocks the write
+    // (exit 0 versus the refusal above), not that the bytes must differ.
+    QVERIFY(!fileSha256(outputPath).isEmpty());
+}
+
+void OperatorAcceptanceTest::addBleedDryRun_largeFormatPlansWithoutRasterOrOutput()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    qint64 peakMemoryKb = -1;
+    for (const auto& size : { QSizeF(48.0, 96.0), QSizeF(240.0, 60.0) })
+    {
+        const QString inputPath = temporaryDirectory.filePath(
+                QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
+        const QString outputPath = temporaryDirectory.filePath(
+                QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
+        QVERIFY(writeLargeFormatPdf(inputPath, size.width(), size.height()));
+
+        QByteArray stdOut;
+        QByteArray stdErr;
+        int exitCode = -1;
+        qint64 childMemoryKb = -1;
+        QVERIFY(runPdfTool({ QStringLiteral("add-bleed"),
+                             inputPath,
+                             QStringLiteral("--output"),
+                             outputPath,
+                             QStringLiteral("--dry-run"),
+                             QStringLiteral("--console-format"),
+                             QStringLiteral("json"),
+                             QStringLiteral("--bleed-mm"),
+                             QStringLiteral("3"),
+                             QStringLiteral("--dpi"),
+                             QStringLiteral("300") },
+                           &stdOut,
+                           &stdErr,
+                           &exitCode,
+                           &childMemoryKb));
+        QCOMPARE(exitCode, 0);
+        QVERIFY2(stdErr.trimmed().isEmpty(), qPrintable(QString::fromUtf8(stdErr)));
+        QVERIFY(!QFile::exists(outputPath));
+        peakMemoryKb = qMax(peakMemoryKb, childMemoryKb);
+
+        QJsonParseError parseError;
+        const QJsonDocument json = QJsonDocument::fromJson(stdOut, &parseError);
+        QCOMPARE(parseError.error, QJsonParseError::NoError);
+        QVERIFY(json.isObject());
+        const QJsonObject envelope = json.object();
+        QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("add-bleed"));
+        QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
+        QVERIFY(QString::fromUtf8(stdOut).contains(QStringLiteral("dry-run")));
+
+        const QJsonArray outputs = envelope.value(QStringLiteral("outputs")).toArray();
+        QCOMPARE(outputs.size(), 1);
+        QCOMPARE(outputs.first().toObject().value(QStringLiteral("state")).toString(), QStringLiteral("planned"));
+    }
+
+#ifdef Q_OS_LINUX
+    if (peakMemoryKb > 0)
+    {
+        QVERIFY2(peakMemoryKb < 1024 * 1024,
+                 qPrintable(QStringLiteral("large-format dry-run peak VmHWM was %1 kB").arg(peakMemoryKb)));
+    }
+#endif
+}
+
 void OperatorAcceptanceTest::unicodeAndSpacePaths_preflightAndAddBleedSucceed()
 {
     const QString sourcePdf = fixturePath(QStringLiteral("bleed-missing.pdf"));
@@ -558,15 +773,26 @@ void OperatorAcceptanceTest::invalidProfile_returnsActionableError()
     badProfileFile.write("{ not valid json");
     badProfileFile.close();
 
+    // preflight defaults to JSON console output (see main.cpp), and
+    // PDFConsole::setDiagnosticSink() intentionally captures error output as
+    // structured diagnostics in that envelope instead of writing to stderr - so
+    // the actionable error lands in the JSON envelope on stdout, not stderr.
     int exitCode = -1;
-    QByteArray stdErr;
+    QByteArray stdOut;
     QVERIFY(runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), badProfilePath },
+                       &stdOut,
                        nullptr,
-                       &stdErr,
                        &exitCode));
     QVERIFY(exitCode != 0);
     QVERIFY(exitCode != 1);
-    QVERIFY(!stdErr.trimmed().isEmpty());
+
+    QJsonParseError parseError;
+    const QJsonDocument json = QJsonDocument::fromJson(stdOut, &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QVERIFY(json.isObject());
+    const QJsonArray diagnostics = json.object().value(QStringLiteral("diagnostics")).toArray();
+    QVERIFY(!diagnostics.isEmpty());
+    QVERIFY(!diagnostics.first().toObject().value(QStringLiteral("message")).toString().isEmpty());
 }
 
 void OperatorAcceptanceTest::profileSemanticMismatch_returnsProfileFinding()

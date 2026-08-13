@@ -46,6 +46,9 @@
 // Compiler detection
 #if defined(_MSC_VER)
 #define PDF4QT_COMPILER_MSVC 1
+#ifdef analyze
+#undef analyze
+#endif
 #endif
 
 #if defined(__clang__)

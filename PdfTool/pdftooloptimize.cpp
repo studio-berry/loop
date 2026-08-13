@@ -51,39 +51,50 @@ QString PDFToolOptimize::getStandardString(PDFToolAbstractApplication::StandardS
     return QString();
 }
 
-int PDFToolOptimize::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolOptimize::execute(const PDFToolOptions& options)
 {
     if (!options.optimizeFlags && !options.imageOptimizationSettings.enabled)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("No optimization option has been set."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("No optimization option has been set."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("optimize")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+    }
+    else if (options.destructiveReport)
     {
         PDFConsole::writeText(PDFToolTranslationContext::tr("Would optimize '%1'.").arg(options.document), options.outputCodec);
     }
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+        }
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     if (options.imageOptimizationSettings.enabled)
@@ -95,7 +106,7 @@ int PDFToolOptimize::execute(const PDFToolOptions& options)
     if (options.optimizeFlags)
     {
         pdf::PDFOptimizer optimizer(options.optimizeFlags, nullptr);
-        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [&options](QString text) { PDFConsole::writeError(text, options.outputCodec); }, Qt::DirectConnection);
+        QObject::connect(&optimizer, &pdf::PDFOptimizer::optimizationProgress, &optimizer, [this, &options](QString text) { reportDiagnostic(options, PDFToolDiagnosticSeverity::Info, QStringLiteral("operation.progress"), text); }, Qt::DirectConnection);
         optimizer.setDocument(&document);
         optimizer.optimize();
         document = optimizer.takeOptimizedDocument();
@@ -107,18 +118,28 @@ int PDFToolOptimize::execute(const PDFToolOptions& options)
         // only touches the target on a successful commit), so there is no
         // partial output to clean up. Removing the file here would delete the
         // still-intact original.
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
     pdf::PDFOperationResult result = writer.write(options.document, &document, true);
     if (!result)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write optimize document. %1").arg(result.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.document}});
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolOptimize::getOptionsFlags() const

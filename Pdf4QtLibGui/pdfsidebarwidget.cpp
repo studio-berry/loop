@@ -40,6 +40,7 @@
 #include "pdfbookmarkui.h"
 #include "pdfwidgetannotation.h"
 #include "pdffilenamesanitizer.h"
+#include "pdfsafefilewriter.h"
 
 #include <QMenu>
 #include <QAction>
@@ -996,15 +997,17 @@ bool PDFSidebarWidget::saveAttachmentToFile(const pdf::PDFFileSpecification* fil
     {
         QByteArray decodedStreamData = m_document->getDecodedStream(platformFile->getStream());
 
-        QFile file(fileName);
-        if (file.open(QFile::WriteOnly | QFile::Truncate))
+        // Atomic write through QSaveFile so a failed save never truncates an
+        // existing file with the same name.
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(
+            fileName, decodedStreamData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+        if (!writeResult)
         {
-            file.write(decodedStreamData);
-            file.close();
-            return true;
+            QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(writeResult.getErrorMessage()));
+            return false;
         }
 
-        QMessageBox::critical(this, tr("Error"), tr("Failed to save attachment to file. %1").arg(file.errorString()));
+        return true;
     }
     catch (const pdf::PDFException &e)
     {

@@ -150,7 +150,7 @@ private:
     RendererEngine m_rendererEngine;
 };
 
-class PDFDrawWidget : public QWidget, public IDrawWidget
+class PDF4QTLIBWIDGETSSHARED_EXPORT PDFDrawWidget : public QWidget, public IDrawWidget
 {
     Q_OBJECT
 
@@ -174,6 +174,12 @@ public:
 
     /// Returns page indices, which are currently displayed in the widget
     virtual std::vector<PDFInteger> getCurrentPages() const override;
+
+    /// Returns a concise, privacy-safe description for assistive technology.
+    QString accessibleDocumentSummary() const;
+
+    /// Announces a document or view-state change to assistive technology.
+    void notifyAccessibilityUpdate();
 
     virtual QSize minimumSizeHint() const override;
     virtual QWidget* getWidget() override { return this; }

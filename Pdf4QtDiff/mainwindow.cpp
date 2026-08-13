@@ -33,6 +33,7 @@
 #include "pdfdocumentmanipulator.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsafefilewriter.h"
 #include "pdfwidgetutils.h"
 
 #include <QToolBar>
@@ -598,15 +599,17 @@ void MainWindow::performOperation(Operation operation)
                 QString fileName = QFileDialog::getSaveFileName(this, tr("Select PDF document"), m_settings.directory, tr("XML file (*.xml)"));
                 if (!fileName.isEmpty())
                 {
-                    QFile file(fileName);
-                    if (file.open(QFile::WriteOnly | QFile::Truncate))
+                    // Atomic write through QSaveFile; saveToXML serializes into the
+                    // device and fails rather than leaving a truncated report.
+                    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
+                        [this](QIODevice* device) -> bool
+                        {
+                            m_filteredDiffResult.saveToXML(device);
+                            return true;
+                        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+                    if (!writeResult)
                     {
-                        m_filteredDiffResult.saveToXML(&file);
-                        file.close();
-                    }
-                    else
-                    {
-                        QMessageBox::critical(this, tr("Error"), tr("File '%1' cannot be opened. %2").arg(fileName, file.errorString()));
+                        QMessageBox::critical(this, tr("Error"), tr("File '%1' cannot be written. %2").arg(fileName, writeResult.getErrorMessage()));
                     }
                 }
             }
@@ -633,7 +636,7 @@ void MainWindow::performOperation(Operation operation)
 
                 pdf::PDFDocument document = builder.build();
                 pdf::PDFDocumentWriter writer(m_progress);
-                pdf::PDFOperationResult result = writer.write(saveFileName, &document, QFile::exists(saveFileName));
+                pdf::PDFOperationResult result = writer.write(saveFileName, &document, true);
                 if (!result)
                 {
                     QMessageBox::critical(this, tr("Error"), result.getErrorMessage());

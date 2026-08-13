@@ -22,6 +22,7 @@
 
 #include "outputpreviewwidget.h"
 
+#include "pdfcolorinventory.h"
 #include "pdfwidgetutils.h"
 
 #include <QPainter>
@@ -746,18 +747,14 @@ OutputPreviewWidget::AlarmImageInfo OutputPreviewWidget::getAlarmRichBlackImageI
         const int width = alarmImage.image.width();
         const int height = alarmImage.image.height();
 
-        const uint8_t blackChannelIndex = pixelFormat.getProcessColorChannelIndexStart() + 3;
-
         for (int y = 0; y < height; ++y)
         {
             for (int x = 0; x < width; ++x)
             {
                 pdf::PDFConstColorBuffer buffer = m_originalProcessBitmap.getPixel(x, y);
-                pdf::PDFColorComponent blackInk = buffer[blackChannelIndex];
                 pdf::PDFColorComponent inkCoverage = m_originalProcessBitmap.getPixelInkCoverage(x, y);
-                pdf::PDFColorComponent inkCoverageWithoutBlack = inkCoverage - blackInk;
 
-                if (blackInk > m_richBlackLimit && !qFuzzyIsNull(inkCoverageWithoutBlack))
+                if (pdf::isRichBlackPixel(buffer, pixelFormat, m_richBlackLimit))
                 {
                     alarmImage.areaInvalid += 1.0f;
                     alarmImage.image.setPixelColor(x, y, m_alarmColor);

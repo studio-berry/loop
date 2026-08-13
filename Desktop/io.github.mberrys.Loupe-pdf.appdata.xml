@@ -4,11 +4,11 @@
   <id>io.github.mberrys.Loupe-pdf</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
-  <name>Loupe-PDF</name>
-  <summary>PDF editor and toolkit (PDF4QT fork)</summary>
+  <name>Loupe</name>
+  <summary>PDF production workspace and CLI (PDF4QT fork)</summary>
   <description>
     <p>
-      Loupe-PDF is based on PDF4QT, an open source PDF editor and toolkit. It provides encryption, optimization, annotations, editing, signing, viewing applications, and the PdfTool command-line interface.
+      Loupe is based on PDF4QT, an open source PDF editor and toolkit. It provides PDF opening and inspection, production workflows, preflight, editing, signing, Production Preview, and the Loupe CLI (the compatible PdfTool command-line interface).
     </p>
   </description>
   <categories>

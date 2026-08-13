@@ -1,4 +1,4 @@
-"""EasyOCR reader singleton for LoupeOcrService."""
+"""EasyOCR reader cache and request processing for LoupeOcrService."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import math
 import os
 from typing import Any
 
-_reader = None
-_reader_languages: tuple[str, ...] | None = None
+DEFAULT_LANGUAGES = ["en"]
+DEFAULT_MEDIA_BOX = {"x": 0.0, "y": 0.0, "width": 612.0, "height": 792.0}
+MAX_DPI = 1200
+_readers: dict[tuple[str, ...], object] = {}
 
 
 def _finite(value: Any, default: float = 0.0) -> float:
@@ -18,6 +20,70 @@ def _finite(value: Any, default: float = 0.0) -> float:
     return number if math.isfinite(number) else default
 
 
+def normalize_languages(value: object) -> list[str]:
+    if value is None:
+        return list(DEFAULT_LANGUAGES)
+
+    if not isinstance(value, list):
+        raise ValueError("languages must be an array")
+
+    languages = [
+        str(language).strip().lower()
+        for language in value
+        if str(language).strip()
+    ]
+
+    if not languages:
+        return list(DEFAULT_LANGUAGES)
+
+    return sorted(set(languages))
+
+
+def _finite_request_number(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        raise ValueError(f"{field} must be a finite number")
+    return float(value)
+
+
+def validate_request(request: dict[str, Any]) -> dict[str, Any]:
+    page = request.get("page")
+    if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+        raise ValueError("page must be an integer >= 1")
+
+    dpi = request.get("dpi")
+    if isinstance(dpi, bool) or not isinstance(dpi, int) or dpi < 1 or dpi > MAX_DPI:
+        raise ValueError(f"dpi must be an integer between 1 and {MAX_DPI}")
+
+    image = request.get("image")
+    if not isinstance(image, str) or not image.strip():
+        raise ValueError("image must be a non-empty path")
+
+    media_box_value = request.get("media_box")
+    media_box = DEFAULT_MEDIA_BOX if media_box_value is None else media_box_value
+    if not isinstance(media_box, dict):
+        raise ValueError("media_box must be an object")
+
+    normalized_media_box = {
+        field: _finite_request_number(media_box.get(field), f"media_box.{field}")
+        for field in ("x", "y", "width", "height")
+    }
+    if normalized_media_box["width"] <= 0 or normalized_media_box["height"] <= 0:
+        raise ValueError("media_box width and height must be positive")
+
+    rotation = request.get("rotation", 0)
+    if isinstance(rotation, bool) or not isinstance(rotation, int) or rotation not in (0, 90, 180, 270):
+        raise ValueError("rotation must be one of 0, 90, 180, or 270")
+
+    return {
+        "page": page,
+        "dpi": dpi,
+        "image": image.strip(),
+        "languages": normalize_languages(request.get("languages")),
+        "media_box": normalized_media_box,
+        "rotation": rotation,
+    }
+
+
 def model_storage_directory() -> str:
     program_data = os.environ.get("PROGRAMDATA")
     if program_data:
@@ -25,43 +91,72 @@ def model_storage_directory() -> str:
     return os.path.join(os.path.expanduser("~"), ".loupe", "ocr-models")
 
 
-def get_reader(languages: list[str]):
-    global _reader, _reader_languages
-    lang_key = tuple(sorted(str(language) for language in languages))
-    if _reader is None or _reader_languages != lang_key:
+def get_reader(languages: list[str], allow_download: bool = False):
+    lang_key = tuple(normalize_languages(languages))
+    if lang_key not in _readers:
         import easyocr
 
         os.makedirs(model_storage_directory(), exist_ok=True)
-        _reader = easyocr.Reader(
+        _readers[lang_key] = easyocr.Reader(
             list(lang_key),
             gpu=False,
             model_storage_directory=model_storage_directory(),
+            download_enabled=allow_download,
             verbose=False,
         )
-        _reader_languages = lang_key
-    return _reader
+    return _readers[lang_key]
 
 
-def pixel_bbox_to_pdf(bbox_pixels: list[list[float]], image_width: int, image_height: int, media_box: dict[str, float]) -> dict[str, float]:
-    xs = [point[0] for point in bbox_pixels]
-    ys = [point[1] for point in bbox_pixels]
-    left_px = min(xs)
-    right_px = max(xs)
-    top_px = min(ys)
-    bottom_px = max(ys)
+def pixel_bbox_to_pdf(
+    bbox_pixels: list[list[float]],
+    image_width: int,
+    image_height: int,
+    media_box: dict[str, float],
+    rotation: int = 0,
+) -> dict[str, float]:
+    media_x = _finite(media_box.get("x", 0.0))
+    media_y = _finite(media_box.get("y", 0.0))
+    media_w = _finite(media_box.get("width", 0.0))
+    media_h = _finite(media_box.get("height", 0.0))
 
-    media_x = float(media_box.get("x", 0.0))
-    media_y = float(media_box.get("y", 0.0))
-    media_w = float(media_box.get("width", 1.0))
-    media_h = float(media_box.get("height", 1.0))
-
-    if image_width <= 0 or image_height <= 0:
+    if image_width <= 0 or image_height <= 0 or media_w <= 0 or media_h <= 0:
         return {"x": media_x, "y": media_y, "width": 0.0, "height": 0.0}
 
-    width_pt = (right_px - left_px) / image_width * media_w
-    height_pt = (bottom_px - top_px) / image_height * media_h
-    x_pt = media_x + left_px / image_width * media_w
-    y_pt = media_y + (1.0 - bottom_px / image_height) * media_h
+    points: list[tuple[float, float]] = []
+    for point in bbox_pixels:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return {"x": media_x, "y": media_y, "width": 0.0, "height": 0.0}
+        x = _finite(point[0], float("nan"))
+        y = _finite(point[1], float("nan"))
+        if not math.isfinite(x) or not math.isfinite(y):
+            return {"x": media_x, "y": media_y, "width": 0.0, "height": 0.0}
+        points.append((x / image_width, y / image_height))
+
+    if not points:
+        return {"x": media_x, "y": media_y, "width": 0.0, "height": 0.0}
+
+    left = min(point[0] for point in points)
+    right = max(point[0] for point in points)
+    top = min(point[1] for point in points)
+    bottom = max(point[1] for point in points)
+
+    if rotation == 90:
+        x_min, x_max = top * media_w, bottom * media_w
+        y_min, y_max = left * media_h, right * media_h
+    elif rotation == 180:
+        x_min, x_max = (1.0 - right) * media_w, (1.0 - left) * media_w
+        y_min, y_max = (1.0 - bottom) * media_h, (1.0 - top) * media_h
+    elif rotation == 270:
+        x_min, x_max = (1.0 - bottom) * media_w, (1.0 - top) * media_w
+        y_min, y_max = (1.0 - right) * media_h, (1.0 - left) * media_h
+    else:
+        x_min, x_max = left * media_w, right * media_w
+        y_min, y_max = (1.0 - bottom) * media_h, (1.0 - top) * media_h
+
+    x_pt = media_x + x_min
+    y_pt = media_y + y_min
+    width_pt = max(0.0, x_max - x_min)
+    height_pt = max(0.0, y_max - y_min)
 
     return {
         "x": _finite(x_pt),
@@ -74,10 +169,12 @@ def pixel_bbox_to_pdf(bbox_pixels: list[list[float]], image_width: int, image_he
 def run_ocr(request: dict[str, Any]) -> dict[str, Any]:
     from PIL import Image
 
-    image_path = request.get("image")
-    page = int(request.get("page", 0))
-    languages = request.get("languages") or ["en"]
-    media_box = request.get("media_box") or {"x": 0.0, "y": 0.0, "width": 612.0, "height": 792.0}
+    normalized = validate_request(request)
+    image_path = normalized["image"]
+    page = normalized["page"]
+    languages = normalized["languages"]
+    media_box = normalized["media_box"]
+    rotation = normalized["rotation"]
 
     if not image_path:
         return {"page": page, "ok": False, "error": "missing image path"}
@@ -99,7 +196,7 @@ def run_ocr(request: dict[str, Any]) -> dict[str, Any]:
             {
                 "text": text,
                 "confidence": _finite(confidence),
-                "bbox": pixel_bbox_to_pdf(bbox_pixels, image_width, image_height, media_box),
+                "bbox": pixel_bbox_to_pdf(bbox_pixels, image_width, image_height, media_box, rotation),
             }
         )
 

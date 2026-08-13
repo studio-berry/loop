@@ -36,7 +36,7 @@ public:
     /// Returns command metadata such as name/description/command string.
     virtual QString getStandardString(StandardString standardString) const override;
     /// Executes the optimization workflow using parsed options.
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     /// Returns the supported option flags for this tool.
     virtual Options getOptionsFlags() const override;
 };

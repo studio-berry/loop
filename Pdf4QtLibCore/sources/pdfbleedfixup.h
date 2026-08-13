@@ -31,6 +31,8 @@
 #include <QImage>
 #include <QMarginsF>
 #include <QRectF>
+#include <QSize>
+#include <QSizeF>
 #include <QString>
 #include <QVector>
 
@@ -52,6 +54,24 @@ enum class PDFBleedFixupSide
     Top = 3
 };
 
+using PDFBleedFixupSideMask = quint8;
+
+constexpr PDFBleedFixupSideMask bleedFixupSideBit(PDFBleedFixupSide side)
+{
+    return PDFBleedFixupSideMask(1u << static_cast<quint8>(side));
+}
+
+constexpr PDFBleedFixupSideMask PDFBleedFixupAllSides =
+        bleedFixupSideBit(PDFBleedFixupSide::Left)
+        | bleedFixupSideBit(PDFBleedFixupSide::Bottom)
+        | bleedFixupSideBit(PDFBleedFixupSide::Right)
+        | bleedFixupSideBit(PDFBleedFixupSide::Top);
+
+constexpr bool isBleedFixupSideEnabled(PDFBleedFixupSideMask sides, PDFBleedFixupSide side)
+{
+    return (sides & bleedFixupSideBit(side)) != 0;
+}
+
 struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupSettings
 {
     enum class ReferenceBox
@@ -65,6 +85,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupSettings
     QString pageRange = "-";
     ReferenceBox referenceBox = ReferenceBox::TrimBox;
     QMarginsF bleedMM = QMarginsF(3.0, 3.0, 3.0, 3.0); ///< left, top, right, bottom
+    PDFBleedFixupSideMask sides = PDFBleedFixupAllSides;
     bool expandMediaBox = true;
     bool expandCropBox = true;
     bool expandBleedBox = true;
@@ -96,6 +117,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupPageReport
     QRectF newCropBox;
     QRectF newBleedBox;
     QRectF newTrimBox;
+    PDFBleedFixupSideMask sidesRequested = 0;
+    PDFBleedFixupSideMask sidesEligible = 0;
     QVector<PDFBleedFixupSide> sidesApplied;
     QStringList skipReasons;
 };
@@ -108,6 +131,21 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFBleedFixupReport
 /// Shared helpers exposed for unit tests (rect / skip / strip image builders).
 namespace PDFBleedFixupMath
 {
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFBleedRasterPlan
+{
+    QSize imageSize;
+    double pixelCount = 0.0;
+    bool rasterRequired = false;
+    bool withinBudget = true;
+    QString errorMessage;
+};
+
+PDF4QTLIBCORESHARED_EXPORT PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
+                                                        int dpi,
+                                                        qint64 maxRasterPixels,
+                                                        bool analyzeOnly,
+                                                        bool hasEligibleSides);
 
 PDF4QTLIBCORESHARED_EXPORT QRectF referenceRect(const PDFPage* page, PDFBleedFixupSettings::ReferenceBox referenceBox);
 PDF4QTLIBCORESHARED_EXPORT QRectF targetBleedRect(const QRectF& reference, const QMarginsF& bleedMM);

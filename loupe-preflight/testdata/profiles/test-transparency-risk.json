@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "Loupe Test - Transparency Risk",
+  "description": "Test-only profile for transparency group blend-mode and blend-space fixtures.",
+  "checks": [
+    { "id": "transparency-risk", "severity": "warning" }
+  ]
+}

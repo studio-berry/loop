@@ -50,16 +50,21 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     layout->setSpacing(pdf::PDFUITheme::kDialogMarginPx);
 
     m_headerLabel = new QLabel(tr("No preflight report loaded."), container);
+    m_headerLabel->setObjectName(QStringLiteral("preflightReportHeader"));
+    m_headerLabel->setAccessibleName(tr("Preflight report status"));
     m_headerLabel->setWordWrap(true);
     layout->addWidget(m_headerLabel);
 
     m_summaryLabel = new QLabel(container);
+    m_summaryLabel->setObjectName(QStringLiteral("preflightReportSummary"));
+    m_summaryLabel->setAccessibleName(tr("Preflight finding summary"));
     m_summaryLabel->setWordWrap(true);
     layout->addWidget(m_summaryLabel);
 
     m_contentStack = new QStackedWidget(container);
 
     m_emptyLabel = new QLabel(tr("Run preflight or load an example report to see findings here."), container);
+    m_emptyLabel->setAccessibleName(tr("Preflight report instructions"));
     m_emptyLabel->setWordWrap(true);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
     {
@@ -74,6 +79,9 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     reportLayout->setContentsMargins(0, 0, 0, 0);
 
     m_findingsView = new QTableView(reportPage);
+    m_findingsView->setObjectName(QStringLiteral("preflightFindingsView"));
+    m_findingsView->setAccessibleName(tr("Preflight findings"));
+    m_findingsView->setAccessibleDescription(tr("Select a finding to inspect its evidence and available fixups."));
     m_findingsView->setModel(&m_model);
     m_findingsView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_findingsView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -92,12 +100,33 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     });
 
     m_fixupsList = new QListWidget(reportPage);
+    m_fixupsList->setObjectName(QStringLiteral("preflightFixupsList"));
+    m_fixupsList->setAccessibleName(tr("Available fixups"));
+    m_fixupsList->setAccessibleDescription(tr("Safe and bounded operations available for the current report."));
     m_fixupsList->setMaximumHeight(120);
     reportLayout->addWidget(m_fixupsList);
 
-    m_applyFixupButton = new QPushButton(tr("Apply Bleed Fix..."), reportPage);
+    m_applyFixupButton = new QPushButton(tr("Apply Fixup..."), reportPage);
+    m_applyFixupButton->setObjectName(QStringLiteral("applyPreflightFixupButton"));
+    m_applyFixupButton->setAccessibleName(tr("Apply selected preflight fixup"));
+    m_applyFixupButton->setAccessibleDescription(tr("Apply the selected bounded fixup after reviewing its scope."));
     m_applyFixupButton->setEnabled(false);
-    connect(m_applyFixupButton, &QPushButton::clicked, this, &PreflightReportDockWidget::applyBleedFixupRequested);
+    connect(m_applyFixupButton, &QPushButton::clicked, this, [this]
+    {
+        QListWidgetItem* item = m_fixupsList ? m_fixupsList->currentItem() : nullptr;
+        if (!item && m_fixupsList && m_fixupsList->count() > 0)
+        {
+            item = m_fixupsList->item(0);
+        }
+        if (item)
+        {
+            const QString id = item->data(Qt::UserRole).toString();
+            if (!id.isEmpty())
+            {
+                Q_EMIT applyFixupRequested(id);
+            }
+        }
+    });
     reportLayout->addWidget(m_applyFixupButton);
 
     m_contentStack->addWidget(reportPage);
@@ -148,8 +177,15 @@ void PreflightReportDockWidget::refreshHeader()
         return;
     }
 
-    const QString statusText = m_model.pass() ? tr("Pass") : tr("Fail");
-    const QColor statusColor = m_model.pass() ? QColor(34, 197, 94) : pdf::PDFUITheme::severityErrorColor();
+    const QString statusText = [&]() {
+        if (m_model.verdictState() == QStringLiteral("incomplete")) return tr("Incomplete");
+        if (m_model.verdictState() == QStringLiteral("error")) return tr("Error");
+        return m_model.pass() ? tr("Pass") : tr("Fail");
+    }();
+    const bool positive = m_model.pass();
+    const QColor statusColor = positive
+                                   ? (pdf::PDFWidgetUtils::isDarkTheme() ? QColor(134, 239, 172) : QColor(0, 102, 51))
+                                   : pdf::PDFUITheme::severityTextColor(QStringLiteral("error"));
     if (m_reportSourceLabel.isEmpty())
     {
         m_headerLabel->setText(tr("%1 — profile: %2").arg(statusText, m_model.profileName()));
@@ -168,6 +204,20 @@ void PreflightReportDockWidget::refreshHeader()
                               .arg(m_model.warningCount());
 
     summaryText += QStringLiteral(" ");
+    if (m_model.verdictState() == QStringLiteral("incomplete"))
+    {
+        summaryText += tr("Could not finish inspecting the document.");
+        if (!m_model.verdictReason().isEmpty())
+        {
+            summaryText += QStringLiteral(" ") + m_model.verdictReason();
+        }
+        summaryText += QStringLiteral(" ");
+    }
+    else if (m_model.verdictState() == QStringLiteral("pass"))
+    {
+        summaryText += tr("No blocking problems found.");
+        summaryText += QStringLiteral(" ");
+    }
     summaryText += pdfplugin::preflight::overprintDisclosureText(m_model.hasWhiteOverprintFinding());
 
     m_summaryLabel->setText(summaryText);
@@ -192,7 +242,8 @@ void PreflightReportDockWidget::refreshFixups()
         const QString label = fixup.safe
                                   ? tr("%1 — %2 (safe)").arg(fixup.id, fixup.description)
                                   : tr("%1 — %2").arg(fixup.id, fixup.description);
-        m_fixupsList->addItem(label);
+        QListWidgetItem* item = new QListWidgetItem(label, m_fixupsList);
+        item->setData(Qt::UserRole, fixup.id);
     }
 
     if (m_fixupsList->count() == 0)
@@ -208,7 +259,7 @@ void PreflightReportDockWidget::refreshApplyFixupButton()
         return;
     }
 
-    m_applyFixupButton->setEnabled(m_model.hasReport() && m_model.hasAddBleedFixup());
+    m_applyFixupButton->setEnabled(m_model.hasReport() && !m_model.fixups().isEmpty());
 }
 
 void PreflightReportDockWidget::refreshEmptyState()

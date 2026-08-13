@@ -32,12 +32,14 @@
 #include "pdfblendfunction.h"
 #include "pdftextlayout.h"
 #include "pdfoperationcontrol.h"
+#include "pdfprocessingbudget.h"
 
 #include <QVector>
 #include <QTransform>
 #include <QPainterPath>
 #include <QSharedPointer>
 
+#include <set>
 #include <stack>
 #include <tuple>
 #include <type_traits>
@@ -369,7 +371,8 @@ public:
                                      const PDFCMS* CMS,
                                      const PDFOptionalContentActivity* optionalContentActivity,
                                      QTransform pagePointToDevicePointMatrix,
-                                     const PDFMeshQualitySettings& meshQualitySettings);
+                                     const PDFMeshQualitySettings& meshQualitySettings,
+                                     PDFProcessingBudget* processingBudget = nullptr);
     virtual ~PDFPageContentProcessor();
 
     enum class Operator
@@ -623,6 +626,16 @@ protected:
     /// \param fillRule Fill rule used in the fill mode
     virtual void performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule);
 
+    /// This hook is called for a path that is about to be painted, after
+    /// suppression/no-op checks and before fill/stroke pattern dispatch.
+    /// Unlike performPathPainting(), it also observes paths whose concrete
+    /// renderer handles the paint through a pattern.
+    virtual void performBeforePathPainting(const QPainterPath& path,
+                                           bool stroke,
+                                           bool fill,
+                                           bool text,
+                                           Qt::FillRule fillRule);
+
     /// This function is used, when we want to implement custom fill using shading. If path is successfully
     /// filled by shading, then true should be returned.
     /// \param path Path to be filled
@@ -778,6 +791,9 @@ protected:
     /// Returns current procedure sets. Procedure sets are deprecated in PDF 2.0 and are here
     /// only for compatibility purposes. See chapter 14.2 in PDF 2.0 specification.
     ProcedureSets getProcedureSets() const { return m_procedureSets; }
+
+    /// Returns errors collected while processing the current page/form.
+    const QList<PDFRenderError>& getRenderErrors() const { return m_errorList; }
 
     /// Returns page
     const PDFPage* getPage() const { return m_page; }
@@ -1172,12 +1188,24 @@ private:
 
     /// Mesh quality settings
     PDFMeshQualitySettings m_meshQualitySettings;
+    PDFProcessingBudget* m_processingBudget = nullptr;
 
     /// Set with rendering errors, which were reported (and should be reported once)
     std::set<QString> m_onceReportedErrors;
 
     /// Active structural parent key
     PDFInteger m_structuralParentKey;
+
+    /// Current nesting depth of the processed content streams (forms, tiling
+    /// patterns and Type 3 character streams). Bounded by
+    /// MAXIMUM_CONTENT_STREAM_NESTING_DEPTH, so the native stack can never be
+    /// exhausted by recursive content streams.
+    int m_contentStreamDepth = 0;
+
+    /// Form XObjects, which are currently being processed. Used to detect
+    /// recursion cycles - a form which paints itself, directly or indirectly
+    /// through other forms.
+    std::set<PDFObjectReference> m_activeFormReferences;
 };
 
 template<>

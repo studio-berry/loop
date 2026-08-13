@@ -132,7 +132,11 @@ void PreflightReportModel::setReport(const QJsonObject& report)
     m_findings.clear();
     m_fixups.clear();
     m_hasReport = true;
-    m_pass = report.value(QStringLiteral("pass")).toBool(true);
+    const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
+    m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(true)
+        ? QStringLiteral("pass") : QStringLiteral("fail"));
+    m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
+    m_pass = m_verdictState == QStringLiteral("pass");
     m_profileName = report.value(QStringLiteral("profile")).toString();
     m_schemaVersion = report.value(QStringLiteral("schema_version")).toInt(1);
     m_errorCount = 0;
@@ -140,8 +144,15 @@ void PreflightReportModel::setReport(const QJsonObject& report)
 
     appendFindings(report.value(QStringLiteral("errors")).toArray());
     m_errorCount = report.value(QStringLiteral("errors")).toArray().size();
-    appendFindings(report.value(QStringLiteral("warnings")).toArray());
-    m_warningCount = report.value(QStringLiteral("warnings")).toArray().size();
+    const QJsonArray warnings = report.value(QStringLiteral("warnings")).toArray();
+    appendFindings(warnings);
+    for (const QJsonValue& warningValue : warnings)
+    {
+        if (warningValue.toObject().value(QStringLiteral("severity")).toString() == QStringLiteral("warning"))
+        {
+            ++m_warningCount;
+        }
+    }
 
     const QJsonArray fixups = report.value(QStringLiteral("fixups_available")).toArray();
     for (const QJsonValue& fixupValue : fixups)
@@ -166,6 +177,8 @@ void PreflightReportModel::clear()
     m_fixups.clear();
     m_hasReport = false;
     m_pass = true;
+    m_verdictState = QStringLiteral("pass");
+    m_verdictReason.clear();
     m_profileName.clear();
     m_schemaVersion = 2;
     m_errorCount = 0;
@@ -178,17 +191,37 @@ bool PreflightReportModel::hasAddBleedFixup() const
     return addBleedFixup() != nullptr;
 }
 
-const PreflightFixupEntry* PreflightReportModel::addBleedFixup() const
+bool PreflightReportModel::hasFixup(const QString& id) const
 {
-    for (const PreflightFixupEntry& fixup : m_fixups)
+    return fixup(id) != nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::fixup(const QString& id) const
+{
+    for (const PreflightFixupEntry& entry : m_fixups)
     {
-        if (fixup.id == QStringLiteral("add-bleed"))
+        if (entry.id == id)
         {
-            return &fixup;
+            return &entry;
         }
     }
 
     return nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::addBleedFixup() const
+{
+    return fixup(QStringLiteral("add-bleed"));
+}
+
+bool PreflightReportModel::hasRgbToCmykFixup() const
+{
+    return rgbToCmykFixup() != nullptr;
+}
+
+const PreflightFixupEntry* PreflightReportModel::rgbToCmykFixup() const
+{
+    return fixup(QStringLiteral("rgb-to-cmyk"));
 }
 
 bool PreflightReportModel::hasWhiteOverprintFinding() const

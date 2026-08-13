@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://studio-berry.github.io/loupe/schemas/loupe-shell-actions.schema.json",
+  "title": "Loupe shell action policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "issue", "source_ui", "expected_action_count", "actions"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "issue": { "type": "integer", "const": 193 },
+    "source_ui": { "const": "Pdf4QtLibGui/pdfeditormainwindow.ui" },
+    "expected_action_count": { "type": "integer", "minimum": 1 },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "disposition", "target"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^action[A-Za-z0-9_]+$" },
+          "disposition": { "enum": ["KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"] },
+          "target": { "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"] }
+        }
+      }
+    }
+  }
+}

@@ -25,6 +25,14 @@
             "status": "ok"
         },
         {
+            "id": "transparency-risk",
+            "status": "ok"
+        },
+        {
+            "id": "color-inventory",
+            "status": "ok"
+        },
+        {
             "id": "white-overprint",
             "status": "ok"
         }
@@ -45,6 +53,48 @@
     "pass": false,
     "profile": "Loupe Default",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "3d207d5a00a9520d"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Cyan",
+            "object_id": "Cyan",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Magenta",
+            "object_id": "Magenta",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Yellow",
+            "object_id": "Yellow",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Black",
+            "object_id": "Black",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        }
     ]
 }

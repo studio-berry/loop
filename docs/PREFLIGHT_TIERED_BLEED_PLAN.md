@@ -1,6 +1,24 @@
 # Tiered Bleed Preflight — Design Plan (M0)
 
 Status: **implemented** (Tier-1/Tier-2 shipped; residual raster golden = Linear MIC-325). M0 locks below remain authoritative.
+
+## Tier-2 calibration record
+
+The raster confirmation defaults are intentionally conservative: a false
+negative can reach press, while a false positive costs an operator a review.
+The calibration corpus covers artwork flush to the bleed edge, 0.5 mm short,
+1 mm short, a three-of-four edge case, a margin hairline, soft-masked artwork,
+a near-white margin fill, and a clipped image. The defaults remain:
+
+| Parameter | Default | Rationale |
+| --- | ---: | --- |
+| `probe_dpi` | 150 | Stable across supported platforms and sufficient for the strip probe. |
+| `probe_threshold` | 16 | Ignores antialiasing noise while retaining dark edge artwork. |
+| `raster_white_threshold` | 0.9975 | Treats a strip as empty only below the conservative boundary. |
+
+The probe test repeats the same fixture and asserts identical per-edge ink
+counts and verdicts. Tier-2 remains opt-in through `raster_confirm`; the
+default profile never pays the raster cost.
 Scope: Loupe-pdf / PDF4QT 1.6.0.0. Phase 1 — CLI engine.
 Primary API names: **`PDFDocumentSession`** (`pdfdocumentsession.*`), **`PDFBleedMarginProbe`** (`pdfbleedmarginprobe.*`), **`PreflightEngine`** (PdfTool orchestrator).
 Finding types: **`content-bleed`**, **`bleed-margin-empty`**, **`needs-auto-bleed`**.

@@ -55,19 +55,19 @@ QString PDFToolSeparate::getStandardString(StandardString standardString) const
     return QString();
 }
 
-int PDFToolSeparate::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolSeparate::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.copy-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to copy content."));
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -75,28 +75,47 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     if (options.separatePagePattern.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("File template is empty."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("File template is empty."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     if (!options.separatePagePattern.contains("%"))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("File template must contain character '%' for page number."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("File template must contain character '%' for page number."));
+        return PDFToolExitCode::InvalidInvocation;
     }
+
+    QStringList plannedOutputs;
+    plannedOutputs.reserve(int(pageIndices.size()));
+    for (pdf::PDFInteger pageIndex : pageIndices)
+    {
+        QString fileName = options.separatePagePattern;
+        fileName.replace('%', QString::number(pageIndex + 1));
+        plannedOutputs.append(fileName);
+    }
+
+    if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
+    {
+        return blocked;
+    }
+
+    size_t failedWrites = 0;
+    int plannedOutputIndex = 0;
 
     for (pdf::PDFInteger pageIndex : pageIndices)
     {
         if (isCancelRequested())
         {
-            return ExitFailure;
+            return PDFToolExitCode::Cancelled;
         }
+
+        const QString fileName = plannedOutputs.at(plannedOutputIndex++);
 
         try
         {
@@ -118,24 +137,23 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
             optimizer.optimize();
             singlePageDocument = optimizer.takeOptimizedDocument();
 
-            QString fileName = options.separatePagePattern;
-            fileName.replace('%', QString::number(pageIndex + 1));
-
-            if (const int blocked = validateDestructiveOutput(options, fileName))
-            {
-                return blocked;
-            }
-
             if (options.destructiveReport)
             {
-                PDFConsole::writeText(PDFToolTranslationContext::tr("Would extract page %1 to '%2'.")
-                                        .arg(pageIndex + 1)
-                                        .arg(fileName),
-                                    options.outputCodec);
+                if (options.outputStyle != PDFOutputFormatter::Style::Json)
+                {
+                    PDFConsole::writeText(PDFToolTranslationContext::tr("Would extract page %1 to '%2'.")
+                                            .arg(pageIndex + 1)
+                                            .arg(fileName),
+                                        options.outputCodec);
+                }
             }
 
             if (options.destructiveDryRun)
             {
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("separate"), fileName, QStringLiteral("planned")});
+                }
                 continue;
             }
 
@@ -143,16 +161,37 @@ int PDFToolSeparate::execute(const PDFToolOptions& options)
             pdf::PDFOperationResult result = writer.write(fileName, &singlePageDocument, true);
             if (!result)
             {
-                PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
+                ++failedWrites;
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), fileName}});
+            }
+
+            if (options.executionContext)
+            {
+                options.executionContext->addOutput({
+                    QStringLiteral("file"),
+                    QStringLiteral("separate"),
+                    fileName,
+                    result ? QStringLiteral("written") : QStringLiteral("partial")
+                });
             }
         }
         catch (const pdf::PDFException &exception)
         {
-            PDFConsole::writeError(exception.getMessage(), options.outputCodec);
+            ++failedWrites;
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), exception.getMessage());
+            if (options.executionContext)
+            {
+                options.executionContext->addOutput({
+                    QStringLiteral("file"),
+                    QStringLiteral("separate"),
+                    fileName,
+                    QStringLiteral("partial")
+                });
+            }
         }
     }
 
-    return ExitSuccess;
+    return failedWrites > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolSeparate::getOptionsFlags() const

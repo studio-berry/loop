@@ -3,7 +3,7 @@
     "id": "bleed-adequate",
     "pdf": "bleed-adequate.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "MediaBox 220x220, TrimBox 200x200 inset 10pt on all sides -> unset BleedBox falls back to CropBox -> MediaBox, giving 10pt margin (>= amount_pt 9)."
   },
@@ -11,7 +11,7 @@
     "id": "bleed-missing",
     "pdf": "bleed-missing.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "expect": { "pass": false, "check_ids": ["bleed", "color-inventory"] },
     "source": "generated",
     "notes": "Only MediaBox (200x200) is set; TrimBox/BleedBox/CropBox all fall back to it, so bleed==trim==media -> zero bleed margin -> bleed check fails."
   },
@@ -19,7 +19,7 @@
     "id": "color-rgb",
     "pdf": "color-rgb.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["color-mode"] },
+    "expect": { "pass": false, "check_ids": ["color-mode", "color-inventory"] },
     "source": "hand-built",
     "notes": "DeviceRGB image (disallowed) at ~310 DPI on a page with adequate bleed and no fonts, so only color-mode fires."
   },
@@ -27,15 +27,47 @@
     "id": "color-cmyk",
     "pdf": "color-cmyk.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "DeviceCMYK image (allowed) at ~310 DPI, adequate bleed, no fonts -> clean pass. Implemented in MIC-148."
+  },
+  {
+    "id": "color-inventory-spot",
+    "pdf": "color-inventory-spot.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Named Separation colorant; expected spot-color and separation informational findings."
+  },
+  {
+    "id": "rich-black",
+    "pdf": "rich-black.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y plus K patch; expected page-scoped rich-black informational finding."
+  },
+  {
+    "id": "black-only",
+    "pdf": "black-only.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process black alone; must not emit rich-black."
+  },
+  {
+    "id": "cmy-rich-no-k",
+    "pdf": "cmy-rich-no-k.pdf",
+    "profile": "profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y without K; must not emit rich-black."
   },
   {
     "id": "image-dpi-low",
     "pdf": "image-dpi-low.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": ["image-resolution"] },
+    "expect": { "pass": true, "check_ids": ["image-resolution", "color-inventory"] },
     "source": "hand-built",
     "notes": "100x100 px DeviceGray image placed at 4x4 in -> ~25 DPI, below min_dpi 300. image-resolution is severity warning in loupe-default, so it appears in warnings[] and report.pass stays true. Implemented in MIC-149."
   },
@@ -43,15 +75,23 @@
     "id": "image-dpi-ok",
     "pdf": "image-dpi-ok.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "1240x1240 px DeviceGray image placed at 4x4 in -> ~310 DPI (>= 300), adequate bleed, no fonts -> clean pass. Implemented in MIC-149."
+  },
+  {
+    "id": "image-dpi-excessive",
+    "pdf": "image-dpi-excessive.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "1200x1200 px DeviceGray image placed at 2x2 in -> 600 DPI. Preflight should advertise downsample-images with the conservative 300-DPI target while leaving image-resolution clean."
   },
   {
     "id": "font-not-embedded",
     "pdf": "font-not-embedded.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": false, "check_ids": ["embedded-fonts"] },
+    "expect": { "pass": false, "check_ids": ["embedded-fonts", "color-inventory"] },
     "source": "hand-built",
     "notes": "Text set in Helvetica (standard-14) with no FontFile, adequate bleed, no images -> only embedded-fonts fires. Implemented in MIC-150."
   },
@@ -59,7 +99,7 @@
     "id": "font-embedded",
     "pdf": "font-embedded.pdf",
     "profile": "profiles/loupe-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "hand-built",
     "notes": "Text set in a subsetted TrueType font embedded via /FontFile2, adequate bleed, no images -> clean pass. Implemented in MIC-150."
   },
@@ -166,5 +206,133 @@
     "expect": { "pass": true, "check_ids": ["white-overprint"] },
     "source": "hand-built",
     "notes": "White overprint inside a Form XObject painted via Do. MIC-306."
+  },
+  {
+    "id": "white-overprint-separation",
+    "pdf": "white-overprint-separation.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using a Separation color space."
+  },
+  {
+    "id": "white-overprint-devicen",
+    "pdf": "white-overprint-devicen.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using a DeviceN color space."
+  },
+  {
+    "id": "white-overprint-iccbased",
+    "pdf": "white-overprint-iccbased.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using an ICCBased color space."
+  },
+  {
+    "id": "ink-coverage-over",
+    "pdf": "ink-coverage-over.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": ["ink-coverage"] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 370% TAC on an otherwise light page; the test profile isolates the ink-coverage warning."
+  },
+  {
+    "id": "ink-coverage-ok",
+    "pdf": "ink-coverage-ok.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 190% TAC, below the 300% test threshold."
+  },
+  {
+    "id": "output-intent-cmyk",
+    "pdf": "output-intent-cmyk.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "One CGATS TR 001 output intent with a deterministic synthetic CMYK ICC profile and matching ProfileCS."
+  },
+  {
+    "id": "output-intent-missing",
+    "pdf": "output-intent-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Catalog has no /OutputIntents key, so the required output-intent check emits output-intent-missing."
+  },
+  {
+    "id": "output-intent-profile-missing",
+    "pdf": "output-intent-profile-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Intent identifies CGATS TR 001 but omits /DestOutputProfile, exercising the profile-missing finding."
+  },
+  {
+    "id": "output-intent-rgb",
+    "pdf": "output-intent-rgb.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Embedded synthetic sRGB profile is valid but disallowed by the test profile's CMYK-only allow-list."
+  },
+  {
+    "id": "output-intent-profile-invalid",
+    "pdf": "output-intent-profile-invalid.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "DestOutputProfile is a stream containing non-ICC bytes, exercising invalid-profile handling."
+  },
+  {
+    "id": "transparency-normal-cmyk",
+    "pdf": "transparency-normal-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "Normal CMYK transparency group with matching CMYK content remains clean."
+  },
+  {
+    "id": "transparency-hue",
+    "pdf": "transparency-hue.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Hue blend mode in a transparency group emits a blend-mode risk warning."
+  },
+  {
+    "id": "transparency-rgb-group-cmyk",
+    "pdf": "transparency-rgb-group-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "CMYK artwork entering an explicit RGB transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-rgb",
+    "pdf": "transparency-cmyk-group-rgb.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "RGB artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-spot",
+    "pdf": "transparency-cmyk-group-spot.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Spot artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-annotation-appearance",
+    "pdf": "transparency-annotation-appearance.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "A risky transparency group exists only in an annotation appearance stream."
   }
 ]

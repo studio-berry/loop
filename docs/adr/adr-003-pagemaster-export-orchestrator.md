@@ -1,9 +1,12 @@
 # ADR-003: PageMaster export orchestrator
 
-**Status:** accepted
+**Status:** implemented
+**Implemented-at:** 5113b86fc7d0f1c5273f128075c84a00a016df8a
+**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-311 / Cycle 2 sprint plan
-**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation)
+**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loupe #30 Action List stage)
 
 ## Context
 
@@ -18,10 +21,20 @@ changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
 - **API:** `PDFPageMasterExport::run(PDFPageMasterExportJob)` returns
   `PDFPageMasterExportResult`. Job owns source `PDFDocument` copies and `QImage`
   sources; optional `PDFProgress*` is borrowed.
-- **Stage order (locked):** assemble → `PDFPageGeometry::apply` (optional) →
-  `PDFBleedFixup::apply` (optional) → `PDFImageOptimizer::optimize` (optional) →
-  `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
+- **Stage order (locked):** assemble → preflight gate (optional) → Action List
+  (optional, see below) → `PDFPageGeometry::apply` (optional) → production
+  geometry validation / `PDFContourBleedFixup::apply` (optional) →
+  `PDFBleedFixup::apply` (optional) → `PDFTransparencyFlattener::apply`
+  (optional) → `PDFImageOptimizer::optimize` (optional) →
+  `PDFStandardConversion::apply` (optional) → preflight revalidation (optional)
+  → `PDFDocumentWriter::write`. Stages run **per output**, not as batch-wide
   assemble-all / optimize-all / write-all passes.
+- **Action List placement (#30):** PageMaster runs the existing
+  `PDFActionListExecutor` after the initial preflight gate and before page
+  geometry. The recipe is planned and executed against the isolated assembled
+  document; later geometry, production, bleed, optimization, and final
+  preflight stages operate on that candidate. A resumed batch is incompatible
+  when its recipe changes.
 - **Retention (MIC-307):** at most one live assembled `PDFDocument` at a time.
   After each successful write (or when that output fails), the document leaves
   scope — no cross-output `assembledDocumentStorage` vector.

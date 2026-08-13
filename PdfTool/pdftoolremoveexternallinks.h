@@ -34,7 +34,7 @@ public:
     explicit PDFToolRemoveExternalLinks() = default;
 
     virtual QString getStandardString(StandardString standardString) const override;
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
     virtual Options getOptionsFlags() const override;
 };
 

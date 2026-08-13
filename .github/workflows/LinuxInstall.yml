@@ -10,15 +10,12 @@ permissions:
 
 jobs:
   build_ubuntu:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/pdf4qt/vcpkg/overlays/linux:${{ github.workspace }}/pdf4qt/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       GNUPGHOME: ${{ github.workspace }}/gnupg
-      VCPKG_COMMIT: 0878b5224d4a4968940ee296a2e7fae2d3b62983
-      # Pinned 2026-08-03 from upstream continuous releases.
-      APPIMAGETOOL_SHA256: a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
-      LINUXDEPLOYQT_SHA256: 974a87457ed26241b793bed7841978fcdf84158d13220e53833a06515f173b0b
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Install dependencies
@@ -26,24 +23,87 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxcb-cursor0 libspeechd2 gnupg2 wget appstream libcups2 libcups2-dev
 
-      - name: Install appimagetool
-        run: |
-          wget -c "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-          echo "${APPIMAGETOOL_SHA256}  appimagetool-x86_64.AppImage" | sha256sum -c -
-          chmod +x appimagetool-x86_64.AppImage
-          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
-
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
 
+      - name: Verify supply-chain pins
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_supply_chain_pins.py
+
+      - name: Resolve verified packaging tool pins
+        working-directory: pdf4qt
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open(".github/pins/packaging-tools.json", encoding="utf-8") as f:
+              pins = json.load(f)
+
+          values = {
+              "APPIMAGETOOL_ASSET_ID": str(pins["appimagetool"]["assetId"]),
+              "APPIMAGETOOL_SHA256": pins["appimagetool"]["sha256"],
+              "RUNTIME_ASSET_ID": str(pins["appimageRuntime"]["assetId"]),
+              "RUNTIME_SHA256": pins["appimageRuntime"]["sha256"],
+              "LINUXDEPLOYQT_ASSET_ID": str(pins["linuxdeployqt"]["assetId"]),
+              "LINUXDEPLOYQT_SHA256": pins["linuxdeployqt"]["sha256"],
+          }
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              for key, value in values.items():
+                  f.write(f"{key}={value}\n")
+          PY
+
+      - name: Install appimagetool
+        working-directory: pdf4qt
+        run: |
+          bash scripts/ci/download_verified.sh \
+            --gh-asset "AppImage/appimagetool" \
+            "$APPIMAGETOOL_ASSET_ID" \
+            appimagetool-x86_64.AppImage \
+            "$APPIMAGETOOL_SHA256"
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Download verified AppImage runtime
+        working-directory: pdf4qt
+        run: |
+          # appimagetool otherwise resolves the *latest* type-2 runtime on its own.
+          # Supply the exact pinned runtime so packaging never resolves a mutable
+          # downstream binary.
+          bash scripts/ci/download_verified.sh \
+            --gh-asset "AppImage/type2-runtime" \
+            "$RUNTIME_ASSET_ID" \
+            "$GITHUB_WORKSPACE/runtime-x86_64" \
+            "$RUNTIME_SHA256"
+          chmod +x "$GITHUB_WORKSPACE/runtime-x86_64"
+
       - name: 'VCPKG: Set up VCPKG'
         run: |
+          VCPKG_COMMIT="$(python3 - <<'PY'
+          import json
+          with open("pdf4qt/vcpkg-configuration.json", encoding="utf-8") as f:
+              print(json.load(f)["default-registry"]["baseline"])
+          PY
+          )"
+
+          if ! [[ "$VCPKG_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Invalid vcpkg baseline: $VCPKG_COMMIT"
+              exit 1
+          fi
+
           git clone https://github.com/microsoft/vcpkg.git
-          cd vcpkg
-          git checkout 0878b5224d4a4968940ee296a2e7fae2d3b62983
-          ./bootstrap-vcpkg.sh
+          git -C vcpkg checkout --detach "$VCPKG_COMMIT"
+
+          ACTUAL="$(git -C vcpkg rev-parse HEAD)"
+          test "$ACTUAL" = "$VCPKG_COMMIT" || {
+              echo "::error::vcpkg checkout does not match manifest baseline"
+              exit 1
+          }
+
+          ./vcpkg/bootstrap-vcpkg.sh
           ./vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
@@ -77,9 +137,10 @@ jobs:
       - name: Build Project
         working-directory: pdf4qt
         run: |
-          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_PLUGIN_OCR=OFF
+          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_LOUPE_DISTRIBUTION=ON -DPDF4QT_PLUGIN_OCR=OFF
           cmake --build build --target all release_translations -j6
           cmake --install build
+          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/pdf4qt/build/install"
           
       - name: Read version
         id: get_version
@@ -89,15 +150,16 @@ jobs:
           echo "appimagefilename=Loupe-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
           echo "appimage_update_info=gh-releases-zsync|mberrys|Loupe-pdf|latest|Loupe-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
           echo "AppImage file name: Loupe-pdf-$version-x86_64.AppImage"
-        env:
-          appimagefilename: ${{ env.appimagefilename }}
-          
+
       - name: 'Linux Deploy Qt'
         working-directory: pdf4qt/build
         run: |
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
-          wget -O deploy.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
-          echo "${LINUXDEPLOYQT_SHA256}  deploy.AppImage" | sha256sum -c -
+          bash "$GITHUB_WORKSPACE/pdf4qt/scripts/ci/download_verified.sh" \
+            --gh-asset "probonopd/linuxdeployqt" \
+            "$LINUXDEPLOYQT_ASSET_ID" \
+            deploy.AppImage \
+            "$LINUXDEPLOYQT_SHA256"
           chmod +x deploy.AppImage
           ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
           
@@ -122,13 +184,20 @@ jobs:
         if: vars.SIGN_APPIMAGE != 'true'
         working-directory: pdf4qt/build
         run: |
-          appimagetool -u "${{ env.appimage_update_info }}" install/ ${{ env.appimagefilename }}
+          appimagetool \
+            --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
+            -u "${{ env.appimage_update_info }}" \
+            install/ ${{ env.appimagefilename }}
 
       - name: Sign and Repack AppImage
         if: vars.SIGN_APPIMAGE == 'true'
         working-directory: pdf4qt/build
         run: |
-          appimagetool -u "${{ env.appimage_update_info }}" -s --sign-key "${{ secrets.PGP_KEY_ID }}" install/ ${{ env.appimagefilename }}
+          appimagetool \
+            --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
+            -u "${{ env.appimage_update_info }}" \
+            -s --sign-key "${{ secrets.PGP_KEY_ID }}" \
+            install/ ${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
           

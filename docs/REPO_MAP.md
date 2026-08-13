@@ -1,102 +1,78 @@
 # Repo map
 
-Loupe-pdf repository layout, fork relationship, and upstream-tracking policy.
+Loupe repository layout, fork relationship, branch policy, and upstream
+tracking policy.
 
 ## Repositories
 
-| Role | Repository | Default branch |
-|------|------------|----------------|
-| Fork (canonical for Loupe work) | [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf) | `master` |
-| Upstream (read-only source) | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) | `master` |
+| Role | Repository | Branch |
+|------|------------|--------|
+| Loupe canonical repository | [studio-berry/loupe](https://github.com/studio-berry/loupe) | `stable` (default/release), `dev` (integration) |
+| Upstream PDF engine source | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) | `master` (upstream only) |
 
-Loupe-pdf is a GitHub fork of PDF4QT (MIT). Upstream is the source of PDF engine, Qt apps, CLI, and build tooling; Loupe owns branding, licensing text, and downstream product changes.
+Loupe owns the product decisions, branding, release policy, and downstream
+changes. PDF4QT remains the upstream source for the PDF engine and inherited
+tooling. Do not infer Loupe branch policy from upstream's `master` branch.
 
-## Upstream-tracking policy
+## Branch policy
+
+- `dev` is the integration branch.
+- `stable` is the release branch and repository default.
+- Topic branches start from `dev`, stay focused, and merge back to `dev`.
+- Releases promote a verified `dev` state to `stable`.
+- `master` is not an active Loupe branch.
+
+The reviewed machine-readable policy is
+[`branch-policy.json`](branch-policy.json). The current factual branch and
+workflow audit is tracked in GitHub issue [#232](https://github.com/studio-berry/loupe/issues/232).
+
+## Upstream tracking policy
 
 ### Policy: on-demand GitHub Sync fork
 
-**Decision:** Pull upstream changes only when you explicitly sync — via GitHub’s **Sync fork** UI or `gh repo sync`. No automatic or scheduled upstream merges.
+Pull upstream changes only when explicitly requested, through GitHub's **Sync
+fork** UI or an intentional local `gh repo sync`. Do not automatically merge
+upstream in CI.
 
-| Do | Don’t |
-|----|-------|
-| Use **Sync fork → Update branch** on GitHub when you want upstream changes | Auto-sync on a schedule or in CI |
-| Merge upstream `master` into Loupe `master` (GitHub default) | Rebase Loupe commits unless you deliberately choose that on GitHub |
-| Keep Loupe-only commits on top of upstream | Force-push `master` to discard fork history |
-| Re-apply Loupe branding after sync if upstream touched the same files | Push Loupe branding/licensing back to upstream |
-
-**Rationale:** Early fork, minimal divergence (2 Loupe-only commits today), and you want control over when upstream lands — especially for `README.md` / license / branding.
-
-### Current fork state (2026-07-09)
-
-| Metric | Value |
-|--------|-------|
-| Upstream HEAD | `a3df6db` — Issue #396: Inherit Zoom for Hyperlink to this PDF |
-| Loupe HEAD | `bb3660a` — Updated LICENSE |
-| Commits ahead of upstream | 2 (`803b035` README, `bb3660a` LICENSE) |
-| Commits behind upstream | 0 (upstream has not moved since fork point) |
-| Last upstream release | v1.6.0.0 (`23f3829`, Jun 2026) |
-
-### Fork-only changes (preserve on sync)
-
-These are intentional Loupe deltas; don’t drop them during conflict resolution:
-
-- **README.md** — Loupe copyright, acknowledgements, CI badge (`mberrys/Loupe-pdf`)
-- **LICENSE** — Loupe licensing posture (upstream MIT file removed/modified in `bb3660a`)
-
-Everything else should track upstream unless there is an explicit Loupe feature branch or product decision not to merge.
-
-### When to sync
-
-- Upstream ships a release you care about (check [PDF4QT releases](https://github.com/JakubMelka/PDF4QT/releases))
-- You need a specific upstream bugfix or feature
-- Before a large Loupe feature branch, to reduce future merge pain
-
-No fixed cadence required.
-
-### How to sync
-
-**On GitHub (preferred):**
-
-1. Open [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf)
-2. **Sync fork** → review commits → **Update branch**
-3. If GitHub reports conflicts, resolve via the offered PR or locally (see below)
-
-**CLI equivalent:**
-
-```bash
-gh repo sync mberrys/Loupe-pdf -b master
-```
-
-**Local after GitHub sync:**
-
-```bash
-git fetch origin
-git pull origin master
-```
-
-**Optional local upstream remote** (for inspection, not required if you only use GitHub Sync):
-
-```bash
-git remote add upstream https://github.com/JakubMelka/PDF4QT.git   # once
-git fetch upstream
-git log master..upstream/master --oneline   # what's new upstream
-```
+When syncing, preserve Loupe product and licensing decisions. Take upstream
+code fixes in shared engine code unless a current Loupe ADR or issue says
+otherwise. Do not push Loupe branding, product UX, or release policy upstream.
 
 ### Conflict handling
 
-Likely conflict files: `README.md`, `LICENSE`, `.github/**`, `CMakeLists.txt`, `RELEASES.txt`.
+Likely conflict files include `README.md`, `LICENSE`, `.github/**`,
+`CMakeLists.txt`, and `RELEASES.txt`.
 
-- Prefer keeping Loupe branding/licensing in `README.md` / `LICENSE`
-- Take upstream code fixes everywhere else
-- Run targeted builds/tests after merge (see [AGENTS.md](../AGENTS.md))
-- Record the sync in `RELEASES.txt` or a short merge commit message, e.g. `Sync upstream PDF4QT @ <sha>`
+- Keep Loupe branding and licensing in `README.md` / `LICENSE`.
+- Prefer upstream code fixes everywhere else, subject to current Loupe tests
+  and accepted ADRs.
+- Run targeted builds/tests after an authorized sync; do not treat a clean
+  merge as verification.
+- Record the sync in `RELEASES.txt` or a short merge commit message with the
+  upstream SHA.
 
-### What we do not do
+## Source-of-truth and generated facts
 
-- No PRs from Loupe → upstream unless you explicitly decide to contribute back
-- No renaming/removing upstream copyright headers in source files (MIT attribution stays)
-- No wholesale replacement of PDF4QT module layout without a documented Loupe architecture decision
+Resolve documentation conflicts using
+[`architecture-source-of-truth.md`](architecture-source-of-truth.md). The
+generated [`architecture-catalog.json`](generated/architecture-catalog.json)
+emits branch policy names, workflow trigger branches, the Core preflight check
+catalog, registered repair operations, schema versions, and CMake test targets.
+CI runs
+`scripts/generate-architecture-catalogs.py --check` so stale narrative or
+catalog claims fail before merge.
 
-### Agent / contributor note
+## Layout
 
-See [AGENTS.md](../AGENTS.md) for build and edit rules. For multi-issue / multi-surface feature planning (shared Core APIs, mode enums), see [PLANNING.md](PLANNING.md). For release packaging and OSS licensing (MIC-140), see [PACKAGING_LICENSING.md](PACKAGING_LICENSING.md). For upstream work: do not run `git fetch upstream` or merge upstream unless the user asks in that session.
+| Area | Path | Purpose |
+|------|------|---------|
+| Core PDF library | `Pdf4QtLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
+| Interactive editor | `Pdf4QtEditor/`, `Pdf4QtLibGui/` | Primary interactive shell and plugin host |
+| Headless CLI | `PdfTool/` | Automation, batch checks, rendering, and repair |
+| Page production | `Pdf4QtPageMaster/` | Batch geometry, assembly, and production export |
+| Editor plugins | `Pdf4QtEditorPlugins/` | Editor-only capabilities |
+| Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
+| Preflight contract | `loupe-preflight/` | Profiles, schemas, examples, and report documentation |
+| Architecture records | `docs/adr/`, `docs/` | Decisions, policy, plans, and generated factual catalogs |
+
+For module placement and build constraints, see [`AGENTS.md`](../AGENTS.md).

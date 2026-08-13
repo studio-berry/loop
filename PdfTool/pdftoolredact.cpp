@@ -53,27 +53,34 @@ QString PDFToolRedact::getStandardString(PDFToolAbstractApplication::StandardStr
     return QString();
 }
 
-int PDFToolRedact::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
 {
     if (options.redactedDocument.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Redacted document file name is not set."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Redacted document file name is not set."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.redactedDocument))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.redactedDocument); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("redact")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+    }
+    else if (options.destructiveReport)
     {
         PDFConsole::writeText(PDFToolTranslationContext::tr("Would redact '%1' to '%2'.")
                                 .arg(options.document, options.redactedDocument),
@@ -82,12 +89,16 @@ int PDFToolRedact::execute(const PDFToolOptions& options)
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.redactedDocument, QStringLiteral("planned")});
+        }
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     // We are ready to redact the document
@@ -107,19 +118,28 @@ int PDFToolRedact::execute(const PDFToolOptions& options)
 
     if (isCancelRequested())
     {
-        removePartialOutput(options.redactedDocument);
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
     pdf::PDFOperationResult result = writer.write(options.redactedDocument, &redactedDocument, true);
     if (!result)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write redacted document. %1").arg(result.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write redacted document. %1").arg(result.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.redactedDocument}});
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.redactedDocument,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolRedact::getOptionsFlags() const
