@@ -1,0 +1,86 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches:
+      - stable
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: release-gate-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  source_integrity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test source integrity checker
+        run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        run: python3 scripts/ci/check_source_integrity.py
+      - name: Verify generated dependency paths are untracked
+        run: python3 scripts/ci/check_generated_dependency_paths.py
+
+  linux:
+    uses: ./.github/workflows/reusable-linux.yml
+
+  windows:
+    uses: ./.github/workflows/reusable-windows.yml
+
+  documentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Verify ADR metadata and generated catalogs
+        run: python3 scripts/generate-architecture-catalogs.py --check
+
+  fuzz_regression:
+    uses: ./.github/workflows/fuzz.yml
+
+  package_contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Verify Loupe shell contract
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loupe-shell-contract.ps1
+
+  supply_chain:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Run supply-chain policy
+        run: python3 scripts/ci/check_supply_chain_pins.py
+      - name: Run policy regression tests
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+      - name: Verify branch policy
+        run: python3 scripts/ci/check_branch_policy.py --live
+
+  release_ok:
+    if: always()
+    needs:
+      - source_integrity
+      - linux
+      - windows
+      - documentation
+      - fuzz_regression
+      - package_contract
+      - supply_chain
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Reduce required results
+        env:
+          RELEASE_GATE_NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci/reduce_release_gate.py
