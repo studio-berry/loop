@@ -4,6 +4,7 @@
 Conflict markers are assembled from fragments on purpose: a literal marker in
 this file would make check_source_integrity.py flag the test itself.
 """
+import json
 import pathlib
 import subprocess
 import sys
@@ -15,9 +16,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from scripts.ci.check_source_integrity import (  # noqa: E402
     MAX_TRACKED_BYTES,
     forbidden_path_reason,
+    fuzz_corpus_violations,
     has_conflict_markers,
     oversized_reason,
+    preflight_pdf_violations,
     validate_repository,
+    whitespace_violations,
 )
 
 OURS = "<" * 7
@@ -173,6 +177,103 @@ class RepositoryScanTests(unittest.TestCase):
             self._git(root, "add", "-A")
 
             self.assertEqual(validate_repository(root), [])
+
+    def test_reports_trailing_whitespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self._git(root, "init", "-q")
+            (root / "trailing.txt").write_text("line with spaces   \n")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-qm", "add trailing whitespace")
+
+            violations = dict(whitespace_violations(root))
+            self.assertIn("trailing.txt", violations)
+            self.assertIn("whitespace:", violations["trailing.txt"])
+
+    def test_reports_unmanifested_fuzz_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            corpus = root / "Fuzz" / "corpus" / "regression"
+            corpus.mkdir(parents=True)
+            (corpus / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "entries": [
+                            {
+                                "file": "listed.bin",
+                                "rationale": "listed regression seed",
+                            }
+                        ]
+                    }
+                )
+                + "\n"
+            )
+            (corpus / "listed.bin").write_bytes(b"ok")
+            (corpus / "orphan.bin").write_bytes(b"bad")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            violations = dict(fuzz_corpus_violations(root))
+            self.assertIn("Fuzz/corpus/regression/orphan.bin", violations)
+            self.assertNotIn("Fuzz/corpus/regression/listed.bin", violations)
+
+    def test_accepts_manifested_fuzz_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            corpus = root / "Fuzz" / "corpus" / "regression"
+            corpus.mkdir(parents=True)
+            (corpus / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "entries": [
+                            {
+                                "file": "listed.bin",
+                                "rationale": "listed regression seed",
+                            }
+                        ]
+                    }
+                )
+                + "\n"
+            )
+            (corpus / "listed.bin").write_bytes(b"ok")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_reports_unmanifested_preflight_pdf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            fixtures = root / "loupe-preflight" / "testdata" / "fixtures"
+            fixtures.mkdir(parents=True)
+            (fixtures / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "listed",
+                            "pdf": "listed.pdf",
+                            "profile": "profiles/loupe-default.json",
+                            "expect": {"pass": True, "check_ids": []},
+                        }
+                    ]
+                )
+                + "\n"
+            )
+            (fixtures / "listed.pdf").write_bytes(b"%PDF-1.4")
+            (fixtures / "orphan.pdf").write_bytes(b"%PDF-1.4")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            violations = dict(preflight_pdf_violations(root))
+            self.assertIn(
+                "loupe-preflight/testdata/fixtures/orphan.pdf", violations
+            )
+            self.assertNotIn(
+                "loupe-preflight/testdata/fixtures/listed.pdf", violations
+            )
 
 
 if __name__ == "__main__":

@@ -21,38 +21,38 @@
 # SOFTWARE.
 
 add_executable(PdfTool
-    main.cpp 
-    pdfoutputformatter.cpp 
-    pdftoolabstractapplication.cpp 
+    main.cpp
+    pdfoutputformatter.cpp
+    pdftoolabstractapplication.cpp
     pdftoolcapabilities.cpp
     pdftoolcapabilities.h
-    pdftoolresult.cpp 
-    pdftoolattachments.cpp 
-    pdftoolaudiobook.cpp 
-    pdftoolcertstore.cpp 
-    pdftoolcolorprofiles.cpp 
-    pdftooldecrypt.cpp 
-    pdftooldiff.cpp 
-    pdftoolencrypt.cpp 
-    pdftoolfetchimages.cpp 
-    pdftoolfetchtext.cpp 
-    pdftoolinfo.cpp 
-    pdftoolinfofonts.cpp 
-    pdftoolinfoinks.cpp 
-    pdftoolinfojavascript.cpp 
-    pdftoolinfometadata.cpp 
-    pdftoolinfonameddestinations.cpp 
-    pdftoolinfopageboxes.cpp 
-    pdftoolinfostructuretree.cpp 
-    pdftoolinkcoverage.cpp 
-    pdftooloptimize.cpp 
-    pdftoolrender.cpp 
+    pdftoolresult.cpp
+    pdftoolattachments.cpp
+    pdftoolaudiobook.cpp
+    pdftoolcertstore.cpp
+    pdftoolcolorprofiles.cpp
+    pdftooldecrypt.cpp
+    pdftooldiff.cpp
+    pdftoolencrypt.cpp
+    pdftoolfetchimages.cpp
+    pdftoolfetchtext.cpp
+    pdftoolinfo.cpp
+    pdftoolinfofonts.cpp
+    pdftoolinfoinks.cpp
+    pdftoolinfojavascript.cpp
+    pdftoolinfometadata.cpp
+    pdftoolinfonameddestinations.cpp
+    pdftoolinfopageboxes.cpp
+    pdftoolinfostructuretree.cpp
+    pdftoolinkcoverage.cpp
+    pdftooloptimize.cpp
+    pdftoolrender.cpp
     pdftoolremoveexternallinks.cpp
     pdftoolremoveexternallinks.h
-    pdftoolseparate.cpp 
-    pdftoolstatistics.cpp 
-    pdftoolunite.cpp 
-    pdftoolverifysignatures.cpp 
+    pdftoolseparate.cpp
+    pdftoolstatistics.cpp
+    pdftoolunite.cpp
+    pdftoolverifysignatures.cpp
     pdftoolxml.cpp
     pdftoolredact.cpp
     pdftoolredact.h

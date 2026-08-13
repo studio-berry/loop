@@ -1,0 +1,232 @@
+{
+  "entries": [
+    {
+      "file": "05fe405753166f125559e7c9ac558654f107c7e9",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "0bf1b28b05310e55396a21cca5a040b7fb61394a",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "0d27adb3342abf33b279e249c791658fa1bd4fbe",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "0d8e7918b49f3b8f4cce0a27138429086f0a5edd",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "0e0796a9f37f7e997de0b7185f2e25889d6208d1",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "1147c233f503559e6717a8e30df554a732cf7491",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "1969e173d3fe999a288596ba83073dff047da6a3",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "1f9016ec5da52d57e15dd410c1f5363d97270696",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "227b8a1f7b8bf0f963a46a8a6682e56000c25aa9",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "2c687872141061cea81f60c66143ccb29f41de46",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "2e20c0993dca7dc5c8f5010ece6c1b65b6568af9",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "3293963d338b3e01755f7d321623c2465e4d8c7a",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "39fa20eafb34195de3022164f0f4374aab2ef57c",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "4015f8ebd19f5bb5d345e965a2e5b17940d906d3",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "4d73d182aa550aec736aff657b899bfc989fb4fb",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "512d35cdf136f863a10580a00b51b4f08eba565b",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "513c5618de3edd7f99809812cf0caa5a131dfea4",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "59a77b63389e68309c5bd4edd677201b083ddc09",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "5ba93c9db0cff93f52b521d7420e43f6eda2784f",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "5cc07916be9e3ec8c2d3e903a061a039a9a3d16c",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "6189fc3fa2b4153d269e398b4e1de09c1b37048f",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "62ab3d6c0a1932f3be4a234d1447791c4b8e68aa",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "67b937d646dfde2be44948b16f68dcb63c28ee8c",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "69f2fb0d9e33c7b4bb0a23208551d182d7e75bc8",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "6a7101913acbe55bd028ee2cbbd682b712e32bd4",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "709550f2c715e00c3a6fd7622de97a3445506d6d",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "71593767ea022b2b11c319c88c5614c8b46c8d62",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "834d4f5f15f456e317ee89f90b25e6b05800798f",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "91baf385aa2c8f940e24a2c261af0c60d232ba75",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "92f61fabd7511434af62ab3a21b03468334a0230",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "948619f51bf14307d0f0f8fa702c461f072b3111",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "951a24c308cc2e7db4a33116335f838b725ebbf8",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "980f09be7b09e121702d79accff64af58605e5d9",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "9821c657d0735d2014f2fcd087f81fd48d62387e",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "9df346eaa0cad4d071887ea0b977273b6f3e4dc0",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "9ef6d8ec7c78e877f44aa8139a0d36fce60b75de",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "aa771641e94641be70a27cc5891153dba03127eb",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "ad1ba649e51727502975d24ea826eb96a5d72470",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "b502df9fb6d6eb5294b4d5231f73ac34e8cde291",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "b6a915ced4661ec1ab8cb5f5808618e8e8a4568d",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "bb73b7d95599b035419acc677798693df6ff1a19",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "be393cd0927030785131202750e9b7f98dada130",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "bf83bf98c8528ea09776118958ddcf74f82e095c",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "c15ab85c4c482560d7de7f65e7076da5df3be23b",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "c40fd12272efb444f117798d2ab7baf5fab08ed4",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "ca7b5bc0524f7bca11ab37dcd27849875ef86f98",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "cac6de5ae7fbaf3377b6be253ec0efa22cfda612",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "ce00904aac8bc5a8ff34eed5837e39ea2ea6be66",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "d309727c5b93b055422f8002783ff5945cad13cb",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "d477d0621238bee0bdcdea83dfe8b4774b537da0",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "e4ac6cc91c659af4cfdcd836e9fc04ef666cf6ae",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "e4e10b45a7b1599f87a05ec4b6518d7ec8612db4",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "eafa7fbcb7bda774967177d4f1cd9d79473d5fab",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "f4b9303f4307bbe02f5721a2184b3c1f27c143ae",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "f9c042ae10baf34a278167a1f572dd2ff0b6b106",
+      "rationale": "legacy libFuzzer regression seed"
+    },
+    {
+      "file": "jbig2_composition_timeout_c8a61daa.bin",
+      "rationale": "MIC-326 JBIG2 composition timeout regression (fuzz_images)"
+    },
+    {
+      "file": "jbig2_symbol_dict_zero_progress_timeout_7cf9387b.bin",
+      "rationale": "MIC-326 JBIG2 symbol-dictionary zero-progress timeout regression (fuzz_images)"
+    }
+  ]
+}

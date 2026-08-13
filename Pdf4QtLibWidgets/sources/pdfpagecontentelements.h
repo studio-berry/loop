@@ -53,7 +53,7 @@ class PDFPageContentImageElement;
 class PDFPageContentElementTextBox;
 
 class PDF4QTLIBWIDGETSSHARED_EXPORT PDFPageContentElement
-{ 
+{
 public:
     explicit PDFPageContentElement() = default;
     virtual ~PDFPageContentElement();

@@ -390,4 +390,3 @@ void PDFExamplesGenerator::generatePageDrawExample()
     pdf::PDFDocumentWriter writer(nullptr);
     writer.write("Ex_PageDraw.pdf", &document, false);
 }
-

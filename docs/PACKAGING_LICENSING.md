@@ -2,8 +2,8 @@
 
 Planning review for Loupe desktop distribution — **not legal advice**. A qualified open-source licensing attorney should review the final release manifest before commercial distribution.
 
-**Linear:** [MIC-140](https://linear.app/mbx2/issue/MIC-140/plan-packaging-licensing-review-ghostscriptverapdfjre-bundle)  
-**Notion source:** [MIC-140 — Packaging & Licensing Review](https://app.notion.com/p/9bdbe383233d44cd88b7916d9aa4ce6d)  
+**Linear:** [MIC-140](https://linear.app/mbx2/issue/MIC-140/plan-packaging-licensing-review-ghostscriptverapdfjre-bundle)
+**Notion source:** [MIC-140 — Packaging & Licensing Review](https://app.notion.com/p/9bdbe383233d44cd88b7916d9aa4ce6d)
 **Architecture context:** [Hybrid sidecar preflight plan (Linear)](https://linear.app/mbx2/document/hybrid-sidecar-preflight-plan-from-notion-45159ab6473e)
 
 ## Recommendation

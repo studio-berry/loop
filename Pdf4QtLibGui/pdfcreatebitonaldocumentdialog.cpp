@@ -508,5 +508,3 @@ QRect ImagePreviewDelegate::getMarkRect(const QStyleOptionViewItem& option) cons
 }
 
 }   // namespace pdfviewer
-
-

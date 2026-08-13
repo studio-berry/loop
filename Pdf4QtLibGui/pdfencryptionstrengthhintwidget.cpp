@@ -189,4 +189,3 @@ void PDFEncryptionStrengthHintWidget::setCurrentValue(int currentValue)
 }
 
 }   // namespace pdfviewer
-
