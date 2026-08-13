@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfglobal.h"
+#include "pdfutils.h"   // PDFOperationResult, returned by preview()/apply() below
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -98,6 +99,6 @@ public:
                                     PDFStandardConversionReport* report = nullptr);
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFSTANDARDCONVERSION_H
+#endif   // PDFSTANDARDCONVERSION_H

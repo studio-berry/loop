@@ -25,6 +25,10 @@
             "status": "ok"
         },
         {
+            "id": "transparency-risk",
+            "status": "ok"
+        },
+        {
             "id": "color-inventory",
             "status": "ok"
         },
@@ -64,6 +68,16 @@
     "pass": false,
     "profile": "Loupe Default",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "3a4460522d49cd5b"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
         {
             "check_id": "color-inventory",

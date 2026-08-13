@@ -53,7 +53,7 @@ pdf::PDFDocument buildDocument()
     return builder.build();
 }
 
-} // namespace
+}   // namespace
 
 void TransparencyFlattenerTest::flattenOpaquePage_reportsFullPageRegion()
 {
@@ -85,5 +85,7 @@ void TransparencyFlattenerTest::dryRun_doesNotMutateDocument()
     QVERIFY(result);
     QVERIFY(document == before);
 }
+
+QTEST_GUILESS_MAIN(TransparencyFlattenerTest)
 
 #include "tst_transparencyflattenertest.moc"

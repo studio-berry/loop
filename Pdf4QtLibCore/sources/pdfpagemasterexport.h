@@ -157,11 +157,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExportResult
 };
 
 /// Headless PageMaster export orchestrator (ADR-003).
-<<<<<<< HEAD
-/// Locked stage order: assemble → preflight → page geometry → bleed fixup → image optimize → standard conversion → write.
-=======
-/// Locked stage order: assemble → preflight → page geometry → bleed fixup → transparency flatten → image optimize → write.
->>>>>>> origin/dev
+/// Locked stage order: assemble → preflight gate → Action List → page geometry →
+/// production geometry validation / contour bleed → bleed fixup → transparency
+/// flatten → image optimize → standard conversion → preflight revalidation → write.
 /// Synchronous and not thread-safe; callers may invoke run() from a worker thread.
 class PDF4QTLIBCORESHARED_EXPORT PDFPageMasterExport
 {
@@ -171,6 +169,6 @@ public:
     static PDFPageMasterExportResult run(PDFPageMasterExportJob job);
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFPAGEMASTEREXPORT_H
+#endif   // PDFPAGEMASTEREXPORT_H

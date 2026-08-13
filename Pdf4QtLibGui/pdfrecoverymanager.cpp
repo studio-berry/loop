@@ -793,7 +793,7 @@ void PDFRecoveryManager::ensureSession()
 
     if (m_sourcePath.isEmpty() || recoveryRoot().isEmpty())
     {
-        emit checkpointFailed(QStringLiteral("recovery-source-unavailable"), QStringLiteral("Recovery is unavailable because the document has no local source identity."));
+        checkpointFailed(QStringLiteral("recovery-source-unavailable"), QStringLiteral("Recovery is unavailable because the document has no local source identity."));
         return;
     }
 
@@ -801,7 +801,7 @@ void PDFRecoveryManager::ensureSession()
     if (!QDir().mkpath(m_sessionDirectory))
     {
         m_sessionDirectory.clear();
-        emit checkpointFailed(QStringLiteral("recovery-directory-unavailable"), QStringLiteral("The private recovery directory could not be created."));
+        checkpointFailed(QStringLiteral("recovery-directory-unavailable"), QStringLiteral("The private recovery directory could not be created."));
         return;
     }
 
@@ -811,7 +811,7 @@ void PDFRecoveryManager::ensureSession()
         delete m_lockFile;
         m_lockFile = nullptr;
         m_sessionDirectory.clear();
-        emit checkpointFailed(QStringLiteral("recovery-session-locked"), QStringLiteral("Another Loupe instance owns the recovery session."));
+        checkpointFailed(QStringLiteral("recovery-session-locked"), QStringLiteral("Another Loupe instance owns the recovery session."));
     }
 }
 
@@ -909,11 +909,11 @@ void PDFRecoveryManager::onCheckpointFinished()
 
     if (result.success)
     {
-        emit checkpointCompleted(result.revision);
+        checkpointCompleted(result.revision);
     }
     else
     {
-        emit checkpointFailed(result.diagnosticCode, result.message);
+        checkpointFailed(result.diagnosticCode, result.message);
     }
 
     if (retire)

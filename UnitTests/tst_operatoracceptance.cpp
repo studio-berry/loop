@@ -25,6 +25,7 @@
 // Editor plugin) and validates report handling helpers used by LoupePreflightPlugin.
 // GUI navigation/overlay/cancel flows are covered in docs/v1-operator-acceptance.md.
 
+#include "pdftoolenvelopeutils.h"
 #include "preflightsidecarutils.h"
 
 #include <QtTest>
@@ -323,12 +324,20 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     QProcessEnvironment environment;
     for (const QString& name : { QStringLiteral("PATH"), QStringLiteral("SystemRoot"),
                                  QStringLiteral("TEMP"), QStringLiteral("TMP"),
-                                 QStringLiteral("USERPROFILE") })
+                                 QStringLiteral("USERPROFILE"), QStringLiteral("LANG"),
+                                 QStringLiteral("LC_ALL"), QStringLiteral("LC_CTYPE") })
     {
         if (systemEnvironment.contains(name))
         {
             environment.insert(name, systemEnvironment.value(name));
         }
+    }
+    if (!environment.contains(QStringLiteral("LANG")) && !environment.contains(QStringLiteral("LC_ALL")))
+    {
+        // Ensure the sidecar sees a UTF-8 locale: some CI runner images leave LANG/LC_ALL
+        // unset, and Qt writes a "Detected locale \"C\"..." warning to stderr in that case,
+        // which acceptance tests assert is empty.
+        environment.insert(QStringLiteral("LANG"), QStringLiteral("C.UTF-8"));
     }
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     environment.insert(QStringLiteral("QT_QPA_PLATFORM_PLUGIN_PATH"),
@@ -439,9 +448,15 @@ bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
         return false;
     }
 
+    const QJsonObject envelope = document.object();
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")))
+    {
+        return false;
+    }
+
     if (report)
     {
-        *report = document.object();
+        *report = pdfplugin::pdftool::reportFromEnvelope(envelope);
     }
 
     return true;
@@ -758,15 +773,26 @@ void OperatorAcceptanceTest::invalidProfile_returnsActionableError()
     badProfileFile.write("{ not valid json");
     badProfileFile.close();
 
+    // preflight defaults to JSON console output (see main.cpp), and
+    // PDFConsole::setDiagnosticSink() intentionally captures error output as
+    // structured diagnostics in that envelope instead of writing to stderr - so
+    // the actionable error lands in the JSON envelope on stdout, not stderr.
     int exitCode = -1;
-    QByteArray stdErr;
+    QByteArray stdOut;
     QVERIFY(runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), badProfilePath },
+                       &stdOut,
                        nullptr,
-                       &stdErr,
                        &exitCode));
     QVERIFY(exitCode != 0);
     QVERIFY(exitCode != 1);
-    QVERIFY(!stdErr.trimmed().isEmpty());
+
+    QJsonParseError parseError;
+    const QJsonDocument json = QJsonDocument::fromJson(stdOut, &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QVERIFY(json.isObject());
+    const QJsonArray diagnostics = json.object().value(QStringLiteral("diagnostics")).toArray();
+    QVERIFY(!diagnostics.isEmpty());
+    QVERIFY(!diagnostics.first().toObject().value(QStringLiteral("message")).toString().isEmpty());
 }
 
 void OperatorAcceptanceTest::profileSemanticMismatch_returnsProfileFinding()

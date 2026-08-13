@@ -242,6 +242,20 @@
       "follow_up_issue": 195
     },
     {
+      "id": "action-list-plugin",
+      "kind": "plugin",
+      "artifact": "ActionListPlugin",
+      "artifact_scope": "install",
+      "disposition": "ABSORB",
+      "owner": "m.berry",
+      "rationale": "Reusable Action Lists are batch execution of registered operations, surfaced contextually within Loupe Fix rather than as a separate product.",
+      "profiles": { "developer": "present", "loupe-release": "present" },
+      "replacement_surface": "loupe-fix",
+      "dependencies": ["Pdf4QtEditor"],
+      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "follow_up_issue": 30
+    },
+    {
       "id": "scanner-plugin",
       "kind": "plugin",
       "artifact": "ScannerPlugin",

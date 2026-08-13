@@ -37,36 +37,40 @@ class PDFDocumentSession;
 
 using DocumentRevision = quint64;
 
-/// Stable identity for the artifact currently held by a document context.
-struct PDFArtifactIdentity
+/// Stable identity for the in-session document currently held by a context.
+/// Distinct from pdf::PDFArtifactIdentity in pdfartifactidentity.h, which
+/// identifies a *persisted* artifact by content hash and storage token. Both
+/// live in namespace pdf and in the Pdf4QtLibCore target, so they must not
+/// share a name — see UnitTests/tst_identityseparationtest.cpp.
+struct PDF4QTLIBCORESHARED_EXPORT PDFDocumentIdentity
 {
     QByteArray sourceDataHash;
     QString documentId;
 
     bool isValid() const { return !documentId.isEmpty() || !sourceDataHash.isEmpty(); }
-    bool operator==(const PDFArtifactIdentity&) const = default;
+    bool operator==(const PDFDocumentIdentity&) const = default;
 
-    static PDFArtifactIdentity fromDocument(const PDFDocument* document);
+    static PDFDocumentIdentity fromDocument(const PDFDocument* document);
 };
 
 /// Revision fence shared by document caches, findings, and asynchronous jobs.
 /// A result is usable only when this complete value still equals the context's
 /// current value. The cache generation changes for renderer/profile changes;
 /// documentRevision changes for document mutations or replacement.
-struct PDFRevisionIdentity
+struct PDF4QTLIBCORESHARED_EXPORT PDFRevisionIdentity
 {
-    PDFArtifactIdentity artifact;
+    PDFDocumentIdentity document;
     DocumentRevision documentRevision = 0;
     quint64 cacheGeneration = 0;
     QString effectiveProfileIdentity;
 
-    bool isValid() const { return artifact.isValid(); }
+    bool isValid() const { return document.isValid(); }
     bool operator==(const PDFRevisionIdentity&) const = default;
     bool operator<(const PDFRevisionIdentity& other) const;
     QString toString() const;
 };
 
-/// Owns the active artifact identity and the one revision fence used by
+/// Owns the active document identity and the one revision fence used by
 /// document-bound caches and asynchronous work.
 class PDF4QTLIBCORESHARED_EXPORT PDFDocumentContext : public QObject
 {
@@ -82,7 +86,7 @@ public:
 
     PDFDocument* getDocument() const { return m_document; }
     PDFDocumentPointer getDocumentPointer() const { return m_documentPointer; }
-    PDFArtifactIdentity getArtifactIdentity() const { return m_artifact; }
+    PDFDocumentIdentity getDocumentIdentity() const { return m_documentIdentity; }
     PDFRevisionIdentity getRevision() const;
     PDFDocumentSession* getSession() const { return m_session.get(); }
 
@@ -112,15 +116,15 @@ private:
 
     PDFDocumentPointer m_documentPointer;
     PDFDocument* m_document = nullptr;
-    PDFArtifactIdentity m_artifact;
+    PDFDocumentIdentity m_documentIdentity;
     DocumentRevision m_documentRevision = 0;
     quint64 m_cacheGeneration = 0;
     QString m_effectiveProfileIdentity;
     std::unique_ptr<PDFDocumentSession> m_session;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_METATYPE(pdf::PDFRevisionIdentity)
 
-#endif // PDFDOCUMENTCONTEXT_H
+#endif   // PDFDOCUMENTCONTEXT_H

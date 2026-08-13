@@ -51,8 +51,8 @@ enum class PDFActionListFailurePolicy
     Continue
 };
 
-QString pdfActionListStepStatusName(PDFActionListStepStatus status);
-QString pdfActionListFailurePolicyName(PDFActionListFailurePolicy policy);
+PDF4QTLIBCORESHARED_EXPORT QString pdfActionListStepStatusName(PDFActionListStepStatus status);
+PDF4QTLIBCORESHARED_EXPORT QString pdfActionListFailurePolicyName(PDFActionListFailurePolicy policy);
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFActionListStep
 {

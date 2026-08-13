@@ -88,7 +88,7 @@ PDFThumbnailsRenderer::PDFThumbnailsRenderer(const PDFDocument* document, QObjec
     QObject(parent),
     m_document(document),
     m_pageImageCache(THUMBNAIL_CACHE_LIMIT_BYTES),
-    m_revision(PDFRevisionIdentity { PDFArtifactIdentity::fromDocument(document), 0, 0, QString() })
+    m_revision(PDFRevisionIdentity { PDFDocumentIdentity::fromDocument(document), 0, 0, QString() })
 {
     connect(&m_renderWatcher, &QFutureWatcher<RenderBatchResult>::finished, this, &PDFThumbnailsRenderer::onRenderFinished);
 }
@@ -117,7 +117,7 @@ void PDFThumbnailsRenderer::setDocument(const PDFDocument* document)
     m_requestQueue.clear();
     m_keysByPage.clear();
     ++m_renderEpoch;
-    m_revision = PDFRevisionIdentity { PDFArtifactIdentity::fromDocument(document), 0, m_renderEpoch, QString() };
+    m_revision = PDFRevisionIdentity { PDFDocumentIdentity::fromDocument(document), 0, m_renderEpoch, QString() };
 }
 
 void PDFThumbnailsRenderer::setDocumentContext(PDFDocumentContext* context)

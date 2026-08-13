@@ -25,6 +25,10 @@
             "status": "ok"
         },
         {
+            "id": "transparency-risk",
+            "status": "ok"
+        },
+        {
             "id": "color-inventory",
             "status": "ok"
         },
@@ -53,6 +57,15 @@
     "pass": true,
     "profile": "Loupe Default",
     "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
     "warnings": [
         {
             "check_id": "color-inventory",

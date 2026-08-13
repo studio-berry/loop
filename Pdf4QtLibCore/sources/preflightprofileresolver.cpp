@@ -52,12 +52,18 @@ QString normalizeId(const QString& value)
 
 QString contextValue(const PreflightJobContext& context, const QString& key)
 {
-    if (key == QStringLiteral("client_id")) return context.clientId;
-    if (key == QStringLiteral("product_id")) return context.productId;
-    if (key == QStringLiteral("job_type")) return context.jobType;
-    if (key == QStringLiteral("press_id")) return context.pressId;
-    if (key == QStringLiteral("stock_id")) return context.stockId;
-    if (key == QStringLiteral("finishing_id")) return context.finishingId;
+    if (key == QStringLiteral("client_id"))
+        return context.clientId;
+    if (key == QStringLiteral("product_id"))
+        return context.productId;
+    if (key == QStringLiteral("job_type"))
+        return context.jobType;
+    if (key == QStringLiteral("press_id"))
+        return context.pressId;
+    if (key == QStringLiteral("stock_id"))
+        return context.stockId;
+    if (key == QStringLiteral("finishing_id"))
+        return context.finishingId;
     return {};
 }
 
@@ -239,7 +245,17 @@ bool profileSourceFromJson(const QJsonObject& profileObject,
     PreflightProfileData parsedProfile;
     if (!validator.parseProfile(profileObject, parsedProfile, errorMessage))
     {
-        return false;
+        // An otherwise well-formed profile with an empty checks array is a semantic
+        // authoring problem PreflightEngine::run() itself reports as a document-scope
+        // 'profile' finding, not a source-validation failure - accept the source here
+        // (resolveMatched() below runs the same exemption for the merged/effective
+        // profile) so the real run classifies it downstream instead of this pre-check
+        // rejecting it outright as an unconditional resolver error.
+        const bool isEmptyChecksOnly = !profileObject.value(QStringLiteral("name")).toString().isEmpty() && profileObject.value(QStringLiteral("checks")).toArray().isEmpty();
+        if (!isEmptyChecksOnly)
+        {
+            return false;
+        }
     }
 
     source.contentHash = QCryptographicHash::hash(canonicalPreflightJson(profileObject), QCryptographicHash::Sha256).toHex();
@@ -272,8 +288,7 @@ struct Contribution
 
 bool isHigherAuthority(const RankedSource& candidate, const Contribution& current)
 {
-    return candidate.source.priority > current.priority
-        || (candidate.source.priority == current.priority && candidate.specificity > current.specificity);
+    return candidate.source.priority > current.priority || (candidate.source.priority == current.priority && candidate.specificity > current.specificity);
 }
 
 QString sourceLabel(const RankedSource& source)
@@ -319,8 +334,7 @@ bool mergeValue(QJsonObject& target,
                 QList<PreflightResolutionDecision>& decisions,
                 QString& errorMessage)
 {
-    if (incoming.isObject() && !incoming.toObject().isEmpty()
-        && (!target.contains(key) || target.value(key).isObject()))
+    if (incoming.isObject() && !incoming.toObject().isEmpty() && (!target.contains(key) || target.value(key).isObject()))
     {
         QJsonObject child = target.value(key).toObject();
         if (!mergeObject(child, incoming.toObject(), source, path, contributions, decisions, errorMessage))
@@ -341,12 +355,11 @@ bool mergeValue(QJsonObject& target,
     }
 
     const Contribution& previous = existing.value();
-    const bool sameAuthority = previous.priority == source.source.priority
-        && previous.specificity == source.specificity;
+    const bool sameAuthority = previous.priority == source.source.priority && previous.specificity == source.specificity;
     if (sameAuthority && !isEqualJson(previous.value, incoming))
     {
         errorMessage = QStringLiteral("Ambiguous profile resolution at '%1': '%2' and '%3' have equal authority.")
-            .arg(path, previous.sourceId, sourceLabel(source));
+                           .arg(path, previous.sourceId, sourceLabel(source));
         return false;
     }
 
@@ -397,8 +410,7 @@ bool sourceMatches(const PreflightProfileSource& source,
             for (auto attribute = attributes.constBegin(); attribute != attributes.constEnd(); ++attribute)
             {
                 const auto contextAttribute = context.attributes.constFind(attribute.key());
-                if (contextAttribute == context.attributes.constEnd() || !contextAttribute.value().isString()
-                    || !matchesSelectorValue(attribute.value(), contextAttribute.value().toString()))
+                if (contextAttribute == context.attributes.constEnd() || !contextAttribute.value().isString() || !matchesSelectorValue(attribute.value(), contextAttribute.value().toString()))
                 {
                     return false;
                 }
@@ -425,7 +437,12 @@ bool mergeIdentifiedArray(QJsonObject& target,
                           QList<PreflightResolutionDecision>& decisions,
                           QString& errorMessage)
 {
+    // QMap iterates in key-sorted (alphabetical id) order, which would silently
+    // reorder the profile's declared check/fixup order. Track first-appearance
+    // order separately so the merged array reads in the same order a human
+    // reading the source profile(s) would expect.
     QMap<QString, QJsonObject> items;
+    QStringList order;
     for (const RankedSource& source : sources)
     {
         const QJsonArray array = source.source.profile.value(key).toArray();
@@ -438,6 +455,10 @@ bool mergeIdentifiedArray(QJsonObject& target,
             }
 
             const QString id = value.toObject().value(QStringLiteral("id")).toString();
+            if (!items.contains(id))
+            {
+                order.append(id);
+            }
             QJsonObject current = items.value(id);
             if (!mergeObject(current, value.toObject(), source,
                              QStringLiteral("/%1/%2").arg(key, id), contributions, decisions, errorMessage))
@@ -449,9 +470,9 @@ bool mergeIdentifiedArray(QJsonObject& target,
     }
 
     QJsonArray result;
-    for (auto iterator = items.constBegin(); iterator != items.constEnd(); ++iterator)
+    for (const QString& id : order)
     {
-        result.append(iterator.value());
+        result.append(items.value(id));
     }
     target.insert(key, result);
     return true;
@@ -514,8 +535,7 @@ PreflightResolvedProfile resolveMatched(const QList<RankedSource>& matched,
             }
         }
 
-        if (!mergeIdentifiedArray(effective, QStringLiteral("checks"), matched, contributions, result.decisions, errorMessage)
-            || !mergeIdentifiedArray(effective, QStringLiteral("fixups"), matched, contributions, result.decisions, errorMessage))
+        if (!mergeIdentifiedArray(effective, QStringLiteral("checks"), matched, contributions, result.decisions, errorMessage) || !mergeIdentifiedArray(effective, QStringLiteral("fixups"), matched, contributions, result.decisions, errorMessage))
         {
             result.errorCode = QStringLiteral("invalid-profile-merge");
             result.errorMessage = errorMessage;
@@ -527,23 +547,33 @@ PreflightResolvedProfile resolveMatched(const QList<RankedSource>& matched,
     PreflightProfileData parsed;
     if (!validator.parseProfile(effective, parsed, errorMessage))
     {
-        result.errorCode = QStringLiteral("invalid-effective-profile");
-        result.errorMessage = errorMessage;
-        return result;
+        // An otherwise well-formed profile with an empty checks array is a semantic
+        // authoring problem that PreflightEngine::run() itself reports as a
+        // document-scope 'profile' finding, not a resolution/merge failure - let
+        // resolution succeed so that classification happens once, downstream,
+        // instead of being pre-empted here as a resolver error (which always maps
+        // to an Error verdict / PreflightError exit code, regardless of reason).
+        const bool isEmptyChecksOnly = !effective.value(QStringLiteral("name")).toString().isEmpty() && effective.value(QStringLiteral("checks")).toArray().isEmpty();
+        if (!isEmptyChecksOnly)
+        {
+            result.errorCode = QStringLiteral("invalid-effective-profile");
+            result.errorMessage = errorMessage;
+            return result;
+        }
     }
 
     result.effectiveProfile = effective;
     result.effectiveHash = QCryptographicHash::hash(canonicalPreflightJson(effective), QCryptographicHash::Sha256).toHex();
-    std::sort(result.decisions.begin(), result.decisions.end(), [](const auto& left, const auto& right) {
+    std::sort(result.decisions.begin(), result.decisions.end(), [](const auto& left, const auto& right)
+              {
         if (left.jsonPointer != right.jsonPointer) return left.jsonPointer < right.jsonPointer;
         if (left.sourceId != right.sourceId) return left.sourceId < right.sourceId;
-        return left.overriddenSourceId < right.overriddenSourceId;
-    });
+        return left.overriddenSourceId < right.overriddenSourceId; });
     result.ok = true;
     return result;
 }
 
-} // namespace
+}   // namespace
 
 QJsonValue canonicalizePreflightJson(const QJsonValue& value)
 {
@@ -587,12 +617,18 @@ QByteArray canonicalPreflightJson(const QJsonValue& value)
 QJsonObject PreflightJobContext::toJson() const
 {
     QJsonObject object;
-    if (!clientId.isEmpty()) object.insert(QStringLiteral("client_id"), clientId);
-    if (!productId.isEmpty()) object.insert(QStringLiteral("product_id"), productId);
-    if (!jobType.isEmpty()) object.insert(QStringLiteral("job_type"), jobType);
-    if (!pressId.isEmpty()) object.insert(QStringLiteral("press_id"), pressId);
-    if (!stockId.isEmpty()) object.insert(QStringLiteral("stock_id"), stockId);
-    if (!finishingId.isEmpty()) object.insert(QStringLiteral("finishing_id"), finishingId);
+    if (!clientId.isEmpty())
+        object.insert(QStringLiteral("client_id"), clientId);
+    if (!productId.isEmpty())
+        object.insert(QStringLiteral("product_id"), productId);
+    if (!jobType.isEmpty())
+        object.insert(QStringLiteral("job_type"), jobType);
+    if (!pressId.isEmpty())
+        object.insert(QStringLiteral("press_id"), pressId);
+    if (!stockId.isEmpty())
+        object.insert(QStringLiteral("stock_id"), stockId);
+    if (!finishingId.isEmpty())
+        object.insert(QStringLiteral("finishing_id"), finishingId);
     if (!attributes.isEmpty())
     {
         QJsonObject attributeObject;
@@ -634,12 +670,7 @@ bool PreflightJobContext::fromJson(const QJsonObject& object,
         }
     }
 
-    if (!parseIdValue(object, { QStringLiteral("client_id"), QStringLiteral("client") }, context.clientId, errorMessage)
-        || !parseIdValue(object, { QStringLiteral("product_id"), QStringLiteral("product") }, context.productId, errorMessage)
-        || !parseIdValue(object, { QStringLiteral("job_type"), QStringLiteral("job-type") }, context.jobType, errorMessage)
-        || !parseIdValue(object, { QStringLiteral("press_id"), QStringLiteral("press") }, context.pressId, errorMessage)
-        || !parseIdValue(object, { QStringLiteral("stock_id"), QStringLiteral("stock") }, context.stockId, errorMessage)
-        || !parseIdValue(object, { QStringLiteral("finishing_id"), QStringLiteral("finishing") }, context.finishingId, errorMessage))
+    if (!parseIdValue(object, { QStringLiteral("client_id"), QStringLiteral("client") }, context.clientId, errorMessage) || !parseIdValue(object, { QStringLiteral("product_id"), QStringLiteral("product") }, context.productId, errorMessage) || !parseIdValue(object, { QStringLiteral("job_type"), QStringLiteral("job-type") }, context.jobType, errorMessage) || !parseIdValue(object, { QStringLiteral("press_id"), QStringLiteral("press") }, context.pressId, errorMessage) || !parseIdValue(object, { QStringLiteral("stock_id"), QStringLiteral("stock") }, context.stockId, errorMessage) || !parseIdValue(object, { QStringLiteral("finishing_id"), QStringLiteral("finishing") }, context.finishingId, errorMessage))
     {
         return false;
     }
@@ -711,17 +742,15 @@ QJsonObject PreflightResolvedProfile::provenance() const
         { QStringLiteral("context"), normalizedContext },
         { QStringLiteral("matched_sources"), matched },
         { QStringLiteral("effective_profile"), QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("resolved") },
-            { QStringLiteral("hash"), QString::fromLatin1(effectiveHash) }
-        } },
+                                                   { QStringLiteral("id"), QStringLiteral("resolved") },
+                                                   { QStringLiteral("hash"), QString::fromLatin1(effectiveHash) } } },
         { QStringLiteral("decisions"), decisionsJson }
     };
     if (!ok)
     {
         object.insert(QStringLiteral("error"), QJsonObject{
-            { QStringLiteral("code"), errorCode },
-            { QStringLiteral("message"), errorMessage }
-        });
+                                                   { QStringLiteral("code"), errorCode },
+                                                   { QStringLiteral("message"), errorMessage } });
     }
     return object;
 }
@@ -785,15 +814,15 @@ bool PreflightProfileStore::loadDirectory(const QString& directoryPath,
         snapshot.sources.append(source);
     }
 
-    std::sort(snapshot.sources.begin(), snapshot.sources.end(), [](const auto& left, const auto& right) {
+    std::sort(snapshot.sources.begin(), snapshot.sources.end(), [](const auto& left, const auto& right)
+              {
         if (left.id != right.id) return left.id < right.id;
-        return left.version < right.version;
-    });
+        return left.version < right.version; });
     return true;
 }
 
 PreflightResolvedProfile PreflightProfileResolver::resolve(const PreflightJobContext& context,
-                                                            const PreflightProfileSnapshot& snapshot) const
+                                                           const PreflightProfileSnapshot& snapshot) const
 {
     PreflightJobContext normalizedContext = context;
     normalizedContext.clientId = normalizeId(normalizedContext.clientId);
@@ -831,12 +860,12 @@ PreflightResolvedProfile PreflightProfileResolver::resolve(const PreflightJobCon
         }
     }
 
-    std::sort(matched.begin(), matched.end(), [](const RankedSource& left, const RankedSource& right) {
+    std::sort(matched.begin(), matched.end(), [](const RankedSource& left, const RankedSource& right)
+              {
         if (left.source.priority != right.source.priority) return left.source.priority < right.source.priority;
         if (left.specificity != right.specificity) return left.specificity < right.specificity;
         if (left.source.id != right.source.id) return left.source.id < right.source.id;
-        return left.source.version < right.source.version;
-    });
+        return left.source.version < right.source.version; });
 
     if (matched.isEmpty())
     {
@@ -851,8 +880,8 @@ PreflightResolvedProfile PreflightProfileResolver::resolve(const PreflightJobCon
 }
 
 PreflightResolvedProfile PreflightProfileResolver::resolveExplicitProfile(const QJsonObject& profile,
-                                                                           const QString& sourceId,
-                                                                           const QString& version) const
+                                                                          const QString& sourceId,
+                                                                          const QString& version) const
 {
     PreflightProfileSource source;
     QString errorMessage;
@@ -873,4 +902,4 @@ PreflightResolvedProfile PreflightProfileResolver::resolveExplicitProfile(const 
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf

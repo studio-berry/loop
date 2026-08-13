@@ -53,7 +53,8 @@ void JobSchedulerTest::priorityOrdersQueuedJobs()
     QStringList started;
     QMutex startedMutex;
     QObject::connect(&scheduler, &pdf::PDFJobScheduler::jobStarted,
-                     [&started, &startedMutex](pdf::PDFJobSnapshot snapshot) {
+                     [&started, &startedMutex](pdf::PDFJobSnapshot snapshot)
+                     {
                          QMutexLocker lock(&startedMutex);
                          started.append(snapshot.jobId);
                      });
@@ -61,13 +62,13 @@ void JobSchedulerTest::priorityOrdersQueuedJobs()
     pdf::PDFJobSpec blocker;
     blocker.jobId = QStringLiteral("blocker");
     blocker.priority = pdf::PDFJobPriority::Background;
-    const QString blockerId = scheduler.submit(blocker, [&releaseBlocker, &blockerStarted](pdf::PDFJobContext&) {
+    const QString blockerId = scheduler.submit(blocker, [&releaseBlocker, &blockerStarted](pdf::PDFJobContext&)
+                                               {
         blockerStarted = true;
         while (!releaseBlocker.load(std::memory_order_acquire))
         {
             std::this_thread::yield();
-        }
-    });
+        } });
     QVERIFY(!blockerId.isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(blockerStarted.load(std::memory_order_acquire), 1000);
 
@@ -97,7 +98,8 @@ void JobSchedulerTest::reservesCapacityForInteractionJobs()
     std::atomic_int backgroundStarted = 0;
     std::atomic_bool visibleStarted = false;
 
-    auto backgroundWork = [&releaseBackground, &backgroundStarted](pdf::PDFJobContext&) {
+    auto backgroundWork = [&releaseBackground, &backgroundStarted](pdf::PDFJobContext&)
+    {
         ++backgroundStarted;
         while (!releaseBackground.load(std::memory_order_acquire))
         {
@@ -118,9 +120,8 @@ void JobSchedulerTest::reservesCapacityForInteractionJobs()
     pdf::PDFJobSpec visible;
     visible.jobId = QStringLiteral("visible-reserved");
     visible.priority = pdf::PDFJobPriority::VisiblePage;
-    const QString visibleId = scheduler.submit(visible, [&visibleStarted](pdf::PDFJobContext&) {
-        visibleStarted = true;
-    });
+    const QString visibleId = scheduler.submit(visible, [&visibleStarted](pdf::PDFJobContext&)
+                                               { visibleStarted = true; });
 
     QVERIFY(scheduler.waitForFinished(visibleId, 1000));
     QVERIFY(visibleStarted.load(std::memory_order_acquire));
@@ -171,13 +172,13 @@ void JobSchedulerTest::cancellationIsTerminalAndMeasured()
     pdf::PDFJobSpec spec;
     spec.jobId = QStringLiteral("cancel-me");
     spec.kind = pdf::PDFJobKind::Preflight;
-    const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& context) {
+    const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& context)
+                                           {
         started = true;
         while (!context.isCancellationRequested())
         {
             std::this_thread::yield();
-        }
-    }, &token);
+        } }, &token);
 
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     QVERIFY(scheduler.cancel(jobId));
@@ -190,9 +191,8 @@ void JobSchedulerTest::cancellationIsTerminalAndMeasured()
     QVERIFY(!scheduler.cancel(jobId));
 
     const QList<pdf::PDFJobTraceEvent> events = scheduler.trace(jobId);
-    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFJobTraceEvent& event) {
-        return event.status == pdf::PDFJobStatus::Cancelled;
-    }));
+    QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFJobTraceEvent& event)
+                        { return event.status == pdf::PDFJobStatus::Cancelled; }));
 }
 
 void JobSchedulerTest::staleRevisionIsDiscardedBeforeWorkRuns()
@@ -206,7 +206,8 @@ void JobSchedulerTest::staleRevisionIsDiscardedBeforeWorkRuns()
     spec.documentKey = QStringLiteral("document-1");
     spec.documentRevision = QStringLiteral("revision-1");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&) { ran = true; });
+    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
+                                           { ran = true; });
 
     QVERIFY(scheduler.waitForFinished(jobId, 1000));
     QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
@@ -226,10 +227,10 @@ void JobSchedulerTest::progressAndOperationMetadataAreObservable()
     spec.checkId = QStringLiteral("page.1");
     spec.progressModel = QStringLiteral("pages");
 
-    const QString jobId = scheduler.submit(spec, [](pdf::PDFJobContext& context) {
+    const QString jobId = scheduler.submit(spec, [](pdf::PDFJobContext& context)
+                                           {
         context.reportProgress(25);
-        context.setResultSummary(QStringLiteral("tile rendered"));
-    });
+        context.setResultSummary(QStringLiteral("tile rendered")); });
     QVERIFY(scheduler.waitForFinished(jobId, 1000));
 
     const pdf::PDFJobSnapshot result = scheduler.snapshot(jobId);
