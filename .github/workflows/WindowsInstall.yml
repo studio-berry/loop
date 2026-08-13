@@ -222,11 +222,14 @@ jobs:
           MSVC_REDISTRIBUTABLES_PATH: ${{ env.MSVC_REDISTRIBUTABLES_PATH }}
 
       - name: Upload Sentry debug files
-        if: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+        # Do not use `if: secrets.*` — GitHub rejects the secrets context in
+        # conditionals and the workflow file fails to parse. The script no-ops
+        # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
         working-directory: pdf4qt
         shell: pwsh
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_ORG: berry-studios
           SENTRY_PROJECT: loupe-pdf
           SENTRY_URL: https://de.sentry.io

@@ -89,6 +89,10 @@ Windows Release builds with `PDF4QT_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
 uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region
-(`https://de.sentry.io`) using the pinned `sentryCli` binary. The step is
-skipped when `SENTRY_AUTH_TOKEN` is unset (fork pull requests). PDBs are
-not installed into the MSI; they stay on the Sentry debug-file store.
+(`https://de.sentry.io`) using the pinned `sentryCli` binary. GitHub
+Actions cannot reference `secrets` in `if:` conditionals, so the workflow
+always runs the step; `upload_sentry_debug_files.ps1` no-ops when
+`SENTRY_AUTH_TOKEN` is unset (fork pull requests). PDBs are not installed
+into the MSI; they stay on the Sentry debug-file store. Store the token as
+the repository secret `SENTRY_AUTH_TOKEN` (`project:releases` or broader);
+do not commit it.
