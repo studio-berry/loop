@@ -1,7 +1,7 @@
 # V1 release readiness audit
 
 Audit date: **2026-07-23**, revised **2026-07-24**, corrected **2026-07-25**, signing gate struck **2026-08-02**, gates 1–4 evidence pass **2026-08-03**, fuzz evidence returned **2026-08-03**
-Product: **Loupe PDF 1.6.0.0** (Qt6 desktop PDF toolkit)
+Product: **Loupe PDF 0.1.0-alpha** (Qt6 desktop PDF toolkit)
 Scope: operational, security, reliability, data-integrity, compatibility, and release-readiness for first public launch.
 Platforms: **Windows and Linux** (macOS is not a V1 platform — see `docs/PLATFORM_SUPPORT.md`).
 
@@ -355,4 +355,4 @@ Product owner: review this document and [`docs/PRODUCTION_RUNBOOK.md`](PRODUCTIO
 - [ ] Confirm you accept known limitations in runbook §9 (overprint, unsigned MSI, Flatpak `--filesystem=host`, mirror bleed seams)
 - [ ] Sign off here and in Linear: MIC-301, MIC-326, MIC-327, MIC-330, MIC-342
 
-**After sign-off (step 6, out of scope for this pass):** dispatch `CreateReleaseDraft.yml` on the release SHA, publish `v1.6.0.0`, attach MSI + AppImage + `SHA256SUMS.txt`.
+**After sign-off (step 6, out of scope for this pass):** dispatch `CreateReleaseDraft.yml` on the release SHA, publish `v0.1.0-alpha`, attach MSI + AppImage + `SHA256SUMS.txt`.

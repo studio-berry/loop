@@ -1,7 +1,7 @@
 # EasyOCR V1 — Design Plan (M0)
 
 Status: **locked for V1 implementation** (2026-07-22).
-Scope: Loupe-pdf / PDF4QT 1.6.0.0. Read-only OCR intake (JSON report + Editor panel).
+Scope: Loupe-pdf 0.1.0-alpha. Read-only OCR intake (JSON report + Editor panel).
 Engine: **EasyOCR (CPU)** in bundled `LoupeOcrService` sidecar under `loupe-ocr/`.
 Epic: [MIC-123](https://linear.app/mbx2/issue/MIC-123). Page gate: [MIC-124](https://linear.app/mbx2/issue/MIC-124).
 

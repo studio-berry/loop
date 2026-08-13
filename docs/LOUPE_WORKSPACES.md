@@ -3,7 +3,7 @@
 This document is the product boundary for issue #192. It describes where an
 operator finds a capability; it does not add a second application shell or
 move UI code. Editor workspace wiring is deferred to #193 and remains outside
-the pre-0.0.3 GUI scope.
+the pre-0.1.1 GUI scope.
 
 ## Product surfaces
 

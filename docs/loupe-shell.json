@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue": 193,
-  "gui_status": "deferred-until-0.0.3",
+  "gui_status": "deferred-until-0.1.1",
   "shell_surface": "Pdf4QtEditor",
   "ui_foundation": {
     "candidate": "Qt Quick Controls",

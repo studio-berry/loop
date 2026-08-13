@@ -62,6 +62,11 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_branch_policy.py
+      - name: Verify version policy
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_version_policy.py
 
       - name: Prepare vcpkg directories
         shell: pwsh

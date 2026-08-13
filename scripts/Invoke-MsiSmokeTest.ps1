@@ -28,7 +28,7 @@
     script bug. Record it on MIC-301 and fix the WiX arch before sign-off.
 
 .EXAMPLE
-    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_1.6.0.0.msi
+    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_0.1.0.msi
 #>
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,

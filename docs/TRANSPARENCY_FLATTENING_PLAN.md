@@ -17,7 +17,7 @@ PageMaster. The rasterization report records the page bounds and the reason
 for every rasterized region.
 
 The operation is deliberately headless. Editor controls are deferred until
-after 0.0.3, but the Core settings already carry the raster DPI, line-art/text
+after 0.1.1, but the Core settings already carry the raster DPI, line-art/text
 policy, spot-color policy, page range, dry-run mode, and raster-pixel budget.
 
 The locked PageMaster order is:
