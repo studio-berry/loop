@@ -27,6 +27,7 @@
 #include "pdfdocument.h"
 #include "pdfprogress.h"
 #include "pdfxreftable.h"
+#include "pdfprocessingbudget.h"
 
 #include <QMutex>
 #include <QIODevice>
@@ -44,7 +45,14 @@ class PDF4QTLIBCORESHARED_EXPORT PDFDocumentReader
     Q_DECLARE_TR_FUNCTIONS(pdf::PDFDocumentReader)
 
 public:
-    explicit PDFDocumentReader(PDFProgress* progress, const std::function<QString(bool*)>& getPasswordCallback, bool permissive, bool authorizeOwnerOnly);
+    explicit PDFDocumentReader(PDFProgress* progress,
+                               const std::function<QString(bool*)>& getPasswordCallback,
+                               bool permissive,
+                               bool authorizeOwnerOnly,
+                               PDFProcessingLimits processingLimits = PDFProcessingLimits::conservativeDefaults());
+
+    void setProcessingLimits(const PDFProcessingLimits& limits);
+    const PDFProcessingLimits& getProcessingLimits() const noexcept { return m_processingBudget.limits(); }
 
     constexpr inline PDFDocumentReader(const PDFDocumentReader&) = delete;
     constexpr inline PDFDocumentReader(PDFDocumentReader&&) = delete;
@@ -175,6 +183,8 @@ private:
     /// Authorize as owner only (if owner authorization fails, then whole document
     /// reading fails)
     bool m_authorizeOwnerOnly;
+
+    mutable PDFProcessingBudget m_processingBudget;
 
     /// Warnings
     QStringList m_warnings;

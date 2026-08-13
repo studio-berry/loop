@@ -1,4 +1,4 @@
-"""LoupeOcrService — stdio JSON-line EasyOCR sidecar."""
+"""LoupeOcrService - stdio JSON-line EasyOCR sidecar."""
 
 from __future__ import annotations
 
@@ -21,27 +21,30 @@ def _write_response(response: dict) -> None:
 
 
 def main() -> int:
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-        except json.JSONDecodeError as exc:
-            response = {"ok": False, "error": f"invalid json: {exc}"}
-        else:
-            if not isinstance(request, dict):
-                response = {"ok": False, "error": "request must be a JSON object"}
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                request = json.loads(line)
+            except json.JSONDecodeError as exc:
+                response = {"ok": False, "error": f"invalid json: {exc}"}
             else:
-                try:
-                    response = run_ocr(request)
-                except Exception as exc:  # noqa: BLE001 — surface to PdfTool
-                    response = {
-                        "page": request.get("page", 0),
-                        "ok": False,
-                        "error": str(exc),
-                    }
-        _write_response(response)
+                if not isinstance(request, dict):
+                    response = {"ok": False, "error": "request must be a JSON object"}
+                else:
+                    try:
+                        response = run_ocr(request)
+                    except Exception as exc:
+                        response = {
+                            "page": request.get("page", 0),
+                            "ok": False,
+                            "error": str(exc),
+                        }
+            _write_response(response)
+    finally:
+        os.close(_JSON_FD)
     return 0
 
 

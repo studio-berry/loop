@@ -24,8 +24,10 @@
 #include "pdfpagecontentprocessor.h"
 #include "pdfconstants.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfsafefilewriter.h"
 
 #include <QCryptographicHash>
+#include <QImageWriter>
 
 namespace pdftool
 {
@@ -121,19 +123,19 @@ QString PDFToolFetchImages::getStandardString(PDFToolAbstractApplication::Standa
     return QString();
 }
 
-int PDFToolFetchImages::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (!document.getStorage().getSecurityHandler()->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent))
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document doesn't allow to copy content."), options.outputCodec);
-        return ErrorPermissions;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.copy-not-permitted"), PDFToolTranslationContext::tr("Document doesn't allow to copy content."));
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     QString parseError;
@@ -141,16 +143,16 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     QString errorMessage;
     Options optionFlags = getOptionsFlags();
     if (!options.imageExportSettings.validate(&errorMessage, false, optionFlags.testFlag(ImageExportSettingsFiles), optionFlags.testFlag(ImageExportSettingsResolution)))
     {
-        PDFConsole::writeError(errorMessage, options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), errorMessage);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     // We are ready to render the document
@@ -191,6 +193,22 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     };
     std::sort(m_images.begin(), m_images.end(), comparator);
 
+    // Guard every planned output up front: saving must not silently clobber an
+    // existing image unless --overwrite was supplied.
+    {
+        QStringList plannedOutputs;
+        plannedOutputs.reserve(int(m_images.size()));
+        for (pdf::PDFInteger i = 0; i < pdf::PDFInteger(m_images.size()); ++i)
+        {
+            plannedOutputs << options.imageExportSettings.getOutputFileName(i, options.imageWriterSettings.getCurrentFormat());
+        }
+
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
+        {
+            return blocked;
+        }
+    }
+
     // Write information about images
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("images", PDFToolTranslationContext::tr("Images fetched from document %1").arg(options.document));
@@ -229,35 +247,76 @@ int PDFToolFetchImages::execute(const PDFToolOptions& options)
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
     // Store images to the disk file
     auto saveImage = [this, &options](size_t index)
     {
         Image& image = m_images[index];
 
-        QImageWriter imageWriter(image.fileName, options.imageWriterSettings.getCurrentFormat());
-        imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
-        imageWriter.setCompression(options.imageWriterSettings.getCompression());
-        imageWriter.setQuality(options.imageWriterSettings.getQuality());
-        imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
-        imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
+        // Atomic write: serialize into a QSaveFile and rename only after the image
+        // bytes are durable, so a crash or short write cannot leave a truncated image.
+        QString imageWriterError;
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(image.fileName,
+            [&options, &image, &imageWriterError](QIODevice* device) -> bool
+            {
+                QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
+                imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
+                imageWriter.setCompression(options.imageWriterSettings.getCompression());
+                imageWriter.setQuality(options.imageWriterSettings.getQuality());
+                imageWriter.setOptimizedWrite(options.imageWriterSettings.hasOptimizedWrite());
+                imageWriter.setProgressiveScanWrite(options.imageWriterSettings.hasProgressiveScanWrite());
 
-        if (!imageWriter.write(image.image))
+                if (!imageWriter.write(image.image))
+                {
+                    imageWriterError = imageWriter.errorString();
+                    return false;
+                }
+
+                return true;
+            }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+
+        if (!writeResult)
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.").arg(image.fileName).arg(imageWriter.errorString()), options.outputCodec);
+            m_failedWrites.fetch_add(1);
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("output.write-failed"),
+                             PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
+                                 .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError),
+                             QJsonObject{{QStringLiteral("path"), image.fileName}});
+        }
+
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("fetch-images"),
+                image.fileName,
+                writeResult ? QStringLiteral("written") : QStringLiteral("partial")
+            });
         }
     };
 
     auto imageRange = pdf::PDFIntegerRange<size_t>(0, m_images.size());
     pdf::PDFExecutionPolicy::execute(pdf::PDFExecutionPolicy::Scope::Page, imageRange.begin(), imageRange.end(), saveImage);
 
-    return ExitSuccess;
+    return m_failedWrites.load() > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolFetchImages::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem;
+    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem | DestructiveWrite;
 }
 
 void PDFToolFetchImages::onImageExtracted(pdf::PDFInteger pageIndex, pdf::PDFInteger order, const QImage& image)

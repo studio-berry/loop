@@ -23,12 +23,14 @@
 #ifndef PDFOUTPUTFORMATTER_H
 #define PDFOUTPUTFORMATTER_H
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringConverter>
 
 namespace pdftool
 {
 class PDFOutputFormatterImpl;
+class PDFToolExecutionContext;
 
 /// Output formatter for text output in various format (text, xml, html...)
 /// to the output console. Text output is in form of a structure tree,
@@ -95,6 +97,10 @@ public:
     /// Get result string in unicode.
     QString getString() const;
 
+    /// Returns the JSON tree as a structured object (JSON style only; other
+    /// styles return an empty object). Avoids serializing to text and reparsing.
+    QJsonObject getJsonObject() const;
+
 private:
     PDFOutputFormatterImpl* m_impl;
 };
@@ -111,6 +117,10 @@ public:
 
     /// Writes binary data to the console
     static void writeData(const QByteArray& data);
+
+    /// Captures legacy direct error writes as structured diagnostics while a
+    /// JSON result envelope is being assembled.
+    static void setDiagnosticSink(PDFToolExecutionContext* context);
 
 private:
     explicit PDFConsole() = delete;

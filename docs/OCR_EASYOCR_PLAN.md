@@ -29,11 +29,18 @@ Add **read-only OCR** for scanned or image-only PDF pages: classify pages, raste
 
 ```text
 PdfTool ocr scan.pdf --console-format json
-    -> PDFOcrPageGate per page
+    -> PDFOcrPageGate::classifyPages (whole selected range, up front)
+    -> no page needs OCR? -> all-skipped report, exit 0, no sidecar
     -> render PNG for NeedsOcr pages
     -> LoupeOcrService (stdin/stdout JSON lines)
     -> PDFOcrReport -> stdout
 ```
+
+**Document-level pre-gate:** the pages in the selected range are classified in one
+pass before the sidecar is touched. The expensive EasyOCR sidecar (model load,
+first-run downloads) starts only when at least one page needs OCR. A fully
+text-based document produces a valid all-skipped report (exit 0) and never
+requires the sidecar to exist.
 
 ## V1 locks
 

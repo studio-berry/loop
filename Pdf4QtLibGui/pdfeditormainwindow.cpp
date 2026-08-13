@@ -42,6 +42,7 @@
 #include "pdfsendmail.h"
 #include "pdfexecutionpolicy.h"
 #include "pdfwidgetutils.h"
+#include "pdfaccessibility.h"
 #include "pdfdocumentwriter.h"
 #include "pdfsignaturehandler.h"
 #include "pdfadvancedtools.h"
@@ -63,6 +64,7 @@
 #include <QLabel>
 #include <QDoubleSpinBox>
 #include <QDesktopServices>
+#include <QUrl>
 #include <QFileDialog>
 #include <QLockFile>
 #include <QtPrintSupport/QPrinter>
@@ -70,6 +72,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QToolButton>
 #include <QActionGroup>
+#include <QPushButton>
 
 #include "pdfdbgheap.h"
 
@@ -100,6 +103,7 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
     m_isChangingProgressStep(false)
 {
     ui->setupUi(this);
+    pdf::PDFAccessibility::install();
 
     setAcceptDrops(true);
 
@@ -109,8 +113,13 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
 
     // Initialize status bar
     m_progressBarOnStatusBar = new QProgressBar(this);
+    m_progressBarOnStatusBar->setObjectName(QStringLiteral("operationProgressBar"));
+    m_progressBarOnStatusBar->setAccessibleName(tr("Operation progress"));
+    m_progressBarOnStatusBar->setAccessibleDescription(tr("Progress for the current operation."));
     m_progressBarOnStatusBar->setHidden(true);
     m_progressBarLeftLabelOnStatusBar = new QLabel(this);
+    m_progressBarLeftLabelOnStatusBar->setObjectName(QStringLiteral("operationStatusLabel"));
+    m_progressBarLeftLabelOnStatusBar->setAccessibleName(tr("Operation status"));
     m_progressBarLeftLabelOnStatusBar->setHidden(true);
     statusBar()->addPermanentWidget(m_progressBarLeftLabelOnStatusBar);
     statusBar()->addPermanentWidget(m_progressBarOnStatusBar);
@@ -191,6 +200,7 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
     m_actionManager->setAction(PDFActionManager::GetSource, ui->actionGetSource);
     m_actionManager->setAction(PDFActionManager::BecomeSponsor, ui->actionBecomeASponsor);
     m_actionManager->setAction(PDFActionManager::About, ui->actionAbout);
+    m_actionManager->setAction(PDFActionManager::CollectDiagnostics, ui->actionCollectDiagnostics);
     m_actionManager->setAction(PDFActionManager::SendByMail, ui->actionSend_by_E_Mail);
     m_actionManager->setAction(PDFActionManager::RenderToImages, ui->actionRender_to_Images);
     m_actionManager->setAction(PDFActionManager::Optimize, ui->actionOptimize);
@@ -234,10 +244,14 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
     connect(ui->actionQuit, &QAction::triggered, this, &PDFEditorMainWindow::onActionQuitTriggered);
 
     m_pageNumberSpinBox = new QSpinBox(this);
-    m_pageNumberSpinBox->setObjectName("pageNumberSpinBox");
+    m_pageNumberSpinBox->setObjectName(QStringLiteral("pageNumberSpinBox"));
+    m_pageNumberSpinBox->setAccessibleName(tr("Page number"));
+    m_pageNumberSpinBox->setAccessibleDescription(tr("Go to a page in the active document."));
     m_pageNumberLabel = new QLabel(this);
-    m_pageNumberLabel->setObjectName("pageNumberLabel");
-    m_pageNumberSpinBox->setFixedWidth(pdf::PDFWidgetUtils::scaleDPI_x(m_pageNumberSpinBox, 80));
+    m_pageNumberLabel->setObjectName(QStringLiteral("pageNumberLabel"));
+    m_pageNumberLabel->setAccessibleName(tr("Page count"));
+    m_pageNumberLabel->setBuddy(m_pageNumberSpinBox);
+    m_pageNumberSpinBox->setMinimumWidth(pdf::PDFAccessibility::minimumSpinBoxWidth(m_pageNumberSpinBox, QStringLiteral("88888")));
     m_pageNumberSpinBox->setAlignment(Qt::AlignCenter);
     connect(m_pageNumberSpinBox, &QSpinBox::editingFinished, this, &PDFEditorMainWindow::onPageNumberSpinboxEditingFinished);
 
@@ -262,11 +276,13 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
 
     m_pageZoomSpinBox = new QDoubleSpinBox(this);
     m_pageZoomSpinBox->setObjectName("pageZoomSpinBox");
+    m_pageZoomSpinBox->setAccessibleName(tr("Zoom percentage"));
+    m_pageZoomSpinBox->setAccessibleDescription(tr("Set the document view zoom percentage."));
     m_pageZoomSpinBox->setMinimum(pdf::PDFDrawWidgetProxy::getMinZoom() * 100);
     m_pageZoomSpinBox->setMaximum(pdf::PDFDrawWidgetProxy::getMaxZoom() * 100);
     m_pageZoomSpinBox->setDecimals(2);
     m_pageZoomSpinBox->setSuffix(tr("%"));
-    m_pageZoomSpinBox->setFixedWidth(pdf::PDFWidgetUtils::scaleDPI_x(m_pageNumberSpinBox, 80));
+    m_pageZoomSpinBox->setMinimumWidth(pdf::PDFAccessibility::minimumSpinBoxWidth(m_pageZoomSpinBox, QStringLiteral("888.88%")));
     m_pageZoomSpinBox->setAlignment(Qt::AlignVCenter | Qt::AlignRight);
     connect(m_pageZoomSpinBox, &QDoubleSpinBox::editingFinished, this, &PDFEditorMainWindow::onPageZoomSpinboxEditingFinished);
     ui->mainToolBar->addWidget(m_pageZoomSpinBox);
@@ -291,6 +307,7 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
 
     // Special tools
     QToolButton* insertStickyNoteButton = m_actionManager->createToolButtonForActionGroup(PDFActionManager::CreateStickyNoteGroup, ui->mainToolBar);
+    pdf::PDFAccessibility::applyActionAccessibility(insertStickyNoteButton, insertStickyNoteButton ? insertStickyNoteButton->defaultAction() : nullptr);
     ui->mainToolBar->addWidget(insertStickyNoteButton);
     ui->mainToolBar->addSeparator();
 
@@ -348,6 +365,10 @@ PDFEditorMainWindow::PDFEditorMainWindow(QWidget* parent) :
     }
 
     m_actionManager->styleActions();
+    for (QToolButton* toolButton : ui->mainToolBar->findChildren<QToolButton*>())
+    {
+        pdf::PDFAccessibility::applyActionAccessibility(toolButton, toolButton->defaultAction());
+    }
     m_programController->initActionComboBox(actionComboBox);
 
 #ifndef NDEBUG
@@ -384,6 +405,10 @@ void PDFEditorMainWindow::onPageNumberSpinboxEditingFinished()
     }
 
     m_programController->getPdfWidget()->getDrawWidgetProxy()->goToPage(m_pageNumberSpinBox->value() - 1);
+    if (pdf::PDFDrawWidget* drawWidget = dynamic_cast<pdf::PDFDrawWidget*>(m_programController->getPdfWidget()->getDrawWidget()))
+    {
+        drawWidget->notifyAccessibilityUpdate();
+    }
 }
 
 void PDFEditorMainWindow::onPageZoomSpinboxEditingFinished()
@@ -399,6 +424,10 @@ void PDFEditorMainWindow::onPageZoomSpinboxEditingFinished()
     }
 
     m_programController->getPdfWidget()->getDrawWidgetProxy()->zoom(m_pageZoomSpinBox->value() / 100.0);
+    if (pdf::PDFDrawWidget* drawWidget = dynamic_cast<pdf::PDFDrawWidget*>(m_programController->getPdfWidget()->getDrawWidget()))
+    {
+        drawWidget->notifyAccessibilityUpdate();
+    }
 }
 
 void PDFEditorMainWindow::onProgressStarted(pdf::ProgressStartupInfo info)
@@ -442,8 +471,12 @@ void PDFEditorMainWindow::onProgressFinished()
 
 void PDFEditorMainWindow::updateDeveloperMenu()
 {
+#ifdef PDF4QT_LOUPE_DISTRIBUTION
+    ui->menuDeveloper->menuAction()->setVisible(false);
+#else
     bool isDeveloperMode = m_programController->getSettings()->getSettings().m_allowDeveloperMode;
     ui->menuDeveloper->menuAction()->setVisible(isDeveloperMode);
+#endif
 }
 
 void PDFEditorMainWindow::updateUI(bool fullUpdate)
@@ -541,6 +574,84 @@ pdf::PDFTextSelection PDFEditorMainWindow::getSelectedText() const
     }
 
     return m_advancedFindWidget->getSelectedText();
+}
+
+void PDFEditorMainWindow::showRecoveryCandidates()
+{
+    const QList<RecoveryCandidate> candidates = m_programController->getRecoveryManager()->scan();
+    for (const RecoveryCandidate& candidate : candidates)
+    {
+        if (candidate.sourceStatus == RecoverySourceStatus::Active)
+        {
+            continue;
+        }
+
+        const QString documentName = candidate.sourceFileName.isEmpty() ? tr("Unknown document") : candidate.sourceFileName;
+        QString status;
+        switch (candidate.sourceStatus)
+        {
+            case RecoverySourceStatus::Unchanged:
+                status = tr("The source document still matches the recovery session.");
+                break;
+            case RecoverySourceStatus::Changed:
+                status = tr("The source changed while Loupe was closed. Restore will open an independent recovered copy.");
+                break;
+            case RecoverySourceStatus::Missing:
+                status = tr("The original source is unavailable. Restore will open the recovered copy.");
+                break;
+            case RecoverySourceStatus::Invalid:
+                status = candidate.diagnosticMessage.isEmpty() ? tr("The recovery artifact failed validation.") : candidate.diagnosticMessage;
+                break;
+            case RecoverySourceStatus::Active:
+                status = tr("Another Loupe instance owns this recovery session.");
+                break;
+        }
+        if (candidate.signedDocument)
+        {
+            status += tr(" The source was signed; the recovered session is an independent working copy and does not preserve signature coverage.");
+        }
+
+        QMessageBox dialog(QMessageBox::Warning,
+                           tr("Recover unsaved Editor work"),
+                           tr("A recoverable session for '%1' was found.\n\nCheckpoint: %2\n%3")
+                               .arg(documentName, candidate.checkpointUtc, status),
+                           QMessageBox::NoButton,
+                           this);
+        QPushButton* restoreButton = nullptr;
+        if (candidate.valid)
+        {
+            restoreButton = dialog.addButton(tr("Restore"), QMessageBox::AcceptRole);
+        }
+        QPushButton* discardButton = dialog.addButton(tr("Discard"), QMessageBox::DestructiveRole);
+        QPushButton* inspectButton = dialog.addButton(tr("Open recovery folder"), QMessageBox::ActionRole);
+        QPushButton* cancelButton = dialog.addButton(tr("Cancel"), QMessageBox::RejectRole);
+        dialog.exec();
+
+        if (dialog.clickedButton() == inspectButton)
+        {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(candidate.sessionDirectory));
+            continue;
+        }
+        if (dialog.clickedButton() == discardButton)
+        {
+            m_programController->getRecoveryManager()->discardCandidate(candidate);
+            continue;
+        }
+        if (dialog.clickedButton() == restoreButton)
+        {
+            QString errorMessage;
+            if (m_programController->restoreRecovery(candidate, &errorMessage))
+            {
+                return;
+            }
+            QMessageBox::critical(this, tr("Recovery unavailable"), errorMessage);
+            return;
+        }
+        if (dialog.clickedButton() == cancelButton)
+        {
+            return;
+        }
+    }
 }
 
 void PDFEditorMainWindow::closeEvent(QCloseEvent* event)

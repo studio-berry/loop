@@ -25,11 +25,13 @@
 
 #include "pdfviewerglobal.h"
 #include "pdfdocument.h"
+#include "pdfsavepolicy.h"
 #include "pdfsignaturehandler.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentpropertiesdialog.h"
 #include "pdfplugin.h"
 #include "pdfbookmarkmanager.h"
+#include "pdfrecoverymanager.h"
 
 #include <QObject>
 #include <QAction>
@@ -115,6 +117,7 @@ public:
         GetSource,
         BecomeSponsor,
         About,
+        CollectDiagnostics,
         SendByMail,
         RenderToImages,
         Optimize,
@@ -287,13 +290,13 @@ public:
 
     enum Feature
     {
-        None            = 0x0000,   ///< No feature
-        Tools           = 0x0001,   ///< Tools
-        Forms           = 0x0002,   ///< Forms
-        UndoRedo        = 0x0004,   ///< Undo/redo
-        Plugins         = 0x0008,   ///< Plugins
-        TextToSpeech    = 0x0010,   ///< Text to speech
-        AllFeatures     = 0xFFFF,   ///< All features enabled
+        None = 0x0000,   ///< No feature
+        Tools = 0x0001,   ///< Tools
+        Forms = 0x0002,   ///< Forms
+        UndoRedo = 0x0004,   ///< Undo/redo
+        Plugins = 0x0008,   ///< Plugins
+        TextToSpeech = 0x0010,   ///< Text to speech
+        AllFeatures = 0xFFFF,   ///< All features enabled
     };
     Q_DECLARE_FLAGS(Features, Feature)
 
@@ -302,10 +305,11 @@ public:
     void closeDocument();
 
     pdf::PDFWidget* getPdfWidget() const { return m_pdfWidget; }
-    pdf::PDFToolManager* getToolManager() const { return  m_toolManager; }
+    pdf::PDFToolManager* getToolManager() const { return m_toolManager; }
     PDFRecentFileManager* getRecentFileManager() const { return m_recentFileManager; }
     PDFViewerSettings* getSettings() const { return m_settings; }
     pdf::PDFDocument* getDocument() const { return m_pdfDocument.data(); }
+    PDFRecoveryManager* getRecoveryManager() const { return m_recoveryManager; }
     pdf::PDFCertificateStore* getCertificateStore() const { return const_cast<pdf::PDFCertificateStore*>(&m_certificateStore); }
     PDFBookmarkManager* getBookmarkManager() const { return m_bookmarkManager; }
     PDFTextToSpeech* getTextToSpeech() const { return m_textToSpeech; }
@@ -335,6 +339,7 @@ public:
 
     bool canClose() const;
     bool askForSaveDocumentBeforeClose();
+    bool restoreRecovery(const RecoveryCandidate& candidate, QString* errorMessage);
 
     virtual QString getOriginalFileName() const override;
     virtual pdf::PDFTextSelection getSelectedText() const override;
@@ -347,7 +352,6 @@ signals:
     void queryPasswordRequest(QString* password, bool* ok);
 
 private:
-
     struct AsyncReadingResult
     {
         pdf::PDFDocumentPointer document;
@@ -374,6 +378,7 @@ private:
     void onActionRenderingOptionTriggered(bool checked);
     void onActionPropertiesTriggered();
     void onActionAboutTriggered();
+    void onActionCollectDiagnosticsTriggered();
     void onActionSendByEMailTriggered();
     void onActionRenderToImagesTriggered();
     void onActionOptimizeTriggered();
@@ -436,12 +441,12 @@ private:
 
     enum SettingFlag
     {
-        NoSettings          = 0x0000,   ///< No feature
-        WindowSettings      = 0x0001,   ///< Window settings
-        GeneralSettings     = 0x0002,   ///< General settings
-        PluginsSettings     = 0x0004,   ///< Enabled plugin settings
-        ActionSettings      = 0x0008,   ///< Action settings
-        RecentFileSettings  = 0x0010,   ///< Recent files settings
+        NoSettings = 0x0000,   ///< No feature
+        WindowSettings = 0x0001,   ///< Window settings
+        GeneralSettings = 0x0002,   ///< General settings
+        PluginsSettings = 0x0004,   ///< Enabled plugin settings
+        ActionSettings = 0x0008,   ///< Action settings
+        RecentFileSettings = 0x0010,   ///< Recent files settings
         CertificateSettings = 0x0020,   ///< Certificate settings
     };
     Q_DECLARE_FLAGS(Settings, SettingFlag)
@@ -457,12 +462,16 @@ private:
     IMainWindow* m_mainWindowInterface;
     pdf::PDFWidget* m_pdfWidget;
     PDFViewerSettings* m_settings;
+    PDFRecoveryManager* m_recoveryManager;
     PDFUndoRedoManager* m_undoRedoManager;
     PDFRecentFileManager* m_recentFileManager;
     pdf::PDFOptionalContentActivity* m_optionalContentActivity;
     pdf::PDFDocumentPointer m_pdfDocument;
     PDFTextToSpeech* m_textToSpeech;
     bool m_isDocumentSetInProgress;
+    bool m_isRecoveredDocument;
+    pdf::PDFOperationSavePolicy m_savePolicy;
+    quint64 m_documentRevision;
 
     QFuture<AsyncReadingResult> m_future;
     QFutureWatcher<AsyncReadingResult>* m_futureWatcher;
@@ -493,4 +502,4 @@ private:
 
 }   // namespace pdfviewer
 
-#endif // PDFPROGRAMCONTROLLER_H
+#endif   // PDFPROGRAMCONTROLLER_H

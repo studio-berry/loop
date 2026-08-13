@@ -22,9 +22,13 @@
 
 #include "pdfpagemasterexport.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsafefilewriter.h"
 #include "pdfprogress.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 #include "pdfdocumentsession.h"
+#include "pdfcontourbleedfixup.h"
+#include "pdfoperationcontrol.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -33,7 +37,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSaveFile>
 #include <QUuid>
 
 #include <utility>
@@ -44,7 +47,7 @@ namespace pdf
 namespace
 {
 
-constexpr int MANIFEST_SCHEMA_VERSION = 1;
+constexpr int MANIFEST_SCHEMA_VERSION = 2;
 constexpr QLatin1String MANIFEST_FILE_NAME(".loupe-batch.json");
 constexpr QLatin1String OUTPUT_STATUS_PENDING("pending");
 constexpr QLatin1String OUTPUT_STATUS_WRITTEN("written");
@@ -110,21 +113,136 @@ QString resolveManifestPath(const PDFPageMasterExportJob& job)
     return QDir(firstOutput.absolutePath()).filePath(QString(MANIFEST_FILE_NAME));
 }
 
+QStringList plannedOutputPaths(const PDFPageMasterExportJob& job, const QString& manifestPath)
+{
+    QStringList paths;
+    paths.reserve(int(job.outputFileNames.size()) * 3 + (manifestPath.isEmpty() ? 0 : 1));
+    for (const QString& outputPath : job.outputFileNames)
+    {
+        paths.append(outputPath);
+        if (job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext))
+        {
+            paths.append(outputPath + QStringLiteral(".preflight.json"));
+            if (job.revalidatePreflightAfterFixups)
+            {
+                paths.append(outputPath + QStringLiteral(".preflight-final.json"));
+            }
+        }
+    }
+    if (!manifestPath.isEmpty())
+    {
+        paths.append(manifestPath);
+    }
+    return paths;
+}
+
+QString outputConflictMessage(const PDFOutputConflict& conflict)
+{
+    if (conflict.code == QStringLiteral("output.duplicate-planned-path"))
+    {
+        return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                           "Output path '%1' is planned more than once.").arg(conflict.path);
+    }
+    if (conflict.code == QStringLiteral("output.destination-is-directory"))
+    {
+        return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                           "Output path '%1' is a directory.").arg(conflict.path);
+    }
+    return QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                       "Output path '%1' already exists.").arg(conflict.path);
+}
+
+QJsonObject productionReport(const PDFPageMasterProductionSettings& settings,
+                             const PDFDocument& document)
+{
+    const PDFProductionValidationReport validation = validateProductionGeometry(settings.geometry);
+    QJsonObject report = validation.toJson();
+    report.insert(QStringLiteral("schema"), QStringLiteral("loupe-production-report/1"));
+    report.insert(QStringLiteral("contourBleedEnabled"), settings.contourBleedEnabled);
+    report.insert(QStringLiteral("grommetsEnabled"), settings.grommetsEnabled);
+
+    QJsonArray contourBleedPlans;
+    if (settings.contourBleedEnabled)
+    {
+        for (const PDFProductionContour& contour : settings.geometry.contours)
+        {
+            const PDFContourBleedPlan plan = planContourBleed(contour, settings.contourBleed);
+            contourBleedPlans.append(plan.toJson());
+            report.insert(QStringLiteral("valid"), report.value(QStringLiteral("valid")).toBool() && plan.valid);
+        }
+    }
+    report.insert(QStringLiteral("contourBleedPlans"), contourBleedPlans);
+
+    QJsonArray grommetPages;
+    if (settings.grommetsEnabled && document.getCatalog())
+    {
+        for (size_t index = 0; index < document.getCatalog()->getPageCount(); ++index)
+        {
+            const PDFPage* page = document.getCatalog()->getPage(index);
+            if (!page)
+            {
+                continue;
+            }
+            const QRectF productionRect = page->getTrimBox().isValid() ? page->getTrimBox() : page->getCropBox();
+            QJsonObject pageReport = placeGrommets(productionRect, settings.grommets).toJson();
+            pageReport.insert(QStringLiteral("page"), int(index + 1));
+            const QJsonArray diagnostics = pageReport.value(QStringLiteral("diagnostics")).toArray();
+            for (const QJsonValue& diagnostic : diagnostics)
+            {
+                if (diagnostic.toObject().value(QStringLiteral("severity")).toString() == QStringLiteral("error"))
+                {
+                    report.insert(QStringLiteral("valid"), false);
+                    break;
+                }
+            }
+            grommetPages.append(pageReport);
+        }
+    }
+    report.insert(QStringLiteral("grommetPages"), grommetPages);
+
+    // Keep generated wide-format marks in the same normalized processing-step
+    // vocabulary as source-document OCGs.  The manifest is the headless
+    // hand-off consumed by PdfTool/PageMaster export; GUI presentation is not
+    // part of this phase.
+    QJsonArray generatedProcessingSteps;
+    for (const QJsonValue& pageValue : grommetPages)
+    {
+        const QJsonObject pageReport = pageValue.toObject();
+        const int pageNumber = pageReport.value(QStringLiteral("page")).toInt();
+        const QJsonArray points = pageReport.value(QStringLiteral("points")).toArray();
+        for (int pointIndex = 0; pointIndex < points.size(); ++pointIndex)
+        {
+            const QJsonObject point = points.at(pointIndex).toObject();
+            generatedProcessingSteps.append(QJsonObject{
+                { QStringLiteral("id"), QStringLiteral("grommet-page-%1-%2").arg(pageNumber).arg(pointIndex + 1) },
+                { QStringLiteral("type"), QStringLiteral("positions") },
+                { QStringLiteral("kind"), QStringLiteral("registration") },
+                { QStringLiteral("displayName"), QStringLiteral("Grommet position") },
+                { QStringLiteral("ocgName"), QStringLiteral("Loupe Grommet Positions") },
+                { QStringLiteral("source"), QStringLiteral("loupe-production-generated") },
+                { QStringLiteral("nonPrinting"), true },
+                { QStringLiteral("page"), pageNumber },
+                { QStringLiteral("point"), point }
+            });
+        }
+    }
+    report.insert(QStringLiteral("processingSteps"), generatedProcessingSteps);
+    return report;
+}
+
+QString normalizedOutputPath(const QString& path)
+{
+    QString normalized = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    normalized = normalized.toCaseFolded();
+#endif
+    return normalized;
+}
+
 bool writeFileAtomically(const QString& finalPath, const QByteArray& payload)
 {
-    QSaveFile saveFile(finalPath);
-    if (!saveFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        return false;
-    }
-
-    if (saveFile.write(payload) != payload.size())
-    {
-        saveFile.cancelWriting();
-        return false;
-    }
-
-    return saveFile.commit();
+    const PDFOperationResult result = PDFSafeFileWriter::writeData(finalPath, payload, PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    return static_cast<bool>(result);
 }
 
 QJsonObject createManifestObject(const QString& batchId, const QStringList& outputFileNames)
@@ -143,6 +261,17 @@ QJsonObject createManifestObject(const QString& batchId, const QStringList& outp
         { QStringLiteral("batch_id"), batchId },
         { QStringLiteral("outputs"), outputs }
     };
+}
+
+QJsonObject createManifestObject(const QString& batchId, const QStringList& outputFileNames,
+                                 const PDFPageMasterExportJob& job)
+{
+    QJsonObject manifest = createManifestObject(batchId, outputFileNames);
+    if (job.hasActionList)
+    {
+        manifest.insert(QStringLiteral("action_list"), job.actionList.toJson());
+    }
+    return manifest;
 }
 
 bool persistManifest(const QString& manifestPath, const QJsonObject& manifest)
@@ -201,22 +330,69 @@ QJsonObject bleedFixupReportToJson(const PDFBleedFixupReport& report)
     QJsonArray pages;
     for (const PDFBleedFixupPageReport& page : report.pages)
     {
+        QStringList sidesRequested;
+        QStringList sidesEligible;
         QStringList sidesApplied;
+        for (PDFBleedFixupSide side : { PDFBleedFixupSide::Left,
+                                        PDFBleedFixupSide::Bottom,
+                                        PDFBleedFixupSide::Right,
+                                        PDFBleedFixupSide::Top })
+        {
+            if (isBleedFixupSideEnabled(page.sidesRequested, side))
+            {
+                sidesRequested.append(bleedSideName(side));
+            }
+            if (isBleedFixupSideEnabled(page.sidesEligible, side))
+            {
+                sidesEligible.append(bleedSideName(side));
+            }
+        }
         for (PDFBleedFixupSide side : page.sidesApplied)
         {
             sidesApplied.append(bleedSideName(side));
         }
 
+        const bool eligible = !sidesEligible.isEmpty();
+        const bool applied = !sidesApplied.isEmpty();
         pages.append(QJsonObject{
             { QStringLiteral("page"), int(page.pageIndex + 1) },
+            { QStringLiteral("sides_requested"), QJsonArray::fromStringList(sidesRequested) },
+            { QStringLiteral("sides_eligible"), QJsonArray::fromStringList(sidesEligible) },
             { QStringLiteral("sides_applied"), QJsonArray::fromStringList(sidesApplied) },
             { QStringLiteral("skip_reasons"), QJsonArray::fromStringList(page.skipReasons) },
-            { QStringLiteral("eligible"), sidesApplied.isEmpty() && page.skipReasons.isEmpty() }
+            { QStringLiteral("eligible"), eligible },
+            { QStringLiteral("applied"), applied }
         });
     }
 
+    bool eligible = false;
+    bool applied = false;
+    bool partial = false;
+    for (const QJsonValue& value : pages)
+    {
+        const QJsonObject page = value.toObject();
+        const bool pageEligible = page.value(QStringLiteral("eligible")).toBool();
+        const bool pageApplied = page.value(QStringLiteral("applied")).toBool();
+        eligible = eligible || pageEligible;
+        applied = applied || pageApplied;
+        partial = partial || (pageEligible && !pageApplied);
+    }
+
+    QString status = QStringLiteral("not-needed");
+    if (eligible && applied)
+    {
+        status = partial ? QStringLiteral("partial") : QStringLiteral("applied");
+    }
+    else if (eligible)
+    {
+        status = QStringLiteral("eligible");
+    }
+
     return QJsonObject{
-        { QStringLiteral("pages"), pages }
+        { QStringLiteral("pages"), pages },
+        { QStringLiteral("eligible"), eligible },
+        { QStringLiteral("applied"), applied },
+        { QStringLiteral("status"), status }
     };
 }
 
@@ -230,6 +406,41 @@ void setOutputBleedReport(QJsonObject& manifest, int index, const PDFBleedFixupR
 
     QJsonObject entry = outputs.at(index).toObject();
     entry.insert(QStringLiteral("bleed_report"), bleedFixupReportToJson(report));
+    outputs.replace(index, entry);
+    manifest.insert(QStringLiteral("outputs"), outputs);
+}
+
+void setOutputBleedFailure(QJsonObject& manifest, int index, const QString& error)
+{
+    QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return;
+    }
+
+    QJsonObject entry = outputs.at(index).toObject();
+    entry.insert(QStringLiteral("bleed_report"), QJsonObject{
+        { QStringLiteral("eligible"), QJsonValue::Null },
+        { QStringLiteral("applied"), false },
+        { QStringLiteral("status"), QStringLiteral("failed") },
+        { QStringLiteral("error"), error }
+    });
+    outputs.replace(index, entry);
+    manifest.insert(QStringLiteral("outputs"), outputs);
+}
+
+void setOutputPreflightReport(QJsonObject& manifest, int index, const QString& stage, const QJsonObject& report)
+{
+    QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return;
+    }
+
+    QJsonObject entry = outputs.at(index).toObject();
+    QJsonObject preflight = entry.value(QStringLiteral("preflight")).toObject();
+    preflight.insert(stage, report);
+    entry.insert(QStringLiteral("preflight"), preflight);
     outputs.replace(index, entry);
     manifest.insert(QStringLiteral("outputs"), outputs);
 }
@@ -281,23 +492,64 @@ bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterE
     for (int index = 0; index < outputs.size(); ++index)
     {
         const QString manifestPath = outputs.at(index).toObject().value(QStringLiteral("path")).toString();
-        if (QFileInfo(manifestPath).absoluteFilePath() != QFileInfo(job.outputFileNames[size_t(index)]).absoluteFilePath())
+        if (normalizedOutputPath(manifestPath) != normalizedOutputPath(job.outputFileNames[size_t(index)]))
         {
             return false;
         }
     }
 
+    const bool manifestHasActionList = manifest.contains(QStringLiteral("action_list"));
+    if (manifestHasActionList != job.hasActionList)
+    {
+        return false;
+    }
+    if (job.hasActionList && manifest.value(QStringLiteral("action_list")).toObject() != job.actionList.toJson())
+    {
+        return false;
+    }
+
     return true;
+}
+
+class PageMasterOperationControl final : public PDFOperationControl
+{
+public:
+    explicit PageMasterOperationControl(std::atomic_bool* cancelFlag) :
+        m_cancelFlag(cancelFlag)
+    {
+    }
+
+    bool isOperationCancelled() const override
+    {
+        return m_cancelFlag && m_cancelFlag->load(std::memory_order_acquire);
+    }
+
+private:
+    std::atomic_bool* m_cancelFlag = nullptr;
+};
+
+void setOutputActionListResult(QJsonObject& manifest, int index,
+                               const PDFActionListExecutionResult& actionListResult)
+{
+    QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+    if (index < 0 || index >= outputs.size())
+    {
+        return;
+    }
+    QJsonObject entry = outputs.at(index).toObject();
+    entry.insert(QStringLiteral("action_list_result"), actionListResult.toJson());
+    outputs.replace(index, entry);
+    manifest.insert(QStringLiteral("outputs"), outputs);
 }
 
 int findOutputIndexByPath(const QJsonObject& manifest, const QString& fileName)
 {
     const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
-    const QString absolutePath = QFileInfo(fileName).absoluteFilePath();
+    const QString absolutePath = normalizedOutputPath(fileName);
     for (int index = 0; index < outputs.size(); ++index)
     {
         const QString entryPath = outputs.at(index).toObject().value(QStringLiteral("path")).toString();
-        if (QFileInfo(entryPath).absoluteFilePath() == absolutePath)
+        if (normalizedOutputPath(entryPath) == absolutePath)
         {
             return index;
         }
@@ -323,30 +575,50 @@ bool shouldSkipResumedOutput(const PDFPageMasterExportJob& job, const QJsonObjec
     return status == OUTPUT_STATUS_WRITTEN && QFile::exists(fileName);
 }
 
-bool writeDocumentAtomically(const QString& fileName, PDFDocument* document, bool allowOverwrite)
+} // namespace
+
+QJsonObject PDFPageMasterProductionSettings::toJson() const
 {
-    const bool isDocumentFileAlreadyExisting = QFile::exists(fileName);
-    if (!allowOverwrite && isDocumentFileAlreadyExisting)
-    {
-        return false;
-    }
-
-    // PDFDocumentWriter(safeWrite=true) uses QSaveFile: temp write then commit/rename
-    // without deleting the previous final until the new bytes are durable.
-    PDFDocumentWriter writer(nullptr);
-    const PDFOperationResult writeResult = writer.write(fileName, document, true);
-    if (!writeResult)
-    {
-        return false;
-    }
-
-    return true;
+    return QJsonObject{
+        { QStringLiteral("enabled"), enabled },
+        { QStringLiteral("geometry"), geometry.toJson() },
+        { QStringLiteral("contourBleedEnabled"), contourBleedEnabled },
+        { QStringLiteral("contourBleed"), QJsonObject{
+            { QStringLiteral("amountPt"), contourBleed.amountPt },
+            { QStringLiteral("flatteningTolerancePt"), contourBleed.flatteningTolerancePt },
+            { QStringLiteral("maxSegments"), contourBleed.maxSegments },
+            { QStringLiteral("dpi"), contourBleedDpi },
+            { QStringLiteral("maxRasterPixels"), double(contourBleedMaxRasterPixels) }
+        } },
+        { QStringLiteral("grommetsEnabled"), grommetsEnabled },
+        { QStringLiteral("grommets"), grommets.toJson() }
+    };
 }
 
-} // namespace
+PDFPageMasterProductionSettings PDFPageMasterProductionSettings::fromJson(const QJsonObject& object)
+{
+    PDFPageMasterProductionSettings settings;
+    settings.enabled = object.value(QStringLiteral("enabled")).toBool(false);
+    settings.geometry = PDFProductionGeometryModel::fromJson(object.value(QStringLiteral("geometry")).toObject());
+    settings.contourBleedEnabled = object.value(QStringLiteral("contourBleedEnabled")).toBool(false);
+    const QJsonObject contourBleed = object.value(QStringLiteral("contourBleed")).toObject();
+    settings.contourBleed.amountPt = contourBleed.value(QStringLiteral("amountPt")).toDouble(settings.contourBleed.amountPt);
+    settings.contourBleed.flatteningTolerancePt = contourBleed.value(QStringLiteral("flatteningTolerancePt")).toDouble(settings.contourBleed.flatteningTolerancePt);
+    settings.contourBleed.maxSegments = contourBleed.value(QStringLiteral("maxSegments")).toInt(settings.contourBleed.maxSegments);
+    settings.contourBleedDpi = contourBleed.value(QStringLiteral("dpi")).toInt(settings.contourBleedDpi);
+    settings.contourBleedMaxRasterPixels = qint64(contourBleed.value(QStringLiteral("maxRasterPixels")).toDouble(double(settings.contourBleedMaxRasterPixels)));
+    settings.grommetsEnabled = object.value(QStringLiteral("grommetsEnabled")).toBool(false);
+    settings.grommets = PDFGrommetSpec::fromJson(object.value(QStringLiteral("grommets")).toObject());
+    return settings;
+}
 
 PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 {
+    const auto persistManifestForJob = [&job](const QString& path, const QJsonObject& value)
+    {
+        return job.manifestPersist ? job.manifestPersist(path, value) : persistManifest(path, value);
+    };
+
     if (isCancelRequested(job))
     {
         return createExportCancelled();
@@ -372,7 +644,26 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                                      .arg(job.outputFileNames.size()));
     }
 
+    if (job.hasBleedFixupSettings
+        && job.bleedConfirmationPolicy == PDFPageMasterBleedConfirmationPolicy::BeforeBatch
+        && !job.bleedConfirmationGranted)
+    {
+        return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                             "Bleed fixup confirmation is required before starting the export batch."));
+    }
+
+    if (job.hasProductionGeometrySettings && !job.productionGeometrySettings.enabled)
+    {
+        job.hasProductionGeometrySettings = false;
+    }
+
     const QString manifestPath = resolveManifestPath(job);
+    const QStringList plannedPaths = plannedOutputPaths(job, manifestPath);
+    for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, false))
+    {
+        return createExportError(outputConflictMessage(conflict));
+    }
+
     QJsonObject manifest;
     QString batchId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
@@ -384,12 +675,22 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportError(std::move(manifestError));
         }
 
+        if (manifest.value(QStringLiteral("schema_version")).toInt(-1) != MANIFEST_SCHEMA_VERSION)
+        {
+            return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                 "Batch manifest schema is incompatible with this PageMaster export version."));
+        }
+
         if (!manifestCompatibleWithJob(manifest, job))
         {
             // Stale or mismatched batch — start a fresh manifest for this job.
             job.resume = false;
-            manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
-            if (!persistManifest(manifestPath, manifest))
+            for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, !job.overwriteFiles))
+            {
+                return createExportError(outputConflictMessage(conflict));
+            }
+            manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()), job);
+            if (!persistManifestForJob(manifestPath, manifest))
             {
                 return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                      "Could not write batch manifest at %1.").arg(manifestPath));
@@ -403,8 +704,12 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
     else
     {
         job.resume = false;
-        manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()));
-        if (!manifestPath.isEmpty() && !persistManifest(manifestPath, manifest))
+        for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, !job.overwriteFiles))
+        {
+            return createExportError(outputConflictMessage(conflict));
+        }
+        manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()), job);
+        if (!manifestPath.isEmpty() && !persistManifestForJob(manifestPath, manifest))
         {
             return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                  "Could not write batch manifest at %1.").arg(manifestPath));
@@ -425,6 +730,45 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         info.showDialog = true;
         info.text = QCoreApplication::translate("pdf::PDFPageMasterExport", "Exporting documents...");
         progress->start(job.assembledDocuments.size(), std::move(info));
+    }
+
+    const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
+    PageMasterOperationControl actionListOperationControl(job.cancelFlag);
+    QJsonObject preflightProfile;
+    QJsonObject preflightResolution;
+    if (runPreflight)
+    {
+        PreflightProfileResolver resolver;
+        PreflightResolvedProfile resolved;
+        QString profileError;
+        if (!job.preflightProfilePath.isEmpty())
+        {
+            if (!PreflightEngine::loadProfile(job.preflightProfilePath, preflightProfile, profileError))
+            {
+                finishProgressIfActive(activeProgress(job));
+                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            resolved = resolver.resolveExplicitProfile(preflightProfile,
+                                                       QFileInfo(job.preflightProfilePath).completeBaseName(),
+                                                       QStringLiteral("explicit"));
+        }
+        else
+        {
+            PreflightProfileSnapshot snapshot;
+            if (!PreflightProfileStore::loadDirectory(job.preflightProfileStorePath, snapshot, profileError))
+            {
+                finishProgressIfActive(activeProgress(job));
+                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            resolved = resolver.resolve(job.preflightContext, snapshot);
+        }
+        if (!resolved.ok)
+        {
+            finishProgressIfActive(activeProgress(job));
+            return createExportError(resolved.errorMessage, std::move(result.writtenFiles), manifestPath, manifest);
+        }
+        preflightProfile = resolved.effectiveProfile;
+        preflightResolution = resolved.provenance();
     }
 
     for (size_t index = 0; index < job.assembledDocuments.size(); ++index)
@@ -452,7 +796,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         if (!currentResult)
         {
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, currentResult.getErrorMessage());
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(currentResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
@@ -467,30 +811,23 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
         }
 
-        if (job.hasPreflightGate && !job.preflightProfilePath.isEmpty())
+        if (runPreflight)
         {
-            QJsonObject profileObject;
-            QString profileError;
-            if (!PreflightEngine::loadProfile(job.preflightProfilePath, profileObject, profileError))
-            {
-                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, profileError);
-                persistManifest(manifestPath, manifest);
-                finishProgressIfActive(activeProgress(job));
-                result.manifest = manifest;
-                return createExportError(profileError, std::move(result.writtenFiles), manifestPath, manifest);
-            }
-
             PDFDocumentSession session(&assembledDocument);
             PreflightEngine engine(&session);
-            const PreflightResult preflightResult = engine.run(profileObject);
-            writePreflightReport(fileName, preflightResult.toJson(fileName));
+            PreflightResult preflightResult = engine.run(preflightProfile);
+            preflightResult.profileResolution = preflightResolution;
+            const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
+            const QJsonObject preflightReport = preflightResult.toJson(fileName);
+            setOutputPreflightReport(manifest, int(index), QStringLiteral("initial"), preflightReport);
+            writePreflightReport(fileName, preflightReport);
 
-            if (!preflightResult.pass && !job.forcePreflight)
+            if (verdict.state != PreflightVerdictState::Pass && !job.forcePreflight)
             {
                 const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                     "Preflight failed for '%1'.").arg(fileName);
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
@@ -504,16 +841,103 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
         }
 
+        if (job.hasActionList)
+        {
+            PDFActionListExecutionOptions actionListOptions;
+            actionListOptions.bindings = job.actionListBindings;
+            actionListOptions.operationControl = &actionListOperationControl;
+            PDFActionListExecutionResult actionListResult;
+            PDFDocument candidate;
+            const PDFOperationResult actionListExecution = PDFActionListExecutor().execute(
+                job.actionList, assembledDocument, actionListOptions, &candidate, &actionListResult);
+            setOutputActionListResult(manifest, int(index), actionListResult);
+            if (!actionListExecution)
+            {
+                if (actionListResult.status == QStringLiteral("cancelled") || isCancelRequested(job))
+                {
+                    persistManifestForJob(manifestPath, manifest);
+                    finishProgressIfActive(activeProgress(job));
+                    result.manifest = manifest;
+                    return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+                }
+                const QString message = actionListExecution.getErrorMessage();
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            assembledDocument = std::move(candidate);
+            if (!persistManifestForJob(manifestPath, manifest))
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Could not persist Action List diagnostics for '%1'.").arg(fileName);
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
         if (job.hasPageGeometrySettings)
         {
             const PDFOperationResult geometryResult = PDFPageGeometry::apply(&assembledDocument, job.pageGeometrySettings);
             if (!geometryResult)
             {
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, geometryResult.getErrorMessage());
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(geometryResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
+        if (job.hasProductionGeometrySettings)
+        {
+            QJsonObject report = productionReport(job.productionGeometrySettings, assembledDocument);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("production"), report);
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!report.value(QStringLiteral("valid")).toBool(false))
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Production geometry validation failed for '%1'.").arg(fileName);
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifest(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+            if (job.productionGeometrySettings.contourBleedEnabled)
+            {
+                PDFContourBleedFixupSettings contourBleedSettings;
+                contourBleedSettings.amountPt = job.productionGeometrySettings.contourBleed.amountPt;
+                contourBleedSettings.flatteningTolerancePt = job.productionGeometrySettings.contourBleed.flatteningTolerancePt;
+                contourBleedSettings.maxSegments = job.productionGeometrySettings.contourBleed.maxSegments;
+                contourBleedSettings.dpi = job.productionGeometrySettings.contourBleedDpi;
+                contourBleedSettings.maxRasterPixels = job.productionGeometrySettings.contourBleedMaxRasterPixels;
+                PDFContourBleedFixupReport contourBleedReport;
+                const PDFOperationResult contourBleedResult = PDFContourBleedFixup::apply(&assembledDocument,
+                                                                                           job.productionGeometrySettings.geometry,
+                                                                                           contourBleedSettings,
+                                                                                           &contourBleedReport);
+                report.insert(QStringLiteral("contourBleedFixup"), contourBleedReport.toJson());
+                outputs = manifest.value(QStringLiteral("outputs")).toArray();
+                output = outputs.at(int(index)).toObject();
+                output.insert(QStringLiteral("production"), report);
+                outputs.replace(int(index), output);
+                manifest.insert(QStringLiteral("outputs"), outputs);
+                if (!contourBleedResult)
+                {
+                    const QString message = contourBleedResult.getErrorMessage();
+                    setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                    persistManifest(manifestPath, manifest);
+                    finishProgressIfActive(activeProgress(job));
+                    result.manifest = manifest;
+                    return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+                }
             }
         }
 
@@ -530,13 +954,45 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             const PDFOperationResult bleedResult = PDFBleedFixup::apply(&assembledDocument, job.bleedFixupSettings, &bleedReport);
             if (!bleedResult)
             {
+                setOutputBleedFailure(manifest, int(index), bleedResult.getErrorMessage());
                 setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, bleedResult.getErrorMessage());
-                persistManifest(manifestPath, manifest);
+                persistManifestForJob(manifestPath, manifest);
                 finishProgressIfActive(activeProgress(job));
                 result.manifest = manifest;
                 return createExportError(bleedResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
             }
             setOutputBleedReport(manifest, int(index), bleedReport);
+        }
+
+        if (isCancelRequested(job))
+        {
+            finishProgressIfActive(activeProgress(job));
+            result.manifest = manifest;
+            return createExportCancelled(std::move(result.writtenFiles), manifestPath, manifest);
+        }
+
+        if (job.hasTransparencyFlattenSettings)
+        {
+            PDFTransparencyFlattenReport transparencyReport;
+            PDFTransparencyFlattenSettings transparencySettings = job.transparencyFlattenSettings;
+            transparencySettings.analyzeOnly = false;
+            const PDFOperationResult transparencyResult = PDFTransparencyFlattener::apply(&assembledDocument,
+                                                                                            transparencySettings,
+                                                                                            &transparencyReport,
+                                                                                            nullptr);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("transparencyFlatten"), transparencyReport.toJson());
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!transparencyResult)
+            {
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, transparencyResult.getErrorMessage());
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(transparencyResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
         }
 
         if (isCancelRequested(job))
@@ -554,6 +1010,51 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             assembledDocument = imageOptimizer.optimize(&assembledDocument, optimizeSettings, {}, nullptr);
         }
 
+        if (job.hasStandardConversionSettings)
+        {
+            PDFStandardConversionReport conversionReport;
+            const PDFOperationResult conversionResult = PDFStandardConversion::apply(&assembledDocument,
+                                                                                       job.standardConversionSettings,
+                                                                                       &conversionReport);
+            QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
+            QJsonObject output = outputs.at(int(index)).toObject();
+            output.insert(QStringLiteral("standardConversion"), conversionReport.toJson());
+            outputs.replace(int(index), output);
+            manifest.insert(QStringLiteral("outputs"), outputs);
+            if (!conversionResult)
+            {
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, conversionResult.getErrorMessage());
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(conversionResult.getErrorMessage(), std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
+        if (runPreflight && job.revalidatePreflightAfterFixups)
+        {
+            PDFDocumentSession session(&assembledDocument);
+            PreflightEngine engine(&session);
+            PreflightResult preflightResult = engine.run(preflightProfile);
+            preflightResult.profileResolution = preflightResolution;
+            const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
+            const QJsonObject preflightReport = preflightResult.toJson(fileName);
+            setOutputPreflightReport(manifest, int(index), QStringLiteral("revalidation"), preflightReport);
+            writeFileAtomically(fileName + QStringLiteral(".preflight-final.json"),
+                                QJsonDocument(preflightReport).toJson(QJsonDocument::Indented));
+
+            if (verdict.state != PreflightVerdictState::Pass && !job.forcePreflight)
+            {
+                const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                                    "Final preflight revalidation failed for '%1'.").arg(fileName);
+                setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
+                persistManifestForJob(manifestPath, manifest);
+                finishProgressIfActive(activeProgress(job));
+                result.manifest = manifest;
+                return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
+            }
+        }
+
         if (isCancelRequested(job))
         {
             finishProgressIfActive(activeProgress(job));
@@ -567,25 +1068,29 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                   "Document with filename '%1' already exists.").arg(fileName);
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
-        if (!writeDocumentAtomically(fileName, &assembledDocument, job.overwriteFiles))
+        // PDFDocumentWriter(safeWrite=true) uses QSaveFile: temp write then commit/rename
+        // without deleting the previous final until the new bytes are durable.
+        PDFDocumentWriter writer(nullptr);
+        const PDFOperationResult writeResult = writer.write(fileName, &assembledDocument, true);
+        if (!writeResult)
         {
             const QString message = QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                 "Could not write document to '%1'.").arg(fileName);
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);
         }
 
         setOutputStatus(manifest, int(index), OUTPUT_STATUS_WRITTEN);
-        if (manifestPath.isEmpty() || !persistManifest(manifestPath, manifest))
+        if (manifestPath.isEmpty() || !persistManifestForJob(manifestPath, manifest))
         {
             // Roll back only an output this run created. When the write replaced a
             // pre-existing file, the original is already gone, so removing the new
@@ -607,7 +1112,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
             }
 
             setOutputStatus(manifest, int(index), OUTPUT_STATUS_FAILED, message);
-            persistManifest(manifestPath, manifest);
+            persistManifestForJob(manifestPath, manifest);
             finishProgressIfActive(activeProgress(job));
             result.manifest = manifest;
             return createExportError(message, std::move(result.writtenFiles), manifestPath, manifest);

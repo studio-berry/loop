@@ -32,7 +32,7 @@ namespace pdftool
 class PDFToolRenderBase : public PDFToolAbstractApplication
 {
 public:
-    virtual int execute(const PDFToolOptions& options) override;
+    virtual PDFToolExitCode execute(const PDFToolOptions& options) override;
 
 protected:
     virtual void finish(const PDFToolOptions& options) = 0;

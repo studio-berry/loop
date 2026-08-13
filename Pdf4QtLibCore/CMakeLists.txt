@@ -36,6 +36,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfcertificatemanager.h
     sources/pdfcms.cpp
     sources/pdfcms.h
+    sources/pdfcolorinventory.cpp
+    sources/pdfcolorinventory.h
     sources/pdfdiff.cpp
     sources/pdfdiff.h
     sources/pdfdocumentbuilder.cpp
@@ -46,18 +48,52 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfpagegeometry.h
     sources/pdfbleedfixup.cpp
     sources/pdfbleedfixup.h
+    sources/pdfcontourbleedfixup.cpp
+    sources/pdfcontourbleedfixup.h
+    sources/pdfproductiongeometry.cpp
+    sources/pdfproductiongeometry.h
+    sources/pdfproductionrepair.cpp
+    sources/pdfrepairdiff.cpp
+    sources/pdfrepairdiff.h
+    sources/pdfrepairoperation.cpp
+    sources/pdfrepairoperation.h
+    sources/pdfrepairprimitives.cpp
+    sources/pdfstandardconversion.cpp
+    sources/pdfstandardconversion.h
+    sources/pdfactionlist.cpp
+    sources/pdfactionlist.h
+    sources/pdffixupregistry.cpp
+    sources/pdffixupregistry.h
+    sources/pdfimagedownsamplefixup.cpp
+    sources/pdfimagedownsamplefixup.h
+    sources/pdfrgbtocmykfixup.cpp
+    sources/pdfrgbtocmykfixup.h
     sources/pdfpagemasterexport.cpp
     sources/pdfpagemasterexport.h
     sources/pdfbleedmarginprobe.cpp
     sources/pdfbleedmarginprobe.h
+    sources/pdfinkcoverageprobe.cpp
+    sources/pdfinkcoverageprobe.h
+    sources/pdfthinpartprobe.cpp
+    sources/pdfthinpartprobe.h
     sources/pdfocrpagegate.cpp
     sources/pdfocrpagegate.h
     sources/pdfocrreport.cpp
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfdocumentcontext.cpp
+    sources/pdfdocumentcontext.h
+    sources/pdfprocessingbudget.cpp
+    sources/pdfprocessingbudget.h
+    sources/pdfjobscheduler.cpp
+    sources/pdfjobscheduler.h
     sources/preflightengine.cpp
     sources/preflightengine.h
+    sources/pdfpreflightverdict.cpp
+    sources/pdfpreflightverdict.h
+    sources/preflightprofileresolver.cpp
+    sources/preflightprofileresolver.h
     sources/pdfpreflightchecks.h
     sources/pdfdocumenttextflow.cpp
     sources/pdfdocumenttextflow.h
@@ -71,6 +107,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdffile.h
     sources/pdffilenamesanitizer.cpp
     sources/pdffilenamesanitizer.h
+    sources/pdfsafefilewriter.cpp
+    sources/pdfsafefilewriter.h
     sources/pdfform.cpp
     sources/pdfform.h
     sources/pdficontheme.cpp
@@ -126,7 +164,9 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdftextlayout.cpp
     sources/pdftextlayout.h
     sources/pdftransparencyrenderer.cpp
+    sources/pdftransparencyflattener.cpp
     sources/pdftransparencyrenderer.h
+    sources/pdftransparencyflattener.h
     sources/pdfutils.cpp
     sources/pdfutils.h
     sources/pdfxfaengine.cpp
@@ -157,6 +197,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfnametounicode.h
     sources/pdffont.cpp
     sources/pdffont.h
+    sources/pdffontintegrity.cpp
+    sources/pdffontintegrity.h
     sources/pdfimagecompressor.cpp
     sources/pdfimagecompressor.h
     sources/pdfimageoptimizer.cpp
@@ -191,6 +233,22 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfsettings.cpp
     sources/pdfsentry.h
     sources/pdfsentry.cpp
+    sources/pdflogger.h
+    sources/pdflogger.cpp
+    sources/pdflogscrubber.h
+    sources/pdflogscrubber.cpp
+    sources/pdfdiagnostics.h
+    sources/pdfdiagnostics.cpp
+    sources/pdfartifactidentity.h
+    sources/pdfartifactidentity.cpp
+    sources/pdfartifactstore.h
+    sources/pdfartifactstore.cpp
+    sources/pdfoperationhistory.h
+    sources/pdfoperationhistory.cpp
+    sources/pdfoperationhistorystore.h
+    sources/pdfoperationhistorystore.cpp
+    sources/pdfsavepolicy.h
+    sources/pdfsavepolicy.cpp
     fonts.qrc
 )
 
@@ -201,7 +259,7 @@ GENERATE_EXPORT_HEADER(Pdf4QtLibCore
                        PDF4QTLIBCORESHARED_EXPORT
                        EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}/pdf4qtlibcore_export.h")
 
-target_link_libraries(Pdf4QtLibCore PRIVATE Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg)
+target_link_libraries(Pdf4QtLibCore PRIVATE Qt6::Core Qt6::Gui Qt6::Xml Qt6::Svg Qt6::Sql)
 target_link_libraries(Pdf4QtLibCore PRIVATE ${LCMS2_LIBRARIES})
 target_link_libraries(Pdf4QtLibCore PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_link_libraries(Pdf4QtLibCore PRIVATE ZLIB::ZLIB)

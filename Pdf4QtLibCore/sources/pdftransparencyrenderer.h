@@ -31,9 +31,74 @@
 #include "pdfprogress.h"
 
 #include <QImage>
+#include <QStringList>
 
 namespace pdf
 {
+
+enum class PDFRenderPurpose
+{
+    InteractiveCanvas,
+    PrintPreview,
+    PreflightAnalysis,
+    SeparationPreview
+};
+
+struct PDFRenderPolicy
+{
+    PDFRenderPurpose purpose = PDFRenderPurpose::InteractiveCanvas;
+    bool requireSeparationAccuracy = false;
+    bool requireOverprintAccuracy = false;
+    bool allowApproximation = true;
+
+    bool requiresAuthoritativeRenderer() const
+    {
+        return requireSeparationAccuracy
+            || requireOverprintAccuracy
+            || purpose == PDFRenderPurpose::PreflightAnalysis
+            || purpose == PDFRenderPurpose::SeparationPreview;
+    }
+
+    static PDFRenderPolicy forOutputPreview()
+    {
+        PDFRenderPolicy policy;
+        policy.purpose = PDFRenderPurpose::SeparationPreview;
+        policy.requireSeparationAccuracy = true;
+        policy.requireOverprintAccuracy = true;
+        policy.allowApproximation = false;
+        return policy;
+    }
+};
+
+enum class PDFRenderFidelity
+{
+    ExactSupported,
+    SupportedWithFallback,
+    Unsupported
+};
+
+struct PDFRenderDiagnostics
+{
+    PDFRenderFidelity fidelity = PDFRenderFidelity::ExactSupported;
+    QStringList reasons;
+
+    void record(PDFRenderFidelity newFidelity, const QString& reason)
+    {
+        if (newFidelity == PDFRenderFidelity::Unsupported
+            || (newFidelity == PDFRenderFidelity::SupportedWithFallback
+                && fidelity == PDFRenderFidelity::ExactSupported))
+        {
+            fidelity = newFidelity;
+        }
+
+        if (!reason.isEmpty() && !reasons.contains(reason))
+        {
+            reasons.push_back(reason);
+        }
+    }
+
+    bool isExact() const { return fidelity == PDFRenderFidelity::ExactSupported; }
+};
 
 /// Pixel format, describes color channels, both process colors (for example,
 /// R, G, B, Gray, C, M, Y, K) or spot colors. Also, describes, if pixel
@@ -308,7 +373,9 @@ public:
                       BlendMode mode,
                       bool knockoutGroup,
                       OverprintMode overprintMode,
-                      QRect blendRegion);
+                      QRect blendRegion,
+                      const std::vector<uint8_t>* overprintContentMask = nullptr,
+                      uint8_t enabledContentMask = 0);
 
     /// Blends converted spot colors, which are in \p convertedSpotColors bitmap.
     /// Process colors must match.
@@ -342,8 +409,17 @@ inline PDFFloatBitmap::OverprintMode selectBlendOverprintMode(const PDFOverprint
         return PDFFloatBitmap::OverprintMode::NoOveprint;
     }
 
-    return overprintMode.overprintMode == 0 ? PDFFloatBitmap::OverprintMode::Overprint_Mode_0
-                                            : PDFFloatBitmap::OverprintMode::Overprint_Mode_1;
+    if (overprintMode.overprintMode == 0)
+    {
+        return PDFFloatBitmap::OverprintMode::Overprint_Mode_0;
+    }
+
+    if (overprintMode.overprintMode == 1)
+    {
+        return PDFFloatBitmap::OverprintMode::Overprint_Mode_1;
+    }
+
+    return PDFFloatBitmap::OverprintMode::NoOveprint;
 }
 
 /// Float bitmap with color space
@@ -484,7 +560,12 @@ private:
 class PDFDrawBuffer : public PDFFloatBitmap
 {
 public:
-    using PDFFloatBitmap::PDFFloatBitmap;
+    explicit PDFDrawBuffer() = default;
+    explicit PDFDrawBuffer(size_t width, size_t height, PDFPixelFormat format) :
+        PDFFloatBitmap(width, height, format),
+        m_contentMask(width * height, 0)
+    {
+    }
 
     /// Clears the draw buffer
     void clear();
@@ -501,9 +582,13 @@ public:
     bool isContainsFilling() const { return m_containsFilling; }
     bool isContainsStroking() const { return m_containsStroking; }
 
+    uint8_t getPixelContentMask(size_t x, size_t y) const { return m_contentMask[y * getWidth() + x]; }
+    void markPixelContentMask(size_t x, size_t y, uint8_t contentMask) { m_contentMask[y * getWidth() + x] |= contentMask; }
+
 private:
     bool m_containsFilling = false;
     bool m_containsStroking = false;
+    std::vector<uint8_t> m_contentMask;
     QRect m_modifiedRect;
 };
 
@@ -574,6 +659,9 @@ struct PDFTransparencyRendererSettings
 
     /// Active color mask
     uint32_t activeColorMask = PDFPixelFormat::getAllColorsMask();
+
+    /// Rendering contract for production-critical preview surfaces.
+    PDFRenderPolicy renderPolicy;
 };
 
 /// Renders PDF pages with transparency, using 32-bit floating point precision.
@@ -638,6 +726,12 @@ public:
     /// and before separation simulation is being processed. Active color mask is still
     /// applied to this image.
     PDFFloatBitmapWithColorSpace getOriginalProcessBitmap() const { return m_originalProcessBitmap; }
+
+    const PDFRenderDiagnostics& getRenderDiagnostics() const { return m_renderDiagnostics; }
+
+    static PDFRenderFidelity classifyOverprintFidelity(const PDFOverprintMode& overprintMode,
+                                                       BlendMode blendMode,
+                                                       bool hasSpotColors);
 
     virtual bool isContentKindSuppressed(ContentKind kind) const override;
     virtual void performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule) override;
@@ -717,6 +811,7 @@ private:
         bool saveOriginalImage = false;
         bool containsFilling = false;
         bool containsStroking = false;
+        std::vector<uint8_t> contentMask;
     };
 
     struct PDFTransparencyPainterState
@@ -801,6 +896,8 @@ private:
 
     /// Flushes draw buffer
     void flushDrawBuffer();
+
+    void recordOverprintDiagnostics(bool containsFilling, bool containsStroking);
 
     /// Returns true, if multithreaded painter path sampling should be used
     /// for a given fill rectangle.
@@ -898,6 +995,7 @@ private:
     PDFTransparencyRendererSettings m_settings;
     PDFDrawBuffer m_drawBuffer;
     PDFFloatBitmapWithColorSpace m_originalProcessBitmap;
+    PDFRenderDiagnostics m_renderDiagnostics;
 };
 
 /// Ink coverage calculator. Calculates ink coverage for a given

@@ -36,6 +36,8 @@
 namespace pdf
 {
 
+class PDFProcessingBudget;
+
 // Group of whitespace characters
 
 constexpr const char CHAR_NULL              = 0x00;
@@ -299,9 +301,17 @@ public:
 
     Q_DECLARE_FLAGS(Features, Feature)
 
-    explicit PDFParser(const QByteArray& data, PDFParsingContext* context, Features features);
-    explicit PDFParser(const char* begin, const char* end, PDFParsingContext* context, Features features);
-    explicit PDFParser(std::function<PDFLexicalAnalyzer::Token(void)> tokenFetcher);
+    explicit PDFParser(const QByteArray& data,
+                       PDFParsingContext* context,
+                       Features features,
+                       PDFProcessingBudget* processingBudget = nullptr);
+    explicit PDFParser(const char* begin,
+                       const char* end,
+                       PDFParsingContext* context,
+                       Features features,
+                       PDFProcessingBudget* processingBudget = nullptr);
+    explicit PDFParser(std::function<PDFLexicalAnalyzer::Token(void)> tokenFetcher,
+                       PDFProcessingBudget* processingBudget = nullptr);
 
     /// Fetches single object from the stream. Does not check
     /// cyclical references. If object cannot be fetched, then
@@ -349,6 +359,7 @@ private:
 
     PDFLexicalAnalyzer::Token m_lookAhead1;
     PDFLexicalAnalyzer::Token m_lookAhead2;
+    PDFProcessingBudget* m_processingBudget = nullptr;
 };
 
 // Implementation

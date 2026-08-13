@@ -81,6 +81,18 @@ if [[ -e "$OCR_PLUGIN" ]]; then
 fi
 echo "OK: OcrPlugin absent (V1 CLI-only OCR surface, MIC-343)"
 
+OCR_SIDECAR_HITS=()
+while IFS= read -r hit; do
+    OCR_SIDECAR_HITS+=("$hit")
+done < <(find "$ROOT" -type f \( -name 'LoupeOcrService' -o -name 'LoupeOcrService.exe' \) 2>/dev/null)
+
+if [[ "${#OCR_SIDECAR_HITS[@]}" -gt 0 ]]; then
+    echo "LoupeOcrService sidecar found in the V1 AppImage; OCR is CLI-only and the sidecar must not be bundled:" >&2
+    printf '  %s\n' "${OCR_SIDECAR_HITS[@]}" >&2
+    exit 1
+fi
+echo "OK: LoupeOcrService sidecar absent (V1 CLI-only OCR surface)"
+
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 export LD_LIBRARY_PATH="${LIB_DIR}:${LIB_DIR}/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
 

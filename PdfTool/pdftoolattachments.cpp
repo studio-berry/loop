@@ -23,9 +23,12 @@
 #include "pdftoolattachments.h"
 #include "pdfexception.h"
 #include "pdffilenamesanitizer.h"
+#include "pdfsafefilewriter.h"
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonObject>
 #include <QMimeDatabase>
 
 namespace pdftool
@@ -54,12 +57,12 @@ QString PDFToolAttachmentsApplication::getStandardString(StandardString standard
     return QString();
 }
 
-int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     if (!readDocument(options, document, nullptr, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     struct FileInfo
@@ -154,23 +157,33 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
         formatter.endTable();
 
         formatter.endDocument();
-        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        if (options.outputStyle == PDFOutputFormatter::Style::Json)
+        {
+            if (options.executionContext)
+            {
+                options.executionContext->setData(formatter.getJsonObject());
+            }
+        }
+        else
+        {
+            PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        }
     }
     else
     {
         if (savedFileCount > 1 && !options.attachmentsTargetFile.isEmpty())
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Target file name must not be specified, if multiple files are being saved."), options.outputCodec);
-            return ErrorInvalidArguments;
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Target file name must not be specified, if multiple files are being saved."));
+            return PDFToolExitCode::InvalidInvocation;
         }
 
-        bool anyAttachmentSkipped = false;
-
+        // Guard every planned output up front: a name already on disk needs
+        // --overwrite, and duplicate normalized names are rejected before any write.
+        QStringList plannedOutputs;
         for (const FileInfo& info : embeddedFiles)
         {
             if (!info.isSaved)
             {
-                // This file is not marked to be saved
                 continue;
             }
 
@@ -182,61 +195,118 @@ int PDFToolAttachmentsApplication::execute(const PDFToolOptions& options)
 
             if (!options.attachmentsOutputDirectory.isEmpty())
             {
-                outputFile = QString("%1/%2").arg(options.attachmentsOutputDirectory, outputFile);
+                outputFile = QDir(options.attachmentsOutputDirectory).filePath(outputFile);
 
                 if (!pdf::PDFFilenameSanitizer::isPathContained(outputFile, options.attachmentsOutputDirectory))
                 {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName), options.outputCodec);
-                    anyAttachmentSkipped = true;
-                    continue;
+                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.path-outside-directory"), PDFToolTranslationContext::tr("Attachment filename '%1' would escape the target directory. Skipping.").arg(info.fileName));
+                    return PDFToolExitCode::InvalidInvocation;
                 }
+            }
+
+            plannedOutputs << outputFile;
+        }
+
+        if (const PDFToolExitCode blocked = validateDestructiveOutputs(options, plannedOutputs); blocked != PDFToolExitCode::Success)
+        {
+            return blocked;
+        }
+
+        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{
+                { QStringLiteral("operation"), QStringLiteral("attachments") },
+                { QStringLiteral("dry_run"), options.destructiveDryRun },
+                { QStringLiteral("selected_count"), static_cast<qint64>(savedFileCount) }
+            });
+        }
+
+        bool anyAttachmentSkipped = false;
+        size_t writtenCount = 0;
+        int plannedOutputIndex = 0;
+        for (const FileInfo& info : embeddedFiles)
+        {
+            if (!info.isSaved)
+            {
+                // This file is not marked to be saved
+                continue;
+            }
+
+            const QString outputFile = plannedOutputs.at(plannedOutputIndex++);
+
+            if (options.destructiveDryRun)
+            {
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({
+                        QStringLiteral("file"),
+                        QStringLiteral("attachment"),
+                        outputFile,
+                        QStringLiteral("planned")
+                    });
+                }
+                continue;
             }
 
             try
             {
                 QByteArray data = document.getDecodedStream(info.specification->getPlatformFile()->getStream());
 
-                QFile file(outputFile);
-                if (file.open(QFile::WriteOnly | QFile::Truncate))
+                const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeData(outputFile, data, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+                if (!writeResult)
                 {
-                    // A short write (disk full, quota) must not be reported as a
-                    // saved attachment -- that leaves a silently truncated file.
-                    const qint64 written = file.write(data);
-                    const bool flushed = file.flush();
-                    file.close();
-
-                    if (written != data.size() || !flushed || file.error() != QFile::NoError)
+                    reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2").arg(outputFile, writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
+                    if (options.executionContext)
                     {
-                        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file '%1'. %2")
-                                                   .arg(outputFile, file.errorString()), options.outputCodec);
-                        return ErrorFailedWriteToFile;
+                        options.executionContext->addOutput({
+                            QStringLiteral("file"),
+                            QStringLiteral("attachment"),
+                            outputFile,
+                            QStringLiteral("partial")
+                        });
                     }
+                    return writtenCount > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::ProcessingFailure;
                 }
-                else
+
+                if (options.executionContext)
                 {
-                    PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(file.errorString()), options.outputCodec);
-                    return ErrorFailedWriteToFile;
+                    options.executionContext->addOutput({
+                        QStringLiteral("file"),
+                        QStringLiteral("attachment"),
+                        outputFile,
+                        QStringLiteral("written")
+                    });
                 }
+                ++writtenCount;
             }
             catch (const pdf::PDFException &e)
             {
-                PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), options.outputCodec);
-                return ErrorFailedWriteToFile;
+                reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to save attachment to file. %1").arg(e.getMessage()), QJsonObject{{QStringLiteral("path"), outputFile}});
+                if (options.executionContext)
+                {
+                    options.executionContext->addOutput({
+                        QStringLiteral("file"),
+                        QStringLiteral("attachment"),
+                        outputFile,
+                        QStringLiteral("partial")
+                    });
+                }
+                return writtenCount > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::ProcessingFailure;
             }
         }
 
         if (anyAttachmentSkipped)
         {
-            return ErrorInvalidArguments;
+            return writtenCount > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::InvalidInvocation;
         }
     }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolAttachmentsApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | Attachments;
+    return ConsoleFormat | OpenDocument | Attachments | DestructiveWrite;
 }
 
 }   // namespace pdftool

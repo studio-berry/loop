@@ -165,6 +165,15 @@ static constexpr const std::pair<const char*, PDFPageContentProcessor::Operator>
     { "EX", PDFPageContentProcessor::Operator::CompatibilityEnd }
 };
 
+// Maximum nesting depth of the processed content streams (forms, tiling
+// patterns and Type 3 character streams). This value matches the precedent
+// set by PREFLIGHT_MAX_FORM_DEPTH in preflightengine.cpp, so the renderer and
+// the preflight engine agree on what a legal document looks like. The depth
+// is counted per processed content stream, in the operator dispatch
+// (processContent), which is the single choke point through which all
+// recursion paths pass.
+constexpr int MAXIMUM_CONTENT_STREAM_NESTING_DEPTH = 32;
+
 void PDFPageContentProcessor::initDictionaries(const PDFObject& resourcesObject)
 {
     const PDFObject& resources = m_document->getObject(resourcesObject);
@@ -234,7 +243,8 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
                                                  const PDFCMS* CMS,
                                                  const PDFOptionalContentActivity* optionalContentActivity,
                                                  QTransform pagePointToDevicePointMatrix,
-                                                 const PDFMeshQualitySettings& meshQualitySettings) :
+                                                 const PDFMeshQualitySettings& meshQualitySettings,
+                                                 PDFProcessingBudget* processingBudget) :
     m_page(page),
     m_document(document),
     m_fontCache(fontCache),
@@ -255,6 +265,7 @@ PDFPageContentProcessor::PDFPageContentProcessor(const PDFPage* page,
     m_patternBaseMatrix(pagePointToDevicePointMatrix),
     m_pagePointToDevicePointMatrix(pagePointToDevicePointMatrix),
     m_meshQualitySettings(meshQualitySettings),
+    m_processingBudget(processingBudget),
     m_structuralParentKey(0)
 {
     Q_ASSERT(page);
@@ -377,6 +388,19 @@ void PDFPageContentProcessor::reportRenderError(RenderErrorType type, QString me
 }
 
 void PDFPageContentProcessor::performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule)
+{
+    Q_UNUSED(path);
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    Q_UNUSED(text);
+    Q_UNUSED(fillRule);
+}
+
+void PDFPageContentProcessor::performBeforePathPainting(const QPainterPath& path,
+                                                        bool stroke,
+                                                        bool fill,
+                                                        bool text,
+                                                        Qt::FillRule fillRule)
 {
     Q_UNUSED(path);
     Q_UNUSED(stroke);
@@ -569,10 +593,38 @@ void PDFPageContentProcessor::performInterceptInstruction(Operator currentOperat
 
 void PDFPageContentProcessor::processContent(const QByteArray& content)
 {
+    std::unique_ptr<PDFProcessingBudget::DepthScope> budgetDepthScope;
+    if (m_processingBudget)
+    {
+        budgetDepthScope = std::make_unique<PDFProcessingBudget::DepthScope>(*m_processingBudget,
+                                                                                PDFBudgetKind::RecursiveContentDepth,
+                                                                                PDFTranslationContext::tr("content stream"));
+    }
+
+    // Guard the content stream nesting depth. Forms, tiling patterns and
+    // Type 3 character streams all recurse through this single function, so
+    // a depth cap here bounds the native stack usage of all of them. The
+    // temp value change makes the decrement exception-safe.
+    PDFTemporaryValueChange contentStreamDepthGuard(&m_contentStreamDepth, m_contentStreamDepth + 1);
+    if (m_contentStreamDepth > MAXIMUM_CONTENT_STREAM_NESTING_DEPTH)
+    {
+        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Maximum content stream nesting depth (%1) exceeded.").arg(MAXIMUM_CONTENT_STREAM_NESTING_DEPTH));
+        return;
+    }
+
     PDFLexicalAnalyzer parser(content.constBegin(), content.constEnd());
+    uint64_t operationCount = 0;
 
     while (!parser.isAtEnd() && !isProcessingCancelled())
     {
+        if (m_processingBudget)
+        {
+            m_processingBudget->chargeRenderOperation(1, PDFTranslationContext::tr("content operation"));
+            if ((++operationCount & 0xFFU) == 0)
+            {
+                m_processingBudget->checkElapsed(PDFTranslationContext::tr("content stream"));
+            }
+        }
         bool tokenFetched = false;
         PDFInteger oldParserPosition = parser.pos();
 
@@ -769,6 +821,10 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
                 }
             }
         }
+        catch (const PDFBudgetExceededException&)
+        {
+            throw;
+        }
         catch (const PDFException& exception)
         {
             // If we get exception when parsing, and parser position is not advanced,
@@ -793,9 +849,13 @@ void PDFPageContentProcessor::processContentStream(const PDFStream* stream)
 {
     try
     {
-        QByteArray content = m_document->getDecodedStream(stream);
+        QByteArray content = m_document->getDecodedStream(stream, m_processingBudget);
 
         processContent(content);
+    }
+    catch (const PDFBudgetExceededException&)
+    {
+        throw;
     }
     catch (const PDFException& exception)
     {
@@ -882,6 +942,8 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
         // No operation requested - either path is empty, or neither stroking or filling
         return;
     }
+
+    performBeforePathPainting(path, stroke, fill, text, fillRule);
 
     if (fill)
     {
@@ -3087,6 +3149,12 @@ void PDFPageContentProcessor::paintXObjectImage(const PDFStream* stream, PDFObje
 
             if (!image.isNull())
             {
+                if (m_processingBudget)
+                {
+                    const uint64_t pixels = static_cast<uint64_t>(image.width()) * static_cast<uint64_t>(image.height());
+                    m_processingBudget->chargeRenderPixels(pixels, PDFTranslationContext::tr("decoded image"));
+                }
+
                 if (PDFImage::canBeConvertedToMonochromatic(image))
                 {
                     image.convertTo(QImage::Format_Mono);
@@ -3125,7 +3193,7 @@ void PDFPageContentProcessor::processForm(const PDFStream* stream)
     QTransform transformationMatrix = loader.readMatrixFromDictionary(streamDictionary, "Matrix", QTransform());
 
     // Read the dictionary content
-    QByteArray content = m_document->getDecodedStream(stream);
+    QByteArray content = m_document->getDecodedStream(stream, m_processingBudget);
 
     // Read resources
     PDFObject resources = m_document->getObject(streamDictionary->get("Resources"));
@@ -3189,6 +3257,29 @@ void PDFPageContentProcessor::operatorPaintXObject(PDFOperandName name)
                 {
                     throw PDFRendererException(RenderErrorType::Error, PDFTranslationContext::tr("Form of type %1 not supported.").arg(formType));
                 }
+
+                // Detect forms which paint themselves, directly or indirectly.
+                // A shallow two-form cycle would otherwise be re-entered many
+                // times before the content stream depth cap triggers, doing
+                // real work each pass. This mirrors the visitedForms set used
+                // by collectColorSpacesFromResources() in preflightengine.cpp.
+                if (reference.isValid())
+                {
+                    if (m_activeFormReferences.count(reference))
+                    {
+                        reportRenderError(RenderErrorType::Error, PDFTranslationContext::tr("Recursive form XObject detected and was not painted."));
+                        return;
+                    }
+                    m_activeFormReferences.insert(reference);
+                }
+
+                auto activeFormGuard = qScopeGuard([this, reference]()
+                {
+                    if (reference.isValid())
+                    {
+                        m_activeFormReferences.erase(reference);
+                    }
+                });
 
                 processForm(stream);
             }

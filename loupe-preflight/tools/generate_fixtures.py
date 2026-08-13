@@ -22,7 +22,8 @@
 # SOFTWARE.
 
 """Regenerate the hand-built golden PDF fixtures for the Loupe custom checks
-(MIC-145): color-mode, embedded-fonts, image-resolution, trim and page-size.
+(MIC-145 / #22): color-mode, embedded-fonts, image-resolution, trim, page-size,
+and color inventory, plus transparency-risk group fixtures.
 
 The bleed pair (bleed-adequate/bleed-missing) is generated separately by the
 C++ tool tools/generate_fixtures.cpp and is NOT touched here.
@@ -124,10 +125,17 @@ def _new_canvas(buf, size):
     return c
 
 
-def _cmyk_image(px, path):
-    # Solid cyan patch in DeviceCMYK; JPEG is the only common CMYK raster PIL
-    # writes, and reportlab passes it through as a /DeviceCMYK image.
-    Image.new("CMYK", (px, px), (255, 0, 0, 0)).save(path, "JPEG", quality=90)
+def _cmyk_image(px, path, fill=(255, 0, 0, 0), patch=None):
+    # JPEG is the only common CMYK raster PIL writes, and reportlab passes it
+    # through as a /DeviceCMYK image. When patch is supplied, draw it centered
+    # on a page-colored field so raster checks can isolate a region.
+    im = Image.new("CMYK", (px, px), fill)
+    if patch is not None:
+        draw = ImageDraw.Draw(im)
+        margin = px // 5
+        draw.rectangle((margin, margin, px - margin - 1, px - margin - 1), fill=patch)
+    save_options = {"quality": 100, "subsampling": 0} if patch is not None else {"quality": 90}
+    im.save(path, "JPEG", **save_options)
 
 
 def _rgb_image(px, path):
@@ -199,6 +207,21 @@ def image_dpi_ok(out_dir, tmp):
     path = os.path.join(out_dir, "image-dpi-ok.pdf")
     img = os.path.join(tmp, "ok.png")
     _gray_image(620, img)  # 620 px / 2 in = 310 DPI
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 84, 84, width=144, height=144)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
+def image_dpi_excessive(out_dir, tmp):
+    """PASS image-resolution with a useful downsample fixup candidate at 600 DPI."""
+    path = os.path.join(out_dir, "image-dpi-excessive.pdf")
+    img = os.path.join(tmp, "excessive.png")
+    _gray_image(1200, img)  # 1200 px / 2 in = 600 DPI; target is 300 DPI.
     buf = io.BytesIO()
     c = _new_canvas(buf, (312, 312))
     c.drawImage(img, 84, 84, width=144, height=144)
@@ -281,6 +304,73 @@ def trim_pagesize_mismatch(out_dir, tmp):
     with open(path, "wb") as f:
         f.write(buf.getvalue())
     _finalize(path, media=(0, 0, 540, 720), trim=(0, 0, 540, 720))
+
+
+# ---------------------------------------------------------------------------
+# color-inventory (#22)
+# ---------------------------------------------------------------------------
+
+def _save_cmyk_inventory_fixture(path, content):
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(400, 400))
+    page.MediaBox = pikepdf.Array([0, 0, 400, 400])
+    page.TrimBox = pikepdf.Array([20, 20, 380, 380])
+    page.BleedBox = pikepdf.Array([0, 0, 400, 400])
+    page.Contents = pdf.make_stream(content)
+    pdf.save(path)
+
+
+def color_inventory_rich_black(out_dir, tmp):
+    """CMYK patch with process C/M/Y plus K, which must emit rich-black."""
+    del tmp
+    _save_cmyk_inventory_fixture(
+        os.path.join(out_dir, "rich-black.pdf"),
+        b"/DeviceCMYK cs\n0.40 0.30 0.30 1.00 sc\n50 50 300 300 re\nf\n")
+
+
+def color_inventory_black_only(out_dir, tmp):
+    """Process black alone, which must not emit rich-black."""
+    del tmp
+    _save_cmyk_inventory_fixture(
+        os.path.join(out_dir, "black-only.pdf"),
+        b"/DeviceCMYK cs\n0 0 0 1 sc\n50 50 300 300 re\nf\n")
+
+
+def color_inventory_cmy_no_k(out_dir, tmp):
+    """Process C/M/Y without K, which must not emit rich-black."""
+    del tmp
+    _save_cmyk_inventory_fixture(
+        os.path.join(out_dir, "cmy-rich-no-k.pdf"),
+        b"/DeviceCMYK cs\n0.40 0.30 0.30 0 sc\n50 50 300 300 re\nf\n")
+
+
+def color_inventory_spot(out_dir, tmp):
+    """A named Separation colorant, which must emit spot-color and separation."""
+    del tmp
+    path = os.path.join(out_dir, "color-inventory-spot.pdf")
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(400, 400))
+    page.MediaBox = pikepdf.Array([0, 0, 400, 400])
+    page.TrimBox = pikepdf.Array([20, 20, 380, 380])
+    page.BleedBox = pikepdf.Array([0, 0, 400, 400])
+    function = pdf.make_indirect(pikepdf.Dictionary({
+        "/FunctionType": 2,
+        "/Domain": pikepdf.Array([0, 1]),
+        "/C0": pikepdf.Array([0, 0, 0, 0]),
+        "/C1": pikepdf.Array([0, 0.91, 0.76, 0]),
+        "/N": 1,
+    }))
+    separation = pdf.make_indirect(pikepdf.Array([
+        pikepdf.Name("/Separation"),
+        pikepdf.Name("/PANTONE#20185#20C"),
+        pikepdf.Name("/DeviceCMYK"),
+        function,
+    ]))
+    page.Resources = pdf.make_indirect(pikepdf.Dictionary({
+        "/ColorSpace": pdf.make_indirect(pikepdf.Dictionary({"/CS1": separation})),
+    }))
+    page.Contents = pdf.make_stream(b"/CS1 cs\n0.8 scn\n50 50 300 300 re\nf\n")
+    pdf.save(path)
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +487,40 @@ def ai_art_raster_trim_edge(out_dir, tmp):
     _finalize(path, media=(0, 0, 400, 400), trim=(0, 0, 400, 400))
 
 
+# ---------------------------------------------------------------------------
+# total ink coverage
+# ---------------------------------------------------------------------------
+
+def ink_coverage_over(out_dir, tmp):
+    """WARNING ink-coverage: a CMYK patch at approximately 370% TAC."""
+    path = os.path.join(out_dir, "ink-coverage-over.pdf")
+    img = os.path.join(tmp, "ink_coverage_over.jpg")
+    _cmyk_image(900, img, (0, 0, 0, 0), (242, 230, 230, 242))
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 0, 0, width=312, height=312)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
+def ink_coverage_ok(out_dir, tmp):
+    """PASS ink-coverage: a CMYK patch at approximately 190% TAC."""
+    path = os.path.join(out_dir, "ink-coverage-ok.pdf")
+    img = os.path.join(tmp, "ink_coverage_ok.jpg")
+    _cmyk_image(900, img, (0, 0, 0, 0), (153, 128, 102, 102))
+    buf = io.BytesIO()
+    c = _new_canvas(buf, (312, 312))
+    c.drawImage(img, 0, 0, width=312, height=312)
+    c.showPage()
+    c.save()
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+    _finalize(path, media=(0, 0, 312, 312), trim=(12, 12, 300, 300), bleed=(0, 0, 312, 312))
+
+
 def white_overprint_fail(out_dir, tmp):
     """FAIL white-overprint: CMYK paper white with overprint enabled on a filled path."""
     del tmp
@@ -487,15 +611,123 @@ Q
     pdf.save(path)
 
 
+# ---------------------------------------------------------------------------
+# transparency-risk
+# ---------------------------------------------------------------------------
+
+def _transparency_group_fixture(out_dir, name, group_cs, blend_mode, content, resources=None, annotation=False):
+    """Create a low-level Form transparency group used by #24 fixtures."""
+    path = os.path.join(out_dir, name + ".pdf")
+    pdf = pikepdf.Pdf.new()
+    page = pdf.add_blank_page(page_size=(200, 200))
+
+    ext_gstate = pdf.make_indirect(pikepdf.Dictionary({
+        "/Type": pikepdf.Name("/ExtGState"),
+        "/BM": pikepdf.Name("/" + blend_mode),
+        "/ca": 1.0,
+        "/CA": 1.0,
+    }))
+    form_resources = pikepdf.Dictionary({
+        "/ExtGState": pikepdf.Dictionary({"/GS0": ext_gstate}),
+    })
+    if resources:
+        form_resources.update(resources)
+
+    form = pdf.make_stream(b"/GS0 gs\n" + content + b"\n", {
+        "/Type": pikepdf.Name("/XObject"),
+        "/Subtype": pikepdf.Name("/Form"),
+        "/FormType": 1,
+        "/BBox": pikepdf.Array([0, 0, 200, 200]),
+        "/Group": pikepdf.Dictionary({
+            "/S": pikepdf.Name("/Transparency"),
+            "/CS": pikepdf.Name("/" + group_cs),
+            "/I": False,
+            "/K": False,
+        }),
+        "/Resources": pdf.make_indirect(form_resources),
+    })
+
+    if annotation:
+        page.Contents = pdf.make_stream(b"")
+        annotation_object = pdf.make_indirect(pikepdf.Dictionary({
+            "/Type": pikepdf.Name("/Annot"),
+            "/Subtype": pikepdf.Name("/Stamp"),
+            "/Rect": pikepdf.Array([20, 20, 180, 180]),
+            "/AP": pikepdf.Dictionary({"/N": form}),
+        }))
+        page.Annots = pikepdf.Array([annotation_object])
+    else:
+        page.Resources = pikepdf.Dictionary({"/XObject": pikepdf.Dictionary({"/Tr0": form})})
+        page.Contents = pdf.make_stream(b"q\n/Tr0 Do\nQ\n")
+
+    pdf.save(path)
+
+
+def transparency_normal_cmyk(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-normal-cmyk", "DeviceCMYK", "Normal", b"0 1 1 0 k 20 20 160 160 re f")
+
+
+def transparency_hue(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-hue", "DeviceRGB", "Hue", b"1 0 0 rg 20 20 160 160 re f")
+
+
+def transparency_rgb_group_cmyk(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-rgb-group-cmyk", "DeviceRGB", "Normal", b"0 1 1 0 k 20 20 160 160 re f")
+
+
+def transparency_cmyk_group_rgb(out_dir, tmp):
+    _transparency_group_fixture(out_dir, "transparency-cmyk-group-rgb", "DeviceCMYK", "Normal", b"1 0 0 rg 20 20 160 160 re f")
+
+
+def transparency_cmyk_group_spot(out_dir, tmp):
+    tint_function = pikepdf.Dictionary({
+        "/FunctionType": 2,
+        "/Domain": pikepdf.Array([0, 1]),
+        "/C0": pikepdf.Array([0, 0, 0, 0]),
+        "/C1": pikepdf.Array([0, 1, 0, 0]),
+        "/N": 1,
+    })
+    spot_space = pikepdf.Array([
+        pikepdf.Name("/Separation"),
+        pikepdf.Name("/SpotGreen"),
+        pikepdf.Name("/DeviceCMYK"),
+        tint_function,
+    ])
+    _transparency_group_fixture(
+        out_dir,
+        "transparency-cmyk-group-spot",
+        "DeviceCMYK",
+        "Normal",
+        b"/CS1 cs 1 scn 20 20 160 160 re f",
+        resources=pikepdf.Dictionary({"/ColorSpace": pikepdf.Dictionary({"/CS1": spot_space})}),
+    )
+
+
+def transparency_annotation_appearance(out_dir, tmp):
+    _transparency_group_fixture(
+        out_dir,
+        "transparency-annotation-appearance",
+        "DeviceRGB",
+        "Normal",
+        b"0 1 1 0 k 20 20 160 160 re f",
+        annotation=True,
+    )
+
+
 FIXTURES = [
     color_rgb,
     color_cmyk,
     image_dpi_low,
     image_dpi_ok,
+    image_dpi_excessive,
     font_not_embedded,
     font_embedded,
     trim_pagesize_ok,
     trim_pagesize_mismatch,
+    color_inventory_rich_black,
+    color_inventory_black_only,
+    color_inventory_cmy_no_k,
+    color_inventory_spot,
     ai_art_missing_bleed,
     ai_art_partial_bleed,
     ai_art_hard_corners,
@@ -503,6 +735,14 @@ FIXTURES = [
     white_overprint_fail,
     white_overprint_ok,
     white_overprint_in_form,
+    ink_coverage_over,
+    ink_coverage_ok,
+    transparency_normal_cmyk,
+    transparency_hue,
+    transparency_rgb_group_cmyk,
+    transparency_cmyk_group_rgb,
+    transparency_cmyk_group_spot,
+    transparency_annotation_appearance,
 ]
 
 

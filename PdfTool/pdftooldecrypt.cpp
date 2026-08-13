@@ -51,7 +51,7 @@ QString PDFToolDecryptApplication::getStandardString(StandardString standardStri
     return QString();
 }
 
-int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolDecryptApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
@@ -59,35 +59,46 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
     {
         if (readDocument(options, document, &sourceData, false))
         {
-            PDFConsole::writeError(PDFToolTranslationContext::tr("Authorization as owner failed. Encryption removal is not permitted if authorized as user only."), options.outputCodec);
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.owner-authorization-required"), PDFToolTranslationContext::tr("Authorization as owner failed. Encryption removal is not permitted if authorized as user only."));
         }
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     if (document.getStorage().getSecurityHandler()->getMode() == pdf::EncryptionMode::None)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Document is not encrypted."), options.outputCodec);
-        return ExitSuccess;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Warning, QStringLiteral("pdf.not-encrypted"), PDFToolTranslationContext::tr("Document is not encrypted."));
+        return PDFToolExitCode::Success;
     }
 
-    if (const int blocked = validateDestructiveOutput(options, options.document))
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.document); blocked != PDFToolExitCode::Success)
     {
         return blocked;
     }
 
-    if (options.destructiveReport)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("decrypt")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+        }
+    }
+    else if (options.destructiveReport)
     {
         PDFConsole::writeText(PDFToolTranslationContext::tr("Would decrypt '%1'.").arg(options.document), options.outputCodec);
     }
 
     if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.document, QStringLiteral("planned")});
+        }
+        return PDFToolExitCode::Success;
     }
 
     if (isCancelRequested())
     {
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentBuilder builder(&document);
@@ -101,7 +112,7 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
         // only touches the target on a successful commit), so there is no
         // partial output to clean up. Removing the file here would delete the
         // still-intact original.
-        return ExitFailure;
+        return PDFToolExitCode::Cancelled;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
@@ -109,11 +120,21 @@ int PDFToolDecryptApplication::execute(const PDFToolOptions& options)
 
     if (!result)
     {
-        PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-        return ErrorDocumentWriting;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), result.getErrorMessage(), QJsonObject{{QStringLiteral("path"), options.document}});
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.document,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolDecryptApplication::getOptionsFlags() const

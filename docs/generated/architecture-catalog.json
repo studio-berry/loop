@@ -1,0 +1,165 @@
+{
+  "branch_policy": {
+    "default": "stable",
+    "integration": "dev",
+    "protected": [
+      "dev",
+      "stable"
+    ],
+    "release": "stable",
+    "topic_patterns": [
+      "chore/*",
+      "docs/*",
+      "feature/*",
+      "fix/*",
+      "gh-*"
+    ],
+    "topic_source": "dev"
+  },
+  "format_version": 1,
+  "generated_by": "scripts/generate-architecture-catalogs.py",
+  "preflight_checks": [
+    "bleed",
+    "color-inventory",
+    "color-mode",
+    "content-bleed",
+    "dieline",
+    "embedded-fonts",
+    "font-integrity",
+    "hidden-layers",
+    "image-resolution",
+    "ink-coverage",
+    "invisible-content",
+    "obscured-content",
+    "off-page-content",
+    "output-intent",
+    "page-size",
+    "processing-steps",
+    "thin-parts",
+    "thin-strokes",
+    "transparency-risk",
+    "trim",
+    "white-overprint"
+  ],
+  "registered_operations": [
+    {
+      "id": "add-bleed",
+      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+    },
+    {
+      "id": "downsample-images",
+      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+    },
+    {
+      "id": "production.add-contour-bleed",
+      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+    },
+    {
+      "id": "production.place-grommets",
+      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+    },
+    {
+      "id": "production.validate-wide-format",
+      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+    },
+    {
+      "id": "rgb-to-cmyk",
+      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+    },
+    {
+      "id": "standards-convert",
+      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+    }
+  ],
+  "schema_versions": {
+    "json_schemas": {
+      "loupe-preflight/schemas/action-list.schema.json": [],
+      "loupe-preflight/schemas/profile.schema.json": [
+        1
+      ],
+      "loupe-preflight/schemas/report.schema.json": [
+        1,
+        2,
+        3
+      ]
+    },
+    "runtime": {
+      "action_list": 1,
+      "preflight_decisions": 1,
+      "preflight_report": 3
+    }
+  },
+  "sources": [
+    "docs/branch-policy.json",
+    "Pdf4QtLibCore/sources/preflightengine.cpp",
+    "Pdf4QtLibCore/sources/preflightengine.h",
+    "Pdf4QtLibCore/sources/pdfactionlist.cpp",
+    "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
+    "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
+    "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
+    "loupe-preflight/schemas/*.json",
+    "UnitTests/CMakeLists.txt",
+    ".github/workflows/*.yml"
+  ],
+  "test_targets": [
+    "UnitTests",
+    "UnitTestsAccessibility",
+    "UnitTestsActionList",
+    "UnitTestsAuthorSettings",
+    "UnitTestsBleedFixup",
+    "UnitTestsBleedMarginProbe",
+    "UnitTestsBleedStress",
+    "UnitTestsContentEditor",
+    "UnitTestsContentProcessorLimits",
+    "UnitTestsDiagnostics",
+    "UnitTestsDocumentSession",
+    "UnitTestsFilenameSanitizer",
+    "UnitTestsFontEncoding",
+    "UnitTestsIdentitySeparation",
+    "UnitTestsImageDownsampleFixup",
+    "UnitTestsImageOptimizer",
+    "UnitTestsIncrementalSave",
+    "UnitTestsJbig2Decoder",
+    "UnitTestsJobScheduler",
+    "UnitTestsOcrCli",
+    "UnitTestsOcrContract",
+    "UnitTestsOcrPageGate",
+    "UnitTestsOperationHistory",
+    "UnitTestsOperatorAcceptance",
+    "UnitTestsOverprint",
+    "UnitTestsOverprintRender",
+    "UnitTestsPageMasterExport",
+    "UnitTestsPdfToolContract",
+    "UnitTestsPreflightChecks",
+    "UnitTestsPreflightCorpus",
+    "UnitTestsPreflightEngine",
+    "UnitTestsPreflightPlugin",
+    "UnitTestsPreflightProfileResolver",
+    "UnitTestsPreflightVerdict",
+    "UnitTestsProcessingBudget",
+    "UnitTestsProductionGeometry",
+    "UnitTestsRecovery",
+    "UnitTestsRedactVerifier",
+    "UnitTestsRepairDiff",
+    "UnitTestsRepairOperation",
+    "UnitTestsRgbToCmyk",
+    "UnitTestsSafeFileWriter",
+    "UnitTestsThumbnailsRenderer",
+    "UnitTestsTransparencyFlattener",
+    "UnitTestsUndoRedoManager"
+  ],
+  "workflow_branches": {
+    ".github/workflows/ci.yml": [
+      "dev",
+      "stable"
+    ],
+    ".github/workflows/codeql.yml": [
+      "dev",
+      "stable"
+    ],
+    ".github/workflows/documentation.yml": [
+      "dev",
+      "stable"
+    ]
+  }
+}

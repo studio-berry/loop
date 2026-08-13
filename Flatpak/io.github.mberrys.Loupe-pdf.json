@@ -12,7 +12,7 @@
         "--socket=pulseaudio",
         "--device=dri",
         "--share=ipc",
-        "--filesystem=host",
+        "--filesystem=home",
         "--filesystem=xdg-run/speech-dispatcher",
         "--filesystem=xdg-cache/speech-dispatcher",
         "--talk-name=org.freedesktop.speech-dispatcher"
@@ -128,6 +128,7 @@
                 "-DPDF4QT_INSTALL_DEPENDENCIES=OFF",
                 "-DPDF4QT_INSTALL_TO_USR=OFF",
                 "-DCMAKE_VERBOSE_MAKEFILE=OFF",
+                "-DPDF4QT_LOUPE_DISTRIBUTION=ON",
                 "-DPDF4QT_PLUGIN_OCR=OFF"
             ],
             "build-commands": [

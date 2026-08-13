@@ -27,6 +27,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfoptionalcontent.h"
 #include "pdfdrawspacecontroller.h"
+#include "pdfsafefilewriter.h"
 
 #include <QFileDialog>
 #include <QMessageBox>
@@ -342,16 +343,33 @@ void PDFRenderToImagesDialog::on_buttonBox_clicked(QAbstractButton* button)
                 {
                     QString fileName = m_imageExportSettings.getOutputFileName(renderedPageImage.pageIndex, m_imageWriterSettings.getCurrentFormat());
 
-                    QImageWriter imageWriter(fileName, m_imageWriterSettings.getCurrentFormat());
-                    imageWriter.setSubType(m_imageWriterSettings.getCurrentSubtype());
-                    imageWriter.setCompression(m_imageWriterSettings.getCompression());
-                    imageWriter.setQuality(m_imageWriterSettings.getQuality());
-                    imageWriter.setOptimizedWrite(m_imageWriterSettings.hasOptimizedWrite());
-                    imageWriter.setProgressiveScanWrite(m_imageWriterSettings.hasProgressiveScanWrite());
+                    // Atomic write: serialize into a QSaveFile and rename only after
+                    // the image bytes are durable, so a crash or short write cannot
+                    // leave a truncated image in place of a valid one.
+                    QString imageWriterError;
+                    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
+                        [this, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
+                        {
+                            QImageWriter imageWriter(device, m_imageWriterSettings.getCurrentFormat());
+                            imageWriter.setSubType(m_imageWriterSettings.getCurrentSubtype());
+                            imageWriter.setCompression(m_imageWriterSettings.getCompression());
+                            imageWriter.setQuality(m_imageWriterSettings.getQuality());
+                            imageWriter.setOptimizedWrite(m_imageWriterSettings.hasOptimizedWrite());
+                            imageWriter.setProgressiveScanWrite(m_imageWriterSettings.hasProgressiveScanWrite());
 
-                    if (!imageWriter.write(renderedPageImage.pageImage))
+                            if (!imageWriter.write(renderedPageImage.pageImage))
+                            {
+                                imageWriterError = imageWriter.errorString();
+                                return false;
+                            }
+
+                            return true;
+                        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+
+                    if (!writeResult)
                     {
-                        Q_EMIT m_rasterizerPool->renderError(renderedPageImage.pageIndex, pdf::PDFRenderError(pdf::RenderErrorType::Error, tr("Cannot write page image to file '%1', because: %2.").arg(fileName).arg(imageWriter.errorString())));
+                        const QString reason = imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError;
+                        Q_EMIT m_rasterizerPool->renderError(renderedPageImage.pageIndex, pdf::PDFRenderError(pdf::RenderErrorType::Error, tr("Cannot write page image to file '%1', because: %2.").arg(fileName, reason)));
                     }
                 };
 

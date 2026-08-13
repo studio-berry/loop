@@ -49,12 +49,16 @@ public:
 
     bool hasReport() const { return m_model.hasReport(); }
     const QVector<PreflightFindingEntry>& findings() const { return m_model.findings(); }
+    bool hasFixup(const QString& id) const { return m_model.hasFixup(id); }
+    const PreflightFixupEntry* fixup(const QString& id) const { return m_model.fixup(id); }
     bool hasAddBleedFixup() const { return m_model.hasAddBleedFixup(); }
     const PreflightFixupEntry* addBleedFixup() const { return m_model.addBleedFixup(); }
+    bool hasRgbToCmykFixup() const { return m_model.hasRgbToCmykFixup(); }
+    const PreflightFixupEntry* rgbToCmykFixup() const { return m_model.rgbToCmykFixup(); }
 
 Q_SIGNALS:
     void findingSelectionChanged(int row);
-    void applyBleedFixupRequested();
+    void applyFixupRequested(const QString& id);
 
 private:
     void clearFindingSelection();

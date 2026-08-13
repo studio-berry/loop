@@ -21,6 +21,10 @@
       "type": "string",
       "description": "Optional summary of when to use this profile."
     },
+    "pdfx": {
+      "$ref": "#/$defs/pdfx",
+      "description": "Optional PDF/X conformance policy. Omitting this object preserves legacy preflight behavior."
+    },
     "job_types": {
       "type": "array",
       "description": "Loupe job categories this profile applies to.",
@@ -43,6 +47,25 @@
     }
   },
   "$defs": {
+    "pdfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4"],
+          "description": "Audited PDF/X policy target."
+        },
+        "policyVersion": {
+          "oneOf": [
+            { "type": "string", "const": "1" },
+            { "type": "integer", "const": 1 }
+          ],
+          "description": "Optional Loupe policy revision; defaults to the target's registered revision."
+        }
+      }
+    },
     "severity": {
       "type": "string",
       "enum": ["error", "warning", "info"],
@@ -80,10 +103,41 @@
         },
         "allowed": {
           "type": "array",
-          "description": "Allow-list for categorical checks (e.g. color-mode).",
+          "description": "Allow-list for categorical checks (e.g. color-mode or output-intent ICC color spaces).",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "allowed_identifiers": {
+          "type": "array",
+          "description": "Optional allow-list of /OutputConditionIdentifier values (output-intent).",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_subtypes": {
+          "type": "array",
+          "description": "Optional allow-list of output-intent /S subtype names.",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "allowed_profile_sha256": {
+          "type": "array",
+          "description": "Optional allow-list of SHA-256 digests for decoded ICC payloads.",
+          "items": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "require_embedded_profile": {
+          "type": "boolean",
+          "description": "Whether an output intent must contain a decodable /DestOutputProfile ICC stream.",
+          "default": true
+        },
+        "allow_multiple": {
+          "type": "boolean",
+          "description": "Whether more than one valid applicable output intent is permitted.",
+          "default": true
         },
         "expected_width_pt": {
           "type": "number",
@@ -109,16 +163,116 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "default": 150,
-          "description": "DPI for the strip-raster probe (content-bleed only)."
+          "description": "DPI for raster probes (content-bleed, ink-coverage, and color-inventory page inspection)."
         },
         "probe_threshold": {
           "type": "number",
           "minimum": 0,
           "default": 16,
           "description": "Pixel channel threshold (0-255) that counts as ink in the raster probe (content-bleed only)."
+        },
+        "rich_black_k_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 10,
+          "description": "Minimum process-black percentage for rich-black inventory (color-inventory only)."
+        },
+        "max_ink_pct": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum total ink coverage percentage (ink-coverage, e.g. 300 for 300% TAC)."
+        },
+        "min_region_area_pct": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.05,
+          "description": "Minimum over-limit connected-region area as a percentage of the page (ink-coverage)."
+        },
+        "max_regions_per_page": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 20,
+          "description": "Maximum number of ink-coverage regions reported per page. Zero deliberately suppresses region findings while still inspecting the page."
+        },
+        "max_raster_pixels": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "default": 250000000,
+          "description": "Per-page raster pixel budget for ink-coverage and bounded thin-parts masks. Exceeding it produces an incomplete/skipped check, never a clean pass."
+        },
+        "analysis_box": {
+          "type": "string",
+          "enum": ["bleed", "trim", "crop", "media"],
+          "default": "bleed",
+          "description": "Production region for TAC analysis. Bleed falls back to Trim, Crop, then Media when a box is unavailable."
+        },
+        "min_effective_width_pt": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Minimum painted stroke or filled-part width in points for thin-strokes and thin-parts."
+        },
+        "zero_width_epsilon_pt": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.000001,
+          "description": "Declared stroke widths at or below this value are hairlines."
+        },
+        "hairline_severity": {
+          "$ref": "#/$defs/severity",
+          "description": "Severity override for hairline-stroke findings."
+        },
+        "thin_stroke_severity": {
+          "$ref": "#/$defs/severity",
+          "description": "Severity override for thin-stroke findings."
+        },
+        "classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["thin-stroke", "thin-fill", "thin-clipped-part", "thin-negative-space", "thin-annotation"]
+          },
+          "default": ["thin-stroke", "thin-fill"],
+          "description": "Thin-parts object classes to inspect. Clipped parts, negative space, and annotation appearances are opt-in."
+        },
+        "severity_by_class": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["thin-stroke", "thin-fill", "thin-clipped-part", "thin-negative-space", "thin-annotation"]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/severity"
+          },
+          "description": "Optional severity overrides keyed by thin-parts class."
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": { "const": "ink-coverage" }
+            },
+            "required": ["id"]
+          },
+          "then": {
+            "required": ["max_ink_pct"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "id": { "const": "thin-parts" }
+            },
+            "required": ["id"]
+          },
+          "then": {
+            "required": ["min_effective_width_pt"]
+          }
+        }
+      ]
     },
     "fixup": {
       "type": "object",
@@ -141,9 +295,10 @@
           "description": "Fixup length in points (e.g. add-bleed)."
         },
         "target_dpi": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Downsample target DPI."
+          "type": "integer",
+          "minimum": 72,
+          "maximum": 1200,
+          "description": "Downsample target DPI; runtime profile validation also requires a registered fixup operation."
         },
         "params": {
           "type": "object",

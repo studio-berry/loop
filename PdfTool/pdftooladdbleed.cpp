@@ -102,7 +102,7 @@ static void writeReport(const PDFToolOptions& options,
                  .arg(settings.bleedMM.left()).arg(settings.bleedMM.top())
                  .arg(settings.bleedMM.right()).arg(settings.bleedMM.bottom()));
     writeSetting(QStringLiteral("force"), settings.force ? QStringLiteral("true") : QStringLiteral("false"));
-    writeSetting(QStringLiteral("dry-run"), options.addBleedDryRun ? QStringLiteral("true") : QStringLiteral("false"));
+    writeSetting(QStringLiteral("dry-run"), options.destructiveDryRun ? QStringLiteral("true") : QStringLiteral("false"));
     formatter.endTable();
     formatter.endl();
 
@@ -145,28 +145,38 @@ static void writeReport(const PDFToolOptions& options,
 
     formatter.endTable();
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 }
 
-int PDFToolAddBleed::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 {
-    if (!options.addBleedDryRun && options.addBleedOutputDocument.isEmpty())
+    if (!options.destructiveDryRun && options.addBleedOutputDocument.isEmpty())
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Output document file name is not set. Use -o/--output or --dry-run."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocument document;
     if (!readDocument(options, document, nullptr, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFBleedFixupSettings settings = options.addBleedSettings;
 
     // A dry run reports geometry only; skip the page raster it would otherwise
     // build for edge sampling.
-    settings.analyzeOnly = options.addBleedDryRun;
+    settings.analyzeOnly = options.destructiveDryRun;
 
     if (!options.pageSelectorSelection.isEmpty())
     {
@@ -183,40 +193,59 @@ int PDFToolAddBleed::execute(const PDFToolOptions& options)
     const pdf::PDFOperationResult result = pdf::PDFBleedFixup::apply(&document, settings, &report);
     if (!result)
     {
-        PDFConsole::writeError(result.getErrorMessage(), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), result.getErrorMessage());
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    if (options.addBleedReport || options.addBleedDryRun)
+    if (options.outputStyle == PDFOutputFormatter::Style::Json ||
+        options.destructiveReport || options.destructiveDryRun)
     {
         writeReport(options, settings, report);
     }
 
-    if (options.addBleedDryRun)
+    if (options.destructiveDryRun)
     {
-        return ExitSuccess;
+        if (options.executionContext)
+        {
+            options.executionContext->addOutput({
+                QStringLiteral("file"),
+                QStringLiteral("primary"),
+                options.addBleedOutputDocument,
+                QStringLiteral("planned")
+            });
+        }
+        return PDFToolExitCode::Success;
     }
 
-    if (QFile::exists(options.addBleedOutputDocument) && !options.addBleedOverwrite)
+    if (const PDFToolExitCode blocked = validateDestructiveOutput(options, options.addBleedOutputDocument); blocked != PDFToolExitCode::Success)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Output '%1' already exists. Use --overwrite to replace it.").arg(options.addBleedOutputDocument), options.outputCodec);
-        return ErrorInvalidArguments;
+        return blocked;
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
     const pdf::PDFOperationResult writeResult = writer.write(options.addBleedOutputDocument, &document, true);
     if (!writeResult)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), options.outputCodec);
-        return ErrorFailedWriteToFile;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.addBleedOutputDocument}});
+        return PDFToolExitCode::ProcessingFailure;
     }
 
-    return ExitSuccess;
+    if (options.executionContext)
+    {
+        options.executionContext->addOutput({
+            QStringLiteral("file"),
+            QStringLiteral("primary"),
+            options.addBleedOutputDocument,
+            QStringLiteral("written")
+        });
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed;
+    return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite;
 }
 
 } // namespace pdftool

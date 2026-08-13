@@ -22,6 +22,104 @@
 
 #include "pdfpagecontenteditorprocessor.h"
 
+#include <cmath>
+
+namespace
+{
+
+QByteArray formatContentNumber(double value)
+{
+    if (!std::isfinite(value))
+    {
+        return QByteArrayLiteral("0");
+    }
+
+    QByteArray result = QByteArray::number(value, 'f', 8);
+    while (result.endsWith('0'))
+    {
+        result.chop(1);
+    }
+    if (result.endsWith('.'))
+    {
+        result.chop(1);
+    }
+    if (result.isEmpty() || result == QByteArrayLiteral("-0"))
+    {
+        result = QByteArrayLiteral("0");
+    }
+    return result;
+}
+
+QByteArray serializeContentToken(const pdf::PDFLexicalAnalyzer::Token& token)
+{
+    using TokenType = pdf::PDFLexicalAnalyzer::TokenType;
+
+    switch (token.type)
+    {
+        case TokenType::Boolean:
+            return token.data.toBool() ? QByteArrayLiteral("true") : QByteArrayLiteral("false");
+
+        case TokenType::Integer:
+            return QByteArray::number(token.data.toLongLong());
+
+        case TokenType::Real:
+            return formatContentNumber(token.data.toDouble());
+
+        case TokenType::String:
+            return QByteArrayLiteral("<") + token.data.toByteArray().toHex() + QByteArrayLiteral(">");
+
+        case TokenType::Name:
+            return QByteArrayLiteral("/") + token.data.toByteArray();
+
+        case TokenType::ArrayStart:
+            return QByteArrayLiteral("[");
+
+        case TokenType::ArrayEnd:
+            return QByteArrayLiteral("]");
+
+        case TokenType::DictionaryStart:
+            return QByteArrayLiteral("<<");
+
+        case TokenType::DictionaryEnd:
+            return QByteArrayLiteral(">>");
+
+        case TokenType::Null:
+            return QByteArrayLiteral("null");
+
+        case TokenType::Command:
+            return token.data.toByteArray();
+
+        case TokenType::EndOfFile:
+            break;
+    }
+
+    return QByteArray();
+}
+
+QByteArray serializeContentInstruction(const pdf::PDFFlatArray<pdf::PDFLexicalAnalyzer::Token, 33>& operands,
+                                       const QByteArray& operatorAsText)
+{
+    QByteArray result;
+    for (size_t i = 0; i < operands.size(); ++i)
+    {
+        if (!result.isEmpty())
+        {
+            result.append(' ');
+        }
+        result.append(serializeContentToken(operands[i]));
+    }
+
+    if (!result.isEmpty())
+    {
+        result.append(' ');
+    }
+    result.append(operatorAsText);
+    result.append('\n');
+    return result;
+}
+
+} // namespace
+
 namespace pdf
 {
 
@@ -70,6 +168,30 @@ void PDFPageContentEditorProcessor::performInterceptInstruction(Operator current
 
     if (processOrder == ProcessOrder::BeforeOperation)
     {
+        switch (currentOperator)
+        {
+        case Operator::MarkedContentPoint:
+        case Operator::MarkedContentPointWithProperties:
+        case Operator::MarkedContentBegin:
+        case Operator::MarkedContentBeginWithProperties:
+        case Operator::MarkedContentEnd:
+        case Operator::CompatibilityBegin:
+        case Operator::CompatibilityEnd:
+            m_content.addPreservedInstruction(*getGraphicState(), serializeContentInstruction(getOperands(), operatorAsText),
+                                              QStringLiteral("Preserved %1").arg(QString::fromLatin1(operatorAsText)));
+            break;
+
+        case Operator::ShadingPaintShape:
+        case Operator::Type3FontSetOffset:
+        case Operator::Type3FontSetOffsetAndBB:
+        case Operator::Invalid:
+            addUnsupportedInstruction(operatorAsText, QStringLiteral("The page content editor cannot represent this operator without changing document semantics."));
+            break;
+
+        default:
+            break;
+        }
+
         if (currentOperator == Operator::TextBegin && !isTextProcessing())
         {
             m_contentElementText.reset(new PDFEditedPageContentElementText(*getGraphicState(), getGraphicState()->getCurrentTransformationMatrix()));
@@ -100,6 +222,17 @@ void PDFPageContentEditorProcessor::performInterceptInstruction(Operator current
 void PDFPageContentEditorProcessor::performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule)
 {
     BaseClass::performPathPainting(path, stroke, fill, text, fillRule);
+
+    const PDFPageContentProcessorState* state = getGraphicState();
+    const bool usesPattern = (fill && state->getFillColorSpace() &&
+                              state->getFillColorSpace()->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Pattern) ||
+                             (stroke && state->getStrokeColorSpace() &&
+                              state->getStrokeColorSpace()->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Pattern);
+    if (usesPattern)
+    {
+        addUnsupportedInstruction(QByteArrayLiteral("pattern"), QStringLiteral("Pattern paint cannot be safely reconstructed by the page content editor."));
+        return;
+    }
 
     if (path.isEmpty())
     {
@@ -151,6 +284,17 @@ void PDFPageContentEditorProcessor::performProcessTextSequence(const TextSequenc
 bool PDFPageContentEditorProcessor::performOriginalImagePainting(const PDFImage& image, const PDFStream* stream, PDFObjectReference reference)
 {
     BaseClass::performOriginalImagePainting(image, stream, reference);
+
+    const PDFPageContentProcessorState* state = getGraphicState();
+    const bool usesPattern = (state->getFillColorSpace() &&
+                              state->getFillColorSpace()->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Pattern) ||
+                             (state->getStrokeColorSpace() &&
+                              state->getStrokeColorSpace()->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Pattern);
+    if (usesPattern)
+    {
+        addUnsupportedInstruction(QByteArrayLiteral("pattern"), QStringLiteral("Pattern paint cannot be safely reconstructed by the page content editor."));
+        return true;
+    }
 
     PDFObject imageObject = PDFObject::createStream(std::make_shared<PDFStream>(*stream));
     m_content.addContentImage(*getGraphicState(), std::move(imageObject), QImage());
@@ -249,19 +393,31 @@ QPainterPath PDFPageContentEditorProcessor::getCurrentClipPathInElementSpace(con
 
 bool PDFPageContentEditorProcessor::isContentKindSuppressed(ContentKind kind) const
 {
-    // Jakub Melka: tiling patterns are not suppressed - their content is
-    // decomposed into the standard edited content elements. Otherwise
-    // everything, which is painted by a tiling pattern (images, paths, text),
-    // would be silently lost, when the page content is written back.
+    // Tiling patterns are still traversed so their use can be reported and
+    // rejected safely. They must not be flattened into editable elements,
+    // because that changes their paint semantics on rewrite.
     return kind == ContentKind::Shading;
 }
 
 bool PDFPageContentEditorProcessor::isTilingPatternProcessingAllowed(PDFInteger tileCount) const
 {
-    // Each tile is decomposed into the edited content elements, so a pattern
-    // with a huge number of tiles would produce an unusable amount of elements.
-    // Such patterns are not processed at all and an error is reported instead.
-    return tileCount <= MAXIMUM_TILING_PATTERN_TILE_COUNT;
+    // Tiling patterns are decomposed into per-tile edited content elements so the
+    // page still renders correctly, but that flattening loses the pattern's paint
+    // semantics (tiling/repetition) - rewriting the flattened elements back out
+    // cannot reconstruct the pattern. Every tiling pattern use is therefore
+    // reported unsupported, regardless of tile count, so rewrite fails closed.
+    const_cast<PDFPageContentEditorProcessor*>(this)->addUnsupportedInstruction(
+        QByteArrayLiteral("tiling-pattern"),
+        QStringLiteral("Tiling patterns cannot be safely reconstructed from the page content editor's flattened elements."));
+
+    // A pattern with a huge number of tiles would also produce an unusable amount
+    // of edited content elements, so such patterns are not processed (flattened) at all.
+    if (tileCount > MAXIMUM_TILING_PATTERN_TILE_COUNT)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 QString PDFEditedPageContent::getOperatorToString(PDFPageContentProcessor::Operator operatorValue)
@@ -500,17 +656,54 @@ void PDFEditedPageContent::addContentPath(PDFPageContentProcessorState state, QP
 {
     QTransform transform = state.getCurrentTransformationMatrix();
     m_contentElements.emplace_back(new PDFEditedPageContentElementPath(std::move(state), std::move(path), strokePath, fillPath, transform));
+    if (!m_integrityReport.changed.contains(QStringLiteral("Visual content normalized into editable elements.")))
+    {
+        m_integrityReport.changed.append(QStringLiteral("Visual content normalized into editable elements."));
+    }
 }
 
 void PDFEditedPageContent::addContentImage(PDFPageContentProcessorState state, PDFObject imageObject, QImage image)
 {
     QTransform transform = state.getCurrentTransformationMatrix();
     m_contentElements.emplace_back(new PDFEditedPageContentElementImage(std::move(state), std::move(imageObject), std::move(image), transform));
+    if (!m_integrityReport.changed.contains(QStringLiteral("Visual content normalized into editable elements.")))
+    {
+        m_integrityReport.changed.append(QStringLiteral("Visual content normalized into editable elements."));
+    }
 }
 
 void PDFEditedPageContent::addContentElement(std::unique_ptr<PDFEditedPageContentElement> element)
 {
+    if (element && element->getType() != PDFEditedPageContentElement::Type::Instruction &&
+        !m_integrityReport.changed.contains(QStringLiteral("Visual content normalized into editable elements.")))
+    {
+        m_integrityReport.changed.append(QStringLiteral("Visual content normalized into editable elements."));
+    }
     m_contentElements.emplace_back(std::move(element));
+}
+
+void PDFEditedPageContent::addPreservedInstruction(PDFPageContentProcessorState state, QByteArray content, QString description)
+{
+    m_contentElements.emplace_back(new PDFEditedPageContentElementInstruction(std::move(state), std::move(content)));
+    if (!m_integrityReport.preserved.contains(description))
+    {
+        m_integrityReport.preserved.append(std::move(description));
+    }
+
+    const QString review = QStringLiteral("Revalidate preserved structural content after editing visual elements.");
+    if (!m_integrityReport.requiresReview.contains(review))
+    {
+        m_integrityReport.requiresReview.append(review);
+    }
+}
+
+void PDFEditedPageContent::addUnsupportedContent(PDFPageContentProcessorState state, QString diagnostic)
+{
+    m_contentElements.emplace_back(new PDFEditedPageContentElementInstruction(std::move(state), QByteArray(), diagnostic));
+    if (!m_integrityReport.unsupported.contains(diagnostic))
+    {
+        m_integrityReport.unsupported.append(std::move(diagnostic));
+    }
 }
 
 PDFEditedPageContentElement* PDFEditedPageContent::getBackElement() const
@@ -551,6 +744,54 @@ PDFDictionary PDFEditedPageContent::getGraphicStateDictionary() const
 void PDFEditedPageContent::setGraphicStateDictionary(const PDFDictionary& newGraphicStateDictionary)
 {
     m_graphicStateDictionary = newGraphicStateDictionary;
+}
+
+PDFEditedPageContentElementInstruction::PDFEditedPageContentElementInstruction(PDFPageContentProcessorState state,
+                                                                               QByteArray content,
+                                                                               QString diagnostic) :
+    PDFEditedPageContentElement(std::move(state), QTransform()),
+    m_content(std::move(content)),
+    m_diagnostic(std::move(diagnostic))
+{
+
+}
+
+PDFEditedPageContentElement::Type PDFEditedPageContentElementInstruction::getType() const
+{
+    return Type::Instruction;
+}
+
+PDFEditedPageContentElementInstruction* PDFEditedPageContentElementInstruction::clone() const
+{
+    PDFEditedPageContentElementInstruction* copy = new PDFEditedPageContentElementInstruction(getState(), getContent(), getDiagnostic());
+    copy->setClipPath(getClipPath());
+    return copy;
+}
+
+QRectF PDFEditedPageContentElementInstruction::getBoundingBox() const
+{
+    return QRectF();
+}
+
+void PDFPageContentEditorProcessor::addUnsupportedInstruction(const QByteArray& operatorAsText, const QString& reason)
+{
+    const QString diagnostic = QStringLiteral("Unsupported page-content construct '%1': %2")
+                                   .arg(QString::fromLatin1(operatorAsText), reason);
+    m_content.addUnsupportedContent(*getGraphicState(), diagnostic);
+}
+
+void PDFPageContentEditorProcessor::performBeginTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup)
+{
+    BaseClass::performBeginTransparencyGroup(order, transparencyGroup);
+    if (order == ProcessOrder::BeforeOperation)
+    {
+        addUnsupportedInstruction(QByteArrayLiteral("transparency-group"), QStringLiteral("Transparency groups cannot be safely reconstructed by the page content editor."));
+    }
+}
+
+void PDFPageContentEditorProcessor::performEndTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup)
+{
+    BaseClass::performEndTransparencyGroup(order, transparencyGroup);
 }
 
 PDFEditedPageContentElement::PDFEditedPageContentElement(PDFPageContentProcessorState state, QTransform transform) :

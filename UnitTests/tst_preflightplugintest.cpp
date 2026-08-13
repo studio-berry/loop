@@ -21,10 +21,14 @@
 // SOFTWARE.
 
 #include "preflightsidecarutils.h"
+#include "pdftoolenvelopeutils.h"
 
 #include <QtTest>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
+#include <QFile>
 
 class PreflightPluginTest : public QObject
 {
@@ -40,12 +44,14 @@ private slots:
     void isNormalizedReport_rejectsInvalidScopeCombinations();
     void findingHasVisualOverlay_respectsScopeAndBbox();
     void filterAdvertisedFixups_removesUnimplementedFixups();
-    void isImplementedFixupId_onlyAdvertisesAddBleed();
+    void isImplementedFixupId_advertisesImplementedFixups();
+    void shippedProfileFixups_areImplemented();
     void sidecarStreamBuffer_spillsToDiskAboveWatermark();
     void sidecarStreamBuffer_rejectsOverflowBeyondMax();
     void sidecarStreamBuffer_spillRoundTripsContent();
     void overprintDisclosureText_alwaysShownEvenWithoutFinding();
     void overprintDisclosureText_addsSpecificWarningForWhiteOverprintFinding();
+    void pdfToolEnvelope_extractsReportAndDiagnostics();
 };
 
 namespace
@@ -124,6 +130,8 @@ void PreflightPluginTest::isExpectedPreflightExitCode_acceptsPassAndFindings()
 {
     QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(0));
     QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(1));
+    QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(8));
+    QVERIFY(pdfplugin::preflight::isExpectedPreflightExitCode(9));
     QVERIFY(!pdfplugin::preflight::isExpectedPreflightExitCode(2));
 }
 
@@ -187,6 +195,13 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncomplete
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
     report.insert(QStringLiteral("checks"), QJsonArray());
+    report.insert(QStringLiteral("verdict"), QJsonObject{
+        { QStringLiteral("state"), QStringLiteral("incomplete") },
+        { QStringLiteral("reason_code"), QStringLiteral("inspection-incomplete") },
+        { QStringLiteral("reason"), QStringLiteral("Required inspection evidence was not collected.") },
+        { QStringLiteral("blocking_finding_ids"), QJsonArray() },
+        { QStringLiteral("waived_finding_ids"), QJsonArray() }
+    });
 
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
 }
@@ -231,15 +246,48 @@ void PreflightPluginTest::filterAdvertisedFixups_removesUnimplementedFixups()
 
     const QJsonObject filtered = pdfplugin::preflight::filterAdvertisedFixups(report);
     const QJsonArray filteredFixups = filtered.value(QStringLiteral("fixups_available")).toArray();
-    QCOMPARE(filteredFixups.size(), 1);
-    QCOMPARE(filteredFixups.first().toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+    QCOMPARE(filteredFixups.size(), 3);
+    QCOMPARE(filteredFixups.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("rgb-to-cmyk"));
+    QCOMPARE(filteredFixups.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("add-bleed"));
+    QCOMPARE(filteredFixups.at(2).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("downsample-images"));
 }
 
-void PreflightPluginTest::isImplementedFixupId_onlyAdvertisesAddBleed()
+void PreflightPluginTest::isImplementedFixupId_advertisesImplementedFixups()
 {
     QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("add-bleed")));
-    QVERIFY(!pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
-    QVERIFY(!pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
+    QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("rgb-to-cmyk")));
+    QVERIFY(pdfplugin::preflight::isImplementedFixupId(QStringLiteral("downsample-images")));
+}
+
+void PreflightPluginTest::shippedProfileFixups_areImplemented()
+{
+    const QDir profiles(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles"));
+    const QFileInfoList profileFiles = profiles.entryInfoList({ QStringLiteral("*.json") },
+                                                               QDir::Files,
+                                                               QDir::Name);
+    QVERIFY2(!profileFiles.isEmpty(), qPrintable(profiles.absolutePath()));
+
+    for (const QFileInfo& profileInfo : profileFiles)
+    {
+        QFile profileFile(profileInfo.absoluteFilePath());
+        QVERIFY2(profileFile.open(QIODevice::ReadOnly), qPrintable(profileInfo.absoluteFilePath()));
+
+        QJsonParseError parseError;
+        const QJsonDocument profile = QJsonDocument::fromJson(profileFile.readAll(), &parseError);
+        QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
+
+        const QJsonArray fixups = profile.object().value(QStringLiteral("fixups")).toArray();
+        QVERIFY2(!fixups.isEmpty(), qPrintable(profileInfo.absoluteFilePath()));
+        for (int index = 0; index < fixups.size(); ++index)
+        {
+            const QString id = fixups.at(index).toObject().value(QStringLiteral("id")).toString();
+            QVERIFY2(pdfplugin::preflight::isImplementedFixupId(id),
+                     qPrintable(QStringLiteral("%1: fixups[%2] = %3")
+                                    .arg(profileInfo.fileName())
+                                    .arg(index)
+                                    .arg(id)));
+        }
+    }
 }
 
 void PreflightPluginTest::sidecarStreamBuffer_spillsToDiskAboveWatermark()
@@ -297,6 +345,38 @@ void PreflightPluginTest::overprintDisclosureText_addsSpecificWarningForWhiteOve
     const QString text = pdfplugin::preflight::overprintDisclosureText(true);
     QVERIFY(text.contains(QStringLiteral("does not simulate overprint")));
     QVERIFY(text.contains(QStringLiteral("white or near-white")));
+}
+
+void PreflightPluginTest::pdfToolEnvelope_extractsReportAndDiagnostics()
+{
+    const QJsonObject envelope{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("command"), QStringLiteral("preflight") },
+        { QStringLiteral("diagnostics"), QJsonArray{
+              QJsonObject{
+                  { QStringLiteral("severity"), QStringLiteral("error") },
+                  { QStringLiteral("code"), QStringLiteral("cli.invalid-arguments") },
+                  { QStringLiteral("message"), QStringLiteral("No profile specified.") }
+              }
+          } },
+        { QStringLiteral("data"), QJsonObject{
+              { QStringLiteral("report"), QJsonObject{
+                    { QStringLiteral("schema_version"), 3 },
+                    { QStringLiteral("pass"), true },
+                    { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
+                    { QStringLiteral("errors"), QJsonArray() },
+                    { QStringLiteral("warnings"), QJsonArray() },
+                    { QStringLiteral("fixups_available"), QJsonArray() }
+                } }
+          } }
+    };
+
+    QVERIFY(pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")));
+    QVERIFY(!pdfplugin::pdftool::reportFromEnvelope(envelope).isEmpty());
+
+    const QByteArray stdoutData = QJsonDocument(envelope).toJson(QJsonDocument::Compact);
+    QCOMPARE(pdfplugin::pdftool::failureDetailFromStdout(stdoutData, QString(), 2, QStringLiteral("fallback")),
+             QStringLiteral("No profile specified."));
 }
 
 QTEST_APPLESS_MAIN(PreflightPluginTest)

@@ -186,7 +186,8 @@ PDFImageCompressor::ImageStatisticsList PDFImageCompressor::collectImages(const 
     PDFModifiedDocument modifiedDocument(const_cast<PDFDocument*>(document), &optionalContentActivity);
     fontCache.setDocument(modifiedDocument);
     fontCache.setCacheShrinkEnabled(nullptr, false);
-    auto fontCacheGuard = qScopeGuard([&fontCache]() { fontCache.setCacheShrinkEnabled(nullptr, true); });
+    auto fontCacheGuard = qScopeGuard([&fontCache]()
+                                      { fontCache.setCacheShrinkEnabled(nullptr, true); });
 
     PDFMeshQualitySettings meshQualitySettings;
     std::map<PDFObjectReference, ImageStatistics> statistics;
@@ -207,7 +208,11 @@ PDFImageCompressor::ImageStatisticsList PDFImageCompressor::collectImages(const 
                                              &optionalContentActivity,
                                              meshQualitySettings,
                                              &statistics);
-        processor.processContents();
+        const QList<PDFRenderError> collectErrors = processor.processContents();
+        for (const PDFRenderError& collectError : collectErrors)
+        {
+            qWarning().noquote() << "TEMP-DIAG collectImages page" << pageIndex << "error:" << collectError.message;
+        }
     }
 
     result.reserve(statistics.size());

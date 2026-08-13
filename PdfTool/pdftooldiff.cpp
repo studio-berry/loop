@@ -51,12 +51,12 @@ QString PDFToolDiff::getStandardString(PDFToolAbstractApplication::StandardStrin
     return QString();
 }
 
-int PDFToolDiff::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolDiff::execute(const PDFToolOptions& options)
 {
     if (options.diffFiles.size() != 2)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Exactly two documents must be specified."), options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Exactly two documents must be specified."));
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     pdf::PDFDocumentReader reader(nullptr, [](bool* ok) { *ok = false; return QString(); }, options.permissiveReading, false);
@@ -64,15 +64,15 @@ int PDFToolDiff::execute(const PDFToolOptions& options)
     pdf::PDFDocument leftDocument = reader.readFromFile(options.diffFiles.front());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.front()), options.outputCodec);
-        return ErrorDocumentReading;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.front()), QJsonObject{{QStringLiteral("path"), options.diffFiles.front()}});
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFDocument rightDocument = reader.readFromFile(options.diffFiles.back());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
-        PDFConsole::writeError(PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.back()), options.outputCodec);
-        return ErrorDocumentReading;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), PDFToolTranslationContext::tr("Cannot open document '%1'.").arg(options.diffFiles.back()), QJsonObject{{QStringLiteral("path"), options.diffFiles.back()}});
+        return PDFToolExitCode::InputError;
     }
 
     pdf::PDFClosedIntervalSet leftPages;
@@ -135,6 +135,13 @@ int PDFToolDiff::execute(const PDFToolOptions& options)
             result.saveToXML(&xml);
             PDFConsole::writeText(xml, options.outputCodec);
         }
+        else if (options.outputStyle == PDFOutputFormatter::Style::Json)
+        {
+            if (options.executionContext)
+            {
+                options.executionContext->setData(formatter.getJsonObject());
+            }
+        }
         else
         {
             PDFConsole::writeText(formatter.getString(), options.outputCodec);
@@ -142,11 +149,12 @@ int PDFToolDiff::execute(const PDFToolOptions& options)
     }
     else
     {
-        PDFConsole::writeError(result.getResult().getErrorMessage(), options.outputCodec);
-        return ErrorUnknown;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("operation.failed"), result.getResult().getErrorMessage());
+        return PDFToolExitCode::InternalError;
     }
 
-    return ExitSuccess;
+    // Exit code reflects whether the comparison found any differences.
+    return result.getDifferencesCount() > 0 ? PDFToolExitCode::Findings : PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolDiff::getOptionsFlags() const

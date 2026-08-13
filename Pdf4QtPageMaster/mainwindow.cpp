@@ -55,6 +55,7 @@
 #include <QDoubleSpinBox>
 #include <QEventLoop>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QToolBar>
 #include <QDesktopServices>
 #include <QImageReader>
@@ -199,7 +200,7 @@ QString sanitizeOutputFileName(QString fileName)
 
 QString normalizedOutputPathKey(const QString& fileName)
 {
-    return QDir::cleanPath(fileName).toCaseFolded();
+    return QDir::cleanPath(QFileInfo(fileName).absoluteFilePath()).toCaseFolded();
 }
 
 int pageRotationToInt(pdf::PageRotation rotation)
@@ -362,6 +363,63 @@ pdf::PDFBleedFixupSettings::ReferenceBox bleedFixupReferenceBoxFromString(const 
     return pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox;
 }
 
+QString bleedFixupSideToString(pdf::PDFBleedFixupSide side)
+{
+    switch (side)
+    {
+        case pdf::PDFBleedFixupSide::Left: return QStringLiteral("left");
+        case pdf::PDFBleedFixupSide::Bottom: return QStringLiteral("bottom");
+        case pdf::PDFBleedFixupSide::Right: return QStringLiteral("right");
+        case pdf::PDFBleedFixupSide::Top: return QStringLiteral("top");
+    }
+    return QStringLiteral("unknown");
+}
+
+pdf::PDFBleedFixupSideMask bleedFixupSidesFromJson(const QJsonValue& value)
+{
+    if (!value.isArray())
+    {
+        return pdf::PDFBleedFixupAllSides;
+    }
+
+    pdf::PDFBleedFixupSideMask sides = 0;
+    for (const QJsonValue& sideValue : value.toArray())
+    {
+        const QString side = sideValue.toString().trimmed().toLower();
+        if (side == QStringLiteral("left"))
+        {
+            sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+        }
+        else if (side == QStringLiteral("bottom"))
+        {
+            sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Bottom);
+        }
+        else if (side == QStringLiteral("right"))
+        {
+            sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Right);
+        }
+        else if (side == QStringLiteral("top"))
+        {
+            sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Top);
+        }
+    }
+    return sides;
+}
+
+QString bleedConfirmationPolicyToString(pdf::PDFPageMasterBleedConfirmationPolicy policy)
+{
+    return policy == pdf::PDFPageMasterBleedConfirmationPolicy::Never
+            ? QStringLiteral("never")
+            : QStringLiteral("before-batch");
+}
+
+pdf::PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicyFromString(const QString& text)
+{
+    return text.trimmed().toLower() == QStringLiteral("never")
+            ? pdf::PDFPageMasterBleedConfirmationPolicy::Never
+            : pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
+}
+
 QJsonObject bleedFixupSettingsToJson(const pdf::PDFBleedFixupSettings& settings)
 {
     QJsonObject object;
@@ -369,6 +427,18 @@ QJsonObject bleedFixupSettingsToJson(const pdf::PDFBleedFixupSettings& settings)
     object["pageRange"] = settings.pageRange;
     object["referenceBox"] = bleedFixupReferenceBoxToString(settings.referenceBox);
     object["bleedMM"] = marginsToJson(settings.bleedMM);
+    QJsonArray sides;
+    for (pdf::PDFBleedFixupSide side : { pdf::PDFBleedFixupSide::Left,
+                                         pdf::PDFBleedFixupSide::Bottom,
+                                         pdf::PDFBleedFixupSide::Right,
+                                         pdf::PDFBleedFixupSide::Top })
+    {
+        if (pdf::isBleedFixupSideEnabled(settings.sides, side))
+        {
+            sides.append(bleedFixupSideToString(side));
+        }
+    }
+    object["sides"] = sides;
     object["expandMediaBox"] = settings.expandMediaBox;
     object["expandCropBox"] = settings.expandCropBox;
     object["expandBleedBox"] = settings.expandBleedBox;
@@ -387,6 +457,7 @@ pdf::PDFBleedFixupSettings bleedFixupSettingsFromJson(const QJsonObject& object)
     settings.pageRange = object["pageRange"].toString(settings.pageRange);
     settings.referenceBox = bleedFixupReferenceBoxFromString(object["referenceBox"].toString(bleedFixupReferenceBoxToString(settings.referenceBox)));
     settings.bleedMM = marginsFromJson(object["bleedMM"].toObject(), settings.bleedMM);
+    settings.sides = bleedFixupSidesFromJson(object["sides"]);
     settings.expandMediaBox = object["expandMediaBox"].toBool(settings.expandMediaBox);
     settings.expandCropBox = object["expandCropBox"].toBool(settings.expandCropBox);
     settings.expandBleedBox = object["expandBleedBox"].toBool(settings.expandBleedBox);
@@ -2699,9 +2770,16 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     job.pageGeometrySettings = m_pageGeometrySettings;
     job.hasBleedFixupSettings = m_hasBleedFixupSettings;
     job.bleedFixupSettings = m_bleedFixupSettings;
+    job.hasProductionGeometrySettings = m_hasProductionGeometrySettings;
+    job.productionGeometrySettings = m_productionGeometrySettings;
+    job.bleedConfirmationPolicy = m_bleedConfirmationPolicy;
     job.hasPreflightGate = m_hasPreflightGate;
     job.preflightProfilePath = m_preflightProfilePath;
     job.forcePreflight = m_forcePreflight;
+    job.revalidatePreflightAfterFixups = m_revalidatePreflightAfterFixups;
+    job.hasActionList = m_hasActionList;
+    job.actionList = m_actionList;
+    job.actionListBindings = m_actionListBindings;
     job.progress = m_exportProgress;
     m_exportCancelToken.cancel->store(false, std::memory_order_release);
     m_exportCancelToken.progressAlive->store(true, std::memory_order_release);
@@ -2716,13 +2794,17 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
                                  tr("Page geometry is set to rewrite BleedBox. Bleed fixup will run after geometry and may expand boxes again."));
         }
 
-        const auto answer = QMessageBox::question(this, tr("Bleed Fixup"),
-                                                  tr("Bleed fixup will rewrite page content by rasterizing and extending page edges. Continue?"),
-                                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (answer != QMessageBox::Yes)
+        if (m_bleedConfirmationPolicy == pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch)
         {
-            return;
+            const auto answer = QMessageBox::question(this, tr("Bleed Fixup"),
+                                                      tr("Bleed fixup will rewrite page content by rasterizing and extending page edges. Continue?"),
+                                                      QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (answer != QMessageBox::Yes)
+            {
+                return;
+            }
         }
+        job.bleedConfirmationGranted = true;
     }
 
     setExportInProgress(true);
@@ -3310,12 +3392,21 @@ QJsonObject MainWindow::createProjectJson() const
     QJsonObject bleedFixupObject;
     bleedFixupObject["enabled"] = m_hasBleedFixupSettings;
     bleedFixupObject["settings"] = bleedFixupSettingsToJson(m_bleedFixupSettings);
+    bleedFixupObject["confirmationPolicy"] = bleedConfirmationPolicyToString(m_bleedConfirmationPolicy);
     settingsObject["bleedFixup"] = bleedFixupObject;
+    settingsObject["production"] = m_productionGeometrySettings.toJson();
     QJsonObject preflightObject;
     preflightObject["enabled"] = m_hasPreflightGate;
     preflightObject["profile"] = m_preflightProfilePath;
     preflightObject["force"] = m_forcePreflight;
+    preflightObject["revalidateAfterFixups"] = m_revalidatePreflightAfterFixups;
     settingsObject["preflight"] = preflightObject;
+    QJsonObject actionListObject;
+    actionListObject["enabled"] = m_hasActionList;
+    actionListObject["path"] = m_actionListPath;
+    actionListObject["recipe"] = m_actionList.toJson();
+    actionListObject["bindings"] = m_actionListBindings;
+    settingsObject["actionList"] = actionListObject;
     project["settings"] = settingsObject;
 
     return project;
@@ -3465,10 +3556,30 @@ bool MainWindow::loadProjectJson(const QJsonObject& project, QString* errorMessa
     {
         m_bleedFixupSettings = bleedFixupSettingsFromJson(bleedFixupObject["settings"].toObject());
     }
+    m_bleedConfirmationPolicy = bleedConfirmationPolicyFromString(bleedFixupObject["confirmationPolicy"].toString());
+    const QJsonObject productionObject = settingsObject["production"].toObject();
+    m_productionGeometrySettings = pdf::PDFPageMasterProductionSettings::fromJson(productionObject);
+    m_hasProductionGeometrySettings = productionObject["enabled"].toBool(false);
     const QJsonObject preflightObject = settingsObject["preflight"].toObject();
     m_hasPreflightGate = preflightObject["enabled"].toBool(false);
     m_preflightProfilePath = preflightObject["profile"].toString();
     m_forcePreflight = preflightObject["force"].toBool(false);
+    m_revalidatePreflightAfterFixups = preflightObject["revalidateAfterFixups"].toBool(false);
+    const QJsonObject actionListObject = settingsObject["actionList"].toObject();
+    m_hasActionList = false;
+    m_actionListPath = actionListObject["path"].toString();
+    m_actionListBindings = actionListObject["bindings"].toObject();
+    if (actionListObject["enabled"].toBool(false) && actionListObject["recipe"].isObject())
+    {
+        pdf::PDFActionList loadedActionList;
+        QStringList validationErrors;
+        if (pdf::PDFActionList::fromJson(actionListObject["recipe"].toObject(), &loadedActionList)
+            && pdf::PDFActionListExecutor().validate(loadedActionList, {}, &validationErrors))
+        {
+            m_actionList = std::move(loadedActionList);
+            m_hasActionList = true;
+        }
+    }
 
     updateActions();
     return true;
@@ -3778,6 +3889,23 @@ void MainWindow::performOperation(Operation operation)
             referenceCombo->setCurrentIndex(qMax(0, referenceCombo->findData(bleedFixupReferenceBoxToString(m_bleedFixupSettings.referenceBox))));
             form->addRow(tr("Reference box"), referenceCombo);
 
+            QCheckBox* leftSideCheck = new QCheckBox(tr("Left"), &dialog);
+            QCheckBox* bottomSideCheck = new QCheckBox(tr("Bottom"), &dialog);
+            QCheckBox* rightSideCheck = new QCheckBox(tr("Right"), &dialog);
+            QCheckBox* topSideCheck = new QCheckBox(tr("Top"), &dialog);
+            leftSideCheck->setChecked(pdf::isBleedFixupSideEnabled(m_bleedFixupSettings.sides, pdf::PDFBleedFixupSide::Left));
+            bottomSideCheck->setChecked(pdf::isBleedFixupSideEnabled(m_bleedFixupSettings.sides, pdf::PDFBleedFixupSide::Bottom));
+            rightSideCheck->setChecked(pdf::isBleedFixupSideEnabled(m_bleedFixupSettings.sides, pdf::PDFBleedFixupSide::Right));
+            topSideCheck->setChecked(pdf::isBleedFixupSideEnabled(m_bleedFixupSettings.sides, pdf::PDFBleedFixupSide::Top));
+            QWidget* sideWidget = new QWidget(&dialog);
+            QHBoxLayout* sideLayout = new QHBoxLayout(sideWidget);
+            sideLayout->setContentsMargins(0, 0, 0, 0);
+            sideLayout->addWidget(leftSideCheck);
+            sideLayout->addWidget(bottomSideCheck);
+            sideLayout->addWidget(rightSideCheck);
+            sideLayout->addWidget(topSideCheck);
+            form->addRow(tr("Sides"), sideWidget);
+
             QDoubleSpinBox* bleedLeftSpin = new QDoubleSpinBox(&dialog);
             bleedLeftSpin->setRange(0.0, 50.0);
             bleedLeftSpin->setDecimals(2);
@@ -3806,6 +3934,19 @@ void MainWindow::performOperation(Operation operation)
             bleedBottomSpin->setValue(m_bleedFixupSettings.bleedMM.bottom());
             form->addRow(tr("Bleed bottom"), bleedBottomSpin);
 
+            QCheckBox* expandMediaCheck = new QCheckBox(tr("Expand MediaBox"), &dialog);
+            QCheckBox* expandCropCheck = new QCheckBox(tr("Expand CropBox"), &dialog);
+            QCheckBox* expandBleedCheck = new QCheckBox(tr("Expand BleedBox"), &dialog);
+            QCheckBox* expandTrimCheck = new QCheckBox(tr("Expand TrimBox"), &dialog);
+            expandMediaCheck->setChecked(m_bleedFixupSettings.expandMediaBox);
+            expandCropCheck->setChecked(m_bleedFixupSettings.expandCropBox);
+            expandBleedCheck->setChecked(m_bleedFixupSettings.expandBleedBox);
+            expandTrimCheck->setChecked(m_bleedFixupSettings.expandTrimBox);
+            form->addRow(QString(), expandMediaCheck);
+            form->addRow(QString(), expandCropCheck);
+            form->addRow(QString(), expandBleedCheck);
+            form->addRow(QString(), expandTrimCheck);
+
             QSpinBox* dpiSpin = new QSpinBox(&dialog);
             dpiSpin->setRange(72, 1200);
             dpiSpin->setValue(m_bleedFixupSettings.dpi);
@@ -3819,6 +3960,12 @@ void MainWindow::performOperation(Operation operation)
             QCheckBox* skipCheck = new QCheckBox(tr("Skip sides that already have enough BleedBox"), &dialog);
             skipCheck->setChecked(m_bleedFixupSettings.skipIfAlreadyBleeding);
             form->addRow(QString(), skipCheck);
+
+            QComboBox* confirmationCombo = new QComboBox(&dialog);
+            confirmationCombo->addItem(tr("Before batch"), QStringLiteral("before-batch"));
+            confirmationCombo->addItem(tr("Never"), QStringLiteral("never"));
+            confirmationCombo->setCurrentIndex(qMax(0, confirmationCombo->findData(bleedConfirmationPolicyToString(m_bleedConfirmationPolicy))));
+            form->addRow(tr("Confirmation"), confirmationCombo);
 
             QCheckBox* enableCheck = new QCheckBox(tr("Enable bleed fixup on export"), &dialog);
             enableCheck->setChecked(m_hasBleedFixupSettings);
@@ -3836,6 +3983,38 @@ void MainWindow::performOperation(Operation operation)
             forcePreflightCheck->setChecked(m_forcePreflight);
             form->addRow(QString(), forcePreflightCheck);
 
+            QCheckBox* revalidatePreflightCheck = new QCheckBox(tr("Revalidate preflight after fixups"), &dialog);
+            revalidatePreflightCheck->setChecked(m_revalidatePreflightAfterFixups);
+            revalidatePreflightCheck->setEnabled(preflightCheck->isChecked());
+            form->addRow(QString(), revalidatePreflightCheck);
+            QObject::connect(preflightCheck, &QCheckBox::toggled, revalidatePreflightCheck, &QWidget::setEnabled);
+
+            QCheckBox* actionListCheck = new QCheckBox(tr("Run Action List recipe after initial preflight"), &dialog);
+            actionListCheck->setChecked(m_hasActionList);
+            QLineEdit* actionListPathEdit = new QLineEdit(&dialog);
+            actionListPathEdit->setText(m_actionListPath);
+            actionListPathEdit->setPlaceholderText(tr("Path to loupe-action-list/1 JSON"));
+            QPushButton* actionListBrowseButton = new QPushButton(tr("Browse..."), &dialog);
+            auto* actionListPathWidget = new QWidget(&dialog);
+            auto* actionListPathLayout = new QHBoxLayout(actionListPathWidget);
+            actionListPathLayout->setContentsMargins(0, 0, 0, 0);
+            actionListPathLayout->addWidget(actionListPathEdit, 1);
+            actionListPathLayout->addWidget(actionListBrowseButton);
+            form->addRow(QString(), actionListCheck);
+            form->addRow(tr("Action List recipe"), actionListPathWidget);
+            QObject::connect(actionListCheck, &QCheckBox::toggled, actionListPathWidget, &QWidget::setEnabled);
+            actionListPathWidget->setEnabled(actionListCheck->isChecked());
+            QObject::connect(actionListBrowseButton, &QPushButton::clicked, &dialog, [&dialog, actionListPathEdit]()
+            {
+                const QString path = QFileDialog::getOpenFileName(&dialog, QObject::tr("Select Action List recipe"),
+                                                                   actionListPathEdit->text(),
+                                                                   QObject::tr("JSON files (*.json);;All files (*.*)"));
+                if (!path.isEmpty())
+                {
+                    actionListPathEdit->setText(path);
+                }
+            });
+
             layout->addLayout(form);
             QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
             layout->addWidget(buttons);
@@ -3846,17 +4025,73 @@ void MainWindow::performOperation(Operation operation)
             {
                 m_bleedFixupSettings.mode = bleedFixupModeFromString(modeCombo->currentData().toString());
                 m_bleedFixupSettings.referenceBox = bleedFixupReferenceBoxFromString(referenceCombo->currentData().toString());
+                m_bleedFixupSettings.sides = 0;
+                if (leftSideCheck->isChecked())
+                {
+                    m_bleedFixupSettings.sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Left);
+                }
+                if (bottomSideCheck->isChecked())
+                {
+                    m_bleedFixupSettings.sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Bottom);
+                }
+                if (rightSideCheck->isChecked())
+                {
+                    m_bleedFixupSettings.sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Right);
+                }
+                if (topSideCheck->isChecked())
+                {
+                    m_bleedFixupSettings.sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Top);
+                }
                 m_bleedFixupSettings.bleedMM = QMarginsF(bleedLeftSpin->value(),
                                                            bleedTopSpin->value(),
                                                            bleedRightSpin->value(),
                                                            bleedBottomSpin->value());
+                m_bleedFixupSettings.expandMediaBox = expandMediaCheck->isChecked();
+                m_bleedFixupSettings.expandCropBox = expandCropCheck->isChecked();
+                m_bleedFixupSettings.expandBleedBox = expandBleedCheck->isChecked();
+                m_bleedFixupSettings.expandTrimBox = expandTrimCheck->isChecked();
                 m_bleedFixupSettings.dpi = dpiSpin->value();
                 m_bleedFixupSettings.samplePixels = sampleSpin->value();
                 m_bleedFixupSettings.skipIfAlreadyBleeding = skipCheck->isChecked();
+                m_bleedConfirmationPolicy = bleedConfirmationPolicyFromString(confirmationCombo->currentData().toString());
                 m_hasBleedFixupSettings = enableCheck->isChecked();
                 m_hasPreflightGate = preflightCheck->isChecked();
                 m_preflightProfilePath = profileEdit->text().trimmed();
                 m_forcePreflight = forcePreflightCheck->isChecked();
+                m_revalidatePreflightAfterFixups = revalidatePreflightCheck->isChecked() && m_hasPreflightGate;
+
+                m_hasActionList = false;
+                m_actionListBindings = {};
+                if (actionListCheck->isChecked())
+                {
+                    const QString actionListPath = actionListPathEdit->text().trimmed();
+                    QFile actionListFile(actionListPath);
+                    if (actionListPath.isEmpty() || !actionListFile.open(QIODevice::ReadOnly))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("Choose a readable Action List recipe before enabling the stage."));
+                        break;
+                    }
+                    QJsonParseError parseError;
+                    const QJsonDocument actionListJson = QJsonDocument::fromJson(actionListFile.readAll(), &parseError);
+                    if (parseError.error != QJsonParseError::NoError || !actionListJson.isObject()
+                        || !pdf::PDFActionList::fromJson(actionListJson.object(), &m_actionList))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("The selected file is not a valid loupe-action-list/1 recipe: %1")
+                                                   .arg(parseError.errorString()));
+                        break;
+                    }
+                    QStringList validationErrors;
+                    if (!pdf::PDFActionListExecutor().validate(m_actionList, {}, &validationErrors))
+                    {
+                        QMessageBox::critical(this, tr("Action List"),
+                                               tr("The Action List is invalid:\n%1").arg(validationErrors.join(QStringLiteral("\n"))));
+                        break;
+                    }
+                    m_actionListPath = actionListPath;
+                    m_hasActionList = true;
+                }
             }
             break;
         }

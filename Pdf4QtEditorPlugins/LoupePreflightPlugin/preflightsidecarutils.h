@@ -23,6 +23,9 @@
 #ifndef PREFLIGHTSIDECARUTILS_H
 #define PREFLIGHTSIDECARUTILS_H
 
+#include "pdffixupregistry.h"
+#include "pdfpreflightverdict.h"
+
 #include <cmath>
 #include <memory>
 
@@ -57,7 +60,7 @@ inline QString getPdfToolFileName()
 
 inline bool isExpectedPreflightExitCode(int exitCode)
 {
-    return exitCode == 0 || exitCode == 1;
+    return exitCode == 0 || exitCode == 1 || exitCode == 8 || exitCode == 9;
 }
 
 inline constexpr int PREFLIGHT_SIDECAR_STDOUT_MAX_BYTES = 16 * 1024 * 1024;
@@ -183,7 +186,7 @@ private:
 
 inline bool isImplementedFixupId(const QString& fixupId)
 {
-    return fixupId == QStringLiteral("add-bleed");
+    return pdf::isImplementedFixupId(fixupId);
 }
 
 inline QJsonObject filterAdvertisedFixups(const QJsonObject& report)
@@ -240,6 +243,12 @@ inline bool isContractIdentifier(const QString& value)
     return expression.match(value).hasMatch();
 }
 
+inline bool isStableFindingId(const QString& value)
+{
+    static const QRegularExpression expression(QStringLiteral("^[0-9a-f]{16}$"));
+    return expression.match(value).hasMatch();
+}
+
 inline bool isSupportedSchemaVersion(int schemaVersion)
 {
     return schemaVersion >= 1 && schemaVersion <= LOUPE_PREFLIGHT_SCHEMA_VERSION;
@@ -277,6 +286,12 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
         return setValidationError(errorMessage, QStringLiteral("%1.type must be a non-empty kebab-case identifier.").arg(context));
     }
 
+    const QJsonValue id = finding.value(QStringLiteral("id"));
+    if (!id.isUndefined() && (!id.isString() || !isStableFindingId(id.toString())))
+    {
+        return setValidationError(errorMessage, QStringLiteral("%1.id must be a 16-character lowercase hexadecimal stable finding id.").arg(context));
+    }
+
     const QString severity = finding.value(QStringLiteral("severity")).toString();
     if (severity != QStringLiteral("error") && severity != QStringLiteral("warning") && severity != QStringLiteral("info"))
     {
@@ -312,7 +327,8 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
-        QStringLiteral("check_id")
+        QStringLiteral("check_id"),
+        QStringLiteral("evidence")
     };
     if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
     {
@@ -337,13 +353,15 @@ inline bool validateFindingV2(const QJsonObject& finding, const QString& context
 {
     static const QSet<QString> allowedProperties = {
         QStringLiteral("scope"),
+        QStringLiteral("id"),
         QStringLiteral("page"),
         QStringLiteral("object_id"),
         QStringLiteral("type"),
         QStringLiteral("severity"),
         QStringLiteral("message"),
         QStringLiteral("bbox"),
-        QStringLiteral("check_id")
+        QStringLiteral("check_id"),
+        QStringLiteral("evidence")
     };
     if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
     {
@@ -485,10 +503,16 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         QStringLiteral("profile"),
         QStringLiteral("engine_version"),
         QStringLiteral("pdf"),
+        QStringLiteral("pdfx"),
+        QStringLiteral("profile_resolution"),
+        QStringLiteral("document_revision_digest"),
+        QStringLiteral("effective_profile_digest"),
+        QStringLiteral("decisions"),
         QStringLiteral("errors"),
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),
-        QStringLiteral("checks")
+        QStringLiteral("checks"),
+        QStringLiteral("verdict")
     };
     if (!hasOnlyProperties(report, allowedProperties, QStringLiteral("report"), errorMessage))
     {
@@ -534,6 +558,20 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
                 return setValidationError(errorMessage, QStringLiteral("checks[%1].status must be a string.").arg(i));
             }
         }
+
+        const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
+        const QString state = verdict.value(QStringLiteral("state")).toString();
+        if (!QSet<QString>{QStringLiteral("pass"), QStringLiteral("fail"), QStringLiteral("incomplete"), QStringLiteral("error")}.contains(state))
+        {
+            return setValidationError(errorMessage, QStringLiteral("verdict.state must be pass, fail, incomplete, or error."));
+        }
+        if (!verdict.value(QStringLiteral("reason_code")).isString()
+            || !verdict.value(QStringLiteral("reason")).isString()
+            || !verdict.value(QStringLiteral("blocking_finding_ids")).isArray()
+            || !verdict.value(QStringLiteral("waived_finding_ids")).isArray())
+        {
+            return setValidationError(errorMessage, QStringLiteral("verdict must contain machine-readable reason and finding arrays."));
+        }
     }
 
     if (!report.value(QStringLiteral("profile")).isString() || report.value(QStringLiteral("profile")).toString().isEmpty())
@@ -547,6 +585,32 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         if (!value.isUndefined() && !value.isString())
         {
             return setValidationError(errorMessage, QStringLiteral("%1 must be a string.").arg(optionalString));
+        }
+    }
+
+    for (const QString& digestName : { QStringLiteral("document_revision_digest"), QStringLiteral("effective_profile_digest") })
+    {
+        const QJsonValue value = report.value(digestName);
+        if (!value.isUndefined() && (!value.isString() || !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(value.toString()).hasMatch()))
+        {
+            return setValidationError(errorMessage, QStringLiteral("%1 must be a lowercase SHA-256 digest.").arg(digestName));
+        }
+    }
+
+    const QJsonValue decisionsValue = report.value(QStringLiteral("decisions"));
+    if (!decisionsValue.isUndefined())
+    {
+        if (!decisionsValue.isArray())
+        {
+            return setValidationError(errorMessage, QStringLiteral("decisions must be an array."));
+        }
+        const QJsonArray decisions = decisionsValue.toArray();
+        for (int i = 0; i < decisions.size(); ++i)
+        {
+            if (!decisions.at(i).isObject())
+            {
+                return setValidationError(errorMessage, QStringLiteral("decisions[%1] must be an object.").arg(i));
+            }
         }
     }
 
@@ -583,16 +647,16 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    const bool errorsEmpty = report.value(QStringLiteral("errors")).toArray().isEmpty();
-    bool expectedPass = errorsEmpty;
+    bool expectedPass = report.value(QStringLiteral("pass")).toBool();
     if (schemaVersionValue >= 3)
     {
-        expectedPass = errorsEmpty && report.value(QStringLiteral("inspection_complete")).toBool();
+        const QString state = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
+        expectedPass = state == QStringLiteral("pass");
     }
 
     if (report.value(QStringLiteral("pass")).toBool() != expectedPass)
     {
-        return setValidationError(errorMessage, QStringLiteral("pass must be true exactly when errors is empty and inspection is complete."));
+        return setValidationError(errorMessage, QStringLiteral("pass must be derived from verdict.state."));
     }
 
     return true;

@@ -131,9 +131,9 @@ void PreflightCorpusTest::populateManifestRows()
         const QJsonObject entry = value.toObject();
         const QString id = entry.value(QStringLiteral("id")).toString();
         QTest::newRow(qPrintable(id)) << id
-                                       << entry.value(QStringLiteral("pdf")).toString()
-                                       << entry.value(QStringLiteral("profile")).toString()
-                                       << entry.value(QStringLiteral("pending")).toBool(false);
+                                      << entry.value(QStringLiteral("pdf")).toString()
+                                      << entry.value(QStringLiteral("profile")).toString()
+                                      << entry.value(QStringLiteral("pending")).toBool(false);
     }
 }
 
@@ -153,7 +153,12 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     process.setProcessEnvironment(environment);
     process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH),
-                   { QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath });
+                  { QStringLiteral("preflight"),
+                    pdfPath,
+                    QStringLiteral("--profile"),
+                    profilePath,
+                    QStringLiteral("--console-format"),
+                    QStringLiteral("json") });
     QVERIFY2(process.waitForFinished(30000), "PdfTool preflight timed out");
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
@@ -162,9 +167,14 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
     QVERIFY2(parseError.error == QJsonParseError::NoError,
              qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(process.readAllStandardError()))));
-    QVERIFY2(document.isObject(), "report JSON must be a top-level object");
+    QVERIFY2(document.isObject(), "result JSON must be a top-level object");
 
-    report = document.object();
+    const QJsonObject envelope = document.object();
+    QCOMPARE(envelope.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("preflight"));
+    QCOMPARE(envelope.value(QStringLiteral("exit_code")).toInt(), process.exitCode());
+    report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY2(!report.isEmpty(), "preflight result must contain data.report");
     exitCode = process.exitCode();
 }
 
@@ -174,6 +184,21 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     // of the check behavior the snapshot is meant to pin down.
     report.remove(QStringLiteral("engine_version"));
     report.remove(QStringLiteral("pdf"));
+    report.remove(QStringLiteral("profile_resolution"));
+    report.remove(QStringLiteral("document_revision_digest"));
+    report.remove(QStringLiteral("effective_profile_digest"));
+    report.remove(QStringLiteral("decisions"));
+    for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        QJsonArray findings = report.value(section).toArray();
+        for (int index = 0; index < findings.size(); ++index)
+        {
+            QJsonObject finding = findings.at(index).toObject();
+            finding.remove(QStringLiteral("id"));
+            findings.replace(index, finding);
+        }
+        report.insert(section, findings);
+    }
     return report;
 }
 
@@ -212,11 +237,11 @@ void PreflightCorpusTest::preflightMatchesManifest_data()
 
         const QString id = entry.value(QStringLiteral("id")).toString();
         QTest::newRow(qPrintable(id)) << id
-                                       << entry.value(QStringLiteral("pdf")).toString()
-                                       << entry.value(QStringLiteral("profile")).toString()
-                                       << expect.value(QStringLiteral("pass")).toBool()
-                                       << expectedCheckIds
-                                       << entry.value(QStringLiteral("pending")).toBool(false);
+                                      << entry.value(QStringLiteral("pdf")).toString()
+                                      << entry.value(QStringLiteral("profile")).toString()
+                                      << expect.value(QStringLiteral("pass")).toBool()
+                                      << expectedCheckIds
+                                      << entry.value(QStringLiteral("pending")).toBool(false);
     }
 }
 
@@ -245,7 +270,13 @@ void PreflightCorpusTest::preflightMatchesManifest()
     runPreflight(pdfPath, profilePath, report, exitCode);
 
     QCOMPARE(report.value(QStringLiteral("pass")).toBool(), expectedPass);
-    QCOMPARE(exitCode, expectedPass ? 0 : 1);
+    const QString verdictState = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
+    const int expectedExitCode = verdictState == QStringLiteral("pass")
+                                     ? 0
+                                 : verdictState == QStringLiteral("fail")       ? 1
+                                 : verdictState == QStringLiteral("incomplete") ? 8
+                                                                                : 9;
+    QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);
     for (const QString& expectedCheckId : expectedCheckIds)
@@ -303,7 +334,8 @@ void PreflightCorpusTest::preflightMatchesSnapshot()
     const QByteArray expectedJson = snapshotFile.readAll();
 
     // Normalize EOLs so Windows checkouts (eol=crlf) match QJsonDocument LF output.
-    auto normalizeNewlines = [](QByteArray data) {
+    auto normalizeNewlines = [](QByteArray data)
+    {
         data.replace("\r\n", "\n");
         data.replace('\r', '\n');
         return data;

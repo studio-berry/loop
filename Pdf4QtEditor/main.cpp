@@ -26,6 +26,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfapplicationtranslator.h"
 #include "pdfsettings.h"
+#include "pdflogger.h"
 #include "pdfsentry.h"
 
 #include <QApplication>
@@ -33,19 +34,19 @@
 
 #include "pdfdbgheap.h"
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
 #if defined(PDF4QT_USE_DBG_HEAP)
-    _CrtSetDbgFlag( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
     QApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QApplication application(argc, argv);
 
     QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("PDF4QT Editor");
+    QCoreApplication::setApplicationName("Loupe");
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
-    QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT Editor"));
+    QApplication::setApplicationDisplayName(QApplication::translate("Application", "Loupe"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
 
@@ -66,6 +67,11 @@ int main(int argc, char *argv[])
     parser.process(application);
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
 
+    // Constructed after the settings path is applied (unlike PDFSentrySession
+    // above, which does not support --config) so a portable/--config install
+    // gets its log directory under <settingsPath>/logs rather than %APPDATA%.
+    const pdf::PDFLogSession logSession(QStringLiteral("editor"));
+
     if (parser.isSet(noDrm))
     {
         pdf::PDFSecurityHandler::setNoDRMMode();
@@ -84,7 +90,11 @@ int main(int argc, char *argv[])
     mainWindow.show();
 
     QStringList arguments = parser.positionalArguments();
-    if (!arguments.isEmpty())
+    if (arguments.isEmpty())
+    {
+        mainWindow.showRecoveryCandidates();
+    }
+    else
     {
         mainWindow.getProgramController()->openDocument(arguments.front());
     }

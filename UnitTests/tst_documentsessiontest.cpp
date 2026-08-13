@@ -1,4 +1,4 @@
-﻿// MIT License
+// MIT License
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 //
@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentsession.h"
+#include "pdfdocumentcontext.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfobject.h"
 
@@ -36,6 +37,7 @@ private slots:
     void getDecodedStream_cachesResult();
     void invalidate_clearsCaches();
     void setRendererFeatures_invalidatesCompileCache();
+    void revisionFence_rejectsSupersededResults();
 };
 
 void DocumentSessionTest::nullDocument_sessionIsInvalid()
@@ -121,6 +123,29 @@ void DocumentSessionTest::setRendererFeatures_invalidatesCompileCache()
     const pdf::PDFPrecompiledPage* after = session.compilePage(0);
     QVERIFY(after != nullptr);
     QCOMPARE(session.compilePage(0), after);
+}
+
+void DocumentSessionTest::revisionFence_rejectsSupersededResults()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentContext context(&document);
+    QSignalSpy revisionSpy(&context, &pdf::PDFDocumentContext::revisionChanged);
+    const pdf::PDFRevisionIdentity firstRevision = context.getRevision();
+
+    for (int i = 0; i < 512; ++i)
+    {
+        const pdf::PDFRevisionIdentity jobRevision = context.getRevision();
+        context.markModified(pdf::PDFModifiedDocument::PageContents);
+
+        QVERIFY(!context.isCurrent(jobRevision));
+        QVERIFY(context.isCurrent(context.getRevision()));
+        QVERIFY(context.getRevision().documentRevision > firstRevision.documentRevision);
+    }
+
+    QCOMPARE(revisionSpy.count(), 512);
 }
 
 QTEST_GUILESS_MAIN(DocumentSessionTest)

@@ -49,13 +49,13 @@ QString PDFToolInfoNamedDestinationsApplication::getStandardString(StandardStrin
     return QString();
 }
 
-int PDFToolInfoNamedDestinationsApplication::execute(const PDFToolOptions& options)
+PDFToolExitCode PDFToolInfoNamedDestinationsApplication::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))
     {
-        return ErrorDocumentReading;
+        return PDFToolExitCode::InputError;
     }
 
     QString parseError;
@@ -63,8 +63,8 @@ int PDFToolInfoNamedDestinationsApplication::execute(const PDFToolOptions& optio
 
     if (!parseError.isEmpty())
     {
-        PDFConsole::writeError(parseError, options.outputCodec);
-        return ErrorInvalidArguments;
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), parseError);
+        return PDFToolExitCode::InvalidInvocation;
     }
 
     PDFOutputFormatter formatter(options.outputStyle);
@@ -235,9 +235,19 @@ int PDFToolInfoNamedDestinationsApplication::execute(const PDFToolOptions& optio
     formatter.endTable();
 
     formatter.endDocument();
-    PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    if (options.outputStyle == PDFOutputFormatter::Style::Json)
+    {
+        if (options.executionContext)
+        {
+            options.executionContext->setData(formatter.getJsonObject());
+        }
+    }
+    else
+    {
+        PDFConsole::writeText(formatter.getString(), options.outputCodec);
+    }
 
-    return ExitSuccess;
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolInfoNamedDestinationsApplication::getOptionsFlags() const

@@ -10,3 +10,32 @@ build/*
 /test-verify.txt
 /build/*.log
 /build/test-*.txt
+
+# vcpkg manifest installs are machine-local (see vcpkg/ and vcpkg.json).
+/vcpkg_installed/
+
+# Docker/vcpkg installs, binary caches, and downloaded package state are
+# generated locally or in CI; never commit them.
+/.docker-vcpkg*
+/.vcpkg-binary-cache/
+/vcpkg-binary-cache/
+/vcpkg/downloads/
+/vcpkg/packages/
+/vcpkg/buildtrees/
+/vcpkg/installed/
+/vcpkg/archives/
+
+# Docker fuzz build tree: object files, autogen sources, and shared libraries
+# produced by build-fuzz-docker. Generated output, never committed.
+/build-fuzz-docker/
+
+# One-off investigation artifacts. Debug logs and per-PR debug scripts are
+# local scratch; scripts/ci/ holds the checks that are meant to be shared.
+/debug-*.log
+/scripts/debug-pr*.sh
+/scripts/debug-pr*.ps1
+
+# Python bytecode from the hook and CI helper scripts (see 08f4280, which had
+# to remove generated OCR bytecode after it was committed by accident).
+__pycache__/
+*.py[cod]

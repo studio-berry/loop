@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "name": "Loupe Test - Output Intent",
+  "description": "Isolates the output-intent check for the golden corpus.",
+  "checks": [
+    { "id": "output-intent", "required": true, "allowed": ["CMYK"], "severity": "error", "allow_multiple": false }
+  ]
+}

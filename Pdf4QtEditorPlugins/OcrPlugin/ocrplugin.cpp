@@ -22,6 +22,7 @@
 
 #include "ocrplugin.h"
 #include "ocrreportdockwidget.h"
+#include "../pdftoolenvelopeutils.h"
 
 #include "pdfdocumentwriter.h"
 #include "pdfdrawspacecontroller.h"
@@ -243,17 +244,21 @@ void OcrPlugin::onOcrStderrReady()
 
 void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
 {
-    Q_UNUSED(exitStatus);
-
     const QByteArray stdoutData = m_ocrStdoutBuffer;
     const QByteArray stderrData = m_ocrStderrBuffer;
     finishOcrRun();
 
     if (exitStatus != static_cast<int>(QProcess::NormalExit) || !ocr::isExpectedOcrExitCode(exitCode))
     {
+        const QString detail = pdfplugin::pdftool::failureDetailFromStdout(
+            stdoutData,
+            QString::fromUtf8(stderrData).trimmed(),
+            exitCode,
+            tr("PdfTool ocr failed (exit %1).").arg(exitCode));
+
         QMessageBox::critical(m_widget,
                               tr("Loupe OCR"),
-                              tr("PdfTool ocr failed (exit %1): %2").arg(exitCode).arg(QString::fromUtf8(stderrData)));
+                              detail);
         return;
     }
 
@@ -267,8 +272,20 @@ void OcrPlugin::onOcrProcessFinished(int exitCode, int exitStatus)
         return;
     }
 
+    const QJsonObject envelope = document.object();
+
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("ocr")))
+    {
+        QMessageBox::critical(m_widget,
+                              tr("Loupe OCR"),
+                              tr("PdfTool returned an invalid result envelope."));
+        return;
+    }
+
+    QJsonObject report;
     QString validationError;
-    if (!applyReportJson(document.object(), &validationError))
+    if (!ocr::extractOcrReport(envelope, &report, &validationError)
+        || !applyReportJson(report, &validationError))
     {
         QMessageBox::critical(m_widget, tr("Loupe OCR"), validationError);
     }

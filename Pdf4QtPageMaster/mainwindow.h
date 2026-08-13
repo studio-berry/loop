@@ -27,6 +27,8 @@
 #include "pdfpagegeometry.h"
 #include "pdfbleedfixup.h"
 #include "pdfpagemasterexport.h"
+#include "pdfactionlist.h"
+#include "pdfproductiongeometry.h"
 #include "pdfprogress.h"
 
 #include "pageitemmodel.h"
@@ -273,9 +275,17 @@ private:
     pdf::PDFPageGeometrySettings m_pageGeometrySettings;
     bool m_hasBleedFixupSettings = false;
     pdf::PDFBleedFixupSettings m_bleedFixupSettings;
+    bool m_hasProductionGeometrySettings = false;
+    pdf::PDFPageMasterProductionSettings m_productionGeometrySettings;
+    pdf::PDFPageMasterBleedConfirmationPolicy m_bleedConfirmationPolicy = pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
     bool m_hasPreflightGate = false;
     bool m_forcePreflight = false;
+    bool m_revalidatePreflightAfterFixups = false;
     QString m_preflightProfilePath;
+    bool m_hasActionList = false;
+    QString m_actionListPath;
+    pdf::PDFActionList m_actionList;
+    QJsonObject m_actionListBindings;
     QAction* m_actionBleedFixup = nullptr;
 
     struct WorkspaceCheckpoint

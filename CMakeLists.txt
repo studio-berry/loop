@@ -64,19 +64,62 @@ if(PDF4QT_ENABLE_SENTRY)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Pdf4QtSentry.cmake)
 endif()
 
-# Loupe slim release profile: disable apps/plugins without deleting upstream sources.
-option(PDF4QT_LOUPE_DISTRIBUTION "Slim Loupe release (disable non-product apps and plugins)" OFF)
+# Loupe release profile: retain the standalone production/developer tools while
+# deferring only explicitly out-of-profile plugins without deleting sources.
+option(PDF4QT_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
+
+# 0.2B keeps compatibility executables in the install tree but presents one
+# desktop product. Full developer packages retain the inherited application
+# registrations for direct testing and upstream comparison.
+if(PDF4QT_LOUPE_DISTRIBUTION)
+    set(PDF4QT_LOUPE_COMPAT_APPLICATIONS "")
+else()
+    set(PDF4QT_LOUPE_COMPAT_APPLICATIONS [=[
+	<Application Id="Pdf4QtViewer" Executable="Pdf4QtViewer.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="PDF4QT Viewer"
+						  Description="View and navigate PDF documents."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtPageMaster" Executable="Pdf4QtPageMaster.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="PDF4QT PageMaster"
+						  Description="Organize, merge, split, and duplicate PDF pages."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtDiff" Executable="Pdf4QtDiff.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="PDF4QT Diff"
+						  Description="Compare PDF documents."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png">
+      </uap:VisualElements>
+    </Application>
+	<Application Id="Pdf4QtLaunchPad" Executable="Pdf4QtLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="PDF4QT LaunchPad"
+						  Description="Launch PDF4QT applications."
+						  BackgroundColor="transparent"
+						  Square150x150Logo="assets\logo.png"
+						  Square44x44Logo="assets\logo.png">
+      </uap:VisualElements>
+    </Application>]=])
+endif()
 
 if(PDF4QT_LOUPE_DISTRIBUTION)
-    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT OFF)
-    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
-    set(_PDF4QT_BUILD_VIEWER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT OFF)
-    set(_PDF4QT_BUILD_DIFF_DEFAULT OFF)
-    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT OFF)
+    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    set(_PDF4QT_BUILD_VIEWER_DEFAULT ON)
+    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT ON)
+    set(_PDF4QT_BUILD_DIFF_DEFAULT ON)
+    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT OFF)
-    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT OFF)
+    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_OCR_DEFAULT OFF)
 else()
     set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
@@ -87,6 +130,7 @@ else()
     set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT ON)
     set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
+    set(_PDF4QT_PLUGIN_OCR_DEFAULT ON)
 endif()
 
 option(PDF4QT_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT})
@@ -104,7 +148,13 @@ option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCAN
 # for local/developer use. Release packaging workflows pass -DPDF4QT_PLUGIN_OCR=OFF
 # explicitly; PdfTool's OCR subcommand is unaffected. (PDF4QT_BUNDLE_OCR_SERVICE, the
 # other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
-option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ON)
+option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_PDF4QT_PLUGIN_OCR_DEFAULT})
+
+if(PDF4QT_LOUPE_DISTRIBUTION AND PDF4QT_PLUGIN_OCR)
+    message(FATAL_ERROR
+        "PDF4QT_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
+        "OCR is CLI-only in V1 (see issue #41 and ADR-005).")
+endif()
 
 if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
@@ -125,9 +175,9 @@ include(GNUInstallDirs)
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
 if(PDF4QT_BUILD_ONLY_CORE_LIBRARY)
-    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql)
 else()
-    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml PrintSupport TextToSpeech Concurrent)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
 endif()
 
 if(PDF4QT_BUILD_TESTS)
@@ -336,7 +386,6 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
                 RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
                 FILES_MATCHING
                 PATTERN *.png)
-
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
                 RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
                 FILES_MATCHING
@@ -348,24 +397,40 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
-                      Desktop/io.github.mberrys.Loupe-pdf.desktop
+        if(PDF4QT_LOUPE_DISTRIBUTION)
+            set(_PDF4QT_DESKTOP_ENTRIES
+                Desktop/io.github.mberrys.Loupe-pdf.desktop)
+            set(_PDF4QT_DESKTOP_ICONS
+                Desktop/io.github.mberrys.Loupe-pdf.svg)
+            set(_PDF4QT_DESKTOP_PNGS
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
+        else()
+            set(_PDF4QT_DESKTOP_ENTRIES
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.desktop)
+            set(_PDF4QT_DESKTOP_ICONS
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
+                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
+                Desktop/io.github.mberrys.Loupe-pdf.svg)
+            set(_PDF4QT_DESKTOP_PNGS
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
+        endif()
+
+        install(FILES ${_PDF4QT_DESKTOP_ENTRIES}
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-        install(FILES Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
-                      Desktop/io.github.mberrys.Loupe-pdf.svg
+        install(FILES ${_PDF4QT_DESKTOP_ICONS}
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
         install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        install(FILES Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
-                      Desktop/128x128/io.github.mberrys.Loupe-pdf.png
+        install(FILES ${_PDF4QT_DESKTOP_PNGS}
                       DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
     endif()
 

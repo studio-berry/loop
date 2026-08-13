@@ -89,8 +89,8 @@ Publish draft only after smoke tests pass.
 
 ### 4.1 CI health
 
-- Watch: https://github.com/mberrys/Loupe-pdf/actions
-- Alert on: `ci.yml` failure on `master`, preflight corpus failure, Windows build break.
+- Watch: https://github.com/studio-berry/loupe/actions
+- Alert on: `release_ok` failure on `stable`, `ci.yml` failure on `dev`, preflight corpus failure, Windows build break.
 
 ### 4.2 Crash telemetry (optional, opt-in)
 
@@ -121,13 +121,53 @@ PdfTool sentry-verify   # requires SENTRY_DSN
 
 ### 4.4 Logs
 
-- **PdfTool:** stderr (human-readable errors); stdout for JSON reports.
-- **Editor:** Qt default; no log aggregation built-in.
-- **Support:** Ask users to run failing command in terminal and attach stderr (redact file paths if needed).
+Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via `pdf::PDFLogSession` (`Pdf4QtLibCore/sources/pdflogger.{h,cpp}`), in addition to PdfTool's existing stderr/stdout behavior (unchanged — the log handler chains to it).
+
+**Location** (resolved in this order):
+
+1. `LOUPE_LOG_DIR` environment variable, if set.
+2. `<settingsPath>/logs`, when a portable / `--config <dir>` install is in use (Editor only — PdfTool does not support `--config`).
+3. Platform default `AppLocalDataLocation` + `/logs`, falling back to the temp directory if that is empty:
+
+| Platform | Default log directory |
+|----------|------------------------|
+| Windows | `%LOCALAPPDATA%\MelkaJ\<AppName>\logs\` |
+| Linux | `~/.local/share/MelkaJ/<AppName>/logs/` |
+
+`<AppName>` is `PdfTool` or `PDF4QT Editor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
+
+**Rotation:** `<applicationId>.log` (`pdftool.log` / `editor.log`), rolling to `.log.1` at 2 MiB, keeping 3 files total (`.log`, `.log.1`, `.log.2`). Bounded footprint, no unbounded growth.
+
+**Level:** default `Warning`. Override with the `LOUPE_LOG_LEVEL` environment variable (`Off|Error|Warning|Info|Debug`), or persistently via Editor → Options → Security → Diagnostics → Log level (stored under the `diagnostics/logLevel` settings key, which PdfTool also reads — no Editor dependency required).
+
+**Privacy:** every line is scrubbed (home/temp directory, login name, host name, other absolute paths — basename dropped, extension kept — email addresses, IPv4/IPv6 literals) before it is written; scrubbing happens in the log sink itself, not at each call site. See `SECURITY.md`.
+
+**Support:** ask users to run `PdfTool diagnostics --output <dir>` (or Editor → Help → Collect Diagnostics…) and attach the resulting bundle. See §5 below — this replaces asking for a raw terminal paste.
 
 ---
 
-## 5. Investigating failures
+## 5. Collecting a support bundle
+
+For a customer-reported failure, prefer a diagnostics bundle over asking for a raw terminal paste — it is reproducible, already scrubbed, and inspectable by the user before they send it.
+
+**CLI:**
+
+```bash
+PdfTool diagnostics --output <dir>          # writes <dir>/loupe-diagnostics-pdftool-<UTC timestamp>/
+PdfTool diagnostics --output <dir> --no-logs                 # metadata-only bundle
+```
+
+**Editor:** Help → Collect Diagnostics… — shows a consent dialog listing exactly what is collected, then a folder picker, then writes the bundle and offers to open it.
+
+**Bundle contents:** `manifest.json` (versioned app/runtime/diagnostics metadata and per-file SHA-256), `system-info.json` (app/Qt/OS/dependency versions, locale), `plugins.json` (Editor only, when plugins are loaded), `logs/*.log` (scrubbed), and `README.txt`. Arbitrary settings, recent files, environment variables, command-line arguments, PDFs, and crash dumps are excluded by default. See `docs/DIAGNOSTICS.md` for the full privacy boundary.
+
+**Never included:** any PDF or document content, the recent-files list, or crash minidumps (those remain a separate, opt-in Sentry mechanism — §4.2 — with different, weaker privacy properties).
+
+On any failure (e.g. an unwritable output directory), no partial bundle directory is left behind.
+
+---
+
+## 6. Investigating failures
 
 ### 5.1 Preflight fails to start
 
@@ -175,7 +215,7 @@ Known limitation: mirror seams on high-contrast corners (`docs/bleed-stress-test
 
 ---
 
-## 6. Problematic uploads / untrusted PDFs
+## 7. Problematic uploads / untrusted PDFs
 
 Loupe is a **local document processor**, not an upload service. Treat all PDFs as untrusted input.
 
@@ -195,7 +235,7 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 
 ---
 
-## 7. Environment variables reference
+## 8. Environment variables reference
 
 | Variable | Component | Purpose |
 |----------|-----------|---------|
@@ -208,7 +248,7 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 
 ---
 
-## 8. Escalation
+## 9. Escalation
 
 | Level | Contact | When |
 |-------|---------|------|
@@ -220,7 +260,7 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 
 ---
 
-## 9. Known limitations to expect in support
+## 10. Known limitations to expect in support
 
 State these up front; each is a documented V1 behaviour, not a regression.
 
@@ -236,11 +276,11 @@ State these up front; each is a documented V1 behaviour, not a regression.
 
 ---
 
-## 10. Pre-launch checklist (maintainer)
+## 11. Pre-launch checklist (maintainer)
 
 - [x] Preflight schema contract aligned on `master` (engine + plugin validator both at schema 3; PR #54 merged)
-- [ ] `ci.yml` green on release SHA (`ci_ok` job passing) — evidence: Actions run on `master`
-- [ ] Branch protection requires the `ci_ok` status check on `master`
+- [ ] `release-gate.yml` green on the release SHA (`release_ok` job passing) — evidence: Actions run on `stable`
+- [ ] Branch protection requires the `release_ok` GitHub Actions status check on `stable`
 - [ ] MIC-301 Windows MSI smoke green via `WindowsInstall.yml` → `scripts/Invoke-MsiSmokeTest.ps1`; run URL attached to MIC-327
 - [ ] MIC-301 Linux AppImage smoke green via `LinuxInstall.yml` → `scripts/smoke-test-appimage.sh`; run URL attached to MIC-301
 - [ ] MIC-326 fuzz workflow green on `master`; run URL attached to the issue

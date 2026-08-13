@@ -61,10 +61,11 @@ the three behaviors land as increments on the new service.
    - Temp file + rename per output; persisted batch manifest
      (written / failed / pending) enabling resume or cleanup.
 5. **MIC-306 — Overprint** (XL, split into sub-issues)
-   - **MIC-319** (this cycle): detect unsafe/white overprint as preflight findings.
-   - **MIC-320** (expected spillover to Cycle 3): overprint-correct rendering in
-     standard and advanced renderers
-     (`Pdf4QtLibCore/sources/pdftransparencyrenderer.cpp:584-644, 2630-2641`).
+   - **MIC-319** (this cycle): detect unsafe/white overprint as preflight findings,
+     including converted Separation, DeviceN, and ICCBased paints.
+   - **MIC-320** (partial): transparency-renderer Output Preview rendering is
+     covered by committed render goldens and direct blend tests. Page-view,
+     thumbnails, printing, and `PdfTool render` remain deferred and disclosed.
 
 ### Stretch (only if committed scope is done)
 

@@ -30,15 +30,37 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
 
     if(PDF4QT_LOUPE_DISTRIBUTION)
         set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor: Loupe preflight, signatures, soft-proofing, dimensions, object inspector, and redaction.")
+        # Keep compatibility binaries in the release installer, but do not
+        # present them as separate Loupe products in the WiX feature tree.
+        set(PDF4QT_WIX_COMPAT_FEATURE_DISPLAY [=[Display="hidden"]=])
     elseif(PDF4QT_PLUGIN_AUDIOBOOK)
         set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains additional editing features, such as audio book conversion, signatures, soft-proofing, dimensions, object inspector, redaction etc.")
+        set(PDF4QT_WIX_COMPAT_FEATURE_DISPLAY "")
     else()
         set(PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains signatures, soft-proofing, dimensions, object inspector, redaction, and Loupe preflight.")
+        set(PDF4QT_WIX_COMPAT_FEATURE_DISPLAY "")
+    endif()
+
+    if(PDF4QT_LOUPE_DISTRIBUTION)
+        set(PDF4QT_WIX_VIEWER_SHORTCUT "")
+        set(PDF4QT_WIX_VIEWER_ASSOCIATION "")
+        set(PDF4QT_WIX_PAGEMASTER_SHORTCUT "")
+        set(PDF4QT_WIX_DIFF_SHORTCUT "")
+    else()
+        set(PDF4QT_WIX_VIEWER_SHORTCUT [=[<Shortcut Id="PDF4QT_Viewer_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT Viewer" Description="Simple PDF viewer" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_VL_Icon.exe" IconIndex="0" Advertise="yes"/>]=])
+        set(PDF4QT_WIX_VIEWER_ASSOCIATION [=[
+        <ProgId Id='pdf4qt_default_viewer.pdf' Description='PDF Document'>
+          <Extension Id='pdf' ContentType='application/pdf'>
+            <Verb Id='open' Command='Open' TargetFile='filPdf4QtViewer' Argument='"%1"' />
+          </Extension>
+        </ProgId>]=])
+        set(PDF4QT_WIX_PAGEMASTER_SHORTCUT [=[<Shortcut Id="PDF4QT_DPO_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT PageMaster" Description="PDF Document page organizer" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_DPO_Icon.exe" IconIndex="0" Advertise="yes"/>]=])
+        set(PDF4QT_WIX_DIFF_SHORTCUT [=[<Shortcut Id="PDF4QT_DD_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT Diff" Description="Compare two similar PDF documents" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_DD_Icon.exe" IconIndex="0" Advertise="yes"/>]=])
     endif()
 
     if(PDF4QT_BUILD_VIEWER)
         set(PDF4QT_WIX_FEATURE_VIEWER [=[
-      <Feature Id="feature_PDF4QT_Viewer" Absent="allow" AllowAdvertise="no" Title="Viewer" Level="1" Description="Simple PDF viewer with basic functions.">
+      <Feature Id="feature_PDF4QT_Viewer" Absent="allow" AllowAdvertise="no" Title="Viewer" @PDF4QT_WIX_COMPAT_FEATURE_DISPLAY@ Level="1" Description="Simple PDF viewer with basic functions.">
         <ComponentGroupRef Id="PDF4QT_Viewer"/>
       </Feature>
 ]=])
@@ -47,13 +69,9 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
     <ComponentGroup Id="PDF4QT_Viewer">
       <Component Id="cmpPdf4QtViewer" Directory="INSTALLFOLDER" Guid="{2D222775-6DA7-43E6-B212-3A142622190C}">
         <File Id="filPdf4QtViewer" KeyPath="yes" Source="$(var.MyInstallDir)\Pdf4QtViewer.exe">
-          <Shortcut Id="PDF4QT_Viewer_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT Viewer" Description="Simple PDF viewer" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_VL_Icon.exe" IconIndex="0" Advertise="yes"/>
+          @PDF4QT_WIX_VIEWER_SHORTCUT@
         </File>
-        <ProgId Id='pdf4qt_default_viewer.pdf' Description='PDF Document'>
-          <Extension Id='pdf' ContentType='application/pdf'>
-            <Verb Id='open' Command='Open' TargetFile='filPdf4QtViewer' Argument='"%1"' />
-          </Extension>
-        </ProgId>
+        @PDF4QT_WIX_VIEWER_ASSOCIATION@
       </Component>
     </ComponentGroup>
   </Fragment>
@@ -69,7 +87,7 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
 
     if(PDF4QT_BUILD_PAGEMASTER)
         set(PDF4QT_WIX_FEATURE_PAGEMASTER [=[
-      <Feature Id="feature_PDF4QT_PageMaster" Absent="allow" AllowAdvertise="no" Title="PageMaster" Level="1" Description="Document page organizer (split/merge documents, insert/remove/move/clone pages, insert blank pages and images to create a new document).">
+      <Feature Id="feature_PDF4QT_PageMaster" Absent="allow" AllowAdvertise="no" Title="PageMaster" @PDF4QT_WIX_COMPAT_FEATURE_DISPLAY@ Level="1" Description="Document page organizer (split/merge documents, insert/remove/move/clone pages, insert blank pages and images to create a new document).">
         <ComponentGroupRef Id="PDF4QT_PageMaster"/>
       </Feature>
 ]=])
@@ -78,7 +96,7 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
     <ComponentGroup Id="PDF4QT_PageMaster">
       <Component Id="cmpPdf4QtPageMaster" Directory="INSTALLFOLDER" Guid="{9D248BEE-BA78-4050-B362-0694B11AA326}">
         <File Id="filPdf4QtPageMaster" KeyPath="yes" Source="$(var.MyInstallDir)\Pdf4QtPageMaster.exe">
-          <Shortcut Id="PDF4QT_DPO_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT PageMaster" Description="PDF Document page organizer" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_DPO_Icon.exe" IconIndex="0" Advertise="yes"/>
+          @PDF4QT_WIX_PAGEMASTER_SHORTCUT@
         </File>
       </Component>
     </ComponentGroup>
@@ -95,7 +113,7 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
 
     if(PDF4QT_BUILD_DIFF)
         set(PDF4QT_WIX_FEATURE_DIFF [=[
-      <Feature Id="feature_PDF4QT_Diff" Absent="allow" AllowAdvertise="no" Title="Diff" Level="1" Description="Compare content of two documents.">
+      <Feature Id="feature_PDF4QT_Diff" Absent="allow" AllowAdvertise="no" Title="Diff" @PDF4QT_WIX_COMPAT_FEATURE_DISPLAY@ Level="1" Description="Compare content of two documents.">
         <ComponentGroupRef Id="PDF4QT_Diff"/>
       </Feature>
 ]=])
@@ -104,7 +122,7 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
     <ComponentGroup Id="PDF4QT_Diff">
       <Component Id="cmpPdf4QtDiff" Directory="INSTALLFOLDER" Guid="{067D40E9-4FAE-472D-BCC3-B92A23CA0028}">
         <File Id="filPdf4QtDiff" KeyPath="yes" Source="$(var.MyInstallDir)\Pdf4QtDiff.exe">
-          <Shortcut Id="PDF4QT_DD_Shortcut" Directory="ProgramMenuDir" Name="PDF4QT Diff" Description="Compare two similar PDF documents" WorkingDirectory="INSTALLFOLDER" Icon="PDF4QT_DD_Icon.exe" IconIndex="0" Advertise="yes"/>
+          @PDF4QT_WIX_DIFF_SHORTCUT@
         </File>
       </Component>
     </ComponentGroup>
@@ -117,6 +135,23 @@ if(WIN32 AND MSVC AND PDF4QT_INSTALL_PREPARE_WIX_INSTALLER)
     else()
         set(PDF4QT_WIX_FEATURE_DIFF "")
         set(PDF4QT_WIX_FRAGMENT_DIFF "")
+    endif()
+
+    string(CONFIGURE "${PDF4QT_WIX_FEATURE_VIEWER}" PDF4QT_WIX_FEATURE_VIEWER @ONLY)
+    string(CONFIGURE "${PDF4QT_WIX_FEATURE_PAGEMASTER}" PDF4QT_WIX_FEATURE_PAGEMASTER @ONLY)
+    string(CONFIGURE "${PDF4QT_WIX_FEATURE_DIFF}" PDF4QT_WIX_FEATURE_DIFF @ONLY)
+    string(CONFIGURE "${PDF4QT_WIX_FRAGMENT_VIEWER}" PDF4QT_WIX_FRAGMENT_VIEWER @ONLY)
+    string(CONFIGURE "${PDF4QT_WIX_FRAGMENT_PAGEMASTER}" PDF4QT_WIX_FRAGMENT_PAGEMASTER @ONLY)
+    string(CONFIGURE "${PDF4QT_WIX_FRAGMENT_DIFF}" PDF4QT_WIX_FRAGMENT_DIFF @ONLY)
+
+    if(PDF4QT_BUILD_LAUNCHPAD)
+        set(PDF4QT_WIX_COMPAT_LAUNCHPAD [=[
+      <Component Id="cmpPdf4QtLaunchPad" Directory="INSTALLFOLDER" Guid="{A7B8C9D0-E1F2-4A3B-8C4D-5E6F708192A3}">
+        <File Id="filPdf4QtLaunchPad" KeyPath="yes" Source="$(var.MyInstallDir)\Pdf4QtLaunchPad.exe" />
+      </Component>
+]=])
+    else()
+        set(PDF4QT_WIX_COMPAT_LAUNCHPAD "")
     endif()
 
     if(PDF4QT_PLUGIN_AUDIOBOOK)

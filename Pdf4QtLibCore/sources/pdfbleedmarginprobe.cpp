@@ -29,12 +29,14 @@
 #include "pdfpainter.h"
 #include "pdfrenderer.h"
 #include "pdffont.h"
+#include "pdfprocessingbudget.h"
 
 #include <QImage>
 #include <QPainter>
 #include <QtMath>
 
 #include <cmath>
+#include <limits>
 
 namespace pdf
 {
@@ -160,22 +162,30 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probe(const PDFPage* page,
     const bool upgradeBottom = !result.bottom.hasContent && rasterUpgradesEmptyEdge(rasterResult.bottom);
 
     // Raster confirmation may upgrade fast-path empty edges when strips have real content.
-    if (upgradeLeft)
+    // Even when an edge isn't upgraded (fast path already found content there), keep its
+    // raster calibration numbers (totalPixels/inkPixels/stripRect) so callers can inspect
+    // what the raster pass measured instead of the fast path's unset defaults.
+    auto mergeCalibration = [](PDFBleedMarginProbeEdgeResult& target,
+                               const PDFBleedMarginProbeEdgeResult& rasterEdge,
+                               bool upgrade)
     {
-        result.left = rasterResult.left;
-    }
-    if (upgradeRight)
-    {
-        result.right = rasterResult.right;
-    }
-    if (upgradeTop)
-    {
-        result.top = rasterResult.top;
-    }
-    if (upgradeBottom)
-    {
-        result.bottom = rasterResult.bottom;
-    }
+        if (upgrade)
+        {
+            target = rasterEdge;
+            return;
+        }
+        if (rasterEdge.totalPixels > 0)
+        {
+            target.inkPixels = rasterEdge.inkPixels;
+            target.totalPixels = rasterEdge.totalPixels;
+            target.stripRect = rasterEdge.stripRect;
+        }
+    };
+
+    mergeCalibration(result.left, rasterResult.left, upgradeLeft);
+    mergeCalibration(result.right, rasterResult.right, upgradeRight);
+    mergeCalibration(result.top, rasterResult.top, upgradeTop);
+    mergeCalibration(result.bottom, rasterResult.bottom, upgradeBottom);
 
     return result;
 }
@@ -295,21 +305,34 @@ PDFBleedMarginProbeResult PDFBleedMarginProbe::probeRaster(const PDFPage* page,
     features.setFlag(PDFRenderer::ClipToCropBox, false);
     features.setFlag(PDFRenderer::DisplayAnnotations, false);
 
-    PDFMeshQualitySettings meshQualitySettings;
-    PDFRenderer renderer(document, &fontCache, cms.get(), &optionalContentActivity, features, meshQualitySettings);
-
     const QSizeF mediaSize = page->getRotatedMediaBox().size();
+    if (settings.dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height())
+        || mediaSize.width() <= 0.0 || mediaSize.height() <= 0.0)
+    {
+        return result;
+    }
+
     const PDFReal pointToPixel = settings.dpi / 72.0;
     const double fullWidthPxReal = std::ceil(mediaSize.width() * pointToPixel);
     const double fullHeightPxReal = std::ceil(mediaSize.height() * pointToPixel);
 
-    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal))
+    if (!std::isfinite(fullWidthPxReal) || !std::isfinite(fullHeightPxReal)
+        || fullWidthPxReal > static_cast<double>(std::numeric_limits<int>::max())
+        || fullHeightPxReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
 
     const int fullW = qMax(1, int(fullWidthPxReal));
     const int fullH = qMax(1, int(fullHeightPxReal));
+    PDFMeshQualitySettings meshQualitySettings;
+    PDFRenderer renderer(document,
+                         &fontCache,
+                         cms.get(),
+                         &optionalContentActivity,
+                         features,
+                         meshQualitySettings,
+                         m_session->getProcessingBudget());
     const QTransform pageToDevice = PDFRenderer::createPagePointToDevicePointMatrix(page, QRect(QPoint(0, 0), QSize(fullW, fullH)));
 
     const PDFBleedFixupSide sides[4] = {
