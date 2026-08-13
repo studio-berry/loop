@@ -651,7 +651,7 @@ add_executable(UnitTestsPreflightPlugin
     tst_preflightplugintest.cpp
 )
 
-target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Test Pdf4QtLibCore)
+target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test Pdf4QtLibCore)
 target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
     ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
@@ -713,7 +713,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         tst_operatoracceptance.cpp
     )
 
-    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Test)
+    target_link_libraries(UnitTestsOperatorAcceptance PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
     add_dependencies(UnitTestsOperatorAcceptance PdfTool)
     target_compile_definitions(UnitTestsOperatorAcceptance PRIVATE
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
@@ -721,6 +721,7 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     )
     target_include_directories(UnitTestsOperatorAcceptance PRIVATE
         ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins/LoupePreflightPlugin
+        ${CMAKE_SOURCE_DIR}/Pdf4QtEditorPlugins
         ${CMAKE_SOURCE_DIR}/Pdf4QtLibCore/sources
         ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
@@ -732,6 +733,22 @@ if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsOperatorAcceptance  "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOperatorAcceptance")
 endif()
+
+# Compiles both identity headers into one TU so the pdf::PDFArtifactIdentity
+# redefinition that broke the Core build cannot silently return.
+add_executable(UnitTestsIdentitySeparation
+	tst_identityseparationtest.cpp
+)
+
+target_link_libraries(UnitTestsIdentitySeparation PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsIdentitySeparation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsIdentitySeparation "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsIdentitySeparation")
 
 # windeployqt copies Core/Gui/etc. but not Qt Test; all UnitTests* targets share one output dir.
 if(WIN32)

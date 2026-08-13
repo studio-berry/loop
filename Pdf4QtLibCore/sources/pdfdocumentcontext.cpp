@@ -30,14 +30,14 @@
 namespace pdf
 {
 
-PDFArtifactIdentity PDFArtifactIdentity::fromDocument(const PDFDocument* document)
+PDFDocumentIdentity PDFDocumentIdentity::fromDocument(const PDFDocument* document)
 {
     if (!document)
     {
-        return PDFArtifactIdentity();
+        return PDFDocumentIdentity();
     }
 
-    PDFArtifactIdentity identity;
+    PDFDocumentIdentity identity;
     identity.sourceDataHash = document->getSourceDataHash();
     identity.documentId = QString::number(reinterpret_cast<quintptr>(document), 16);
     return identity;
@@ -45,15 +45,15 @@ PDFArtifactIdentity PDFArtifactIdentity::fromDocument(const PDFDocument* documen
 
 bool PDFRevisionIdentity::operator<(const PDFRevisionIdentity& other) const
 {
-    return std::tie(artifact.sourceDataHash, artifact.documentId, documentRevision, cacheGeneration, effectiveProfileIdentity) <
-           std::tie(other.artifact.sourceDataHash, other.artifact.documentId, other.documentRevision, other.cacheGeneration, other.effectiveProfileIdentity);
+    return std::tie(document.sourceDataHash, document.documentId, documentRevision, cacheGeneration, effectiveProfileIdentity) <
+           std::tie(other.document.sourceDataHash, other.document.documentId, other.documentRevision, other.cacheGeneration, other.effectiveProfileIdentity);
 }
 
 QString PDFRevisionIdentity::toString() const
 {
     return QStringLiteral("%1:%2:%3:%4:%5")
-        .arg(QString::fromLatin1(artifact.sourceDataHash.toHex()))
-        .arg(artifact.documentId)
+        .arg(QString::fromLatin1(document.sourceDataHash.toHex()))
+        .arg(document.documentId)
         .arg(documentRevision)
         .arg(cacheGeneration)
         .arg(effectiveProfileIdentity);
@@ -62,7 +62,7 @@ QString PDFRevisionIdentity::toString() const
 PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent) :
     QObject(parent),
     m_document(document),
-    m_artifact(PDFArtifactIdentity::fromDocument(document)),
+    m_documentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_session(std::make_unique<PDFDocumentSession>(document, this))
 {
 }
@@ -71,7 +71,7 @@ PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* par
     QObject(parent),
     m_documentPointer(std::move(document)),
     m_document(m_documentPointer.data()),
-    m_artifact(PDFArtifactIdentity::fromDocument(m_document)),
+    m_documentIdentity(PDFDocumentIdentity::fromDocument(m_document)),
     m_session(std::make_unique<PDFDocumentSession>(m_document, this))
 {
 }
@@ -81,7 +81,7 @@ PDFDocumentContext::~PDFDocumentContext() = default;
 PDFRevisionIdentity PDFDocumentContext::getRevision() const
 {
     PDFRevisionIdentity revision;
-    revision.artifact = m_artifact;
+    revision.document = m_documentIdentity;
     revision.documentRevision = m_documentRevision;
     revision.cacheGeneration = m_cacheGeneration;
     revision.effectiveProfileIdentity = m_effectiveProfileIdentity;
@@ -162,7 +162,7 @@ void PDFDocumentContext::replaceDocument(PDFDocument* document, PDFDocumentPoint
     const PDFRevisionIdentity previous = getRevision();
     m_documentPointer = std::move(owner);
     m_document = document;
-    m_artifact = PDFArtifactIdentity::fromDocument(document);
+    m_documentIdentity = PDFDocumentIdentity::fromDocument(document);
     ++m_documentRevision;
     ++m_cacheGeneration;
     m_session = std::make_unique<PDFDocumentSession>(m_document, this);

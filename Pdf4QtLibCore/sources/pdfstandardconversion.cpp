@@ -163,7 +163,8 @@ int profileComponents(const QByteArray& data)
 void addOutputIntent(PDFDocumentBuilder* builder,
                      const PDFStandardConversionSettings& settings)
 {
-    const QByteArray compressed = PDFFlateDecodeFilter::compress(settings.outputIntentIccData);
+    // Not const: it is moved into the PDFStream below, which takes QByteArray&&.
+    QByteArray compressed = PDFFlateDecodeFilter::compress(settings.outputIntentIccData);
     PDFDictionary profileDictionary;
     profileDictionary.addEntry(PDFInplaceOrMemoryString("N"), PDFObject::createInteger(profileComponents(settings.outputIntentIccData)));
     profileDictionary.addEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(compressed.size()));

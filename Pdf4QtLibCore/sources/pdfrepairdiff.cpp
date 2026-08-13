@@ -661,11 +661,35 @@ PDFOperationResult PDFRepairDiffEngine::compare(const PDFDocument& before,
         const PageSnapshot& left = beforeSnapshot.pages.at(pageIndex);
         const PageSnapshot& right = afterSnapshot.pages.at(pageIndex);
         const QString prefix = QStringLiteral("pages/%1/").arg(pageIndex);
-        if (left.mediaBox != right.mediaBox) addChange(report, prefix + QStringLiteral("media_box"), QStringLiteral("page_box"), rectName(left.mediaBox), rectName(right.mediaBox), options);
-        if (left.cropBox != right.cropBox) addChange(report, prefix + QStringLiteral("crop_box"), QStringLiteral("page_box"), rectName(left.cropBox), rectName(right.cropBox), options);
-        if (left.bleedBox != right.bleedBox) addChange(report, prefix + QStringLiteral("bleed_box"), QStringLiteral("page_box"), rectName(left.bleedBox), rectName(right.bleedBox), options);
-        if (left.trimBox != right.trimBox) addChange(report, prefix + QStringLiteral("trim_box"), QStringLiteral("page_box"), rectName(left.trimBox), rectName(right.trimBox), options);
-        if (left.artBox != right.artBox) addChange(report, prefix + QStringLiteral("art_box"), QStringLiteral("page_box"), rectName(left.artBox), rectName(right.artBox), options);
+        // CropBox/BleedBox/TrimBox/ArtBox each fall back to an enclosing box
+        // (ultimately MediaBox) whenever a page does not set them explicitly, so a
+        // single MediaBox resize cascades into every inherited box reading as changed
+        // too. Report that as the one page-box edit it actually is instead of one
+        // structural change per inherited box.
+        struct NamedBox { const char* name; const QRectF* before; const QRectF* after; };
+        const NamedBox namedBoxes[] = {
+            { "media_box", &left.mediaBox, &right.mediaBox },
+            { "crop_box", &left.cropBox, &right.cropBox },
+            { "bleed_box", &left.bleedBox, &right.bleedBox },
+            { "trim_box", &left.trimBox, &right.trimBox },
+            { "art_box", &left.artBox, &right.artBox },
+        };
+        QStringList beforeBoxes;
+        QStringList afterBoxes;
+        for (const NamedBox& namedBox : namedBoxes)
+        {
+            if (*namedBox.before != *namedBox.after)
+            {
+                const QString label = QString::fromLatin1(namedBox.name);
+                beforeBoxes.append(label + QLatin1Char('=') + rectName(*namedBox.before));
+                afterBoxes.append(label + QLatin1Char('=') + rectName(*namedBox.after));
+            }
+        }
+        if (!beforeBoxes.isEmpty())
+        {
+            addChange(report, prefix + QStringLiteral("page_box"), QStringLiteral("page_box"),
+                      beforeBoxes.join(QStringLiteral("; ")), afterBoxes.join(QStringLiteral("; ")), options);
+        }
         if (left.rotation != right.rotation) addChange(report, prefix + QStringLiteral("rotation"), QStringLiteral("page_order"), pageRotationName(left.rotation), pageRotationName(right.rotation), options);
         if (options.compareAnnotations && left.annotationTypes != right.annotationTypes)
         {

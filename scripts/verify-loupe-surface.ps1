@@ -113,25 +113,33 @@ foreach ($file in $firstPartyFiles) {
     }
 }
 
-$expectedDesktop = @(Get-ProfileValue $manifest.packaging.desktop_entries $Profile)
-$desktopFiles = @($files | Where-Object { $_.Extension -eq ".desktop" })
-$actualDesktop = @($desktopFiles | ForEach-Object Name | Sort-Object)
-$expectedDesktopSorted = @($expectedDesktop | Sort-Object)
-if (($actualDesktop -join "`n") -ne ($expectedDesktopSorted -join "`n")) {
-    throw "Desktop entry inventory drift for $($Profile). Expected: $($expectedDesktopSorted -join ', '); found: $($actualDesktop -join ', ')"
-}
-
 $launcher = $manifest.packaging.loupe_launcher
-$loupeDesktop = @($desktopFiles | Where-Object { $_.Name -eq "io.github.mberrys.Loupe-pdf.desktop" })
-if ($loupeDesktop.Count -eq 1) {
-    $desktopText = Get-Content -LiteralPath $loupeDesktop[0].FullName -Raw
-    $expectedExec = "^Exec=" + [regex]::Escape($launcher.executable) + "(?:\.exe)? %f\r?$"
-    if ($desktopText -notmatch "(?m)$expectedExec") {
-        throw "Loupe desktop entry does not launch $($launcher.executable): $($loupeDesktop[0].FullName)"
+$desktopFiles = @()
+
+# .desktop entries are a freedesktop.org / Linux packaging concept; CMakeLists.txt
+# only installs them outside the WIN32 branch, so they never exist on a Windows
+# install surface. $IsLinux is a PowerShell 7+ automatic variable. $launcher stays
+# in scope outside this block: the AppX manifest check further down also reads it.
+if ($IsLinux) {
+    $expectedDesktop = @(Get-ProfileValue $manifest.packaging.desktop_entries $Profile)
+    $desktopFiles = @($files | Where-Object { $_.Extension -eq ".desktop" })
+    $actualDesktop = @($desktopFiles | ForEach-Object Name | Sort-Object)
+    $expectedDesktopSorted = @($expectedDesktop | Sort-Object)
+    if (($actualDesktop -join "`n") -ne ($expectedDesktopSorted -join "`n")) {
+        throw "Desktop entry inventory drift for $($Profile). Expected: $($expectedDesktopSorted -join ', '); found: $($actualDesktop -join ', ')"
     }
-    foreach ($association in @($launcher.file_associations)) {
-        if ($desktopText -notmatch "(?m)^MimeType=.*$([regex]::Escape($association))") {
-            throw "Loupe desktop entry is missing file association $association."
+
+    $loupeDesktop = @($desktopFiles | Where-Object { $_.Name -eq "io.github.mberrys.Loupe-pdf.desktop" })
+    if ($loupeDesktop.Count -eq 1) {
+        $desktopText = Get-Content -LiteralPath $loupeDesktop[0].FullName -Raw
+        $expectedExec = "^Exec=" + [regex]::Escape($launcher.executable) + "(?:\.exe)? %f\r?$"
+        if ($desktopText -notmatch "(?m)$expectedExec") {
+            throw "Loupe desktop entry does not launch $($launcher.executable): $($loupeDesktop[0].FullName)"
+        }
+        foreach ($association in @($launcher.file_associations)) {
+            if ($desktopText -notmatch "(?m)^MimeType=.*$([regex]::Escape($association))") {
+                throw "Loupe desktop entry is missing file association $association."
+            }
         }
     }
 }
@@ -152,7 +160,11 @@ try {
 } catch {
     throw "CLI discovery command did not return valid JSON: $($manifest.cli.discovery_command)"
 }
-$capabilityProperty = $discoveryDocument.PSObject.Properties[$manifest.cli.capability_field]
+$discoveryData = $discoveryDocument.data
+if ($null -eq $discoveryData) {
+    throw "CLI discovery output is missing the data envelope."
+}
+$capabilityProperty = $discoveryData.PSObject.Properties[$manifest.cli.capability_field]
 if ($null -eq $capabilityProperty) {
     throw "CLI discovery output is missing capability field: $($manifest.cli.capability_field)"
 }

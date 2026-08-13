@@ -2212,9 +2212,9 @@ void runOutputIntentCheck(PDFDocumentSession* session,
     }
 }
 
-bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color)
+bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color, int recursionDepth = 0)
 {
-    if (!colorSpace)
+    if (!colorSpace || recursionDepth > 8)
     {
         return false;
     }
@@ -2227,6 +2227,49 @@ bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFCo
             return color[0] >= 0.99f && color[1] >= 0.99f && color[2] >= 0.99f;
         case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
             return color[0] <= 0.01f && color[1] <= 0.01f && color[2] <= 0.01f && color[3] <= 0.01f;
+
+        case PDFAbstractColorSpace::ColorSpace::ICCBased:
+        {
+            // ICCBased components share the alternate color space's semantics 1:1.
+            const PDFICCBasedColorSpace* iccColorSpace = static_cast<const PDFICCBasedColorSpace*>(colorSpace);
+            return isNearWhiteDevicePaint(iccColorSpace->getAlternateColorSpace(), color, recursionDepth + 1);
+        }
+
+        case PDFAbstractColorSpace::ColorSpace::Separation:
+        case PDFAbstractColorSpace::ColorSpace::DeviceN:
+        {
+            // Resolve through the tint transform so a near-white finding still fires when
+            // the alternate color space (not the tint value itself) is near-white/no-ink.
+            std::vector<PDFColorComponent> input(color.size());
+            for (size_t i = 0; i < color.size(); ++i)
+            {
+                input[i] = color[i];
+            }
+
+            PDFColorSpacePointer alternateColorSpace;
+            std::vector<PDFColorComponent> transformed;
+            if (colorSpace->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Separation)
+            {
+                const PDFSeparationColorSpace* separationColorSpace = static_cast<const PDFSeparationColorSpace*>(colorSpace);
+                alternateColorSpace = separationColorSpace->getAlternateColorSpace();
+                transformed = separationColorSpace->transformColorsToBaseColorSpace(PDFColorBuffer(input.data(), input.size()));
+            }
+            else
+            {
+                const PDFDeviceNColorSpace* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(colorSpace);
+                alternateColorSpace = deviceNColorSpace->getAlternateColorSpace();
+                transformed = deviceNColorSpace->transformColorsToBaseColorSpace(PDFColorBuffer(input.data(), input.size()));
+            }
+
+            PDFColor alternateColor;
+            alternateColor.resize(transformed.size());
+            for (size_t i = 0; i < transformed.size(); ++i)
+            {
+                alternateColor[i] = transformed[i];
+            }
+            return isNearWhiteDevicePaint(alternateColorSpace.data(), alternateColor, recursionDepth + 1);
+        }
+
         default:
             return false;
     }
@@ -2809,6 +2852,7 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
 struct ThinStrokeFinding
 {
     QString type;
+    QString classification = QStringLiteral("thin-stroke");
     QRectF bbox;
     qreal declaredWidth = 0.0;
     qreal effectiveWidth = 0.0;
@@ -2851,6 +2895,11 @@ public:
 
     const QList<ThinStrokeFinding>& findings() const { return m_findings; }
     const QList<PDFRenderError>& renderErrors() const { return getRenderErrors(); }
+
+    void setProcessingAnnotation(bool processingAnnotation)
+    {
+        m_processingAnnotation = processingAnnotation;
+    }
 
 protected:
     bool isContentKindSuppressed(ContentKind kind) const override
@@ -2918,6 +2967,10 @@ protected:
 
         ThinStrokeFinding finding;
         finding.type = hairline ? QStringLiteral("hairline-stroke") : QStringLiteral("thin-stroke");
+        if (m_processingAnnotation)
+        {
+            finding.classification = QStringLiteral("thin-annotation");
+        }
         finding.bbox = visibleStroke.boundingRect();
         finding.declaredWidth = declaredWidth;
         finding.effectiveWidth = effectiveWidth;
@@ -2949,6 +3002,7 @@ protected:
     }
 
 private:
+    bool m_processingAnnotation = false;
     qreal m_minimumWidth = 0.0;
     qreal m_zeroWidthEpsilon = 1.0e-6;
     QPainterPath m_clipPath;
@@ -4870,8 +4924,6 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         // Profile parsing errors are retained in the normalized report so the
         // canonical reducer can classify them as an operator-visible error.
         PreflightResult result;
-        result.errorCode = QStringLiteral("profile-invalid");
-        result.errorMessage = errorMessage;
         result.profileName = profile.value(QStringLiteral("name")).toString();
 
         PreflightFinding finding;
@@ -4882,6 +4934,21 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         finding.bbox = QRectF();
         result.errors.push_back(finding);
 
+        // A profile that parses as valid JSON but defines no checks has nothing
+        // structurally wrong with it - it is a semantic finding an operator can act
+        // on (add checks to the profile), not an engine failure. Leave errorCode/
+        // errorMessage unset so reducePreflightVerdict() classifies it through the
+        // normal blocking-findings path (verdict Fail, exit code Findings) instead
+        // of its unconditional errorCode-set-means-Error short circuit. Every other
+        // parse failure (missing name, bad severity, malformed pdfx block, ...) still
+        // reports a genuine engine error.
+        if (!profile.value(QStringLiteral("checks")).toArray().isEmpty())
+        {
+            result.errorCode = QStringLiteral("profile-invalid");
+            result.errorMessage = errorMessage;
+        }
+
+        result.pass = reducePreflightVerdict(result).isPass();
         return result;
     }
 
@@ -5412,7 +5479,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                 return false;
             }
             const QJsonObject severityByClass = severityByClassValue.toObject();
-            for (auto it = severityByClass.cbegin(); it != severityByClass.cend(); ++it)
+            for (auto it = severityByClass.constBegin(); it != severityByClass.constEnd(); ++it)
             {
                 if (!allowedClasses.contains(it.key()) || !it.value().isString() || !validSeverity(it.value().toString()))
                 {

@@ -48,6 +48,12 @@ jobs:
       - name: Verify generated dependency paths are untracked
         working-directory: pdf4qt
         run: python3 scripts/ci/check_generated_dependency_paths.py
+      - name: Test source integrity checker
+        working-directory: pdf4qt
+        run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         run: python3 scripts/ci/check_branch_policy.py
@@ -181,6 +187,16 @@ jobs:
         with:
           path: pdf4qt
 
+      - name: Exclude workspace from Windows Defender real-time scanning
+        # CMake's install() does an atomic rename of freshly-built DLLs; Defender's
+        # real-time scanner can hold a brief lock on them right after MSBuild writes
+        # them, which surfaces as CMake's misleading "file INSTALL cannot find X:
+        # File exists" error. Best-effort: some runner policies don't allow this, so
+        # don't fail the build over it.
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${env:GITHUB_WORKSPACE}" -ErrorAction SilentlyContinue
+
       - name: Verify supply-chain pins
         working-directory: pdf4qt
         shell: pwsh
@@ -196,6 +212,16 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_generated_dependency_paths.py
+      - name: Test source integrity checker
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         shell: pwsh
@@ -268,10 +294,38 @@ jobs:
         working-directory: pdf4qt
         shell: pwsh
         run: |
+          # pwsh, unlike bash's default -e, does not stop on a non-zero exit code from
+          # an external command (cmake here) -- it just keeps going to the next line.
+          # That previously let a real "cmake --build" link failure fall through
+          # silently into "cmake --install" failing on a DLL that was never produced,
+          # which read like a Windows install race instead of the build error it was.
+          # Check $LASTEXITCODE after each cmake invocation so a real failure stops
+          # the step immediately, at the command that actually failed.
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:Qt6_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
+
           cmake --build build --target release_translations --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build (release_translations) failed with exit code $LASTEXITCODE." }
+
           cmake --build build --config Release -j6
-          cmake --install build --config Release
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build failed with exit code $LASTEXITCODE." }
+
+          # Kept as defense-in-depth against genuine Windows install-time file-lock
+          # flakiness (antivirus/indexer), now that a real build failure can no longer
+          # hide behind it.
+          $installSucceeded = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+              cmake --install build --config Release
+              if ($LASTEXITCODE -eq 0) {
+                  $installSucceeded = $true
+                  break
+              }
+              Write-Host "cmake --install attempt $attempt failed with exit code $LASTEXITCODE; retrying after a short delay."
+              Start-Sleep -Seconds (5 * $attempt)
+          }
+          if (-not $installSucceeded) {
+              throw "cmake --install failed after 3 attempts."
+          }
 
       - name: Verify developer product surface
         working-directory: pdf4qt

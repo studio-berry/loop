@@ -201,7 +201,7 @@ int runCrashHarness(const QStringList& arguments)
     job.outputFileNames.push_back(arguments.at(2));
     job.overwriteFiles = true;
     job.manifestPath = arguments.at(3);
-    job.manifestPersist = [](const QString&, const QJsonObject& manifest)
+    job.manifestPersist = [](const QString& path, const QJsonObject& manifest)
     {
         const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
         if (!outputs.isEmpty()
@@ -211,7 +211,19 @@ int runCrashHarness(const QStringList& arguments)
             // manifest update. The parent verifies the final path remains valid.
             std::quick_exit(91);
         }
-        return true;
+
+        // Real persistence, mirroring PDFPageMasterExport::run()'s internal
+        // persistManifest() (not reachable from here - it's file-local to
+        // pdfpagemasterexport.cpp). Without this, no manifest ever reaches disk:
+        // the harness only intercepted the crash condition and otherwise just
+        // returned true without writing anything, so the initial 'pending'
+        // persist call (made before any output is written) silently no-opped.
+        QFile file(path);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            return false;
+        }
+        return file.write(QJsonDocument(manifest).toJson(QJsonDocument::Compact)) >= 0;
     };
 
     const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));

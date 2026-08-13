@@ -177,9 +177,9 @@ void RepairOperationTest::failedOperation_discardsCandidate()
 
 void RepairOperationTest::standardTargets_areExplicitAndStable()
 {
-    QCOMPARE(pdf::supportedPDFStandardTargets(), QStringList{
+    QCOMPARE(pdf::supportedPDFStandardTargets(), (QStringList{
         QStringLiteral("PDF/X-1a:2001"), QStringLiteral("PDF/X-3:2002"),
-        QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") });
+        QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") }));
     pdf::PDFStandardTarget target = pdf::PDFStandardTarget::PDFX4;
     QVERIFY(pdf::pdfStandardTargetFromString(QStringLiteral("PDF/X-3:2002"), &target));
     QCOMPARE(target, pdf::PDFStandardTarget::PDFX3_2002);

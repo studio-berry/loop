@@ -47,8 +47,8 @@ private slots:
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
 {
-    const QJsonObject first{{ QStringLiteral("z"), 1 }, { QStringLiteral("a"), QJsonObject{{ QStringLiteral("token"), QStringLiteral("secret") }} }};
-    const QJsonObject second{{ QStringLiteral("a"), QJsonObject{{ QStringLiteral("token"), QStringLiteral("secret") }} }, { QStringLiteral("z"), 1 }};
+    const QJsonObject first{ { QStringLiteral("z"), 1 }, { QStringLiteral("a"), QJsonObject{ { QStringLiteral("token"), QStringLiteral("secret") } } } };
+    const QJsonObject second{ { QStringLiteral("a"), QJsonObject{ { QStringLiteral("token"), QStringLiteral("secret") } } }, { QStringLiteral("z"), 1 } };
     QCOMPARE(pdf::canonicalJson(first), pdf::canonicalJson(second));
     const QJsonObject redacted = pdf::redactSensitiveJson(first).toObject();
     QCOMPARE(redacted.value(QStringLiteral("a")).toObject().value(QStringLiteral("token")).toString(), QStringLiteral("[REDACTED]"));
@@ -61,21 +61,27 @@ void OperationHistoryTest::artifactStoreStreamsAndDetectsTampering()
     pdf::PDFArtifactStore store(temporary.path());
     const QByteArray payload("immutable artifact payload");
     const pdf::PDFArtifactStoreResult first = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
-    QVERIFY(first.success);
+    const QByteArray firstError = first.errorMessage.toUtf8();
+    QVERIFY2(first.success, firstError.constData());
     QCOMPARE(first.artifact.sha256, QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex()));
     QVERIFY(first.artifact.isValid());
     QVERIFY(store.verify(first.artifact));
-    QVERIFY(!(QFileInfo(store.pathFor(first.artifact)).permissions() & QFileDevice::WriteOwner));
+    {
+        QFile published(store.pathFor(first.artifact));
+        QVERIFY2(!published.open(QIODevice::WriteOnly | QIODevice::Append),
+                 "Published artifact must not be writable");
+    }
 
     const pdf::PDFArtifactStoreResult second = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("copy.pdf") });
-    QVERIFY(second.success);
+    const QByteArray secondError = second.errorMessage.toUtf8();
+    QVERIFY2(second.success, secondError.constData());
     QVERIFY(second.reused);
     QVERIFY(store.verify(second.artifact));
 
     QFile file(store.pathFor(first.artifact));
     QVERIFY(QFile::setPermissions(file.fileName(),
                                   QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
+                                      QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(file.open(QIODevice::Append));
     QVERIFY(file.write("tamper") > 0);
     file.close();
@@ -91,10 +97,16 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto output = artifacts.importBytes("output", { QStringLiteral("application/pdf"), QStringLiteral("output.pdf") });
-    QVERIFY(input.success && output.success);
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    const QByteArray outputError = output.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
+    QVERIFY2(output.success, outputError.constData());
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
-    QVERIFY(history.open());
+    QString openError;
+    const pdf::PDFOperationResult opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
     QVERIFY(history.registerArtifact(output.artifact));
 
@@ -103,7 +115,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     execution.operationVersion = 2;
     execution.input = input.artifact;
     execution.sourceDocumentRevision = 7;
-    execution.parameters = QJsonObject{{ QStringLiteral("password"), QStringLiteral("do-not-store") }, { QStringLiteral("mode"), QStringLiteral("safe") }};
+    execution.parameters = QJsonObject{ { QStringLiteral("password"), QStringLiteral("do-not-store") }, { QStringLiteral("mode"), QStringLiteral("safe") } };
     QUuid executionId;
     QVERIFY(history.beginExecution(execution, &executionId));
 
@@ -116,7 +128,7 @@ void OperationHistoryTest::lifecycleApprovalAndRollbackResolution()
     accepted.executionId = executionId;
     accepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     accepted.output = output.artifact;
-    accepted.resultSummary = QJsonObject{{ QStringLiteral("password"), QStringLiteral("do-not-store") }};
+    accepted.resultSummary = QJsonObject{ { QStringLiteral("password"), QStringLiteral("do-not-store") } };
     accepted.approval.kind = pdf::PDFApprovalKind::Human;
     accepted.approval.actorId = QStringLiteral("local-user:test");
     accepted.approval.decision = QStringLiteral("approve");
@@ -155,11 +167,19 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     const auto input = artifacts.importBytes("input", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
     const auto middle = artifacts.importBytes("middle", { QStringLiteral("application/pdf"), QStringLiteral("middle.pdf") });
     const auto final = artifacts.importBytes("final", { QStringLiteral("application/pdf"), QStringLiteral("final.pdf") });
-    QVERIFY(input.success && middle.success && final.success);
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    const QByteArray middleError = middle.errorMessage.toUtf8();
+    const QByteArray finalError = final.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
+    QVERIFY2(middle.success, middleError.constData());
+    QVERIFY2(final.success, finalError.constData());
 
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
-    QVERIFY(history.open());
+    QString openError;
+    const pdf::PDFOperationResult opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerOriginalInput(input.artifact));
     QVERIFY(history.registerArtifact(middle.artifact));
     QVERIFY(history.registerArtifact(final.artifact));
@@ -168,11 +188,13 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
                               const pdf::PDFArtifactIdentity& output,
                               const QString& operation,
                               bool approved,
-                              QUuid* executionId) {
+                              QUuid* executionId)
+    {
         pdf::PDFOperationHistoryExecution execution;
         execution.operationId = operation;
         execution.input = source;
-        if (!history.beginExecution(execution, executionId)) return false;
+        if (!history.beginExecution(execution, executionId))
+            return false;
         pdf::PDFOperationHistoryEvent event;
         event.executionId = *executionId;
         event.status = pdf::PDFOperationHistoryStatus::Accepted;
@@ -233,7 +255,7 @@ void OperationHistoryTest::rollbackPointsRetentionAndAtomicity()
     QFile corrupt(artifacts.pathFor(final.artifact));
     QVERIFY(QFile::setPermissions(corrupt.fileName(),
                                   QFileDevice::ReadOwner | QFileDevice::WriteOwner |
-                                  QFileDevice::ReadGroup | QFileDevice::ReadOther));
+                                      QFileDevice::ReadGroup | QFileDevice::ReadOther));
     QVERIFY(corrupt.open(QIODevice::Append));
     QVERIFY(corrupt.write("corrupt") > 0);
     corrupt.close();
@@ -250,10 +272,14 @@ void OperationHistoryTest::externalPayloadTamperingCompromisesChain()
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY(input.success);
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
     const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
     pdf::PDFOperationHistoryStore history(databasePath);
-    QVERIFY(history.open());
+    QString openError;
+    const pdf::PDFOperationResult opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
     pdf::PDFOperationHistoryExecution execution;
     execution.operationId = QStringLiteral("tamper.test");
@@ -286,10 +312,14 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
     QVERIFY(temporary.isValid());
     pdf::PDFArtifactStore artifacts(temporary.path());
     const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
-    QVERIFY(input.success);
+    const QByteArray inputError = input.errorMessage.toUtf8();
+    QVERIFY2(input.success, inputError.constData());
 
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
-    QVERIFY(history.open());
+    QString openError;
+    const pdf::PDFOperationResult opened = history.open(&openError);
+    const QByteArray openErrorUtf8 = openError.toUtf8();
+    QVERIFY2(opened, openErrorUtf8.constData());
     QVERIFY(history.registerArtifact(input.artifact));
 
     pdf::PDFOperationHistoryExecution execution;

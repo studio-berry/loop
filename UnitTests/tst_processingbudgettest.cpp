@@ -37,6 +37,11 @@ public:
 
     bool isSequential() const override { return true; }
 
+    qint64 bytesAvailable() const override
+    {
+        return (m_data.size() - m_offset) + QIODevice::bytesAvailable();
+    }
+
 protected:
     qint64 readData(char* data, qint64 maxSize) override
     {

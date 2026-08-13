@@ -45,9 +45,9 @@ QJsonObject check(const QString& id, int minDpi, const QString& severity = QStri
 }
 
 QJsonObject source(const QString& id,
-                  int priority,
-                  const QJsonObject& selector,
-                  const QJsonArray& checks)
+                   int priority,
+                   const QJsonObject& selector,
+                   const QJsonArray& checks)
 {
     return QJsonObject{
         { QStringLiteral("schema_version"), 1 },
@@ -63,11 +63,10 @@ QJsonObject source(const QString& id,
 bool writeProfile(const QString& directory, const QString& name, const QJsonObject& profile)
 {
     QFile file(QDir(directory).filePath(name + QStringLiteral(".json")));
-    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
-        && file.write(QJsonDocument(profile).toJson(QJsonDocument::Compact)) >= 0;
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(QJsonDocument(profile).toJson(QJsonDocument::Compact)) >= 0;
 }
 
-} // namespace
+}   // namespace
 
 class PreflightProfileResolverTest : public QObject
 {
@@ -85,14 +84,9 @@ void PreflightProfileResolverTest::normalizesContextAndMergesByCheckId()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("default"), source(
-        QStringLiteral("global.default"), 0, {}, QJsonArray{ check(QStringLiteral("image-resolution"), 150) })));
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("press"), source(
-        QStringLiteral("press.hp"), 100, {{ QStringLiteral("press_id"), QStringLiteral("HP-15K") }},
-        QJsonArray{ check(QStringLiteral("image-resolution"), 200), check(QStringLiteral("bleed"), 3) })));
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("client"), source(
-        QStringLiteral("client.acme"), 200, {{ QStringLiteral("client_id"), QStringLiteral("ACME") }},
-        QJsonArray{ check(QStringLiteral("bleed"), 9, QStringLiteral("warning")) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("default"), source(QStringLiteral("global.default"), 0, {}, QJsonArray{ check(QStringLiteral("image-resolution"), 150) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("press"), source(QStringLiteral("press.hp"), 100, { { QStringLiteral("press_id"), QStringLiteral("HP-15K") } }, QJsonArray{ check(QStringLiteral("image-resolution"), 200), check(QStringLiteral("bleed"), 3) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("client"), source(QStringLiteral("client.acme"), 200, { { QStringLiteral("client_id"), QStringLiteral("ACME") } }, QJsonArray{ check(QStringLiteral("bleed"), 9, QStringLiteral("warning")) })));
 
     pdf::PreflightProfileSnapshot snapshot;
     QString error;
@@ -105,11 +99,16 @@ void PreflightProfileResolverTest::normalizesContextAndMergesByCheckId()
     QVERIFY2(result.ok, qPrintable(result.errorMessage));
     QCOMPARE(result.normalizedContext.value(QStringLiteral("client_id")).toString(), QStringLiteral("acme"));
     QCOMPARE(result.effectiveProfile.value(QStringLiteral("checks")).toArray().size(), 2);
+    // Merged checks preserve first-appearance order across sources in ascending
+    // priority order (default, then press, then client): image-resolution is
+    // declared by 'default' (priority 0), bleed first appears in 'press'
+    // (priority 100). Field-level values still come from whichever matched
+    // source has the highest authority for that field, independent of order.
     const QJsonArray checks = result.effectiveProfile.value(QStringLiteral("checks")).toArray();
-    QCOMPARE(checks.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("bleed"));
-    QCOMPARE(checks.at(0).toObject().value(QStringLiteral("amount_pt")).toDouble(), 9.0);
-    QCOMPARE(checks.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("image-resolution"));
-    QCOMPARE(checks.at(1).toObject().value(QStringLiteral("min_dpi")).toInt(), 200);
+    QCOMPARE(checks.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("image-resolution"));
+    QCOMPARE(checks.at(0).toObject().value(QStringLiteral("min_dpi")).toInt(), 200);
+    QCOMPARE(checks.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("bleed"));
+    QCOMPARE(checks.at(1).toObject().value(QStringLiteral("amount_pt")).toDouble(), 9.0);
     QVERIFY(result.provenance().value(QStringLiteral("decisions")).toArray().size() >= 4);
 }
 
@@ -117,8 +116,8 @@ void PreflightProfileResolverTest::sourceOrderDoesNotChangeHash()
 {
     const QJsonObject defaultProfile = source(QStringLiteral("global.default"), 0, {}, QJsonArray{ check(QStringLiteral("bleed"), 3) });
     const QJsonObject pressProfile = source(QStringLiteral("press.hp"), 100,
-                                             {{ QStringLiteral("press_id"), QStringLiteral("hp") }},
-                                             QJsonArray{ check(QStringLiteral("bleed"), 6) });
+                                            { { QStringLiteral("press_id"), QStringLiteral("hp") } },
+                                            QJsonArray{ check(QStringLiteral("bleed"), 6) });
 
     QString error;
     // Build snapshots through the public store boundary so all source metadata
@@ -147,12 +146,8 @@ void PreflightProfileResolverTest::equalAuthorityConflictFailsClosed()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("a"), source(
-        QStringLiteral("client.a"), 100, {{ QStringLiteral("client_id"), QStringLiteral("acme") }},
-        QJsonArray{ check(QStringLiteral("bleed"), 3) })));
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("b"), source(
-        QStringLiteral("client.b"), 100, {{ QStringLiteral("client_id"), QStringLiteral("acme") }},
-        QJsonArray{ check(QStringLiteral("bleed"), 9) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("a"), source(QStringLiteral("client.a"), 100, { { QStringLiteral("client_id"), QStringLiteral("acme") } }, QJsonArray{ check(QStringLiteral("bleed"), 3) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("b"), source(QStringLiteral("client.b"), 100, { { QStringLiteral("client_id"), QStringLiteral("acme") } }, QJsonArray{ check(QStringLiteral("bleed"), 9) })));
 
     pdf::PreflightProfileSnapshot snapshot;
     QString error;
@@ -181,14 +176,14 @@ void PreflightProfileResolverTest::rejectsUnknownSelectorField()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    QVERIFY(writeProfile(directory.path(), QStringLiteral("invalid"), source(
-        QStringLiteral("invalid"), 0, {{ QStringLiteral("arbitrary_expression"), QStringLiteral("x") }},
-        QJsonArray{ check(QStringLiteral("bleed"), 3) })));
+    QVERIFY(writeProfile(directory.path(), QStringLiteral("invalid"), source(QStringLiteral("invalid"), 0, { { QStringLiteral("arbitrary_expression"), QStringLiteral("x") } }, QJsonArray{ check(QStringLiteral("bleed"), 3) })));
 
     pdf::PreflightProfileSnapshot snapshot;
     QString error;
     QVERIFY(!pdf::PreflightProfileStore::loadDirectory(directory.path(), snapshot, error));
     QVERIFY(error.contains(QStringLiteral("not supported")));
 }
+
+QTEST_APPLESS_MAIN(PreflightProfileResolverTest)
 
 #include "tst_preflightprofileresolvertest.moc"

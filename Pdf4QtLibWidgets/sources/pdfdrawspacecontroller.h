@@ -27,6 +27,7 @@
 #include "pdfwidgetsglobal.h"
 #include "pdfglobal.h"
 #include "pdfdocument.h"
+#include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdffont.h"
 #include "pdfdocumentdrawinterface.h"

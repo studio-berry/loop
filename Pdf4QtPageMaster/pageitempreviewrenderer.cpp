@@ -259,7 +259,7 @@ void PageItemPreviewRenderer::requestPreview(const PageGroupItem* item, const QR
         const auto it = m_documentContexts.find(request.documentIndex);
         if (it != m_documentContexts.cend())
         {
-            request.revision.artifact = it->second->revision.artifact;
+            request.revision.document = it->second->revision.document;
         }
     }
 
@@ -355,7 +355,7 @@ bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
 
     auto context = std::make_unique<DocumentRenderContext>();
     context->document = &it->second.document;
-    context->revision = pdf::PDFRevisionIdentity { pdf::PDFArtifactIdentity::fromDocument(context->document), 0, m_renderEpoch, QString() };
+    context->revision = pdf::PDFRevisionIdentity { pdf::PDFDocumentIdentity::fromDocument(context->document), 0, m_renderEpoch, QString() };
     context->fontCache = std::make_unique<pdf::PDFFontCache>(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     context->cmsManager = std::make_unique<pdf::PDFCMSManager>(nullptr);
     context->optionalContentActivity = std::make_unique<pdf::PDFOptionalContentActivity>(context->document, pdf::OCUsage::View, nullptr);

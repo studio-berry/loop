@@ -35,6 +35,7 @@
     "output-intent",
     "page-size",
     "processing-steps",
+    "thin-parts",
     "thin-strokes",
     "transparency-risk",
     "trim",
@@ -63,6 +64,10 @@
     },
     {
       "id": "rgb-to-cmyk",
+      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+    },
+    {
+      "id": "standards-convert",
       "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
     }
   ],
@@ -110,10 +115,12 @@
     "UnitTestsDocumentSession",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
+    "UnitTestsIdentitySeparation",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
     "UnitTestsJbig2Decoder",
+    "UnitTestsJobScheduler",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
@@ -128,6 +135,7 @@
     "UnitTestsPreflightEngine",
     "UnitTestsPreflightPlugin",
     "UnitTestsPreflightProfileResolver",
+    "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
     "UnitTestsRecovery",
@@ -142,10 +150,12 @@
   ],
   "workflow_branches": {
     ".github/workflows/ci.yml": [
-      "master"
+      "dev",
+      "stable"
     ],
     ".github/workflows/codeql.yml": [
-      "master"
+      "dev",
+      "stable"
     ],
     ".github/workflows/documentation.yml": [
       "dev",

@@ -1,7 +1,7 @@
 {
     "checks": [
         {
-            "id": "white-overprint",
+            "id": "ink-coverage",
             "status": "ok"
         }
     ],
@@ -11,7 +11,7 @@
     ],
     "inspection_complete": true,
     "pass": true,
-    "profile": "Loupe Test - White Overprint",
+    "profile": "Loupe Test - Ink Coverage",
     "schema_version": 3,
     "verdict": {
         "blocking_finding_ids": [

@@ -150,7 +150,7 @@ private:
     RendererEngine m_rendererEngine;
 };
 
-class PDFDrawWidget : public QWidget, public IDrawWidget
+class PDF4QTLIBWIDGETSSHARED_EXPORT PDFDrawWidget : public QWidget, public IDrawWidget
 {
     Q_OBJECT
 

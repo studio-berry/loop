@@ -121,7 +121,7 @@ void ActionListTest::dryRunDoesNotMutateSource()
     QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, options, &candidate, &result));
     QCOMPARE(result.status, QStringLiteral("planned"));
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
-    QVERIFY(candidate.getCatalog() == nullptr);
+    QVERIFY(candidate == pdf::PDFDocument());
 }
 
 void ActionListTest::executesRegisteredOperationOnCandidate()
@@ -145,7 +145,7 @@ void ActionListTest::executesRegisteredOperationOnCandidate()
     QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &result));
     QCOMPARE(result.status, QStringLiteral("succeeded"));
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Succeeded);
-    QVERIFY(candidate.getCatalog() != nullptr);
+    QVERIFY(candidate != pdf::PDFDocument());
     QVERIFY(candidate.getCatalog()->getPage(0)->getMediaBox().width() > 100.0);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
 }
@@ -176,7 +176,7 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     QCOMPARE(result.status, QStringLiteral("cancelled"));
     QCOMPARE(result.steps.front().status, pdf::PDFActionListStepStatus::Cancelled);
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
-    QVERIFY(candidate.getCatalog() == nullptr);
+    QVERIFY(candidate == pdf::PDFDocument());
 }
 
 QTEST_GUILESS_MAIN(ActionListTest)
