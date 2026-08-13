@@ -216,6 +216,13 @@ set(CMAKE_AUTORCC_OPTIONS "--threshold;0;--compress;9")
 
 if (MSVC)
     add_compile_options(/bigobj /W4 /wd5054 /wd4127 /wd4702)
+    if(PDF4QT_ENABLE_SENTRY)
+        # Crashpad minidumps need PDBs to symbolicate. Keep Release optimization.
+        add_compile_options("$<$<CONFIG:Release>:/Zi>")
+        add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL>"
+                         "$<$<CONFIG:Release>:/OPT:REF>"
+                         "$<$<CONFIG:Release>:/OPT:ICF>")
+    endif()
 endif()
 
 if (MINGW)

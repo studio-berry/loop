@@ -57,9 +57,16 @@ $temporaryOutFile = "$OutFile.$([System.IO.Path]::GetRandomFileName()).download"
 try {
     if ($GhRepo -and $AssetId) {
         $ProgressPreference = 'SilentlyContinue'
+        $headers = @{
+            'Accept' = 'application/octet-stream'
+            'X-GitHub-Api-Version' = '2022-11-28'
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) {
+            $headers['Authorization'] = "Bearer $($env:GITHUB_TOKEN)"
+        }
         Invoke-WebRequest `
             -Uri "https://api.github.com/repos/$GhRepo/releases/assets/$AssetId" `
-            -Headers @{ 'Accept' = 'application/octet-stream'; 'X-GitHub-Api-Version' = '2022-11-28' } `
+            -Headers $headers `
             -OutFile $temporaryOutFile
     }
     elseif ($Url) {

@@ -27,6 +27,7 @@ inline. Its layout:
 | `digicertKeylocker` | `WindowsInstall.yml` | KeyLocker toolset URL + SHA-256 (signing only) |
 | `flatpak` | `LinuxFlatpak.yml` | runner label + apt package versions |
 | `deb` | `ci.yml` | runner label + dpkg version |
+| `sentryCli` | `reusable-windows.yml`, `WindowsInstall.yml` | Windows x64 `sentry-cli` for debug-file upload |
 
 ## Refreshing a pin
 

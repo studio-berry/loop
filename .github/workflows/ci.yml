@@ -40,3 +40,5 @@ jobs:
   windows:
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

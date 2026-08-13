@@ -43,5 +43,13 @@
   "deb": {
     "runner": "ubuntu-24.04",
     "dpkgVersion": "1.22.6ubuntu6.6"
+  },
+  "sentryCli": {
+    "upstream": "getsentry/sentry-cli",
+    "upstreamCommit": "24cb9ea315e32942c0d9945192b5a9fafb688f79",
+    "assetId": 486164038,
+    "assetName": "sentry-cli-Windows-x86_64.exe",
+    "sha256": "5c90cb0045cef3d3c36113c2aa21a7dcae11627d2d6e3098b679dea5b6681be3",
+    "version": "3.6.2"
   }
 }

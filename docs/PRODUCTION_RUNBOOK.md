@@ -107,9 +107,11 @@ Debug Files — they are not Issues or traces.
 | `SENTRY_ENVIRONMENT` | `production`, `staging`, etc. |
 | `SENTRY_TRACES_SAMPLE_RATE` | 0.0–1.0 (default 1.0) |
 | `SENTRY_DEBUG` | Verbose sentry-native logs (dev only) |
-| `SENTRY_AUTH_TOKEN` | CI only: upload Windows PDBs |
+| `SENTRY_AUTH_TOKEN` | CI only: upload Windows PDBs (`scripts/ci/upload_sentry_debug_files.ps1`) |
 
 **Privacy:** Desktop sentry-native 0.15.x does not send default PII (`send_default_pii` is NX-only in that pin). Crashes may still include OS-level paths and PDF bytes in minidumps — set `SENTRY_DSN=off` in high-classification environments. CI sets `SENTRY_DSN=off` so test runs do not flood the project.
+
+**Debug files:** Windows CI uploads Loupe PDBs to `berry-studios/loupe-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
 
 **Verify (Windows, Sentry-enabled build):**
 
