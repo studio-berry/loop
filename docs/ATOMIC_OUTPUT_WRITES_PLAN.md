@@ -1,8 +1,8 @@
 # Atomic, collision-safe, overwrite-explicit outputs — Implementation Plan
 
-Status: **in review** (planning doc, M0 — locked before code).  
-Scope: Loupe-pdf 0.1.0-alpha, branch `dev`.  
-Issue: [studio-berry/loupe#10] — "Make generated PDF and attachment outputs atomic, collision-safe, and overwrite-explicit".  
+Status: **in review** (planning doc, M0 — locked before code).
+Scope: Loupe-pdf 0.1.0-alpha, branch `dev`.
+Issue: [studio-berry/loupe#10] — "Make generated PDF and attachment outputs atomic, collision-safe, and overwrite-explicit".
 Phase 1 (MIC-309, PR #46/#47) landed: `PdfTool unite`/`separate` write through `PDFDocumentWriter(safeWrite=true)` and PageMaster got atomic per-output writes plus a batch manifest. This document covers Phase 2 — every remaining generated-file output in the tree.
 
 ## Goal
