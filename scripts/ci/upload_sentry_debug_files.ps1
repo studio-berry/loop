@@ -21,8 +21,12 @@ if (-not (Test-Path -LiteralPath $BuildDir)) {
     throw "upload_sentry_debug_files.ps1: build directory not found: $BuildDir"
 }
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+# scripts/ci/<this-file> -> repository root
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $pinsPath = Join-Path $repoRoot ".github\pins\packaging-tools.json"
+if (-not (Test-Path -LiteralPath $pinsPath)) {
+    throw "upload_sentry_debug_files.ps1: pin file not found: $pinsPath"
+}
 $pins = Get-Content -Raw $pinsPath | ConvertFrom-Json
 $cli = $pins.sentryCli
 if (-not $cli -or -not $cli.assetId -or -not $cli.sha256 -or -not $cli.upstream) {
