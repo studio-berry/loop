@@ -390,7 +390,7 @@ public:
     /// \param drawPaper Draw background paper
     /// \param transparency Page graphics transparency
     void setGroupTransparency(PDFInteger groupIndex, bool drawPaper = true, PDFReal transparency = 1.0);
-    
+
     PDFWidgetAnnotationManager* getAnnotationManager() const;
     const std::vector<PDFSignatureVerificationResult>& getSignatureVerificationResult() const { return m_signatureVerificationResult; }
 

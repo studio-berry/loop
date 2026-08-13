@@ -54,7 +54,7 @@ jobs:
         run: |
           $makeAppxPath = Get-Command MakeAppx.exe | Select-Object -ExpandProperty Definition
           Write-Host "MakeAppx.exe found at: $makeAppxPath"
-          
+
       - name: Setup Variables and Install Keylocker KSP
         shell: pwsh
         if: vars.SIGN_MSI == 'true'
@@ -74,18 +74,18 @@ jobs:
           $certificateBase64 = '${{ secrets.SM_CLIENT_CERT_FILE_B64 }}'
           $certificateBytes = [Convert]::FromBase64String($certificateBase64)
           $certPath = "$env:GITHUB_WORKSPACE\JM_AuthCert.p12"
-          
+
           # Write the certificate to a file
           [System.IO.File]::WriteAllBytes($certPath, $certificateBytes)
-          
+
           # Compute the hash of the certificate file
           $hash = Get-FileHash -Path $certPath -Algorithm SHA256
           Write-Host "Authorization certificate hash: $($hash.Hash)"
-          
+
           # Set GitHub Actions outputs
           echo "KEYPAIR_NAME=gt-standard-keypair" >> $env:GITHUB_OUTPUT
           echo "CERTIFICATE_NAME=gt-certificate" >> $env:GITHUB_OUTPUT
-          
+
           # Set environment variables
           echo "SM_HOST=${{ secrets.SM_HOST }}" >> "$env:GITHUB_ENV"
           echo "SM_API_KEY=${{ secrets.SM_API_KEY }}" >> "$env:GITHUB_ENV"
@@ -93,12 +93,12 @@ jobs:
           echo "SM_CLIENT_CERT_PASSWORD=${{ secrets.SM_CLIENT_CERT_PASSWORD }}" >> "$env:GITHUB_ENV"
 
           $installer = Join-Path $env:RUNNER_TEMP "Keylockertools-windows-x64.msi"
-          
+
           # Add paths to PATH environment variable
           echo "C:\Program Files (x86)\Windows Kits\10\App Certification Kit" >> $env:GITHUB_PATH
           echo "C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools" >> $env:GITHUB_PATH
           echo "C:\Program Files\DigiCert\DigiCert Keylocker Tools" >> $env:GITHUB_PATH
-          
+
           # Download and install the Keylocker tools
           & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
             -Url $pins.digicertKeylocker.url `
@@ -118,14 +118,14 @@ jobs:
           if ($install.ExitCode -ne 0) {
             throw "DigiCert KeyLocker installer failed with exit code $($install.ExitCode)"
           }
-          
-      - name: Certificates Sync   
+
+      - name: Certificates Sync
         shell: pwsh
         if: vars.SIGN_MSI == 'true'
         run: |
           # Sync certificates
           smctl windows certsync
-          
+
       - name: 'VCPKG: Set up VCPKG'
         run: |
           $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\vcpkg-configuration.json" | ConvertFrom-Json
@@ -163,7 +163,7 @@ jobs:
         run: |
           .\vcpkg install tbb openssl lcms zlib openjpeg freetype libjpeg-turbo libpng blend2d brotli bzip2 hwloc vcpkg-cmake vcpkg-cmake-config vcpkg-cmake-get-vars --triplet x64-windows
         working-directory: vcpkg
-        
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
@@ -179,7 +179,7 @@ jobs:
           # aqtinstall 3.3.0 cannot resolve Qt 6.11+ Windows repo layout (miurahr/aqtinstall#1007).
           # Pin PR #1000 merge until aqtinstall >3.3.0 ships with that fix.
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
-          
+
 
       - name: Find VC Redistributable Directories
         shell: pwsh
@@ -187,10 +187,10 @@ jobs:
           # Define the base path to the VC redistributable directories
           $basePath = "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC"
           $arch = "x64"
-          
+
           # Find directories that match the pattern for VC redistributables
           $redistDirs = Get-ChildItem -Path $basePath -Recurse -Directory -Filter "Microsoft.VC*.CRT" | Where-Object { $_.FullName -notmatch "debug_nonredist" -and $_.FullName -match "\\$arch\\" -and $_.FullName -notmatch "onecore" }
-          
+
           # Extract the toolset version from the directory names
           if ($redistDirs) {
               $firstRedistDir = $redistDirs | Select-Object -First 1
@@ -286,19 +286,19 @@ jobs:
           & "${env:GITHUB_WORKSPACE}\pdf4qt\scripts\Inject-WixMissingDlls.ps1" `
             -ProductWxs "${env:GITHUB_WORKSPACE}\pdf4qt\build\WixInstaller\Product.wxs" `
             -InstallBinDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin"
- 
+
       - name: Create MSI Package
         working-directory: pdf4qt\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
           & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=PDF4QT.sln" -d"SolutionName=PDF4QT" -d"SolutionPath=PDF4QT.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=PDF4QT.wixproj" -d"ProjectName=PDF4QT" -d"ProjectPath=PDF4QT.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=PDF4QT" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext $env:wixuiextpath Product.wxs
           & "$wixBin\light.exe" -v -out ${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\PDF4QT.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\PDF4QT.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\PDF4QT.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\PDF4QT.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\PDF4QT.wixproj obj\Release\Product.wixobj
-          
+
       - name: Sign MSI Package
         shell: pwsh
-        if: vars.SIGN_MSI == 'true'     
+        if: vars.SIGN_MSI == 'true'
         run: |
-          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"        
+          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"
           signtool.exe verify /v /pa "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"
 
       - name: Run MSI lifecycle smoke test
@@ -316,7 +316,7 @@ jobs:
       - name: Create MSIX Package
         run: |
           MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix"
-          
+
       - name: Upload ZIP directory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
@@ -331,7 +331,7 @@ jobs:
           path: .\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix
           retention-days: 30
           compression-level: 0
-          
+
       - name: Upload MSI package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:

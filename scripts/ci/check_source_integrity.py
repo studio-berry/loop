@@ -12,6 +12,7 @@ and not merely present in a dirty working tree.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -41,6 +42,14 @@ MAX_TRACKED_BYTES = 5 * 1024 * 1024
 # Tracked files permitted to exceed MAX_TRACKED_BYTES, each with the reason it
 # earns the exception. Keep this empty unless a fixture genuinely needs the size.
 LARGE_FILE_ALLOWLIST: dict[str, str] = {}
+
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+FUZZ_CORPUS_PREFIX = "Fuzz/corpus/"
+FUZZ_MANIFEST_PATH = "Fuzz/corpus/regression/manifest.json"
+FUZZ_MANIFEST_EXEMPT = frozenset({"README.md", "manifest.json"})
+PREFLIGHT_FIXTURES_PREFIX = "loupe-preflight/testdata/fixtures/"
+PREFLIGHT_MANIFEST_PATH = "loupe-preflight/testdata/fixtures/manifest.json"
+WHITESPACE_CHECK = re.compile(r"^([^:]+):(\d+):\s+(.+)$")
 
 
 def normalize(path: str) -> str:
@@ -88,6 +97,109 @@ def tracked_paths(root: Path = ROOT) -> list[str]:
     return [path for path in result.stdout.decode().split("\0") if path]
 
 
+def whitespace_violations(root: Path = ROOT) -> list[tuple[str, str]]:
+    """Return whitespace problems reported by `git diff --check` on tracked text."""
+    result = subprocess.run(
+        ["git", "-C", str(root), "diff", "--check", EMPTY_TREE, "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    violations: list[tuple[str, str]] = []
+    for line in (result.stdout + result.stderr).splitlines():
+        match = WHITESPACE_CHECK.match(line)
+        if not match:
+            continue
+        path, message = match.group(1), match.group(3).strip().rstrip(".")
+        violations.append((path, f"whitespace: {message}"))
+    return violations
+
+
+def _load_json(path: Path) -> object:
+    with path.open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def fuzz_corpus_violations(root: Path = ROOT) -> list[tuple[str, str]]:
+    """Return tracked fuzz seeds that are missing from the regression manifest."""
+    tracked_seeds = [
+        path
+        for path in tracked_paths(root)
+        if normalize(path).startswith(FUZZ_CORPUS_PREFIX)
+        and normalize(path).rsplit("/", 1)[-1] not in FUZZ_MANIFEST_EXEMPT
+    ]
+    if not tracked_seeds:
+        return []
+
+    manifest_path = root / FUZZ_MANIFEST_PATH
+    if not manifest_path.is_file():
+        return [(FUZZ_MANIFEST_PATH, "fuzz corpus manifest is missing")]
+
+    manifest = _load_json(manifest_path)
+    if not isinstance(manifest, dict):
+        return [(FUZZ_MANIFEST_PATH, "fuzz corpus manifest must be a JSON object")]
+
+    entries = manifest.get("entries")
+    if not isinstance(entries, list):
+        return [(FUZZ_MANIFEST_PATH, "fuzz corpus manifest must contain an entries array")]
+
+    allowlisted: set[str] = set()
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            return [(FUZZ_MANIFEST_PATH, f"entries[{index}] must be an object")]
+        file_name = entry.get("file")
+        rationale = entry.get("rationale")
+        if not isinstance(file_name, str) or not file_name:
+            return [(FUZZ_MANIFEST_PATH, f"entries[{index}] is missing a file name")]
+        if not isinstance(rationale, str) or not rationale.strip():
+            return [(FUZZ_MANIFEST_PATH, f"entries[{index}] is missing a rationale")]
+        allowlisted.add(file_name)
+
+    violations: list[tuple[str, str]] = []
+    for path in tracked_seeds:
+        normalized = normalize(path)
+        basename = normalized.rsplit("/", 1)[-1]
+        if basename not in allowlisted:
+            violations.append((normalized, "unmanifested fuzz corpus seed"))
+    return violations
+
+
+def preflight_pdf_violations(root: Path = ROOT) -> list[tuple[str, str]]:
+    """Return tracked preflight fixture PDFs that are not listed in manifest.json."""
+    tracked_pdfs = [
+        path
+        for path in tracked_paths(root)
+        if normalize(path).startswith(PREFLIGHT_FIXTURES_PREFIX)
+        and normalize(path).endswith(".pdf")
+    ]
+    if not tracked_pdfs:
+        return []
+
+    manifest_path = root / PREFLIGHT_MANIFEST_PATH
+    if not manifest_path.is_file():
+        return [(PREFLIGHT_MANIFEST_PATH, "preflight fixture manifest is missing")]
+
+    manifest = _load_json(manifest_path)
+    if not isinstance(manifest, list):
+        return [(PREFLIGHT_MANIFEST_PATH, "preflight fixture manifest must be a JSON array")]
+
+    allowlisted: set[str] = set()
+    for index, entry in enumerate(manifest):
+        if not isinstance(entry, dict):
+            return [(PREFLIGHT_MANIFEST_PATH, f"entry[{index}] must be an object")]
+        pdf_name = entry.get("pdf")
+        if isinstance(pdf_name, str) and pdf_name:
+            allowlisted.add(pdf_name)
+
+    violations: list[tuple[str, str]] = []
+    for path in tracked_pdfs:
+        normalized = normalize(path)
+        basename = normalized.rsplit("/", 1)[-1]
+        if basename not in allowlisted:
+            violations.append((normalized, "unmanifested preflight fixture PDF"))
+    return violations
+
+
 def validate_repository(root: Path = ROOT) -> list[tuple[str, str]]:
     """Return (path, reason) for every tracked file that violates a rule."""
     violations: list[tuple[str, str]] = []
@@ -121,13 +233,16 @@ def validate_repository(root: Path = ROOT) -> list[tuple[str, str]]:
         if has_conflict_markers(text):
             violations.append((path, "unresolved merge-conflict marker"))
 
+    violations.extend(whitespace_violations(root))
+    violations.extend(fuzz_corpus_violations(root))
+    violations.extend(preflight_pdf_violations(root))
     return violations
 
 
 def main() -> int:
     try:
         violations = validate_repository()
-    except (OSError, subprocess.CalledProcessError) as exc:
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         print(f"ERROR: unable to inspect tracked paths: {exc}", file=sys.stderr)
         return 1
     if violations:

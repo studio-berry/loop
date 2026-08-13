@@ -38,6 +38,22 @@ directories.
 `scripts/ci/check_generated_dependency_paths.py` inspects the Git index and
 fails CI if any known generated dependency path is tracked again.
 
+## Tracked source integrity
+
+`scripts/ci/check_source_integrity.py` runs before Qt/vcpkg configure on every
+`ci.yml`, `release-gate.yml`, and `fuzz.yml` invocation. It inspects the Git
+index (`git ls-files`) and fails when tracked content includes:
+
+- build trees (`build/`, `build-*`), `.docker-vcpkg`, or `CMakeCache.txt`
+- root `debug-*.log` files or one-off `scripts/debug-*` scripts
+- unresolved merge-conflict markers
+- tracked files over 5 MB without an explicit allowlist entry
+- whitespace problems reported by `git diff --check` over the full tree
+- fuzz regression seeds or preflight fixture PDFs that are not listed in their
+  corpus manifests
+
+Negative fixtures live in `scripts/ci/test_check_source_integrity.py`.
+
 ## Updating pinned workflow dependencies
 
 Workflow actions, vcpkg, and binary packaging tools are pinned to exact

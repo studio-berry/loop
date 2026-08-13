@@ -124,5 +124,3 @@ void CreateRedactedDocumentDialog::accept()
 }
 
 } // namespace pdfplugin
-
-

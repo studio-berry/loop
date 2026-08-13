@@ -16,7 +16,7 @@
 
       <Feature Id="feature_PDF4QT_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="Advanced PDF viewer/editor with many functions, such as annotation editing, form filling, signature verification, and many optional plugins.">
         <ComponentGroupRef Id="PDF4QT_Editor"/>
-        
+
         <Feature Id="feature_PDF4QT_Editor_Plugins" Absent="allow" AllowAdvertise="no" Title="Plugin Pack" Level="1" Description="${PDF4QT_WIX_PLUGIN_PACK_DESCRIPTION}">
           <ComponentGroupRef Id="PDF4QT_Editor_Plugins"/>
           <ComponentGroupRef Id="PDF4QT_Loupe_Data"/>

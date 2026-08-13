@@ -73,4 +73,3 @@ private:
 }   // namespace pdfviewer
 
 #endif // PDFENCRYPTIONSETTINGSDIALOG_H
-
