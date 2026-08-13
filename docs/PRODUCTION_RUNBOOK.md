@@ -89,8 +89,8 @@ Publish draft only after smoke tests pass.
 
 ### 4.1 CI health
 
-- Watch: https://github.com/mberrys/Loupe-pdf/actions
-- Alert on: `ci.yml` failure on `master`, preflight corpus failure, Windows build break.
+- Watch: https://github.com/studio-berry/loupe/actions
+- Alert on: `release_ok` failure on `stable`, `ci.yml` failure on `dev`, preflight corpus failure, Windows build break.
 
 ### 4.2 Crash telemetry (optional, opt-in)
 
@@ -279,8 +279,8 @@ State these up front; each is a documented V1 behaviour, not a regression.
 ## 11. Pre-launch checklist (maintainer)
 
 - [x] Preflight schema contract aligned on `master` (engine + plugin validator both at schema 3; PR #54 merged)
-- [ ] `ci.yml` green on release SHA (`ci_ok` job passing) — evidence: Actions run on `master`
-- [ ] Branch protection requires the `ci_ok` status check on `master`
+- [ ] `release-gate.yml` green on the release SHA (`release_ok` job passing) — evidence: Actions run on `stable`
+- [ ] Branch protection requires the `release_ok` GitHub Actions status check on `stable`
 - [ ] MIC-301 Windows MSI smoke green via `WindowsInstall.yml` → `scripts/Invoke-MsiSmokeTest.ps1`; run URL attached to MIC-327
 - [ ] MIC-301 Linux AppImage smoke green via `LinuxInstall.yml` → `scripts/smoke-test-appimage.sh`; run URL attached to MIC-301
 - [ ] MIC-326 fuzz workflow green on `master`; run URL attached to the issue

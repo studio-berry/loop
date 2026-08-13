@@ -1,0 +1,186 @@
+name: Reusable Windows CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    env:
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\pdf4qt\vcpkg\overlays\general
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          path: pdf4qt
+
+      - name: Exclude workspace from Windows Defender real-time scanning
+        # CMake's install() does an atomic rename of freshly-built DLLs; Defender's
+        # real-time scanner can hold a brief lock on them right after MSBuild writes
+        # them, which surfaces as CMake's misleading "file INSTALL cannot find X:
+        # File exists" error. Best-effort: some runner policies don't allow this, so
+        # don't fail the build over it.
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${env:GITHUB_WORKSPACE}" -ErrorAction SilentlyContinue
+
+      - name: Verify supply-chain pins
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_supply_chain_pins.py
+
+      - name: Verify Loupe shell contract
+        working-directory: pdf4qt
+        shell: pwsh
+        run: .\scripts\verify-loupe-shell-contract.ps1
+      - name: Verify generated dependency paths are untracked
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_generated_dependency_paths.py
+      - name: Test source integrity checker
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_source_integrity.py
+      - name: Verify branch policy
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          python scripts\ci\check_branch_policy.py
+
+      - name: Prepare vcpkg directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
+      - name: 'VCPKG: Set up VCPKG'
+        shell: pwsh
+        run: |
+          $configPath = Join-Path $env:GITHUB_WORKSPACE "pdf4qt\vcpkg-configuration.json"
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $vcpkgCommit = $config.'default-registry'.baseline
+
+          if ($vcpkgCommit -notmatch '^[0-9a-f]{40}$') {
+              throw "Invalid vcpkg baseline: $vcpkgCommit"
+          }
+
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout --detach $vcpkgCommit
+
+          $actual = (git -C vcpkg rev-parse HEAD).Trim()
+          if ($actual -ne $vcpkgCommit) {
+              throw "vcpkg checkout $actual does not match manifest baseline $vcpkgCommit"
+          }
+
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          .\vcpkg\vcpkg.exe integrate install
+
+      - name: 'VCPKG: Cache vcpkg dependencies'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: |
+            ./vcpkg/downloads
+            ./vcpkg/packages
+            ./vcpkg/installed
+            ./vcpkg/archives
+          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-
+
+      - name: 'VCPKG: Install project dependencies'
+        run: |
+          $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'pdf4qt'
+          .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+        working-directory: vcpkg
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+        with:
+          version: '6.11.1'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          dir: '${{ github.workspace }}/qt/'
+          install-deps: 'true'
+          modules: 'qtspeech qtmultimedia'
+          cache: 'true'
+          cache-key-prefix: ${{ runner.os }}-qt-6111
+          # aqtinstall 3.3.0 cannot resolve Qt 6.11+ Windows repo layout (miurahr/aqtinstall#1007).
+          # Pin PR #1000 merge until aqtinstall >3.3.0 ships with that fix.
+          aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
+
+      - name: Build project
+        working-directory: pdf4qt
+        shell: pwsh
+        run: |
+          # pwsh, unlike bash's default -e, does not stop on a non-zero exit code from
+          # an external command (cmake here) -- it just keeps going to the next line.
+          # That previously let a real "cmake --build" link failure fall through
+          # silently into "cmake --install" failing on a DLL that was never produced,
+          # which read like a Windows install race instead of the build error it was.
+          # Check $LASTEXITCODE after each cmake invocation so a real failure stops
+          # the step immediately, at the command that actually failed.
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:Qt6_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
+
+          cmake --build build --target release_translations --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build (release_translations) failed with exit code $LASTEXITCODE." }
+
+          cmake --build build --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build failed with exit code $LASTEXITCODE." }
+
+          # Kept as defense-in-depth against genuine Windows install-time file-lock
+          # flakiness (antivirus/indexer), now that a real build failure can no longer
+          # hide behind it.
+          $installSucceeded = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+              cmake --install build --config Release
+              if ($LASTEXITCODE -eq 0) {
+                  $installSucceeded = $true
+                  break
+              }
+              Write-Host "cmake --install attempt $attempt failed with exit code $LASTEXITCODE; retrying after a short delay."
+              Start-Sleep -Seconds (5 * $attempt)
+          }
+          if (-not $installSucceeded) {
+              throw "cmake --install failed after 3 attempts."
+          }
+
+      - name: Verify developer product surface
+        working-directory: pdf4qt
+        shell: pwsh
+        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin" -Profile developer
+
+      - name: Run unit tests
+        working-directory: pdf4qt/build
+        shell: pwsh
+        run: |
+          ctest -C Release --output-on-failure
+
+      - name: Run preflight corpus gate
+        working-directory: pdf4qt/build
+        shell: pwsh
+        run: |
+          ctest -C Release -R UnitTestsPreflightCorpus --output-on-failure
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: 'pdf4qt-${{ runner.os }}.zip'
+          path: .\pdf4qt\build\install\usr\bin
+          retention-days: 30
