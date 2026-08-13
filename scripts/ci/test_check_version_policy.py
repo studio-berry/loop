@@ -26,7 +26,7 @@ class VersionPolicyTests(unittest.TestCase):
         self.assertEqual(policy["cmake_format"], "MAJOR.MINOR.PATCH")
         self.assertEqual(policy["tag_prefix"], "v")
         self.assertEqual(policy["current"], "0.1.0")
-        self.assertEqual(policy["prerelease"], "alpha")
+        self.assertEqual(policy["prerelease"], "")
 
     def test_rejects_four_part_cmake_version(self):
         with self.assertRaisesRegex(ValueError, "MAJOR.MINOR.PATCH"):

@@ -10,7 +10,7 @@ plugins). Prefer minimal, local changes that match nearby code.
 |------|-------|
 | **Repository** | [studio-berry/loupe](https://github.com/studio-berry/loupe) |
 | **Upstream** | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
-| **Version** | `0.1.0-alpha` (`PDF4QT_VERSION` `0.1.0` + `PDF4QT_VERSION_PRERELEASE` in root `CMakeLists.txt`; [SemVer 2.0](docs/VERSIONING.md)) |
+| **Version** | `0.1.0` (`PDF4QT_VERSION` in root `CMakeLists.txt`; [SemVer 2.0](docs/VERSIONING.md)) |
 | **Language** | C++20 |
 | **Qt** | **6.11.1 minimum** (CI installs **6.11.1** via `jurplel/install-qt-action`; older versions are blocked because of Qt SVG security fixes) |
 | **Dependencies** | vcpkg manifest: `vcpkg.json`, `vcpkg-configuration.json`, overlays in `vcpkg/overlays/` |
