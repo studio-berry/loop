@@ -44,9 +44,11 @@ MAX_TRACKED_BYTES = 5 * 1024 * 1024
 LARGE_FILE_ALLOWLIST: dict[str, str] = {}
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-FUZZ_CORPUS_PREFIX = "Fuzz/corpus/"
+# Legacy hashed seeds only. Harness corpora under Fuzz/corpus/<harness>/ are
+# owned by scripts/ci/check_fuzz_corpus.py and Fuzz/corpus/manifest.json.
+FUZZ_CORPUS_PREFIX = "Fuzz/corpus/regression/"
 FUZZ_MANIFEST_PATH = "Fuzz/corpus/regression/manifest.json"
-FUZZ_MANIFEST_EXEMPT = frozenset({"README.md", "manifest.json"})
+FUZZ_MANIFEST_EXEMPT = frozenset({".gitkeep", "LICENSE", "README.md", "manifest.json"})
 PREFLIGHT_FIXTURES_PREFIX = "loupe-preflight/testdata/fixtures/"
 PREFLIGHT_MANIFEST_PATH = "loupe-preflight/testdata/fixtures/manifest.json"
 WHITESPACE_CHECK = re.compile(r"^([^:]+):(\d+):\s+(.+)$")

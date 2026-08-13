@@ -131,11 +131,24 @@ class RepositoryScanTests(unittest.TestCase):
     """End-to-end scan over a throwaway repository containing each violation."""
 
     def _git(self, root, *args):
-        subprocess.run(
-            ["git", "-C", str(root), *args],
-            check=True,
-            capture_output=True,
-        )
+        command = ["git", "-C", str(root)]
+        if args and args[0] == "commit":
+            # Throwaway repos have no identity, and some runners enable gpgsign.
+            command.extend(
+                [
+                    "-c",
+                    "user.email=ci@example.invalid",
+                    "-c",
+                    "user.name=ci",
+                    "-c",
+                    "commit.gpgsign=false",
+                ]
+            )
+        command.extend(args)
+        completed = subprocess.run(command, capture_output=True)
+        if completed.returncode != 0:
+            stderr = completed.stderr.decode(errors="replace").strip()
+            raise AssertionError(f"git {' '.join(args)} failed: {stderr}")
 
     def test_reports_each_violation_class(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -237,6 +250,42 @@ class RepositoryScanTests(unittest.TestCase):
                 + "\n"
             )
             (corpus / "listed.bin").write_bytes(b"ok")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_ignores_harness_corpus_outside_regression(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            images = root / "Fuzz" / "corpus" / "fuzz_images"
+            images.mkdir(parents=True)
+            (images / "jbig2-timeout.bin").write_bytes(b"seed")
+            (root / "Fuzz" / "corpus" / "LICENSE").write_text("license\n")
+            regression = root / "Fuzz" / "corpus" / "regression"
+            regression.mkdir(parents=True)
+            (regression / "manifest.json").write_text(
+                json.dumps({"entries": []}) + "\n"
+            )
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_ignores_harness_corpus_outside_regression(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            images = root / "Fuzz" / "corpus" / "fuzz_images"
+            images.mkdir(parents=True)
+            (images / "jbig2-timeout.bin").write_bytes(b"seed")
+            (root / "Fuzz" / "corpus" / "LICENSE").write_text("license\n")
+            regression = root / "Fuzz" / "corpus" / "regression"
+            regression.mkdir(parents=True)
+            (regression / "manifest.json").write_text(
+                json.dumps({"entries": []}) + "\n"
+            )
 
             self._git(root, "init", "-q")
             self._git(root, "add", "-A")
