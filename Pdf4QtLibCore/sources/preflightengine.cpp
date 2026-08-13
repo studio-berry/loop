@@ -3289,7 +3289,7 @@ void appendThinPartIncomplete(const PreflightCheckConfig& check,
         { QStringLiteral("thresholdPt"), check.minEffectiveStrokeWidthPt },
         { QStringLiteral("reason"), QStringLiteral("measurement-near-threshold") }
     };
-    pushPreflightFinding(finding, check.severity, errors, warnings);
+    pushPreflightFinding(finding, QStringLiteral("info"), errors, warnings);
 }
 
 void runThinPartsCheck(PDFDocumentSession* session,
@@ -3321,7 +3321,8 @@ void runThinPartsCheck(PDFDocumentSession* session,
     PDFCMSPointer cms = cmsManager.getCurrentCMS();
     PDFMeshQualitySettings meshQuality;
 
-    const bool inspectStrokes = thinPartClassEnabled(check, QStringLiteral("thin-stroke"));
+    const bool inspectStrokes = thinPartClassEnabled(check, QStringLiteral("thin-stroke"))
+        || thinPartClassEnabled(check, QStringLiteral("thin-annotation"));
     const bool inspectFills = thinPartClassEnabled(check, QStringLiteral("thin-fill"))
         || thinPartClassEnabled(check, QStringLiteral("thin-clipped-part"))
         || thinPartClassEnabled(check, QStringLiteral("thin-annotation"))
