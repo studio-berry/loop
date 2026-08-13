@@ -55,7 +55,14 @@ QString resolveDsn()
     const QByteArray fromEnvironment = qgetenv("SENTRY_DSN");
     if (!fromEnvironment.isEmpty())
     {
-        return QString::fromUtf8(fromEnvironment);
+        const QString value = QString::fromUtf8(fromEnvironment).trimmed();
+        if (value.compare(QLatin1String("off"), Qt::CaseInsensitive) == 0 ||
+            value == QLatin1String("0") ||
+            value.compare(QLatin1String("disabled"), Qt::CaseInsensitive) == 0)
+        {
+            return QString();
+        }
+        return value;
     }
 
 #ifdef PDF4QT_SENTRY_DSN
@@ -96,7 +103,7 @@ double tracesSampleRate()
         }
     }
 
-    return 0.2;
+    return 1.0;
 }
 
 void configureCrashpadHandler(sentry_options_t* options)
@@ -164,10 +171,7 @@ PDFSentrySession::PDFSentrySession(const QString& applicationId)
     // changing how minidumps are captured.
 
     const double tracesSampleRateValue = tracesSampleRate();
-    if (tracesSampleRateValue > 0.0)
-    {
-        sentry_options_set_traces_sample_rate(options, tracesSampleRateValue);
-    }
+    sentry_options_set_traces_sample_rate(options, tracesSampleRateValue);
 
     if (sentry_init(options) == 0)
     {
@@ -206,6 +210,35 @@ void PDFSentrySession::captureVerificationEvent()
         "custom",
         "It works!"));
     sentry_flush(2000);
+#endif
+}
+
+void PDFSentrySession::flush(int timeoutMilliseconds)
+{
+#ifdef PDF4QT_ENABLE_SENTRY_IMPL
+    if (isGloballyActive())
+    {
+        sentry_flush(timeoutMilliseconds);
+    }
+#else
+    Q_UNUSED(timeoutMilliseconds);
+#endif
+}
+
+void PDFSentrySession::traceStartup(const QString& applicationId)
+{
+#ifdef PDF4QT_ENABLE_SENTRY_IMPL
+    if (!isGloballyActive() || applicationId.isEmpty())
+    {
+        return;
+    }
+
+    {
+        const PDFSentryTransaction startup(applicationId + QStringLiteral(".start"), "ui.bootstrap");
+    }
+    flush(1000);
+#else
+    Q_UNUSED(applicationId);
 #endif
 }
 

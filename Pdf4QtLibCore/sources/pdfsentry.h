@@ -30,7 +30,8 @@
 namespace pdf
 {
 
-/// RAII wrapper for sentry-native. No-op when PDF4QT_ENABLE_SENTRY is off or SENTRY_DSN is unset.
+/// RAII wrapper for sentry-native. No-op when PDF4QT_ENABLE_SENTRY is off or
+/// SENTRY_DSN is `off`/`0`/`disabled`. Windows builds compile in the Loupe DSN.
 class PDF4QTLIBCORESHARED_EXPORT PDFSentrySession
 {
 public:
@@ -44,12 +45,14 @@ public:
 
     static bool isGloballyActive();
     static void captureVerificationEvent();
+    static void traceStartup(const QString& applicationId);
+    static void flush(int timeoutMilliseconds = 2000);
 
 private:
     bool m_active = false;
 };
 
-/// One performance transaction for a PdfTool command (or similar unit of work).
+/// One performance transaction (PdfTool command, GUI session, or startup).
 class PDF4QTLIBCORESHARED_EXPORT PDFSentryTransaction
 {
 public:
