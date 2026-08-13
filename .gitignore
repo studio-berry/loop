@@ -29,6 +29,9 @@ build/*
 # produced by build-fuzz-docker. Generated output, never committed.
 /build-fuzz-docker/
 
+# Local git worktrees checked out beside the main tree.
+/.worktrees/
+
 # One-off investigation artifacts. Debug logs and per-PR debug scripts are
 # local scratch; scripts/ci/ holds the checks that are meant to be shared.
 /debug-*.log
