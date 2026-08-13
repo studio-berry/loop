@@ -30,6 +30,8 @@
 
 #include "pdfartifactidentity.h"
 #include "pdfdocumentcontext.h"
+#include "pdfoperationhistory.h"
+#include "pdfoperationhistorystore.h"
 
 #include <QtTest>
 
@@ -37,6 +39,22 @@
 
 static_assert(!std::is_same_v<pdf::PDFArtifactIdentity, pdf::PDFDocumentIdentity>,
               "Persisted artifact identity and in-session document identity must stay distinct types");
+
+static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
+                              pdf::PDFArtifactIdentity>,
+              "Operation-history executions must reference persisted PDFArtifactIdentity inputs");
+
+static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryEvent>().output),
+                              std::optional<pdf::PDFArtifactIdentity>>,
+              "Operation-history events must reference persisted PDFArtifactIdentity outputs");
+
+static_assert(!std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
+                              pdf::PDFDocumentIdentity>,
+              "Operation-history inputs must not collapse to PDFDocumentIdentity");
+
+static_assert(!std::is_same_v<std::decay_t<decltype(std::declval<pdf::PDFOperationHistoryEvent>().output.value())>,
+                              pdf::PDFDocumentIdentity>,
+              "Operation-history outputs must not collapse to PDFDocumentIdentity");
 
 class IdentitySeparationTest : public QObject
 {
