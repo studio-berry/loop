@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
-  <Identity Name="mberrys.Loupe-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${PDF4QT_VERSION}" />
+  <Identity Name="mberrys.Loupe-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${PDF4QT_WINDOWS_VERSION}" />
   <Properties>
     <DisplayName>Loupe</DisplayName>
     <PublisherDisplayName>Michael Berry</PublisherDisplayName>

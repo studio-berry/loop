@@ -33,6 +33,9 @@ jobs:
       - name: Verify branch policy
         working-directory: pdf4qt
         run: python3 scripts/ci/check_branch_policy.py
+      - name: Verify version policy
+        working-directory: pdf4qt
+        run: python3 scripts/ci/check_version_policy.py
 
       - name: Prepare vcpkg directories
         run: |

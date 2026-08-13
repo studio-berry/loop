@@ -21,6 +21,7 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
+VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
 ADR_DIR = ROOT / "docs" / "adr"
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -69,6 +70,31 @@ def parse_branch_policy() -> dict[str, Any]:
         "topic_source": policy["topic_branch_source"],
         "protected": sorted(policy["protected_branches"]),
         "topic_patterns": sorted(policy["topic_branch_patterns"]),
+    }
+
+
+def parse_version_policy() -> dict[str, Any]:
+    policy = json.loads(read(VERSION_POLICY_PATH))
+    required = {
+        "scheme",
+        "current",
+        "tag_prefix",
+        "cmake_format",
+    }
+    missing = sorted(required - policy.keys())
+    if missing:
+        raise ValueError(f"version policy is missing: {', '.join(missing)}")
+    if policy["scheme"] != "semver":
+        raise ValueError("version policy scheme must be semver")
+    prerelease = policy.get("prerelease") or ""
+    if not isinstance(prerelease, str):
+        raise ValueError("version policy prerelease must be a string")
+    return {
+        "scheme": policy["scheme"],
+        "current": policy["current"],
+        "prerelease": prerelease or None,
+        "tag_prefix": policy["tag_prefix"],
+        "cmake_format": policy["cmake_format"],
     }
 
 
@@ -243,6 +269,7 @@ def build_catalog() -> dict[str, Any]:
         "format_version": 1,
         "generated_by": "scripts/generate-architecture-catalogs.py",
         "branch_policy": parse_branch_policy(),
+        "version_policy": parse_version_policy(),
         "preflight_checks": parse_preflight_checks(),
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
@@ -250,6 +277,7 @@ def build_catalog() -> dict[str, Any]:
         "workflow_branches": parse_workflow_branches(),
         "sources": [
             "docs/branch-policy.json",
+            "docs/version-policy.json",
             "Pdf4QtLibCore/sources/preflightengine.cpp",
             "Pdf4QtLibCore/sources/preflightengine.h",
             "Pdf4QtLibCore/sources/pdfactionlist.cpp",

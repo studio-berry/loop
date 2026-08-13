@@ -22,10 +22,19 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-set(PDF4QT_VERSION 1.6.0.0)
+set(PDF4QT_VERSION 0.1.0)
+set(PDF4QT_VERSION_PRERELEASE alpha)
 message(STATUS "Build type - CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 project(PDF4QT VERSION ${PDF4QT_VERSION} LANGUAGES CXX)
+
+# Appx Identity.Version requires four components. MSI accepts SemVer three-part.
+set(PDF4QT_WINDOWS_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.0")
+if(PDF4QT_VERSION_PRERELEASE)
+    set(PDF4QT_PROJECT_VERSION "${PDF4QT_VERSION}-${PDF4QT_VERSION_PRERELEASE}")
+else()
+    set(PDF4QT_PROJECT_VERSION "${PDF4QT_VERSION}")
+endif()
 
 message("VCPKG Enabled: " ${VCPKG_TOOLCHAIN})
 
@@ -34,7 +43,7 @@ option(PDF4QT_INSTALL_QT_DEPENDENCIES "Install Qt dependencies" ${VCPKG_TOOLCHAI
 option(PDF4QT_INSTALL_INCLUDE "Install include headers" ON)
 option(PDF4QT_FLATPAK_BUILD "Special flag for Flatpak" OFF)
 
-add_compile_definitions(PDF4QT_PROJECT_VERSION="${PDF4QT_VERSION}")
+add_compile_definitions(PDF4QT_PROJECT_VERSION="${PDF4QT_PROJECT_VERSION}")
 add_compile_definitions(QT_NO_EMIT)
 
 if(PDF4QT_FLATPAK_BUILD)

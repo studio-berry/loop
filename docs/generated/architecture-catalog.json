@@ -91,6 +91,7 @@
   },
   "sources": [
     "docs/branch-policy.json",
+    "docs/version-policy.json",
     "Pdf4QtLibCore/sources/preflightengine.cpp",
     "Pdf4QtLibCore/sources/preflightengine.h",
     "Pdf4QtLibCore/sources/pdfactionlist.cpp",
@@ -148,6 +149,13 @@
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager"
   ],
+  "version_policy": {
+    "cmake_format": "MAJOR.MINOR.PATCH",
+    "current": "0.1.0",
+    "prerelease": "alpha",
+    "scheme": "semver",
+    "tag_prefix": "v"
+  },
   "workflow_branches": {
     ".github/workflows/ci.yml": [
       "dev",

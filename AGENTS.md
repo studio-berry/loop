@@ -10,7 +10,7 @@ plugins). Prefer minimal, local changes that match nearby code.
 |------|-------|
 | **Repository** | [studio-berry/loupe](https://github.com/studio-berry/loupe) |
 | **Upstream** | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) |
-| **Version** | `1.6.0.0` (`PDF4QT_VERSION` in root `CMakeLists.txt`) |
+| **Version** | `0.1.0-alpha` (`PDF4QT_VERSION` `0.1.0` + `PDF4QT_VERSION_PRERELEASE` in root `CMakeLists.txt`; [SemVer 2.0](docs/VERSIONING.md)) |
 | **Language** | C++20 |
 | **Qt** | **6.11.1 minimum** (CI installs **6.11.1** via `jurplel/install-qt-action`; older versions are blocked because of Qt SVG security fixes) |
 | **Dependencies** | vcpkg manifest: `vcpkg.json`, `vcpkg-configuration.json`, overlays in `vcpkg/overlays/` |
@@ -81,6 +81,14 @@ integration branch. Short-lived topic branches start from `dev` and merge back
 to `dev` before release promotion. `master` is not an active Loupe branch.
 The machine-readable policy is [`docs/branch-policy.json`](docs/branch-policy.json)
 and the human-facing explanation is [`docs/BRANCH_POLICY.md`](docs/BRANCH_POLICY.md).
+
+## Versioning
+
+Loupe product versions follow [Semantic Versioning 2.0.0](https://semver.org/).
+`PDF4QT_VERSION` is `MAJOR.MINOR.PATCH`. Git tags are `vMAJOR.MINOR.PATCH`
+with optional pre-release. Appx uses derived `PDF4QT_WINDOWS_VERSION`
+(`MAJOR.MINOR.PATCH.0`). Policy: [`docs/version-policy.json`](docs/version-policy.json)
+and [`docs/VERSIONING.md`](docs/VERSIONING.md).
 
 When this file conflicts with current code on `dev` or an explicitly
 re-verified issue status block, follow the hierarchy in

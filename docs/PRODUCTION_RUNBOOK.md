@@ -63,7 +63,7 @@ Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** d
 
 ```bash
 # Manual dispatch: CreateReleaseDraft.yml
-# Attaches latest AppImage + MSI artifacts to draft release tag v1.6.0.0
+# Attaches latest AppImage + MSI artifacts to draft release tag v0.1.0-alpha
 ```
 
 Publish draft only after smoke tests pass.

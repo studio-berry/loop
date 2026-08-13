@@ -11,7 +11,8 @@ The standalone `Documentation truth` workflow runs for the policy branches
 `dev` and `stable` pull requests and pushes. It checks every ADR's verification
 header and fails when
 [`docs/generated/architecture-catalog.json`](generated/architecture-catalog.json)
-is stale.
+is stale. Product versioning is SemVer 2.0 (`0.1.0-alpha`); CI also runs
+`scripts/ci/check_version_policy.py`.
 
 The `release_ok` job in `.github/workflows/release-gate.yml` is the single
 GitHub Actions status required by the protected `stable` branch. It always

@@ -26,6 +26,12 @@ The reviewed machine-readable policy is
 [`branch-policy.json`](branch-policy.json). The current factual branch and
 workflow audit is tracked in GitHub issue [#232](https://github.com/studio-berry/loupe/issues/232).
 
+## Versioning
+
+Loupe uses [Semantic Versioning 2.0](https://semver.org/). The current product
+version is **0.1.0-alpha**. Policy: [`version-policy.json`](version-policy.json)
+and [`VERSIONING.md`](VERSIONING.md). Former 0.0.3–0.0.6 gates are 0.1.1–0.1.4.
+
 ## Upstream tracking policy
 
 ### Policy: on-demand GitHub Sync fork

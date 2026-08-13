@@ -2,7 +2,7 @@
 
 Loupe exposes standard conversion as the Core operation `standards-convert`.
 PdfTool's `repair` command and PageMaster's headless export job call this same
-operation; an Editor adapter can be added after the 0.0.3 GUI gate without
+operation; an Editor adapter can be added after the 0.1.1 GUI gate without
 creating a second conversion implementation.
 
 Supported targets are explicit: `PDF/X-1a:2001`, `PDF/X-3:2002`, `PDF/X-4`, and
