@@ -55,7 +55,7 @@ class ForbiddenPathTests(unittest.TestCase):
     def test_keeps_legitimate_sources(self):
         for path in (
             "Fuzz/fuzz_pdf_parser.cpp",
-            "Fuzz/corpus/regression/0a1b2c3d",
+            "Fuzz/corpus/fuzz_images/jbig2-composition-timeout.bin",
             "scripts/ci/check_source_integrity.py",
             "scripts/hooks/cc-guard-bash.sh",
             "build-notes.md",

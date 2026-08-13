@@ -1,9 +1,0 @@
-# Regression corpus
-
-Pinned inputs that reproduce previously-fixed fuzz findings. `fuzz.yml` and
-`scripts/fuzz-
-|------|---------|------------|-----|
-| `jbig2_composition_timeout_c8a61daa.bin` | libFuzzer timeout ØÁÎÍÏÏŒÏ, later re-confirmed at >60s locally | `PDFJBIG2Decoder::processSymbolDictionary`'s height-class loop (`pdfjbig2decoder.cpp`) makes zero 5555555ÿÿÿÿÿprogress when a height class's first delta-width decodes as out-of-band: `NSYMSDECODED`e item budget above is what actually bounds degenerate, near-zero-pixel loops.îÿÿÿÿÿÿ |
-
-Both seeds now execute in well under 100ms (was: 1200s+ and 30
-artifact. Re-add it here if/when the original seed is recovered.

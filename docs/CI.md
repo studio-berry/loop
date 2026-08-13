@@ -21,6 +21,10 @@ would create multiple checks for the same gate. The release-gate workflow
 runs for every pull request targeting `stable` and for `merge_group` events;
 it has no path filters. `dev` does not require this check for merging.
 
+Hosted fuzzing (`.github/workflows/fuzz.yml`) validates the manifested
+regression corpus under `Fuzz/corpus/` and runs each harness's owned seeds
+with `-runs=0` before time-bounded mutation.
+
 When a Windows test run fails, GitHub Actions uploads its CTest logs as the
 `windows-test-logs` artifact. Store any intentional, long-lived diagnostic
 artifact in the related issue or release attachment; do not add local build or
