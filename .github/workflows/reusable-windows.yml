@@ -18,6 +18,7 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
       QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
 
     steps:
       - name: Checkout repository

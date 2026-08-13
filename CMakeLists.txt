@@ -56,7 +56,14 @@ else()
     set(_PDF4QT_ENABLE_SENTRY_DEFAULT OFF)
 endif()
 option(PDF4QT_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_PDF4QT_ENABLE_SENTRY_DEFAULT})
-set(PDF4QT_SENTRY_DSN "" CACHE STRING "Optional compile-time Sentry DSN (prefer SENTRY_DSN env at runtime)")
+# Public ingest DSN for berry-studios/loupe-pdf (EU). Runtime SENTRY_DSN overrides;
+# SENTRY_DSN=off disables telemetry. CI jobs set SENTRY_DSN=off so builds do not
+# flood the project. Confidential workflows should also set SENTRY_DSN=off.
+set(_PDF4QT_SENTRY_DSN_DEFAULT "https://44f65b76ce476befdfb321ca361921fe@o4511731410337792.ingest.de.sentry.io/4511866328449104")
+set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)")
+if(PDF4QT_SENTRY_DSN STREQUAL "")
+    set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)" FORCE)
+endif()
 
 if(PDF4QT_ENABLE_SENTRY)
     find_package(Threads REQUIRED)

@@ -13,6 +13,7 @@ jobs:
     runs-on: windows-2022
     env:
       QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
 
     steps:
       - name: Checkout repository
