@@ -160,6 +160,9 @@
     ".github/workflows/documentation.yml": [
       "dev",
       "stable"
+    ],
+    ".github/workflows/release-gate.yml": [
+      "stable"
     ]
   }
 }
