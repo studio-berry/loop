@@ -11,13 +11,13 @@ The declarations below are intentionally machine-readable by that check:
 - Canonical version: `PDF4QT_VERSION` in root `CMakeLists.txt`
 - Format: MAJOR.MINOR.PATCH
 - Current version: 0.1.0
-- Pre-release: alpha
+- Pre-release: none
 - Git tags: `vMAJOR.MINOR.PATCH` with optional pre-release / build metadata
 - Windows Appx version: MAJOR.MINOR.PATCH.0 (`PDF4QT_WINDOWS_VERSION`)
 - Release workflow: `.github/workflows/CreateReleaseDraft.yml`
 
-The current line is **0.1.0-alpha**. Display strings, PdfTool's envelope
-`version`, and git tags use that full pre-release identifier. CMake's
+The current line is **0.1.0**. Display strings, PdfTool's envelope
+`version`, and git tags use that identifier. CMake's
 `project(VERSION)` stays `0.1.0` because it only accepts numeric components.
 
 ## Milestone remap
@@ -26,7 +26,7 @@ Earlier 0.0.x planning numbers map onto the 0.1 line as follows:
 
 | Former | Current |
 |--------|---------|
-| 0.1.0-alpha (this line) | current pre-release |
+| 0.1.0 (this line) | current release |
 | 0.0.3 | 0.1.1 |
 | 0.0.4 | 0.1.2 |
 | 0.0.5 | 0.1.3 |

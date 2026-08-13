@@ -48,6 +48,9 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <functional>
+#include <utility>
+#include <vector>
 
 class PageMasterExportTest : public QObject
 {
@@ -79,8 +82,11 @@ private slots:
     void manifest_concurrentBatchesHaveIndependentState();
     void processKill_afterAtomicOutputLeavesNoPartialFile();
     void resume_skipsAlreadyWrittenOutputs();
-    void resume_mismatchedManifestStartsFreshBatch();
+    void resume_mismatchedManifestRejectsResume();
+    void resume_configDriftAfterInterruptRejectsResume();
     void preflight_gate_blocksFailedOutput();
+    void preflight_sidecarWriteFailure_failsClosed();
+    void preflight_finalSidecarWriteFailure_keepsPriorOutput();
     void bleed_confirmationGate_blocksBeforeAssembly();
     void bleed_manifestReportsEligibility();
 };
@@ -1177,7 +1183,7 @@ void PageMasterExportTest::resume_skipsAlreadyWrittenOutputs()
     QCOMPARE(resumedWidth, 400.0);
 }
 
-void PageMasterExportTest::resume_mismatchedManifestStartsFreshBatch()
+void PageMasterExportTest::resume_mismatchedManifestRejectsResume()
 {
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
@@ -1211,13 +1217,110 @@ void PageMasterExportTest::resume_mismatchedManifestStartsFreshBatch()
     job.manifestPath = manifestPath;
 
     const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
-    QVERIFY(result.success);
-    QVERIFY(QFile::exists(outputPath));
-    QCOMPARE(result.manifest.value(QStringLiteral("batch_id")).toString().isEmpty(), false);
-    QVERIFY(result.manifest.value(QStringLiteral("batch_id")).toString() != QStringLiteral("stale-batch"));
-    QCOMPARE(result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject()
-                 .value(QStringLiteral("path")).toString(),
-             outputPath);
+    QVERIFY(!result.success);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("schema"), Qt::CaseInsensitive) ||
+            result.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive));
+    QVERIFY(!QFile::exists(outputPath));
+    QFile leftover(manifestPath);
+    QVERIFY(leftover.open(QIODevice::ReadOnly));
+    const QJsonDocument leftoverManifest = QJsonDocument::fromJson(leftover.readAll());
+    QCOMPARE(leftoverManifest.object().value(QStringLiteral("batch_id")).toString(), QStringLiteral("stale-batch"));
+}
+
+void PageMasterExportTest::resume_configDriftAfterInterruptRejectsResume()
+{
+    auto fillTwoOutputJob = [](QTemporaryDir& tempDir, pdf::PDFPageMasterExportJob* job, QString* outputA, QString* outputB)
+    {
+        pdf::PDFDocument sourceA = buildFilledPage(QRectF(0, 0, 200, 200));
+        pdf::PDFDocument sourceB = buildFilledPage(QRectF(0, 0, 240, 240));
+        *outputA = tempDir.filePath(QStringLiteral("drift-a.pdf"));
+        *outputB = tempDir.filePath(QStringLiteral("drift-b.pdf"));
+        job->assembledDocuments.push_back({ documentPage(0, sourceA) });
+        job->assembledDocuments.push_back({ documentPage(1, sourceB) });
+        job->documents.emplace(0, std::move(sourceA));
+        job->documents.emplace(1, std::move(sourceB));
+        job->outputFileNames.push_back(*outputA);
+        job->outputFileNames.push_back(*outputB);
+        job->overwriteFiles = true;
+    };
+
+    const auto mutations = std::vector<std::pair<QString, std::function<void(pdf::PDFPageMasterExportJob&)>>>{
+        { QStringLiteral("page-geometry"), [](pdf::PDFPageMasterExportJob& job) {
+              job.hasPageGeometrySettings = true;
+              job.pageGeometrySettings.applyBleedBox = true;
+              job.pageGeometrySettings.marginsMM = QMarginsF(2.0, 2.0, 2.0, 2.0);
+          } },
+        { QStringLiteral("bleed-fixup"), [](pdf::PDFPageMasterExportJob& job) {
+              job.hasBleedFixupSettings = true;
+              job.bleedConfirmationGranted = true;
+              job.bleedFixupSettings.dpi = 72;
+          } },
+        { QStringLiteral("flatten"), [](pdf::PDFPageMasterExportJob& job) {
+              job.hasTransparencyFlattenSettings = true;
+              job.transparencyFlattenSettings.rasterizationDpi = 72;
+          } },
+        { QStringLiteral("optimize"), [](pdf::PDFPageMasterExportJob& job) {
+              job.optimizeImages = true;
+              job.imageOptimizationSettings = pdf::PDFImageOptimizer::Settings::createDefault();
+          } },
+        { QStringLiteral("outline"), [](pdf::PDFPageMasterExportJob& job) {
+              job.outlineMode = pdf::PDFDocumentManipulator::OutlineMode::Join;
+          } },
+        { QStringLiteral("action-list"), [](pdf::PDFPageMasterExportJob& job) {
+              job.hasActionList = true;
+              job.actionList.id = QStringLiteral("drift-list");
+              job.actionList.name = QStringLiteral("drift");
+          } }
+    };
+
+    for (const auto& mutation : mutations)
+    {
+        QTemporaryDir tempDir;
+        QVERIFY2(tempDir.isValid(), qPrintable(mutation.first));
+
+        QString outputA;
+        QString outputB;
+        pdf::PDFPageMasterExportJob initialJob;
+        fillTwoOutputJob(tempDir, &initialJob, &outputA, &outputB);
+
+        std::atomic_bool cancel{false};
+        initialJob.cancelFlag = &cancel;
+        pdf::PDFProgress progress(nullptr);
+        initialJob.progress = &progress;
+        int completedOutputs = 0;
+        QObject::connect(&progress, &pdf::PDFProgress::progressStep, &progress, [&](int) {
+            ++completedOutputs;
+            if (completedOutputs >= 1)
+            {
+                cancel.store(true, std::memory_order_release);
+            }
+        }, Qt::DirectConnection);
+
+        const pdf::PDFPageMasterExportResult interrupted = pdf::PDFPageMasterExport::run(std::move(initialJob));
+        QVERIFY2(interrupted.cancelled, qPrintable(mutation.first));
+        QVERIFY(QFile::exists(outputA));
+        QVERIFY(!QFile::exists(outputB));
+        QFile original(outputA);
+        QVERIFY(original.open(QIODevice::ReadOnly));
+        const QByteArray originalBytes = original.readAll();
+        original.close();
+
+        pdf::PDFPageMasterExportJob resumeJob;
+        fillTwoOutputJob(tempDir, &resumeJob, &outputA, &outputB);
+        mutation.second(resumeJob);
+        resumeJob.resume = true;
+        resumeJob.overwriteFiles = true;
+        resumeJob.manifestPath = interrupted.manifestPath;
+
+        const pdf::PDFPageMasterExportResult drifted = pdf::PDFPageMasterExport::run(std::move(resumeJob));
+        QVERIFY2(!drifted.success, qPrintable(mutation.first + QLatin1Char(' ') + drifted.errorMessage));
+        QVERIFY2(drifted.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive),
+                 qPrintable(mutation.first + QLatin1Char(' ') + drifted.errorMessage));
+        QVERIFY(!QFile::exists(outputB));
+        QFile kept(outputA);
+        QVERIFY(kept.open(QIODevice::ReadOnly));
+        QCOMPARE(kept.readAll(), originalBytes);
+    }
 }
 
 void PageMasterExportTest::preflight_gate_blocksFailedOutput()
@@ -1245,6 +1348,94 @@ void PageMasterExportTest::preflight_gate_blocksFailedOutput()
     QVERIFY(!result.success);
     QVERIFY(!QFile::exists(outputPath));
     QVERIFY(QFile::exists(outputPath + QStringLiteral(".preflight.json")));
+}
+
+void PageMasterExportTest::preflight_sidecarWriteFailure_failsClosed()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    QVERIFY(QFile::exists(fixturePath));
+    QVERIFY(QFile::exists(profilePath));
+
+    const QString outputPath = tempDir.filePath(QStringLiteral("sidecar-blocked.pdf"));
+    const QString sidecarPath = outputPath + QStringLiteral(".preflight.json");
+    pdf::PDFDocument source = readDocument(fixturePath);
+
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.hasPreflightGate = true;
+    job.preflightProfilePath = profilePath;
+    job.forcePreflight = true;
+
+    pdf::PDFProgress progress(nullptr);
+    QObject::connect(&progress, &pdf::PDFProgress::progressStarted, &progress, [&](pdf::ProgressStartupInfo) {
+        QVERIFY(QDir().mkpath(sidecarPath));
+    }, Qt::DirectConnection);
+    job.progress = &progress;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("preflight report"), Qt::CaseInsensitive));
+    QVERIFY(!QFile::exists(outputPath));
+    QCOMPARE(result.manifest.value(QStringLiteral("outputs")).toArray().first().toObject()
+                 .value(QStringLiteral("status")).toString(),
+             QStringLiteral("failed"));
+}
+
+void PageMasterExportTest::preflight_finalSidecarWriteFailure_keepsPriorOutput()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    QVERIFY(QFile::exists(fixturePath));
+    QVERIFY(QFile::exists(profilePath));
+
+    const QString outputPath = tempDir.filePath(QStringLiteral("final-sidecar.pdf"));
+    pdf::PDFDocument priorSource = buildFilledPage(QRectF(0, 0, 180, 180));
+    pdf::PDFPageMasterExportJob priorJob;
+    priorJob.assembledDocuments.push_back({ documentPage(0, priorSource) });
+    priorJob.documents.emplace(0, std::move(priorSource));
+    priorJob.outputFileNames.push_back(outputPath);
+    priorJob.overwriteFiles = true;
+    const pdf::PDFPageMasterExportResult priorResult = pdf::PDFPageMasterExport::run(std::move(priorJob));
+    QVERIFY(priorResult.success);
+    QFile priorFile(outputPath);
+    QVERIFY(priorFile.open(QIODevice::ReadOnly));
+    const QByteArray priorBytes = priorFile.readAll();
+    priorFile.close();
+
+    pdf::PDFDocument source = readDocument(fixturePath);
+    pdf::PDFPageMasterExportJob job;
+    job.assembledDocuments.push_back({ documentPage(0, source) });
+    job.documents.emplace(0, std::move(source));
+    job.outputFileNames.push_back(outputPath);
+    job.overwriteFiles = true;
+    job.hasPreflightGate = true;
+    job.preflightProfilePath = profilePath;
+    job.forcePreflight = true;
+    job.revalidatePreflightAfterFixups = true;
+
+    const QString finalSidecarPath = outputPath + QStringLiteral(".preflight-final.json");
+    pdf::PDFProgress progress(nullptr);
+    QObject::connect(&progress, &pdf::PDFProgress::progressStarted, &progress, [&](pdf::ProgressStartupInfo) {
+        QVERIFY(QDir().mkpath(finalSidecarPath));
+    }, Qt::DirectConnection);
+    job.progress = &progress;
+
+    const pdf::PDFPageMasterExportResult result = pdf::PDFPageMasterExport::run(std::move(job));
+    QVERIFY(!result.success);
+    QVERIFY(result.errorMessage.contains(QStringLiteral("final preflight"), Qt::CaseInsensitive));
+    QFile kept(outputPath);
+    QVERIFY(kept.open(QIODevice::ReadOnly));
+    QCOMPARE(kept.readAll(), priorBytes);
 }
 
 void PageMasterExportTest::bleed_confirmationGate_blocksBeforeAssembly()

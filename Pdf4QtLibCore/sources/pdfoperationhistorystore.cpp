@@ -71,6 +71,36 @@ bool exec(QSqlDatabase& database, const QString& sql, QString* errorMessage)
     return false;
 }
 
+bool tableHasColumn(QSqlDatabase& database, const QString& table, const QString& column)
+{
+    QSqlQuery query(database);
+    if (!query.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table)))
+    {
+        return false;
+    }
+    while (query.next())
+    {
+        if (query.value(1).toString().compare(column, Qt::CaseInsensitive) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool addColumnIfMissing(QSqlDatabase& database,
+                        const QString& table,
+                        const QString& column,
+                        const QString& sql,
+                        QString* errorMessage)
+{
+    if (tableHasColumn(database, table, column))
+    {
+        return true;
+    }
+    return exec(database, sql, errorMessage);
+}
+
 QString dateTimeString(const QDateTime& value)
 {
     return value.toUTC().toString(Qt::ISODateWithMs);
@@ -192,19 +222,24 @@ PDFOperationResult PDFOperationHistoryStore::open(QString* errorMessage)
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS artifacts (sha256 TEXT PRIMARY KEY, size_bytes INTEGER NOT NULL, media_type TEXT NOT NULL, logical_name TEXT, storage_token TEXT, created_utc TEXT NOT NULL, is_original_input INTEGER NOT NULL DEFAULT 0, artifact_evicted INTEGER NOT NULL DEFAULT 0)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS executions (execution_id TEXT PRIMARY KEY, parent_execution_id TEXT, operation_id TEXT NOT NULL, operation_version INTEGER NOT NULL, source_sha256 TEXT NOT NULL, source_revision INTEGER NOT NULL, parameters_json TEXT NOT NULL, started_utc TEXT NOT NULL, FOREIGN KEY(source_sha256) REFERENCES artifacts(sha256), FOREIGN KEY(parent_execution_id) REFERENCES executions(execution_id))"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS history_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL UNIQUE, execution_id TEXT NOT NULL, event_kind TEXT NOT NULL DEFAULT 'operation', status TEXT NOT NULL, operator_identity TEXT NOT NULL DEFAULT '', document_revision_digest TEXT NOT NULL DEFAULT '', effective_profile_digest TEXT NOT NULL DEFAULT '', result_json TEXT NOT NULL, output_sha256 TEXT, finding_ids_json TEXT NOT NULL, report_sha256 TEXT, diff_sha256 TEXT, approval_json TEXT NOT NULL, previous_event_hash TEXT NOT NULL, event_hash TEXT NOT NULL, created_utc TEXT NOT NULL, FOREIGN KEY(execution_id) REFERENCES executions(execution_id), FOREIGN KEY(output_sha256) REFERENCES artifacts(sha256))"), &error) ||
-        (schemaVersion == 1 && (!exec(m_impl->database, QStringLiteral("ALTER TABLE artifacts ADD COLUMN is_original_input INTEGER NOT NULL DEFAULT 0"), &error) ||
-                                !exec(m_impl->database, QStringLiteral("ALTER TABLE artifacts ADD COLUMN artifact_evicted INTEGER NOT NULL DEFAULT 0"), &error))) ||
-        (schemaVersion > 0 && schemaVersion < 3 &&
-         (!exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN event_kind TEXT NOT NULL DEFAULT 'operation'"), &error) ||
-          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN operator_identity TEXT NOT NULL DEFAULT ''"), &error) ||
-          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN document_revision_digest TEXT NOT NULL DEFAULT ''"), &error) ||
-          !exec(m_impl->database, QStringLiteral("ALTER TABLE history_events ADD COLUMN effective_profile_digest TEXT NOT NULL DEFAULT ''"), &error))) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("artifacts"), QStringLiteral("is_original_input"),
+                            QStringLiteral("ALTER TABLE artifacts ADD COLUMN is_original_input INTEGER NOT NULL DEFAULT 0"), &error) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("artifacts"), QStringLiteral("artifact_evicted"),
+                            QStringLiteral("ALTER TABLE artifacts ADD COLUMN artifact_evicted INTEGER NOT NULL DEFAULT 0"), &error) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("history_events"), QStringLiteral("event_kind"),
+                            QStringLiteral("ALTER TABLE history_events ADD COLUMN event_kind TEXT NOT NULL DEFAULT 'operation'"), &error) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("history_events"), QStringLiteral("operator_identity"),
+                            QStringLiteral("ALTER TABLE history_events ADD COLUMN operator_identity TEXT NOT NULL DEFAULT ''"), &error) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("history_events"), QStringLiteral("document_revision_digest"),
+                            QStringLiteral("ALTER TABLE history_events ADD COLUMN document_revision_digest TEXT NOT NULL DEFAULT ''"), &error) ||
+        !addColumnIfMissing(m_impl->database, QStringLiteral("history_events"), QStringLiteral("effective_profile_digest"),
+                            QStringLiteral("ALTER TABLE history_events ADD COLUMN effective_profile_digest TEXT NOT NULL DEFAULT ''"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE TABLE IF NOT EXISTS rollback_points (rollback_id TEXT PRIMARY KEY, audit_event_id TEXT, document_revision_digest TEXT NOT NULL, created_utc TEXT NOT NULL, artifact_path TEXT NOT NULL, artifact_bytes INTEGER NOT NULL, operation_id TEXT NOT NULL, plan_summary TEXT NOT NULL, is_original_input INTEGER NOT NULL DEFAULT 0, approved_output INTEGER NOT NULL DEFAULT 0, artifact_evicted INTEGER NOT NULL DEFAULT 0, evicted_utc TEXT, FOREIGN KEY(audit_event_id) REFERENCES history_events(entry_id), FOREIGN KEY(document_revision_digest) REFERENCES artifacts(sha256))"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_history_execution ON history_events(execution_id, sequence)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_execution_source ON executions(source_sha256, source_revision)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_execution_operation ON executions(operation_id, started_utc)"), &error) ||
         !exec(m_impl->database, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_rollback_digest ON rollback_points(document_revision_digest)"), &error) ||
-        !exec(m_impl->database, QStringLiteral("INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', '2')"), &error) ||
+        !exec(m_impl->database, QStringLiteral("INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', '%1')").arg(CurrentSchemaVersion), &error) ||
         !exec(m_impl->database, QStringLiteral("COMMIT"), &error))
     {
         exec(m_impl->database, QStringLiteral("ROLLBACK"), nullptr);
