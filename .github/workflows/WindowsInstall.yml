@@ -221,6 +221,18 @@ jobs:
           MSVC_TOOLSET_VERSION: ${{ env.MSVC_TOOLSET_VERSION }}
           MSVC_REDISTRIBUTABLES_PATH: ${{ env.MSVC_REDISTRIBUTABLES_PATH }}
 
+      - name: Upload Sentry debug files
+        if: ${{ secrets.SENTRY_AUTH_TOKEN != '' }}
+        working-directory: pdf4qt
+        shell: pwsh
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: berry-studios
+          SENTRY_PROJECT: loupe-pdf
+          SENTRY_URL: https://de.sentry.io
+        run: |
+          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\pdf4qt\build"
+
       - name: Validate staged install tree
         shell: pwsh
         run: |

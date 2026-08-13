@@ -26,3 +26,5 @@ jobs:
 
   windows:
     uses: ./.github/workflows/reusable-windows.yml
+    secrets:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
