@@ -310,4 +310,3 @@ QSize StatisticsGraphWidget::minimumSizeHint() const
 }
 
 }   // namespace pdfplugin
-

@@ -49,11 +49,11 @@ jobs:
       - name: Add Flatpak repository
         run: |
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          
+
       - name: Install KDE SDK and Runtime
         run: |
           sudo flatpak install -y flathub org.kde.Sdk/x86_64/6.9 org.kde.Platform/x86_64/6.9
-          
+
       - name: List Flatpak Installed Packages and Version
         run: |
           flatpak --version
@@ -77,7 +77,7 @@ jobs:
 
       - name: Build Flatpak
         run: |
-          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.mberrys.Loupe-pdf.json 
+          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.mberrys.Loupe-pdf.json
 
       - name: Build Flatpak Package
         run: |

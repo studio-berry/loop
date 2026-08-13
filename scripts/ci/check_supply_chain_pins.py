@@ -109,7 +109,7 @@ def validate_packaging_pins_data(path: Path, pins: Any) -> list[PinViolation]:
     if pins.get("schemaVersion") != 1:
         errors.append(PinViolation(path, "schemaVersion must be 1"))
 
-    for tool in ("appimagetool", "appimageRuntime", "linuxdeployqt"):
+    for tool in ("appimagetool", "appimageRuntime", "linuxdeployqt", "sentryCli"):
         _validate_asset_pin(path, tool, pins.get(tool), errors)
 
     wix = pins.get("wix")

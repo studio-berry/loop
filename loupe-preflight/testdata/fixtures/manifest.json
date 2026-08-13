@@ -334,5 +334,122 @@
     "expect": { "pass": true, "check_ids": ["transparency-risk"] },
     "source": "generated",
     "notes": "A risky transparency group exists only in an annotation appearance stream."
+  },
+  {
+    "id": "malformed-not-pdf",
+    "pdf": "malformed-not-pdf.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "pending": true,
+    "notes": "Non-PDF input for malformed-input operator acceptance; manifest allowlist only."
+  },
+  {
+    "id": "overprint-cmyk-mode0-off",
+    "pdf": "overprint-cmyk-mode0-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode0-on",
+    "pdf": "overprint-cmyk-mode0-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-off",
+    "pdf": "overprint-cmyk-mode1-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-on",
+    "pdf": "overprint-cmyk-mode1-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-off",
+    "pdf": "overprint-group-stroke-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-on",
+    "pdf": "overprint-group-stroke-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-off",
+    "pdf": "overprint-multiply-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-on",
+    "pdf": "overprint-multiply-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-off",
+    "pdf": "overprint-separation-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-on",
+    "pdf": "overprint-separation-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-off",
+    "pdf": "overprint-white-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-on",
+    "pdf": "overprint-white-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
   }
 ]

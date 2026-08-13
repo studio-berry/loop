@@ -128,7 +128,7 @@ There are **no** tenant roles, admin consoles, or hosted user accounts.
 
 | Service | Required? | Opt-in mechanism |
 |---------|-----------|-------------------|
-| **Sentry** crash telemetry | No | `SENTRY_DSN` env; Windows default build flag `PDF4QT_ENABLE_SENTRY` |
+| **Sentry** crash telemetry | Yes (Windows) | Compile-time DSN; `SENTRY_DSN=off` to disable; `PDF4QT_ENABLE_SENTRY` |
 | **OCR Python sidecar** | No | `LOUPE_OCR_SIDECAR` / bundled `LoupeOcrService` |
 | **GitHub / Sponsor links** | No | `QDesktopServices::openUrl` from Help menu only |
 
@@ -230,7 +230,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 | ID | Impact | Affected users | Reproduction | Root cause | Fix / mitigation | Verification | Owner |
 |----|--------|----------------|--------------|------------|------------------|--------------|-------|
 | **R-007** | Resume batch after manifest failure | PageMaster power users | Disk full during manifest write | Was: PDF written, manifest stale | **Fixed:** remove a PDF this run created when manifest persist fails; keep it (and report the inconsistency) when the write had replaced a pre-existing file, since removing it would destroy user data | **Tested (2026-08-04).** Both branches covered by `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` in `UnitTests/tst_pagemasterexporttest.cpp` — MIC-335 | Core |
-| **R-008** | Sentry crash minidumps can contain PDF content and file paths | Opt-in telemetry users | Crash with `SENTRY_DSN` set | Crashpad captures thread stacks and referenced heap memory out-of-process. A crash in the parser or content processor therefore has document bytes live in the dump. `before_send` cannot filter this — it applies to events, not the minidump upload | **Disclosure, not enforcement.** `SENTRY_DSN` is unset by default and must stay unset when handling confidential documents. Do not restate "no PDF content by design" — nothing implements it | `PdfTool sentry-verify`; confirm `SENTRY_DSN` unset in shipped configs | Release |
+| **R-008** | Sentry crash minidumps can contain PDF content and file paths | Telemetry users | Crash with Sentry enabled | Crashpad captures thread stacks and referenced heap memory out-of-process. A crash in the parser or content processor therefore has document bytes live in the dump. `before_send` cannot filter this — it applies to events, not the minidump upload | **Disclosure, not enforcement.** Windows builds compile in the Loupe DSN. Set `SENTRY_DSN=off` when handling confidential documents. Do not restate "no PDF content by design" — nothing implements it | `PdfTool sentry-verify`; confirm `SENTRY_DSN=off` in confidential workflows | Release |
 | **R-009** | Theme/scheme requires restart | All GUI users | Change color scheme in settings | Settings read only at startup | Document in release notes | Manual | UX |
 | **R-010** | OCR sidecar supply chain | OCR users | Point `LOUPE_OCR_SIDECAR` at unknown binary | External Python/PyInstaller bundle | Ship only signed/bundled sidecar; document env var | OCR README | Release |
 | ~~R-011~~ | ~~README links upstream releases~~ | — | — | Fork branding drift | **Resolved.** Every install link in `README.md` points at `mberrys/Loupe-pdf/releases`; the only upstream link left is the PDF4QT attribution in the License section, which is correct and stays | README review 2026-08-04 | Docs |

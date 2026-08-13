@@ -1,7 +1,0 @@
-# Regression corpus
-
-Pinned inputs that reproduce previously-fixed fuzz findings. `fuzz.yml` and
-`scripts/fuzz-
-|------|---------|------------|-----|
-| `jbig2_composition_timeout_c8a61daa.bin` | libFuzzer timeout ØÁÎÍÏÏŒÏ, later re-SymbolDictionary`'s height-class loop (`pdfjbig2decoder.cpp`) makes zero 5555555ÿÿÿÿÿprogress when a height cas: 1200s+ and 30
-artifact. Re-add it here if/whee if/when the originas recovered.

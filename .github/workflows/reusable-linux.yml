@@ -15,6 +15,7 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
       QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
 
     steps:
       - name: Checkout repository
@@ -29,15 +30,6 @@ jobs:
       - name: Verify Loupe shell contract
         working-directory: pdf4qt
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loupe-shell-contract.ps1
-      - name: Verify generated dependency paths are untracked
-        working-directory: pdf4qt
-        run: python3 scripts/ci/check_generated_dependency_paths.py
-      - name: Test source integrity checker
-        working-directory: pdf4qt
-        run: python3 scripts/ci/test_check_source_integrity.py
-      - name: Verify tracked source integrity
-        working-directory: pdf4qt
-        run: python3 scripts/ci/check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         run: python3 scripts/ci/check_branch_policy.py

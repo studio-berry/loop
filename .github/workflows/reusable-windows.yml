@@ -2,6 +2,9 @@ name: Reusable Windows CI
 
 on:
   workflow_call:
+    secrets:
+      SENTRY_AUTH_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -15,6 +18,7 @@ jobs:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
       QT_QPA_PLATFORM: offscreen
+      SENTRY_DSN: off
 
     steps:
       - name: Checkout repository
@@ -42,21 +46,6 @@ jobs:
         working-directory: pdf4qt
         shell: pwsh
         run: .\scripts\verify-loupe-shell-contract.ps1
-      - name: Verify generated dependency paths are untracked
-        working-directory: pdf4qt
-        shell: pwsh
-        run: |
-          python scripts\ci\check_generated_dependency_paths.py
-      - name: Test source integrity checker
-        working-directory: pdf4qt
-        shell: pwsh
-        run: |
-          python scripts\ci\test_check_source_integrity.py
-      - name: Verify tracked source integrity
-        working-directory: pdf4qt
-        shell: pwsh
-        run: |
-          python scripts\ci\check_source_integrity.py
       - name: Verify branch policy
         working-directory: pdf4qt
         shell: pwsh
@@ -189,3 +178,18 @@ jobs:
           name: 'pdf4qt-${{ runner.os }}.zip'
           path: .\pdf4qt\build\install\usr\bin
           retention-days: 30
+
+      - name: Upload Sentry debug files
+        # Do not use `if: secrets.*` — GitHub rejects the secrets context in
+        # conditionals and the workflow file fails to parse. The script no-ops
+        # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
+        working-directory: pdf4qt
+        shell: pwsh
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_ORG: berry-studios
+          SENTRY_PROJECT: loupe-pdf
+          SENTRY_URL: https://de.sentry.io
+        run: |
+          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\pdf4qt\build"

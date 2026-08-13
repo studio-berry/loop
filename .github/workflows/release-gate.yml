@@ -28,9 +28,11 @@ jobs:
         run: python3 scripts/ci/check_generated_dependency_paths.py
 
   linux:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
 
   documentation:

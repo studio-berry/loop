@@ -44,6 +44,8 @@ int main(int argc, char *argv[])
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT LaunchPad"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("launchpad"));
+    pdf::PDFSentrySession::traceStartup(QStringLiteral("launchpad"));
+    const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("launchpad.session"), "ui.session");
 
     QCommandLineParser parser;
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();

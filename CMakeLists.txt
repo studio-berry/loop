@@ -65,7 +65,14 @@ else()
     set(_PDF4QT_ENABLE_SENTRY_DEFAULT OFF)
 endif()
 option(PDF4QT_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_PDF4QT_ENABLE_SENTRY_DEFAULT})
-set(PDF4QT_SENTRY_DSN "" CACHE STRING "Optional compile-time Sentry DSN (prefer SENTRY_DSN env at runtime)")
+# Public ingest DSN for berry-studios/loupe-pdf (EU). Runtime SENTRY_DSN overrides;
+# SENTRY_DSN=off disables telemetry. CI jobs set SENTRY_DSN=off so builds do not
+# flood the project. Confidential workflows should also set SENTRY_DSN=off.
+set(_PDF4QT_SENTRY_DSN_DEFAULT "https://44f65b76ce476befdfb321ca361921fe@o4511731410337792.ingest.de.sentry.io/4511866328449104")
+set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)")
+if(PDF4QT_SENTRY_DSN STREQUAL "")
+    set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)" FORCE)
+endif()
 
 if(PDF4QT_ENABLE_SENTRY)
     find_package(Threads REQUIRED)
@@ -218,6 +225,13 @@ set(CMAKE_AUTORCC_OPTIONS "--threshold;0;--compress;9")
 
 if (MSVC)
     add_compile_options(/bigobj /W4 /wd5054 /wd4127 /wd4702)
+    if(PDF4QT_ENABLE_SENTRY)
+        # Crashpad minidumps need PDBs to symbolicate. Keep Release optimization.
+        add_compile_options("$<$<CONFIG:Release>:/Zi>")
+        add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL>"
+                         "$<$<CONFIG:Release>:/OPT:REF>"
+                         "$<$<CONFIG:Release>:/OPT:ICF>")
+    endif()
 endif()
 
 if (MINGW)
@@ -584,4 +598,3 @@ endif()
 #endmacro()
 #
 #dump_variables()
-

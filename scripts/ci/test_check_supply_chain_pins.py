@@ -57,6 +57,13 @@ class SupplyChainPolicyTests(unittest.TestCase):
         violations = validate_packaging_pins_data(Path("packaging-tools.json"), pins)
         self.assertTrue(any("must be set together" in violation.message for violation in violations))
 
+    def test_rejects_missing_sentry_cli_pin(self):
+        pins = json.loads((ROOT / ".github/pins/packaging-tools.json").read_text(encoding="utf-8"))
+        pins = copy.deepcopy(pins)
+        del pins["sentryCli"]
+        violations = validate_packaging_pins_data(Path("packaging-tools.json"), pins)
+        self.assertTrue(any("sentryCli" in violation.message for violation in violations))
+
     def test_policy_constants_are_strict(self):
         self.assertTrue(FULL_SHA.fullmatch("a" * 40))
         self.assertIsNone(FULL_SHA.fullmatch("a" * 39))

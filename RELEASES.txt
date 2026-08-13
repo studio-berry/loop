@@ -62,16 +62,16 @@ V: 1.6.0.0 14.6.2026
  - Issue #136: smooth scrolling of document with mouse middle wheel - flywheel
  - Issue #92: Add image compression to PDF DocPage Organizer
  - Issue #18: Performance optimization - OutputPreview Renderer
- 
+
 V: 1.5.3.1 22.1.2026
  - Windows installer fix
 
 V: 1.5.3.0 18.1.2026 - removed
- - Issue #341: Embed AppImage update information 
- - Issue #339: (zh_TW)Traditional Chinese Translation File 
- - Issue #333: ijg-libjpeg obsoleted in vcpkg 
+ - Issue #341: Embed AppImage update information
+ - Issue #339: (zh_TW)Traditional Chinese Translation File
+ - Issue #333: ijg-libjpeg obsoleted in vcpkg
  - Issue #329: How to remove "External links"
- - Issue #269: Nested Bookmarks loses children when moving. 
+ - Issue #269: Nested Bookmarks loses children when moving.
  - Issue #179: Signature: Adding .jpg or .png image crashes PDF4QT
  - Issue #146: Incorrect fonts displayed on Linux
  - Issue #144: Text notes - drag and drop annotations
@@ -79,19 +79,19 @@ V: 1.5.3.0 18.1.2026 - removed
 V: 1.5.2.0 20.9.2025
  - Issue #313: Remove history UX improvement
  - Issue #310: Docpage organiser uses PDF title rather than filename
- - Issue #306: Unable to delete the recent files history. 
+ - Issue #306: Unable to delete the recent files history.
  - Issue #303: Add Dockerfile for Simplified PDF4QT Setup with Qt 6.9.1 and All Dependencies
  - Issue #301: Russian Language file
- - Issue #296: Redaction annotation support in PdfTool 
+ - Issue #296: Redaction annotation support in PdfTool
  - Issue #295: Request: Make page layout choice persist between files
  - Issue #279: qt_add_translations uses options only in qt 6.9
- - Issue #284: Scaling dimensions [Enhancements, Features] 
+ - Issue #284: Scaling dimensions [Enhancements, Features]
  - Issue #281: install API headers for reuse by other applications ?
  - Issue #251: Let user lock direction of lines/polylines when pressing keybinding (e.g. shift)
 
 V: 1.5.1.0 27.4.2025
  - Issue #271: Change of the license to MIT
- - Issue #257: Force light mode (or dark mode) 
+ - Issue #257: Force light mode (or dark mode)
  - Issue #255: PDF4QT Page Master invert selection does not work
  - Issue #254: Unit Settings default window size too small
  - Issue #248: update version and year in Help > About page
@@ -101,15 +101,15 @@ V: 1.5.0.0 9.3.2025
  - Issue #244: PageMaster: united one document after remove pages leads to lose the outline
  - Issue #236: Highligting - Allow color selection and intensity [Enhancement]
  - Issue #229: Can't add picture to PDF
- - Issue #228: [feature] reverse pages order 
+ - Issue #228: [feature] reverse pages order
  - Issue #222: UnitTests fails several tests
- - Issue #207: Zoom to Cursor (Zoom Anchoring) 
+ - Issue #207: Zoom to Cursor (Zoom Anchoring)
  - Issue #206: Name of the executable / command
  - Issue #205: Editor cannot create white, whitesmoke or transparent annotations
  - Issue #202: Certain raster content not rendered
- - Issue #200: Icons under dark theme on Arch/KDE is broken 
+ - Issue #200: Icons under dark theme on Arch/KDE is broken
  - Issue #185: Latest git fails to build in linux
- - Issue #165: Insert > Inline Text latency issues on Flatpak and Appimage packages 
+ - Issue #165: Insert > Inline Text latency issues on Flatpak and Appimage packages
  - Issue #161: Can it be possible to trust a certificate like in acrobat?
 
 SPONSORSHIP:
@@ -126,14 +126,14 @@ V: 1.4.0.0 4.7.2024
  - Issue #173: errors loading file Echoplex.pdf
  - Issue #172: access keys are missing from most menu items/action text strings
  - Issue #168: When opening a PDF file or merging some PDF files, stamp will disappear.
- - Issue #166: Adding images to PDF? 
+ - Issue #166: Adding images to PDF?
  - Issue #164: Taskbar icon not shown in linux mint.
  - Issue #163: Unable to render probably valid PDF
- - Issue #161: Can it be possible to trust a certificate like in acrobat? 
- - Issue #159: Offer 4 AppImage one for each App [enhancement] 
+ - Issue #161: Can it be possible to trust a certificate like in acrobat?
+ - Issue #159: Offer 4 AppImage one for each App [enhancement]
  - Issue #123: Alternative software rendering backend (Blend2D)
  - Issue #42: Is REAL pdf text editing planned ?
- - Issue #26: Add pictures in PDF files 
+ - Issue #26: Add pictures in PDF files
 
 V: 1.3.7 10.1.2024
  - Issue #142: Cannot reach the top
@@ -142,18 +142,18 @@ V: 1.3.7 10.1.2024
  - Issue #139: Changing page layout reset the current page
  - Issue #137: Redaction - Cannot convert '#000000' to color value
  - Issue #134: Add search bar for actions
- - Issue #133: Rectangle selector when choosing the page of the PDF 
+ - Issue #133: Rectangle selector when choosing the page of the PDF
  - Issue #129: Cannot compile with lcms 2.16
- - Issue #128: Create list of markup annotations 
+ - Issue #128: Create list of markup annotations
  - Issue #126: Remove <QtCore> include from main headers
- - Issue #119: Improve search bar 2 (the revenge) 
+ - Issue #119: Improve search bar 2 (the revenge)
  - Issue #118: Adding CMAKE options for minimal builds
  - Issue #116: Improve search bar (rembember searched text, allow scroll and zoom)
  - Issue #115: Redesign of sidebar widget, new icons
  - Issue #113: Color | Custom (green/black) partially works in scanned PDF (1.3.6)
  - Issue #112: smooth scrolling
  - Issue #104: pdf_3d branch and license
- - Issue #102: Does this software use Qt's PDF tool? Or based on Poppler or muPDF? 
+ - Issue #102: Does this software use Qt's PDF tool? Or based on Poppler or muPDF?
  - Issue #99: Icons for dark mode
  - Issue #55: System certificates store - not found
  - Issue #54: Bookmarks for pages
@@ -188,7 +188,7 @@ V: 1.3.4 3.8.2023
  - Issue #69: Dashed Line not rendered as expected
  - Issue #68: Add alternative VCPKG file with dependency on Qt
  - Issue #59: Fix character font encoding - do not use (1, 0) Mac Roman table if (3, 1) unicode table is present (according to spec)
- - Issue #50: Some types of pdf don't open as expected and some doesnt open. 
+ - Issue #50: Some types of pdf don't open as expected and some doesnt open.
 
 V: 1.3.3 22.4.2023
  - Issue #49: Document read error
@@ -211,7 +211,7 @@ V: 1.3.0 25.12.2022
  - Issue #24: Text selection and table selection algorithm improvement
  - Issue #25: Move Qt 6.4, change build system to CMake and VCPKG
  - Issue #28: Add multiple PDF files at once for merging
- - Issue #33: ToUnicode for simple fonts not used 
+ - Issue #33: ToUnicode for simple fonts not used
  - Issue #32: I need a new stable release.
 
 V: 1.2.1 30.6.2022

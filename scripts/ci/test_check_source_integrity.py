@@ -4,6 +4,7 @@
 Conflict markers are assembled from fragments on purpose: a literal marker in
 this file would make check_source_integrity.py flag the test itself.
 """
+import json
 import pathlib
 import subprocess
 import sys
@@ -15,9 +16,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from scripts.ci.check_source_integrity import (  # noqa: E402
     MAX_TRACKED_BYTES,
     forbidden_path_reason,
+    fuzz_corpus_violations,
     has_conflict_markers,
     oversized_reason,
+    preflight_pdf_violations,
     validate_repository,
+    whitespace_violations,
 )
 
 OURS = "<" * 7
@@ -55,7 +59,7 @@ class ForbiddenPathTests(unittest.TestCase):
     def test_keeps_legitimate_sources(self):
         for path in (
             "Fuzz/fuzz_pdf_parser.cpp",
-            "Fuzz/corpus/regression/0a1b2c3d",
+            "Fuzz/corpus/fuzz_images/jbig2-composition-timeout.bin",
             "scripts/ci/check_source_integrity.py",
             "scripts/hooks/cc-guard-bash.sh",
             "build-notes.md",
@@ -127,11 +131,24 @@ class RepositoryScanTests(unittest.TestCase):
     """End-to-end scan over a throwaway repository containing each violation."""
 
     def _git(self, root, *args):
-        subprocess.run(
-            ["git", "-C", str(root), *args],
-            check=True,
-            capture_output=True,
-        )
+        command = ["git", "-C", str(root)]
+        if args and args[0] == "commit":
+            # Throwaway repos have no identity, and some runners enable gpgsign.
+            command.extend(
+                [
+                    "-c",
+                    "user.email=ci@example.invalid",
+                    "-c",
+                    "user.name=ci",
+                    "-c",
+                    "commit.gpgsign=false",
+                ]
+            )
+        command.extend(args)
+        completed = subprocess.run(command, capture_output=True)
+        if completed.returncode != 0:
+            stderr = completed.stderr.decode(errors="replace").strip()
+            raise AssertionError(f"git {' '.join(args)} failed: {stderr}")
 
     def test_reports_each_violation_class(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -173,6 +190,139 @@ class RepositoryScanTests(unittest.TestCase):
             self._git(root, "add", "-A")
 
             self.assertEqual(validate_repository(root), [])
+
+    def test_reports_trailing_whitespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            self._git(root, "init", "-q")
+            (root / "trailing.txt").write_text("line with spaces   \n")
+            self._git(root, "add", "-A")
+            self._git(root, "commit", "-qm", "add trailing whitespace")
+
+            violations = dict(whitespace_violations(root))
+            self.assertIn("trailing.txt", violations)
+            self.assertIn("whitespace:", violations["trailing.txt"])
+
+    def test_reports_unmanifested_fuzz_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            corpus = root / "Fuzz" / "corpus" / "regression"
+            corpus.mkdir(parents=True)
+            (corpus / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "entries": [
+                            {
+                                "file": "listed.bin",
+                                "rationale": "listed regression seed",
+                            }
+                        ]
+                    }
+                )
+                + "\n"
+            )
+            (corpus / "listed.bin").write_bytes(b"ok")
+            (corpus / "orphan.bin").write_bytes(b"bad")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            violations = dict(fuzz_corpus_violations(root))
+            self.assertIn("Fuzz/corpus/regression/orphan.bin", violations)
+            self.assertNotIn("Fuzz/corpus/regression/listed.bin", violations)
+
+    def test_accepts_manifested_fuzz_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            corpus = root / "Fuzz" / "corpus" / "regression"
+            corpus.mkdir(parents=True)
+            (corpus / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "entries": [
+                            {
+                                "file": "listed.bin",
+                                "rationale": "listed regression seed",
+                            }
+                        ]
+                    }
+                )
+                + "\n"
+            )
+            (corpus / "listed.bin").write_bytes(b"ok")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_ignores_harness_corpus_outside_regression(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            images = root / "Fuzz" / "corpus" / "fuzz_images"
+            images.mkdir(parents=True)
+            (images / "jbig2-timeout.bin").write_bytes(b"seed")
+            (root / "Fuzz" / "corpus" / "LICENSE").write_text("license\n")
+            regression = root / "Fuzz" / "corpus" / "regression"
+            regression.mkdir(parents=True)
+            (regression / "manifest.json").write_text(
+                json.dumps({"entries": []}) + "\n"
+            )
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_ignores_harness_corpus_outside_regression(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            images = root / "Fuzz" / "corpus" / "fuzz_images"
+            images.mkdir(parents=True)
+            (images / "jbig2-timeout.bin").write_bytes(b"seed")
+            (root / "Fuzz" / "corpus" / "LICENSE").write_text("license\n")
+            regression = root / "Fuzz" / "corpus" / "regression"
+            regression.mkdir(parents=True)
+            (regression / "manifest.json").write_text(
+                json.dumps({"entries": []}) + "\n"
+            )
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            self.assertEqual(fuzz_corpus_violations(root), [])
+
+    def test_reports_unmanifested_preflight_pdf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            fixtures = root / "loupe-preflight" / "testdata" / "fixtures"
+            fixtures.mkdir(parents=True)
+            (fixtures / "manifest.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "listed",
+                            "pdf": "listed.pdf",
+                            "profile": "profiles/loupe-default.json",
+                            "expect": {"pass": True, "check_ids": []},
+                        }
+                    ]
+                )
+                + "\n"
+            )
+            (fixtures / "listed.pdf").write_bytes(b"%PDF-1.4")
+            (fixtures / "orphan.pdf").write_bytes(b"%PDF-1.4")
+
+            self._git(root, "init", "-q")
+            self._git(root, "add", "-A")
+
+            violations = dict(preflight_pdf_violations(root))
+            self.assertIn(
+                "loupe-preflight/testdata/fixtures/orphan.pdf", violations
+            )
+            self.assertNotIn(
+                "loupe-preflight/testdata/fixtures/listed.pdf", violations
+            )
 
 
 if __name__ == "__main__":

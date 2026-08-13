@@ -106,10 +106,7 @@ cmake --build /work/build-fuzz-docker \
     -j"$(nproc)"
 
 if [[ "${MODE}" == "verify" ]]; then
-    REGRESSION=/work/Fuzz/corpus/regression
-    echo "Running fuzz_images on regression corpus..."
-    /work/build-fuzz-docker/usr/bin/fuzz_images \
-        -max_total_time=30 -print_final_stats=1 \
-        "${REGRESSION}"
+    python3 /work/scripts/ci/check_fuzz_corpus.py
+    bash /work/scripts/fuzz-run-targets.sh /work/build-fuzz-docker 30
     echo "Regression corpus OK"
 fi

@@ -92,22 +92,34 @@ Publish draft only after smoke tests pass.
 - Watch: https://github.com/studio-berry/loupe/actions
 - Alert on: `release_ok` failure on `stable`, `ci.yml` failure on `dev`, preflight corpus failure, Windows build break.
 
-### 4.2 Crash telemetry (optional, opt-in)
+### 4.2 Crash telemetry and tracing
+
+Windows builds enable sentry-native by default (`PDF4QT_ENABLE_SENTRY`) and
+compile in the `berry-studios/loupe-pdf` EU DSN. Opening Editor (or running
+`PdfTool sentry-verify`) sends a startup trace to
+[Explore → Traces](https://de.sentry.io/explore/traces/?project=4511866328449104).
+Crashes appear under Issues. PDB uploads from CI go to Project Settings →
+Debug Files — they are not Issues or traces.
 
 | Variable | Purpose |
 |----------|---------|
-| `SENTRY_DSN` | Enable crash reporting (runtime) |
+| `SENTRY_DSN` | Override the compile-time DSN, or `off` / `0` / `disabled` to turn telemetry off |
 | `SENTRY_ENVIRONMENT` | `production`, `staging`, etc. |
-| `SENTRY_TRACES_SAMPLE_RATE` | 0.0–1.0 (default 0.2) |
+| `SENTRY_TRACES_SAMPLE_RATE` | 0.0–1.0 (default 1.0) |
 | `SENTRY_DEBUG` | Verbose sentry-native logs (dev only) |
+| `SENTRY_AUTH_TOKEN` | CI only: upload Windows PDBs (`scripts/ci/upload_sentry_debug_files.ps1`) |
 
-**Privacy:** Desktop sentry-native 0.15.x does not send default PII (`send_default_pii` is NX-only in that pin). Crashes may still include OS-level paths in minidumps — do not enable Sentry in high-classification environments without review.
+**Privacy:** Desktop sentry-native 0.15.x does not send default PII (`send_default_pii` is NX-only in that pin). Crashes may still include OS-level paths and PDF bytes in minidumps — set `SENTRY_DSN=off` in high-classification environments. CI sets `SENTRY_DSN=off` so test runs do not flood the project.
 
-**Verify:**
+**Debug files:** Windows CI uploads Loupe PDBs to `berry-studios/loupe-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
+
+**Verify (Windows, Sentry-enabled build):**
 
 ```bash
-PdfTool sentry-verify   # requires SENTRY_DSN
+PdfTool sentry-verify
 ```
+
+Then open [Issues](https://de.sentry.io/issues/?project=4511866328449104) for the `It works!` event and [Traces](https://de.sentry.io/explore/traces/?project=4511866328449104) for `sentry-verify` / `editor.start`.
 
 ### 4.3 Success metrics (manual / support tracking)
 
@@ -239,7 +251,7 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 
 | Variable | Component | Purpose |
 |----------|-----------|---------|
-| `SENTRY_DSN` | All GUI apps | Crash reporting |
+| `SENTRY_DSN` | All GUI apps + PdfTool | Override compile-time DSN, or `off` to disable |
 | `LOUPE_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
 | `QT_QPA_PLATFORM` | Headless CI | `offscreen` for tests |
 | `PDF4QT_*` | Build-time | See `CMakeLists.txt` |
