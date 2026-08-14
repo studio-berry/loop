@@ -269,6 +269,8 @@ def main() -> int:
 
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
+    for test in tests:
+        add_result(evidence, f"build:{test}", ["cmake", "--build", str(build_dir), "--target", test, "--config", "Release"], ROOT, args.dry_run)
     if tests:
         expression = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
         add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "--output-on-failure", "-R", expression], ROOT, args.dry_run)

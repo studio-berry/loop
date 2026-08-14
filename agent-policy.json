@@ -106,7 +106,14 @@
       "tests": ["UnitTestsPreflightPlugin"]
     },
     "schemas_contracts": {
-      "paths": ["docs/schemas/**", "loupe-ocr/schemas/**", "loupe-preflight/schemas/**"],
+      "paths": [
+        "docs/schemas/product-surface.schema.json",
+        "docs/schemas/pdftool-result.schema.json",
+        "docs/schemas/loupe-shell.schema.json",
+        "docs/schemas/loupe-shell-actions.schema.json",
+        "loupe-ocr/schemas/**",
+        "loupe-preflight/schemas/**"
+      ],
       "targets": ["PdfTool"],
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrContract", "UnitTestsPreflightCorpus"]
     },
