@@ -26,7 +26,10 @@ class GenerateAdapterTests(unittest.TestCase):
     def test_render_has_generated_marker_and_verification_contract(self) -> None:
         policy = MODULE.load_policy()
         rendered = MODULE.render(policy, "AGENTS.md")
+        version, prerelease = MODULE.load_version_policy()
+        display_version = MODULE.format_product_version(version, prerelease)
         self.assertIn("GENERATED FILE", rendered)
+        self.assertIn(f"version: `{display_version}`", rendered)
         self.assertIn("check-change.py --base origin/dev", rendered)
         self.assertIn("Every PR adds exactly one", rendered)
 

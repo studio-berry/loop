@@ -12,6 +12,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "agent-policy.json"
+VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
+
+
+def load_version_policy() -> tuple[str, str]:
+    with VERSION_POLICY_PATH.open(encoding="utf-8") as stream:
+        version_policy = json.load(stream)
+    version = version_policy.get("current", "")
+    prerelease = version_policy.get("prerelease", "")
+    if not version:
+        raise ValueError("docs/version-policy.json must define current")
+    return version, prerelease
+
+
+def format_product_version(version: str, prerelease: str) -> str:
+    return f"{version}-{prerelease}" if prerelease else version
 
 
 def load_policy() -> dict:
@@ -68,11 +83,13 @@ def render(policy: dict, adapter: str) -> str:
     branches = policy["branches"]
     autonomy = policy["autonomy"]
     changelog = policy["changelog"]
+    version, prerelease = load_version_policy()
+    display_version = format_product_version(version, prerelease)
     lines = [
         "<!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->",
         "# Loupe agent policy adapter",
         "",
-        f"Repository: `{policy.get('repository', 'studio-berry/loupe')}`; language: `{policy.get('language', 'C++20')}`; minimum Qt: `{policy.get('qt_minimum', 'source-defined')}`.",
+        f"Repository: `{policy.get('repository', 'studio-berry/loupe')}`; version: `{display_version}`; language: `{policy.get('language', 'C++20')}`; minimum Qt: `{policy.get('qt_minimum', 'source-defined')}`.",
         "",
         "## Branches and safety",
         "",
