@@ -317,6 +317,33 @@ def _required_check_entries(protection: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _validate_required_check(
+    *,
+    branch: str,
+    protection: dict[str, Any] | None,
+    expected: str,
+    required_check_app: str,
+) -> list[str]:
+    if not isinstance(protection, dict):
+        return [f"live protection: {branch} rules were not returned"]
+    checks = _required_check_entries(protection)
+    contexts = [str(item.get("context")) for item in checks]
+    if contexts != [expected]:
+        return [
+            f"live protection: {branch} required checks "
+            f"{contexts} do not match `[{expected}]`"
+        ]
+    if checks and required_check_app.lower() == "github actions":
+        app_id = checks[0].get("app_id")
+        if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
+            return [
+                f"live protection: {branch} required check "
+                f"`{expected}` must be bound to GitHub Actions "
+                f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
+            ]
+    return []
+
+
 def validate_live_protection(
     *,
     stable_protection: dict[str, Any] | None,
@@ -326,47 +353,26 @@ def validate_live_protection(
     """Compare live GitHub protection JSON with the documented contract."""
     violations: list[str] = []
     if "stable" in policy.protected_branches:
-        if not isinstance(stable_protection, dict):
-            violations.append("live protection: stable rules were not returned")
-        else:
-            checks = _required_check_entries(stable_protection)
-            contexts = [str(item.get("context")) for item in checks]
-            if contexts != [policy.required_check]:
-                violations.append(
-                    "live protection: stable required checks "
-                    f"{contexts} do not match `[{policy.required_check}]`"
-                )
-            elif checks and policy.required_check_app.lower() == "github actions":
-                app_id = checks[0].get("app_id")
-                if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
-                    violations.append(
-                        "live protection: stable required check "
-                        f"`{policy.required_check}` must be bound to GitHub Actions "
-                        f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
-                    )
+        violations.extend(
+            _validate_required_check(
+                branch="stable",
+                protection=stable_protection,
+                expected=policy.required_check,
+                required_check_app=policy.required_check_app,
+            )
+        )
     if "dev" in policy.protected_branches:
-        if not isinstance(dev_protection, dict):
-            violations.append("live protection: dev rules were not returned")
-        else:
-            dev_checks = _required_check_entries(dev_protection)
-            contexts = [str(item.get("context")) for item in dev_checks]
-            if contexts != [policy.integration_required_check]:
-                violations.append(
-                    "live protection: dev required checks "
-                    f"{contexts} do not match `[{policy.integration_required_check}]`"
-                )
-            elif dev_checks and policy.required_check_app.lower() == "github actions":
-                app_id = dev_checks[0].get("app_id")
-                if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
-                    violations.append(
-                        "live protection: dev required check "
-                        f"`{policy.integration_required_check}` must be bound to GitHub Actions "
-                        f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
-                    )
+        violations.extend(
+            _validate_required_check(
+                branch="dev",
+                protection=dev_protection,
+                expected=policy.integration_required_check,
+                required_check_app=policy.required_check_app,
+            )
+        )
     elif isinstance(dev_protection, dict):
-        dev_checks = _required_check_entries(dev_protection)
-        if dev_checks:
-            contexts = [str(item.get("context")) for item in dev_checks]
+        contexts = [str(item.get("context")) for item in _required_check_entries(dev_protection)]
+        if contexts:
             violations.append(
                 "live protection: dev must not require status checks, "
                 f"got {contexts}"

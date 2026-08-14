@@ -248,24 +248,22 @@ def main() -> int:
     add_result(evidence, "architecture_catalog", [python, "scripts/generate-architecture-catalogs.py", "--check"], ROOT, args.dry_run)
     add_result(evidence, "policy_adapters", [python, "scripts/agent/generate-adapters.py"], ROOT, args.dry_run)
 
-    if args.fix_format and sources and not args.dry_run:
-        for source in sources:
-            if shutil.which("clang-format"):
-                subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
-            else:
-                evidence.append(Evidence("format", ["clang-format", "-i", source], "incomplete", "prerequisite unavailable: clang-format"))
+    clang_format = shutil.which("clang-format")
     if sources:
-        if shutil.which("clang-format"):
+        if not clang_format:
+            evidence.append(Evidence("format", ["clang-format", "--dry-run"], result="incomplete", reason="prerequisite unavailable: clang-format"))
+        else:
+            if args.fix_format and not args.dry_run:
+                for source in sources:
+                    subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
             for source in sources:
                 add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
-        else:
-            evidence.append(Evidence("format", ["clang-format", "--dry-run"], "incomplete", "prerequisite unavailable: clang-format"))
         compile_db = build_dir / "compile_commands.json"
         if compile_db.exists() and shutil.which("clang-tidy-18"):
             for source in sources:
                 add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
         else:
-            evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], "incomplete", "compile_commands.json or clang-tidy-18 unavailable"))
+            evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
 
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
