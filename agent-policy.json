@@ -141,6 +141,5 @@
     "categories": ["added", "changed", "fixed", "security", "internal"],
     "required_fields": ["Category", "Audience", "Breaking-Change", "Summary"]
   },
-  "adapters": ["AGENTS.md", ".claude/policy-brief.md", ".cursor/agent-policy.md", "docs/branch-policy.json"],
-  "dev_status": "agent-fast / build"
+  "adapters": ["AGENTS.md", ".claude/policy-brief.md", ".cursor/agent-policy.md", "docs/branch-policy.json"]
 }

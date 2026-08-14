@@ -147,7 +147,11 @@ jobs:
         }
         violations = validate_live_protection(
             stable_protection=stale_stable,
-            dev_protection={},
+            dev_protection={
+                "required_status_checks": {
+                    "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
+                }
+            },
             policy=policy,
         )
         self.assertTrue(any("ci_ok" in item for item in violations))
@@ -177,7 +181,7 @@ jobs:
             [],
         )
 
-    def test_live_protection_rejects_required_checks_on_dev(self):
+    def test_live_protection_rejects_mismatched_dev_checks(self):
         policy = parse_documented_policy_full(
             (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
         )

@@ -18,11 +18,10 @@ VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
 def load_version_policy() -> tuple[str, str]:
     with VERSION_POLICY_PATH.open(encoding="utf-8") as stream:
         version_policy = json.load(stream)
-    version = version_policy.get("current", "")
-    prerelease = version_policy.get("prerelease", "")
+    version = version_policy["current"]
     if not version:
         raise ValueError("docs/version-policy.json must define current")
-    return version, prerelease
+    return version, version_policy.get("prerelease", "")
 
 
 def format_product_version(version: str, prerelease: str) -> str:
@@ -32,36 +31,25 @@ def format_product_version(version: str, prerelease: str) -> str:
 def load_policy() -> dict:
     with POLICY_PATH.open(encoding="utf-8") as stream:
         policy = json.load(stream)
-    required = {"branches", "autonomy", "module_boundaries", "global_checks", "changelog", "adapters"}
+    required = {
+        "format_version",
+        "repository",
+        "language",
+        "qt_minimum",
+        "branches",
+        "autonomy",
+        "module_boundaries",
+        "global_checks",
+        "changelog",
+        "adapters",
+    }
     missing = sorted(required - policy.keys())
     if missing:
         raise ValueError(f"agent-policy.json missing: {', '.join(missing)}")
-    if policy.get("format_version") != 1:
+    if policy["format_version"] != 1:
         raise ValueError("unsupported agent policy format_version")
-    for section in ("branches", "autonomy", "changelog"):
-        if not isinstance(policy.get(section), dict):
-            raise ValueError(f"agent policy section must be an object: {section}")
-    for key in ("default", "integration", "release", "topic_source", "protected"):
-        if key not in policy["branches"]:
-            raise ValueError(f"agent policy branches missing: {key}")
-    if not isinstance(policy["branches"].get("topic_branch_patterns"), list):
-        raise ValueError("agent policy branches.topic_branch_patterns must be an array")
-    for key in ("allowed", "approval_required"):
-        if not isinstance(policy["autonomy"].get(key), list):
-            raise ValueError(f"agent policy autonomy.{key} must be an array")
-    if not isinstance(policy["module_boundaries"], dict) or not policy["module_boundaries"]:
-        raise ValueError("agent policy module_boundaries must be a non-empty object")
-    for module, definition in policy["module_boundaries"].items():
-        if not all(isinstance(definition.get(key), list) for key in ("paths", "targets", "tests")):
-            raise ValueError(f"module {module} must define paths, targets, and tests arrays")
-    if not isinstance(policy["global_checks"], list) or not policy["global_checks"]:
-        raise ValueError("agent policy global_checks must be a non-empty array")
     if policy["changelog"].get("required_per_pr") != 1:
         raise ValueError("agent policy must require exactly one changelog fragment per PR")
-    if not all(policy["changelog"].get(key) for key in ("directory", "filename", "categories", "required_fields")):
-        raise ValueError("agent policy changelog section is incomplete")
-    if not isinstance(policy["adapters"], list) or not policy["adapters"]:
-        raise ValueError("agent policy adapters must be a non-empty array")
     return policy
 
 
@@ -89,7 +77,7 @@ def render(policy: dict, adapter: str) -> str:
         "<!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->",
         "# Loupe agent policy adapter",
         "",
-        f"Repository: `{policy.get('repository', 'studio-berry/loupe')}`; version: `{display_version}`; language: `{policy.get('language', 'C++20')}`; minimum Qt: `{policy.get('qt_minimum', 'source-defined')}`.",
+        f"Repository: `{policy['repository']}`; version: `{display_version}`; language: `{policy['language']}`; minimum Qt: `{policy['qt_minimum']}`.",
         "",
         "## Branches and safety",
         "",
@@ -149,10 +137,7 @@ def check_or_write(write: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true", help="write generated adapters")
-    parser.add_argument("--check", action="store_true", help="validate generated adapters (default)")
     args = parser.parse_args()
-    if args.write and args.check:
-        parser.error("--write and --check are mutually exclusive")
     try:
         return check_or_write(args.write)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
