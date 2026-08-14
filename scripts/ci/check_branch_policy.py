@@ -23,6 +23,7 @@ GITHUB_API = "https://api.github.com"
 DOCUMENTED_CI_BRANCHES = re.compile(r"^[-*]\s+CI branches:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_PROTECTED_BRANCHES = re.compile(r"^[-*]\s+Protected branches:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required check:\s*`([^`]+)`$", re.MULTILINE)
+DOCUMENTED_INTEGRATION_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required integration check:\s*`([^`]+)`$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK_APP = re.compile(r"^[-*]\s+Required check app:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_RELEASE_GATE_WORKFLOW = re.compile(
     r"^[-*]\s+Release gate workflow:\s*`([^`]+)`$", re.MULTILINE
@@ -46,6 +47,7 @@ class DocumentedPolicy:
     ci_branches: tuple[str, ...]
     protected_branches: tuple[str, ...]
     required_check: str
+    integration_required_check: str
     required_check_app: str
     release_gate_workflow: str
     release_gate_events: tuple[str, ...]
@@ -89,6 +91,9 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
     if not protected:
         raise ValueError("policy declares no protected branches")
     required_check = required(DOCUMENTED_REQUIRED_CHECK, "Required check:")
+    integration_required_check = required(
+        DOCUMENTED_INTEGRATION_REQUIRED_CHECK, "Required integration check:"
+    )
     required_app = required(DOCUMENTED_REQUIRED_CHECK_APP, "Required check app:")
     release_workflow = required(DOCUMENTED_RELEASE_GATE_WORKFLOW, "Release gate workflow:")
     release_events = _branch_names(required(DOCUMENTED_RELEASE_GATE_EVENTS, "Release gate events:"))
@@ -109,6 +114,7 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
         ci_branches=ci_branches,
         protected_branches=protected,
         required_check=required_check,
+        integration_required_check=integration_required_check,
         required_check_app=required_app,
         release_gate_workflow=release_workflow,
         release_gate_events=release_events,
@@ -288,6 +294,8 @@ def validate_integration_workflow(path: Path, text: str, policy: DocumentedPolic
         )
     if re.search(r"^\s*ci_ok\s*:", text, re.MULTILINE):
         violations.append(f"{path}: obsolete ci_ok aggregate must not remain")
+    if not re.search(r"^\s*agent-fast\s*:", text, re.MULTILINE):
+        violations.append(f"{path}: missing required agent-fast job")
     return violations
 
 
@@ -336,7 +344,26 @@ def validate_live_protection(
                         f"`{policy.required_check}` must be bound to GitHub Actions "
                         f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
                     )
-    if isinstance(dev_protection, dict):
+    if "dev" in policy.protected_branches:
+        if not isinstance(dev_protection, dict):
+            violations.append("live protection: dev rules were not returned")
+        else:
+            dev_checks = _required_check_entries(dev_protection)
+            contexts = [str(item.get("context")) for item in dev_checks]
+            if contexts != [policy.integration_required_check]:
+                violations.append(
+                    "live protection: dev required checks "
+                    f"{contexts} do not match `[{policy.integration_required_check}]`"
+                )
+            elif dev_checks and policy.required_check_app.lower() == "github actions":
+                app_id = dev_checks[0].get("app_id")
+                if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
+                    violations.append(
+                        "live protection: dev required check "
+                        f"`{policy.integration_required_check}` must be bound to GitHub Actions "
+                        f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
+                    )
+    elif isinstance(dev_protection, dict):
         dev_checks = _required_check_entries(dev_protection)
         if dev_checks:
             contexts = [str(item.get("context")) for item in dev_checks]

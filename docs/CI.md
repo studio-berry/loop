@@ -1,7 +1,11 @@
 # CI and diagnostic artifacts
 
-Pull requests to `dev` run the **Linux** and **Windows** build-and-test jobs
-as an informational integration workflow. These are the two platforms Loupe V1
+Pull requests to `dev` run the Linux `agent-fast / build` workflow as the
+required integration gate. It classifies the diff, runs source and contract
+checks, compiles affected targets, runs focused tests, and requires one
+structured changelog fragment under `changes/`. These are the fast checks for
+the shared integration baseline. The full Linux and Windows build-and-test
+jobs run for release qualification. These are the two platforms Loupe V1
 supports; **macOS** CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
@@ -20,7 +24,8 @@ runs and fails when any required dependency failed, was cancelled, was
 skipped, or did not report. Requiring the platform-specific jobs directly
 would create multiple checks for the same gate. The release-gate workflow
 runs for every pull request targeting `stable` and for `merge_group` events;
-it has no path filters. `dev` does not require this check for merging.
+it has no path filters. `dev` requires `agent-fast / build` for merging;
+`stable` requires `release_ok`.
 
 Hosted fuzzing (`.github/workflows/fuzz.yml`) validates the manifested
 regression corpus under `Fuzz/corpus/` and runs each harness's owned seeds

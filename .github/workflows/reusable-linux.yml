@@ -2,6 +2,19 @@ name: Reusable Linux CI
 
 on:
   workflow_call:
+    inputs:
+      fast:
+        required: false
+        type: boolean
+        default: false
+      base_sha:
+        required: false
+        type: string
+        default: ''
+      head_sha:
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -22,6 +35,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: pdf4qt
+          fetch-depth: 0
 
       - name: Verify supply-chain pins
         working-directory: pdf4qt
@@ -120,31 +134,54 @@ jobs:
       - name: Build project
         working-directory: pdf4qt
         run: |
-          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
-          cmake --build build --target all release_translations --config Release -j6
-          cmake --install build
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          if [ "${{ inputs.fast }}" != "true" ]; then
+            cmake --build build --target all release_translations --config Release -j6
+            cmake --install build
+          fi
+
+      - name: Prove change with agent-fast
+        if: inputs.fast
+        working-directory: pdf4qt
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          python3 scripts/agent/check-change.py --base "$BASE_SHA" --head "$HEAD_SHA" --report agent-fast-evidence.json
+
+      - name: Upload agent-fast evidence
+        if: inputs.fast
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: agent-fast-evidence
+          path: pdf4qt/agent-fast-evidence.json
+          if-no-files-found: error
 
       - name: Verify developer product surface
+        if: ${{ !inputs.fast }}
         working-directory: pdf4qt
         run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/pdf4qt/build/install" -Profile developer
 
       - name: Run unit tests
+        if: ${{ !inputs.fast }}
         working-directory: pdf4qt/build
         run: |
           ctest --output-on-failure
 
       - name: Run preflight corpus gate
+        if: ${{ !inputs.fast }}
         working-directory: pdf4qt/build
         run: |
           ctest -R UnitTestsPreflightCorpus --output-on-failure
 
       - name: Make DEB package
-        if: github.event_name != 'pull_request'
+        if: ${{ !inputs.fast && github.event_name != 'pull_request' }}
         working-directory: pdf4qt/build
         run: |
           sh make-package.sh
 
       - name: Upload DEB package
+        if: ${{ !inputs.fast }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ubuntu-deb-package

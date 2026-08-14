@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["format_version", "repository", "branches", "autonomy", "module_boundaries", "global_checks", "changelog", "adapters"],
+  "properties": {
+    "format_version": {"const": 1},
+    "repository": {"type": "string", "minLength": 1},
+    "language": {"type": "string"},
+    "qt_minimum": {"type": "string"},
+    "branches": {
+      "type": "object",
+      "required": ["default", "integration", "release", "topic_source", "protected"],
+      "properties": {
+        "default": {"type": "string"},
+        "integration": {"type": "string"},
+        "release": {"type": "string"},
+        "topic_source": {"type": "string"},
+        "topic_branch_patterns": {"type": "array", "items": {"type": "string"}},
+        "protected": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "autonomy": {
+      "type": "object",
+      "required": ["allowed", "approval_required"],
+      "properties": {
+        "allowed": {"type": "array", "items": {"type": "string"}},
+        "approval_required": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "module_boundaries": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["paths", "targets", "tests"],
+        "properties": {
+          "paths": {"type": "array", "items": {"type": "string"}},
+          "targets": {"type": "array", "items": {"type": "string"}},
+          "tests": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "global_checks": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "changelog": {
+      "type": "object",
+      "required": ["directory", "required_per_pr", "filename", "categories", "required_fields"],
+      "properties": {
+        "directory": {"type": "string"},
+        "required_per_pr": {"const": 1},
+        "filename": {"type": "string"},
+        "categories": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "required_fields": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "adapters": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+  }
+}

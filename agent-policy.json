@@ -1,0 +1,139 @@
+{
+  "$schema": "docs/schemas/agent-policy.schema.json",
+  "format_version": 1,
+  "repository": "studio-berry/loupe",
+  "language": "C++20",
+  "qt_minimum": "6.11.1",
+  "branches": {
+    "default": "stable",
+    "integration": "dev",
+    "release": "stable",
+    "topic_source": "dev",
+    "topic_branch_patterns": ["gh-*", "feature/*", "fix/*", "chore/*", "docs/*"],
+    "protected": ["dev", "stable"]
+  },
+  "autonomy": {
+    "allowed": [
+      "format_touched_files",
+      "static_analyze_touched_translation_units",
+      "build_affected_targets_in_existing_build",
+      "run_mapped_focused_tests",
+      "run_source_and_contract_checks"
+    ],
+    "approval_required": [
+      "dependency_or_toolchain_changes",
+      "configure_or_reconfigure",
+      "clean_or_full_rebuild",
+      "packaging_or_installation",
+      "external_writes",
+      "push_or_merge",
+      "history_rewrite",
+      "upstream_sync",
+      "signing_or_credential_operations"
+    ]
+  },
+  "source_of_truth": [
+    "current_code_and_tests_on_dev",
+    "reverified_issue_status",
+    "accepted_current_adr",
+    "generated_architecture_catalog",
+    "narrative_repository_docs"
+  ],
+  "protected_paths": [
+    "CMakeLists.txt",
+    "vcpkg.json",
+    "vcpkg-configuration.json",
+    "vcpkg/**",
+    "loupe-preflight/schemas/**",
+    "docs/schemas/**",
+    "Pdf4QtLibCore/sources/**",
+    "UnitTests/CMakeLists.txt"
+  ],
+  "module_boundaries": {
+    "core": {
+      "paths": ["Pdf4QtLibCore/**"],
+      "targets": ["Pdf4QtLibCore"],
+      "tests": [
+        "UnitTests",
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsPreflightProfileResolver"
+      ]
+    },
+    "pdftool": {
+      "paths": ["PdfTool/**"],
+      "targets": ["PdfTool"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
+    },
+    "preflight": {
+      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*"],
+      "targets": ["PdfTool"],
+      "tests": [
+        "UnitTestsPreflightChecks",
+        "UnitTestsPreflightCorpus",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsPreflightProfileResolver"
+      ]
+    },
+    "pagemaster": {
+      "paths": ["Pdf4QtPageMaster/**"],
+      "targets": ["Pdf4QtPageMaster"],
+      "tests": ["UnitTestsPageMasterExport"]
+    },
+    "widgets_gui": {
+      "paths": ["Pdf4QtLibWidgets/**", "Pdf4QtLibGui/**", "Pdf4QtEditor/**", "Pdf4QtViewer/**"],
+      "targets": ["Pdf4QtEditor", "Pdf4QtViewer"],
+      "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
+    },
+    "plugins": {
+      "paths": ["Pdf4QtEditorPlugins/**"],
+      "targets": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin"
+      ],
+      "tests": ["UnitTestsPreflightPlugin"]
+    },
+    "schemas_contracts": {
+      "paths": ["docs/schemas/**", "loupe-ocr/schemas/**", "loupe-preflight/schemas/**"],
+      "targets": ["PdfTool"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrContract", "UnitTestsPreflightCorpus"]
+    },
+    "build_policy": {
+      "paths": ["CMakeLists.txt", "**/CMakeLists.txt", "cmake/**", "vcpkg.json", "vcpkg-configuration.json", "vcpkg/**"],
+      "targets": ["Pdf4QtLibCore", "PdfTool", "UnitTests"],
+      "tests": ["UnitTests"]
+    },
+    "documentation": {
+      "paths": ["docs/**", "AGENTS.md", ".claude/**", ".cursor/**", "agent-policy.json"],
+      "targets": [],
+      "tests": ["architecture_catalog", "policy_adapters"]
+    }
+  },
+  "global_checks": [
+    "source_integrity",
+    "architecture_catalog",
+    "policy_adapters",
+    "changelog"
+  ],
+  "changelog": {
+    "directory": "changes",
+    "required_per_pr": 1,
+    "filename": "<sanitized-head-branch>.md",
+    "categories": ["added", "changed", "fixed", "security", "internal"],
+    "required_fields": ["Category", "Audience", "Breaking-Change", "Summary"]
+  },
+  "adapters": ["AGENTS.md", ".claude/policy-brief.md", ".cursor/agent-policy.md", "docs/branch-policy.json"],
+  "dev_status": "agent-fast / build"
+}

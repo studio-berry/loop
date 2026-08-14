@@ -42,4 +42,4 @@ Approval is required for:
 - Interactive plugins belong in `Pdf4QtEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.
 - Consult the generated architecture catalog and current code/tests for dynamic facts; narrative docs are not authoritative when they conflict.
 
-Generated adapter: `AGENTS.md`.
+Generated adapter: `.cursor/agent-policy.md`.

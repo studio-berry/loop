@@ -1,19 +1,45 @@
-# Berry Studio — policy brief (agent session context)
+<!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->
+# Loupe agent policy adapter
 
-Non-negotiable constraints for every session in this repo:
+Repository: `studio-berry/loupe`; language: `C++20`; minimum Qt: `6.11.1`.
 
-- **Branching:** trunk-based. Never commit on `main`, `master`, or `stable`. Use
-  `feature/`, `bugfix/`, or `hotfix/` branches and open a PR.
-- **Commits:** Conventional Commits v1.0.0. Signed commits required before push.
-- **Secrets:** never stage or write `.env`, keys, tokens, or credentials. Use
-  `.env.example` with placeholders only. No `--no-verify`.
-- **Data:** no real customer or research personal data in fixtures, seeds, or tests.
-- **Storage:** private docs, data, logs, and artifacts live under
-  `C:\.dev\<category>\<repo>\`, not in the Git tree. See `C:\.dev\README.md`.
-- **Docs-with-code:** user-facing or API doc changes ship in the same PR as the code.
-- **Hooks:** client-side gates are fast feedback only; CI is authoritative. Do not
-  bypass pre-commit or pre-push checks.
-- **Loupe-pdf:** Qt 6.11.1+ C++20 fork; Editor is the plugin host; PdfTool for
-  headless automation; PageMaster for batch geometry. Do not run full rebuilds unless asked.
+## Branches and safety
 
-Full hook map: Notion → Policy Enforcement Hooks.
+- Integration: `dev`; release/default: `stable`; topic branches start from `dev`.
+- Protected branches: `dev`, `stable`. Do not commit, push, merge, force-push, or rewrite history without approval.
+- Keep private data, credentials, logs, scratch plans, and build artifacts outside the repository. Do not edit vendored dependencies unless explicitly scoped.
+
+## Autonomous verification budget
+
+Allowed without additional approval:
+- format touched files
+- static analyze touched translation units
+- build affected targets in existing build
+- run mapped focused tests
+- run source and contract checks
+
+Approval is required for:
+- dependency or toolchain changes
+- configure or reconfigure
+- clean or full rebuild
+- packaging or installation
+- external writes
+- push or merge
+- history rewrite
+- upstream sync
+- signing or credential operations
+
+## Required proof and changelog
+
+- After implementation, run `python scripts/agent/check-change.py --base origin/dev` (or the equivalent base SHA). Treat an incomplete result as not proven.
+- Every PR adds exactly one `changes/<sanitized-head-branch>.md` fragment. Required fields: Category, Audience, Breaking-Change, Summary. Categories: added, changed, fixed, security, internal.
+- Use `internal` for tooling or documentation changes; it still requires a fragment.
+- Do not invent a public contract when a protected interface, schema, persistence format, central type, or root build contract must change; stop and report the contract change.
+
+## Module placement
+
+- Core PDF logic belongs in `Pdf4QtLibCore`; it must not depend on Widgets.
+- Interactive plugins belong in `Pdf4QtEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.
+- Consult the generated architecture catalog and current code/tests for dynamic facts; narrative docs are not authoritative when they conflict.
+
+Generated adapter: `.claude/policy-brief.md`.
