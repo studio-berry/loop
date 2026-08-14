@@ -49,6 +49,8 @@ int main(int argc, char* argv[])
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "Loupe"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
+    pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
+    const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("editor.session"), "ui.session");
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");

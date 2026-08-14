@@ -54,7 +54,7 @@ PDFToolExitCode PDFToolSentryVerify::execute(const PDFToolOptions& options)
 {
     if (!pdf::PDFSentrySession::isGloballyActive())
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("sentry.unavailable"), PDFToolTranslationContext::tr("Sentry is not active. Set SENTRY_DSN (or PDF4QT_SENTRY_DSN at build time) and retry."));
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("sentry.unavailable"), PDFToolTranslationContext::tr("Sentry is not active. Use a Sentry-enabled Windows build, or set SENTRY_DSN. SENTRY_DSN=off disables telemetry."));
         return PDFToolExitCode::InvalidInvocation;
     }
 

@@ -11,7 +11,8 @@ The standalone `Documentation truth` workflow runs for the policy branches
 `dev` and `stable` pull requests and pushes. It checks every ADR's verification
 header and fails when
 [`docs/generated/architecture-catalog.json`](generated/architecture-catalog.json)
-is stale.
+is stale. Product versioning is SemVer 2.0 (`0.1.0-alpha`); CI also runs
+`scripts/ci/check_version_policy.py`.
 
 The `release_ok` job in `.github/workflows/release-gate.yml` is the single
 GitHub Actions status required by the protected `stable` branch. It always
@@ -20,6 +21,10 @@ skipped, or did not report. Requiring the platform-specific jobs directly
 would create multiple checks for the same gate. The release-gate workflow
 runs for every pull request targeting `stable` and for `merge_group` events;
 it has no path filters. `dev` does not require this check for merging.
+
+Hosted fuzzing (`.github/workflows/fuzz.yml`) validates the manifested
+regression corpus under `Fuzz/corpus/` and runs each harness's owned seeds
+with `-runs=0` before time-bounded mutation.
 
 When a Windows test run fails, GitHub Actions uploads its CTest logs as the
 `windows-test-logs` artifact. Store any intentional, long-lived diagnostic
@@ -37,6 +42,22 @@ directories.
 
 `scripts/ci/check_generated_dependency_paths.py` inspects the Git index and
 fails CI if any known generated dependency path is tracked again.
+
+## Tracked source integrity
+
+`scripts/ci/check_source_integrity.py` runs before Qt/vcpkg configure on every
+`ci.yml`, `release-gate.yml`, and `fuzz.yml` invocation. It inspects the Git
+index (`git ls-files`) and fails when tracked content includes:
+
+- build trees (`build/`, `build-*`), `.docker-vcpkg`, or `CMakeCache.txt`
+- root `debug-*.log` files or one-off `scripts/debug-*` scripts
+- unresolved merge-conflict markers
+- tracked files over 5 MB without an explicit allowlist entry
+- whitespace problems reported by `git diff --check` over the full tree
+- fuzz regression seeds or preflight fixture PDFs that are not listed in their
+  corpus manifests
+
+Negative fixtures live in `scripts/ci/test_check_source_integrity.py`.
 
 ## Updating pinned workflow dependencies
 
@@ -62,3 +83,17 @@ Do not replace a pin with a moving tag such as `main`, `latest`, or `continuous`
 DigiCert KeyLocker (`MSI` signing) must additionally be added to
 `digicertKeylocker` in `packaging-tools.json` before `SIGN_MSI` can proceed;
 the signing step refuses to run against an unpinned toolchain.
+
+## Sentry debug files
+
+Windows Release builds with `PDF4QT_ENABLE_SENTRY` emit PDBs (`/Zi` +
+`/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
+CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
+uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region
+(`https://de.sentry.io`) using the pinned `sentryCli` binary. GitHub
+Actions cannot reference `secrets` in `if:` conditionals, so the workflow
+always runs the step; `upload_sentry_debug_files.ps1` no-ops when
+`SENTRY_AUTH_TOKEN` is unset (fork pull requests). PDBs are not installed
+into the MSI; they stay on the Sentry debug-file store. Store the token as
+the repository secret `SENTRY_AUTH_TOKEN` (`project:releases` or broader);
+do not commit it.

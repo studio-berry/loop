@@ -113,6 +113,3 @@ void SignDialog::accept()
 }
 
 }   // namespace pdfplugin
-
-
-

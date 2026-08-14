@@ -22,10 +22,19 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-set(PDF4QT_VERSION 1.6.0.0)
+set(PDF4QT_VERSION 0.1.0)
+set(PDF4QT_VERSION_PRERELEASE)
 message(STATUS "Build type - CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 project(PDF4QT VERSION ${PDF4QT_VERSION} LANGUAGES CXX)
+
+# Appx Identity.Version requires four components. MSI accepts SemVer three-part.
+set(PDF4QT_WINDOWS_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.0")
+if(PDF4QT_VERSION_PRERELEASE)
+    set(PDF4QT_PROJECT_VERSION "${PDF4QT_VERSION}-${PDF4QT_VERSION_PRERELEASE}")
+else()
+    set(PDF4QT_PROJECT_VERSION "${PDF4QT_VERSION}")
+endif()
 
 message("VCPKG Enabled: " ${VCPKG_TOOLCHAIN})
 
@@ -34,7 +43,7 @@ option(PDF4QT_INSTALL_QT_DEPENDENCIES "Install Qt dependencies" ${VCPKG_TOOLCHAI
 option(PDF4QT_INSTALL_INCLUDE "Install include headers" ON)
 option(PDF4QT_FLATPAK_BUILD "Special flag for Flatpak" OFF)
 
-add_compile_definitions(PDF4QT_PROJECT_VERSION="${PDF4QT_VERSION}")
+add_compile_definitions(PDF4QT_PROJECT_VERSION="${PDF4QT_PROJECT_VERSION}")
 add_compile_definitions(QT_NO_EMIT)
 
 if(PDF4QT_FLATPAK_BUILD)
@@ -56,7 +65,14 @@ else()
     set(_PDF4QT_ENABLE_SENTRY_DEFAULT OFF)
 endif()
 option(PDF4QT_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_PDF4QT_ENABLE_SENTRY_DEFAULT})
-set(PDF4QT_SENTRY_DSN "" CACHE STRING "Optional compile-time Sentry DSN (prefer SENTRY_DSN env at runtime)")
+# Public ingest DSN for berry-studios/loupe-pdf (EU). Runtime SENTRY_DSN overrides;
+# SENTRY_DSN=off disables telemetry. CI jobs set SENTRY_DSN=off so builds do not
+# flood the project. Confidential workflows should also set SENTRY_DSN=off.
+set(_PDF4QT_SENTRY_DSN_DEFAULT "https://44f65b76ce476befdfb321ca361921fe@o4511731410337792.ingest.de.sentry.io/4511866328449104")
+set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)")
+if(PDF4QT_SENTRY_DSN STREQUAL "")
+    set(PDF4QT_SENTRY_DSN "${_PDF4QT_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)" FORCE)
+endif()
 
 if(PDF4QT_ENABLE_SENTRY)
     find_package(Threads REQUIRED)
@@ -209,6 +225,13 @@ set(CMAKE_AUTORCC_OPTIONS "--threshold;0;--compress;9")
 
 if (MSVC)
     add_compile_options(/bigobj /W4 /wd5054 /wd4127 /wd4702)
+    if(PDF4QT_ENABLE_SENTRY)
+        # Crashpad minidumps need PDBs to symbolicate. Keep Release optimization.
+        add_compile_options("$<$<CONFIG:Release>:/Zi>")
+        add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL>"
+                         "$<$<CONFIG:Release>:/OPT:REF>"
+                         "$<$<CONFIG:Release>:/OPT:ICF>")
+    endif()
 endif()
 
 if (MINGW)
@@ -575,4 +598,3 @@ endif()
 #endmacro()
 #
 #dump_variables()
-

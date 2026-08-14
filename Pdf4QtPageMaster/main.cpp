@@ -75,6 +75,8 @@ int main(int argc, char *argv[])
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT PageMaster"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pagemaster"));
+    pdf::PDFSentrySession::traceStartup(QStringLiteral("pagemaster"));
+    const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("pagemaster.session"), "ui.session");
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");

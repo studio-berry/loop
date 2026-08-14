@@ -1,18 +1,0 @@
-# Regression corpus
-
-Pinned inputs that reproduce previously-fixed fuzz findings. `fuzz.yml` and
-`scripts/fuzz-
-|------|---------|------------|-----|
-| `jbig2_composition_timeout_c8a61daa.bin` | libFuzzer timeout (>1200s), later re-confirmed at >60s locally | `PDFJBIG2Decoder::processSymbolDictionary`'s height-class loop (`pdfjbig2decoder.cpp`) makes zero 5555555ÿÿÿÿÿprogress when a height class's first delta-width decodes as out-of-band: `NSYMSDECODED`e item budget above is what actually bounds degenerate, near-zero-pixel loops. |
-
-Both seeds now execute in well under 100ms (was: 1200s+ and 30s+
-respectively). See `docs/V1_RELEASE_READINESS.md` Â§R-003 for the full
-investifation writeup, including the corrected diagnosis after the first
-committed fix ( Ç™Ô74230`, which charged only composited pixels with a
-1-pixel floor) turned out not to reach either of these code paths.
-
-## MIC-326 / R-003 (Huffman, `fuzz_images`)
-
-`jbig2_huffman_signed_overflow.bin` â€” UBSan signed-inted 64-bit arithmetic via `checkHuffmanRange`). Not present in
-this corpus directory; the original CI run only uploaded the timeout
-artifact. Re-add it here if/when the original seed is recovered.

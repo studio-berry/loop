@@ -1,7 +1,7 @@
 # Loupe shell contract
 
 This is the non-visual foundation for issue #193. Per the product scope gate,
-GUI elements remain deferred until after 0.0.3. This document therefore defines
+GUI elements remain deferred until after 0.1.1. This document therefore defines
 the state, routing, and verification contract without changing the existing Qt
 Widgets shell or adding QML.
 
@@ -90,7 +90,7 @@ remain outside the operator shell.
 Issue #178 proposes Qt Quick Controls for the later application shell, but it is
 still open. The contract records Qt Quick Controls as the candidate and keeps
 the decision pending. No Qt Quick module, QML file, `QQuickWidget`, or shell
-restyle is introduced by this slice. Once the 0.0.3 GUI gate opens, #178 must
+restyle is introduced by this slice. Once the 0.1.1 GUI gate opens, #178 must
 resolve the migration strategy, canvas hosting, rendering fallback, licensing,
 and accessibility baseline before large-scale shell wiring begins.
 
@@ -113,4 +113,4 @@ pwsh ./scripts/verify-loupe-shell-contract.ps1
 This verifies JSON shape, workspace parity with the #192 product-surface
 manifest, plugin disposition targets, and complete Editor action coverage. It
 does not claim GUI behavior, accessibility runtime success, or Qt Quick
-rendering validation; those remain post-0.0.3 gates.
+rendering validation; those remain post-0.1.1 gates.

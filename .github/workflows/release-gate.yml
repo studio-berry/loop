@@ -28,9 +28,11 @@ jobs:
         run: python3 scripts/ci/check_generated_dependency_paths.py
 
   linux:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
 
   documentation:
@@ -63,6 +65,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
       - name: Verify branch policy
         run: python3 scripts/ci/check_branch_policy.py --live
+      - name: Verify version policy
+        run: python3 scripts/ci/check_version_policy.py
 
   release_ok:
     if: always()

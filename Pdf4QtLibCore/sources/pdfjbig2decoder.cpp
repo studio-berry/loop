@@ -2540,7 +2540,7 @@ void PDFJBIG2Decoder::processHalftoneRegion(const PDFJBIG2SegmentHeader& header)
             // We must find EOFB symbol in the data. We hope, that EOFB symbol
             // lies in the compressed data, otherwise we can't do anything...
             PDFBitReader reader(&parameters.data, 1);
-			
+
             while (!reader.isAtEnd())
             {
                 if (reader.look(24) == 0x1001)

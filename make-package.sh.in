@@ -18,9 +18,3 @@ echo "Vcs-Browser: https://github.com/mberrys/Loupe-pdf" >>$file
 dpkg-deb --build install
 
 mv install.deb Loupe-pdf-${PDF4QT_VERSION}.deb
-
-
-
-
-
-

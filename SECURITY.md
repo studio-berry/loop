@@ -6,7 +6,7 @@ Loupe-PDF is released from the `master` branch of [mberrys/Loupe-pdf](https://gi
 
 | Version | Supported |
 | ------- | --------- |
-| 1.6.x (current `PDF4QT_VERSION`) | Yes — security fixes land here |
+| 0.1.x (current `PDF4QT_VERSION`) | Yes — security fixes land here |
 | Older fork tags / unreleased branches | Best effort only |
 
 Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Loupe-specific.

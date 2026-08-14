@@ -121,7 +121,7 @@ jobs:
         run: |
           ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/pdf4qt --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
-        
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
@@ -141,7 +141,7 @@ jobs:
           cmake --build build --target all release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/pdf4qt/build/install"
-          
+
       - name: Read version
         id: get_version
         run: |
@@ -162,7 +162,7 @@ jobs:
             "$LINUXDEPLOYQT_SHA256"
           chmod +x deploy.AppImage
           ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
-          
+
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
@@ -200,7 +200,7 @@ jobs:
             install/ ${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
-          
+
       - name: Manual signature
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
@@ -231,7 +231,7 @@ jobs:
           path: ./pdf4qt/build/${{ env.appimagefilename }}
           retention-days: 30
           compression-level: 0
-          
+
       - name: Upload AppImage Signature File
         if: vars.SIGN_APPIMAGE == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
@@ -241,7 +241,7 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           compression-level: 0
-          
+
       - name: Upload AppImage zsync File
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:

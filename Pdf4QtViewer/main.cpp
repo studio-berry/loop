@@ -42,6 +42,8 @@ int main(int argc, char *argv[])
     QApplication::setApplicationDisplayName(QApplication::translate("Application", "PDF4QT Viewer"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("viewer"));
+    pdf::PDFSentrySession::traceStartup(QStringLiteral("viewer"));
+    const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("viewer.session"), "ui.session");
 
     QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
     QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");

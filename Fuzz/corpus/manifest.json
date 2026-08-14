@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "jbig2-composition-timeout",
+      "path": "Fuzz/corpus/fuzz_images/jbig2-composition-timeout.bin",
+      "harness": "fuzz_images",
+      "origin": "fuzz-finding",
+      "issue": 64,
+      "sha256": "b486342eaf2ad597dea929b700c12a94f6134c4f02c4ad01fcbda2e30b829813",
+      "expected": "terminates-without-crash",
+      "minimized": true
+    },
+    {
+      "id": "jbig2-symbol-dict-zero-progress-timeout",
+      "path": "Fuzz/corpus/fuzz_images/jbig2-symbol-dict-zero-progress-timeout.bin",
+      "harness": "fuzz_images",
+      "origin": "fuzz-finding",
+      "issue": 64,
+      "sha256": "f1a4da02f8010927a81512a95fbfe007b0bfe9e3357d50d4e573a2f6b16cbb15",
+      "expected": "terminates-without-crash",
+      "minimized": true
+    }
+  ]
+}

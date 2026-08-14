@@ -51,7 +51,7 @@ opening the destination `QSaveFile`, then appends a new `history.rollback` execu
 Intervening history is never erased. A corrupt or missing target fails before the current document is touched.
 
 The headless `PdfTool repair` and `action-list run/batch` paths create a per-output `<pdf>.loupe-history` sidecar
-using this API. Editor and PageMaster UI wiring remains deferred until after 0.0.3; those surfaces must use this
+using this API. Editor and PageMaster UI wiring remains deferred until after 0.1.1; those surfaces must use this
 same Core chain when enabled rather than introducing separate history stores. Action List parents and corrective-
 operation plans can use `parentExecutionId`, canonical parameters, and digest references without coupling Core
 repair primitives to GUI or database details.

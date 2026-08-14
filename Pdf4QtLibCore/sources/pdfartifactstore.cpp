@@ -336,6 +336,35 @@ PDFArtifactStoreResult PDFArtifactStore::importDevice(QIODevice* source,
             const QString error = temporary.errorString();
             temporary.remove();
             QFile::remove(stagedPath);
+
+            // A peer worker may have published the same digest between our
+            // existence check and rename. Reconcile instead of reporting a
+            // false failure (#296).
+            if (QFileInfo::exists(finalPath))
+            {
+                const bool sameSize = QFileInfo(finalPath).size() == size;
+                PDFArtifactIdentity published;
+                published.sha256 = sha256;
+                published.size = size;
+                if (sameSize && verify(published))
+                {
+                    result.reused = true;
+                    result.success = true;
+                    result.artifact.sha256 = sha256;
+                    result.artifact.size = size;
+                    result.artifact.mediaType = options.mediaType.trimmed().isEmpty()
+                        ? QStringLiteral("application/octet-stream")
+                        : options.mediaType.trimmed();
+                    result.artifact.logicalName = sanitizeArtifactLogicalName(options.logicalName);
+                    result.artifact.storageToken = token;
+                    return result;
+                }
+                result.errorMessage = sameSize
+                    ? QStringLiteral("Existing content-addressed artifact failed integrity verification.")
+                    : QStringLiteral("Artifact digest collision detected.");
+                return result;
+            }
+
             result.errorMessage = withFileError(QStringLiteral("Could not atomically publish the artifact '%1'.").arg(finalPath),
                                                 error);
             return result;

@@ -30,8 +30,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
+      - name: Test source integrity checker
+        run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Verify tracked source integrity
+        run: python3 scripts/ci/check_source_integrity.py
+      - name: Verify generated dependency paths are untracked
+        run: python3 scripts/ci/check_generated_dependency_paths.py
+
       - name: Verify supply-chain pins
         run: python3 scripts/ci/check_supply_chain_pins.py
+
+      - name: Verify fuzz regression corpus
+        run: python3 scripts/ci/check_fuzz_corpus.py
 
       - name: Prepare vcpkg directories
         run: mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
@@ -125,20 +135,12 @@ jobs:
 
       - name: Run fuzz harnesses
         run: |
-          SEED_DIR="${GITHUB_WORKSPACE}/loupe-preflight/testdata/fixtures"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             FUZZ_SECONDS=120
           else
             FUZZ_SECONDS=600
           fi
-          FUZZ_ARGS=(-max_total_time=${FUZZ_SECONDS} -print_final_stats=1)
-          if [ -d "$SEED_DIR" ]; then
-            FUZZ_ARGS+=("$SEED_DIR")
-          fi
-          for target in fuzz_pdf_parser fuzz_stream_filters fuzz_content_stream fuzz_images; do
-            echo "Running $target (${FUZZ_SECONDS}s)"
-            "./build-fuzz/usr/bin/$target" "${FUZZ_ARGS[@]}"
-          done
+          bash scripts/fuzz-run-targets.sh build-fuzz "${FUZZ_SECONDS}"
 
       - name: Upload crash artifacts
         if: failure()

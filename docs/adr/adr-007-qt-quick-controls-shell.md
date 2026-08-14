@@ -31,7 +31,7 @@ spacing, icons, animation timing, and custom control styling remain product
 design decisions.
 
 This ADR records the foundation only. It does not add Qt Quick modules, QML,
-or product UI code. No GUI migration is required before 0.0.3.
+or product UI code. No GUI migration is required before 0.1.1.
 
 ### Migration strategy
 
@@ -138,7 +138,7 @@ adoption preserves feature delivery while those risks are measured.
 - Quick/Widgets focus transfer and input routing are first-class integration
   behavior, not incidental adapter code.
 - A Quick foundation does not authorize visual redesign or GUI work before the
-  0.0.3 gate.
+  0.1.1 gate.
 - The first Quick implementation must carry the backend, packaging,
   licensing, and accessibility evidence required above.
 

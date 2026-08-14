@@ -2843,4 +2843,3 @@ QString PDFPageContentElementEdited::getDescription() const
 }
 
 }   // namespace pdf
-
