@@ -42,3 +42,6 @@ build/*
 # to remove generated OCR bytecode after it was committed by accident).
 __pycache__/
 *.py[cod]
+
+# CI evidence is uploaded as an artifact and must not enter the source tree.
+/agent-fast-evidence.json

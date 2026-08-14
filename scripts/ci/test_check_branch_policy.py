@@ -33,7 +33,8 @@ class BranchPolicyTests(unittest.TestCase):
         self.assertEqual(required_check, "release_ok")
         self.assertEqual(policy.required_check, "release_ok")
         self.assertEqual(policy.required_check_app.lower(), "github actions")
-        self.assertEqual(policy.protected_branches, ("stable",))
+        self.assertEqual(policy.protected_branches, ("dev", "stable"))
+        self.assertEqual(policy.integration_required_check, "agent-fast / build")
         self.assertEqual(policy.release_gate_workflow, ".github/workflows/release-gate.yml")
         self.assertEqual(policy.release_gate_events, ("pull_request", "merge_group"))
         self.assertEqual(policy.release_gate_pull_request_branches, ("stable",))
@@ -162,10 +163,15 @@ jobs:
                 "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
             }
         }
+        dev = {
+            "required_status_checks": {
+                "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
+            }
+        }
         self.assertEqual(
             validate_live_protection(
                 stable_protection=stable,
-                dev_protection={},
+                dev_protection=dev,
                 policy=policy,
             ),
             [],
@@ -190,7 +196,7 @@ jobs:
             dev_protection=dev,
             policy=policy,
         )
-        self.assertTrue(any("dev must not require" in item for item in violations))
+        self.assertTrue(any("dev required checks" in item for item in violations))
 
 
 if __name__ == "__main__":
