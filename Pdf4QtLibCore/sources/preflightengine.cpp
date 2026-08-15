@@ -4975,6 +4975,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             result.inspectionComplete = false;
             result.errorCode = QStringLiteral("unsupported-scope");
             result.errorMessage = PDFTranslationContext::tr("Profile scope is empty or unsupported.");
+            result.pass = reducePreflightVerdict(result).isPass();
             return result;
         }
     }
@@ -4986,6 +4987,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             result.inspectionComplete = false;
             result.errorCode = QStringLiteral("unresolved-variable");
             result.errorMessage = PDFTranslationContext::tr("Profile variable '%1' is unresolved.").arg(it.key());
+            result.pass = reducePreflightVerdict(result).isPass();
             return result;
         }
     }
@@ -5030,6 +5032,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
                 result.inspectionComplete = false;
                 result.errorCode = QStringLiteral("budget-exceeded");
                 result.errorMessage = QString::fromLatin1(getPDFBudgetKindName(exception.getDetail().kind));
+                result.pass = reducePreflightVerdict(result).isPass();
                 return result;
             }
             catch (const PDFException&)

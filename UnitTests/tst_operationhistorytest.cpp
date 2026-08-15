@@ -707,6 +707,7 @@ void OperationHistoryTest::livePreflightRunCarriesRevisionAndProfileDigests()
     finished.status = pdf::PDFOperationHistoryStatus::Accepted;
     finished.documentRevisionDigest = running.documentRevisionDigest;
     finished.effectiveProfileDigest = running.effectiveProfileDigest;
+    finished.output = imported.artifact;
     QVERIFY(history.appendEvent(finished));
     const pdf::PDFOperationHistoryVerification verified = history.verify();
     QVERIFY(verified.verified);

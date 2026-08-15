@@ -88,7 +88,7 @@ void EvidenceGraphTest::remainingFamiliesCollectWithoutFailingClosed()
     builder.appendPage(QRectF(0, 0, 200, 200));
     pdf::PDFDocument document = builder.build();
     pdf::PDFDocumentSession session(&document);
-    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceAllDomains);
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::pdfEvidenceAllDomains());
     QVERIFY(graph.isComplete());
     QVERIFY(graph.recordsForDomain(pdf::PDFEvidenceDomain::Colorants).size() >= 0);
     QVERIFY(graph.recordsForDomain(pdf::PDFEvidenceDomain::Strokes).size() >= 0);

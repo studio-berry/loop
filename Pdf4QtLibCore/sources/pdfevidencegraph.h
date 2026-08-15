@@ -48,10 +48,6 @@ enum class PDF4QTLIBCORESHARED_EXPORT PDFEvidenceDomain
 };
 Q_DECLARE_FLAGS(PDFEvidenceDomains, PDFEvidenceDomain)
 
-inline constexpr PDFEvidenceDomains PDFEvidenceAllDomains = PDFEvidenceDomains(
-    PDFEvidenceDomain::Images | PDFEvidenceDomain::Colorants | PDFEvidenceDomain::Strokes |
-    PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Fonts);
-
 struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceRecord
 {
     QString id;
@@ -96,7 +92,7 @@ class PDF4QTLIBCORESHARED_EXPORT PDFEvidenceCollector
 {
 public:
     static PDFEvidenceGraph collect(PDFDocumentSession* session,
-                                    PDFEvidenceDomains domains = PDFEvidenceAllDomains);
+                                    PDFEvidenceDomains domains = {});
 };
 
 PDF4QTLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
@@ -104,5 +100,19 @@ PDF4QTLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain d
 } // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFEvidenceDomains)
+
+namespace pdf
+{
+
+inline PDFEvidenceDomains pdfEvidenceAllDomains()
+{
+    return PDFEvidenceDomains(PDFEvidenceDomain::Images)
+         | PDFEvidenceDomain::Colorants
+         | PDFEvidenceDomain::Strokes
+         | PDFEvidenceDomain::OverprintTransparency
+         | PDFEvidenceDomain::Fonts;
+}
+
+} // namespace pdf
 
 #endif // PDFEVIDENCEGRAPH_H

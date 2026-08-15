@@ -59,26 +59,34 @@ void SchemaEvolutionTest::unsupportedMajorFailsClosed()
 
 void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()
 {
-    auto load = [](const QString& name) {
+    auto load = [](const QString& name, bool* opened) {
         QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + name);
-        QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(file.fileName()));
+        *opened = file.open(QIODevice::ReadOnly);
+        if (!*opened)
+        {
+            return QJsonObject();
+        }
         return QJsonDocument::fromJson(file.readAll()).object();
     };
 
-    const QJsonObject current = load(QStringLiteral("preflight-report-v3.json"));
+    bool opened = false;
+    const QJsonObject current = load(QStringLiteral("preflight-report-v3.json"), &opened);
+    QVERIFY2(opened, "preflight-report-v3.json");
     const pdf::PDFSchemaEnvelope currentEnvelope = pdf::readSchemaEnvelope(current);
     QCOMPARE(currentEnvelope.kind, pdf::PDFSchemaKind::PreflightReport);
     QCOMPARE(int(currentEnvelope.version.major), 3);
     QCOMPARE(pdf::checkSchemaCompatibility(currentEnvelope.kind, currentEnvelope.version),
              pdf::PDFSchemaCompatibility::Compatible);
 
-    const QJsonObject previous = load(QStringLiteral("preflight-report-v2.json"));
+    const QJsonObject previous = load(QStringLiteral("preflight-report-v2.json"), &opened);
+    QVERIFY2(opened, "preflight-report-v2.json");
     const pdf::PDFSchemaEnvelope previousEnvelope = pdf::readSchemaEnvelope(previous);
     QCOMPARE(int(previousEnvelope.version.major), 2);
     QCOMPARE(pdf::checkSchemaCompatibility(previousEnvelope.kind, previousEnvelope.version),
              pdf::PDFSchemaCompatibility::Compatible);
 
-    const QJsonObject unsupported = load(QStringLiteral("unsupported-major.json"));
+    const QJsonObject unsupported = load(QStringLiteral("unsupported-major.json"), &opened);
+    QVERIFY2(opened, "unsupported-major.json");
     const pdf::PDFSchemaEnvelope bad = pdf::readSchemaEnvelope(unsupported);
     QCOMPARE(pdf::checkSchemaCompatibility(bad.kind, bad.version),
              pdf::PDFSchemaCompatibility::UnsupportedMajor);

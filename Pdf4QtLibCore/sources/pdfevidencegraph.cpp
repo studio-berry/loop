@@ -319,6 +319,10 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph)
 
 PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session, PDFEvidenceDomains domains)
 {
+    if (domains == PDFEvidenceDomains())
+    {
+        domains = pdfEvidenceAllDomains();
+    }
     PDFEvidenceGraph graph;
     graph.producerVersion = QString::fromLatin1(PDF_LIBRARY_VERSION);
     if (!session || !session->getDocument())
