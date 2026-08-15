@@ -24,6 +24,7 @@
 #define PREFLIGHTENGINE_H
 
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 #include "pdfdocumentsession.h"
 
 #include <QByteArray>
@@ -351,6 +352,8 @@ public:
     PreflightResult run(const QJsonObject& profile);
     PreflightResult run(const PreflightProfileData& profile);
 
+    void setOperationControl(const PDFOperationControl* operationControl) { m_operationControl = operationControl; }
+
     PDFDocumentSession* getSession() const;
 
     /// Loads a profile JSON file. On error, returns false and writes a message
@@ -365,6 +368,7 @@ private:
     void registerBuiltInChecks();
 
     PDFDocumentSession* m_session;
+    const PDFOperationControl* m_operationControl = nullptr;
     std::map<QString, CheckRunner> m_checks;
 };
 

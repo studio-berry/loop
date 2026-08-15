@@ -22,6 +22,7 @@
 
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfoperationcontrol.h"
 
 #include "pdfbleedmarginprobe.h"
 #include "pdfblendfunction.h"
@@ -599,45 +600,7 @@ QJsonObject findingToJson(const PreflightFinding& finding)
 
 constexpr int PREFLIGHT_MAX_FORM_DEPTH = 32;
 
-QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace)
-{
-    if (!colorSpace)
-    {
-        return QString();
-    }
-
-    const PDFAbstractColorSpace* base = colorSpace;
-    while (base && base->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Indexed)
-    {
-        base = static_cast<const PDFIndexedColorSpace*>(base)->getBaseColorSpace().get();
-    }
-
-    if (!base)
-    {
-        return QString();
-    }
-
-    switch (base->getColorSpace())
-    {
-        case PDFAbstractColorSpace::ColorSpace::DeviceRGB:
-            return QStringLiteral("DeviceRGB");
-        case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
-            return QStringLiteral("DeviceCMYK");
-        case PDFAbstractColorSpace::ColorSpace::DeviceGray:
-            return QStringLiteral("DeviceGray");
-        case PDFAbstractColorSpace::ColorSpace::CalRGB:
-        case PDFAbstractColorSpace::ColorSpace::ICCBased:
-        case PDFAbstractColorSpace::ColorSpace::Lab:
-            return QStringLiteral("DeviceRGB");
-        case PDFAbstractColorSpace::ColorSpace::CalGray:
-            return QStringLiteral("DeviceGray");
-        case PDFAbstractColorSpace::ColorSpace::DeviceN:
-        case PDFAbstractColorSpace::ColorSpace::Separation:
-            return QStringLiteral("DeviceCMYK");
-        default:
-            return QString();
-    }
-}
+QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace);
 
 void recordPaintedColorSpace(const PDFAbstractColorSpace* colorSpace, QSet<QString>* paintedSpaces)
 {
@@ -795,21 +758,27 @@ void collectColorSpacesFromResources(const PDFDocument* document,
     }
 }
 
-QRectF imageBoundsFromCtm(const QTransform& ctm, int pixelWidth, int pixelHeight)
+QRectF imageBoundsFromCtm(const QTransform& ctm)
 {
     const QPointF corners[4] = {
         ctm.map(QPointF(0, 0)),
-        ctm.map(QPointF(pixelWidth, 0)),
-        ctm.map(QPointF(pixelWidth, pixelHeight)),
-        ctm.map(QPointF(0, pixelHeight))
+        ctm.map(QPointF(1, 0)),
+        ctm.map(QPointF(1, 1)),
+        ctm.map(QPointF(0, 1))
     };
 
-    QRectF bounds;
-    for (const QPointF& corner : corners)
+    qreal minX = corners[0].x();
+    qreal maxX = minX;
+    qreal minY = corners[0].y();
+    qreal maxY = minY;
+    for (int index = 1; index < 4; ++index)
     {
-        bounds |= QRectF(corner, corner);
+        minX = qMin(minX, corners[index].x());
+        maxX = qMax(maxX, corners[index].x());
+        minY = qMin(minY, corners[index].y());
+        maxY = qMax(maxY, corners[index].y());
     }
-    return bounds.normalized();
+    return QRectF(QPointF(minX, minY), QPointF(maxX, maxY)).normalized();
 }
 
 /// Walks the /AP appearance streams of every annotation on \p page. The visitor
@@ -1971,6 +1940,86 @@ QString classifyIccColorSpace(cmsColorSpaceSignature signature)
             return QStringLiteral("RGB");
         case cmsSigCmykData:
             return QStringLiteral("CMYK");
+        default:
+            return QString();
+    }
+}
+
+QString deviceNameFromIccSignature(cmsColorSpaceSignature signature)
+{
+    switch (signature)
+    {
+        case cmsSigRgbData:
+            return QStringLiteral("DeviceRGB");
+        case cmsSigCmykData:
+            return QStringLiteral("DeviceCMYK");
+        case cmsSigGrayData:
+            return QStringLiteral("DeviceGray");
+        default:
+            return QString();
+    }
+}
+
+QString classifyPaintedColorSpace(const PDFAbstractColorSpace* colorSpace)
+{
+    if (!colorSpace)
+    {
+        return QString();
+    }
+
+    const PDFAbstractColorSpace* base = colorSpace;
+    while (base && base->getColorSpace() == PDFAbstractColorSpace::ColorSpace::Indexed)
+    {
+        base = static_cast<const PDFIndexedColorSpace*>(base)->getBaseColorSpace().get();
+    }
+
+    if (!base)
+    {
+        return QString();
+    }
+
+    switch (base->getColorSpace())
+    {
+        case PDFAbstractColorSpace::ColorSpace::DeviceRGB:
+            return QStringLiteral("DeviceRGB");
+        case PDFAbstractColorSpace::ColorSpace::DeviceCMYK:
+            return QStringLiteral("DeviceCMYK");
+        case PDFAbstractColorSpace::ColorSpace::DeviceGray:
+            return QStringLiteral("DeviceGray");
+        case PDFAbstractColorSpace::ColorSpace::CalRGB:
+            return QStringLiteral("DeviceRGB");
+        case PDFAbstractColorSpace::ColorSpace::CalGray:
+            return QStringLiteral("DeviceGray");
+        case PDFAbstractColorSpace::ColorSpace::ICCBased:
+        {
+            const PDFICCBasedColorSpace* iccColorSpace = static_cast<const PDFICCBasedColorSpace*>(base);
+            const QByteArray iccData = iccColorSpace->getIccProfileData();
+            if (!iccData.isEmpty())
+            {
+                IccProfileGuard guard(iccData);
+                if (guard.isValid())
+                {
+                    const QString deviceName = deviceNameFromIccSignature(guard.getColorSpace());
+                    if (!deviceName.isEmpty())
+                    {
+                        return deviceName;
+                    }
+                }
+            }
+            return classifyPaintedColorSpace(iccColorSpace->getAlternateColorSpace());
+        }
+        case PDFAbstractColorSpace::ColorSpace::Separation:
+        {
+            const PDFSeparationColorSpace* separationColorSpace = static_cast<const PDFSeparationColorSpace*>(base);
+            return classifyPaintedColorSpace(separationColorSpace->getAlternateColorSpace().data());
+        }
+        case PDFAbstractColorSpace::ColorSpace::DeviceN:
+        {
+            const PDFDeviceNColorSpace* deviceNColorSpace = static_cast<const PDFDeviceNColorSpace*>(base);
+            return classifyPaintedColorSpace(deviceNColorSpace->getAlternateColorSpace().data());
+        }
+        case PDFAbstractColorSpace::ColorSpace::Lab:
+            return QString();
         default:
             return QString();
     }
@@ -4193,9 +4242,7 @@ void runImageResolutionCheck(PDFDocumentSession* session,
             info.ref = reference;
             info.minDpiX = static_cast<qreal>(image.getImageData().getWidth()) / widthInches;
             info.minDpiY = static_cast<qreal>(image.getImageData().getHeight()) / heightInches;
-            info.bbox = imageBoundsFromCtm(ctm,
-                                           image.getImageData().getWidth(),
-                                           image.getImageData().getHeight());
+            info.bbox = imageBoundsFromCtm(ctm);
             m_results->push_back(info);
             return true;
         }
@@ -4968,6 +5015,14 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
 
     for (const PreflightCheckConfig& check : profile.checks)
     {
+        if (PDFOperationControl::isOperationCancelled(m_operationControl))
+        {
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("cancelled");
+            result.errorMessage = PDFTranslationContext::tr("Preflight was cancelled.");
+            break;
+        }
+
         PreflightCheckStatus status;
         status.id = check.id;
 

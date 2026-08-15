@@ -26,6 +26,7 @@
 #include "pdfglobal.h"
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QList>
@@ -123,8 +124,8 @@ public:
     /// Compatibility path. It bypasses contextual matching but emits the same
     /// identity and provenance shape as contextual resolution.
     PreflightResolvedProfile resolveExplicitProfile(const QJsonObject& profile,
-                                                     const QString& sourceId = QStringLiteral("explicit"),
-                                                     const QString& version = QStringLiteral("1")) const;
+                                                    const QString& sourceId = QStringLiteral("explicit"),
+                                                    const QString& version = QStringLiteral("1")) const;
 };
 
 /// Recursively sorts JSON object keys and preserves array order.
@@ -133,6 +134,72 @@ PDF4QTLIBCORESHARED_EXPORT QJsonValue canonicalizePreflightJson(const QJsonValue
 /// Compact canonical JSON used for profile identities and provenance hashes.
 PDF4QTLIBCORESHARED_EXPORT QByteArray canonicalPreflightJson(const QJsonValue& value);
 
-} // namespace pdf
+/// Materializes omitted check/fixup defaults so identity does not depend on
+/// whether a default was written explicitly.
+PDF4QTLIBCORESHARED_EXPORT QJsonObject materializePreflightProfileDefaults(const QJsonObject& profile);
 
-#endif // PREFLIGHTPROFILERESOLVER_H
+/// Canonical SHA-256 digest over semantic profile content. Excludes
+/// description, authored, and digest; unknown keys are included.
+PDF4QTLIBCORESHARED_EXPORT QString computeProfileDigest(const QJsonObject& profile);
+
+/// Identity recorded on reports and import/export. A provisional profile still
+/// runs but cannot be certified.
+struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileIdentity
+{
+    QString id;
+    QString version;
+    QString name;
+    QString digest;
+    QString effectiveDigest;
+    QString sourcePath;
+    bool provisional = false;
+    QJsonObject authored;
+    QJsonObject derivedFrom;
+
+    QJsonObject toJson() const;
+};
+
+PDF4QTLIBCORESHARED_EXPORT PreflightProfileIdentity identifyPreflightProfile(const QJsonObject& profile,
+                                                                             const QString& sourcePath = QString());
+
+struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileImportResult
+{
+    bool ok = false;
+    QString errorCode;
+    QString errorMessage;
+    QJsonObject profile;
+    PreflightProfileIdentity identity;
+};
+
+/// Validates a profile file. A committed digest that does not match is rejected
+/// and never auto-repaired.
+PDF4QTLIBCORESHARED_EXPORT PreflightProfileImportResult importPreflightProfile(const QJsonObject& profile,
+                                                                               const QString& sourcePath = QString());
+
+/// Writes identity fields and a content digest in canonical form.
+PDF4QTLIBCORESHARED_EXPORT QJsonObject exportPreflightProfile(const QJsonObject& profile);
+
+/// Forks a profile, recording derived_from against the parent's digest.
+PDF4QTLIBCORESHARED_EXPORT QJsonObject forkPreflightProfile(const QJsonObject& parent,
+                                                            const QString& newId,
+                                                            const QString& newVersion);
+
+struct PDF4QTLIBCORESHARED_EXPORT PreflightVariableBindResult
+{
+    bool ok = false;
+    QString errorCode;
+    QString errorMessage;
+    QJsonObject profile;
+    QJsonArray bindings;
+};
+
+/// Substitutes ${name} references. Whole-value substitution preserves JSON type.
+/// Binding precedence is profile default < job-spec < CLI. Undeclared or
+/// unresolved required variables fail closed as unresolved-variable.
+PDF4QTLIBCORESHARED_EXPORT PreflightVariableBindResult bindPreflightProfileVariables(const QJsonObject& profile,
+                                                                                     const QJsonObject& jobSpecBindings = QJsonObject(),
+                                                                                     const QJsonObject& cliBindings = QJsonObject());
+
+}   // namespace pdf
+
+#endif   // PREFLIGHTPROFILERESOLVER_H

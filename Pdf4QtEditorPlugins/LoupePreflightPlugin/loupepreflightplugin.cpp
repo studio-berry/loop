@@ -34,6 +34,7 @@
 #include "pdfsafefilewriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
+#include "pdfjobscheduler.h"
 #include "pdfuitheme.h"
 #include "pdfwidgetutils.h"
 #include "pdfwidgetutils.h"
@@ -61,6 +62,7 @@
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QMutexLocker>
 #include <QPainter>
 #include <QPen>
 #include <QProcess>
@@ -101,8 +103,7 @@ QString defaultBleedOutputPath(const QString& sourcePath)
         return QString();
     }
 
-    return sourceInfo.absolutePath() + QDir::separator()
-        + sourceInfo.completeBaseName() + QStringLiteral("_bleed.") + sourceInfo.suffix();
+    return sourceInfo.absolutePath() + QDir::separator() + sourceInfo.completeBaseName() + QStringLiteral("_bleed.") + sourceInfo.suffix();
 }
 
 QString defaultRgbToCmykOutputPath(const QString& sourcePath)
@@ -113,8 +114,7 @@ QString defaultRgbToCmykOutputPath(const QString& sourcePath)
         return QString();
     }
 
-    return sourceInfo.absolutePath() + QDir::separator()
-        + sourceInfo.completeBaseName() + QStringLiteral("_cmyk.") + sourceInfo.suffix();
+    return sourceInfo.absolutePath() + QDir::separator() + sourceInfo.completeBaseName() + QStringLiteral("_cmyk.") + sourceInfo.suffix();
 }
 
 QString defaultDownsampleOutputPath(const QString& sourcePath)
@@ -125,8 +125,7 @@ QString defaultDownsampleOutputPath(const QString& sourcePath)
         return QString();
     }
 
-    return sourceInfo.absolutePath() + QDir::separator()
-        + sourceInfo.completeBaseName() + QStringLiteral("_downsampled.") + sourceInfo.suffix();
+    return sourceInfo.absolutePath() + QDir::separator() + sourceInfo.completeBaseName() + QStringLiteral("_downsampled.") + sourceInfo.suffix();
 }
 
 bool writeReviewedRepairCandidate(pdf::PDFRepairTransaction& transaction,
@@ -200,7 +199,8 @@ bool writeReviewedRepairCandidate(pdf::PDFRepairTransaction& transaction,
     }
     finalFile.close();
 
-    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
+                                       { return QString(); }, false, false);
     finalReader.readFromFile(outputPath);
     if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -215,7 +215,6 @@ bool writeReviewedRepairCandidate(pdf::PDFRepairTransaction& transaction,
 LoupePreflightPlugin::LoupePreflightPlugin() :
     pdf::PDFPlugin(nullptr)
 {
-
 }
 
 LoupePreflightPlugin::~LoupePreflightPlugin()
@@ -234,6 +233,8 @@ void LoupePreflightPlugin::setWidget(pdf::PDFWidget* widget)
     m_actionRunPreflight->setEnabled(false);
     m_actionRunPreflight->setToolTip(tr("Runs PdfTool preflight via QProcess (MIC-136)."));
     connect(m_actionRunPreflight, &QAction::triggered, this, &LoupePreflightPlugin::onRunPreflightTriggered);
+    connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            { onPreflightJobFinished(snapshot); });
 
     m_actionShowPanel = new QAction(QIcon(":/pdfplugins/loupepreflight/preflight.svg"), tr("Show &Report Panel"), this);
     m_actionShowPanel->setObjectName("loupepreflight_ShowPanel");
@@ -266,7 +267,7 @@ void LoupePreflightPlugin::setDocument(const pdf::PDFModifiedDocument& document)
     }
     else if (documentChanged)
     {
-        if (m_preflightProcess)
+        if (isPreflightRunning())
         {
             cancelPreflightRun(true);
         }
@@ -300,12 +301,11 @@ void LoupePreflightPlugin::ensureDockWidget()
     m_reportDockWidget->setFloating(false);
 
     connect(m_reportDockWidget, &QDockWidget::visibilityChanged, this, [this](bool visible)
-    {
+            {
         if (m_actionShowPanel && m_actionShowPanel->isChecked() != visible)
         {
             m_actionShowPanel->setChecked(visible);
-        }
-    });
+        } });
 
     connect(m_reportDockWidget, &PreflightReportDockWidget::findingSelectionChanged,
             this, &LoupePreflightPlugin::onFindingSelectionChanged);
@@ -330,7 +330,7 @@ void LoupePreflightPlugin::updateActions()
 
     if (m_actionRunPreflight)
     {
-        m_actionRunPreflight->setEnabled(hasDocument && !m_preflightProcess);
+        m_actionRunPreflight->setEnabled(hasDocument && !isPreflightRunning());
     }
 }
 
@@ -374,12 +374,12 @@ bool LoupePreflightPlugin::resolvePreflightPaths(QString* pdfToolPath, QString* 
 }
 
 void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
-                                                  const QString& profilePath,
-                                                  quint64 revisionToMatch,
-                                                  bool ignoreRevisionMatch,
-                                                  const QString& reportSourceLabel)
+                                                const QString& profilePath,
+                                                quint64 revisionToMatch,
+                                                bool ignoreRevisionMatch,
+                                                const QString& reportSourceLabel)
 {
-    if (m_preflightProcess)
+    if (isPreflightRunning())
     {
         return;
     }
@@ -412,37 +412,103 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
 
     m_preflightStdoutBuffer.clear();
     m_preflightStderrBuffer.clear();
+    m_preflightStdout.clear();
+    m_preflightStderr.clear();
+    m_preflightFailedToStart = false;
+    m_preflightOutputOverflow = false;
+    m_preflightExitCode = 0;
+    m_preflightExitStatus = 0;
     m_preflightRunRevision = revisionToMatch;
     m_preflightIgnoreRevision = ignoreRevisionMatch;
     m_preflightReportSourceLabel = reportSourceLabel;
-    m_preflightProcess = new QProcess(this);
-    m_preflightProcess->setProcessChannelMode(QProcess::SeparateChannels);
-    connect(m_preflightProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) { onPreflightProcessFinished(exitCode, static_cast<int>(exitStatus)); });
-    connect(m_preflightProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
-    {
-        if (error == QProcess::FailedToStart)
-        {
-            onPreflightProcessErrorOccurred();
-        }
-    });
-    connect(m_preflightProcess, &QProcess::readyReadStandardOutput, this, &LoupePreflightPlugin::onPreflightStdoutReady);
-    connect(m_preflightProcess, &QProcess::readyReadStandardError, this, &LoupePreflightPlugin::onPreflightStderrReady);
 
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentRevision = QString::number(revisionToMatch);
+    spec.operationId = QStringLiteral("preflight");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    pdf::PDFJobScheduler::global().setCurrentRevision(QStringLiteral("editor-preflight"), spec.documentRevision);
+    spec.documentKey = QStringLiteral("editor-preflight");
+
+    const QString workingDirectory = QCoreApplication::applicationDirPath();
     updateActions();
-    m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath,
-                              { QStringLiteral("preflight"),
-                                stagedPath,
-                                QStringLiteral("--profile"),
-                                profilePath,
-                                QStringLiteral("--console-format"),
-                                QStringLiteral("json") });
+    m_preflightJobId = pdf::PDFJobScheduler::global().submit(spec, [this, pdfToolPath, stagedPath, profilePath, workingDirectory](pdf::PDFJobContext& context)
+                                                             {
+        QProcess process;
+        process.setProcessChannelMode(QProcess::SeparateChannels);
+        process.setWorkingDirectory(workingDirectory);
+        process.start(pdfToolPath,
+                      { QStringLiteral("preflight"),
+                        stagedPath,
+                        QStringLiteral("--profile"),
+                        profilePath,
+                        QStringLiteral("--console-format"),
+                        QStringLiteral("json") });
+        if (!process.waitForStarted(5000))
+        {
+            QMutexLocker locker(&m_preflightResultMutex);
+            m_preflightFailedToStart = true;
+            m_preflightStderr = process.errorString().toLocal8Bit();
+            return;
+        }
+
+        preflight::PreflightSidecarStreamBuffer stdoutBuffer(preflight::PREFLIGHT_SIDECAR_STDOUT_MAX_BYTES);
+        preflight::PreflightSidecarStreamBuffer stderrBuffer(preflight::PREFLIGHT_SIDECAR_STDERR_MAX_BYTES);
+        bool outputOverflow = false;
+        const auto drainChannels = [&]()
+        {
+            const QByteArray stdoutChunk = process.readAllStandardOutput();
+            if (!stdoutChunk.isEmpty()
+                && stdoutBuffer.append(stdoutChunk) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+            {
+                outputOverflow = true;
+            }
+            const QByteArray stderrChunk = process.readAllStandardError();
+            if (!stderrChunk.isEmpty()
+                && stderrBuffer.append(stderrChunk) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+            {
+                outputOverflow = true;
+            }
+        };
+
+        while (!process.waitForFinished(100))
+        {
+            if (context.isCancellationRequested())
+            {
+                process.kill();
+                process.waitForFinished(3000);
+                return;
+            }
+            drainChannels();
+            if (outputOverflow)
+            {
+                process.kill();
+                process.waitForFinished(3000);
+                break;
+            }
+        }
+        drainChannels();
+
+        QMutexLocker locker(&m_preflightResultMutex);
+        m_preflightOutputOverflow = outputOverflow;
+        if (outputOverflow)
+        {
+            m_preflightStdout.clear();
+            m_preflightStderr = tr("Preflight output exceeded the maximum allowed size.").toLocal8Bit();
+            m_preflightExitCode = 1;
+            m_preflightExitStatus = static_cast<int>(QProcess::NormalExit);
+            return;
+        }
+        m_preflightExitCode = process.exitCode();
+        m_preflightExitStatus = static_cast<int>(process.exitStatus());
+        m_preflightStdout = stdoutBuffer.takeData();
+        m_preflightStderr = stderrBuffer.takeData(); });
 }
 
 void LoupePreflightPlugin::onRunPreflightTriggered()
 {
-    if (!m_document || m_preflightProcess)
+    if (!m_document || isPreflightRunning())
     {
         return;
     }
@@ -471,60 +537,65 @@ void LoupePreflightPlugin::onRunPreflightTriggered()
         return;
     }
 
-    m_preflightTemporaryDirectory = std::move(temporaryDirectory);
-    m_preflightStdoutBuffer.clear();
-    m_preflightStderrBuffer.clear();
-    m_preflightRunRevision = m_documentRevision;
-    m_preflightIgnoreRevision = false;
-    m_preflightReportSourceLabel.clear();
-    m_preflightProcess = new QProcess(this);
-    m_preflightProcess->setProcessChannelMode(QProcess::SeparateChannels);
-    connect(m_preflightProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) { onPreflightProcessFinished(exitCode, static_cast<int>(exitStatus)); });
-    connect(m_preflightProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
-    {
-        if (error == QProcess::FailedToStart)
-        {
-            onPreflightProcessErrorOccurred();
-        }
-    });
-    connect(m_preflightProcess, &QProcess::readyReadStandardOutput, this, &LoupePreflightPlugin::onPreflightStdoutReady);
-    connect(m_preflightProcess, &QProcess::readyReadStandardError, this, &LoupePreflightPlugin::onPreflightStderrReady);
-
-    updateActions();
-    m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath,
-                              { QStringLiteral("preflight"),
-                                snapshotPath,
-                                QStringLiteral("--profile"),
-                                profilePath,
-                                QStringLiteral("--console-format"),
-                                QStringLiteral("json") });
+    const QString snapshot = snapshotPath;
+    startPreflightOnFile(snapshot, profilePath, m_documentRevision, false, QString());
 }
 
-void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStatus)
+void LoupePreflightPlugin::onPreflightJobFinished(const pdf::PDFJobSnapshot& snapshot)
 {
-    if (!m_preflightProcess)
+    if (snapshot.jobId != m_preflightJobId)
     {
         return;
     }
 
-    onPreflightStdoutReady();
-    onPreflightStderrReady();
+    int exitCode = 0;
+    int exitStatus = 0;
+    bool failedToStart = false;
+    bool outputOverflow = false;
+    QByteArray standardOutput;
+    QByteArray standardErrorBytes;
+    {
+        QMutexLocker locker(&m_preflightResultMutex);
+        exitCode = m_preflightExitCode;
+        exitStatus = m_preflightExitStatus;
+        failedToStart = m_preflightFailedToStart;
+        outputOverflow = m_preflightOutputOverflow;
+        standardOutput = m_preflightStdout;
+        standardErrorBytes = m_preflightStderr;
+    }
 
     const quint64 runRevision = m_preflightRunRevision;
     const bool ignoreRevision = m_preflightIgnoreRevision;
     const QString reportSourceLabel = m_preflightReportSourceLabel;
-    const QByteArray standardOutput = m_preflightStdoutBuffer.takeData();
-    const QString standardError = QString::fromLocal8Bit(m_preflightStderrBuffer.takeData()).trimmed();
     finishPreflightRun();
+
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        return;
+    }
 
     if (!ignoreRevision && runRevision != m_documentRevision)
     {
         return;
     }
 
-    if (exitStatus != QProcess::NormalExit || !preflight::isExpectedPreflightExitCode(exitCode))
+    if (failedToStart || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        const QString error = QString::fromLocal8Bit(standardErrorBytes).trimmed();
+        QMessageBox::critical(m_widget, tr("Loupe Preflight"),
+                              tr("Could not start PdfTool: %1").arg(error.isEmpty() ? snapshot.errorMessage : error));
+        return;
+    }
+
+    if (outputOverflow)
+    {
+        QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Preflight output exceeded the maximum allowed size."));
+        return;
+    }
+
+    const QString standardError = QString::fromLocal8Bit(standardErrorBytes).trimmed();
+
+    if (exitStatus != static_cast<int>(QProcess::NormalExit) || !preflight::isExpectedPreflightExitCode(exitCode))
     {
         const QString detail = pdfplugin::pdftool::failureDetailFromStdout(
             standardOutput,
@@ -571,44 +642,6 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
     }
 }
 
-void LoupePreflightPlugin::onPreflightProcessErrorOccurred()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    const QString error = m_preflightProcess->errorString();
-    finishPreflightRun();
-    QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Could not start PdfTool: %1").arg(error));
-}
-
-void LoupePreflightPlugin::onPreflightStdoutReady()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    if (m_preflightStdoutBuffer.append(m_preflightProcess->readAllStandardOutput()) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
-    {
-        abortPreflightRun(tr("Preflight output exceeded the maximum allowed size."));
-    }
-}
-
-void LoupePreflightPlugin::onPreflightStderrReady()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    if (m_preflightStderrBuffer.append(m_preflightProcess->readAllStandardError()) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
-    {
-        abortPreflightRun(tr("Preflight diagnostic output exceeded the maximum allowed size."));
-    }
-}
-
 void LoupePreflightPlugin::finishPreflightRun()
 {
     cancelPreflightRun(true);
@@ -617,21 +650,20 @@ void LoupePreflightPlugin::finishPreflightRun()
 
 void LoupePreflightPlugin::cancelPreflightRun(bool silent)
 {
-    if (m_preflightProcess)
+    if (!m_preflightJobId.isEmpty())
     {
-        disconnect(m_preflightProcess, nullptr, this, nullptr);
-        if (m_preflightProcess->state() != QProcess::NotRunning)
-        {
-            m_preflightProcess->kill();
-            m_preflightProcess->waitForFinished(3000);
-        }
-        m_preflightProcess->deleteLater();
-        m_preflightProcess = nullptr;
+        pdf::PDFJobScheduler::global().cancel(m_preflightJobId);
+        pdf::PDFJobScheduler::global().waitForFinished(m_preflightJobId, 5000);
+        m_preflightJobId.clear();
     }
 
     m_preflightTemporaryDirectory.reset();
     m_preflightStdoutBuffer.clear();
     m_preflightStderrBuffer.clear();
+    m_preflightStdout.clear();
+    m_preflightStderr.clear();
+    m_preflightFailedToStart = false;
+    m_preflightOutputOverflow = false;
     m_preflightRunRevision = 0;
     m_preflightIgnoreRevision = false;
     m_preflightReportSourceLabel.clear();
@@ -671,10 +703,7 @@ void LoupePreflightPlugin::invalidateReportIfStale()
 
 bool LoupePreflightPlugin::documentModificationInvalidatesReport(const pdf::PDFModifiedDocument& document) const
 {
-    return document.hasReset()
-        || document.hasPageContentsChanged()
-        || document.hasFlag(pdf::PDFModifiedDocument::Annotation)
-        || document.hasFlag(pdf::PDFModifiedDocument::FormField);
+    return document.hasReset() || document.hasPageContentsChanged() || document.hasFlag(pdf::PDFModifiedDocument::Annotation) || document.hasFlag(pdf::PDFModifiedDocument::FormField);
 }
 
 void LoupePreflightPlugin::onShowPanelTriggered(bool checked)
@@ -724,12 +753,12 @@ void LoupePreflightPlugin::onLoadExampleReportTriggered()
 }
 
 void LoupePreflightPlugin::drawPage(QPainter* painter,
-                                      pdf::PDFInteger pageIndex,
-                                      const pdf::PDFPrecompiledPage* compiledPage,
-                                      pdf::PDFTextLayoutGetter& layoutGetter,
-                                      const QTransform& pagePointToDevicePointMatrix,
-                                      const pdf::PDFColorConvertor& convertor,
-                                      QList<pdf::PDFRenderError>& errors) const
+                                    pdf::PDFInteger pageIndex,
+                                    const pdf::PDFPrecompiledPage* compiledPage,
+                                    pdf::PDFTextLayoutGetter& layoutGetter,
+                                    const QTransform& pagePointToDevicePointMatrix,
+                                    const pdf::PDFColorConvertor& convertor,
+                                    QList<pdf::PDFRenderError>& errors) const
 {
     Q_UNUSED(compiledPage);
     Q_UNUSED(layoutGetter);
@@ -800,7 +829,7 @@ void LoupePreflightPlugin::drawPage(QPainter* painter,
             for (qreal offset = deviceRect.left() - deviceRect.height(); offset < deviceRect.right(); offset += spacing)
             {
                 painter->drawLine(QPointF(offset, deviceRect.bottom()),
-                                    QPointF(offset + deviceRect.height(), deviceRect.top()));
+                                  QPointF(offset + deviceRect.height(), deviceRect.top()));
             }
         }
     }
@@ -832,8 +861,7 @@ void LoupePreflightPlugin::onFindingSelectionChanged(int row)
     }
 
     const PreflightFindingEntry& finding = findings.at(row);
-    if ((finding.scope == QStringLiteral("page") || finding.scope == QStringLiteral("object"))
-        && finding.page > 0)
+    if ((finding.scope == QStringLiteral("page") || finding.scope == QStringLiteral("object")) && finding.page > 0)
     {
         m_widget->getDrawWidgetProxy()->goToPage(finding.page - 1);
     }
@@ -919,7 +947,7 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(browseButton, &QPushButton::clicked, &dialog, [&dialog, outputPathEdit, originalPath]()
-    {
+            {
         const QString selectedPath = QFileDialog::getSaveFileName(&dialog,
                                                                   tr("Save bleed-fixed PDF"),
                                                                   outputPathEdit->text().isEmpty() ? defaultBleedOutputPath(originalPath) : outputPathEdit->text(),
@@ -927,8 +955,7 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
         if (!selectedPath.isEmpty())
         {
             outputPathEdit->setText(selectedPath);
-        }
-    });
+        } });
 
     pdf::PDFWidgetUtils::style(&dialog);
 
@@ -956,10 +983,10 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
 
     const qreal bleedMm = bleedSpin->value();
     const QString mode = modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::PixelRepeat)
-        ? QStringLiteral("pixel-repeat")
-        : modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::Stretch)
-            ? QStringLiteral("stretch")
-            : QStringLiteral("mirror");
+                             ? QStringLiteral("pixel-repeat")
+                         : modeCombo->currentData().toInt() == int(pdf::PDFBleedFixupMode::Stretch)
+                             ? QStringLiteral("stretch")
+                             : QStringLiteral("mirror");
     const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
     if (!operation)
     {
@@ -969,14 +996,13 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
 
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
-        { QStringLiteral("mode"), mode },
-        { QStringLiteral("bleed_mm"), bleedMm },
-        { QStringLiteral("force"), true }
-    });
+                                                                             { QStringLiteral("mode"), mode },
+                                                                             { QStringLiteral("bleed_mm"), bleedMm },
+                                                                             { QStringLiteral("force"), true } });
     if (!addResult || !transaction.analyze() || !transaction.apply())
     {
         const QString message = !addResult ? addResult.getErrorMessage()
-            : tr("The bleed repair could not be planned or applied.");
+                                           : tr("The bleed repair could not be planned or applied.");
         QMessageBox::critical(m_widget, tr("Apply Bleed Fix"), message);
         return;
     }
@@ -1049,7 +1075,8 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
         return;
     }
     finalFile.close();
-    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
+                                       { return QString(); }, false, false);
     finalReader.readFromFile(outputPath);
     if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -1061,7 +1088,7 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
                              tr("Bleed fixup saved to %1. The open document was not modified.")
                                  .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }
@@ -1144,14 +1171,13 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(browseButton, &QPushButton::clicked, &dialog, [&dialog, outputPathEdit]()
-    {
+            {
         const QString selectedPath = QFileDialog::getSaveFileName(
             &dialog, QObject::tr("Save downsampled PDF"), outputPathEdit->text(), QObject::tr("PDF files (*.pdf)"));
         if (!selectedPath.isEmpty())
         {
             outputPathEdit->setText(selectedPath);
-        }
-    });
+        } });
 
     pdf::PDFWidgetUtils::style(&dialog);
     if (dialog.exec() != QDialog::Accepted)
@@ -1165,10 +1191,9 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
         QMessageBox::warning(m_widget, tr("Downsample Images"), tr("Choose an output file path."));
         return;
     }
-    if (QFile::exists(outputPath)
-        && QMessageBox::warning(m_widget, tr("Downsample Images"),
-                                tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    if (QFile::exists(outputPath) && QMessageBox::warning(m_widget, tr("Downsample Images"),
+                                                          tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
+                                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
     {
         return;
     }
@@ -1182,19 +1207,19 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
 
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
-        { QStringLiteral("target_dpi"), dpiSpin->value() },
-        { QStringLiteral("quality"), qualitySpin->value() }
-    });
+                                                                             { QStringLiteral("target_dpi"), dpiSpin->value() },
+                                                                             { QStringLiteral("quality"), qualitySpin->value() } });
     if (!addResult || !transaction.analyze() || !transaction.apply())
     {
         const QString message = !addResult ? addResult.getErrorMessage()
-            : tr("The downsample repair could not be planned or applied.");
+                                           : tr("The downsample repair could not be planned or applied.");
         QMessageBox::critical(m_widget, tr("Downsample Images"), message);
         return;
     }
 
     const int changedImages = transaction.results().isEmpty()
-        ? 0 : transaction.results().front().changes.size();
+                                  ? 0
+                                  : transaction.results().front().changes.size();
     if (!writeReviewedRepairCandidate(transaction, outputPath, m_widget, tr("Downsample Images")))
     {
         return;
@@ -1207,7 +1232,7 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
             .arg(changedImages)
             .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }
@@ -1287,14 +1312,13 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(browseButton, &QPushButton::clicked, &dialog, [&dialog, outputPathEdit]()
-    {
+            {
         const QString selectedPath = QFileDialog::getSaveFileName(
             &dialog, tr("Save CMYK PDF"), outputPathEdit->text(), tr("PDF files (*.pdf)"));
         if (!selectedPath.isEmpty())
         {
             outputPathEdit->setText(selectedPath);
-        }
-    });
+        } });
 
     pdf::PDFWidgetUtils::style(&dialog);
     if (dialog.exec() != QDialog::Accepted)
@@ -1308,10 +1332,9 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
         QMessageBox::warning(m_widget, tr("RGB to CMYK"), tr("Choose an output file path."));
         return;
     }
-    if (QFile::exists(outputPath)
-        && QMessageBox::warning(m_widget, tr("RGB to CMYK"),
-                                tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
-                                QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+    if (QFile::exists(outputPath) && QMessageBox::warning(m_widget, tr("RGB to CMYK"),
+                                                          tr("'%1' already exists. Overwrite it?").arg(QDir::toNativeSeparators(outputPath)),
+                                                          QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
     {
         return;
     }
@@ -1343,23 +1366,23 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
 
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, QJsonObject{
-        { QStringLiteral("target_icc_base64"), QString::fromLatin1(profileData.toBase64()) },
-        { QStringLiteral("target_icc_id"), profile.id },
-        { QStringLiteral("target_profile_name"), profile.name },
-        { QStringLiteral("intent"), intentCombo->currentData().toInt() },
-        { QStringLiteral("black_point_compensation"), blackPointCheck->isChecked() },
-        { QStringLiteral("embed_output_intent"), true }
-    });
+                                                                             { QStringLiteral("target_icc_base64"), QString::fromLatin1(profileData.toBase64()) },
+                                                                             { QStringLiteral("target_icc_id"), profile.id },
+                                                                             { QStringLiteral("target_profile_name"), profile.name },
+                                                                             { QStringLiteral("intent"), intentCombo->currentData().toInt() },
+                                                                             { QStringLiteral("black_point_compensation"), blackPointCheck->isChecked() },
+                                                                             { QStringLiteral("embed_output_intent"), true } });
     if (!addResult || !transaction.analyze() || !transaction.apply())
     {
         const QString message = !addResult ? addResult.getErrorMessage()
-            : tr("The RGB-to-CMYK repair could not be planned or applied.");
+                                           : tr("The RGB-to-CMYK repair could not be planned or applied.");
         QMessageBox::critical(m_widget, tr("RGB to CMYK"), message);
         return;
     }
 
     const int changedAreas = transaction.results().isEmpty()
-        ? 0 : transaction.results().front().changes.size();
+                                 ? 0
+                                 : transaction.results().front().changes.size();
     if (!writeReviewedRepairCandidate(transaction, outputPath, m_widget, tr("RGB to CMYK")))
     {
         return;
@@ -1370,7 +1393,7 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
                                  .arg(changedAreas)
                                  .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }
