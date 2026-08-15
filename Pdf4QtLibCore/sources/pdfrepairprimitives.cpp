@@ -118,6 +118,14 @@ public:
     {
         return PDFRepairDomain::PageGeometry | PDFRepairDomain::Images | PDFRepairDomain::Structure;
     }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.documentWide = true;
+        declared.fullRewrite = true;
+        declared.impactComplete = false;
+        return declared;
+    }
 
     PDFOperationResult analyze(const PDFDocument& source,
                                const QJsonObject& parameters,
@@ -236,6 +244,15 @@ public:
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::fullRewrite(QStringLiteral("image downsampling removes prior image data")); }
     QJsonObject parameterSchema() const override { return downsampleImagesParameterSchema(); }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains = PDFEvidenceDomain::Images;
+        declared.fullRewrite = false;
+        declared.documentWide = false;
+        declared.impactComplete = true;
+        return declared;
+    }
 
     PDFOperationResult analyze(const PDFDocument& source,
                                const QJsonObject& parameters,
@@ -362,6 +379,14 @@ public:
     PDFRepairDomains domains() const override
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Images | PDFRepairDomain::Structure;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Colorants) | PDFEvidenceDomain::Images;
+        declared.documentWide = true;
+        declared.impactComplete = true;
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument& source,
@@ -511,6 +536,15 @@ public:
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images
             | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.documentWide = true;
+        declared.fullRewrite = true;
+        declared.impactComplete = false;
+        declared.requiresIndependentOracle = true;
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument& source,

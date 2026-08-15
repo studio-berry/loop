@@ -256,6 +256,7 @@ QJsonObject PDFRepairOperation::descriptor() const
         { QStringLiteral("risk"), pdfRepairRiskName(risk()) },
         { QStringLiteral("save_policy"), savePolicy().toJson() },
         { QStringLiteral("domains"), domainArray(domains()) },
+        { QStringLiteral("impact"), impact(nullptr, QJsonObject()).toJson() },
         { QStringLiteral("preflight_fixup"), isPreflightFixup() },
         { QStringLiteral("parameter_schema"), parameterSchema() },
         { QStringLiteral("requires_preview"), true },

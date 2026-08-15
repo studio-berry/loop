@@ -147,6 +147,7 @@
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
     "UnitTestsOperationHistory",
+    "UnitTestsOperationImpact",
     "UnitTestsOperatorAcceptance",
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",

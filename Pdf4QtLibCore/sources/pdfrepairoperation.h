@@ -25,6 +25,7 @@
 
 #include "pdfrepairdiff.h"
 #include "pdfsavepolicy.h"
+#include "pdfoperationimpact.h"
 
 #if defined(_MSC_VER)
 #pragma push_macro("analyze")
@@ -203,6 +204,21 @@ public:
     virtual PDFOperationResult apply(PDFDocument* candidate,
                                      const PDFRepairPlan& plan,
                                      PDFRepairResult* result) const = 0;
+
+    /// Conservative revalidation impact. The default is incomplete, which forces
+    /// a full revalidation. Registered operations override this when they can
+    /// name Evidence Graph domains.
+    virtual PDFOperationImpact impact(const PDFDocument* source,
+                                      const QJsonObject& parameters) const
+    {
+        Q_UNUSED(source);
+        Q_UNUSED(parameters);
+        PDFOperationImpact declared;
+        declared.documentWide = true;
+        declared.fullRewrite = true;
+        declared.impactComplete = false;
+        return declared;
+    }
 
     QJsonObject descriptor() const;
 };
