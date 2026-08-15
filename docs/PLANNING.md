@@ -60,6 +60,13 @@ Tier-2 raster golden). Session/cache research lives under MIC-151/153/156/157
    diverge — if they pick different boxes, the "skip Tier-2 when Tier-1 passes"
    gate is unsound.
 
+## Worked example: semantic trust engine (0.1.1)
+
+[SEMANTIC_TRUST_ENGINE_PLAN.md](SEMANTIC_TRUST_ENGINE_PLAN.md) locks identity
+(`PDFArtifactIdentity` vs `PDFRevisionToken` = `PDFRevisionIdentity`), schema
+kinds, evidence-record fields, operation impact, and the fail-closed table.
+Surface order is Core → PdfTool → tests; the milestone does not add GUI.
+
 ## What not to put in AGENTS.md
 
 Keep DPI, sample-pixel defaults, corner policies, CLI flag lists, and issue IDs in the feature plan / Linear — not in agent-wide rules.
