@@ -120,7 +120,11 @@ private:
     struct CompileTask
     {
         CompileTask() = default;
-        CompileTask(PDFInteger pageIndex, PDFRevisionIdentity revision) : pageIndex(pageIndex), revision(std::move(revision)) { }
+        CompileTask(PDFInteger pageIndex, PDFRevisionIdentity revision) :
+            pageIndex(pageIndex),
+            revision(std::move(revision))
+        {
+        }
 
         PDFInteger pageIndex = 0;
         PDFRevisionIdentity revision;
@@ -225,4 +229,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFCOMPILER_H
+#endif   // PDFCOMPILER_H

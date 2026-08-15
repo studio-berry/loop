@@ -48,7 +48,7 @@ int depthIndex(pdf::PDFBudgetKind kind)
     }
 }
 
-} // namespace
+}   // namespace
 
 namespace pdf
 {
@@ -57,19 +57,32 @@ const char* getPDFBudgetKindName(PDFBudgetKind kind)
 {
     switch (kind)
     {
-        case PDFBudgetKind::InputBytes: return "input-bytes";
-        case PDFBudgetKind::SingleDecodedStreamBytes: return "single-decoded-stream-bytes";
-        case PDFBudgetKind::CumulativeDecodedBytes: return "cumulative-decoded-bytes";
-        case PDFBudgetKind::DecompressionRatio: return "decompression-ratio";
-        case PDFBudgetKind::ObjectDepth: return "object-depth";
-        case PDFBudgetKind::RecursiveContentDepth: return "recursive-content-depth";
-        case PDFBudgetKind::ObjectsVisited: return "objects-visited";
-        case PDFBudgetKind::RenderOperations: return "render-operations";
-        case PDFBudgetKind::RenderPixels: return "render-pixels";
-        case PDFBudgetKind::ElapsedTime: return "elapsed-time";
-        case PDFBudgetKind::EvidenceRecords: return "evidence-records";
-        case PDFBudgetKind::UndoSnapshots: return "undo-snapshots";
-        case PDFBudgetKind::RollbackArtifacts: return "rollback-artifacts";
+        case PDFBudgetKind::InputBytes:
+            return "input-bytes";
+        case PDFBudgetKind::SingleDecodedStreamBytes:
+            return "single-decoded-stream-bytes";
+        case PDFBudgetKind::CumulativeDecodedBytes:
+            return "cumulative-decoded-bytes";
+        case PDFBudgetKind::DecompressionRatio:
+            return "decompression-ratio";
+        case PDFBudgetKind::ObjectDepth:
+            return "object-depth";
+        case PDFBudgetKind::RecursiveContentDepth:
+            return "recursive-content-depth";
+        case PDFBudgetKind::ObjectsVisited:
+            return "objects-visited";
+        case PDFBudgetKind::RenderOperations:
+            return "render-operations";
+        case PDFBudgetKind::RenderPixels:
+            return "render-pixels";
+        case PDFBudgetKind::ElapsedTime:
+            return "elapsed-time";
+        case PDFBudgetKind::EvidenceRecords:
+            return "evidence-records";
+        case PDFBudgetKind::UndoSnapshots:
+            return "undo-snapshots";
+        case PDFBudgetKind::RollbackArtifacts:
+            return "rollback-artifacts";
     }
 
     return "unknown";
@@ -79,12 +92,18 @@ const char* getPDFBudgetPoolName(PDFBudgetPool pool)
 {
     switch (pool)
     {
-        case PDFBudgetPool::DocumentModel: return "document-model";
-        case PDFBudgetPool::EvidenceCache: return "evidence-cache";
-        case PDFBudgetPool::RasterTile: return "raster-tile";
-        case PDFBudgetPool::DecodedStreams: return "decoded-streams";
-        case PDFBudgetPool::Undo: return "undo";
-        case PDFBudgetPool::Rollback: return "rollback";
+        case PDFBudgetPool::DocumentModel:
+            return "document-model";
+        case PDFBudgetPool::EvidenceCache:
+            return "evidence-cache";
+        case PDFBudgetPool::RasterTile:
+            return "raster-tile";
+        case PDFBudgetPool::DecodedStreams:
+            return "decoded-streams";
+        case PDFBudgetPool::Undo:
+            return "undo";
+        case PDFBudgetPool::Rollback:
+            return "rollback";
     }
 
     return "unknown";
@@ -134,7 +153,8 @@ PDFBudgetExceededException::PDFBudgetExceededException(PDFBudgetExceeded detail)
 }
 
 PDFProcessingBudget::PDFProcessingBudget(PDFProcessingLimits limits) :
-    PDFProcessingBudget(std::move(limits), [] { return std::chrono::steady_clock::now(); })
+    PDFProcessingBudget(std::move(limits), []
+                        { return std::chrono::steady_clock::now(); })
 {
 }
 
@@ -145,7 +165,8 @@ PDFProcessingBudget::PDFProcessingBudget(PDFProcessingLimits limits, ClockNow no
 {
     if (!m_now)
     {
-        m_now = [] { return std::chrono::steady_clock::now(); };
+        m_now = []
+        { return std::chrono::steady_clock::now(); };
     }
 
     reset();
@@ -186,9 +207,7 @@ void PDFProcessingBudget::chargeCounter(std::atomic<std::uint64_t>& counter,
     {
         if (delta > limit || current > limit - delta)
         {
-            fail(kind, limit, current > std::numeric_limits<std::uint64_t>::max() - delta
-                                      ? std::numeric_limits<std::uint64_t>::max()
-                                      : current + delta,
+            fail(kind, limit, current > std::numeric_limits<std::uint64_t>::max() - delta ? std::numeric_limits<std::uint64_t>::max() : current + delta,
                  context);
         }
 
@@ -225,9 +244,7 @@ void PDFProcessingBudget::checkDecodedStreamSize(std::uint64_t decodedBytes,
             fail(PDFBudgetKind::DecompressionRatio, 0, decodedBytes, context);
         }
     }
-    else if (compressedBytes != 0
-             && (compressedBytes > std::numeric_limits<std::uint64_t>::max() / ratio
-                 || decodedBytes > compressedBytes * ratio))
+    else if (compressedBytes != 0 && (compressedBytes > std::numeric_limits<std::uint64_t>::max() / ratio || decodedBytes > compressedBytes * ratio))
     {
         fail(PDFBudgetKind::DecompressionRatio, ratio, decodedBytes, context);
     }
@@ -236,37 +253,37 @@ void PDFProcessingBudget::checkDecodedStreamSize(std::uint64_t decodedBytes,
 void PDFProcessingBudget::chargeDecodedBytes(std::uint64_t bytes, QString context)
 {
     chargeCounter(m_cumulativeDecodedBytes,
-                   bytes,
-                   PDFBudgetKind::CumulativeDecodedBytes,
-                   asLimit(m_limits.maxCumulativeDecodedBytes),
-                   context);
+                  bytes,
+                  PDFBudgetKind::CumulativeDecodedBytes,
+                  asLimit(m_limits.maxCumulativeDecodedBytes),
+                  context);
 }
 
 void PDFProcessingBudget::chargeObject(QString context)
 {
     chargeCounter(m_objectsVisited,
-                   1,
-                   PDFBudgetKind::ObjectsVisited,
-                   m_limits.maxObjectsVisited,
-                   context);
+                  1,
+                  PDFBudgetKind::ObjectsVisited,
+                  m_limits.maxObjectsVisited,
+                  context);
 }
 
 void PDFProcessingBudget::chargeRenderOperation(std::uint64_t count, QString context)
 {
     chargeCounter(m_renderOperations,
-                   count,
-                   PDFBudgetKind::RenderOperations,
-                   m_limits.maxRenderOperations,
-                   context);
+                  count,
+                  PDFBudgetKind::RenderOperations,
+                  m_limits.maxRenderOperations,
+                  context);
 }
 
 void PDFProcessingBudget::chargeRenderPixels(std::uint64_t pixels, QString context)
 {
     chargeCounter(m_renderPixels,
-                   pixels,
-                   PDFBudgetKind::RenderPixels,
-                   m_limits.maxRenderPixels,
-                   context);
+                  pixels,
+                  PDFBudgetKind::RenderPixels,
+                  m_limits.maxRenderPixels,
+                  context);
 }
 
 void PDFProcessingBudget::checkElapsed(QString context) const
@@ -337,4 +354,4 @@ PDFProcessingBudget::DepthScope::~DepthScope()
     throw PDFBudgetExceededException({ kind, budgetPoolFor(kind), limit, attempted, context });
 }
 
-} // namespace pdf
+}   // namespace pdf

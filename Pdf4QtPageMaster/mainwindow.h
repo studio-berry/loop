@@ -300,4 +300,4 @@ private:
 
 }   // namespace pdfpagemaster
 
-#endif // PDFPAGEMASTER_MAINWINDOW_H
+#endif   // PDFPAGEMASTER_MAINWINDOW_H

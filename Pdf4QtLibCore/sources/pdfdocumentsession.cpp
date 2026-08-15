@@ -98,12 +98,12 @@ void PDFDocumentSession::setRendererFeatures(PDFRenderer::Features features)
     {
         PDFMeshQualitySettings meshQualitySettings;
         m_renderer = std::make_unique<PDFRenderer>(m_document,
-                                                    m_fontCache.get(),
-                                                    m_cms.get(),
-                                                    m_optionalContentActivity.get(),
-                                                    m_features,
-                                                    meshQualitySettings,
-                                                    m_processingBudget.get());
+                                                   m_fontCache.get(),
+                                                   m_cms.get(),
+                                                   m_optionalContentActivity.get(),
+                                                   m_features,
+                                                   meshQualitySettings,
+                                                   m_processingBudget.get());
     }
 }
 
@@ -177,7 +177,7 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         return nullptr;
     }
 
-    const PageCacheKey key { getRevision(), pageIndex };
+    const PageCacheKey key{ getRevision(), pageIndex };
     auto it = m_compileCache.find(key);
     if (it != m_compileCache.cend())
     {
@@ -213,7 +213,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
         return QByteArray();
     }
 
-    const StreamCacheKey key { getRevision(), reference };
+    const StreamCacheKey key{ getRevision(), reference };
     auto it = m_streamCache.find(key);
     if (it != m_streamCache.cend())
     {
@@ -291,12 +291,12 @@ void PDFDocumentSession::initializeRendering()
 
     PDFMeshQualitySettings meshQualitySettings;
     m_renderer = std::make_unique<PDFRenderer>(m_document,
-                                                m_fontCache.get(),
-                                                m_cms.get(),
-                                                m_optionalContentActivity.get(),
-                                                m_features,
-                                                meshQualitySettings,
-                                                m_processingBudget.get());
+                                               m_fontCache.get(),
+                                               m_cms.get(),
+                                               m_optionalContentActivity.get(),
+                                               m_features,
+                                               meshQualitySettings,
+                                               m_processingBudget.get());
 }
 
-} // namespace pdf
+}   // namespace pdf

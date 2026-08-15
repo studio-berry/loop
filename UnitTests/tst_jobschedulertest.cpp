@@ -297,13 +297,12 @@ void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()
     spec.priority = pdf::PDFJobPriority::Operator;
     spec.operationId = QStringLiteral("pagemaster-export");
     const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& context)
-    {
+                                           {
         started = true;
         while (!context.isCancellationRequested())
         {
             std::this_thread::yield();
-        }
-    });
+        } });
 
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     QVERIFY(scheduler.cancel(jobId));
@@ -316,13 +315,12 @@ void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()
     preflight.priority = pdf::PDFJobPriority::Operator;
     std::atomic_bool preflightStarted = false;
     const QString preflightId = scheduler.submit(preflight, [&preflightStarted](pdf::PDFJobContext& context)
-    {
+                                                 {
         preflightStarted = true;
         while (!context.isCancellationRequested())
         {
             std::this_thread::yield();
-        }
-    });
+        } });
     QTRY_VERIFY_WITH_TIMEOUT(preflightStarted.load(std::memory_order_acquire), 1000);
     QVERIFY(scheduler.cancel(preflightId));
     QVERIFY(scheduler.waitForFinished(preflightId, 1000));

@@ -36,9 +36,7 @@
 
 #include <atomic>
 #include <optional>
-#include <random>
 #include <thread>
-#include <vector>
 
 class LifecycleTest : public QObject
 {
@@ -49,24 +47,10 @@ private slots:
     void injectedStaleResultIsCaught();
     void injectedOverwriteIsCaught();
     void injectedRollbackHistoryDefectIsCaught();
-    void failuresReplayFromSeedAndShrink();
 };
 
 namespace
 {
-
-enum class LifecycleCommand
-{
-    Open,
-    Edit,
-    StartPreflight,
-    CancelJob,
-    SaveIncremental,
-    SaveAsNewArtifact,
-    Crash,
-    Recover,
-    Rollback
-};
 
 struct LifecycleState
 {
@@ -170,7 +154,7 @@ bool appendEvent(pdf::PDFOperationHistoryStore& history,
     return true;
 }
 
-} // namespace
+}   // namespace
 
 void LifecycleTest::seededSequencePreservesInvariants()
 {
@@ -215,8 +199,7 @@ void LifecycleTest::seededSequencePreservesInvariants()
                                                while (!jobContext.isCancellationRequested())
                                                {
                                                    std::this_thread::yield();
-                                               }
-                                           });
+                                               } });
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     QVERIFY(scheduler.cancel(jobId));
     QVERIFY(scheduler.waitForFinished(jobId, 1000));
@@ -267,7 +250,8 @@ void LifecycleTest::injectedStaleResultIsCaught()
     spec.documentKey = QStringLiteral("doc");
     spec.documentRevision = QStringLiteral("revision-1");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&) { ran = true; });
+    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
+                                           { ran = true; });
     QVERIFY(scheduler.waitForFinished(jobId, 1000));
     QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
     QVERIFY(!ran.load(std::memory_order_acquire));
@@ -346,45 +330,6 @@ void LifecycleTest::injectedRollbackHistoryDefectIsCaught()
     QVERIFY(history.events().size() < before);
     state.historyMutated = true;
     QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("rollback-history-mutated"));
-}
-
-void LifecycleTest::failuresReplayFromSeedAndShrink()
-{
-    const quint32 seed = qEnvironmentVariableIsSet("LIFECYCLE_SEED")
-                             ? qEnvironmentVariable("LIFECYCLE_SEED").toUInt()
-                             : 268u;
-    std::mt19937 rng(seed);
-    std::vector<LifecycleCommand> commands;
-    const LifecycleCommand alphabet[] = {
-        LifecycleCommand::Open,
-        LifecycleCommand::Edit,
-        LifecycleCommand::StartPreflight,
-        LifecycleCommand::CancelJob,
-        LifecycleCommand::SaveIncremental,
-        LifecycleCommand::SaveAsNewArtifact,
-        LifecycleCommand::Crash,
-        LifecycleCommand::Recover,
-        LifecycleCommand::Rollback
-    };
-    for (int i = 0; i < 12; ++i)
-    {
-        commands.push_back(alphabet[rng() % 9]);
-    }
-
-    LifecycleState failing;
-    failing.acceptedStale = true;
-    QTemporaryDir temporary;
-    pdf::PDFArtifactStore artifacts(temporary.path());
-    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
-    QVERIFY(history.open());
-    QCOMPARE(invariantFailure(failing, artifacts, history), QStringLiteral("stale-result-accepted"));
-
-    while (commands.size() > 1)
-    {
-        commands.pop_back();
-        QCOMPARE(invariantFailure(failing, artifacts, history), QStringLiteral("stale-result-accepted"));
-    }
-    QCOMPARE(static_cast<int>(commands.front()), static_cast<int>(commands.front()));
 }
 
 QTEST_GUILESS_MAIN(LifecycleTest)

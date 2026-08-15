@@ -49,17 +49,18 @@ void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
 
 void SchemaEvolutionTest::unsupportedMajorFailsClosed()
 {
-    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, {99, 0}),
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 99, 0 }),
              pdf::PDFSchemaCompatibility::UnsupportedMajor);
-    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::Unknown, {1, 0}),
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::Unknown, { 1, 0 }),
              pdf::PDFSchemaCompatibility::UnknownKind);
-    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, {3, 0}),
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 3, 0 }),
              pdf::PDFSchemaCompatibility::Compatible);
 }
 
 void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()
 {
-    auto load = [](const QString& name, bool* opened) {
+    auto load = [](const QString& name, bool* opened)
+    {
         QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + name);
         *opened = file.open(QIODevice::ReadOnly);
         if (!*opened)
@@ -94,8 +95,8 @@ void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()
 
 void SchemaEvolutionTest::migrateIsPure()
 {
-    QJsonObject document{{QStringLiteral("extra"), QStringLiteral("keep")}};
-    const QJsonObject migrated = pdf::migrateSchemaDocument(pdf::PDFSchemaKind::PreflightReport, {2, 0}, document);
+    QJsonObject document{ { QStringLiteral("extra"), QStringLiteral("keep") } };
+    const QJsonObject migrated = pdf::migrateSchemaDocument(pdf::PDFSchemaKind::PreflightReport, { 2, 0 }, document);
     QCOMPARE(migrated.value(QStringLiteral("extra")).toString(), QStringLiteral("keep"));
 }
 

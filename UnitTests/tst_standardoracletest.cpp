@@ -74,9 +74,8 @@ QString writeScript(const QTemporaryDir& directory, const QString& name, const Q
     return path;
 }
 
-pdf::PDFStandardConversionSettings pdfaSettings(const QString& program, int exitCodePlaceholder = 0)
+pdf::PDFStandardConversionSettings pdfaSettings(const QString& program)
 {
-    Q_UNUSED(exitCodePlaceholder);
     pdf::PDFStandardConversionSettings settings;
     settings.target = pdf::PDFStandardTarget::PDFA2b;
     settings.outputIntentIccData = loadCmykProfile();
@@ -168,7 +167,6 @@ void StandardOracleTest::veraPdfLaneSkipsWhenMissing()
     {
         QSKIP("veraPDF is not installed; independent CI oracle lane is skip-if-missing.");
     }
-    QVERIFY(true);
 }
 
 QTEST_APPLESS_MAIN(StandardOracleTest)

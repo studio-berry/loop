@@ -70,7 +70,7 @@ QJsonObject validMetadata()
     };
 }
 
-} // namespace
+}   // namespace
 
 void PluginAbiTest::acceptedManifestPasses()
 {

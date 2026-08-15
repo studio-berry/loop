@@ -17,7 +17,7 @@ before tagging `0.1.1`.
 | Standards claims pass an independent oracle | S12 | Wave C (mock oracle + fixture triad) |
 | Resource exhaustion reports INCOMPLETE within bounds | S14–S15 | This branch |
 | Huge-document behavior measured and bounded | S15 | This branch (generated representatives) |
-| Model-based lifecycle catches stale/overwrite/rollback defects | S16 | This branch |
+| Model-based lifecycle catches stale/overwrite/rollback defects | S16 | This branch (injected defects; not a command-alphabet fuzzer) |
 | Native plugin ABI/load policy tested | S17 | This branch |
 | Benchmark identity and architecture invariants automated | S18 | This branch (`PDFRunIdentity`, `docs/architecture-invariants.json`, catalog `--check`) |
 | No new GUI required | all | Held |

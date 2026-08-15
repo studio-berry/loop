@@ -124,8 +124,8 @@ public:
     /// Compatibility path. It bypasses contextual matching but emits the same
     /// identity and provenance shape as contextual resolution.
     PreflightResolvedProfile resolveExplicitProfile(const QJsonObject& profile,
-                                                     const QString& sourceId = QStringLiteral("explicit"),
-                                                     const QString& version = QStringLiteral("1")) const;
+                                                    const QString& sourceId = QStringLiteral("explicit"),
+                                                    const QString& version = QStringLiteral("1")) const;
 };
 
 /// Recursively sorts JSON object keys and preserves array order.
@@ -200,6 +200,6 @@ PDF4QTLIBCORESHARED_EXPORT PreflightVariableBindResult bindPreflightProfileVaria
                                                                                      const QJsonObject& jobSpecBindings = QJsonObject(),
                                                                                      const QJsonObject& cliBindings = QJsonObject());
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PREFLIGHTPROFILERESOLVER_H
+#endif   // PREFLIGHTPROFILERESOLVER_H

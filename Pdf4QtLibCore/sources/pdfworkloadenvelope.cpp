@@ -25,6 +25,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QProcess>
 #include <QSysInfo>
 #include <QtGlobal>
 
@@ -63,15 +64,39 @@ QString gitCommitIdentity()
     {
         return QString::fromUtf8(env).trimmed();
     }
+
     const QByteArray sha = qgetenv("GITHUB_SHA");
     if (!sha.isEmpty())
     {
         return QString::fromUtf8(sha).trimmed();
     }
+
+#ifdef PDF4QT_GIT_COMMIT
+    {
+        const QString compiled = QString::fromLatin1(PDF4QT_GIT_COMMIT).trimmed();
+        if (!compiled.isEmpty())
+        {
+            return compiled;
+        }
+    }
+#endif
+
+    QProcess git;
+    git.setProcessChannelMode(QProcess::SeparateChannels);
+    git.start(QStringLiteral("git"), { QStringLiteral("rev-parse"), QStringLiteral("HEAD") });
+    if (git.waitForFinished(2000) && git.exitStatus() == QProcess::NormalExit && git.exitCode() == 0)
+    {
+        const QString result = QString::fromUtf8(git.readAllStandardOutput()).trimmed();
+        if (!result.isEmpty())
+        {
+            return result;
+        }
+    }
+
     return QString();
 }
 
-} // namespace
+}   // namespace
 
 PDFRunIdentity PDFRunIdentity::capture()
 {
@@ -178,4 +203,4 @@ QJsonObject PDFWorkloadEnvelope::toJson() const
     return object;
 }
 
-} // namespace pdf
+}   // namespace pdf

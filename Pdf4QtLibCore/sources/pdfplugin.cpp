@@ -43,7 +43,7 @@ QJsonObject pluginIdentityObject(const QJsonObject& json)
     return json;
 }
 
-} // namespace
+}   // namespace
 
 QString pdfPluginCapabilityToString(PDFPluginCapability capability)
 {
@@ -104,7 +104,6 @@ PDFPlugin::PDFPlugin(QObject* parent) :
     m_cmsManager(nullptr),
     m_document(nullptr)
 {
-
 }
 
 void PDFPlugin::setDataExchangeInterface(IPluginDataExchange* dataExchangeInterface)
@@ -191,10 +190,10 @@ bool pluginPathIsInsideAllowedDirectory(const QString& pluginPath, const QString
 }
 
 PDFPluginTrustDecision inspectPluginManifest(const QJsonObject& qtMetaData,
-                                            const QString& pluginPath,
-                                            const QString& allowedDirectory,
-                                            const QSet<QString>& seenPluginIds,
-                                            quint32 expectedAbi)
+                                             const QString& pluginPath,
+                                             const QString& allowedDirectory,
+                                             const QSet<QString>& seenPluginIds,
+                                             quint32 expectedAbi)
 {
     PDFPluginTrustDecision decision;
     if (!pluginPathIsInsideAllowedDirectory(pluginPath, allowedDirectory))

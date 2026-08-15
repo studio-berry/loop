@@ -256,12 +256,7 @@ bool profileSourceFromJson(const QJsonObject& profileObject,
     PreflightProfileData parsedProfile;
     if (!validator.parseProfile(profileObject, parsedProfile, errorMessage))
     {
-        // An otherwise well-formed profile with an empty checks array is a semantic
-        // authoring problem PreflightEngine::run() itself reports as a document-scope
-        // 'profile' finding, not a source-validation failure - accept the source here
-        // (resolveMatched() below runs the same exemption for the merged/effective
-        // profile) so the real run classifies it downstream instead of this pre-check
-        // rejecting it outright as an unconditional resolver error.
+        // Empty checks are classified by PreflightEngine::run(), not as a resolver error.
         const bool isEmptyChecksOnly = !profileObject.value(QStringLiteral("name")).toString().isEmpty() && profileObject.value(QStringLiteral("checks")).toArray().isEmpty();
         if (!isEmptyChecksOnly)
         {
@@ -560,12 +555,7 @@ PreflightResolvedProfile resolveMatched(const QList<RankedSource>& matched,
     PreflightProfileData parsed;
     if (!validator.parseProfile(effective, parsed, errorMessage))
     {
-        // An otherwise well-formed profile with an empty checks array is a semantic
-        // authoring problem that PreflightEngine::run() itself reports as a
-        // document-scope 'profile' finding, not a resolution/merge failure - let
-        // resolution succeed so that classification happens once, downstream,
-        // instead of being pre-empted here as a resolver error (which always maps
-        // to an Error verdict / PreflightError exit code, regardless of reason).
+        // Empty checks are classified by PreflightEngine::run(), not as a resolver error.
         const bool isEmptyChecksOnly = !effective.value(QStringLiteral("name")).toString().isEmpty() && effective.value(QStringLiteral("checks")).toArray().isEmpty();
         if (!isEmptyChecksOnly)
         {

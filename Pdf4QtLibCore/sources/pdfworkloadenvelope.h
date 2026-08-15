@@ -53,8 +53,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRunIdentity
     static QString digestBytes(const QByteArray& bytes);
 };
 
-/// Measured huge-document envelope. Fixtures are generated representatives;
-/// do not commit multi-hundred-megabyte binaries.
+/// Measured huge-document envelope.
 struct PDF4QTLIBCORESHARED_EXPORT PDFWorkloadEnvelope
 {
     PDFRunIdentity identity;
@@ -69,6 +68,6 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFWorkloadEnvelope
     QJsonObject toJson() const;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFWORKLOADENVELOPE_H
+#endif   // PDFWORKLOADENVELOPE_H

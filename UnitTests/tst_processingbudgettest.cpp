@@ -33,7 +33,10 @@
 class SequentialByteDevice final : public QIODevice
 {
 public:
-    explicit SequentialByteDevice(QByteArray data) : m_data(std::move(data)) { }
+    explicit SequentialByteDevice(QByteArray data) :
+        m_data(std::move(data))
+    {
+    }
 
     bool isSequential() const override { return true; }
 
@@ -108,14 +111,14 @@ void ProcessingBudgetTest::depthIsBoundedAndTyped()
     limits.maxRecursiveContentDepth = 1;
     pdf::PDFProcessingBudget budget(limits);
     pdf::PDFProcessingBudget::DepthScope outer(budget,
-                                                pdf::PDFBudgetKind::RecursiveContentDepth,
-                                                QStringLiteral("form"));
+                                               pdf::PDFBudgetKind::RecursiveContentDepth,
+                                               QStringLiteral("form"));
 
     try
     {
         pdf::PDFProcessingBudget::DepthScope inner(budget,
-                                                    pdf::PDFBudgetKind::RecursiveContentDepth,
-                                                    QStringLiteral("nested form"));
+                                                   pdf::PDFBudgetKind::RecursiveContentDepth,
+                                                   QStringLiteral("nested form"));
         QFAIL("expected recursive-depth budget failure");
     }
     catch (const pdf::PDFBudgetExceededException& exception)
@@ -132,7 +135,8 @@ void ProcessingBudgetTest::elapsedTimeIsCooperativelyChecked()
     Clock::time_point now = Clock::time_point{};
     pdf::PDFProcessingLimits limits;
     limits.maxElapsed = std::chrono::milliseconds(10);
-    pdf::PDFProcessingBudget budget(limits, [&now] { return now; });
+    pdf::PDFProcessingBudget budget(limits, [&now]
+                                    { return now; });
 
     now += std::chrono::milliseconds(11);
     try
@@ -173,7 +177,8 @@ void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
 {
     pdf::PDFProcessingLimits limits;
     limits.maxInputBytes = 4;
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false, limits);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false, limits);
     SequentialByteDevice device(QByteArrayLiteral("0123456789"));
     QVERIFY(device.open(QIODevice::ReadOnly));
 

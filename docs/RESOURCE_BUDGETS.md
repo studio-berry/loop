@@ -8,8 +8,9 @@ incomplete operation and must not report a normal pass or successful output.
 
 The conservative defaults bound input bytes, each decoded stream, cumulative
 decoded bytes, decompression ratio, object count, recursive content depth,
-render operations, rendered pixels, elapsed processing time, evidence records,
-undo snapshots, and rollback artifacts. The existing hard stream-filter
+render operations, rendered pixels, elapsed processing time, and evidence
+records. Named `undo` and `rollback` pools exist with charge APIs; history
+and artifact stores do not call them yet. The existing hard stream-filter
 ceilings remain active as a second line of defense.
 
 ## Named pools
@@ -36,8 +37,8 @@ Synthetic exhaustion fixtures are generated in `UnitTestsBudgetExhaustion`
 commit multi-GB binaries.
 
 Under memory pressure, `PDFDocumentSession::shedPrefetchAndQuality()`
-drops prefetch and quality work before interaction. The job scheduler
-still reserves an interaction slot when background work is saturated.
+shrinks compile and stream cache caps. The job scheduler still reserves
+an interaction slot when background work is saturated.
 
 ## Reader and session behavior
 

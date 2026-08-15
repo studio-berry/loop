@@ -187,6 +187,6 @@ private:
     std::deque<StreamCacheKey> m_streamCacheOrder;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFDOCUMENTSESSION_H
+#endif   // PDFDOCUMENTSESSION_H

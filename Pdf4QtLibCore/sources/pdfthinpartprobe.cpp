@@ -42,28 +42,19 @@ namespace
 
 bool isUsableBounds(const QRectF& bounds)
 {
-    return bounds.isValid()
-        && std::isfinite(bounds.left())
-        && std::isfinite(bounds.top())
-        && std::isfinite(bounds.width())
-        && std::isfinite(bounds.height())
-        && bounds.width() > 0.0
-        && bounds.height() > 0.0;
+    return bounds.isValid() && std::isfinite(bounds.left()) && std::isfinite(bounds.top()) && std::isfinite(bounds.width()) && std::isfinite(bounds.height()) && bounds.width() > 0.0 && bounds.height() > 0.0;
 }
 
 QImage rasterizeMask(const QPainterPath& path,
-                    const QRectF& bounds,
-                    int dpi,
-                    qint64 maxRasterPixels,
-                    const QString& context)
+                     const QRectF& bounds,
+                     int dpi,
+                     qint64 maxRasterPixels,
+                     const QString& context)
 {
     const qreal scale = static_cast<qreal>(dpi) / 72.0;
     const double widthReal = std::ceil(bounds.width() * scale) + 2.0;
     const double heightReal = std::ceil(bounds.height() * scale) + 2.0;
-    if (!std::isfinite(widthReal) || !std::isfinite(heightReal)
-        || widthReal <= 0.0 || heightReal <= 0.0
-        || widthReal > static_cast<double>(std::numeric_limits<int>::max())
-        || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0 || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         PDFBudgetExceeded detail;
         detail.kind = PDFBudgetKind::RenderPixels;
@@ -121,8 +112,8 @@ std::vector<float> distanceTransform(const QImage& mask, bool invert)
         // must not become a negative-space candidate, otherwise every path
         // would appear to have a thin gap at the mask boundary.
         return invert
-            ? (!painted && x > 0 && y > 0 && x + 1 < mask.width() && y + 1 < mask.height())
-            : painted;
+                   ? (!painted && x > 0 && y > 0 && x + 1 < mask.width() && y + 1 < mask.height())
+                   : painted;
     };
 
     for (int y = 0; y < height; ++y)
@@ -142,10 +133,14 @@ std::vector<float> distanceTransform(const QImage& mask, bool invert)
         for (int x = 0; x < width; ++x)
         {
             float& distance = distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
-            if (x > 0) distance = std::min(distance, distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + 1.0f);
-            if (y > 0) distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x)] + 1.0f);
-            if (x > 0 && y > 0) distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + diagonal);
-            if (x + 1 < width && y > 0) distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + diagonal);
+            if (x > 0)
+                distance = std::min(distance, distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + 1.0f);
+            if (y > 0)
+                distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x)] + 1.0f);
+            if (x > 0 && y > 0)
+                distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + diagonal);
+            if (x + 1 < width && y > 0)
+                distance = std::min(distance, distances[static_cast<size_t>(y - 1) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + diagonal);
         }
     }
     for (int y = height - 1; y >= 0; --y)
@@ -153,17 +148,21 @@ std::vector<float> distanceTransform(const QImage& mask, bool invert)
         for (int x = width - 1; x >= 0; --x)
         {
             float& distance = distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)];
-            if (x + 1 < width) distance = std::min(distance, distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + 1.0f);
-            if (y + 1 < height) distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x)] + 1.0f);
-            if (x + 1 < width && y + 1 < height) distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + diagonal);
-            if (x > 0 && y + 1 < height) distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + diagonal);
+            if (x + 1 < width)
+                distance = std::min(distance, distances[static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + 1.0f);
+            if (y + 1 < height)
+                distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x)] + 1.0f);
+            if (x + 1 < width && y + 1 < height)
+                distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x + 1)] + diagonal);
+            if (x > 0 && y + 1 < height)
+                distance = std::min(distance, distances[static_cast<size_t>(y + 1) * static_cast<size_t>(width) + static_cast<size_t>(x - 1)] + diagonal);
         }
     }
 
     return distances;
 }
 
-} // namespace
+}   // namespace
 
 PDFThinPartMeasurement measureThinPartPath(const QPainterPath& pagePath,
                                            int dpi,
@@ -216,8 +215,7 @@ PDFThinPartMeasurement measureThinPartPath(const QPainterPath& pagePath,
                     {
                         continue;
                     }
-                    if (isInside(neighborX, neighborY)
-                        && distances[static_cast<size_t>(neighborY) * static_cast<size_t>(width) + static_cast<size_t>(neighborX)] > distance + 0.001f)
+                    if (isInside(neighborX, neighborY) && distances[static_cast<size_t>(neighborY) * static_cast<size_t>(width) + static_cast<size_t>(neighborX)] > distance + 0.001f)
                     {
                         localMaximum = false;
                         break;
@@ -247,4 +245,4 @@ PDFThinPartMeasurement measureThinPartPath(const QPainterPath& pagePath,
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf

@@ -76,7 +76,7 @@ pdf::PDFDocument rgbPageDocument()
     return builder.build();
 }
 
-} // namespace
+}   // namespace
 
 void BudgetExhaustionTest::everyKindReportsExactKindAndPool()
 {
@@ -85,98 +85,106 @@ void BudgetExhaustionTest::everyKindReportsExactKindAndPool()
         limits.maxInputBytes = 1;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::InputBytes, pdf::PDFBudgetPool::DocumentModel,
-                   [&budget] { budget.chargeInputBytes(2, QStringLiteral("input")); });
+                   [&budget]
+                   { budget.chargeInputBytes(2, QStringLiteral("input")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxDecodedStreamBytes = 1;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::SingleDecodedStreamBytes, pdf::PDFBudgetPool::DecodedStreams,
-                   [&budget] { budget.checkDecodedStreamSize(8, 8, QStringLiteral("stream")); });
+                   [&budget]
+                   { budget.checkDecodedStreamSize(8, 8, QStringLiteral("stream")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxCumulativeDecodedBytes = 1;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::CumulativeDecodedBytes, pdf::PDFBudgetPool::DecodedStreams,
-                   [&budget] { budget.chargeDecodedBytes(2, QStringLiteral("decode")); });
+                   [&budget]
+                   { budget.chargeDecodedBytes(2, QStringLiteral("decode")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxDecompressionRatio = 2;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::DecompressionRatio, pdf::PDFBudgetPool::DecodedStreams,
-                   [&budget] { budget.checkDecodedStreamSize(20, 2, QStringLiteral("ratio")); });
+                   [&budget]
+                   { budget.checkDecodedStreamSize(20, 2, QStringLiteral("ratio")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxObjectDepth = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::ObjectDepth, pdf::PDFBudgetPool::DocumentModel, [&budget]
-                   {
-                       pdf::PDFProcessingBudget::DepthScope scope(budget, pdf::PDFBudgetKind::ObjectDepth, QStringLiteral("obj"));
-                   });
+                   { pdf::PDFProcessingBudget::DepthScope scope(budget, pdf::PDFBudgetKind::ObjectDepth, QStringLiteral("obj")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxRecursiveContentDepth = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::RecursiveContentDepth, pdf::PDFBudgetPool::DocumentModel, [&budget]
-                   {
-                       pdf::PDFProcessingBudget::DepthScope scope(budget, pdf::PDFBudgetKind::RecursiveContentDepth, QStringLiteral("form"));
-                   });
+                   { pdf::PDFProcessingBudget::DepthScope scope(budget, pdf::PDFBudgetKind::RecursiveContentDepth, QStringLiteral("form")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxObjectsVisited = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::ObjectsVisited, pdf::PDFBudgetPool::DocumentModel,
-                   [&budget] { budget.chargeObject(QStringLiteral("object")); });
+                   [&budget]
+                   { budget.chargeObject(QStringLiteral("object")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxRenderOperations = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::RenderOperations, pdf::PDFBudgetPool::RasterTile,
-                   [&budget] { budget.chargeRenderOperation(1, QStringLiteral("op")); });
+                   [&budget]
+                   { budget.chargeRenderOperation(1, QStringLiteral("op")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxRenderPixels = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::RenderPixels, pdf::PDFBudgetPool::RasterTile,
-                   [&budget] { budget.chargeRenderPixels(1, QStringLiteral("px")); });
+                   [&budget]
+                   { budget.chargeRenderPixels(1, QStringLiteral("px")); });
     }
     {
         using Clock = std::chrono::steady_clock;
         Clock::time_point now{};
         pdf::PDFProcessingLimits limits;
         limits.maxElapsed = std::chrono::milliseconds(0);
-        pdf::PDFProcessingBudget budget(limits, [&now] { return now; });
+        pdf::PDFProcessingBudget budget(limits, [&now]
+                                        { return now; });
         now += std::chrono::milliseconds(1);
         expectKind(pdf::PDFBudgetKind::ElapsedTime, pdf::PDFBudgetPool::DocumentModel,
-                   [&budget] { budget.checkElapsed(QStringLiteral("clock")); });
+                   [&budget]
+                   { budget.checkElapsed(QStringLiteral("clock")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxEvidenceRecords = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::EvidenceRecords, pdf::PDFBudgetPool::EvidenceCache,
-                   [&budget] { budget.chargeEvidenceRecords(1, QStringLiteral("graph")); });
+                   [&budget]
+                   { budget.chargeEvidenceRecords(1, QStringLiteral("graph")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxUndoSnapshots = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::UndoSnapshots, pdf::PDFBudgetPool::Undo,
-                   [&budget] { budget.chargeUndoSnapshot(QStringLiteral("undo")); });
+                   [&budget]
+                   { budget.chargeUndoSnapshot(QStringLiteral("undo")); });
     }
     {
         pdf::PDFProcessingLimits limits;
         limits.maxRollbackArtifacts = 0;
         pdf::PDFProcessingBudget budget(limits);
         expectKind(pdf::PDFBudgetKind::RollbackArtifacts, pdf::PDFBudgetPool::Rollback,
-                   [&budget] { budget.chargeRollbackArtifact(QStringLiteral("rollback")); });
+                   [&budget]
+                   { budget.chargeRollbackArtifact(QStringLiteral("rollback")); });
     }
 }
 
@@ -212,8 +220,8 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Exhaust evidence") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
-              { QStringLiteral("id"), QStringLiteral("color-inventory") },
-              { QStringLiteral("severity"), QStringLiteral("info") } } } }
+                                        { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                        { QStringLiteral("severity"), QStringLiteral("info") } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
