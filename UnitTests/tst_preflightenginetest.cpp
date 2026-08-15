@@ -125,12 +125,11 @@ namespace
 {
 
 const pdf::PreflightFinding* findThinPartFinding(const QList<pdf::PreflightFinding>& findings,
-                                                  const QString& classification)
+                                                 const QString& classification)
 {
     for (const pdf::PreflightFinding& finding : findings)
     {
-        if (finding.checkId != QStringLiteral("thin-parts")
-            || finding.type == QStringLiteral("check-incomplete"))
+        if (finding.checkId != QStringLiteral("thin-parts") || finding.type == QStringLiteral("check-incomplete"))
         {
             continue;
         }
@@ -146,7 +145,7 @@ const pdf::PreflightFinding* findThinPartFinding(const QList<pdf::PreflightFindi
 }
 
 void assertNormalizedThinPartFinding(const pdf::PreflightFinding& finding,
-                                       const QString& classification)
+                                     const QString& classification)
 {
     QCOMPARE(finding.checkId, QStringLiteral("thin-parts"));
     QCOMPARE(finding.evidence.value(QStringLiteral("class")).toString(), classification);
@@ -713,11 +712,9 @@ void PreflightEngineTest::run_thinParts_routesSeverityByClass()
                                             { QStringLiteral("min_effective_width_pt"), 0.5 },
                                             { QStringLiteral("probe_dpi"), 1200 },
                                             { QStringLiteral("classes"), QJsonArray{
-                                                                               QStringLiteral("thin-stroke"),
-                                                                               QStringLiteral("thin-fill") } },
-                                            { QStringLiteral("severity_by_class"), QJsonObject{
-                                                                                       { QStringLiteral("thin-stroke"), QStringLiteral("error") },
-                                                                                       { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
+                                                                             QStringLiteral("thin-stroke"),
+                                                                             QStringLiteral("thin-fill") } },
+                                            { QStringLiteral("severity_by_class"), QJsonObject{ { QStringLiteral("thin-stroke"), QStringLiteral("error") }, { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -799,9 +796,9 @@ void PreflightEngineTest::run_thinParts_reportsIncompleteNearThreshold()
     QCOMPARE(result.warnings.first().type, QStringLiteral("check-incomplete"));
     QCOMPARE(result.warnings.first().severity, QStringLiteral("info"));
     QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("reason")).toString(),
-              QStringLiteral("measurement-near-threshold"));
+             QStringLiteral("measurement-near-threshold"));
     QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("class")).toString(),
-              QStringLiteral("thin-fill"));
+             QStringLiteral("thin-fill"));
     QVERIFY(findThinPartFinding(result.errors, QStringLiteral("thin-fill")) == nullptr);
     QVERIFY(findThinPartFinding(result.warnings, QStringLiteral("thin-fill")) == nullptr);
 }

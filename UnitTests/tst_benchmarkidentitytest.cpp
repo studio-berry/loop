@@ -60,7 +60,7 @@ static bool hasBenchmarkIdentity(const QJsonObject& record)
 
 void BenchmarkIdentityTest::recordWithoutIdentityIsRejected()
 {
-    QVERIFY(!hasBenchmarkIdentity(QJsonObject{{QStringLiteral("ms"), 12}}));
+    QVERIFY(!hasBenchmarkIdentity(QJsonObject{ { QStringLiteral("ms"), 12 } }));
 }
 
 void BenchmarkIdentityTest::completeIdentityIsAccepted()

@@ -71,7 +71,8 @@ bool updateSnapshotsRequested()
 
 QImage renderFixture(const QString& fixturePath, bool separationSimulation)
 {
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -166,7 +167,7 @@ void compareRender(const QString& name, const QImage& actual, const QImage& expe
     }
 }
 
-} // namespace
+}   // namespace
 
 class OverprintRenderTest : public QObject
 {

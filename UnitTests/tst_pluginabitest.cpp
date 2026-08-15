@@ -40,9 +40,8 @@ void PluginAbiTest::missingAbiFailsClosed()
 {
     QJsonObject root{
         { QStringLiteral("MetaData"), QJsonObject{
-            { QStringLiteral("Name"), QStringLiteral("test") },
-            { QStringLiteral("Version"), QStringLiteral("1.0.0") }
-        } }
+                                          { QStringLiteral("Name"), QStringLiteral("test") },
+                                          { QStringLiteral("Version"), QStringLiteral("1.0.0") } } }
     };
     const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
     QVERIFY(!info.isAbiCompatible());
@@ -52,10 +51,9 @@ void PluginAbiTest::matchingAbiIsAccepted()
 {
     QJsonObject root{
         { QStringLiteral("MetaData"), QJsonObject{
-            { QStringLiteral("Name"), QStringLiteral("test") },
-            { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion },
-            { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("preflight") } }
-        } }
+                                          { QStringLiteral("Name"), QStringLiteral("test") },
+                                          { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion },
+                                          { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("preflight") } } } }
     };
     const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
     QVERIFY(info.isAbiCompatible());
@@ -68,9 +66,8 @@ void PluginAbiTest::mismatchedAbiFailsClosed()
 {
     QJsonObject root{
         { QStringLiteral("MetaData"), QJsonObject{
-            { QStringLiteral("Name"), QStringLiteral("test") },
-            { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion + 1 }
-        } }
+                                          { QStringLiteral("Name"), QStringLiteral("test") },
+                                          { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion + 1 } } }
     };
     const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
     QVERIFY(!info.isAbiCompatible());

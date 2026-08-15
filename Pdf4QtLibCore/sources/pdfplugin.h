@@ -106,4 +106,4 @@ protected:
 
 }   // namespace pdf
 
-#endif // PDFPLUGIN_H
+#endif   // PDFPLUGIN_H

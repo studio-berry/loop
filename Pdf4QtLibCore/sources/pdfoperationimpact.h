@@ -46,8 +46,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFOperationImpact
 };
 
 PDF4QTLIBCORESHARED_EXPORT PDFOperationImpact mergePDFOperationImpact(const PDFOperationImpact& first,
-                                                                        const PDFOperationImpact& second);
+                                                                      const PDFOperationImpact& second);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFOPERATIONIMPACT_H
+#endif   // PDFOPERATIONIMPACT_H

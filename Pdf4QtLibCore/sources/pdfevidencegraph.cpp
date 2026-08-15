@@ -44,11 +44,16 @@ QString pdfEvidenceDomainToString(PDFEvidenceDomain domain)
 {
     switch (domain)
     {
-        case PDFEvidenceDomain::Images: return QStringLiteral("images");
-        case PDFEvidenceDomain::Colorants: return QStringLiteral("colorants");
-        case PDFEvidenceDomain::Strokes: return QStringLiteral("strokes");
-        case PDFEvidenceDomain::OverprintTransparency: return QStringLiteral("overprint-transparency");
-        case PDFEvidenceDomain::Fonts: return QStringLiteral("fonts");
+        case PDFEvidenceDomain::Images:
+            return QStringLiteral("images");
+        case PDFEvidenceDomain::Colorants:
+            return QStringLiteral("colorants");
+        case PDFEvidenceDomain::Strokes:
+            return QStringLiteral("strokes");
+        case PDFEvidenceDomain::OverprintTransparency:
+            return QStringLiteral("overprint-transparency");
+        case PDFEvidenceDomain::Fonts:
+            return QStringLiteral("fonts");
     }
     return QStringLiteral("unknown");
 }
@@ -109,15 +114,15 @@ class EvidenceProcessor : public PDFPageContentProcessor
 {
 public:
     EvidenceProcessor(const PDFPage* page,
-                       const PDFDocument* document,
-                       const PDFFontCache* fontCache,
-                       const PDFCMS* cms,
-                       const PDFOptionalContentActivity* optionalContent,
-                       const PDFMeshQualitySettings& meshQuality,
-                       PDFProcessingBudget* budget,
-                       PDFEvidenceGraph* graph,
-                       PDFEvidenceDomains domains,
-                       int pageNumber) :
+                      const PDFDocument* document,
+                      const PDFFontCache* fontCache,
+                      const PDFCMS* cms,
+                      const PDFOptionalContentActivity* optionalContent,
+                      const PDFMeshQualitySettings& meshQuality,
+                      PDFProcessingBudget* budget,
+                      PDFEvidenceGraph* graph,
+                      PDFEvidenceDomains domains,
+                      int pageNumber) :
         PDFPageContentProcessor(page, document, fontCache, cms, optionalContent, QTransform(), meshQuality, budget),
         m_graph(graph),
         m_domains(domains),
@@ -142,8 +147,8 @@ protected:
     }
 
     bool performOriginalImagePainting(const PDFImage& image,
-                                       const PDFStream* stream,
-                                       PDFObjectReference reference) override
+                                      const PDFStream* stream,
+                                      PDFObjectReference reference) override
     {
         Q_UNUSED(stream);
         if (!m_domains.testFlag(PDFEvidenceDomain::Images) || isContentSuppressed())
@@ -152,7 +157,8 @@ protected:
         }
 
         const QTransform ctm = getGraphicState()->getCurrentTransformationMatrix();
-        const auto axisLength = [](qreal x, qreal y) {
+        const auto axisLength = [](qreal x, qreal y)
+        {
             return std::hypot(static_cast<double>(x), static_cast<double>(y)) * PDF_POINT_TO_INCH;
         };
         const double widthInches = axisLength(ctm.m11(), ctm.m12());
@@ -315,7 +321,7 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph)
     }
 }
 
-} // namespace
+}   // namespace
 
 PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session, PDFEvidenceDomains domains)
 {
@@ -345,9 +351,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session, PDFE
             collectColorants(session, &graph);
         }
 
-        if (domains.testFlag(PDFEvidenceDomain::Images)
-            || domains.testFlag(PDFEvidenceDomain::Strokes)
-            || domains.testFlag(PDFEvidenceDomain::OverprintTransparency))
+        if (domains.testFlag(PDFEvidenceDomain::Images) || domains.testFlag(PDFEvidenceDomain::Strokes) || domains.testFlag(PDFEvidenceDomain::OverprintTransparency))
         {
             PDFOptionalContentActivity ocActivity(document, OCUsage::Export, nullptr);
             PDFFontCache fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT);
@@ -389,4 +393,4 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session, PDFE
     return graph;
 }
 
-} // namespace pdf
+}   // namespace pdf

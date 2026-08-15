@@ -35,7 +35,6 @@ PDFPlugin::PDFPlugin(QObject* parent) :
     m_cmsManager(nullptr),
     m_document(nullptr)
 {
-
 }
 
 void PDFPlugin::setDataExchangeInterface(IPluginDataExchange* dataExchangeInterface)

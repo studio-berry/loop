@@ -184,6 +184,6 @@ private:
     std::atomic<std::uint64_t> m_rollbackBytes = 0;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFPROCESSINGBUDGET_H
+#endif   // PDFPROCESSINGBUDGET_H

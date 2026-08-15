@@ -91,7 +91,7 @@ QMarginsF mapCropMarginsToRenderedPage(QMarginsF cropMargins, pdf::PageRotation 
     return cropMargins;
 }
 
-} // namespace
+}   // namespace
 
 PageItemPreviewRenderer::PageItemPreviewRenderer(PageItemModel* model, QObject* parent) :
     QObject(parent),
@@ -323,18 +323,18 @@ QString PageItemPreviewRenderer::getPageImageKey(const PageGroupItem* item, cons
 
     const PageGroupItem::GroupItem& groupItem = item->groups.front();
     return QString("%1#%2#%3#%4#%5#%6#%7#%8#%9@%10x%11@r%12")
-            .arg(groupItem.documentIndex)
-            .arg(groupItem.imageIndex)
-            .arg(int(groupItem.pageAdditionalRotation))
-            .arg(groupItem.pageIndex)
-            .arg(groupItem.pageType)
-            .arg(int(groupItem.cropMarginsMM.left() * 100.0))
-            .arg(int(groupItem.cropMarginsMM.top() * 100.0))
-            .arg(int(groupItem.cropMarginsMM.right() * 100.0))
-            .arg(int(groupItem.cropMarginsMM.bottom() * 100.0))
-            .arg(logicalSize.width())
-            .arg(logicalSize.height())
-            .arg(m_renderEpoch);
+        .arg(groupItem.documentIndex)
+        .arg(groupItem.imageIndex)
+        .arg(int(groupItem.pageAdditionalRotation))
+        .arg(groupItem.pageIndex)
+        .arg(groupItem.pageType)
+        .arg(int(groupItem.cropMarginsMM.left() * 100.0))
+        .arg(int(groupItem.cropMarginsMM.top() * 100.0))
+        .arg(int(groupItem.cropMarginsMM.right() * 100.0))
+        .arg(int(groupItem.cropMarginsMM.bottom() * 100.0))
+        .arg(logicalSize.width())
+        .arg(logicalSize.height())
+        .arg(m_renderEpoch);
 }
 
 bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
@@ -366,14 +366,14 @@ bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
     const int threadHint = pdf::PDFExecutionPolicy::getMaxThreadCount(pdf::PDFExecutionPolicy::Scope::Page);
     const int rasterizerCount = pdf::PDFRasterizerPool::getCorrectedRasterizerCount(threadHint);
     context->rasterizerPool = std::make_unique<pdf::PDFRasterizerPool>(context->document,
-                                                                        context->fontCache.get(),
-                                                                        context->cmsManager.get(),
-                                                                        context->optionalContentActivity.get(),
-                                                                        context->features,
-                                                                        context->meshQualitySettings,
-                                                                        rasterizerCount,
-                                                                        pdf::RendererEngine::Blend2D_SingleThread,
-                                                                        nullptr);
+                                                                       context->fontCache.get(),
+                                                                       context->cmsManager.get(),
+                                                                       context->optionalContentActivity.get(),
+                                                                       context->features,
+                                                                       context->meshQualitySettings,
+                                                                       rasterizerCount,
+                                                                       pdf::RendererEngine::Blend2D_SingleThread,
+                                                                       nullptr);
     m_documentContexts.emplace(documentIndex, std::move(context));
     return true;
 }
@@ -451,9 +451,7 @@ void PageItemPreviewRenderer::startNextRequest()
 
     m_renderInProgress = true;
     m_renderWatcher.setFuture(QtConcurrent::run([this, requests = std::move(requests)]() mutable
-    {
-        return renderPreviewBatchAsync(std::move(requests));
-    }));
+                                                { return renderPreviewBatchAsync(std::move(requests)); }));
 }
 
 void PageItemPreviewRenderer::waitForCurrentRender()

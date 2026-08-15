@@ -78,7 +78,8 @@ void LifecycleTest::openEditPreflightCancelSaveRecoverRollback()
     spec.documentRevision = opened.toString();
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
     bool ran = false;
-    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&) { ran = true; });
+    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
+                                           { ran = true; });
     QVERIFY(scheduler.waitForFinished(jobId, 2000));
     QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
     QVERIFY(!ran);
@@ -87,11 +88,11 @@ void LifecycleTest::openEditPreflightCancelSaveRecoverRollback()
     cancelSpec.jobId = QStringLiteral("cancel-me");
     cancelSpec.kind = pdf::PDFJobKind::Preflight;
     pdf::PDFJobCancellationTokenPtr token;
-    const QString cancelId = scheduler.submit(cancelSpec, [](pdf::PDFJobContext& ctx) {
+    const QString cancelId = scheduler.submit(cancelSpec, [](pdf::PDFJobContext& ctx)
+                                              {
         while (!ctx.isCancellationRequested())
         {
-        }
-    }, &token);
+        } }, &token);
     QVERIFY(token);
     QVERIFY(scheduler.cancel(cancelId));
     QVERIFY(scheduler.waitForFinished(cancelId, 2000));

@@ -86,4 +86,4 @@ PDFOperationImpact mergePDFOperationImpact(const PDFOperationImpact& first,
     return merged;
 }
 
-} // namespace pdf
+}   // namespace pdf

@@ -487,12 +487,12 @@ void PDFProgramController::initialize(Features features,
     m_mainWindow = mainWindow;
     m_mainWindowInterface = mainWindowInterface;
 
-    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message) {
+    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message)
+            {
         if (m_mainWindowInterface)
         {
             m_mainWindowInterface->setStatusBarMessage(tr("Recovery checkpoint unavailable: %1").arg(message), 6000);
-        }
-    });
+        } });
 
     if (QAction* action = m_actionManager->getAction(PDFActionManager::GoToDocumentStart))
     {
@@ -1355,7 +1355,8 @@ void PDFProgramController::saveDocument(const QString& fileName)
     }
     else
     {
-        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+        pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                      { return QString(); }, true, false);
         pdf::PDFDocument sourceDocument = reader.readFromFile(fileName);
         if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
         {
@@ -1481,8 +1482,8 @@ bool PDFProgramController::restoreRecovery(const RecoveryCandidate& candidate, Q
     setDocument(document, {}, false);
     updateTitle();
     const QString recoveryMessage = candidate.signedDocument
-        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
-        : tr("Recovered session restored. Save As is required to create a new output.");
+                                        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
+                                        : tr("Recovered session restored. Save As is required to create a new output.");
     m_mainWindowInterface->setStatusBarMessage(recoveryMessage, 6000);
     return true;
 }

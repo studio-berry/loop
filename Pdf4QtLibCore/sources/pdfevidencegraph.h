@@ -97,7 +97,7 @@ public:
 
 PDF4QTLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFEvidenceDomains)
 
@@ -106,13 +106,9 @@ namespace pdf
 
 inline PDFEvidenceDomains pdfEvidenceAllDomains()
 {
-    return PDFEvidenceDomains(PDFEvidenceDomain::Images)
-         | PDFEvidenceDomain::Colorants
-         | PDFEvidenceDomain::Strokes
-         | PDFEvidenceDomain::OverprintTransparency
-         | PDFEvidenceDomain::Fonts;
+    return PDFEvidenceDomains(PDFEvidenceDomain::Images) | PDFEvidenceDomain::Colorants | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Fonts;
 }
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFEVIDENCEGRAPH_H
+#endif   // PDFEVIDENCEGRAPH_H

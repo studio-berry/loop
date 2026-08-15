@@ -50,11 +50,11 @@ void OperationImpactTest::mergeUnionsDomainsAndKeepsIncomplete()
     pdf::PDFOperationImpact first;
     first.domains = pdf::PDFEvidenceDomain::Images;
     first.impactComplete = true;
-    first.pages = {1};
+    first.pages = { 1 };
     pdf::PDFOperationImpact second;
     second.domains = pdf::PDFEvidenceDomain::Fonts;
     second.impactComplete = false;
-    second.pages = {2};
+    second.pages = { 2 };
     const pdf::PDFOperationImpact merged = pdf::mergePDFOperationImpact(first, second);
     QVERIFY(merged.domains.testFlag(pdf::PDFEvidenceDomain::Images));
     QVERIFY(merged.domains.testFlag(pdf::PDFEvidenceDomain::Fonts));

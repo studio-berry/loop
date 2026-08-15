@@ -82,21 +82,20 @@ private:
     PDFFontCache* m_fontCache;
 };
 
-} // namespace
+}   // namespace
 
 PDFThumbnailsRenderer::PDFThumbnailsRenderer(const PDFDocument* document, QObject* parent) :
     QObject(parent),
     m_document(document),
     m_pageImageCache(THUMBNAIL_CACHE_LIMIT_BYTES),
-    m_revision(PDFRevisionIdentity { PDFDocumentIdentity::fromDocument(document), 0, 0, QString() })
+    m_revision(PDFRevisionIdentity{ PDFDocumentIdentity::fromDocument(document), 0, 0, QString() })
 {
     connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
-    {
+            {
         if (snapshot.jobId == m_renderJobId)
         {
             onRenderFinished();
-        }
-    });
+        } });
 }
 
 PDFThumbnailsRenderer::~PDFThumbnailsRenderer()
@@ -123,7 +122,7 @@ void PDFThumbnailsRenderer::setDocument(const PDFDocument* document)
     m_requestQueue.clear();
     m_keysByPage.clear();
     ++m_renderEpoch;
-    m_revision = PDFRevisionIdentity { PDFDocumentIdentity::fromDocument(document), 0, m_renderEpoch, QString() };
+    m_revision = PDFRevisionIdentity{ PDFDocumentIdentity::fromDocument(document), 0, m_renderEpoch, QString() };
 }
 
 void PDFThumbnailsRenderer::setDocumentContext(PDFDocumentContext* context)
@@ -300,15 +299,14 @@ void PDFThumbnailsRenderer::startNextRequest()
     spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
     PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
     m_renderJobId = PDFJobScheduler::global().submit(spec, [this, requests = std::move(requests)](PDFJobContext& context) mutable
-    {
+                                                     {
         if (context.isCancellationRequested())
         {
             return;
         }
         RenderBatchResult results = renderBatchAsync(std::move(requests));
         QMutexLocker guard(&m_contextMutex);
-        m_batchResult = std::move(results);
-    });
+        m_batchResult = std::move(results); });
 }
 
 void PDFThumbnailsRenderer::waitForCurrentRender()

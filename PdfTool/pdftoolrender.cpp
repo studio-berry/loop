@@ -105,9 +105,8 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
     // Atomic write: serialize into a QSaveFile and rename only after the image
     // bytes are durable, so a crash or short write cannot leave a truncated image.
     QString imageWriterError;
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
-        [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
-        {
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName, [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
+                                                                                    {
             QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
             imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
             imageWriter.setCompression(options.imageWriterSettings.getCompression());
@@ -121,8 +120,7 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
                 return false;
             }
 
-            return true;
-        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            return true; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
 
     if (!writeResult)
     {
@@ -132,12 +130,10 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("render"),
-            fileName,
-            writeResult ? QStringLiteral("written") : QStringLiteral("partial")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("render"),
+                                              fileName,
+                                              writeResult ? QStringLiteral("written") : QStringLiteral("partial") });
     }
 
     m_pageInfo[renderedPageImage.pageIndex].pageWriteTime = imageWriterTimer.elapsed();
