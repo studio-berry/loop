@@ -80,6 +80,27 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual(evidence.result, "fail")
         self.assertIn("changes/dev.md", evidence.reason or "")
 
+    def test_check_changelog_allows_stacked_topic_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            changes_dir = root / "changes"
+            changes_dir.mkdir()
+            parent = changes_dir / "cursor-wave-b.md"
+            child = changes_dir / "cursor-wave-c.md"
+            body = (
+                "Category: fixed\nAudience: developers\nBreaking-Change: no\nSummary: Wave fragment.\n"
+            )
+            parent.write_text(body, encoding="utf-8")
+            child.write_text(body, encoding="utf-8")
+            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+            changes = [
+                MODULE.Change("A", "changes/cursor-wave-b.md"),
+                MODULE.Change("A", "changes/cursor-wave-c.md"),
+            ]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cursor/wave-c")
+        self.assertEqual(evidence.result, "pass")
+
     def test_changelog_evidence_still_required_on_topic_branch(self) -> None:
         policy = {
             "branches": POLICY_BRANCHES,

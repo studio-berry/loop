@@ -216,13 +216,18 @@ def check_changelog(changes: list[Change], policy: dict, branch: str) -> Evidenc
     expected = f"{directory}/{branch_slug(branch)}.md"
     added = [change.path for change in changes if change.status == "A" and change.path.startswith(f"{directory}/") and change.path.endswith(".md")]
     evidence = Evidence("changelog")
-    if added != [expected]:
+    if expected not in added:
         evidence.result = "fail"
-        evidence.reason = f"expected exactly one added fragment {expected}; found {added or 'none'}"
+        evidence.reason = f"expected added fragment {expected}; found {added or 'none'}"
         return evidence
-    valid, reason = parse_changelog(ROOT / expected, set(policy["changelog"]["categories"]))
-    evidence.result = "pass" if valid else "fail"
-    evidence.reason = None if valid else reason
+    categories = set(policy["changelog"]["categories"])
+    for path in added:
+        valid, reason = parse_changelog(ROOT / path, categories)
+        if not valid:
+            evidence.result = "fail"
+            evidence.reason = f"{path}: {reason}"
+            return evidence
+    evidence.result = "pass"
     return evidence
 
 
@@ -294,17 +299,18 @@ def main() -> int:
                     subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
             for source in sources:
                 add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
-        compile_db = build_dir / "compile_commands.json"
-        if compile_db.exists() and shutil.which("clang-tidy-18"):
-            for source in sources:
-                add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
-        else:
-            evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
 
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
     for test in tests:
         add_result(evidence, f"build:{test}", ["cmake", "--build", str(build_dir), "--target", test, "--config", "Release"], ROOT, args.dry_run)
+
+    compile_db = build_dir / "compile_commands.json"
+    if sources and compile_db.exists() and shutil.which("clang-tidy-18"):
+        for source in sources:
+            add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
+    elif sources:
+        evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
     if tests:
         expression = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
         add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "--output-on-failure", "-R", expression], ROOT, args.dry_run)
