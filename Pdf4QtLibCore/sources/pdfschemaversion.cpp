@@ -67,7 +67,7 @@ QJsonObject loadCompatibilityMatrix()
     return cached;
 }
 
-} // namespace
+}   // namespace
 
 QString PDFSchemaVersion::toString() const
 {
@@ -123,22 +123,38 @@ QString pdfSchemaKindToString(PDFSchemaKind kind)
 {
     switch (kind)
     {
-        case PDFSchemaKind::PreflightReport: return QStringLiteral("preflight-report");
-        case PDFSchemaKind::PreflightProfile: return QStringLiteral("preflight-profile");
-        case PDFSchemaKind::EvidenceGraph: return QStringLiteral("evidence-graph");
-        case PDFSchemaKind::OperationPlan: return QStringLiteral("operation-plan");
-        case PDFSchemaKind::OperationResult: return QStringLiteral("operation-result");
-        case PDFSchemaKind::ProvenanceEvent: return QStringLiteral("provenance-event");
-        case PDFSchemaKind::Certificate: return QStringLiteral("certificate");
-        case PDFSchemaKind::CapabilityDiscovery: return QStringLiteral("capability-discovery");
-        case PDFSchemaKind::PackageManifest: return QStringLiteral("package-manifest");
-        case PDFSchemaKind::ActionList: return QStringLiteral("action-list");
-        case PDFSchemaKind::PdfToolEnvelope: return QStringLiteral("pdftool-envelope");
-        case PDFSchemaKind::OcrReport: return QStringLiteral("ocr-report");
-        case PDFSchemaKind::HistoryDb: return QStringLiteral("history-db");
-        case PDFSchemaKind::PageMasterManifest: return QStringLiteral("pagemaster-manifest");
-        case PDFSchemaKind::PreflightDecisions: return QStringLiteral("preflight-decisions");
-        case PDFSchemaKind::Unknown: break;
+        case PDFSchemaKind::PreflightReport:
+            return QStringLiteral("preflight-report");
+        case PDFSchemaKind::PreflightProfile:
+            return QStringLiteral("preflight-profile");
+        case PDFSchemaKind::EvidenceGraph:
+            return QStringLiteral("evidence-graph");
+        case PDFSchemaKind::OperationPlan:
+            return QStringLiteral("operation-plan");
+        case PDFSchemaKind::OperationResult:
+            return QStringLiteral("operation-result");
+        case PDFSchemaKind::ProvenanceEvent:
+            return QStringLiteral("provenance-event");
+        case PDFSchemaKind::Certificate:
+            return QStringLiteral("certificate");
+        case PDFSchemaKind::CapabilityDiscovery:
+            return QStringLiteral("capability-discovery");
+        case PDFSchemaKind::PackageManifest:
+            return QStringLiteral("package-manifest");
+        case PDFSchemaKind::ActionList:
+            return QStringLiteral("action-list");
+        case PDFSchemaKind::PdfToolEnvelope:
+            return QStringLiteral("pdftool-envelope");
+        case PDFSchemaKind::OcrReport:
+            return QStringLiteral("ocr-report");
+        case PDFSchemaKind::HistoryDb:
+            return QStringLiteral("history-db");
+        case PDFSchemaKind::PageMasterManifest:
+            return QStringLiteral("pagemaster-manifest");
+        case PDFSchemaKind::PreflightDecisions:
+            return QStringLiteral("preflight-decisions");
+        case PDFSchemaKind::Unknown:
+            break;
     }
     return QStringLiteral("unknown");
 }
@@ -146,21 +162,36 @@ QString pdfSchemaKindToString(PDFSchemaKind kind)
 PDFSchemaKind pdfSchemaKindFromString(const QString& value)
 {
     const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("preflight-report")) return PDFSchemaKind::PreflightReport;
-    if (normalized == QStringLiteral("preflight-profile")) return PDFSchemaKind::PreflightProfile;
-    if (normalized == QStringLiteral("evidence-graph")) return PDFSchemaKind::EvidenceGraph;
-    if (normalized == QStringLiteral("operation-plan")) return PDFSchemaKind::OperationPlan;
-    if (normalized == QStringLiteral("operation-result")) return PDFSchemaKind::OperationResult;
-    if (normalized == QStringLiteral("provenance-event")) return PDFSchemaKind::ProvenanceEvent;
-    if (normalized == QStringLiteral("certificate")) return PDFSchemaKind::Certificate;
-    if (normalized == QStringLiteral("capability-discovery")) return PDFSchemaKind::CapabilityDiscovery;
-    if (normalized == QStringLiteral("package-manifest")) return PDFSchemaKind::PackageManifest;
-    if (normalized == QStringLiteral("action-list")) return PDFSchemaKind::ActionList;
-    if (normalized == QStringLiteral("pdftool-envelope")) return PDFSchemaKind::PdfToolEnvelope;
-    if (normalized == QStringLiteral("ocr-report")) return PDFSchemaKind::OcrReport;
-    if (normalized == QStringLiteral("history-db")) return PDFSchemaKind::HistoryDb;
-    if (normalized == QStringLiteral("pagemaster-manifest")) return PDFSchemaKind::PageMasterManifest;
-    if (normalized == QStringLiteral("preflight-decisions")) return PDFSchemaKind::PreflightDecisions;
+    if (normalized == QStringLiteral("preflight-report"))
+        return PDFSchemaKind::PreflightReport;
+    if (normalized == QStringLiteral("preflight-profile"))
+        return PDFSchemaKind::PreflightProfile;
+    if (normalized == QStringLiteral("evidence-graph"))
+        return PDFSchemaKind::EvidenceGraph;
+    if (normalized == QStringLiteral("operation-plan"))
+        return PDFSchemaKind::OperationPlan;
+    if (normalized == QStringLiteral("operation-result"))
+        return PDFSchemaKind::OperationResult;
+    if (normalized == QStringLiteral("provenance-event"))
+        return PDFSchemaKind::ProvenanceEvent;
+    if (normalized == QStringLiteral("certificate"))
+        return PDFSchemaKind::Certificate;
+    if (normalized == QStringLiteral("capability-discovery"))
+        return PDFSchemaKind::CapabilityDiscovery;
+    if (normalized == QStringLiteral("package-manifest"))
+        return PDFSchemaKind::PackageManifest;
+    if (normalized == QStringLiteral("action-list"))
+        return PDFSchemaKind::ActionList;
+    if (normalized == QStringLiteral("pdftool-envelope"))
+        return PDFSchemaKind::PdfToolEnvelope;
+    if (normalized == QStringLiteral("ocr-report"))
+        return PDFSchemaKind::OcrReport;
+    if (normalized == QStringLiteral("history-db"))
+        return PDFSchemaKind::HistoryDb;
+    if (normalized == QStringLiteral("pagemaster-manifest"))
+        return PDFSchemaKind::PageMasterManifest;
+    if (normalized == QStringLiteral("preflight-decisions"))
+        return PDFSchemaKind::PreflightDecisions;
     return PDFSchemaKind::Unknown;
 }
 
@@ -179,7 +210,7 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
         switch (kind)
         {
             case PDFSchemaKind::PreflightReport:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{1, 2, 3} } };
+                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1, 2, 3 } } };
                 break;
             case PDFSchemaKind::PreflightProfile:
             case PDFSchemaKind::PdfToolEnvelope:
@@ -192,14 +223,14 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
             case PDFSchemaKind::ProvenanceEvent:
             case PDFSchemaKind::Certificate:
             case PDFSchemaKind::PackageManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{1} } };
+                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
                 break;
             case PDFSchemaKind::ActionList:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{1} } };
+                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
                 break;
             case PDFSchemaKind::HistoryDb:
             case PDFSchemaKind::PageMasterManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{2, 3} } };
+                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 2, 3 } } };
                 break;
             case PDFSchemaKind::Unknown:
                 return PDFSchemaCompatibility::UnknownKind;
@@ -249,4 +280,4 @@ void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVer
     document.insert(QStringLiteral("schema_version"), version.toJsonValue());
 }
 
-} // namespace pdf
+}   // namespace pdf

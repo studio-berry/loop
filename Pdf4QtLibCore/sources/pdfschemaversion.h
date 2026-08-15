@@ -84,6 +84,6 @@ PDF4QTLIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind,
 PDF4QTLIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
 PDF4QTLIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFSCHEMAVERSION_H
+#endif   // PDFSCHEMAVERSION_H
