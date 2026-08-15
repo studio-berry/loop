@@ -32,6 +32,9 @@
 #include "pdfrenderer.h"
 #include "pdftransparencyrenderer.h"
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
 
 #include <limits>
@@ -149,6 +152,32 @@ void compareRender(const QString& name, const QImage& actual, const QImage& expe
                 ++differingPixels;
             }
         }
+    }
+
+    const QJsonObject measurement{
+        { QStringLiteral("width"), actualRgba.width() },
+        { QStringLiteral("height"), actualRgba.height() },
+        { QStringLiteral("max_channel_delta"), observedMaxDelta },
+        { QStringLiteral("differing_pixels"), differingPixels },
+        { QStringLiteral("max_channel_delta_budget"), maxChannelDelta },
+        { QStringLiteral("differing_pixel_budget"), differingPixelBudget }
+    };
+    const QString measurementPath = rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".measurements.json");
+    if (updateSnapshotsRequested())
+    {
+        QFile measurementFile(measurementPath);
+        QVERIFY(measurementFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        measurementFile.write(QJsonDocument(measurement).toJson(QJsonDocument::Indented));
+    }
+    else
+    {
+        QFile measurementFile(measurementPath);
+        QVERIFY2(measurementFile.open(QIODevice::ReadOnly), qPrintable(QStringLiteral("Missing measurement baseline %1").arg(measurementPath)));
+        const QJsonObject expectedMeasurement = QJsonDocument::fromJson(measurementFile.readAll()).object();
+        QVERIFY(expectedMeasurement.value(QStringLiteral("width")).toInt() == actualRgba.width());
+        QVERIFY(expectedMeasurement.value(QStringLiteral("height")).toInt() == actualRgba.height());
+        QVERIFY(differingPixels <= expectedMeasurement.value(QStringLiteral("differing_pixel_budget")).toInt(differingPixelBudget));
+        QVERIFY(observedMaxDelta <= expectedMeasurement.value(QStringLiteral("max_channel_delta_budget")).toInt(maxChannelDelta) || differingPixels <= differingPixelBudget);
     }
 
     if (differingPixels > differingPixelBudget)
