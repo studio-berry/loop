@@ -127,11 +127,6 @@ bool appendPreflightProvenance(const QString& documentPath,
     return true;
 }
 
-} // namespace
-
-namespace
-{
-
 static PDFToolPreflightApplication s_preflightApplication;
 
 bool loadProfileJson(const QString& profilePath, QJsonObject& profile, QString& errorMessage)

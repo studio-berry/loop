@@ -70,7 +70,7 @@ Rules:
 | `PDFEvidenceRecord` | `pdfevidencegraph.h` | One normalized observation |
 | `PDFEvidenceGraph` | `pdfevidencegraph.h` | Revision-bound bag of records |
 | `PDFOperationImpact` | `pdfoperationimpact.h` | Declared revalidation impact |
-| `PDFPluginAbiVersion` | `pdfplugin.h` | Integer ABI before instantiation |
+| `PDFPluginInfo::abiVersion` | `pdfplugin.h` | Integer ABI inspected before `QPluginLoader::instance()` |
 
 JSON field names (locked):
 

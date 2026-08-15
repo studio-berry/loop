@@ -672,24 +672,25 @@ void PageItemPreviewRenderer::onRenderFinished()
 {
     const RenderBatchResult results = m_renderWatcher.result();
     m_renderInProgress = false;
+    const auto revisionIsCurrent = [this](const pdf::PDFRevisionIdentity& revision)
+    {
+        QMutexLocker guard(&m_contextMutex);
+        for (const auto& entry : m_documentContexts)
+        {
+            if (entry.second && entry.second->authority && entry.second->authority->isCurrent(revision))
+            {
+                return true;
+            }
+        }
+        return revision.cacheGeneration == m_renderEpoch;
+    };
     for (const RenderResult& result : results)
     {
         m_pendingKeys.remove(result.key);
 
         if (!result.image.isNull())
         {
-            const bool isCurrentResult = result.epoch == m_renderEpoch &&
-                [&]() {
-                    QMutexLocker guard(&m_contextMutex);
-                    for (const auto& entry : m_documentContexts)
-                    {
-                        if (entry.second && entry.second->authority && entry.second->authority->isCurrent(result.revision))
-                        {
-                            return true;
-                        }
-                    }
-                    return result.revision.cacheGeneration == m_renderEpoch;
-                }();
+            const bool isCurrentResult = result.epoch == m_renderEpoch && revisionIsCurrent(result.revision);
             if (isCurrentResult)
             {
                 const int cost = qMax(1, int(qMin<qint64>(result.image.sizeInBytes(), std::numeric_limits<int>::max())));

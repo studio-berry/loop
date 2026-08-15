@@ -49,7 +49,8 @@ void LifecycleTest::openEditPreflightCancelSaveRecoverRollback()
     pdf::PDFDocument document = builder.build();
     pdf::PDFDocumentContext context(&document);
     const pdf::PDFRevisionIdentity opened = context.getRevision();
-    QVERIFY(opened.documentRevision == 0 || opened.isValid());
+    QVERIFY(opened.isValid());
+    QCOMPARE(opened.documentRevision, quint64(0));
 
     context.markModified();
     const pdf::PDFRevisionIdentity edited = context.getRevision();
@@ -65,7 +66,8 @@ void LifecycleTest::openEditPreflightCancelSaveRecoverRollback()
     profile.checks.append(check);
     const pdf::PreflightResult preflight = engine.run(profile);
     QVERIFY(context.isCurrent(session->getRevision()));
-    Q_UNUSED(preflight);
+    QVERIFY(preflight.inspectionComplete);
+    QCOMPARE(preflight.pass, pdf::reducePreflightVerdict(preflight).isPass());
 
     pdf::PDFJobScheduler scheduler(1);
     scheduler.setCurrentRevision(opened.document.documentId, edited.toString());

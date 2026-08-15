@@ -68,6 +68,7 @@
 #include <exception>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <set>
 
 namespace pdf
@@ -80,6 +81,33 @@ bool isSha256Digest(const QString& value)
 {
     static const QRegularExpression expression(QStringLiteral("^[0-9a-fA-F]{64}$"));
     return expression.match(value).hasMatch();
+}
+
+std::optional<PDFEvidenceDomain> evidenceDomainForCheckId(const QString& checkId)
+{
+    if (checkId == QStringLiteral("image-resolution"))
+    {
+        return PDFEvidenceDomain::Images;
+    }
+    if (checkId == QStringLiteral("color-mode")
+        || checkId == QStringLiteral("color-inventory")
+        || checkId == QStringLiteral("output-intent"))
+    {
+        return PDFEvidenceDomain::Colorants;
+    }
+    if (checkId == QStringLiteral("thin-strokes") || checkId == QStringLiteral("thin-parts"))
+    {
+        return PDFEvidenceDomain::Strokes;
+    }
+    if (checkId == QStringLiteral("white-overprint") || checkId == QStringLiteral("transparency-risk"))
+    {
+        return PDFEvidenceDomain::OverprintTransparency;
+    }
+    if (checkId == QStringLiteral("embedded-fonts") || checkId == QStringLiteral("font-integrity"))
+    {
+        return PDFEvidenceDomain::Fonts;
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -4998,27 +5026,9 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         PDFEvidenceDomains needed;
         for (const PreflightCheckConfig& check : profile.checks)
         {
-            if (check.id == QStringLiteral("image-resolution"))
+            if (const auto domain = evidenceDomainForCheckId(check.id))
             {
-                needed |= PDFEvidenceDomain::Images;
-            }
-            else if (check.id == QStringLiteral("color-mode")
-                     || check.id == QStringLiteral("color-inventory")
-                     || check.id == QStringLiteral("output-intent"))
-            {
-                needed |= PDFEvidenceDomain::Colorants;
-            }
-            else if (check.id == QStringLiteral("thin-strokes") || check.id == QStringLiteral("thin-parts"))
-            {
-                needed |= PDFEvidenceDomain::Strokes;
-            }
-            else if (check.id == QStringLiteral("white-overprint") || check.id == QStringLiteral("transparency-risk"))
-            {
-                needed |= PDFEvidenceDomain::OverprintTransparency;
-            }
-            else if (check.id == QStringLiteral("embedded-fonts") || check.id == QStringLiteral("font-integrity"))
-            {
-                needed |= PDFEvidenceDomain::Fonts;
+                needed |= *domain;
             }
         }
         if (needed != PDFEvidenceDomains())
@@ -5170,22 +5180,9 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
 
     auto citeEvidence = [&evidenceGraph](QList<PreflightFinding>& findings)
     {
-        auto domainForCheck = [](const QString& checkId) -> std::optional<PDFEvidenceDomain>
-        {
-            if (checkId == QStringLiteral("image-resolution")) return PDFEvidenceDomain::Images;
-            if (checkId == QStringLiteral("color-mode") || checkId == QStringLiteral("color-inventory") || checkId == QStringLiteral("output-intent"))
-                return PDFEvidenceDomain::Colorants;
-            if (checkId == QStringLiteral("thin-strokes") || checkId == QStringLiteral("thin-parts"))
-                return PDFEvidenceDomain::Strokes;
-            if (checkId == QStringLiteral("white-overprint") || checkId == QStringLiteral("transparency-risk"))
-                return PDFEvidenceDomain::OverprintTransparency;
-            if (checkId == QStringLiteral("embedded-fonts") || checkId == QStringLiteral("font-integrity"))
-                return PDFEvidenceDomain::Fonts;
-            return std::nullopt;
-        };
         for (PreflightFinding& finding : findings)
         {
-            const auto domain = domainForCheck(finding.checkId);
+            const auto domain = evidenceDomainForCheckId(finding.checkId);
             if (!domain)
             {
                 continue;
