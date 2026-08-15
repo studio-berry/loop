@@ -503,6 +503,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             resultExitCode = PDFToolExitCode::PreflightError;
             break;
     }
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        resultExitCode = PDFToolExitCode::Cancelled;
+    }
     if (options.preflightRequireSignoff && verdict.state == pdf::PreflightVerdictState::Fail)
     {
         for (const pdf::PreflightFinding& finding : result.errors)

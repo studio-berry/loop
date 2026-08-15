@@ -34,6 +34,10 @@ private slots:
     void budgetExceededWithoutFindings_isIncomplete();
     void activeWaiver_isPassAndRecorded();
     void engineError_isError();
+    void unsupportedScopeErrorCode_isIncomplete();
+    void unresolvedVariableErrorCode_isIncomplete();
+    void cancelledErrorCode_isIncomplete();
+    void budgetExceededErrorCode_isIncomplete();
     void reportPassIsDerivedFromVerdict();
     void incompleteInspectionWithoutFindings_isNotPass();
     void cancellationMarkedIncomplete_isNotPass();
@@ -129,6 +133,59 @@ void PreflightVerdictTest::engineError_isError()
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Error);
     QCOMPARE(verdict.reasonCode, QStringLiteral("profile-invalid"));
     QCOMPARE(verdict.reason, result.errorMessage);
+}
+
+void PreflightVerdictTest::unsupportedScopeErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("unsupported-scope");
+    result.errorMessage = QStringLiteral("Profile scope is empty or unsupported.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("unsupported-scope"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::unresolvedVariableErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("unresolved-variable");
+    result.errorMessage = QStringLiteral("Profile variable 'stock' is unresolved.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("unresolved-variable"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::cancelledErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("cancelled");
+    result.errorMessage = QStringLiteral("Preflight was cancelled.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("cancelled"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::budgetExceededErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("budget-exceeded");
+    result.errorMessage = QStringLiteral("RasterTile");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("budget-exceeded"));
+    QCOMPARE(verdict.reason, QStringLiteral("RasterTile"));
+    QVERIFY(!verdict.isPass());
 }
 
 void PreflightVerdictTest::reportPassIsDerivedFromVerdict()
