@@ -262,8 +262,8 @@ public:
     PDFOperationResult apply();
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
-                                           PDFDocument* reopenedCandidate,
-                                           QByteArray* candidateSha256 = nullptr) const;
+                                          PDFDocument* reopenedCandidate,
+                                          QByteArray* candidateSha256 = nullptr) const;
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
@@ -300,7 +300,7 @@ QString pdfRepairRiskName(PDFRepairRisk risk);
 QString pdfRepairDomainName(PDFRepairDomain domain);
 QString pdfRepairValidatorName(PDFRepairValidatorKind validator);
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFRepairDomains)
 
@@ -309,4 +309,4 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFRepairDomains)
 #pragma pop_macro("analyze")
 #endif
 
-#endif // PDFREPAIROPERATION_H
+#endif   // PDFREPAIROPERATION_H

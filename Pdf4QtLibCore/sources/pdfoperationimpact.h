@@ -67,7 +67,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRevalidationPlan
 /// check is graph-backed. Unmapped checks cannot be skipped by a targeted plan.
 PDF4QTLIBCORESHARED_EXPORT std::optional<PDFEvidenceDomain> preflightEvidenceDomainForCheck(const QString& checkId);
 
-/// Plans which enabled checks to rerun. Incomplete, document-wide, full-rewrite,
+/// Plans which enabled checks to rerun. Incomplete, document-wide,
 /// oracle-required, or unmapped-check impact falls back to a full run.
 PDF4QTLIBCORESHARED_EXPORT PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
                                                                 const QStringList& enabledCheckIds);

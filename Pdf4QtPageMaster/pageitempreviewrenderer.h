@@ -223,4 +223,4 @@ private:
 
 }   // namespace pdfpagemaster
 
-#endif // PDFPAGEMASTER_PAGEITEMPREVIEWRENDERER_H
+#endif   // PDFPAGEMASTER_PAGEITEMPREVIEWRENDERER_H

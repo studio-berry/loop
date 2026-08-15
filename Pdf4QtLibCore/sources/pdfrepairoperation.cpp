@@ -94,19 +94,26 @@ QJsonObject expectedChangesObject(const PDFRepairExpectedChanges& expected)
     };
 }
 
-} // namespace
+}   // namespace
 
 QString pdfRepairStatusName(PDFRepairStatus status)
 {
     switch (status)
     {
-        case PDFRepairStatus::Planned: return QStringLiteral("planned");
-        case PDFRepairStatus::Applied: return QStringLiteral("applied");
-        case PDFRepairStatus::Passed: return QStringLiteral("passed");
-        case PDFRepairStatus::Failed: return QStringLiteral("failed");
-        case PDFRepairStatus::Incomplete: return QStringLiteral("incomplete");
-        case PDFRepairStatus::Unsupported: return QStringLiteral("unsupported");
-        case PDFRepairStatus::Cancelled: return QStringLiteral("cancelled");
+        case PDFRepairStatus::Planned:
+            return QStringLiteral("planned");
+        case PDFRepairStatus::Applied:
+            return QStringLiteral("applied");
+        case PDFRepairStatus::Passed:
+            return QStringLiteral("passed");
+        case PDFRepairStatus::Failed:
+            return QStringLiteral("failed");
+        case PDFRepairStatus::Incomplete:
+            return QStringLiteral("incomplete");
+        case PDFRepairStatus::Unsupported:
+            return QStringLiteral("unsupported");
+        case PDFRepairStatus::Cancelled:
+            return QStringLiteral("cancelled");
     }
     return QStringLiteral("failed");
 }
@@ -115,10 +122,14 @@ QString pdfRepairRiskName(PDFRepairRisk risk)
 {
     switch (risk)
     {
-        case PDFRepairRisk::Low: return QStringLiteral("low");
-        case PDFRepairRisk::Medium: return QStringLiteral("medium");
-        case PDFRepairRisk::High: return QStringLiteral("high");
-        case PDFRepairRisk::Destructive: return QStringLiteral("destructive");
+        case PDFRepairRisk::Low:
+            return QStringLiteral("low");
+        case PDFRepairRisk::Medium:
+            return QStringLiteral("medium");
+        case PDFRepairRisk::High:
+            return QStringLiteral("high");
+        case PDFRepairRisk::Destructive:
+            return QStringLiteral("destructive");
     }
     return QStringLiteral("high");
 }
@@ -127,18 +138,30 @@ QString pdfRepairDomainName(PDFRepairDomain domain)
 {
     switch (domain)
     {
-        case PDFRepairDomain::None: return QStringLiteral("none");
-        case PDFRepairDomain::PageGeometry: return QStringLiteral("page-geometry");
-        case PDFRepairDomain::Text: return QStringLiteral("text");
-        case PDFRepairDomain::Fonts: return QStringLiteral("fonts");
-        case PDFRepairDomain::Vector: return QStringLiteral("vector");
-        case PDFRepairDomain::Paths: return QStringLiteral("paths");
-        case PDFRepairDomain::Images: return QStringLiteral("images");
-        case PDFRepairDomain::Color: return QStringLiteral("color");
-        case PDFRepairDomain::Layers: return QStringLiteral("layers");
-        case PDFRepairDomain::Annotations: return QStringLiteral("annotations");
-        case PDFRepairDomain::Metadata: return QStringLiteral("metadata");
-        case PDFRepairDomain::Structure: return QStringLiteral("structure");
+        case PDFRepairDomain::None:
+            return QStringLiteral("none");
+        case PDFRepairDomain::PageGeometry:
+            return QStringLiteral("page-geometry");
+        case PDFRepairDomain::Text:
+            return QStringLiteral("text");
+        case PDFRepairDomain::Fonts:
+            return QStringLiteral("fonts");
+        case PDFRepairDomain::Vector:
+            return QStringLiteral("vector");
+        case PDFRepairDomain::Paths:
+            return QStringLiteral("paths");
+        case PDFRepairDomain::Images:
+            return QStringLiteral("images");
+        case PDFRepairDomain::Color:
+            return QStringLiteral("color");
+        case PDFRepairDomain::Layers:
+            return QStringLiteral("layers");
+        case PDFRepairDomain::Annotations:
+            return QStringLiteral("annotations");
+        case PDFRepairDomain::Metadata:
+            return QStringLiteral("metadata");
+        case PDFRepairDomain::Structure:
+            return QStringLiteral("structure");
     }
     return QStringLiteral("unknown");
 }
@@ -147,15 +170,24 @@ QString pdfRepairValidatorName(PDFRepairValidatorKind validator)
 {
     switch (validator)
     {
-        case PDFRepairValidatorKind::StructuralIntegrity: return QStringLiteral("structural-integrity");
-        case PDFRepairValidatorKind::NormalPreflight: return QStringLiteral("normal-preflight");
-        case PDFRepairValidatorKind::ImageResolution: return QStringLiteral("image-resolution");
-        case PDFRepairValidatorKind::ColorMode: return QStringLiteral("color-mode");
-        case PDFRepairValidatorKind::OutputIntent: return QStringLiteral("output-intent");
-        case PDFRepairValidatorKind::FontIntegrity: return QStringLiteral("font-integrity");
-        case PDFRepairValidatorKind::TextExtraction: return QStringLiteral("text-extraction");
-        case PDFRepairValidatorKind::SignatureState: return QStringLiteral("signature-state");
-        case PDFRepairValidatorKind::Custom: return QStringLiteral("custom");
+        case PDFRepairValidatorKind::StructuralIntegrity:
+            return QStringLiteral("structural-integrity");
+        case PDFRepairValidatorKind::NormalPreflight:
+            return QStringLiteral("normal-preflight");
+        case PDFRepairValidatorKind::ImageResolution:
+            return QStringLiteral("image-resolution");
+        case PDFRepairValidatorKind::ColorMode:
+            return QStringLiteral("color-mode");
+        case PDFRepairValidatorKind::OutputIntent:
+            return QStringLiteral("output-intent");
+        case PDFRepairValidatorKind::FontIntegrity:
+            return QStringLiteral("font-integrity");
+        case PDFRepairValidatorKind::TextExtraction:
+            return QStringLiteral("text-extraction");
+        case PDFRepairValidatorKind::SignatureState:
+            return QStringLiteral("signature-state");
+        case PDFRepairValidatorKind::Custom:
+            return QStringLiteral("custom");
     }
     return QStringLiteral("custom");
 }
@@ -167,7 +199,8 @@ QJsonObject PDFRepairTarget::toJson() const
     if (objectReference.isValid())
     {
         result.insert(QStringLiteral("object"), QStringLiteral("%1 %2 R")
-                     .arg(objectReference.objectNumber).arg(objectReference.generation));
+                                                    .arg(objectReference.objectNumber)
+                                                    .arg(objectReference.generation));
     }
     result.insert(QStringLiteral("path"), semanticPath);
     return result;
@@ -426,8 +459,8 @@ PDFOperationResult PDFRepairTransaction::apply()
         result.operationId = m_entries[index].operation->id();
         result.status = PDFRepairStatus::Applied;
         const PDFOperationResult operationResult = m_entries[index].operation->apply(&m_candidate,
-                                                                                      m_plans[index],
-                                                                                      &result);
+                                                                                     m_plans[index],
+                                                                                     &result);
         if (!operationResult)
         {
             m_candidate = PDFDocument();
@@ -454,7 +487,8 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
-        [](PDFDocument*) { return PDFOperationResult(true); },
+        [](PDFDocument*)
+        { return PDFOperationResult(true); },
         candidatePath,
         reopenedCandidate,
         candidateSha256);
@@ -525,9 +559,9 @@ PDFOperationResult PDFRepairTransaction::compareCandidate(const QString& candida
     options.expected = expectedChanges();
     options.affectedPages = affectedPages();
     const PDFOperationResult compareResult = PDFRepairDiffEngine::compare(*m_source,
-                                                                            reopenedCandidate,
-                                                                            options,
-                                                                            report);
+                                                                          reopenedCandidate,
+                                                                          options,
+                                                                          report);
     if (!compareResult)
     {
         return compareResult;
@@ -544,4 +578,4 @@ const PDFDocument* PDFRepairTransaction::candidate() const
     return m_hasCandidate ? &m_candidate : nullptr;
 }
 
-} // namespace pdf
+}   // namespace pdf

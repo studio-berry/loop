@@ -50,11 +50,11 @@ static_assert(!std::is_same_v<pdf::PDFRevisionToken, pdf::PDFDocumentIdentity>,
               "Revision tokens include document identity plus revision/cache/profile fences");
 
 static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
-                              pdf::PDFArtifactIdentity>,
+                             pdf::PDFArtifactIdentity>,
               "Operation-history executions must reference persisted PDFArtifactIdentity inputs");
 
 static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryEvent>().output),
-                              std::optional<pdf::PDFArtifactIdentity>>,
+                             std::optional<pdf::PDFArtifactIdentity>>,
               "Operation-history events must reference persisted PDFArtifactIdentity outputs");
 
 static_assert(!std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
