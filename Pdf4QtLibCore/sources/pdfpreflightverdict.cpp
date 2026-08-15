@@ -32,9 +32,7 @@ namespace
 
 bool isNonBlockingIncompleteFinding(const PreflightFinding& finding)
 {
-    return finding.type == QStringLiteral("budget-exceeded")
-        || finding.type == QStringLiteral("check-incomplete")
-        || finding.evidence.value(QStringLiteral("budget_exceeded")).toBool(false);
+    return finding.type == QStringLiteral("budget-exceeded") || finding.type == QStringLiteral("check-incomplete") || finding.type == QStringLiteral("evidence-incomplete") || finding.evidence.value(QStringLiteral("budget_exceeded")).toBool(false);
 }
 
 bool isActiveDecisionForFinding(const PreflightFinding& finding,
@@ -81,8 +79,7 @@ QString incompleteReason(const PreflightResult& result)
 {
     for (const PreflightCheckStatus& status : result.checkStatuses)
     {
-        if ((status.status == QStringLiteral("incomplete") || status.status == QStringLiteral("unsupported"))
-            && !status.reason.isEmpty())
+        if ((status.status == QStringLiteral("incomplete") || status.status == QStringLiteral("unsupported")) && !status.reason.isEmpty())
         {
             return status.reason;
         }
@@ -96,23 +93,23 @@ QString incompleteReason(const PreflightResult& result)
 
 bool isFailClosedIncompleteErrorCode(const QString& errorCode)
 {
-    return errorCode == QLatin1String("unsupported-scope")
-        || errorCode == QLatin1String("unresolved-variable")
-        || errorCode == QLatin1String("budget-exceeded")
-        || errorCode == QLatin1String("evidence-incomplete")
-        || errorCode == QLatin1String("cancelled");
+    return errorCode == QLatin1String("unsupported-scope") || errorCode == QLatin1String("unresolved-variable") || errorCode == QLatin1String("budget-exceeded") || errorCode == QLatin1String("evidence-incomplete") || errorCode == QLatin1String("cancelled");
 }
 
-} // namespace
+}   // namespace
 
 QString preflightVerdictStateToString(PreflightVerdictState state)
 {
     switch (state)
     {
-        case PreflightVerdictState::Pass: return QStringLiteral("pass");
-        case PreflightVerdictState::Fail: return QStringLiteral("fail");
-        case PreflightVerdictState::Incomplete: return QStringLiteral("incomplete");
-        case PreflightVerdictState::Error: return QStringLiteral("error");
+        case PreflightVerdictState::Pass:
+            return QStringLiteral("pass");
+        case PreflightVerdictState::Fail:
+            return QStringLiteral("fail");
+        case PreflightVerdictState::Incomplete:
+            return QStringLiteral("incomplete");
+        case PreflightVerdictState::Error:
+            return QStringLiteral("error");
     }
     return QStringLiteral("error");
 }
@@ -151,16 +148,16 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
             verdict.state = PreflightVerdictState::Incomplete;
             verdict.reasonCode = code;
             verdict.reason = result.errorMessage.isEmpty()
-                ? incompleteReason(result)
-                : result.errorMessage;
+                                 ? incompleteReason(result)
+                                 : result.errorMessage;
             return verdict;
         }
 
         verdict.state = PreflightVerdictState::Error;
         verdict.reasonCode = code;
         verdict.reason = result.errorMessage.isEmpty()
-            ? QStringLiteral("The preflight engine could not complete the operation.")
-            : result.errorMessage;
+                             ? QStringLiteral("The preflight engine could not complete the operation.")
+                             : result.errorMessage;
         return verdict;
     }
 
@@ -196,7 +193,8 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
 
             const auto status = std::find_if(result.checkStatuses.cbegin(),
                                              result.checkStatuses.cend(),
-                                             [&check](const PreflightCheckStatus& candidate) {
+                                             [&check](const PreflightCheckStatus& candidate)
+                                             {
                                                  return candidate.id == check.id;
                                              });
             if (status == result.checkStatuses.cend())
@@ -225,14 +223,14 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
     {
         verdict.state = PreflightVerdictState::Pass;
         verdict.reasonCode = verdict.waivedFindingIds.isEmpty()
-            ? QStringLiteral("no-blocking-findings")
-            : QStringLiteral("blocking-findings-waived");
+                                 ? QStringLiteral("no-blocking-findings")
+                                 : QStringLiteral("blocking-findings-waived");
         verdict.reason = verdict.waivedFindingIds.isEmpty()
-            ? QStringLiteral("Inspection completed with no blocking findings.")
-            : QStringLiteral("Inspection completed; all blocking findings have an active disposition.");
+                             ? QStringLiteral("Inspection completed with no blocking findings.")
+                             : QStringLiteral("Inspection completed; all blocking findings have an active disposition.");
     }
 
     return verdict;
 }
 
-} // namespace pdf
+}   // namespace pdf

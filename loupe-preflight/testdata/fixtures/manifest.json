@@ -451,5 +451,23 @@
     "source": "generated",
     "pending": true,
     "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "thin-strokes",
+    "pdf": "thin-strokes.pdf",
+    "profile": "testdata/profiles/test-thin-strokes.json",
+    "expect": { "pass": false, "check_ids": ["thin-strokes"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07: hairline and production-risk thin-stroke fixture; PDF not in the golden corpus yet."
+  },
+  {
+    "id": "thin-parts",
+    "pdf": "thin-parts.pdf",
+    "profile": "testdata/profiles/test-thin-parts.json",
+    "expect": { "pass": false, "check_ids": ["thin-parts"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07: thin-fill/thin-part fixture; PDF not in the golden corpus yet."
   }
 ]

@@ -66,6 +66,7 @@ Tier-2 raster golden). Session/cache research lives under MIC-151/153/156/157
 (`PDFArtifactIdentity` vs `PDFRevisionToken` = `PDFRevisionIdentity`), schema
 kinds, evidence-record fields, operation impact, and the fail-closed table.
 Surface order is Core → PdfTool → tests; the milestone does not add GUI.
+The Evidence Graph contract is summarized in [EVIDENCE_GRAPH.md](EVIDENCE_GRAPH.md).
 
 ## What not to put in AGENTS.md
 

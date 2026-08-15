@@ -132,6 +132,7 @@
     "UnitTestsContentProcessorLimits",
     "UnitTestsDiagnostics",
     "UnitTestsDocumentSession",
+    "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
     "UnitTestsIdentitySeparation",

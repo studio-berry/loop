@@ -188,6 +188,6 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Wave A (S00–S05) is the scope of this branch. Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (Evidence Graph, profiles, oracles, hostile load, lifecycle, plugin ABI, S18) are not in this change set.
+Wave B (S06–S08) is the scope of this branch: Evidence Graph types, one collector walk, five-family graph evaluation, and golden-corpus parity (with `evidence_ids` stripped from snapshots). Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (profiles, oracles, hostile load, lifecycle, plugin ABI, S18) are not in this change set.
 
 Wave A leftovers after this landing: none for S00–S05 done-when. Overlay tile rendering, OCR, batch analysis, and agent jobs remain off the scheduler by design (S05 out of scope).

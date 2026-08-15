@@ -377,6 +377,20 @@ set_target_properties(UnitTestsSchemaEvolution PROPERTIES
 )
 add_test(UnitTestsSchemaEvolution "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsSchemaEvolution")
 
+add_executable(UnitTestsEvidenceGraph
+    tst_evidencegraphtest.cpp
+)
+target_link_libraries(UnitTestsEvidenceGraph PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsEvidenceGraph PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+set_target_properties(UnitTestsEvidenceGraph PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsEvidenceGraph "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsEvidenceGraph")
+
 add_executable(UnitTestsPreflightProfileResolver
     tst_preflightprofileresolvertest.cpp
 )
