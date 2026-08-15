@@ -55,9 +55,11 @@
       "targets": ["Pdf4QtLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsJobScheduler",
+        "UnitTestsOperationHistory",
         "UnitTestsPreflightEngine",
-        "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsPreflightVerdict"
       ]
     },
     "pdftool": {

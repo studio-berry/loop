@@ -638,8 +638,8 @@ void OperationHistoryTest::concurrentIdenticalArtifactImportsSucceed()
         QTemporaryDir temporary;
         QVERIFY(temporary.isValid());
         pdf::PDFArtifactStore store(temporary.path());
-        std::atomic_int ready{0};
-        std::atomic_bool go{false};
+        std::atomic_int ready{ 0 };
+        std::atomic_bool go{ false };
         pdf::PDFArtifactStoreResult results[2];
 
         auto worker = [&](int index)

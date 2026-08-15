@@ -260,8 +260,7 @@ void JobSchedulerTest::waitTimeoutCancelJoinsBeforeTerminalSnapshot()
         while (!releaseBlocker.load(std::memory_order_acquire) && !context.isCancellationRequested())
         {
             std::this_thread::yield();
-        }
-    });
+        } });
     QVERIFY(!blockerId.isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(blockerStarted.load(std::memory_order_acquire), 1000);
 

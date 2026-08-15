@@ -258,17 +258,18 @@ def main() -> int:
                     subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
             for source in sources:
                 add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
-        compile_db = build_dir / "compile_commands.json"
-        if compile_db.exists() and shutil.which("clang-tidy-18"):
-            for source in sources:
-                add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
-        else:
-            evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
 
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
     for test in tests:
         add_result(evidence, f"build:{test}", ["cmake", "--build", str(build_dir), "--target", test, "--config", "Release"], ROOT, args.dry_run)
+
+    compile_db = build_dir / "compile_commands.json"
+    if sources and compile_db.exists() and shutil.which("clang-tidy-18"):
+        for source in sources:
+            add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
+    elif sources:
+        evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
     if tests:
         expression = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
         add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "--output-on-failure", "-R", expression], ROOT, args.dry_run)

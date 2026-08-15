@@ -82,7 +82,7 @@ bool isSha256Digest(const QString& value)
     return expression.match(value).hasMatch();
 }
 
-} // namespace
+}   // namespace
 
 QString PreflightFinding::stableId() const
 {
@@ -160,14 +160,7 @@ QString preflightDecisionStateToString(PreflightDecisionState state)
 PreflightDecisionState PreflightDecision::resolveState(const QString& currentDocumentDigest,
                                                        const QString& currentProfileDigest) const
 {
-    if (findingId.trimmed().isEmpty()
-        || justification.trimmed().size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH
-        || operatorIdentity.trimmed().isEmpty()
-        || !timestampUtc.isValid()
-        || !isSha256Digest(documentRevisionDigest)
-        || !isSha256Digest(effectiveProfileDigest)
-        || !isSha256Digest(currentDocumentDigest)
-        || !isSha256Digest(currentProfileDigest))
+    if (findingId.trimmed().isEmpty() || justification.trimmed().size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH || operatorIdentity.trimmed().isEmpty() || !timestampUtc.isValid() || !isSha256Digest(documentRevisionDigest) || !isSha256Digest(effectiveProfileDigest) || !isSha256Digest(currentDocumentDigest) || !isSha256Digest(currentProfileDigest))
     {
         return PreflightDecisionState::Invalid;
     }
@@ -188,14 +181,11 @@ bool PreflightDecision::countsForSignoff(const QString& currentDocumentDigest,
                                          const QString& currentProfileDigest) const
 {
     const PreflightDecisionState state = resolveState(currentDocumentDigest, currentProfileDigest);
-    return state == PreflightDecisionState::Active
-        && (kind == PreflightDecisionKind::Accept
-            || kind == PreflightDecisionKind::Waive
-            || kind == PreflightDecisionKind::Override);
+    return state == PreflightDecisionState::Active && (kind == PreflightDecisionKind::Accept || kind == PreflightDecisionKind::Waive || kind == PreflightDecisionKind::Override);
 }
 
 QJsonObject PreflightDecision::toJson(const QString& currentDocumentDigest,
-                                     const QString& currentProfileDigest) const
+                                      const QString& currentProfileDigest) const
 {
     QJsonObject object{
         { QStringLiteral("finding_id"), findingId },
@@ -243,7 +233,7 @@ bool PreflightDecision::fromJson(const QJsonObject& object,
     if (decision.justification.size() < PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH)
     {
         errorMessage = QStringLiteral("Decision justification must contain at least %1 non-whitespace characters.")
-            .arg(PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH);
+                           .arg(PREFLIGHT_DECISION_MIN_JUSTIFICATION_LENGTH);
         return false;
     }
 
@@ -379,8 +369,8 @@ bool pdfxPolicyForTarget(const QString& target, PDFXPolicy& policy, QString& err
     else
     {
         errorMessage = PDFTranslationContext::tr(
-            "Unsupported PDF/X target '%1' (supported: %2).")
-            .arg(target, supportedPDFXTargets().join(QStringLiteral(", ")));
+                           "Unsupported PDF/X target '%1' (supported: %2).")
+                           .arg(target, supportedPDFXTargets().join(QStringLiteral(", ")));
         return false;
     }
 
@@ -434,8 +424,7 @@ PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
                 failedRuleIds->append(rule.ruleId);
             }
         }
-        else if (rule.state == PDFXRuleState::NotInspected
-                 || rule.state == PDFXRuleState::NotApplicable)
+        else if (rule.state == PDFXRuleState::NotInspected || rule.state == PDFXRuleState::NotApplicable)
         {
             if (incompleteRuleIds)
             {
@@ -454,18 +443,15 @@ PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
     }
 
     // Callers that do not request the ID lists still need the same reduction.
-    const bool hasFailure = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule) {
-        return rule.mandatory && rule.state == PDFXRuleState::Failed;
-    });
+    const bool hasFailure = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule)
+                                        { return rule.mandatory && rule.state == PDFXRuleState::Failed; });
     if (hasFailure)
     {
         return PDFXConformanceStatus::NonConformant;
     }
 
-    const bool incomplete = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule) {
-        return rule.mandatory
-            && (rule.state == PDFXRuleState::NotInspected || rule.state == PDFXRuleState::NotApplicable);
-    });
+    const bool incomplete = std::any_of(rules.cbegin(), rules.cend(), [](const PDFXRuleResult& rule)
+                                        { return rule.mandatory && (rule.state == PDFXRuleState::NotInspected || rule.state == PDFXRuleState::NotApplicable); });
     return incomplete ? PDFXConformanceStatus::Incomplete : PDFXConformanceStatus::Conformant;
 }
 
@@ -488,7 +474,7 @@ QString pdfxRuleStateToString(PDFXRuleState state)
     }
 }
 
-} // namespace
+}   // namespace
 
 QJsonObject PDFXConformanceResult::toJson() const
 {
@@ -926,8 +912,8 @@ void runBleedCheck(PDFDocumentSession* session,
 
 enum class SizeCheckKind
 {
-    Trim,       ///< Measures the TrimBox (with trim -> crop -> media fallback).
-    PageSize    ///< Measures the MediaBox (physical page size).
+    Trim,   ///< Measures the TrimBox (with trim -> crop -> media fallback).
+    PageSize   ///< Measures the MediaBox (physical page size).
 };
 
 void runSizeCheck(SizeCheckKind kind,
@@ -984,9 +970,17 @@ void runSizeCheck(SizeCheckKind kind,
         finding.bbox = box;
         finding.message = (kind == SizeCheckKind::Trim)
                               ? PDFTranslationContext::tr("TrimBox %1 x %2 pt does not match expected %3 x %4 pt (tolerance %5 pt)")
-                                    .arg(box.width()).arg(box.height()).arg(check.expectedWidthPt).arg(check.expectedHeightPt).arg(check.tolerancePt)
+                                    .arg(box.width())
+                                    .arg(box.height())
+                                    .arg(check.expectedWidthPt)
+                                    .arg(check.expectedHeightPt)
+                                    .arg(check.tolerancePt)
                               : PDFTranslationContext::tr("Page size %1 x %2 pt does not match expected %3 x %4 pt (tolerance %5 pt)")
-                                    .arg(box.width()).arg(box.height()).arg(check.expectedWidthPt).arg(check.expectedHeightPt).arg(check.tolerancePt);
+                                    .arg(box.width())
+                                    .arg(box.height())
+                                    .arg(check.expectedWidthPt)
+                                    .arg(check.expectedHeightPt)
+                                    .arg(check.tolerancePt);
 
         if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
         {
@@ -1003,10 +997,14 @@ QString sideNameForFinding(PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return QStringLiteral("left");
-        case PDFBleedFixupSide::Right: return QStringLiteral("right");
-        case PDFBleedFixupSide::Top: return QStringLiteral("top");
-        case PDFBleedFixupSide::Bottom: return QStringLiteral("bottom");
+        case PDFBleedFixupSide::Left:
+            return QStringLiteral("left");
+        case PDFBleedFixupSide::Right:
+            return QStringLiteral("right");
+        case PDFBleedFixupSide::Top:
+            return QStringLiteral("top");
+        case PDFBleedFixupSide::Bottom:
+            return QStringLiteral("bottom");
     }
     return QStringLiteral("unknown");
 }
@@ -1030,10 +1028,14 @@ bool edgeHasContent(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide s
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return result.left.hasContent;
-        case PDFBleedFixupSide::Right: return result.right.hasContent;
-        case PDFBleedFixupSide::Top: return result.top.hasContent;
-        case PDFBleedFixupSide::Bottom: return result.bottom.hasContent;
+        case PDFBleedFixupSide::Left:
+            return result.left.hasContent;
+        case PDFBleedFixupSide::Right:
+            return result.right.hasContent;
+        case PDFBleedFixupSide::Top:
+            return result.top.hasContent;
+        case PDFBleedFixupSide::Bottom:
+            return result.bottom.hasContent;
     }
     return false;
 }
@@ -1042,10 +1044,14 @@ QRectF edgeStripRect(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide 
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return result.left.stripRect;
-        case PDFBleedFixupSide::Right: return result.right.stripRect;
-        case PDFBleedFixupSide::Top: return result.top.stripRect;
-        case PDFBleedFixupSide::Bottom: return result.bottom.stripRect;
+        case PDFBleedFixupSide::Left:
+            return result.left.stripRect;
+        case PDFBleedFixupSide::Right:
+            return result.right.stripRect;
+        case PDFBleedFixupSide::Top:
+            return result.top.stripRect;
+        case PDFBleedFixupSide::Bottom:
+            return result.bottom.stripRect;
     }
     return QRectF();
 }
@@ -1080,9 +1086,9 @@ void runProcessingStepsCheck(PDFDocumentSession* session,
 
     const QList<PDFProcessingStep> steps = detectProcessingSteps(*session->getDocument());
     const auto addFinding = [&check, &errors, &warnings](const QString& type,
-                                                          const QString& message,
-                                                          const PDFProcessingStep* step,
-                                                          const QString& requiredType = QString())
+                                                         const QString& message,
+                                                         const PDFProcessingStep* step,
+                                                         const QString& requiredType = QString())
     {
         PreflightFinding finding;
         finding.scope = step && step->pageIndices.size() == 1
@@ -1153,9 +1159,9 @@ void runProcessingStepsCheck(PDFDocumentSession* session,
 }
 
 void runContentBleedCheck(PDFDocumentSession* session,
-                           const PreflightCheckConfig& check,
-                           QList<PreflightFinding>& errors,
-                           QList<PreflightFinding>& warnings)
+                          const PreflightCheckConfig& check,
+                          QList<PreflightFinding>& errors,
+                          QList<PreflightFinding>& warnings)
 {
     if (!session)
     {
@@ -1273,16 +1279,16 @@ void runContentBleedCheck(PDFDocumentSession* session,
 }
 
 void runInkCoverageCheck(PDFDocumentSession* session,
-                          const PreflightCheckConfig& check,
-                          QList<PreflightFinding>& errors,
-                          QList<PreflightFinding>& warnings)
+                         const PreflightCheckConfig& check,
+                         QList<PreflightFinding>& errors,
+                         QList<PreflightFinding>& warnings)
 {
     auto emitIncomplete = [&](int pageNumber, const QString& reason, bool budgetExceeded = false)
     {
         PreflightFinding finding;
         finding.scope = pageNumber > 0
-            ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE)
-            : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+                            ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE)
+                            : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
         finding.page = pageNumber;
         finding.type = QStringLiteral("check-incomplete");
         finding.severity = QStringLiteral("info");
@@ -1294,8 +1300,8 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             { QStringLiteral("max_raster_pixels"), check.maxRasterPixels }
         };
         finding.message = pageNumber > 0
-            ? PDFTranslationContext::tr("Page %1 skipped: %2").arg(pageNumber).arg(reason)
-            : PDFTranslationContext::tr("Ink coverage skipped: %1").arg(reason);
+                              ? PDFTranslationContext::tr("Page %1 skipped: %2").arg(pageNumber).arg(reason)
+                              : PDFTranslationContext::tr("Ink coverage skipped: %1").arg(reason);
         pushPreflightFinding(finding, finding.severity, errors, warnings);
     };
 
@@ -1379,11 +1385,11 @@ void runInkCoverageCheck(PDFDocumentSession* session,
                 { QStringLiteral("region_rank"), ++regionRank }
             };
             finding.message = PDFTranslationContext::tr(
-                "Total ink coverage %1% exceeds maximum %2% over %3 mm^2 on page %4")
-                .arg(qRound(region.peakInkCoverage * 100.0))
-                .arg(qRound(check.maxInkPct))
-                .arg(qRound(region.areaMM2))
-                .arg(pageIndex + 1);
+                                  "Total ink coverage %1% exceeds maximum %2% over %3 mm^2 on page %4")
+                                  .arg(qRound(region.peakInkCoverage * 100.0))
+                                  .arg(qRound(check.maxInkPct))
+                                  .arg(qRound(region.areaMM2))
+                                  .arg(pageIndex + 1);
             pushPreflightFinding(finding, check.severity, errors, warnings);
         }
     }
@@ -1439,10 +1445,10 @@ void recordBudgetFailure(PreflightResult& result,
     finding.checkId = check.id;
     finding.bbox = QRectF();
     finding.message = PDFTranslationContext::tr("Check '%1' exceeded the %2 processing budget (%3 > %4): %5")
-        .arg(check.id, status.budgetKind)
-        .arg(detail.attempted)
-        .arg(detail.limit)
-        .arg(detail.context);
+                          .arg(check.id, status.budgetKind)
+                          .arg(detail.attempted)
+                          .arg(detail.limit)
+                          .arg(detail.context);
     result.errors.push_back(finding);
 }
 
@@ -1450,10 +1456,7 @@ bool hasBleedGapFinding(const QList<PreflightFinding>& findings)
 {
     for (const PreflightFinding& finding : findings)
     {
-        if (finding.checkId == QStringLiteral("bleed")
-            || finding.type == QStringLiteral("content-bleed")
-            || finding.type == QStringLiteral("bleed-margin-empty")
-            || finding.type == QStringLiteral("needs-auto-bleed"))
+        if (finding.checkId == QStringLiteral("bleed") || finding.type == QStringLiteral("content-bleed") || finding.type == QStringLiteral("bleed-margin-empty") || finding.type == QStringLiteral("needs-auto-bleed"))
         {
             return true;
         }
@@ -1579,14 +1582,10 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
     const auto hasRgbFinding = [](const QList<PreflightFinding>& findings)
     {
         return std::any_of(findings.cbegin(), findings.cend(), [](const PreflightFinding& finding)
-        {
-            return finding.checkId == QStringLiteral("color-mode")
-                && finding.message.contains(QStringLiteral("DeviceRGB"), Qt::CaseInsensitive);
-        });
+                           { return finding.checkId == QStringLiteral("color-mode") && finding.message.contains(QStringLiteral("DeviceRGB"), Qt::CaseInsensitive); });
     };
 
-    if ((hasRgbFinding(errors) || hasRgbFinding(warnings))
-        && isImplementedFixupId(QStringLiteral("rgb-to-cmyk")))
+    if ((hasRgbFinding(errors) || hasRgbFinding(warnings)) && isImplementedFixupId(QStringLiteral("rgb-to-cmyk")))
     {
         if (!hasProfileRgbToCmyk)
         {
@@ -1606,16 +1605,14 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
 
     const int targetDpi = downsampleConfig.params.value(QStringLiteral("target_dpi")).toInt(300);
     int candidateCount = 0;
-    if (hasProfileDownsample
-        && isImplementedFixupId(QStringLiteral("downsample-images"))
-        && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
+    if (hasProfileDownsample && isImplementedFixupId(QStringLiteral("downsample-images")) && hasDownsampleCandidate(session ? session->getDocument() : nullptr, targetDpi, &candidateCount))
     {
         if (downsampleConfig.description.isEmpty())
         {
             downsampleConfig.description = PDFTranslationContext::tr(
-                "Downsample %1 oversized image(s) toward %2 DPI")
-                .arg(candidateCount)
-                .arg(targetDpi);
+                                               "Downsample %1 oversized image(s) toward %2 DPI")
+                                               .arg(candidateCount)
+                                               .arg(targetDpi);
         }
 
         QJsonObject params = downsampleConfig.params;
@@ -1690,9 +1687,9 @@ void runColorModeCheck(PDFDocumentSession* session,
                            const PDFOptionalContentActivity* oc,
                            const PDFMeshQualitySettings& mq,
                            PDFProcessingBudget* budget,
-                           QSet<QString>* paintedSpaces)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
-            , m_paintedSpaces(paintedSpaces)
+                           QSet<QString>* paintedSpaces) :
+            PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget),
+            m_paintedSpaces(paintedSpaces)
         {
         }
 
@@ -1744,8 +1741,8 @@ void runColorModeCheck(PDFDocumentSession* session,
         }
 
         bool performOriginalImagePainting(const PDFImage& image,
-                                           const PDFStream* stream,
-                                           PDFObjectReference reference) override
+                                          const PDFStream* stream,
+                                          PDFObjectReference reference) override
         {
             Q_UNUSED(reference);
             if (isContentSuppressed())
@@ -1788,9 +1785,8 @@ void runColorModeCheck(PDFDocumentSession* session,
         ColorModeProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &paintedSpaces);
         processor.processContents();
 
-        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
 
         QStringList disallowed;
         for (const QString& cs : paintedSpaces)
@@ -1824,10 +1820,10 @@ void runColorModeCheck(PDFDocumentSession* session,
                 modeList += mode;
             }
             finding.message = PDFTranslationContext::tr(
-                "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
-                .arg(pageIndex + 1)
-                .arg(disallowed.join(QStringLiteral(", ")))
-                .arg(modeList);
+                                  "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
+                                  .arg(pageIndex + 1)
+                                  .arg(disallowed.join(QStringLiteral(", ")))
+                                  .arg(modeList);
 
             if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
             {
@@ -1882,8 +1878,8 @@ void runColorInventoryCheck(PDFDocumentSession* session,
         finding.objectId = ink.name;
         finding.type = QStringLiteral("separation");
         finding.message = ink.isSpot
-                ? PDFTranslationContext::tr("Spot output separation: %1").arg(ink.name)
-                : PDFTranslationContext::tr("Process output separation: %1").arg(ink.name);
+                              ? PDFTranslationContext::tr("Spot output separation: %1").arg(ink.name)
+                              : PDFTranslationContext::tr("Process output separation: %1").arg(ink.name);
         emitInfo(finding);
     }
 
@@ -1894,10 +1890,10 @@ void runColorInventoryCheck(PDFDocumentSession* session,
         finding.page = richBlack.page;
         finding.type = QStringLiteral("rich-black");
         finding.message = PDFTranslationContext::tr(
-            "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
-                .arg(richBlack.page)
-                .arg(richBlack.areaMM2, 0, 'f', 2)
-                .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
+                              "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
+                              .arg(richBlack.page)
+                              .arg(richBlack.areaMM2, 0, 'f', 2)
+                              .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
         emitInfo(finding);
     }
 }
@@ -2043,7 +2039,8 @@ void runOutputIntentCheck(PDFDocumentSession* session,
 
     const PDFCatalog* catalog = document->getCatalog();
     const auto& outputIntents = catalog->getOutputIntents();
-    auto recordFinding = [&](const QString& type, const QString& message) {
+    auto recordFinding = [&](const QString& type, const QString& message)
+    {
         PreflightFinding finding;
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
         finding.type = type;
@@ -2100,13 +2097,11 @@ void runOutputIntentCheck(PDFDocumentSession* session,
         const QString identifier = outputIntent.getOutputConditionIdentifier();
         const QString label = identifier.isEmpty() ? QStringLiteral("(unnamed)") : identifier;
         const QString indexedLabel = outputIntents.size() > 1
-            ? PDFTranslationContext::tr("intent %1 '%2'").arg(int(intentIndex)).arg(label)
-            : label;
+                                         ? PDFTranslationContext::tr("intent %1 '%2'").arg(int(intentIndex)).arg(label)
+                                         : label;
 
-        if (!check.allowedOutputIntentSubtypes.isEmpty()
-            && std::none_of(check.allowedOutputIntentSubtypes.cbegin(), check.allowedOutputIntentSubtypes.cend(), [&outputIntent](const QString& subtype) {
-                return subtype.compare(QString::fromLatin1(outputIntent.getSubtype()), Qt::CaseInsensitive) == 0;
-            }))
+        if (!check.allowedOutputIntentSubtypes.isEmpty() && std::none_of(check.allowedOutputIntentSubtypes.cbegin(), check.allowedOutputIntentSubtypes.cend(), [&outputIntent](const QString& subtype)
+                                                                         { return subtype.compare(QString::fromLatin1(outputIntent.getSubtype()), Qt::CaseInsensitive) == 0; }))
         {
             recordFinding(
                 QStringLiteral("output-intent-subtype"),
@@ -2196,9 +2191,8 @@ void runOutputIntentCheck(PDFDocumentSession* session,
         if (!check.allowedOutputIntentProfileSha256.isEmpty())
         {
             const QString profileSha256 = QString::fromLatin1(QCryptographicHash::hash(content, QCryptographicHash::Sha256).toHex());
-            if (std::none_of(check.allowedOutputIntentProfileSha256.cbegin(), check.allowedOutputIntentProfileSha256.cend(), [&profileSha256](const QString& allowed) {
-                return allowed.compare(profileSha256, Qt::CaseInsensitive) == 0;
-            }))
+            if (std::none_of(check.allowedOutputIntentProfileSha256.cbegin(), check.allowedOutputIntentProfileSha256.cend(), [&profileSha256](const QString& allowed)
+                             { return allowed.compare(profileSha256, Qt::CaseInsensitive) == 0; }))
             {
                 recordFinding(
                     QStringLiteral("output-intent-profile-identity"),
@@ -2363,9 +2357,9 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
                                 const PDFOptionalContentActivity* oc,
                                 const PDFMeshQualitySettings& mq,
                                 PDFProcessingBudget* budget,
-                                bool* foundWhiteOverprint)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
-            , m_foundWhiteOverprint(foundWhiteOverprint)
+                                bool* foundWhiteOverprint) :
+            PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget),
+            m_foundWhiteOverprint(foundWhiteOverprint)
         {
         }
 
@@ -2406,14 +2400,12 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
             const PDFPageContentProcessorState* state = getGraphicState();
             const PDFOverprintMode overprintMode = state->getOverprintMode();
 
-            if (fill && overprintMode.overprintFilling
-                && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal()))
+            if (fill && overprintMode.overprintFilling && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal()))
             {
                 *m_foundWhiteOverprint = true;
             }
 
-            if (stroke && overprintMode.overprintStroking
-                && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal()))
+            if (stroke && overprintMode.overprintStroking && isNearWhiteDevicePaint(state->getStrokeColorSpace(), state->getStrokeColorOriginal()))
             {
                 *m_foundWhiteOverprint = true;
             }
@@ -2435,9 +2427,8 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
         WhiteOverprintProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &foundWhiteOverprint);
         processor.processContents();
 
-        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
 
         if (!foundWhiteOverprint)
         {
@@ -2451,7 +2442,7 @@ void runWhiteOverprintCheck(PDFDocumentSession* session,
         finding.severity = check.severity;
         finding.checkId = check.id;
         finding.message = PDFTranslationContext::tr(
-            "White or near-white paint is set to overprint on page %1.")
+                              "White or near-white paint is set to overprint on page %1.")
                               .arg(pageIndex + 1);
 
         if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
@@ -2538,9 +2529,7 @@ TransparencyColorFamily classifyTransparencyColorSpace(const PDFAbstractColorSpa
 bool isRiskyTransparencyConversion(TransparencyColorFamily blendSpace,
                                    TransparencyColorFamily sourceSpace)
 {
-    if (blendSpace == TransparencyColorFamily::Unknown
-        || sourceSpace == TransparencyColorFamily::Unknown
-        || blendSpace == sourceSpace)
+    if (blendSpace == TransparencyColorFamily::Unknown || sourceSpace == TransparencyColorFamily::Unknown || blendSpace == sourceSpace)
     {
         return false;
     }
@@ -2562,8 +2551,7 @@ bool isRiskyTransparencyConversion(TransparencyColorFamily blendSpace,
         return true;
     }
 
-    return (blendSpace == TransparencyColorFamily::RGB && sourceSpace == TransparencyColorFamily::CMYK)
-        || (blendSpace == TransparencyColorFamily::CMYK && sourceSpace == TransparencyColorFamily::RGB);
+    return (blendSpace == TransparencyColorFamily::RGB && sourceSpace == TransparencyColorFamily::CMYK) || (blendSpace == TransparencyColorFamily::CMYK && sourceSpace == TransparencyColorFamily::RGB);
 }
 
 struct TransparencyGroupFrame
@@ -2788,9 +2776,7 @@ private:
 
     void evaluateBlendSpace(const TransparencyGroupFrame& frame)
     {
-        if (!frame.hasExplicitBlendSpace
-            || frame.blendSpace == TransparencyColorFamily::Unknown
-            || !m_mismatchDescriptions)
+        if (!frame.hasExplicitBlendSpace || frame.blendSpace == TransparencyColorFamily::Unknown || !m_mismatchDescriptions)
         {
             return;
         }
@@ -2851,19 +2837,18 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
         QSet<QString> riskyBlendModes;
         QSet<QString> mismatchDescriptions;
         TransparencyRiskProcessor processor(page,
-                                             document,
-                                             &fontCache,
-                                             cms.get(),
-                                             &ocActivity,
-                                             meshQuality,
-                                             session->getProcessingBudget(),
-                                             &riskyBlendModes,
-                                             &mismatchDescriptions);
+                                            document,
+                                            &fontCache,
+                                            cms.get(),
+                                            &ocActivity,
+                                            meshQuality,
+                                            session->getProcessingBudget(),
+                                            &riskyBlendModes,
+                                            &mismatchDescriptions);
 
         processor.processContents();
-        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
 
         QStringList blendModes = riskyBlendModes.values();
         blendModes.sort();
@@ -2876,8 +2861,8 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
             finding.severity = check.severity;
             finding.checkId = check.id;
             finding.message = PDFTranslationContext::tr(
-                "Transparency uses blend mode configuration(s) that may not be reproduced reliably by all render paths: %1")
-                .arg(blendModes.join(QStringLiteral(", ")));
+                                  "Transparency uses blend mode configuration(s) that may not be reproduced reliably by all render paths: %1")
+                                  .arg(blendModes.join(QStringLiteral(", ")));
             pushPreflightFinding(finding, check.severity, errors, warnings);
         }
 
@@ -2892,7 +2877,7 @@ void runTransparencyRiskCheck(PDFDocumentSession* session,
             finding.severity = check.severity;
             finding.checkId = check.id;
             finding.message = PDFTranslationContext::tr("Potential transparency blend-space mismatch: %1")
-                .arg(mismatches.join(QStringLiteral("; ")));
+                                  .arg(mismatches.join(QStringLiteral("; ")));
             pushPreflightFinding(finding, check.severity, errors, warnings);
         }
     }
@@ -3063,9 +3048,7 @@ void throwIfThinStrokeProcessingIncomplete(const QList<PDFRenderError>& errors)
 {
     for (const PDFRenderError& error : errors)
     {
-        if (error.type == RenderErrorType::Error
-            || error.type == RenderErrorType::NotImplemented
-            || error.type == RenderErrorType::NotSupported)
+        if (error.type == RenderErrorType::Error || error.type == RenderErrorType::NotImplemented || error.type == RenderErrorType::NotSupported)
         {
             throw PDFException(error.message);
         }
@@ -3124,9 +3107,8 @@ void runThinStrokesCheck(PDFDocumentSession* session,
         const QList<PDFRenderError> pageErrors = processor.processContents();
         throwIfThinStrokeProcessingIncomplete(pageErrors);
 
-        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
         throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
 
         for (const ThinStrokeFinding& source : processor.findings())
@@ -3145,17 +3127,17 @@ void runThinStrokesCheck(PDFDocumentSession* session,
             if (hairline)
             {
                 finding.message = PDFTranslationContext::tr(
-                    "Hairline stroke on page %1 has declared width %2 pt.")
-                    .arg(pageIndex + 1)
-                    .arg(source.declaredWidth, 0, 'f', 6);
+                                      "Hairline stroke on page %1 has declared width %2 pt.")
+                                      .arg(pageIndex + 1)
+                                      .arg(source.declaredWidth, 0, 'f', 6);
             }
             else
             {
                 finding.message = PDFTranslationContext::tr(
-                    "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
-                    .arg(pageIndex + 1)
-                    .arg(source.effectiveWidth, 0, 'f', 6)
-                    .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                                      "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
+                                      .arg(pageIndex + 1)
+                                      .arg(source.effectiveWidth, 0, 'f', 6)
+                                      .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
             }
             pushPreflightFinding(finding, severity, errors, warnings);
         }
@@ -3255,13 +3237,12 @@ protected:
         m_fillPaths.push_back(visiblePath);
         ThinPartCandidate candidate;
         candidate.classification = m_processingAnnotation
-            ? QStringLiteral("thin-annotation")
-            : QStringLiteral("thin-fill");
+                                       ? QStringLiteral("thin-annotation")
+                                       : QStringLiteral("thin-fill");
         candidate.path = visiblePath;
         m_candidates.push_back(candidate);
 
-        if (!m_processingAnnotation
-            && visiblePath.boundingRect() != pagePath.boundingRect())
+        if (!m_processingAnnotation && visiblePath.boundingRect() != pagePath.boundingRect())
         {
             ThinPartCandidate clippedCandidate;
             clippedCandidate.classification = QStringLiteral("thin-clipped-part");
@@ -3327,10 +3308,10 @@ void appendThinPartIncomplete(const PreflightCheckConfig& check,
     finding.severity = QStringLiteral("info");
     finding.checkId = check.id;
     finding.message = PDFTranslationContext::tr(
-        "Thin-part measurement for %1 on page %2 is within one raster pixel of the %3 pt threshold.")
-        .arg(classification)
-        .arg(pageNumber)
-        .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                          "Thin-part measurement for %1 on page %2 is within one raster pixel of the %3 pt threshold.")
+                          .arg(classification)
+                          .arg(pageNumber)
+                          .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
     finding.evidence = {
         { QStringLiteral("class"), classification },
         { QStringLiteral("measuredWidthPt"), measuredWidthPt },
@@ -3370,12 +3351,8 @@ void runThinPartsCheck(PDFDocumentSession* session,
     PDFCMSPointer cms = cmsManager.getCurrentCMS();
     PDFMeshQualitySettings meshQuality;
 
-    const bool inspectStrokes = thinPartClassEnabled(check, QStringLiteral("thin-stroke"))
-        || thinPartClassEnabled(check, QStringLiteral("thin-annotation"));
-    const bool inspectFills = thinPartClassEnabled(check, QStringLiteral("thin-fill"))
-        || thinPartClassEnabled(check, QStringLiteral("thin-clipped-part"))
-        || thinPartClassEnabled(check, QStringLiteral("thin-annotation"))
-        || thinPartClassEnabled(check, QStringLiteral("thin-negative-space"));
+    const bool inspectStrokes = thinPartClassEnabled(check, QStringLiteral("thin-stroke")) || thinPartClassEnabled(check, QStringLiteral("thin-annotation"));
+    const bool inspectFills = thinPartClassEnabled(check, QStringLiteral("thin-fill")) || thinPartClassEnabled(check, QStringLiteral("thin-clipped-part")) || thinPartClassEnabled(check, QStringLiteral("thin-annotation")) || thinPartClassEnabled(check, QStringLiteral("thin-negative-space"));
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
@@ -3400,9 +3377,8 @@ void runThinPartsCheck(PDFDocumentSession* session,
             const QList<PDFRenderError> pageErrors = processor.processContents();
             throwIfThinStrokeProcessingIncomplete(pageErrors);
             processor.setProcessingAnnotation(true);
-            processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-                processor.processFormStream(formStream);
-            });
+            processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                               { processor.processFormStream(formStream); });
             processor.setProcessingAnnotation(false);
             throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
 
@@ -3430,10 +3406,10 @@ void runThinPartsCheck(PDFDocumentSession* session,
                 finding.checkId = check.id;
                 finding.bbox = source.bbox;
                 finding.message = PDFTranslationContext::tr(
-                    "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
-                    .arg(pageNumber)
-                    .arg(source.effectiveWidth, 0, 'f', 6)
-                    .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                                      "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
+                                      .arg(pageNumber)
+                                      .arg(source.effectiveWidth, 0, 'f', 6)
+                                      .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
                 finding.evidence = {
                     { QStringLiteral("class"), source.classification },
                     { QStringLiteral("measuredWidthPt"), source.effectiveWidth },
@@ -3459,9 +3435,8 @@ void runThinPartsCheck(PDFDocumentSession* session,
         const QList<PDFRenderError> pageErrors = processor.processContents();
         throwIfThinStrokeProcessingIncomplete(pageErrors);
         processor.setProcessingAnnotation(true);
-        processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, pageNumber, [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
         processor.setProcessingAnnotation(false);
         throwIfThinStrokeProcessingIncomplete(processor.renderErrors());
 
@@ -3507,11 +3482,11 @@ void runThinPartsCheck(PDFDocumentSession* session,
             finding.checkId = check.id;
             finding.bbox = measurement.bbox;
             finding.message = PDFTranslationContext::tr(
-                "Thin %1 on page %2 has measured width %3 pt below %4 pt.")
-                .arg(candidate.classification)
-                .arg(pageNumber)
-                .arg(measurement.widthPt, 0, 'f', 6)
-                .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                                  "Thin %1 on page %2 has measured width %3 pt below %4 pt.")
+                                  .arg(candidate.classification)
+                                  .arg(pageNumber)
+                                  .arg(measurement.widthPt, 0, 'f', 6)
+                                  .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
             finding.evidence = {
                 { QStringLiteral("class"), candidate.classification },
                 { QStringLiteral("measuredWidthPt"), measurement.widthPt },
@@ -3521,8 +3496,7 @@ void runThinPartsCheck(PDFDocumentSession* session,
             pushPreflightFinding(finding, severity, errors, warnings);
         }
 
-        if (thinPartClassEnabled(check, QStringLiteral("thin-negative-space"))
-            && processor.fillPaths().size() > 1)
+        if (thinPartClassEnabled(check, QStringLiteral("thin-negative-space")) && processor.fillPaths().size() > 1)
         {
             QPainterPath combined;
             for (const QPainterPath& fillPath : processor.fillPaths())
@@ -3558,10 +3532,10 @@ void runThinPartsCheck(PDFDocumentSession* session,
                     finding.checkId = check.id;
                     finding.bbox = measurement.bbox;
                     finding.message = PDFTranslationContext::tr(
-                        "Thin negative space on page %1 has measured width %2 pt below %3 pt.")
-                        .arg(pageNumber)
-                        .arg(measurement.widthPt, 0, 'f', 6)
-                        .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+                                          "Thin negative space on page %1 has measured width %2 pt below %3 pt.")
+                                          .arg(pageNumber)
+                                          .arg(measurement.widthPt, 0, 'f', 6)
+                                          .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
                     finding.evidence = {
                         { QStringLiteral("class"), QStringLiteral("thin-negative-space") },
                         { QStringLiteral("measuredWidthPt"), measurement.widthPt },
@@ -3596,13 +3570,13 @@ public:
                            PDFProcessingBudget* budget,
                            qreal offPageAllowance) :
         PDFPageContentProcessor(page,
-                                 document,
-                                 fontCache,
-                                 cms,
-                                 optionalContentActivity,
-                                 QTransform(),
-                                 meshQualitySettings,
-                                 budget)
+                                document,
+                                fontCache,
+                                cms,
+                                optionalContentActivity,
+                                QTransform(),
+                                meshQualitySettings,
+                                budget)
     {
         if (page)
         {
@@ -3610,8 +3584,8 @@ public:
             const QRectF effective = preflight::resolveEffectiveBox(page->getTrimBox(), page->getCropBox(), media);
             const QRectF bleed = page->getBleedBox().normalized();
             m_toleratedBounds = bleed.isEmpty()
-                ? effective.adjusted(-offPageAllowance, -offPageAllowance, offPageAllowance, offPageAllowance)
-                : bleed;
+                                    ? effective.adjusted(-offPageAllowance, -offPageAllowance, offPageAllowance, offPageAllowance)
+                                    : bleed;
         }
     }
 
@@ -3637,8 +3611,7 @@ protected:
         }
         if (reference.isValid() && getDocument()->getCatalog()->getOptionalContentProperties()->hasOptionalContentGroup(reference))
         {
-            name = getDocument()->getCatalog()->getOptionalContentProperties()
-                ->getOptionalContentGroup(reference).getName();
+            name = getDocument()->getCatalog()->getOptionalContentProperties()->getOptionalContentGroup(reference).getName();
             if (name.isEmpty())
             {
                 name = QStringLiteral("object %1 %2").arg(reference.objectNumber).arg(reference.generation);
@@ -3655,8 +3628,7 @@ protected:
                                      ProcessOrder processOrder,
                                      const QByteArray& operatorAsText) override
     {
-        if (processOrder != ProcessOrder::BeforeOperation
-            || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
+        if (processOrder != ProcessOrder::BeforeOperation || getGraphicState()->getTextRenderingMode() != TextRenderingMode::Invisible)
         {
             return;
         }
@@ -3769,18 +3741,18 @@ void runHiddenContentCheck(PDFDocumentSession* session,
 
             PreflightFinding finding;
             finding.scope = source.type == QStringLiteral("hidden-layers")
-                ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT)
-                : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+                                ? QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT)
+                                : QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
             finding.page = int(pageIndex + 1);
             finding.type = source.type;
             finding.checkId = check.id;
             finding.bbox = source.bbox;
             finding.severity = source.heuristic && check.severity == QStringLiteral("error")
-                ? QStringLiteral("info")
-                : check.severity;
+                                   ? QStringLiteral("info")
+                                   : check.severity;
             finding.message = source.type == QStringLiteral("hidden-layers")
-                ? PDFTranslationContext::tr("Optional-content group '%1' is not printable by default.").arg(source.detail)
-                : PDFTranslationContext::tr("%1 on page %2.").arg(source.detail).arg(pageIndex + 1);
+                                  ? PDFTranslationContext::tr("Optional-content group '%1' is not printable by default.").arg(source.detail)
+                                  : PDFTranslationContext::tr("%1 on page %2.").arg(source.detail).arg(pageIndex + 1);
             finding.evidence.insert(QStringLiteral("confidence"), source.heuristic ? QStringLiteral("heuristic") : QStringLiteral("exact"));
             if (source.type == QStringLiteral("hidden-layers"))
             {
@@ -3794,9 +3766,9 @@ void runHiddenContentCheck(PDFDocumentSession* session,
 // Scans Font resource dictionaries on the page and nested Form XObjects /
 // annotation appearance streams (resource recursion with cycle guard).
 void runEmbeddedFontsCheck(PDFDocumentSession* session,
-                            const PreflightCheckConfig& check,
-                            QList<PreflightFinding>& errors,
-                            QList<PreflightFinding>& warnings)
+                           const PreflightCheckConfig& check,
+                           QList<PreflightFinding>& errors,
+                           QList<PreflightFinding>& warnings)
 {
     if (!session)
     {
@@ -4027,7 +3999,7 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
         finding.objectId = QStringLiteral("%1 %2 R").arg(reference.objectNumber).arg(reference.generation);
         finding.severity = result.inspectionComplete ? check.severity : QStringLiteral("error");
         finding.message = PDFTranslationContext::tr("Font '%1' has integrity defects: %2")
-            .arg(fontName, result.defects.join(QStringLiteral(", ")));
+                              .arg(fontName, result.defects.join(QStringLiteral(", ")));
         finding.evidence.insert(QStringLiteral("font_resource"), fontName);
         finding.evidence.insert(QStringLiteral("font_subtype"), result.subtype);
         finding.evidence.insert(QStringLiteral("embedded"), true);
@@ -4133,9 +4105,9 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
 }
 
 void runImageResolutionCheck(PDFDocumentSession* session,
-                              const PreflightCheckConfig& check,
-                              QList<PreflightFinding>& errors,
-                              QList<PreflightFinding>& warnings)
+                             const PreflightCheckConfig& check,
+                             QList<PreflightFinding>& errors,
+                             QList<PreflightFinding>& warnings)
 {
     if (!session)
     {
@@ -4184,9 +4156,9 @@ void runImageResolutionCheck(PDFDocumentSession* session,
                           const PDFOptionalContentActivity* oc,
                           const PDFMeshQualitySettings& mq,
                           PDFProcessingBudget* budget,
-                          std::vector<ImageDpiInfo>* results)
-            : PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget)
-            , m_results(results)
+                          std::vector<ImageDpiInfo>* results) :
+            PDFPageContentProcessor(page, doc, fc, cms_p, oc, QTransform(), mq, budget),
+            m_results(results)
         {
         }
 
@@ -4214,8 +4186,8 @@ void runImageResolutionCheck(PDFDocumentSession* session,
         }
 
         bool performOriginalImagePainting(const PDFImage& image,
-                                           const PDFStream* stream,
-                                           PDFObjectReference reference) override
+                                          const PDFStream* stream,
+                                          PDFObjectReference reference) override
         {
             Q_UNUSED(stream);
             if (isContentSuppressed())
@@ -4225,7 +4197,8 @@ void runImageResolutionCheck(PDFDocumentSession* session,
 
             const QTransform ctm = getGraphicState()->getCurrentTransformationMatrix();
 
-            const auto axisLength = [](qreal x, qreal y) -> double {
+            const auto axisLength = [](qreal x, qreal y) -> double
+            {
                 return std::hypot(static_cast<double>(x), static_cast<double>(y)) * PDF_POINT_TO_INCH;
             };
 
@@ -4263,9 +4236,8 @@ void runImageResolutionCheck(PDFDocumentSession* session,
         ImageDpiProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality, session->getProcessingBudget(), &images);
         processor.processContents();
 
-        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream) {
-            processor.processFormStream(formStream);
-        });
+        processAnnotationAppearanceStreams(document, page, int(pageIndex + 1), [&](const PDFPage* /*pageRef*/, const PDFStream* formStream)
+                                           { processor.processFormStream(formStream); });
 
         for (const auto& img : images)
         {
@@ -4276,16 +4248,17 @@ void runImageResolutionCheck(PDFDocumentSession* session,
                 finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
                 finding.page = int(pageIndex + 1);
                 finding.objectId = img.ref.isValid()
-                    ? QString::number(img.ref.objectNumber) : QString();
+                                       ? QString::number(img.ref.objectNumber)
+                                       : QString();
                 finding.type = QStringLiteral("image-resolution");
                 finding.severity = check.severity;
                 finding.checkId = check.id;
                 finding.bbox = img.bbox;
                 finding.message = PDFTranslationContext::tr(
-                    "Image resolution %1 DPI is below minimum %2 DPI on page %3")
-                    .arg(qRound(dpi))
-                    .arg(check.minDpi)
-                    .arg(pageIndex + 1);
+                                      "Image resolution %1 DPI is below minimum %2 DPI on page %3")
+                                      .arg(qRound(dpi))
+                                      .arg(check.minDpi)
+                                      .arg(pageIndex + 1);
 
                 if (check.severity == QStringLiteral("warning") || check.severity == QStringLiteral("info"))
                 {
@@ -4362,7 +4335,8 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         // PDF/X-1a:2001 is based on PDF 1.3. PDF/X-4 permits PDF 1.4 and
         // later; requiring 1.6 would reject otherwise valid PDF/X-4 files.
         const QString minimumVersion = policy.flavor == PDFXFlavor::X4
-            ? QStringLiteral("1.4") : QStringLiteral("1.3");
+                                           ? QStringLiteral("1.4")
+                                           : QStringLiteral("1.3");
         const bool allowed = validVersion && (policy.flavor == PDFXFlavor::X4
                                                   ? (major > 1 || (major == 1 && minor >= 4))
                                                   : (major == 1 && minor == 3));
@@ -4385,8 +4359,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   present ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("first_present"), !firstId.isEmpty() },
-                                      { QStringLiteral("second_present"), !secondId.isEmpty() }
-                                  },
+                                      { QStringLiteral("second_present"), !secondId.isEmpty() } },
                                   present ? QString() : PDFTranslationContext::tr("The trailer does not contain the two-part document identifier required by PDF/X."));
     }
 
@@ -4403,8 +4376,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   encrypted ? PDFXRuleState::Failed : PDFXRuleState::Passed,
                                   QJsonObject{
-                                      { QStringLiteral("encrypted"), encrypted }
-                                  },
+                                      { QStringLiteral("encrypted"), encrypted } },
                                   encrypted ? PDFTranslationContext::tr("Encrypted documents are not permitted by the selected PDF/X policy.") : QString());
     }
 
@@ -4414,7 +4386,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         if (!metadataObject.isStream())
         {
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Failed,
-                                      QJsonObject{{ QStringLiteral("metadata_stream"), false }},
+                                      QJsonObject{ { QStringLiteral("metadata_stream"), false } },
                                       PDFTranslationContext::tr("PDF/X identification metadata is missing."));
         }
 
@@ -4426,40 +4398,33 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         catch (const PDFException& exception)
         {
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
-                                      QJsonObject{{ QStringLiteral("metadata_stream"), true }}, exception.getMessage());
+                                      QJsonObject{ { QStringLiteral("metadata_stream"), true } }, exception.getMessage());
         }
 
         const QByteArray lowerMetadata = metadata.toLower();
-        const bool hasPdfxIdentification = lowerMetadata.contains("pdfaid:")
-            || lowerMetadata.contains("gts_pdfxversion")
-            || lowerMetadata.contains("pdf/x-");
+        const bool hasPdfxIdentification = lowerMetadata.contains("pdfaid:") || lowerMetadata.contains("gts_pdfxversion") || lowerMetadata.contains("pdf/x-");
         const bool hasTargetMarker = policy.flavor == PDFXFlavor::X1a2001
-            ? (lowerMetadata.contains("pdfaid:part=\"1\"") || lowerMetadata.contains("pdf/x-1a"))
-            : policy.flavor == PDFXFlavor::X3_2002
-                ? lowerMetadata.contains("pdf/x-3")
-                : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
+                                         ? (lowerMetadata.contains("pdfaid:part=\"1\"") || lowerMetadata.contains("pdf/x-1a"))
+                                     : policy.flavor == PDFXFlavor::X3_2002
+                                         ? lowerMetadata.contains("pdf/x-3")
+                                         : (lowerMetadata.contains("pdfaid:part=\"4\"") || lowerMetadata.contains("pdf/x-4"));
         const bool identified = hasPdfxIdentification && hasTargetMarker;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   identified ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("metadata_stream"), true },
                                       { QStringLiteral("has_pdfx_identification"), hasPdfxIdentification },
-                                      { QStringLiteral("has_target_marker"), hasTargetMarker }
-                                  },
+                                      { QStringLiteral("has_target_marker"), hasTargetMarker } },
                                   identified ? QString() : PDFTranslationContext::tr("PDF/X metadata does not identify the requested target."));
     }
 
-    if (requirement.ruleId == QStringLiteral("pdfx.output-intent.present")
-        || requirement.ruleId == QStringLiteral("pdfx.output-intent.identity")
-        || requirement.ruleId == QStringLiteral("pdfx.output-intent.subtype")
-        || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile")
-        || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
+    if (requirement.ruleId == QStringLiteral("pdfx.output-intent.present") || requirement.ruleId == QStringLiteral("pdfx.output-intent.identity") || requirement.ruleId == QStringLiteral("pdfx.output-intent.subtype") || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile") || requirement.ruleId == QStringLiteral("pdfx.output-intent.profile-space"))
     {
         const auto& intents = catalog->getOutputIntents();
         if (intents.empty())
         {
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Failed,
-                                      QJsonObject{{ QStringLiteral("count"), 0 }},
+                                      QJsonObject{ { QStringLiteral("count"), 0 } },
                                       PDFTranslationContext::tr("No PDF/X output intent is defined."));
         }
 
@@ -4512,8 +4477,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             const QString colorSpace = classifyIccColorSpace(profile.getColorSpace());
             spaces.append(colorSpace);
             const QByteArray declared = intent.getOutputProfileInfo().getSignature();
-            if (colorSpace.isEmpty() || declared.isEmpty()
-                || QString::fromLatin1(declared).compare(colorSpace, Qt::CaseInsensitive) != 0)
+            if (colorSpace.isEmpty() || declared.isEmpty() || QString::fromLatin1(declared).compare(colorSpace, Qt::CaseInsensitive) != 0)
             {
                 ++profileSpaceFailures;
             }
@@ -4525,8 +4489,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                       subtypeFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                       QJsonObject{
                                           { QStringLiteral("count"), int(intents.size()) },
-                                          { QStringLiteral("invalid_subtypes"), subtypeFailures }
-                                      },
+                                          { QStringLiteral("invalid_subtypes"), subtypeFailures } },
                                       subtypeFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must use the GTS_PDFX subtype."));
         }
 
@@ -4536,8 +4499,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                       identityFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                       QJsonObject{
                                           { QStringLiteral("count"), int(intents.size()) },
-                                          { QStringLiteral("missing_identifiers"), identityFailures }
-                                      },
+                                          { QStringLiteral("missing_identifiers"), identityFailures } },
                                       identityFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must identify its intended printing condition."));
         }
 
@@ -4547,8 +4509,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                       profileFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                       QJsonObject{
                                           { QStringLiteral("count"), int(intents.size()) },
-                                          { QStringLiteral("invalid_profiles"), profileFailures }
-                                      },
+                                          { QStringLiteral("invalid_profiles"), profileFailures } },
                                       profileFailures == 0 ? QString() : PDFTranslationContext::tr("Every output intent must contain a valid, decodable ICC profile."));
         }
 
@@ -4560,25 +4521,22 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                           PDFXRuleState::NotInspected,
                                           QJsonObject{
                                               { QStringLiteral("uninspected_profiles"), profileSpaceUninspected },
-                                              { QStringLiteral("mismatches"), profileSpaceFailures }
-                                          },
+                                              { QStringLiteral("mismatches"), profileSpaceFailures } },
                                           PDFTranslationContext::tr("The output-intent profile color space could not be verified for every intent."));
             }
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                       profileSpaceFailures == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                       QJsonObject{
                                           { QStringLiteral("color_spaces"), spaces },
-                                          { QStringLiteral("mismatches"), profileSpaceFailures }
-                                      },
+                                          { QStringLiteral("mismatches"), profileSpaceFailures } },
                                       profileSpaceFailures == 0 ? QString() : PDFTranslationContext::tr("An output intent declares a color space that does not match its embedded ICC profile."));
         }
 
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::Passed,
-                                  QJsonObject{{ QStringLiteral("count"), int(intents.size()) }});
+                                  QJsonObject{ { QStringLiteral("count"), int(intents.size()) } });
     }
 
-    if (requirement.ruleId == QStringLiteral("pdfx.page.trim-box")
-        || requirement.ruleId == QStringLiteral("pdfx.page.bleed-box"))
+    if (requirement.ruleId == QStringLiteral("pdfx.page.trim-box") || requirement.ruleId == QStringLiteral("pdfx.page.bleed-box"))
     {
         QJsonArray missingPages;
         const bool trim = requirement.ruleId.endsWith(QStringLiteral("trim-box"));
@@ -4596,8 +4554,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   passed ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("page_count"), int(catalog->getPageCount()) },
-                                      { QStringLiteral("missing_pages"), missingPages }
-                                  },
+                                      { QStringLiteral("missing_pages"), missingPages } },
                                   passed ? QString() : PDFTranslationContext::tr("One or more pages do not have the required inherited page box."));
     }
 
@@ -4613,8 +4570,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("failed_fonts"), int(errors.size()) },
-                                      { QStringLiteral("warnings"), int(warnings.size()) }
-                                  },
+                                      { QStringLiteral("warnings"), int(warnings.size()) } },
                                   errors.isEmpty() ? QString() : PDFTranslationContext::tr("One or more fonts are not embedded."));
     }
 
@@ -4623,7 +4579,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         if (policy.flavor != PDFXFlavor::X1a2001)
         {
             return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotApplicable,
-                                      QJsonObject{{ QStringLiteral("target_allows_device_rgb"), true }});
+                                      QJsonObject{ { QStringLiteral("target_allows_device_rgb"), true } });
         }
 
         PreflightCheckConfig colorCheck;
@@ -4637,8 +4593,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("disallowed_pages"), int(errors.size()) },
-                                      { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK"), QStringLiteral("Grayscale") } }
-                                  },
+                                      { QStringLiteral("allowed"), QJsonArray{ QStringLiteral("CMYK"), QStringLiteral("Grayscale") } } },
                                   errors.isEmpty() ? QString() : PDFTranslationContext::tr("DeviceRGB content is not permitted by PDF/X-1a:2001."));
     }
 
@@ -4656,16 +4611,11 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                 continue;
             }
 
-            bool transparent = loader.readNameFromDictionary(dictionary, "S") == QByteArrayLiteral("Transparency")
-                || dictionary->hasKey("SMask")
-                || dictionary->hasKey("ca")
-                || dictionary->hasKey("CA");
+            bool transparent = loader.readNameFromDictionary(dictionary, "S") == QByteArrayLiteral("Transparency") || dictionary->hasKey("SMask") || dictionary->hasKey("ca") || dictionary->hasKey("CA");
             if (dictionary->hasKey("BM"))
             {
                 const QByteArray blendMode = loader.readNameFromDictionary(dictionary, "BM");
-                transparent = transparent || (!blendMode.isEmpty()
-                                               && blendMode != QByteArrayLiteral("Normal")
-                                               && blendMode != QByteArrayLiteral("Compatible"));
+                transparent = transparent || (!blendMode.isEmpty() && blendMode != QByteArrayLiteral("Normal") && blendMode != QByteArrayLiteral("Compatible"));
             }
             if (transparent)
             {
@@ -4673,14 +4623,12 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
             }
         }
 
-        const bool forbidden = (policy.flavor == PDFXFlavor::X1a2001 || policy.flavor == PDFXFlavor::X3_2002)
-            && transparencyObjects > 0;
+        const bool forbidden = (policy.flavor == PDFXFlavor::X1a2001 || policy.flavor == PDFXFlavor::X3_2002) && transparencyObjects > 0;
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   forbidden ? PDFXRuleState::Failed : PDFXRuleState::Passed,
                                   QJsonObject{
                                       { QStringLiteral("transparency_objects"), transparencyObjects },
-                                      { QStringLiteral("target_allows_live_transparency"), !forbidden }
-                                  },
+                                      { QStringLiteral("target_allows_live_transparency"), !forbidden } },
                                   forbidden ? PDFTranslationContext::tr("Live transparency is not permitted by PDF/X-1a:2001.") : QString());
     }
 
@@ -4699,8 +4647,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   QJsonObject{
                                       { QStringLiteral("overprint_objects"), overprintObjects },
                                       { QStringLiteral("renderer"), QStringLiteral("Output Preview separation/overprint path") },
-                                      { QStringLiteral("inspection"), QStringLiteral("structural flags inspected; rendering remains authoritative in Output Preview") }
-                                  });
+                                      { QStringLiteral("inspection"), QStringLiteral("structural flags inspected; rendering remains authoritative in Output Preview") } });
     }
 
     if (requirement.ruleId == QStringLiteral("pdfx.annotation.forbidden-action"))
@@ -4736,8 +4683,7 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
                                   actionCount == 0 ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
                                       { QStringLiteral("action_count"), actionCount },
-                                      { QStringLiteral("annotation_pages"), actionPages }
-                                  },
+                                      { QStringLiteral("annotation_pages"), actionPages } },
                                   actionCount == 0 ? QString() : PDFTranslationContext::tr("Active document or annotation actions are not permitted by the selected PDF/X policy."));
     }
 
@@ -4791,9 +4737,7 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
     for (const PDFXRuleResult& rule : result.rules)
     {
         const bool mandatoryNotApplicable = rule.mandatory && rule.state == PDFXRuleState::NotApplicable;
-        if (rule.state != PDFXRuleState::Failed
-            && rule.state != PDFXRuleState::NotInspected
-            && !mandatoryNotApplicable)
+        if (rule.state != PDFXRuleState::Failed && rule.state != PDFXRuleState::NotInspected && !mandatoryNotApplicable)
         {
             continue;
         }
@@ -4811,16 +4755,18 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
         PreflightFinding finding;
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
         finding.type = rule.state == PDFXRuleState::Failed
-            ? QStringLiteral("pdfx-conformance") : QStringLiteral("pdfx-incomplete");
+                           ? QStringLiteral("pdfx-conformance")
+                           : QStringLiteral("pdfx-incomplete");
         finding.severity = rule.state == PDFXRuleState::Failed
-            ? QStringLiteral("error") : QStringLiteral("warning");
+                               ? QStringLiteral("error")
+                               : QStringLiteral("warning");
         // Keep the stable rule ID in the canonical finding field so callers do
         // not need to parse prose or inspect nested evidence to route it.
         finding.checkId = rule.ruleId;
         finding.evidence = evidence;
         finding.message = rule.state == PDFXRuleState::Failed
-            ? PDFTranslationContext::tr("PDF/X rule '%1' failed: %2").arg(rule.ruleId, rule.diagnostic)
-            : PDFTranslationContext::tr("PDF/X rule '%1' could not be inspected: %2").arg(rule.ruleId, rule.diagnostic);
+                              ? PDFTranslationContext::tr("PDF/X rule '%1' failed: %2").arg(rule.ruleId, rule.diagnostic)
+                              : PDFTranslationContext::tr("PDF/X rule '%1' could not be inspected: %2").arg(rule.ruleId, rule.diagnostic);
 
         if (rule.state == PDFXRuleState::Failed)
         {
@@ -4833,7 +4779,7 @@ void appendPDFXFindings(const PDFXConformanceResult& result,
     }
 }
 
-} // namespace
+}   // namespace
 
 QJsonObject PreflightResult::toJson(const QString& pdfPath) const
 {
@@ -4879,9 +4825,8 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     if (!errorCode.isEmpty() || !errorMessage.isEmpty())
     {
         root.insert(QStringLiteral("error"), QJsonObject{
-            { QStringLiteral("code"), errorCode },
-            { QStringLiteral("message"), errorMessage }
-        });
+                                                 { QStringLiteral("code"), errorCode },
+                                                 { QStringLiteral("message"), errorMessage } });
     }
     root.insert(QStringLiteral("profile"), profileName);
     root.insert(QStringLiteral("engine_version"), QCoreApplication::applicationVersion());
@@ -5093,18 +5038,18 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             return finding.type == QStringLiteral("check-incomplete");
         };
         const bool checkIncomplete = std::any_of(result.errors.cbegin() + errorsBefore,
-                                                  result.errors.cend(),
-                                                  isCheckIncomplete)
-            || std::any_of(result.warnings.cbegin() + warningsBefore,
-                           result.warnings.cend(),
-                           isCheckIncomplete);
+                                                 result.errors.cend(),
+                                                 isCheckIncomplete) ||
+                                     std::any_of(result.warnings.cbegin() + warningsBefore,
+                                                 result.warnings.cend(),
+                                                 isCheckIncomplete);
         const bool checkFailed = result.errors.size() > errorsBefore;
         const bool checkWarned = std::any_of(result.warnings.cbegin() + warningsBefore,
-                                              result.warnings.cend(),
-                                              [](const PreflightFinding& finding)
-        {
-            return finding.severity == QStringLiteral("warning");
-        });
+                                             result.warnings.cend(),
+                                             [](const PreflightFinding& finding)
+                                             {
+                                                 return finding.severity == QStringLiteral("warning");
+                                             });
         if (checkIncomplete)
         {
             status.status = QStringLiteral("skipped");
@@ -5276,12 +5221,12 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         if (pdfxObject.contains(QStringLiteral("policyVersion")))
         {
             const QJsonValue versionValue = pdfxObject.value(QStringLiteral("policyVersion"));
-            const bool validVersion = (versionValue.isString() && versionValue.toString() == policy.policyVersion)
-                || (versionValue.isDouble() && qFuzzyCompare(versionValue.toDouble() + 1.0, policy.policyVersion.toDouble() + 1.0));
+            const bool validVersion = (versionValue.isString() && versionValue.toString() == policy.policyVersion) || (versionValue.isDouble() && qFuzzyCompare(versionValue.toDouble() + 1.0, policy.policyVersion.toDouble() + 1.0));
             if (!validVersion)
             {
                 errorMessage = PDFTranslationContext::tr(
-                    "Profile field 'pdfx.policyVersion' must match supported policy revision %1.").arg(policy.policyVersion);
+                                   "Profile field 'pdfx.policyVersion' must match supported policy revision %1.")
+                                   .arg(policy.policyVersion);
                 return false;
             }
         }
@@ -5334,10 +5279,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         check.minRegionAreaPct = minRegionAreaValue.toDouble(0.05);
         check.maxRegionsPerPage = maxRegionsValue.toInt(20);
         check.maxRasterPixels = 250LL * 1000 * 1000;
-        if (check.id == QStringLiteral("ink-coverage")
-            && (!maxInkValue.isDouble()
-                || !std::isfinite(check.maxInkPct)
-                || check.maxInkPct <= 0.0))
+        if (check.id == QStringLiteral("ink-coverage") && (!maxInkValue.isDouble() || !std::isfinite(check.maxInkPct) || check.maxInkPct <= 0.0))
         {
             errorMessage = PDFTranslationContext::tr("Check '%1' requires positive max_ink_pct.").arg(check.id);
             return false;
@@ -5345,28 +5287,17 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
 
         if (check.id == QStringLiteral("ink-coverage"))
         {
-            if (checkObject.contains(QStringLiteral("probe_dpi"))
-                && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble()
-                    || check.probeDpi <= 0
-                    || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble())
-                        != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
+            if (checkObject.contains(QStringLiteral("probe_dpi")) && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble() || check.probeDpi <= 0 || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble()) != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires integral positive probe_dpi.").arg(check.id);
                 return false;
             }
-            if (checkObject.contains(QStringLiteral("min_region_area_pct"))
-                && (!minRegionAreaValue.isDouble()
-                    || !std::isfinite(check.minRegionAreaPct)
-                    || check.minRegionAreaPct < 0.0
-                    || check.minRegionAreaPct > 100.0))
+            if (checkObject.contains(QStringLiteral("min_region_area_pct")) && (!minRegionAreaValue.isDouble() || !std::isfinite(check.minRegionAreaPct) || check.minRegionAreaPct < 0.0 || check.minRegionAreaPct > 100.0))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires min_region_area_pct between 0 and 100.").arg(check.id);
                 return false;
             }
-            if (checkObject.contains(QStringLiteral("max_regions_per_page"))
-                && (!maxRegionsValue.isDouble()
-                    || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble()
-                    || check.maxRegionsPerPage < 0))
+            if (checkObject.contains(QStringLiteral("max_regions_per_page")) && (!maxRegionsValue.isDouble() || std::floor(maxRegionsValue.toDouble()) != maxRegionsValue.toDouble() || check.maxRegionsPerPage < 0))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative integral max_regions_per_page.").arg(check.id);
                 return false;
@@ -5374,11 +5305,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             if (checkObject.contains(QStringLiteral("max_raster_pixels")))
             {
                 const double maxRasterPixels = maxRasterPixelsValue.toDouble(0.0);
-                if (!maxRasterPixelsValue.isDouble()
-                    || !std::isfinite(maxRasterPixels)
-                    || std::floor(maxRasterPixels) != maxRasterPixels
-                    || maxRasterPixels <= 0.0
-                    || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
+                if (!maxRasterPixelsValue.isDouble() || !std::isfinite(maxRasterPixels) || std::floor(maxRasterPixels) != maxRasterPixels || maxRasterPixels <= 0.0 || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
                 {
                     errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_raster_pixels.").arg(check.id);
                     return false;
@@ -5401,14 +5328,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                 check.inkCoverageAnalysisBox = analysisBoxValue.toString();
             }
 
-            if (check.inkCoverageAnalysisBox != QStringLiteral("bleed")
-                && check.inkCoverageAnalysisBox != QStringLiteral("trim")
-                && check.inkCoverageAnalysisBox != QStringLiteral("crop")
-                && check.inkCoverageAnalysisBox != QStringLiteral("media"))
+            if (check.inkCoverageAnalysisBox != QStringLiteral("bleed") && check.inkCoverageAnalysisBox != QStringLiteral("trim") && check.inkCoverageAnalysisBox != QStringLiteral("crop") && check.inkCoverageAnalysisBox != QStringLiteral("media"))
             {
                 errorMessage = PDFTranslationContext::tr(
-                    "Check '%1' has invalid analysis_box '%2' (must be 'bleed', 'trim', 'crop', or 'media').")
-                    .arg(check.id, check.inkCoverageAnalysisBox);
+                                   "Check '%1' has invalid analysis_box '%2' (must be 'bleed', 'trim', 'crop', or 'media').")
+                                   .arg(check.id, check.inkCoverageAnalysisBox);
                 return false;
             }
         }
@@ -5422,9 +5346,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
 
             const auto validSeverity = [](const QString& severity)
             {
-                return severity == QStringLiteral("error")
-                    || severity == QStringLiteral("warning")
-                    || severity == QStringLiteral("info");
+                return severity == QStringLiteral("error") || severity == QStringLiteral("warning") || severity == QStringLiteral("info");
             };
             if (check.minEffectiveStrokeWidthPt <= 0.0)
             {
@@ -5472,11 +5394,11 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             {
                 for (const QJsonValue& classValue : classesValue.toArray())
                 {
-                    if (!classValue.isString() || !allowedClasses.contains(classValue.toString())
-                        || check.thinPartClasses.contains(classValue.toString()))
+                    if (!classValue.isString() || !allowedClasses.contains(classValue.toString()) || check.thinPartClasses.contains(classValue.toString()))
                     {
                         errorMessage = PDFTranslationContext::tr(
-                            "Check '%1' has an invalid or duplicate thin-parts class.").arg(check.id);
+                                           "Check '%1' has an invalid or duplicate thin-parts class.")
+                                           .arg(check.id);
                         return false;
                     }
                     check.thinPartClasses.push_back(classValue.toString());
@@ -5490,9 +5412,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
 
             const auto validSeverity = [](const QString& severity)
             {
-                return severity == QStringLiteral("error")
-                    || severity == QStringLiteral("warning")
-                    || severity == QStringLiteral("info");
+                return severity == QStringLiteral("error") || severity == QStringLiteral("warning") || severity == QStringLiteral("info");
             };
             if (!std::isfinite(check.minEffectiveStrokeWidthPt) || check.minEffectiveStrokeWidthPt <= 0.0)
             {
@@ -5504,11 +5424,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires non-negative zero_width_epsilon_pt.").arg(check.id);
                 return false;
             }
-            if (checkObject.contains(QStringLiteral("probe_dpi"))
-                && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble()
-                    || check.probeDpi <= 0
-                    || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble())
-                        != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
+            if (checkObject.contains(QStringLiteral("probe_dpi")) && (!checkObject.value(QStringLiteral("probe_dpi")).isDouble() || check.probeDpi <= 0 || std::floor(checkObject.value(QStringLiteral("probe_dpi")).toDouble()) != checkObject.value(QStringLiteral("probe_dpi")).toDouble()))
             {
                 errorMessage = PDFTranslationContext::tr("Check '%1' requires integral positive probe_dpi.").arg(check.id);
                 return false;
@@ -5516,11 +5432,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             if (checkObject.contains(QStringLiteral("max_raster_pixels")))
             {
                 const double maxRasterPixels = maxRasterPixelsValue.toDouble(0.0);
-                if (!maxRasterPixelsValue.isDouble()
-                    || !std::isfinite(maxRasterPixels)
-                    || std::floor(maxRasterPixels) != maxRasterPixels
-                    || maxRasterPixels <= 0.0
-                    || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
+                if (!maxRasterPixelsValue.isDouble() || !std::isfinite(maxRasterPixels) || std::floor(maxRasterPixels) != maxRasterPixels || maxRasterPixels <= 0.0 || maxRasterPixels >= static_cast<double>(std::numeric_limits<qint64>::max()))
                 {
                     errorMessage = PDFTranslationContext::tr("Check '%1' requires positive integral max_raster_pixels.").arg(check.id);
                     return false;
@@ -5587,8 +5499,8 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
                     mode != QStringLiteral("Grayscale"))
                 {
                     errorMessage = PDFTranslationContext::tr(
-                        "Check '%1' has unknown allowed color space '%2' (expected 'CMYK', 'RGB', or 'Grayscale').")
-                        .arg(check.id, mode);
+                                       "Check '%1' has unknown allowed color space '%2' (expected 'CMYK', 'RGB', or 'Grayscale').")
+                                       .arg(check.id, mode);
                     return false;
                 }
             }
@@ -5633,9 +5545,8 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             for (const QJsonValue& val : allowedProfileSha256)
             {
                 const QString digest = val.toString();
-                if (digest.size() != 64 || !std::all_of(digest.cbegin(), digest.cend(), [](QChar character) {
-                    return character.isDigit() || (character.toLower() >= QLatin1Char('a') && character.toLower() <= QLatin1Char('f'));
-                }))
+                if (digest.size() != 64 || !std::all_of(digest.cbegin(), digest.cend(), [](QChar character)
+                                                        { return character.isDigit() || (character.toLower() >= QLatin1Char('a') && character.toLower() <= QLatin1Char('f')); }))
                 {
                     errorMessage = PDFTranslationContext::tr("Check '%1' contains an invalid allowed_profile_sha256 digest.").arg(check.id);
                     return false;
@@ -5670,20 +5581,14 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         fixup.amountPt = fixupObject.value(QStringLiteral("amount_pt")).toDouble(0.0);
         fixup.description = fixupObject.value(QStringLiteral("description")).toString();
         fixup.params = fixupObject.value(QStringLiteral("params")).toObject();
-        if (fixupObject.contains(QStringLiteral("target_dpi"))
-            && !fixup.params.contains(QStringLiteral("target_dpi")))
+        if (fixupObject.contains(QStringLiteral("target_dpi")) && !fixup.params.contains(QStringLiteral("target_dpi")))
         {
             fixup.params.insert(QStringLiteral("target_dpi"), fixupObject.value(QStringLiteral("target_dpi")));
         }
         if (fixup.id == QStringLiteral("downsample-images"))
         {
             const QJsonValue targetDpiValue = fixup.params.value(QStringLiteral("target_dpi"));
-            if (!targetDpiValue.isUndefined()
-                && (!targetDpiValue.isDouble()
-                    || !std::isfinite(targetDpiValue.toDouble())
-                    || std::floor(targetDpiValue.toDouble()) != targetDpiValue.toDouble()
-                    || targetDpiValue.toInt() < 72
-                    || targetDpiValue.toInt() > 1200))
+            if (!targetDpiValue.isUndefined() && (!targetDpiValue.isDouble() || !std::isfinite(targetDpiValue.toDouble()) || std::floor(targetDpiValue.toDouble()) != targetDpiValue.toDouble() || targetDpiValue.toInt() < 72 || targetDpiValue.toInt() > 1200))
             {
                 errorMessage = PDFTranslationContext::tr(
                     "Fixup 'downsample-images' requires an integral target_dpi between 72 and 1200.");
@@ -5700,114 +5605,114 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
 void PreflightEngine::registerBuiltInChecks()
 {
     m_checks[QStringLiteral("bleed")] = [](PDFDocumentSession* session,
-                                            const PreflightCheckConfig& check,
-                                            QList<PreflightFinding>& errors,
-                                            QList<PreflightFinding>& warnings)
+                                           const PreflightCheckConfig& check,
+                                           QList<PreflightFinding>& errors,
+                                           QList<PreflightFinding>& warnings)
     {
         runBleedCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("trim")] = [](PDFDocumentSession* session,
-                                           const PreflightCheckConfig& check,
-                                           QList<PreflightFinding>& errors,
-                                           QList<PreflightFinding>& warnings)
+                                          const PreflightCheckConfig& check,
+                                          QList<PreflightFinding>& errors,
+                                          QList<PreflightFinding>& warnings)
     {
         runSizeCheck(SizeCheckKind::Trim, session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("page-size")] = [](PDFDocumentSession* session,
-                                                 const PreflightCheckConfig& check,
-                                                 QList<PreflightFinding>& errors,
-                                                 QList<PreflightFinding>& warnings)
+                                               const PreflightCheckConfig& check,
+                                               QList<PreflightFinding>& errors,
+                                               QList<PreflightFinding>& warnings)
     {
         runSizeCheck(SizeCheckKind::PageSize, session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("processing-steps")] = [](PDFDocumentSession* session,
-                                                       const PreflightCheckConfig& check,
-                                                       QList<PreflightFinding>& errors,
-                                                       QList<PreflightFinding>& warnings)
+                                                      const PreflightCheckConfig& check,
+                                                      QList<PreflightFinding>& errors,
+                                                      QList<PreflightFinding>& warnings)
     {
         runProcessingStepsCheck(session, check, errors, warnings);
     };
     m_checks[QStringLiteral("dieline")] = m_checks.at(QStringLiteral("processing-steps"));
 
     m_checks[QStringLiteral("content-bleed")] = [](PDFDocumentSession* session,
-                                                     const PreflightCheckConfig& check,
-                                                     QList<PreflightFinding>& errors,
-                                                     QList<PreflightFinding>& warnings)
+                                                   const PreflightCheckConfig& check,
+                                                   QList<PreflightFinding>& errors,
+                                                   QList<PreflightFinding>& warnings)
     {
         runContentBleedCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("ink-coverage")] = [](PDFDocumentSession* session,
-                                                    const PreflightCheckConfig& check,
-                                                    QList<PreflightFinding>& errors,
-                                                    QList<PreflightFinding>& warnings)
+                                                  const PreflightCheckConfig& check,
+                                                  QList<PreflightFinding>& errors,
+                                                  QList<PreflightFinding>& warnings)
     {
         runInkCoverageCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("color-mode")] = [](PDFDocumentSession* session,
-                                                  const PreflightCheckConfig& check,
-                                                  QList<PreflightFinding>& errors,
-                                                  QList<PreflightFinding>& warnings)
+                                                const PreflightCheckConfig& check,
+                                                QList<PreflightFinding>& errors,
+                                                QList<PreflightFinding>& warnings)
     {
         runColorModeCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("transparency-risk")] = [](PDFDocumentSession* session,
-                                                         const PreflightCheckConfig& check,
-                                                         QList<PreflightFinding>& errors,
-                                                         QList<PreflightFinding>& warnings)
+                                                       const PreflightCheckConfig& check,
+                                                       QList<PreflightFinding>& errors,
+                                                       QList<PreflightFinding>& warnings)
     {
         runTransparencyRiskCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("thin-strokes")] = [](PDFDocumentSession* session,
-                                                    const PreflightCheckConfig& check,
-                                                    QList<PreflightFinding>& errors,
-                                                    QList<PreflightFinding>& warnings)
+                                                  const PreflightCheckConfig& check,
+                                                  QList<PreflightFinding>& errors,
+                                                  QList<PreflightFinding>& warnings)
     {
         runThinStrokesCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("thin-parts")] = [](PDFDocumentSession* session,
-                                                  const PreflightCheckConfig& check,
-                                                  QList<PreflightFinding>& errors,
-                                                  QList<PreflightFinding>& warnings)
+                                                const PreflightCheckConfig& check,
+                                                QList<PreflightFinding>& errors,
+                                                QList<PreflightFinding>& warnings)
     {
         runThinPartsCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("color-inventory")] = [](PDFDocumentSession* session,
-                                                       const PreflightCheckConfig& check,
-                                                       QList<PreflightFinding>& errors,
-                                                       QList<PreflightFinding>& warnings)
+                                                     const PreflightCheckConfig& check,
+                                                     QList<PreflightFinding>& errors,
+                                                     QList<PreflightFinding>& warnings)
     {
         runColorInventoryCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("output-intent")] = [](PDFDocumentSession* session,
-                                                     const PreflightCheckConfig& check,
-                                                     QList<PreflightFinding>& errors,
-                                                     QList<PreflightFinding>& warnings)
+                                                   const PreflightCheckConfig& check,
+                                                   QList<PreflightFinding>& errors,
+                                                   QList<PreflightFinding>& warnings)
     {
         runOutputIntentCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("embedded-fonts")] = [](PDFDocumentSession* session,
-                                                     const PreflightCheckConfig& check,
-                                                     QList<PreflightFinding>& errors,
-                                                     QList<PreflightFinding>& warnings)
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
     {
         runEmbeddedFontsCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("font-integrity")] = [](PDFDocumentSession* session,
-                                                      const PreflightCheckConfig& check,
-                                                      QList<PreflightFinding>& errors,
-                                                      QList<PreflightFinding>& warnings)
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
     {
         runFontIntegrityCheck(session, check, errors, warnings);
     };
@@ -5827,20 +5732,20 @@ void PreflightEngine::registerBuiltInChecks()
     }
 
     m_checks[QStringLiteral("image-resolution")] = [](PDFDocumentSession* session,
-                                                       const PreflightCheckConfig& check,
-                                                       QList<PreflightFinding>& errors,
-                                                       QList<PreflightFinding>& warnings)
+                                                      const PreflightCheckConfig& check,
+                                                      QList<PreflightFinding>& errors,
+                                                      QList<PreflightFinding>& warnings)
     {
         runImageResolutionCheck(session, check, errors, warnings);
     };
 
     m_checks[QStringLiteral("white-overprint")] = [](PDFDocumentSession* session,
-                                                       const PreflightCheckConfig& check,
-                                                       QList<PreflightFinding>& errors,
-                                                       QList<PreflightFinding>& warnings)
+                                                     const PreflightCheckConfig& check,
+                                                     QList<PreflightFinding>& errors,
+                                                     QList<PreflightFinding>& warnings)
     {
         runWhiteOverprintCheck(session, check, errors, warnings);
     };
 }
 
-} // namespace pdf
+}   // namespace pdf

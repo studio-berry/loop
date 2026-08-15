@@ -125,8 +125,8 @@ PDF4QTLIBCORESHARED_EXPORT QStringList supportedPDFXTargets();
 
 /// Resolves a target name to the audited policy registry entry.
 PDF4QTLIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
-                                                     PDFXPolicy& policy,
-                                                     QString& errorMessage);
+                                                    PDFXPolicy& policy,
+                                                    QString& errorMessage);
 
 /// Reduces mandatory PDF/X rule states. A definite failure takes precedence
 /// over missing evidence; a mandatory not-applicable rule is incomplete.
@@ -372,6 +372,6 @@ private:
     std::map<QString, CheckRunner> m_checks;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PREFLIGHTENGINE_H
+#endif   // PREFLIGHTENGINE_H
