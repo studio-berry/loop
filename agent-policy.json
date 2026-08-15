@@ -55,9 +55,23 @@
       "targets": ["Pdf4QtLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsEvidenceGraph",
+        "UnitTestsIdentitySeparation",
+        "UnitTestsIncrementalSave",
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory",
+        "UnitTestsOperationImpact",
+        "UnitTestsOverprintRender",
+        "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",
+        "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsProcessingBudget",
+        "UnitTestsSchemaEvolution",
+        "UnitTestsStandardOracle",
+        "UnitTestsWorkloadEnvelope"
       ]
     },
     "pdftool": {
@@ -74,7 +88,8 @@
         "UnitTestsPreflightPlugin",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsProfileIdentity"
       ]
     },
     "pagemaster": {
