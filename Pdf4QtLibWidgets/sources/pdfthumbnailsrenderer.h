@@ -191,4 +191,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFTHUMBNAILSRENDERER_H
+#endif   // PDFTHUMBNAILSRENDERER_H

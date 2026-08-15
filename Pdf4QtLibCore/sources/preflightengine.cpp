@@ -1868,27 +1868,6 @@ void adjustFixupsAvailable(PDFDocumentSession* session,
     }
 }
 
-void runColorModeCheck(PDFDocumentSession* session,
-                       const PreflightCheckConfig& check,
-                       QList<PreflightFinding>& errors,
-                       QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Colorants);
-    evaluateColorModeFromGraph(check, errors, warnings, graph);
-}
-
-void runColorInventoryCheck(PDFDocumentSession* session,
-                            const PreflightCheckConfig& check,
-                            QList<PreflightFinding>& errors,
-                            QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceCollectSettings settings;
-    settings.colorProbeDpi = check.colorProbeDpi;
-    settings.richBlackKThreshold = check.richBlackKThreshold;
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Colorants, settings);
-    evaluateColorInventoryFromGraph(check, errors, warnings, graph);
-}
-
 /// Owns a cmsHPROFILE for the duration of a scope. The output-intent check has
 /// several early-exit paths; a guard keeps them from leaking the handle.
 class IccProfileGuard
@@ -2164,36 +2143,6 @@ void runOutputIntentCheck(PDFDocumentSession* session,
                 .arg(int(outputIntents.size()))
                 .arg(conflictColorSpaces.join(QStringLiteral(", "))));
     }
-}
-
-void runWhiteOverprintCheck(PDFDocumentSession* session,
-                            const PreflightCheckConfig& check,
-                            QList<PreflightFinding>& errors,
-                            QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::OverprintTransparency);
-    evaluateWhiteOverprintFromGraph(check, errors, warnings, graph);
-}
-
-void runTransparencyRiskCheck(PDFDocumentSession* session,
-                              const PreflightCheckConfig& check,
-                              QList<PreflightFinding>& errors,
-                              QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::OverprintTransparency);
-    evaluateTransparencyRiskFromGraph(check, errors, warnings, graph);
-}
-
-void runThinStrokesCheck(PDFDocumentSession* session,
-                         const PreflightCheckConfig& check,
-                         QList<PreflightFinding>& errors,
-                         QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceCollectSettings settings;
-    settings.minEffectiveStrokeWidthPt = check.minEffectiveStrokeWidthPt;
-    settings.zeroWidthEpsilonPt = check.zeroWidthEpsilonPt;
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Strokes, settings);
-    evaluateThinStrokesFromGraph(check, errors, warnings, graph);
 }
 
 struct ThinStrokeFinding
@@ -2987,16 +2936,6 @@ void runHiddenContentCheck(PDFDocumentSession* session,
     }
 }
 
-// Scans Font resource dictionaries via the Evidence Graph collector.
-void runEmbeddedFontsCheck(PDFDocumentSession* session,
-                           const PreflightCheckConfig& check,
-                           QList<PreflightFinding>& errors,
-                           QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Fonts);
-    evaluateEmbeddedFontsFromGraph(check, errors, warnings, graph);
-}
-
 // LOW CONFIDENCE NOTE: DPI calculation uses getCurrentTransformationMatrix()
 // from the PDFPageContentProcessor state, which is in PDF user space.
 // This matches the existing PDFImageCollectorProcessor pattern in
@@ -3133,15 +3072,6 @@ void runFontIntegrityCheck(PDFDocumentSession* session,
             scanResources(page->getResources(), int(pageIndex + 1));
         }
     }
-}
-
-void runImageResolutionCheck(PDFDocumentSession* session,
-                             const PreflightCheckConfig& check,
-                             QList<PreflightFinding>& errors,
-                             QList<PreflightFinding>& warnings)
-{
-    PDFEvidenceGraph graph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Images);
-    evaluateImageResolutionFromGraph(check, errors, warnings, graph);
 }
 
 PDFXRuleResult makePDFXRuleResult(const QString& ruleId,
@@ -3436,7 +3366,14 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         fontCheck.severity = QStringLiteral("error");
         QList<PreflightFinding> errors;
         QList<PreflightFinding> warnings;
-        runEmbeddedFontsCheck(session, fontCheck, errors, warnings);
+        PDFEvidenceGraph fontGraph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Fonts);
+        if (!fontGraph.isComplete())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject{ { QStringLiteral("incomplete_reason"), fontGraph.incompleteReason } },
+                                      fontGraph.incompleteReason);
+        }
+        evaluateEmbeddedFontsFromGraph(fontCheck, errors, warnings, fontGraph);
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
@@ -3459,7 +3396,14 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         colorCheck.allowedColorModes = { QStringLiteral("CMYK"), QStringLiteral("Grayscale") };
         QList<PreflightFinding> errors;
         QList<PreflightFinding> warnings;
-        runColorModeCheck(session, colorCheck, errors, warnings);
+        PDFEvidenceGraph colorGraph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Colorants);
+        if (!colorGraph.isComplete())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject{ { QStringLiteral("incomplete_reason"), colorGraph.incompleteReason } },
+                                      colorGraph.incompleteReason);
+        }
+        evaluateColorModeFromGraph(colorCheck, errors, warnings, colorGraph);
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{

@@ -167,6 +167,17 @@ PDFEvidenceRecord makeRecord(const PDFEvidenceGraph* graph,
     return record;
 }
 
+void throwIfContentProcessingIncomplete(const QList<PDFRenderError>& errors)
+{
+    for (const PDFRenderError& error : errors)
+    {
+        if (error.type == RenderErrorType::Error || error.type == RenderErrorType::NotImplemented || error.type == RenderErrorType::NotSupported)
+        {
+            throw PDFException(error.message);
+        }
+    }
+}
+
 void processAnnotationAppearanceStreams(PDFDocument* document,
                                         const PDFPage* page,
                                         const std::function<void(const PDFStream*)>& processForm)
@@ -594,6 +605,8 @@ public:
         }
     }
 
+    const QList<PDFRenderError>& renderErrors() const { return getRenderErrors(); }
+
 protected:
     bool isContentKindSuppressed(ContentKind kind) const override
     {
@@ -654,7 +667,7 @@ protected:
                                     qreal(image.getImageData().getHeight()) / heightInches);
         record.units = QStringLiteral("dpi");
         record.geometry = imageBoundsFromCtm(ctm, image.getImageData().getWidth(), image.getImageData().getHeight());
-        record.id = QStringLiteral("img:%1:%2").arg(m_pageNumber).arg(record.objectId.isEmpty() ? QStringLiteral("anon") : record.objectId);
+        record.id = QStringLiteral("img:%1:%2:%3").arg(m_pageNumber).arg(record.objectId.isEmpty() ? QStringLiteral("anon") : record.objectId).arg(++m_imageOrdinal);
         m_graph->records.append(record);
         return true;
     }
@@ -759,7 +772,7 @@ protected:
         record.extra.insert(QStringLiteral("declared_width"), declaredWidth);
         record.extra.insert(QStringLiteral("effective_width"), effectiveWidth);
         record.extra.insert(QStringLiteral("hairline"), hairline);
-        record.id = QStringLiteral("stroke:%1:%2").arg(m_pageNumber).arg(m_graph->records.size());
+        record.id = QStringLiteral("stroke:%1:%2").arg(m_pageNumber).arg(++m_strokeOrdinal);
         m_graph->records.append(record);
     }
 
@@ -954,6 +967,8 @@ private:
     QPainterPath m_clipPath;
     std::vector<QPainterPath> m_clipStack;
     std::vector<TransparencyGroupFrame> m_groups;
+    int m_imageOrdinal = 0;
+    int m_strokeOrdinal = 0;
 };
 
 void collectFonts(PDFDocument* document, PDFEvidenceGraph* graph)
@@ -1217,6 +1232,10 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                 processor.processContents();
                 processAnnotationAppearanceStreams(document, page, [&](const PDFStream* formStream)
                                                    { processor.processFormStream(formStream); });
+                if (domains.testFlag(PDFEvidenceDomain::Strokes))
+                {
+                    throwIfContentProcessingIncomplete(processor.renderErrors());
+                }
 
                 if (domains.testFlag(PDFEvidenceDomain::Colorants))
                 {

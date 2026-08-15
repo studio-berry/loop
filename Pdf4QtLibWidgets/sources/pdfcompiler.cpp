@@ -48,9 +48,7 @@ PDFAsynchronousPageCompiler::PDFAsynchronousPageCompiler(PDFDrawWidgetProxy* pro
 {
     m_cache->setMaxCost(128 * 1024 * 1024);
     connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
-    {
-        onCompileJobFinished(snapshot);
-    });
+            { onCompileJobFinished(snapshot); });
 }
 
 PDFAsynchronousPageCompiler::~PDFAsynchronousPageCompiler()
@@ -77,7 +75,7 @@ void PDFAsynchronousPageCompiler::start()
         }
 
         case State::Active:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Stopping:
         {
@@ -95,7 +93,7 @@ void PDFAsynchronousPageCompiler::stop(bool clearCache)
         case State::Inactive:
         {
             Q_ASSERT(m_compileJobId.isEmpty());
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
         }
 
         case State::Active:
@@ -231,7 +229,7 @@ void PDFAsynchronousPageCompiler::submitCompileJob()
     spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
     PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
     m_compileJobId = PDFJobScheduler::global().submit(spec, [this](PDFJobContext& context)
-    {
+                                                      {
         std::vector<CompileTask> tasks;
         {
             QMutexLocker locker(&m_mutex);
@@ -278,8 +276,7 @@ void PDFAsynchronousPageCompiler::submitCompileJob()
             {
                 m_tasks[task.pageIndex] = std::move(task);
             }
-        }
-    });
+        } });
 }
 
 void PDFAsynchronousPageCompiler::onCompileJobFinished(const PDFJobSnapshot& snapshot)
@@ -309,7 +306,8 @@ void PDFAsynchronousPageCompiler::onCompileJobFinished(const PDFJobSnapshot& sna
     bool needSubmit = false;
     {
         QMutexLocker locker(&m_mutex);
-        needSubmit = pending || std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task) { return !task.second.finished; });
+        needSubmit = pending || std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task)
+                                            { return !task.second.finished; });
     }
     if (needSubmit)
     {
@@ -387,9 +385,7 @@ PDFAsynchronousTextLayoutCompiler::PDFAsynchronousTextLayoutCompiler(PDFDrawWidg
     m_cache(std::bind(&PDFAsynchronousTextLayoutCompiler::createTextLayout, this, std::placeholders::_1))
 {
     connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
-    {
-        onTextLayoutJobFinished(snapshot);
-    });
+            { onTextLayoutJobFinished(snapshot); });
 }
 
 void PDFAsynchronousTextLayoutCompiler::start()
@@ -403,7 +399,7 @@ void PDFAsynchronousTextLayoutCompiler::start()
         }
 
         case State::Active:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Stopping:
         {
@@ -419,7 +415,7 @@ void PDFAsynchronousTextLayoutCompiler::stop(bool clearCache)
     switch (m_state)
     {
         case State::Inactive:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Active:
         {
@@ -646,15 +642,14 @@ void PDFAsynchronousTextLayoutCompiler::makeTextLayout()
     spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
     PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
     m_textLayoutJobId = PDFJobScheduler::global().submit(spec, [this, createTextLayout](PDFJobContext& context)
-    {
+                                                         {
         if (context.isCancellationRequested())
         {
             return;
         }
         PDFTextLayoutStorage result = createTextLayout();
         QMutexLocker locker(&m_textLayoutMutex);
-        m_textLayoutJobResult = std::move(result);
-    });
+        m_textLayoutJobResult = std::move(result); });
 }
 
 void PDFAsynchronousTextLayoutCompiler::onTextLayoutJobFinished(const PDFJobSnapshot& snapshot)
