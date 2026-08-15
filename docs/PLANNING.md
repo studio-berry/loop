@@ -62,12 +62,10 @@ Tier-2 raster golden). Session/cache research lives under MIC-151/153/156/157
 
 ## Worked example: semantic trust engine (0.1.1)
 
-The 0.1.1 substrate (former planning alias 0.0.3) is locked in
-[SEMANTIC_TRUST_ENGINE_PLAN.md](SEMANTIC_TRUST_ENGINE_PLAN.md). It freezes
-identity (`PDFArtifactIdentity` vs `PDFRevisionToken` = `PDFRevisionIdentity`),
-schema kinds, evidence-record fields, operation impact, and the fail-closed
-table before any of those types are implemented. Surface order is Core →
-PdfTool → tests; no GUI is required for the milestone.
+[SEMANTIC_TRUST_ENGINE_PLAN.md](SEMANTIC_TRUST_ENGINE_PLAN.md) locks identity
+(`PDFArtifactIdentity` vs `PDFRevisionToken` = `PDFRevisionIdentity`), schema
+kinds, evidence-record fields, operation impact, and the fail-closed table.
+Surface order is Core → PdfTool → tests; the milestone does not add GUI.
 
 ## What not to put in AGENTS.md
 

@@ -176,7 +176,6 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
     QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
     if (entry.isEmpty())
     {
-        // Built-in fail-closed defaults when the matrix file is not on cwd.
         switch (kind)
         {
             case PDFSchemaKind::PreflightReport:

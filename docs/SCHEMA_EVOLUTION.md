@@ -1,6 +1,6 @@
 # Schema evolution and compatibility
 
-Status: **locked for 0.1.1 session S03**. Product SemVer is independent of these
+Status: **locked**. Product SemVer is independent of these
 contracts. See [SEMANTIC_TRUST_ENGINE_PLAN.md](SEMANTIC_TRUST_ENGINE_PLAN.md)
 and [schema-compatibility.json](schema-compatibility.json).
 

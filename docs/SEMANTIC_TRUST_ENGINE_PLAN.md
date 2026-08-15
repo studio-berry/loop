@@ -143,8 +143,6 @@ Compatibility:
 
 ## Agent sessions (0.1.1)
 
-Launch one session per agent / PR. Do not combine waves. File extra work forward.
-
 | ID | Goal |
 |----|------|
 | S00 | This document |
@@ -169,12 +167,12 @@ Launch one session per agent / PR. Do not combine waves. File extra work forward
 
 Parallel after S00: S01, S02, S03, S17. Never start S08 until S07 parity is green.
 
-## Already landed (do not re-implement)
+## Already landed
 
-- #234 `reducePreflightVerdict()` — `pdfpreflightverdict.h`, `docs/PREFLIGHT_VERDICT.md`
-- #236 `PDFDocumentContext` — `pdfdocumentcontext.h`, `docs/REVISION_CONTEXT.md`
-- #237 one SQLite chain, schema v3 — `pdfoperationhistorystore.*`
-- #238 `PDFJobScheduler` Core API (zero production callers)
+- #234 `reducePreflightVerdict()` in `pdfpreflightverdict.h`, `docs/PREFLIGHT_VERDICT.md`
+- #236 `PDFDocumentContext` in `pdfdocumentcontext.h`, `docs/REVISION_CONTEXT.md`
+- #237 one SQLite chain, schema v3, `pdfoperationhistorystore.*`
+- #238 `PDFJobScheduler` Core API
 - #239 `PDFOperationSavePolicy` on repair operations
 
 ## Catalog
@@ -188,22 +186,10 @@ python3 scripts/generate-architecture-catalogs.py --check
 
 Do not hand-edit `docs/generated/architecture-catalog.json`.
 
-## Branch landing notes (combined 0.1.1 run)
+## Open work
 
-This branch lands S00–S18 on one PR because the milestone was requested as a single agent run. Product `PDF4QT_VERSION` remains **0.1.0**.
+Product `PDF4QT_VERSION` stays **0.1.0**.
 
-Landed and acceptance-tested:
-
-- S00/S01 identity alias + fail-closed reducer (`unsupported-scope`, `unresolved-variable`, `budget-exceeded`, `evidence-incomplete`, `cancelled` → Incomplete, never PASS)
-- S02 live `PreflightRun` / `FixApplied` kinds; Accepted events persist the inspected artifact as output
-- S03 schema evolution API + goldens; unsupported major fails closed
-- S04 thumbnail scheduler + PageMaster revision fence
-- S05 PdfTool preflight on `PDFJobScheduler`; cancel ≠ success (page compile / PageMaster export / Editor preflight are not fully migrated)
-- S06/S07 Evidence Graph collector + five-family citation; golden corpus verdicts match with additive `evidence_ids`
-- S09–S17 profile contracts, coverage catalog, impact planner, oracle lane, renderer differential, named budgets, huge-doc envelope, lifecycle, plugin ABI, benchmark identity, architecture invariants
-
-Filed forward (do not silently claim done):
-
-- **S08 walker deletion.** Image-resolution still walks annotation appearance streams that the collector does not yet visit. Checks continue to use per-check processors; the graph is collected and cited. Start S08 only after the collector covers those appearances without changing corpus findings.
-- **S18 version bump.** Exit checklist is not fully green (S08 walkers remain; veraPDF is skip-if-missing). Leave `0.1.0`.
-
+- **S08.** Image-resolution still walks annotation appearance streams the collector does not visit. Checks still use per-check processors; the graph is collected and cited. Start S08 only after the collector covers those appearances without changing corpus findings.
+- **S18.** S08 walkers remain; veraPDF is skip-if-missing. Do not bump the product version yet.
+- **S05 leftovers.** Page compile, PageMaster export, and Editor preflight are not on `PDFJobScheduler`.
