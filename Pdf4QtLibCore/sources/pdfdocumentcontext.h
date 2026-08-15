@@ -70,6 +70,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRevisionIdentity
     QString toString() const;
 };
 
+/// Spec name from docs/SEMANTIC_TRUST_ENGINE_PLAN.md. Not a second freshness
+/// type — caches, jobs, and asynchronous results carry this alias.
+using PDFRevisionToken = PDFRevisionIdentity;
+
 /// Owns the active document identity and the one revision fence used by
 /// document-bound caches and asynchronous work.
 class PDF4QTLIBCORESHARED_EXPORT PDFDocumentContext : public QObject

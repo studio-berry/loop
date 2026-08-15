@@ -35,6 +35,9 @@ private slots:
     void activeWaiver_isPassAndRecorded();
     void engineError_isError();
     void reportPassIsDerivedFromVerdict();
+    void incompleteInspectionWithoutFindings_isNotPass();
+    void cancellationMarkedIncomplete_isNotPass();
+    void requiredCheckMissingStatus_isIncomplete();
 };
 
 namespace
@@ -138,6 +141,57 @@ void PreflightVerdictTest::reportPassIsDerivedFromVerdict()
     QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
              QStringLiteral("incomplete"));
     QVERIFY(!report.value(QStringLiteral("pass")).toBool());
+}
+
+void PreflightVerdictTest::incompleteInspectionWithoutFindings_isNotPass()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.pass = true;
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("inspection-incomplete"));
+    QVERIFY(!verdict.isPass());
+    QVERIFY(!result.toJson().value(QStringLiteral("pass")).toBool());
+}
+
+void PreflightVerdictTest::cancellationMarkedIncomplete_isNotPass()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.checkStatuses.append({
+        QStringLiteral("image-resolution"),
+        QStringLiteral("incomplete"),
+        QStringLiteral("cancelled"),
+        QString(),
+        0,
+        0,
+        QStringLiteral("operator cancel")
+    });
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("cancelled"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::requiredCheckMissingStatus_isIncomplete()
+{
+    pdf::PreflightProfileData profile;
+    pdf::PreflightCheckConfig check;
+    check.id = QStringLiteral("image-resolution");
+    check.required = true;
+    check.enabled = true;
+    profile.checks.append(check);
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result, &profile);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("required-check-not-run"));
+    QVERIFY(!verdict.isPass());
 }
 
 QTEST_APPLESS_MAIN(PreflightVerdictTest)
