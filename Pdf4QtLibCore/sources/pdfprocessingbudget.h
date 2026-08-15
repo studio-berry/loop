@@ -48,7 +48,12 @@ enum class PDFBudgetKind
     ObjectsVisited,
     RenderOperations,
     RenderPixels,
-    ElapsedTime
+    ElapsedTime,
+    DocumentModelBytes,
+    EvidenceCacheBytes,
+    RasterTileBytes,
+    UndoBytes,
+    RollbackBytes
 };
 
 PDF4QTLIBCORESHARED_EXPORT const char* getPDFBudgetKindName(PDFBudgetKind kind);
@@ -67,6 +72,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFProcessingLimits
     std::uint64_t maxRenderOperations = 20'000'000;
     std::uint64_t maxRenderPixels = 500'000'000;
     std::chrono::milliseconds maxElapsed = std::chrono::minutes(2);
+    std::int64_t maxDocumentModelBytes = 1LL * 1024 * 1024 * 1024;
+    std::int64_t maxEvidenceCacheBytes = 512LL * 1024 * 1024;
+    std::int64_t maxRasterTileBytes = 512LL * 1024 * 1024;
+    std::int64_t maxUndoBytes = 512LL * 1024 * 1024;
+    std::int64_t maxRollbackBytes = 2LL * 1024 * 1024 * 1024;
 
     static PDFProcessingLimits conservativeDefaults();
 };
@@ -121,6 +131,11 @@ public:
     void chargeRenderOperation(std::uint64_t count = 1, QString context = {});
     void chargeRenderPixels(std::uint64_t pixels, QString context = {});
     void checkElapsed(QString context = {}) const;
+    void chargeDocumentModelBytes(std::uint64_t bytes, QString context = {});
+    void chargeEvidenceCacheBytes(std::uint64_t bytes, QString context = {});
+    void chargeRasterTileBytes(std::uint64_t bytes, QString context = {});
+    void chargeUndoBytes(std::uint64_t bytes, QString context = {});
+    void chargeRollbackBytes(std::uint64_t bytes, QString context = {});
 
     class PDF4QTLIBCORESHARED_EXPORT DepthScope
     {
@@ -162,6 +177,11 @@ private:
     std::atomic<std::uint64_t> m_objectsVisited = 0;
     std::atomic<std::uint64_t> m_renderOperations = 0;
     std::atomic<std::uint64_t> m_renderPixels = 0;
+    std::atomic<std::uint64_t> m_documentModelBytes = 0;
+    std::atomic<std::uint64_t> m_evidenceCacheBytes = 0;
+    std::atomic<std::uint64_t> m_rasterTileBytes = 0;
+    std::atomic<std::uint64_t> m_undoBytes = 0;
+    std::atomic<std::uint64_t> m_rollbackBytes = 0;
 };
 
 } // namespace pdf

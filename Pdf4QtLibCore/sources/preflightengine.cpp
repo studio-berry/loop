@@ -38,6 +38,7 @@
 #include "pdfglobal.h"
 #include "pdfimage.h"
 #include "pdfimageoptimizer.h"
+#include "pdfevidencegraph.h"
 #include "pdfinkcoverageprobe.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfoptionalcontent.h"
@@ -4966,6 +4967,86 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         m_session->resetProcessingBudget();
     }
 
+    if (profile.restrictions.contains(QStringLiteral("scope")))
+    {
+        const QString scope = profile.restrictions.value(QStringLiteral("scope")).toString().trimmed();
+        if (scope.isEmpty() || scope.compare(QStringLiteral("unsupported"), Qt::CaseInsensitive) == 0)
+        {
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("unsupported-scope");
+            result.errorMessage = PDFTranslationContext::tr("Profile scope is empty or unsupported.");
+            return result;
+        }
+    }
+    for (auto it = profile.variables.constBegin(); it != profile.variables.constEnd(); ++it)
+    {
+        const QString value = it.value().toString();
+        if (value.startsWith(QLatin1String("${")) && value.endsWith(QLatin1Char('}')))
+        {
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("unresolved-variable");
+            result.errorMessage = PDFTranslationContext::tr("Profile variable '%1' is unresolved.").arg(it.key());
+            return result;
+        }
+    }
+
+    PDFEvidenceGraph evidenceGraph;
+    if (m_session)
+    {
+        PDFEvidenceDomains needed;
+        for (const PreflightCheckConfig& check : profile.checks)
+        {
+            if (check.id == QStringLiteral("image-resolution"))
+            {
+                needed |= PDFEvidenceDomain::Images;
+            }
+            else if (check.id == QStringLiteral("color-mode")
+                     || check.id == QStringLiteral("color-inventory")
+                     || check.id == QStringLiteral("output-intent"))
+            {
+                needed |= PDFEvidenceDomain::Colorants;
+            }
+            else if (check.id == QStringLiteral("thin-strokes") || check.id == QStringLiteral("thin-parts"))
+            {
+                needed |= PDFEvidenceDomain::Strokes;
+            }
+            else if (check.id == QStringLiteral("white-overprint") || check.id == QStringLiteral("transparency-risk"))
+            {
+                needed |= PDFEvidenceDomain::OverprintTransparency;
+            }
+            else if (check.id == QStringLiteral("embedded-fonts") || check.id == QStringLiteral("font-integrity"))
+            {
+                needed |= PDFEvidenceDomain::Fonts;
+            }
+        }
+        if (needed != PDFEvidenceDomains())
+        {
+            try
+            {
+                evidenceGraph = PDFEvidenceCollector::collect(m_session, needed);
+            }
+            catch (const PDFBudgetExceededException& exception)
+            {
+                result.inspectionComplete = false;
+                result.errorCode = QStringLiteral("budget-exceeded");
+                result.errorMessage = QString::fromLatin1(getPDFBudgetKindName(exception.getDetail().kind));
+                return result;
+            }
+            catch (const PDFException&)
+            {
+                result.inspectionComplete = false;
+                result.errorCode = QStringLiteral("evidence-incomplete");
+                result.errorMessage = QStringLiteral("Evidence collection failed.");
+            }
+            if (!evidenceGraph.isComplete())
+            {
+                result.inspectionComplete = false;
+                result.errorCode = QStringLiteral("evidence-incomplete");
+                result.errorMessage = evidenceGraph.incompleteReason;
+            }
+        }
+    }
+
     for (const PreflightCheckConfig& check : profile.checks)
     {
         PreflightCheckStatus status;
@@ -5084,6 +5165,45 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         result.checkStatuses.push_back(status);
     }
 
+    auto citeEvidence = [&evidenceGraph](QList<PreflightFinding>& findings)
+    {
+        auto domainForCheck = [](const QString& checkId) -> std::optional<PDFEvidenceDomain>
+        {
+            if (checkId == QStringLiteral("image-resolution")) return PDFEvidenceDomain::Images;
+            if (checkId == QStringLiteral("color-mode") || checkId == QStringLiteral("color-inventory") || checkId == QStringLiteral("output-intent"))
+                return PDFEvidenceDomain::Colorants;
+            if (checkId == QStringLiteral("thin-strokes") || checkId == QStringLiteral("thin-parts"))
+                return PDFEvidenceDomain::Strokes;
+            if (checkId == QStringLiteral("white-overprint") || checkId == QStringLiteral("transparency-risk"))
+                return PDFEvidenceDomain::OverprintTransparency;
+            if (checkId == QStringLiteral("embedded-fonts") || checkId == QStringLiteral("font-integrity"))
+                return PDFEvidenceDomain::Fonts;
+            return std::nullopt;
+        };
+        for (PreflightFinding& finding : findings)
+        {
+            const auto domain = domainForCheck(finding.checkId);
+            if (!domain)
+            {
+                continue;
+            }
+            QJsonArray ids;
+            for (const PDFEvidenceRecord& record : evidenceGraph.recordsForDomain(*domain))
+            {
+                if (finding.page <= 0 || record.page == finding.page)
+                {
+                    ids.append(record.id);
+                }
+            }
+            if (!ids.isEmpty())
+            {
+                finding.evidence.insert(QStringLiteral("evidence_ids"), ids);
+            }
+        }
+    };
+    citeEvidence(result.errors);
+    citeEvidence(result.warnings);
+
     if (profile.pdfx.has_value())
     {
         const PDFXConformanceResult pdfxResult = evaluatePDFXPolicy(m_session, profile.pdfx.value());
@@ -5178,6 +5298,18 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
     {
         errorMessage = PDFTranslationContext::tr("Profile is missing required field 'name'.");
         return false;
+    }
+    profile.id = profileObject.value(QStringLiteral("id")).toString();
+    profile.version = profileObject.value(QStringLiteral("version")).toString();
+    profile.authored = profileObject.value(QStringLiteral("authored")).toString();
+    profile.derivedFrom = profileObject.value(QStringLiteral("derived_from")).toString();
+    if (profileObject.value(QStringLiteral("restrictions")).isObject())
+    {
+        profile.restrictions = profileObject.value(QStringLiteral("restrictions")).toObject();
+    }
+    if (profileObject.value(QStringLiteral("variables")).isObject())
+    {
+        profile.variables = profileObject.value(QStringLiteral("variables")).toObject();
     }
 
     const QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();

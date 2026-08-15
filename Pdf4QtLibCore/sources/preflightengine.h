@@ -284,6 +284,12 @@ PDF4QTLIBCORESHARED_EXPORT bool preflightDecisionsFromJson(const QJsonObject& ob
 struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileData
 {
     QString name;
+    QString id;
+    QString version;
+    QString authored;
+    QString derivedFrom;
+    QJsonObject restrictions;
+    QJsonObject variables;
     QList<PreflightCheckConfig> checks;
     QList<PreflightFixupConfig> fixups;
     std::optional<PDFXPolicy> pdfx;

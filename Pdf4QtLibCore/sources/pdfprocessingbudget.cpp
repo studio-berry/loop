@@ -67,6 +67,11 @@ const char* getPDFBudgetKindName(PDFBudgetKind kind)
         case PDFBudgetKind::RenderOperations: return "render-operations";
         case PDFBudgetKind::RenderPixels: return "render-pixels";
         case PDFBudgetKind::ElapsedTime: return "elapsed-time";
+        case PDFBudgetKind::DocumentModelBytes: return "document-model-bytes";
+        case PDFBudgetKind::EvidenceCacheBytes: return "evidence-cache-bytes";
+        case PDFBudgetKind::RasterTileBytes: return "raster-tile-bytes";
+        case PDFBudgetKind::UndoBytes: return "undo-bytes";
+        case PDFBudgetKind::RollbackBytes: return "rollback-bytes";
     }
 
     return "unknown";
@@ -112,6 +117,11 @@ void PDFProcessingBudget::reset()
     m_objectsVisited = 0;
     m_renderOperations = 0;
     m_renderPixels = 0;
+    m_documentModelBytes = 0;
+    m_evidenceCacheBytes = 0;
+    m_rasterTileBytes = 0;
+    m_undoBytes = 0;
+    m_rollbackBytes = 0;
     m_started = m_now();
 }
 
@@ -218,6 +228,31 @@ void PDFProcessingBudget::chargeRenderPixels(std::uint64_t pixels, QString conte
                    PDFBudgetKind::RenderPixels,
                    m_limits.maxRenderPixels,
                    context);
+}
+
+void PDFProcessingBudget::chargeDocumentModelBytes(std::uint64_t bytes, QString context)
+{
+    chargeCounter(m_documentModelBytes, bytes, PDFBudgetKind::DocumentModelBytes, asLimit(m_limits.maxDocumentModelBytes), context);
+}
+
+void PDFProcessingBudget::chargeEvidenceCacheBytes(std::uint64_t bytes, QString context)
+{
+    chargeCounter(m_evidenceCacheBytes, bytes, PDFBudgetKind::EvidenceCacheBytes, asLimit(m_limits.maxEvidenceCacheBytes), context);
+}
+
+void PDFProcessingBudget::chargeRasterTileBytes(std::uint64_t bytes, QString context)
+{
+    chargeCounter(m_rasterTileBytes, bytes, PDFBudgetKind::RasterTileBytes, asLimit(m_limits.maxRasterTileBytes), context);
+}
+
+void PDFProcessingBudget::chargeUndoBytes(std::uint64_t bytes, QString context)
+{
+    chargeCounter(m_undoBytes, bytes, PDFBudgetKind::UndoBytes, asLimit(m_limits.maxUndoBytes), context);
+}
+
+void PDFProcessingBudget::chargeRollbackBytes(std::uint64_t bytes, QString context)
+{
+    chargeCounter(m_rollbackBytes, bytes, PDFBudgetKind::RollbackBytes, asLimit(m_limits.maxRollbackBytes), context);
 }
 
 void PDFProcessingBudget::checkElapsed(QString context) const

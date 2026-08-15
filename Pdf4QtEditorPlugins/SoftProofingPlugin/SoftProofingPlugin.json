@@ -1,7 +1,11 @@
 {
-    "Name" : "SoftProofing",
-    "Author" : "Jakub Melka",
-    "Version" : "1.0.0",
-    "License" : "LGPL v3",
-    "Description" : "Perform soft-proofing / gamut checking with CMYK profiles on a document."
+    "Name": "SoftProofing",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "Perform soft-proofing / gamut checking with CMYK profiles on a document.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
+    "Capabilities": []
 }
