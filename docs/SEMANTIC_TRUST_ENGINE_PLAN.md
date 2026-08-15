@@ -188,8 +188,33 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Product `PDF4QT_VERSION` stays **0.1.0**.
+Audited 2026-08-15 against the canonical Notion [Roadmap](https://www.notion.so/38f9cb079ddb804a96dbe26b8d86e84f) **0.1.1 exit gate** (all boxes still unchecked there — correct, this milestone is not operator-accepted) and current code on this branch. Product `PDF4QT_VERSION` stays **0.1.0**. Cursor session todos that marked S05/S08/S11/S18 complete were wrong; those sessions are not done-when green.
 
-- **S08.** Image-resolution still walks annotation appearance streams the collector does not visit. Checks still use per-check processors; the graph is collected and cited. Start S08 only after the collector covers those appearances without changing corpus findings.
-- **S18.** S08 walkers remain; veraPDF is skip-if-missing. Do not bump the product version yet.
-- **S05 leftovers.** Page compile, PageMaster export, and Editor preflight are not on `PDFJobScheduler`.
+Notion 0.1.1 exit gate × code:
+
+| Notion exit item | Session | Status |
+| --- | --- | --- |
+| #234/#236/#237/#238/#239 acceptance-verified | S01–S05 | **Partial.** Reducer, revision alias, live PdfTool provenance kinds, thumbnail scheduler, and save-policy tests exist. **#238 production callers are not done:** only PdfTool `preflight` and widget thumbnails use `PDFJobScheduler`. |
+| Current/previous schemas round-trip; unsupported majors fail closed | S03 | **Landed.** `pdfschemaversion.*`, `docs/schema-compatibility.json`, goldens, `UnitTestsSchemaEvolution`. |
+| Five-family Evidence Graph matches golden corpus | S06–S08 | **Partial.** Collector walks Images/Colorants/Strokes/OverprintTransparency/Fonts. Checks still use per-check processors. Findings get additive `evidence_ids` after the old walk. **S08 walker deletion is not done.** |
+| Findings cite normalized evidence records | S06–S08 | **Partial.** Citation is domain/page overlay, not graph-evaluated findings. |
+| Every async/cache result is revision-bound | S04–S05 | **Partial.** Thumbnails + PageMaster preview fence. Page compile / text layout (`QtConcurrent` in `pdfcompiler.cpp`), PageMaster export, Editor preflight, PageMaster preview render remain off the scheduler. Inventory: `docs/JOB_SCHEDULER.md`. |
+| Targeted revalidation matches full-run verdicts | S11 | **Not done.** `PDFOperationImpact` exists; default incomplete impact → full revalidation (fail-closed-correct). No qualification-corpus targeted=full proof; repair ops do not declare complete scoped impact. |
+| Standards claims pass an independent oracle | S12 | **Partial.** Fixture triad + mismatch/`missing` cannot self-certify. veraPDF lane is `QSKIP` if missing (not bundled). |
+| Resource exhaustion reports attributable INCOMPLETE | S14–S15 | **Partial.** Named pools + budget→Incomplete. Huge-doc envelope is a generated 40-page identity JSON in `UnitTestsHugeDocumentEnvelope`, not a measured production envelope. |
+| Huge-document behavior measured and bounded | S15 | **Partial.** Scheduler reserved interaction slot exists in Core. Prefetch/quality shedding under pressure is not wired to production compilers. |
+| Model-based lifecycle catches stale/overwrite/rollback | S16 | **Landed as a seeded unit sequence** (`UnitTestsLifecycle`). Depends on S05 remaining jobs for production coverage. |
+| Native plugin ABI/load policy explicit and tested | S17 | **Landed.** Root `AbiVersion: 1`; `loadPlugins()` inspects metadata before `instance()`; `UnitTestsPluginAbi`; `docs/UPSTREAM_DIVERGENCE.md`. |
+| Benchmark identity and architecture invariants automated | S18 | **Partial.** `PdfTool benchmark` identity JSON + INV-001–INV-014 `--check`. Exit audit is **not green**; do not bump product version. |
+| No new GUI required | standing | **Held.** |
+
+Session leftovers (do not treat Cursor checkmarks as truth):
+
+- **S05.** Migrate page compile, text layout, Editor preflight, and PageMaster export onto `PDFJobScheduler`. Cancelled work must not report `Succeeded` / `verdict.state = pass`. OCR/agent remain out of scope.
+- **S07 remainder.** `thin-strokes-hairline` and `thin-parts-fill` corpus rows are `pending: true` (fixtures not generated). Dual-run parity is not closed for those families.
+- **S08.** Image-resolution still walks annotation `/AP` streams the collector does not visit (`preflightengine.cpp`). Start S08 only after the collector covers those appearances without changing corpus findings. Then evaluate the graph only and delete the five-family walkers.
+- **S11.** Declare complete `PDFOperationImpact` on repair ops where true; prove targeted ≡ full on a qualification corpus. Until then, incomplete → full revalidation stays the safe default.
+- **S12.** Independent oracle still skip-if-missing; do not self-certify. Do not bundle veraPDF/JRE.
+- **S18.** Re-run this table. Bump to **0.1.1** only when every Notion 0.1.1 exit box can be checked from named tests on an integrated SHA.
+
+The Notion **8.14** page is a copy of the agent-session cards with todos still `pending`. It is not the living roadmap; do not treat it as a second source of truth.
