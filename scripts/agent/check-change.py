@@ -114,6 +114,45 @@ def current_branch(override: str | None) -> str:
         return "detached"
 
 
+def policy_integration_branches(policy: dict) -> set[str]:
+    branches = policy.get("branches", {})
+    names: set[str] = set(branches.get("protected") or [])
+    for key in ("integration", "release", "default"):
+        value = branches.get(key)
+        if isinstance(value, str) and value:
+            names.add(value)
+    return names
+
+
+def skip_changelog_reason(branch: str, policy: dict, skip: bool) -> str | None:
+    """Changelog fragments are named after topic-branch PRs, not integration pushes."""
+    if skip:
+        return "non-PR event"
+    event = os.environ.get("GITHUB_EVENT_NAME")
+    if event and event != "pull_request":
+        return "non-PR event"
+    if branch in policy_integration_branches(policy):
+        return "integration branch"
+    return None
+
+
+def changelog_evidence(changes: list[Change], policy: dict, branch: str, skip: bool) -> Evidence:
+    reason = skip_changelog_reason(branch, policy, skip)
+    if reason:
+        return Evidence("changelog", result="not-applicable", reason=reason)
+    return check_changelog(changes, policy, branch)
+
+
+def format_sources(changes: Iterable[Change]) -> list[str]:
+    return sorted(
+        {
+            change.path
+            for change in changes
+            if change.status != "D" and Path(change.path).suffix.lower() in SOURCE_SUFFIXES
+        }
+    )
+
+
 def classify(changes: Iterable[Change], policy: dict) -> list[str]:
     modules: set[str] = set()
     definitions = policy["module_boundaries"]
@@ -233,16 +272,13 @@ def main() -> int:
 
     branch = current_branch(args.head_branch)
     modules = classify(changes, policy)
-    sources = sorted({change.path for change in changes if Path(change.path).suffix.lower() in SOURCE_SUFFIXES})
+    sources = format_sources(changes)
     targets = selected_values(modules, policy, "targets")
     tests = [test for test in selected_values(modules, policy, "tests") if test not in NON_TEST_CHECKS]
     protected = protected_paths(changes, policy)
     build_dir = (ROOT / args.build_dir).resolve()
 
-    if args.skip_changelog:
-        evidence.append(Evidence("changelog", result="not-applicable", reason="non-PR event"))
-    else:
-        evidence.append(check_changelog(changes, policy, branch))
+    evidence.append(changelog_evidence(changes, policy, branch, args.skip_changelog))
     python = sys.executable
     add_result(evidence, "source_integrity", [python, "scripts/ci/check_source_integrity.py"], ROOT, args.dry_run)
     add_result(evidence, "architecture_catalog", [python, "scripts/generate-architecture-catalogs.py", "--check"], ROOT, args.dry_run)
