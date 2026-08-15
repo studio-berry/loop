@@ -256,6 +256,7 @@ struct PDFToolOptions
     QString preflightPressId;
     QString preflightStockId;
     QString preflightFinishingId;
+    QStringList preflightParameterAssignments;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;

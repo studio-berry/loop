@@ -391,6 +391,21 @@ set_target_properties(UnitTestsEvidenceGraph PROPERTIES
 )
 add_test(UnitTestsEvidenceGraph "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsEvidenceGraph")
 
+add_executable(UnitTestsProfileIdentity
+    tst_preflightprofileidentitytest.cpp
+)
+target_link_libraries(UnitTestsProfileIdentity PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsProfileIdentity PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+    LOUPE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+set_target_properties(UnitTestsProfileIdentity PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsProfileIdentity "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsProfileIdentity")
+
 add_executable(UnitTestsPreflightProfileResolver
     tst_preflightprofileresolvertest.cpp
 )

@@ -357,6 +357,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("press"), { QStringLiteral("--press") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("stock"), { QStringLiteral("--stock") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("finishing"), { QStringLiteral("--finishing") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
@@ -803,6 +804,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("press"), QStringLiteral("Stable press/device identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("stock"), QStringLiteral("Stable stock identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("param"), QStringLiteral("Profile variable binding as key=value; may be repeated. Overrides job-spec and profile defaults."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1313,6 +1315,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightPressId = parser->value("press");
         options.preflightStockId = parser->value("stock");
         options.preflightFinishingId = parser->value("finishing");
+        options.preflightParameterAssignments = parser->values("param");
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
