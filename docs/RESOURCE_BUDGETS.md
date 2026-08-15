@@ -8,8 +8,38 @@ incomplete operation and must not report a normal pass or successful output.
 
 The conservative defaults bound input bytes, each decoded stream, cumulative
 decoded bytes, decompression ratio, object count, recursive content depth,
-render operations, rendered pixels, and elapsed processing time. The existing
-hard stream-filter ceilings remain active as a second line of defense.
+render operations, rendered pixels, elapsed processing time, evidence records,
+undo snapshots, and rollback artifacts. The existing hard stream-filter
+ceilings remain active as a second line of defense.
+
+## Named pools
+
+Each exhaustion reports the exact `budget.kind` and its pool. A budget
+failure is **incomplete**, never PASS.
+
+| Pool | Kinds |
+|------|--------|
+| `document-model` | `input-bytes`, `object-depth`, `recursive-content-depth`, `objects-visited`, `elapsed-time` |
+| `decoded-streams` | `single-decoded-stream-bytes`, `cumulative-decoded-bytes`, `decompression-ratio` |
+| `raster-tile` | `render-operations`, `render-pixels` |
+| `evidence-cache` | `evidence-records` |
+| `undo` | `undo-snapshots` |
+| `rollback` | `rollback-artifacts` |
+
+Preflight maps `PDFBudgetExceededException` to
+`checks[].budget.{kind,pool,limit,attempted,context}` alongside a
+`budget-exceeded` error and `inspectionComplete: false`.
+`reducePreflightVerdict()` yields `incomplete`.
+
+Synthetic exhaustion fixtures are generated in `UnitTestsBudgetExhaustion`
+(nested objects, raster size, evidence records, elapsed clock). Do not
+commit multi-GB binaries.
+
+Under memory pressure, `PDFDocumentSession::shedPrefetchAndQuality()`
+drops prefetch and quality work before interaction. The job scheduler
+still reserves an interaction slot when background work is saturated.
+
+## Reader and session behavior
 
 Reader input is accumulated in bounded chunks when the source is sequential;
 it is never passed through an unbounded `readAll()` path. Parser object nesting
@@ -33,10 +63,7 @@ session.setProcessingLimits(limits);
 `PdfTool` and Editor integrations should expose this as an explicit named
 profile or finite per-limit options, record the selected profile in their
 diagnostics, and keep the conservative profile as the default. There is no
-unbounded or “disable all limits” mode. A budget failure is structured by
-preflight as `checks[].budget` with `kind`, `limit`, `attempted`, and optional
-`context`, alongside a `budget-exceeded` error and
-`inspectionComplete: false`.
+unbounded or “disable all limits” mode.
 
 The budget is reset at the start of a reader operation and preflight run. A
 session reset clears accounting and caches; document mutation still requires

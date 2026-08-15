@@ -88,6 +88,7 @@ void PreflightVerdictTest::budgetExceededWithoutFindings_isIncomplete()
         QStringLiteral("incomplete"),
         QStringLiteral("budget-exceeded"),
         QStringLiteral("raster-pixels"),
+        QStringLiteral("raster-tile"),
         100,
         101,
         QStringLiteral("page 1")
@@ -221,6 +222,7 @@ void PreflightVerdictTest::cancellationMarkedIncomplete_isNotPass()
         QStringLiteral("image-resolution"),
         QStringLiteral("incomplete"),
         QStringLiteral("cancelled"),
+        QString(),
         QString(),
         0,
         0,

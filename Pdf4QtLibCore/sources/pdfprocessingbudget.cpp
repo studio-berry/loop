@@ -67,9 +67,55 @@ const char* getPDFBudgetKindName(PDFBudgetKind kind)
         case PDFBudgetKind::RenderOperations: return "render-operations";
         case PDFBudgetKind::RenderPixels: return "render-pixels";
         case PDFBudgetKind::ElapsedTime: return "elapsed-time";
+        case PDFBudgetKind::EvidenceRecords: return "evidence-records";
+        case PDFBudgetKind::UndoSnapshots: return "undo-snapshots";
+        case PDFBudgetKind::RollbackArtifacts: return "rollback-artifacts";
     }
 
     return "unknown";
+}
+
+const char* getPDFBudgetPoolName(PDFBudgetPool pool)
+{
+    switch (pool)
+    {
+        case PDFBudgetPool::DocumentModel: return "document-model";
+        case PDFBudgetPool::EvidenceCache: return "evidence-cache";
+        case PDFBudgetPool::RasterTile: return "raster-tile";
+        case PDFBudgetPool::DecodedStreams: return "decoded-streams";
+        case PDFBudgetPool::Undo: return "undo";
+        case PDFBudgetPool::Rollback: return "rollback";
+    }
+
+    return "unknown";
+}
+
+PDFBudgetPool budgetPoolFor(PDFBudgetKind kind)
+{
+    switch (kind)
+    {
+        case PDFBudgetKind::SingleDecodedStreamBytes:
+        case PDFBudgetKind::CumulativeDecodedBytes:
+        case PDFBudgetKind::DecompressionRatio:
+            return PDFBudgetPool::DecodedStreams;
+        case PDFBudgetKind::RenderOperations:
+        case PDFBudgetKind::RenderPixels:
+            return PDFBudgetPool::RasterTile;
+        case PDFBudgetKind::EvidenceRecords:
+            return PDFBudgetPool::EvidenceCache;
+        case PDFBudgetKind::UndoSnapshots:
+            return PDFBudgetPool::Undo;
+        case PDFBudgetKind::RollbackArtifacts:
+            return PDFBudgetPool::Rollback;
+        case PDFBudgetKind::InputBytes:
+        case PDFBudgetKind::ObjectDepth:
+        case PDFBudgetKind::RecursiveContentDepth:
+        case PDFBudgetKind::ObjectsVisited:
+        case PDFBudgetKind::ElapsedTime:
+            return PDFBudgetPool::DocumentModel;
+    }
+
+    return PDFBudgetPool::DocumentModel;
 }
 
 PDFProcessingLimits PDFProcessingLimits::conservativeDefaults()
@@ -112,6 +158,9 @@ void PDFProcessingBudget::reset()
     m_objectsVisited = 0;
     m_renderOperations = 0;
     m_renderPixels = 0;
+    m_evidenceRecords = 0;
+    m_undoSnapshots = 0;
+    m_rollbackArtifacts = 0;
     m_started = m_now();
 }
 
@@ -231,6 +280,21 @@ void PDFProcessingBudget::checkElapsed(QString context) const
     }
 }
 
+void PDFProcessingBudget::chargeEvidenceRecords(std::uint64_t count, QString context)
+{
+    chargeCounter(m_evidenceRecords, count, PDFBudgetKind::EvidenceRecords, m_limits.maxEvidenceRecords, context);
+}
+
+void PDFProcessingBudget::chargeUndoSnapshot(QString context)
+{
+    chargeCounter(m_undoSnapshots, 1, PDFBudgetKind::UndoSnapshots, m_limits.maxUndoSnapshots, context);
+}
+
+void PDFProcessingBudget::chargeRollbackArtifact(QString context)
+{
+    chargeCounter(m_rollbackArtifacts, 1, PDFBudgetKind::RollbackArtifacts, m_limits.maxRollbackArtifacts, context);
+}
+
 std::uint32_t& PDFProcessingBudget::threadDepth(const PDFProcessingBudget* budget, PDFBudgetKind kind)
 {
     const int index = depthIndex(kind);
@@ -270,7 +334,7 @@ PDFProcessingBudget::DepthScope::~DepthScope()
                                             std::uint64_t attempted,
                                             const QString& context) const
 {
-    throw PDFBudgetExceededException({ kind, limit, attempted, context });
+    throw PDFBudgetExceededException({ kind, budgetPoolFor(kind), limit, attempted, context });
 }
 
 } // namespace pdf

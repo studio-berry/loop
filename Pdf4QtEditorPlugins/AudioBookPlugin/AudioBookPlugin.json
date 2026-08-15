@@ -1,7 +1,16 @@
 {
-    "Name" : "AudioBook",
-    "Author" : "Jakub Melka",
-    "Version" : "1.0.0",
-    "License" : "LGPL v3",
-    "Description" : "Convert document to an audio book."
+    "PluginId": "PDF4QT.AudioBookPlugin",
+    "AbiVersion": 1,
+    "Name": "AudioBook",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "Convert document to an audio book.",
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation",
+        "external-process"
+    ],
+    "BuildId": "loupe-0.1.0"
 }

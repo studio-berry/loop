@@ -82,6 +82,11 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceGraph
     QList<PDFEvidenceRecord> records;
     bool complete = true;
     QString incompleteReason;
+    QString budgetKind;
+    QString budgetPool;
+    qint64 budgetLimit = 0;
+    qint64 budgetAttempted = 0;
+    QString budgetContext;
 
     bool isComplete() const { return complete && incompleteReason.isEmpty(); }
     QList<PDFEvidenceRecord> recordsForDomain(PDFEvidenceDomain domain) const;

@@ -1,7 +1,14 @@
 {
-    "Name" : "SoftProofing",
-    "Author" : "Jakub Melka",
-    "Version" : "1.0.0",
-    "License" : "LGPL v3",
-    "Description" : "Perform soft-proofing / gamut checking with CMYK profiles on a document."
+    "PluginId": "PDF4QT.SoftProofingPlugin",
+    "AbiVersion": 1,
+    "Name": "SoftProofing",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "Perform soft-proofing / gamut checking with CMYK profiles on a document.",
+    "Capabilities": [
+        "read-document",
+        "propose-operation"
+    ],
+    "BuildId": "loupe-0.1.0"
 }

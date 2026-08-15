@@ -140,6 +140,8 @@ QJsonObject buildPlugins(const PDFPluginInfos& plugins)
     {
         QJsonObject entry;
         entry[QStringLiteral("name")] = plugin.name;
+        entry[QStringLiteral("pluginId")] = plugin.pluginId;
+        entry[QStringLiteral("abiVersion")] = static_cast<int>(plugin.abiVersion);
         entry[QStringLiteral("author")] = plugin.author;
         entry[QStringLiteral("version")] = plugin.version;
         entry[QStringLiteral("license")] = plugin.license;

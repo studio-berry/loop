@@ -1,7 +1,16 @@
 {
-    "Name" : "Scanner",
-    "Author" : "Jakub Melka",
-    "Version" : "1.0.0",
-    "License" : "LGPL v3",
-    "Description" : "Scan pages from a document scanner and append them to the current PDF document."
+    "PluginId": "PDF4QT.ScannerPlugin",
+    "AbiVersion": 1,
+    "Name": "Scanner",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "Scan pages from a document scanner and append them to the current PDF document.",
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation",
+        "external-process"
+    ],
+    "BuildId": "loupe-0.1.0"
 }

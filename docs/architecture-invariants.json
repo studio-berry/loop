@@ -1,0 +1,105 @@
+{
+  "format_version": 1,
+  "invariants": [
+    {
+      "id": "I01",
+      "title": "Incomplete inspection cannot reduce to PASS",
+      "test_targets": ["UnitTestsPreflightVerdict"]
+    },
+    {
+      "id": "I02",
+      "title": "Budget exhaustion reports INCOMPLETE with exact budget.kind and never PASS",
+      "test_targets": ["UnitTestsProcessingBudget", "UnitTestsBudgetExhaustion", "UnitTestsPreflightVerdict"]
+    },
+    {
+      "id": "I03",
+      "title": "Engine, profile, or document failure is error, never PASS",
+      "test_targets": ["UnitTestsPreflightVerdict", "UnitTestsPreflightEngine"]
+    },
+    {
+      "id": "I04",
+      "title": "Unsupported schema majors fail closed",
+      "test_targets": ["UnitTestsSchemaEvolution"]
+    },
+    {
+      "id": "I05",
+      "title": "Cancellation is terminal and is not success",
+      "test_targets": ["UnitTestsJobScheduler", "UnitTestsOperationHistory", "UnitTestsLifecycle"]
+    },
+    {
+      "id": "I06",
+      "title": "Unresolved profile variables and unsupported scopes are incomplete",
+      "test_targets": ["UnitTestsPreflightVerdict", "UnitTestsProfileIdentity"]
+    },
+    {
+      "id": "I07",
+      "title": "Stale revision results are discarded and are not current",
+      "test_targets": ["UnitTestsDocumentSession", "UnitTestsJobScheduler", "UnitTestsLifecycle"]
+    },
+    {
+      "id": "I08",
+      "title": "Provenance events are append-only",
+      "test_targets": ["UnitTestsOperationHistory", "UnitTestsLifecycle"]
+    },
+    {
+      "id": "I09",
+      "title": "Rollback appends a new event and advances revision",
+      "test_targets": ["UnitTestsOperationHistory", "UnitTestsLifecycle"]
+    },
+    {
+      "id": "I10",
+      "title": "Recovered or unapproved output is not certified",
+      "test_targets": ["UnitTestsLifecycle", "UnitTestsRecovery"]
+    },
+    {
+      "id": "I11",
+      "title": "Save policy matches the declared operation",
+      "test_targets": ["UnitTestsRepairOperation", "UnitTestsLifecycle"]
+    },
+    {
+      "id": "I12",
+      "title": "Malformed or unsupported plugin ABI fails closed before instance()",
+      "test_targets": ["UnitTestsPluginAbi"]
+    },
+    {
+      "id": "I13",
+      "title": "Plugins load only from the packaged plugin directory by default",
+      "test_targets": ["UnitTestsPluginAbi"]
+    },
+    {
+      "id": "I14",
+      "title": "Named budget pools map every kind; exhaustion names the kind",
+      "test_targets": ["UnitTestsProcessingBudget", "UnitTestsBudgetExhaustion"]
+    },
+    {
+      "id": "I15",
+      "title": "An incomplete Evidence Graph cannot reduce to PASS",
+      "test_targets": ["UnitTestsEvidenceGraph", "UnitTestsBudgetExhaustion"]
+    },
+    {
+      "id": "I16",
+      "title": "Unknown or incomplete operation impact forces full revalidation",
+      "test_targets": ["UnitTestsOperationImpact"]
+    },
+    {
+      "id": "I17",
+      "title": "Standards claims require an independent conversion oracle",
+      "test_targets": ["UnitTestsStandardOracle"]
+    },
+    {
+      "id": "I18",
+      "title": "Color and overprint renderer measurements stay within golden tolerance",
+      "test_targets": ["UnitTestsOverprintRender"]
+    },
+    {
+      "id": "I19",
+      "title": "Interaction work still runs when background jobs saturate the scheduler",
+      "test_targets": ["UnitTestsJobScheduler", "UnitTestsWorkloadEnvelope"]
+    },
+    {
+      "id": "I20",
+      "title": "Measured envelopes and benchmarks carry run identity fields",
+      "test_targets": ["UnitTestsWorkloadEnvelope"]
+    }
+  ]
+}

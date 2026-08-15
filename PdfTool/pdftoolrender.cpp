@@ -25,10 +25,12 @@
 #include "pdffont.h"
 #include "pdfconstants.h"
 #include "pdfsafefilewriter.h"
+#include "pdfworkloadenvelope.h"
 
 #include <QColorSpace>
 #include <QElapsedTimer>
 #include <QImageWriter>
+#include <QJsonObject>
 
 namespace pdftool
 {
@@ -166,8 +168,29 @@ PDFToolAbstractApplication::Options PDFToolBenchmark::getOptionsFlags() const
 
 void PDFToolBenchmark::finish(const PDFToolOptions& options)
 {
+    pdf::PDFRunIdentity identity = pdf::PDFRunIdentity::capture();
+    identity.fixtureDigest = pdf::PDFRunIdentity::digestFile(options.document);
+    identity.operationVersion = QStringLiteral("benchmark-render");
+    identity.renderer = QStringLiteral("pdf4qt");
+
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("benchmark", PDFToolTranslationContext::tr("Benchmark rendering of document %1").arg(options.document));
+    formatter.endl();
+
+    formatter.beginHeader("identity", PDFToolTranslationContext::tr("Run identity"));
+    formatter.writeText("commit", identity.commit);
+    formatter.writeText("compiler", identity.compiler);
+    formatter.writeText("build", identity.buildType);
+    formatter.writeText("os", identity.os);
+    formatter.writeText("qt", identity.qtVersion);
+    formatter.writeText("cpu", identity.cpuArchitecture);
+    formatter.writeText("gpu", identity.gpu);
+    formatter.writeText("renderer", identity.renderer);
+    formatter.writeText("fixture-digest", identity.fixtureDigest);
+    formatter.writeText("profile-version", identity.profileVersion);
+    formatter.writeText("operation-version", identity.operationVersion);
+    formatter.writeText("product-version", identity.productVersion);
+    formatter.endHeader();
     formatter.endl();
 
     writeStatistics(formatter);
@@ -182,7 +205,9 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->setData(formatter.getJsonObject());
+            QJsonObject data = formatter.getJsonObject();
+            data.insert(QStringLiteral("identity"), identity.toJson());
+            options.executionContext->setData(data);
         }
     }
     else

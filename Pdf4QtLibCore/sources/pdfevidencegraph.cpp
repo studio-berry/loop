@@ -1271,14 +1271,25 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                 }
             }
         }
+        if (session->getProcessingBudget() && !graph.records.isEmpty())
+        {
+            session->getProcessingBudget()->chargeEvidenceRecords(static_cast<std::uint64_t>(graph.records.size()),
+                                                                  QStringLiteral("evidence-graph"));
+        }
     }
     catch (const PDFBudgetExceededException& exception)
     {
+        const PDFBudgetExceeded& detail = exception.getDetail();
         graph.complete = false;
-        graph.incompleteReason = QString::fromLatin1(getPDFBudgetKindName(exception.getDetail().kind));
+        graph.incompleteReason = QString::fromLatin1(getPDFBudgetKindName(detail.kind));
+        graph.budgetKind = graph.incompleteReason;
+        graph.budgetPool = QString::fromLatin1(getPDFBudgetPoolName(detail.pool));
+        graph.budgetLimit = static_cast<qint64>(detail.limit);
+        graph.budgetAttempted = static_cast<qint64>(detail.attempted);
+        graph.budgetContext = detail.context;
         if (!graph.records.isEmpty())
         {
-            graph.records.last().budgetContext = exception.getDetail().context;
+            graph.records.last().budgetContext = detail.context;
         }
     }
     catch (const PDFException& exception)

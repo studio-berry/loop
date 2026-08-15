@@ -28,6 +28,8 @@
 
 #include <QObject>
 #include <QJsonObject>
+#include <QSet>
+#include <QStringList>
 
 #include <vector>
 
@@ -39,19 +41,57 @@ namespace pdf
 class PDFWidget;
 class PDFCMSManager;
 
+constexpr quint32 PDF_PLUGIN_ABI_VERSION = 1;
+
+enum class PDFPluginCapability
+{
+    ReadDocument,
+    ProposeOperation,
+    ExecuteRegisteredOperation,
+    ExternalProcess,
+    Network
+};
+
+PDF4QTLIBCORESHARED_EXPORT QString pdfPluginCapabilityToString(PDFPluginCapability capability);
+PDF4QTLIBCORESHARED_EXPORT bool pdfPluginCapabilityFromString(const QString& value, PDFPluginCapability& capability);
+
 struct PDF4QTLIBCORESHARED_EXPORT PDFPluginInfo
 {
+    QString pluginId;
+    quint32 abiVersion = 0;
     QString name;
     QString author;
     QString version;
     QString license;
     QString description;
+    QStringList capabilities;
+    QString buildId;
     QString pluginFile;
     QString pluginFileWithPath;
 
     static PDFPluginInfo loadFromJson(const QJsonObject* json);
 };
 using PDFPluginInfos = std::vector<PDFPluginInfo>;
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFPluginTrustDecision
+{
+    bool accepted = false;
+    QString errorCode;
+    QString errorMessage;
+    PDFPluginInfo info;
+};
+
+/// Inspect Qt plugin metadata before QPluginLoader::instance(). Rejects
+/// unsupported ABI, malformed identity, duplicate ids, undeclared capability
+/// tokens, and paths outside the packaged plugin directory.
+PDF4QTLIBCORESHARED_EXPORT PDFPluginTrustDecision inspectPluginManifest(const QJsonObject& qtMetaData,
+                                                                        const QString& pluginPath,
+                                                                        const QString& allowedDirectory,
+                                                                        const QSet<QString>& seenPluginIds,
+                                                                        quint32 expectedAbi = PDF_PLUGIN_ABI_VERSION);
+
+PDF4QTLIBCORESHARED_EXPORT bool pluginPathIsInsideAllowedDirectory(const QString& pluginPath,
+                                                                   const QString& allowedDirectory);
 
 class IPluginDataExchange
 {

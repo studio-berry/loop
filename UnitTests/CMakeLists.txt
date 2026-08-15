@@ -817,6 +817,54 @@ set_target_properties(UnitTestsIdentitySeparation PROPERTIES
 )
 add_test(UnitTestsIdentitySeparation "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsIdentitySeparation")
 
+add_executable(UnitTestsBudgetExhaustion
+    tst_budgetexhaustiontest.cpp
+)
+target_link_libraries(UnitTestsBudgetExhaustion PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsBudgetExhaustion "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsBudgetExhaustion")
+
+add_executable(UnitTestsWorkloadEnvelope
+    tst_workloadenvelopetest.cpp
+)
+target_link_libraries(UnitTestsWorkloadEnvelope PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsWorkloadEnvelope PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsWorkloadEnvelope "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsWorkloadEnvelope")
+
+add_executable(UnitTestsLifecycle
+    tst_lifecycletest.cpp
+)
+target_link_libraries(UnitTestsLifecycle PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test)
+set_target_properties(UnitTestsLifecycle PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsLifecycle "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsLifecycle")
+
+add_executable(UnitTestsPluginAbi
+    tst_pluginabitest.cpp
+)
+target_link_libraries(UnitTestsPluginAbi PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsPluginAbi PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPluginAbi "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPluginAbi")
+
 # windeployqt copies Core/Gui/etc. but not Qt Test; all UnitTests* targets share one output dir.
 if(WIN32)
     add_custom_command(TARGET UnitTests POST_BUILD

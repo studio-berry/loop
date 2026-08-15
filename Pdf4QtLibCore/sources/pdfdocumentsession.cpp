@@ -29,6 +29,7 @@
 #include "pdfprocessingbudget.h"
 
 #include <tuple>
+#include <QtGlobal>
 
 namespace pdf
 {
@@ -145,6 +146,30 @@ void PDFDocumentSession::resetProcessingBudget()
     m_processingBudget->reset();
 }
 
+void PDFDocumentSession::shedPrefetchAndQuality()
+{
+    m_prefetchEnabled = false;
+    m_qualityPercent = qMin(m_qualityPercent, ShedQualityPercent);
+    m_qualityPrefetchShed = true;
+    m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
+    m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
+    trimCachesToLimits();
+}
+
+void PDFDocumentSession::trimCachesToLimits()
+{
+    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() > m_compileCacheLimit)
+    {
+        m_compileCache.erase(m_compileCacheOrder.front());
+        m_compileCacheOrder.pop_front();
+    }
+    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() > m_streamCacheLimit)
+    {
+        m_streamCache.erase(m_streamCacheOrder.front());
+        m_streamCacheOrder.pop_front();
+    }
+}
+
 const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
 {
     if (!isValid())
@@ -170,7 +195,7 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
 
     // Evict before inserting, so the pointer returned below is never the entry
     // this call dropped.
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= CompileCacheLimit)
+    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= m_compileCacheLimit)
     {
         m_compileCache.erase(m_compileCacheOrder.front());
         m_compileCacheOrder.pop_front();
@@ -203,7 +228,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
 
     QByteArray decoded = m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
 
-    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= StreamCacheLimit)
+    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= m_streamCacheLimit)
     {
         m_streamCache.erase(m_streamCacheOrder.front());
         m_streamCacheOrder.pop_front();

@@ -65,10 +65,13 @@ QImage rasterizeMask(const QPainterPath& path,
         || widthReal > static_cast<double>(std::numeric_limits<int>::max())
         || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
-        throw PDFBudgetExceededException({ PDFBudgetKind::RenderPixels,
-                                            static_cast<std::uint64_t>(std::max<qint64>(1, maxRasterPixels)),
-                                            std::numeric_limits<std::uint64_t>::max(),
-                                            context });
+        PDFBudgetExceeded detail;
+        detail.kind = PDFBudgetKind::RenderPixels;
+        detail.pool = budgetPoolFor(detail.kind);
+        detail.limit = static_cast<std::uint64_t>(std::max<qint64>(1, maxRasterPixels));
+        detail.attempted = std::numeric_limits<std::uint64_t>::max();
+        detail.context = context;
+        throw PDFBudgetExceededException(detail);
     }
 
     const int width = std::max(1, static_cast<int>(widthReal));
@@ -76,10 +79,13 @@ QImage rasterizeMask(const QPainterPath& path,
     const qint64 rasterPixels = static_cast<qint64>(width) * static_cast<qint64>(height);
     if (maxRasterPixels > 0 && rasterPixels > maxRasterPixels)
     {
-        throw PDFBudgetExceededException({ PDFBudgetKind::RenderPixels,
-                                            static_cast<std::uint64_t>(maxRasterPixels),
-                                            static_cast<std::uint64_t>(rasterPixels),
-                                            context });
+        PDFBudgetExceeded detail;
+        detail.kind = PDFBudgetKind::RenderPixels;
+        detail.pool = budgetPoolFor(detail.kind);
+        detail.limit = static_cast<std::uint64_t>(maxRasterPixels);
+        detail.attempted = static_cast<std::uint64_t>(rasterPixels);
+        detail.context = context;
+        throw PDFBudgetExceededException(detail);
     }
 
     QImage mask(QSize(width, height), QImage::Format_Grayscale8);

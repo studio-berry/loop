@@ -341,6 +341,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
     QString status;
     QString reason;
     QString budgetKind;
+    QString budgetPool;
     qint64 budgetLimit = 0;
     qint64 budgetAttempted = 0;
     QString budgetContext;

@@ -100,6 +100,16 @@ public:
     void setProcessingLimits(const PDFProcessingLimits& limits);
     void resetProcessingBudget();
 
+    /// Under memory or time pressure, drop prefetch and quality work before
+    /// interaction. Compile/stream cache caps shrink; later compilePage calls
+    /// still succeed, they just retain fewer pages.
+    void shedPrefetchAndQuality();
+    bool prefetchEnabled() const { return m_prefetchEnabled; }
+    int qualityPercent() const { return m_qualityPercent; }
+    bool qualityPrefetchShed() const { return m_qualityPrefetchShed; }
+    size_t compileCacheLimit() const { return m_compileCacheLimit; }
+    size_t streamCacheLimit() const { return m_streamCacheLimit; }
+
     /// Clears all caches. Call this when the underlying document is mutated.
     void invalidate();
 
@@ -114,6 +124,9 @@ public:
     /// another page.
     static constexpr size_t CompileCacheLimit = 8;
     static constexpr size_t StreamCacheLimit = 256;
+    static constexpr size_t ShedCompileCacheLimit = 2;
+    static constexpr size_t ShedStreamCacheLimit = 16;
+    static constexpr int ShedQualityPercent = 25;
 
     /// Low-level access to the renderer and its dependencies. Prefer the
     /// compilePage() helper; these accessors are exposed for tools that need
@@ -147,6 +160,7 @@ private:
     };
 
     void initializeRendering();
+    void trimCachesToLimits();
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
@@ -155,6 +169,11 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
+    size_t m_compileCacheLimit = CompileCacheLimit;
+    size_t m_streamCacheLimit = StreamCacheLimit;
+    bool m_prefetchEnabled = true;
+    int m_qualityPercent = 100;
+    bool m_qualityPrefetchShed = false;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;

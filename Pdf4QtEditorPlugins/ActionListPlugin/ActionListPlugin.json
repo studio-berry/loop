@@ -1,7 +1,15 @@
 {
-    "Name" : "Loupe Action Lists",
-    "Author" : "Loupe",
-    "Version" : "1.0.0",
-    "License" : "MIT",
-    "Description" : "Import, edit, validate, preview, and run reusable Loupe Action Lists."
+    "PluginId": "PDF4QT.ActionListPlugin",
+    "AbiVersion": 1,
+    "Name": "Loupe Action Lists",
+    "Author": "Loupe",
+    "Version": "1.0.0",
+    "License": "MIT",
+    "Description": "Import, edit, validate, preview, and run reusable Loupe Action Lists.",
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation"
+    ],
+    "BuildId": "loupe-0.1.0"
 }

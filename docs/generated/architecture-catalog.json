@@ -1,4 +1,161 @@
 {
+  "architecture_invariants": [
+    {
+      "id": "I01",
+      "test_targets": [
+        "UnitTestsPreflightVerdict"
+      ],
+      "title": "Incomplete inspection cannot reduce to PASS"
+    },
+    {
+      "id": "I02",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProcessingBudget"
+      ],
+      "title": "Budget exhaustion reports INCOMPLETE with exact budget.kind and never PASS"
+    },
+    {
+      "id": "I03",
+      "test_targets": [
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightVerdict"
+      ],
+      "title": "Engine, profile, or document failure is error, never PASS"
+    },
+    {
+      "id": "I04",
+      "test_targets": [
+        "UnitTestsSchemaEvolution"
+      ],
+      "title": "Unsupported schema majors fail closed"
+    },
+    {
+      "id": "I05",
+      "test_targets": [
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
+      ],
+      "title": "Cancellation is terminal and is not success"
+    },
+    {
+      "id": "I06",
+      "test_targets": [
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProfileIdentity"
+      ],
+      "title": "Unresolved profile variables and unsupported scopes are incomplete"
+    },
+    {
+      "id": "I07",
+      "test_targets": [
+        "UnitTestsDocumentSession",
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle"
+      ],
+      "title": "Stale revision results are discarded and are not current"
+    },
+    {
+      "id": "I08",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
+      ],
+      "title": "Provenance events are append-only"
+    },
+    {
+      "id": "I09",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
+      ],
+      "title": "Rollback appends a new event and advances revision"
+    },
+    {
+      "id": "I10",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsRecovery"
+      ],
+      "title": "Recovered or unapproved output is not certified"
+    },
+    {
+      "id": "I11",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsRepairOperation"
+      ],
+      "title": "Save policy matches the declared operation"
+    },
+    {
+      "id": "I12",
+      "test_targets": [
+        "UnitTestsPluginAbi"
+      ],
+      "title": "Malformed or unsupported plugin ABI fails closed before instance()"
+    },
+    {
+      "id": "I13",
+      "test_targets": [
+        "UnitTestsPluginAbi"
+      ],
+      "title": "Plugins load only from the packaged plugin directory by default"
+    },
+    {
+      "id": "I14",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsProcessingBudget"
+      ],
+      "title": "Named budget pools map every kind; exhaustion names the kind"
+    },
+    {
+      "id": "I15",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsEvidenceGraph"
+      ],
+      "title": "An incomplete Evidence Graph cannot reduce to PASS"
+    },
+    {
+      "id": "I16",
+      "test_targets": [
+        "UnitTestsOperationImpact"
+      ],
+      "title": "Unknown or incomplete operation impact forces full revalidation"
+    },
+    {
+      "id": "I17",
+      "test_targets": [
+        "UnitTestsStandardOracle"
+      ],
+      "title": "Standards claims require an independent conversion oracle"
+    },
+    {
+      "id": "I18",
+      "test_targets": [
+        "UnitTestsOverprintRender"
+      ],
+      "title": "Color and overprint renderer measurements stay within golden tolerance"
+    },
+    {
+      "id": "I19",
+      "test_targets": [
+        "UnitTestsJobScheduler",
+        "UnitTestsWorkloadEnvelope"
+      ],
+      "title": "Interaction work still runs when background jobs saturate the scheduler"
+    },
+    {
+      "id": "I20",
+      "test_targets": [
+        "UnitTestsWorkloadEnvelope"
+      ],
+      "title": "Measured envelopes and benchmarks carry run identity fields"
+    }
+  ],
   "branch_policy": {
     "default": "stable",
     "integration": "dev",
@@ -110,6 +267,7 @@
   "sources": [
     "docs/branch-policy.json",
     "docs/version-policy.json",
+    "docs/architecture-invariants.json",
     "Pdf4QtLibCore/sources/preflightengine.cpp",
     "Pdf4QtLibCore/sources/preflightengine.h",
     "docs/preflight-check-catalog-overlay.json",
@@ -130,6 +288,7 @@
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
+    "UnitTestsBudgetExhaustion",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
     "UnitTestsDiagnostics",
@@ -143,6 +302,7 @@
     "UnitTestsIncrementalSave",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
+    "UnitTestsLifecycle",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
@@ -153,6 +313,7 @@
     "UnitTestsOverprintRender",
     "UnitTestsPageMasterExport",
     "UnitTestsPdfToolContract",
+    "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",
@@ -172,7 +333,8 @@
     "UnitTestsStandardOracle",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
-    "UnitTestsUndoRedoManager"
+    "UnitTestsUndoRedoManager",
+    "UnitTestsWorkloadEnvelope"
   ],
   "version_policy": {
     "cmake_format": "MAJOR.MINOR.PATCH",

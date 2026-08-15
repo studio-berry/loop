@@ -58,6 +58,8 @@
 #include "pdfdiagnostics.h"
 
 #include <QMenu>
+#include <QPluginLoader>
+#include <QSet>
 #include <QPrinter>
 #include <QPrintDialog>
 #include <QFormLayout>
@@ -70,6 +72,7 @@
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QApplication>
+#include <QDir>
 #include <QFileDialog>
 #include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
@@ -2834,6 +2837,7 @@ void PDFProgramController::loadPlugins()
 {
     QStringList availablePlugins;
     QDir directory(QApplication::applicationDirPath() + "/" PDF4QT_PLUGINS_RELATIVE_PATH);
+    const QString allowedDirectory = directory.exists() ? directory.canonicalPath() : directory.absolutePath();
 #if defined(Q_OS_WIN)
     availablePlugins = directory.entryList(QStringList("*.dll"));
 #elif defined(Q_OS_UNIX)
@@ -2842,34 +2846,60 @@ void PDFProgramController::loadPlugins()
     static_assert(false, "Implement this for another OS!");
 #endif
 
+    QSet<QString> seenPluginIds;
     for (const QString& availablePlugin : availablePlugins)
     {
         QString pluginFileName = directory.absoluteFilePath(availablePlugin);
-        QPluginLoader loader(pluginFileName);
-        if (loader.load())
+        if (!pdf::pluginPathIsInsideAllowedDirectory(pluginFileName, allowedDirectory))
         {
-            QJsonObject metaData = loader.metaData();
-            m_plugins.emplace_back(pdf::PDFPluginInfo::loadFromJson(&metaData));
-            m_plugins.back().pluginFile = availablePlugin;
-            m_plugins.back().pluginFileWithPath = pluginFileName;
+            qWarning("Skipping plugin outside packaged directory: %s", qUtf8Printable(pluginFileName));
+            continue;
+        }
 
-            QString pluginName = m_plugins.back().name;
-            if (!m_enabledPlugins.contains(pluginName) && !m_loadAllPlugins)
-            {
-                loader.unload();
-                continue;
-            }
+        QPluginLoader loader(pluginFileName);
+        const QJsonObject metaData = loader.metaData();
+        const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(metaData,
+                                                                                pluginFileName,
+                                                                                allowedDirectory,
+                                                                                seenPluginIds);
+        if (!decision.accepted)
+        {
+            qWarning("Rejected plugin %s: %s (%s)",
+                     qUtf8Printable(pluginFileName),
+                     qUtf8Printable(decision.errorCode),
+                     qUtf8Printable(decision.errorMessage));
+            continue;
+        }
 
-            if (m_loadAllPlugins)
-            {
-                m_enabledPlugins << pluginName;
-            }
+        pdf::PDFPluginInfo pluginInfo = decision.info;
+        pluginInfo.pluginFile = availablePlugin;
+        pluginInfo.pluginFileWithPath = pluginFileName;
+        m_plugins.emplace_back(pluginInfo);
+        seenPluginIds.insert(pluginInfo.pluginId);
 
-            pdf::PDFPlugin* plugin = qobject_cast<pdf::PDFPlugin*>(loader.instance());
-            if (plugin)
-            {
-                m_loadedPlugins.push_back(std::make_pair(m_plugins.back(), plugin));
-            }
+        QString pluginName = pluginInfo.name;
+        if (!m_enabledPlugins.contains(pluginName) && !m_loadAllPlugins)
+        {
+            continue;
+        }
+
+        if (m_loadAllPlugins)
+        {
+            m_enabledPlugins << pluginName;
+        }
+
+        if (!loader.load())
+        {
+            qWarning("Failed to load plugin %s: %s",
+                     qUtf8Printable(pluginFileName),
+                     qUtf8Printable(loader.errorString()));
+            continue;
+        }
+
+        pdf::PDFPlugin* plugin = qobject_cast<pdf::PDFPlugin*>(loader.instance());
+        if (plugin)
+        {
+            m_loadedPlugins.push_back(std::make_pair(m_plugins.back(), plugin));
         }
     }
     m_loadAllPlugins = false;

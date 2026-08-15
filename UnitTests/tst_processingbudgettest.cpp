@@ -72,6 +72,8 @@ private slots:
     void elapsedTimeIsCooperativelyChecked();
     void parserObjectDepthUsesConfiguredBudget();
     void sequentialInputIsBoundedBeforeParsing();
+    void namedPoolsMapEveryKind();
+    void evidenceUndoAndRollbackPoolsAreFinite();
 };
 
 void ProcessingBudgetTest::cumulativeDecodedBytesAreDocumentWide()
@@ -94,6 +96,7 @@ void ProcessingBudgetTest::cumulativeDecodedBytesAreDocumentWide()
     catch (const pdf::PDFBudgetExceededException& exception)
     {
         QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::CumulativeDecodedBytes);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::DecodedStreams);
         QCOMPARE(exception.getDetail().limit, uint64_t(15));
         QCOMPARE(exception.getDetail().attempted, uint64_t(16));
     }
@@ -118,6 +121,7 @@ void ProcessingBudgetTest::depthIsBoundedAndTyped()
     catch (const pdf::PDFBudgetExceededException& exception)
     {
         QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::RecursiveContentDepth);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::DocumentModel);
         QCOMPARE(exception.getDetail().attempted, uint64_t(2));
     }
 }
@@ -139,6 +143,7 @@ void ProcessingBudgetTest::elapsedTimeIsCooperativelyChecked()
     catch (const pdf::PDFBudgetExceededException& exception)
     {
         QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::ElapsedTime);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::DocumentModel);
         QCOMPARE(exception.getDetail().limit, uint64_t(10));
     }
 }
@@ -158,6 +163,7 @@ void ProcessingBudgetTest::parserObjectDepthUsesConfiguredBudget()
     catch (const pdf::PDFBudgetExceededException& exception)
     {
         QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::ObjectDepth);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::DocumentModel);
         QCOMPARE(exception.getDetail().limit, uint64_t(1));
         QCOMPARE(exception.getDetail().context, QStringLiteral("PDF object nesting"));
     }
@@ -175,6 +181,68 @@ void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
 
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
     QVERIFY(reader.getErrorMessage().contains(QStringLiteral("input-bytes")));
+}
+
+void ProcessingBudgetTest::namedPoolsMapEveryKind()
+{
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::InputBytes), pdf::PDFBudgetPool::DocumentModel);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::ObjectDepth), pdf::PDFBudgetPool::DocumentModel);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::RecursiveContentDepth), pdf::PDFBudgetPool::DocumentModel);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::ObjectsVisited), pdf::PDFBudgetPool::DocumentModel);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::ElapsedTime), pdf::PDFBudgetPool::DocumentModel);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::SingleDecodedStreamBytes), pdf::PDFBudgetPool::DecodedStreams);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::CumulativeDecodedBytes), pdf::PDFBudgetPool::DecodedStreams);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::DecompressionRatio), pdf::PDFBudgetPool::DecodedStreams);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::RenderOperations), pdf::PDFBudgetPool::RasterTile);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::RenderPixels), pdf::PDFBudgetPool::RasterTile);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::EvidenceRecords), pdf::PDFBudgetPool::EvidenceCache);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::UndoSnapshots), pdf::PDFBudgetPool::Undo);
+    QCOMPARE(pdf::budgetPoolFor(pdf::PDFBudgetKind::RollbackArtifacts), pdf::PDFBudgetPool::Rollback);
+}
+
+void ProcessingBudgetTest::evidenceUndoAndRollbackPoolsAreFinite()
+{
+    pdf::PDFProcessingLimits limits;
+    limits.maxEvidenceRecords = 1;
+    limits.maxUndoSnapshots = 1;
+    limits.maxRollbackArtifacts = 1;
+    pdf::PDFProcessingBudget budget(limits);
+
+    budget.chargeEvidenceRecords(1, QStringLiteral("first"));
+    try
+    {
+        budget.chargeEvidenceRecords(1, QStringLiteral("second"));
+        QFAIL("expected evidence-records budget failure");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::EvidenceRecords);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::EvidenceCache);
+    }
+
+    budget.chargeUndoSnapshot(QStringLiteral("undo-1"));
+    try
+    {
+        budget.chargeUndoSnapshot(QStringLiteral("undo-2"));
+        QFAIL("expected undo-snapshots budget failure");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::UndoSnapshots);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::Undo);
+    }
+
+    budget.chargeRollbackArtifact(QStringLiteral("rollback-1"));
+    try
+    {
+        budget.chargeRollbackArtifact(QStringLiteral("rollback-2"));
+        QFAIL("expected rollback-artifacts budget failure");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::RollbackArtifacts);
+        QCOMPARE(exception.getDetail().pool, pdf::PDFBudgetPool::Rollback);
+    }
 }
 
 QTEST_MAIN(ProcessingBudgetTest)

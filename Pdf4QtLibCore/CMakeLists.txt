@@ -82,6 +82,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfworkloadenvelope.cpp
+    sources/pdfworkloadenvelope.h
     sources/pdfdocumentcontext.cpp
     sources/pdfdocumentcontext.h
     sources/pdfprocessingbudget.cpp
