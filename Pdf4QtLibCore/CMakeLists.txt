@@ -90,6 +90,8 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfjobscheduler.h
     sources/pdfschemaversion.cpp
     sources/pdfschemaversion.h
+    sources/pdfevidencegraph.cpp
+    sources/pdfevidencegraph.h
     sources/preflightengine.cpp
     sources/preflightengine.h
     sources/pdfpreflightverdict.cpp
