@@ -112,6 +112,10 @@ bool appendPreflightProvenance(const QString& documentPath,
     finished.operatorIdentity = QStringLiteral("PdfTool");
     finished.resultSummary = summary;
     finished.createdUtc = QDateTime::currentDateTimeUtc();
+    if (status == pdf::PDFOperationHistoryStatus::Accepted || status == pdf::PDFOperationHistoryStatus::RolledBack)
+    {
+        finished.output = imported.artifact;
+    }
     if (!history.appendEvent(finished))
     {
         if (error)

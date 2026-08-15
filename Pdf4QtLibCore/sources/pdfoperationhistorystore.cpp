@@ -381,8 +381,7 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
         return PDFOperationResult(QStringLiteral("History event identity or approval is invalid."));
     if (!event.createdUtc.isValid())
         event.createdUtc = QDateTime::currentDateTimeUtc();
-    if (event.kind == PDFOperationHistoryEventKind::Operation &&
-        (event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack) && !event.output)
+    if ((event.status == PDFOperationHistoryStatus::Accepted || event.status == PDFOperationHistoryStatus::RolledBack) && !event.output)
     {
         return PDFOperationResult(QStringLiteral("Accepted history events require a durable output artifact."));
     }
