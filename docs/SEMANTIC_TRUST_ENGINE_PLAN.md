@@ -188,9 +188,11 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Wave C (S09–S13) is the scope of this branch: profile identity / restrictions /
-variables, the generated check catalog and coverage matrix, `PDFOperationImpact`
-revalidation planning, the independent conversion oracle lane with a fixture
-triad, and renderer differentials for color/overprint goldens. Product
-`PDF4QT_VERSION` stays **0.1.0**. Wave D (budgets, lifecycle, plugin ABI, S18)
-is not in this change set.
+Wave D (S14–S18) is the scope of this branch: named budget pools and a
+generated exhaustion corpus, huge-document envelopes with prefetch/quality
+shedding, a seeded lifecycle model, plugin ABI inspection before
+`QPluginLoader::instance()`, the upstream divergence register, benchmark
+run identity, and catalog-checked architecture invariants. Product
+`PDF4QT_VERSION` stays **0.1.0** because the 0.1.1 exit checklist is not
+green on `origin/dev` (Waves A–D are still stacked topic branches). See
+[`SEMANTIC_TRUST_ENGINE_EXIT.md`](SEMANTIC_TRUST_ENGINE_EXIT.md).

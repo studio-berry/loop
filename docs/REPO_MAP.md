@@ -34,6 +34,11 @@ and [`VERSIONING.md`](VERSIONING.md). Former 0.0.3–0.0.6 gates are 0.1.1–0.1
 
 ## Upstream tracking policy
 
+Parser, writer, and renderer divergences from upstream PDF4QT are
+recorded in [`UPSTREAM_DIVERGENCE.md`](UPSTREAM_DIVERGENCE.md). Cosmetic
+Loupe-only code does not belong there. Re-run the mapped tests after an
+authorized sync; a clean merge is not verification.
+
 ### Policy: on-demand GitHub Sync fork
 
 Pull upstream changes only when explicitly requested, through GitHub's **Sync
@@ -63,7 +68,8 @@ Resolve documentation conflicts using
 [`architecture-source-of-truth.md`](architecture-source-of-truth.md). The
 generated [`architecture-catalog.json`](generated/architecture-catalog.json)
 emits branch policy names, workflow trigger branches, the Core preflight check
-catalog, registered repair operations, schema versions, and CMake test targets.
+catalog, registered repair operations, schema versions, numbered architecture
+invariants, and CMake test targets.
 CI runs
 `scripts/generate-architecture-catalogs.py --check` so stale narrative or
 catalog claims fail before merge.
