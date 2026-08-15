@@ -70,6 +70,8 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFRevisionIdentity
     QString toString() const;
 };
 
+using PDFRevisionToken = PDFRevisionIdentity;
+
 /// Owns the active document identity and the one revision fence used by
 /// document-bound caches and asynchronous work.
 class PDF4QTLIBCORESHARED_EXPORT PDFDocumentContext : public QObject

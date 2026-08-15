@@ -1,0 +1,115 @@
+{
+  "product_semver_independent": true,
+  "unknown_fields": "passthrough-on-compatible-minor",
+  "unsupported_major": "fail-closed",
+  "kinds": {
+    "preflight-report": {
+      "current": "3.0",
+      "supported_majors": [
+        1,
+        2,
+        3
+      ],
+      "previous": "2.0"
+    },
+    "preflight-profile": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "evidence-graph": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "operation-plan": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "operation-result": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "provenance-event": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "certificate": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "capability-discovery": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "package-manifest": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "action-list": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "pdftool-envelope": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "ocr-report": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    },
+    "history-db": {
+      "current": "3.0",
+      "supported_majors": [
+        2,
+        3
+      ],
+      "previous": "2.0"
+    },
+    "pagemaster-manifest": {
+      "current": "3.0",
+      "supported_majors": [
+        3
+      ],
+      "previous": "3.0"
+    },
+    "preflight-decisions": {
+      "current": "1.0",
+      "supported_majors": [
+        1
+      ],
+      "previous": "1.0"
+    }
+  }
+}

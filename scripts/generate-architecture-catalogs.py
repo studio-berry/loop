@@ -162,6 +162,22 @@ def schema_version_values(value: Any) -> list[int]:
     return []
 
 
+def parse_schema_kinds() -> list[str]:
+    source = read(ROOT / "Pdf4QtLibCore" / "sources" / "pdfschemaversion.cpp")
+    match = re.search(
+        r"QString\s+pdfSchemaKindToString\(PDFSchemaKind kind\)\s*\{(?P<body>.*?)\n\}",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("could not find pdfSchemaKindToString")
+    kinds = unique_sorted(re.findall(r'return QStringLiteral\("([a-z0-9-]+)"\)', match.group("body")))
+    kinds = [kind for kind in kinds if kind != "unknown"]
+    if len(kinds) < 10:
+        raise ValueError("schema kind catalog is incomplete")
+    return kinds
+
+
 def parse_schema_versions() -> dict[str, Any]:
     schemas: dict[str, Any] = {}
     schema_dir = ROOT / "loupe-preflight" / "schemas"
@@ -273,6 +289,7 @@ def build_catalog() -> dict[str, Any]:
         "preflight_checks": parse_preflight_checks(),
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
+        "schema_kinds": parse_schema_kinds(),
         "test_targets": parse_test_targets(),
         "workflow_branches": parse_workflow_branches(),
         "sources": [
@@ -285,6 +302,7 @@ def build_catalog() -> dict[str, Any]:
             "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
             "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
             "loupe-preflight/schemas/*.json",
+            "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
             "UnitTests/CMakeLists.txt",
             ".github/workflows/*.yml",
         ],

@@ -94,6 +94,15 @@ QString incompleteReason(const PreflightResult& result)
     return QStringLiteral("Required inspection evidence was not collected.");
 }
 
+bool isFailClosedIncompleteErrorCode(const QString& errorCode)
+{
+    return errorCode == QLatin1String("unsupported-scope")
+        || errorCode == QLatin1String("unresolved-variable")
+        || errorCode == QLatin1String("budget-exceeded")
+        || errorCode == QLatin1String("evidence-incomplete")
+        || errorCode == QLatin1String("cancelled");
+}
+
 } // namespace
 
 QString preflightVerdictStateToString(PreflightVerdictState state)
@@ -136,8 +145,19 @@ PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
 
     if (!result.errorCode.trimmed().isEmpty())
     {
+        const QString code = result.errorCode.trimmed();
+        if (isFailClosedIncompleteErrorCode(code))
+        {
+            verdict.state = PreflightVerdictState::Incomplete;
+            verdict.reasonCode = code;
+            verdict.reason = result.errorMessage.isEmpty()
+                ? incompleteReason(result)
+                : result.errorMessage;
+            return verdict;
+        }
+
         verdict.state = PreflightVerdictState::Error;
-        verdict.reasonCode = result.errorCode.trimmed();
+        verdict.reasonCode = code;
         verdict.reason = result.errorMessage.isEmpty()
             ? QStringLiteral("The preflight engine could not complete the operation.")
             : result.errorMessage;

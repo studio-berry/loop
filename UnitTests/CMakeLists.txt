@@ -363,6 +363,20 @@ set_target_properties(UnitTestsPreflightVerdict PROPERTIES
 )
 add_test(UnitTestsPreflightVerdict "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPreflightVerdict")
 
+add_executable(UnitTestsSchemaEvolution
+    tst_schemaevolutiontest.cpp
+)
+target_link_libraries(UnitTestsSchemaEvolution PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsSchemaEvolution PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+set_target_properties(UnitTestsSchemaEvolution PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsSchemaEvolution "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsSchemaEvolution")
+
 add_executable(UnitTestsPreflightProfileResolver
     tst_preflightprofileresolvertest.cpp
 )

@@ -71,6 +71,23 @@
       "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
     }
   ],
+  "schema_kinds": [
+    "action-list",
+    "capability-discovery",
+    "certificate",
+    "evidence-graph",
+    "history-db",
+    "ocr-report",
+    "operation-plan",
+    "operation-result",
+    "package-manifest",
+    "pagemaster-manifest",
+    "pdftool-envelope",
+    "preflight-decisions",
+    "preflight-profile",
+    "preflight-report",
+    "provenance-event"
+  ],
   "schema_versions": {
     "json_schemas": {
       "loupe-preflight/schemas/action-list.schema.json": [],
@@ -99,6 +116,7 @@
     "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
     "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
     "loupe-preflight/schemas/*.json",
+    "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"
   ],
@@ -145,6 +163,7 @@
     "UnitTestsRepairOperation",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
+    "UnitTestsSchemaEvolution",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager"
