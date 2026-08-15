@@ -27,7 +27,12 @@
 #include "pdfsafefilewriter.h"
 
 #include <QColorSpace>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSysInfo>
 #include <QImageWriter>
 
 namespace pdftool
@@ -180,9 +185,36 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     formatter.endDocument();
     if (options.outputStyle == PDFOutputFormatter::Style::Json)
     {
+        QJsonObject root = formatter.getJsonObject();
+        QString fixtureDigest = QStringLiteral("unspecified");
+        QFile fixture(options.document);
+        if (fixture.open(QIODevice::ReadOnly))
+        {
+            fixtureDigest = QString::fromLatin1(QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex());
+        }
+        const QString compiler =
+#if defined(__clang__)
+            QStringLiteral("clang");
+#elif defined(__GNUC__)
+            QStringLiteral("g++");
+#else
+            QStringLiteral("unknown");
+#endif
+        root.insert(QStringLiteral("commit"), qEnvironmentVariable("GIT_COMMIT", QStringLiteral("unspecified")));
+        root.insert(QStringLiteral("compiler"), compiler);
+        root.insert(QStringLiteral("os"), QSysInfo::prettyProductName());
+        root.insert(QStringLiteral("qt"), QString::fromLatin1(qVersion()));
+        root.insert(QStringLiteral("cpu"), QSysInfo::currentCpuArchitecture());
+        root.insert(QStringLiteral("renderer"), QStringLiteral("QPainter"));
+        root.insert(QStringLiteral("fixture_digest"), fixtureDigest);
+        root.insert(QStringLiteral("profile_or_operation_version"), QString::fromLatin1(pdf::PDF_LIBRARY_VERSION));
         if (options.executionContext)
         {
-            options.executionContext->setData(formatter.getJsonObject());
+            options.executionContext->setData(root);
+        }
+        else
+        {
+            PDFConsole::writeText(QString::fromUtf8(QJsonDocument(root).toJson()), options.outputCodec);
         }
     }
     else

@@ -165,6 +165,7 @@ private:
         pdf::PDFMeshQualitySettings meshQualitySettings;
         pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
         std::unique_ptr<pdf::PDFRasterizerPool> rasterizerPool;
+        std::unique_ptr<pdf::PDFDocumentContext> authority;
         pdf::PDFRevisionIdentity revision;
     };
 

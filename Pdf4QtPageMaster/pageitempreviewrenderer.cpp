@@ -355,7 +355,8 @@ bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
 
     auto context = std::make_unique<DocumentRenderContext>();
     context->document = &it->second.document;
-    context->revision = pdf::PDFRevisionIdentity { pdf::PDFDocumentIdentity::fromDocument(context->document), 0, m_renderEpoch, QString() };
+    context->authority = std::make_unique<pdf::PDFDocumentContext>(const_cast<pdf::PDFDocument*>(context->document));
+    context->revision = context->authority->getRevision();
     context->fontCache = std::make_unique<pdf::PDFFontCache>(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     context->cmsManager = std::make_unique<pdf::PDFCMSManager>(nullptr);
     context->optionalContentActivity = std::make_unique<pdf::PDFOptionalContentActivity>(context->document, pdf::OCUsage::View, nullptr);
@@ -383,6 +384,15 @@ void PageItemPreviewRenderer::clearPreviewCache()
     m_pendingKeys.clear();
     m_requestQueue.clear();
     ++m_renderEpoch;
+    QMutexLocker guard(&m_contextMutex);
+    for (auto& entry : m_documentContexts)
+    {
+        if (entry.second && entry.second->authority)
+        {
+            entry.second->authority->invalidateCaches();
+            entry.second->revision = entry.second->authority->getRevision();
+        }
+    }
 }
 
 void PageItemPreviewRenderer::pruneRequestQueue()
@@ -668,7 +678,18 @@ void PageItemPreviewRenderer::onRenderFinished()
 
         if (!result.image.isNull())
         {
-            const bool isCurrentResult = result.epoch == m_renderEpoch && result.revision.cacheGeneration == m_renderEpoch;
+            const bool isCurrentResult = result.epoch == m_renderEpoch &&
+                [&]() {
+                    QMutexLocker guard(&m_contextMutex);
+                    for (const auto& entry : m_documentContexts)
+                    {
+                        if (entry.second && entry.second->authority && entry.second->authority->isCurrent(result.revision))
+                        {
+                            return true;
+                        }
+                    }
+                    return result.revision.cacheGeneration == m_renderEpoch;
+                }();
             if (isCurrentResult)
             {
                 const int cost = qMax(1, int(qMin<qint64>(result.image.sizeInBytes(), std::numeric_limits<int>::max())));

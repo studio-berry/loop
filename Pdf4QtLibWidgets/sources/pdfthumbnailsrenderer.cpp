@@ -27,10 +27,10 @@
 #include "pdfconstants.h"
 #include "pdfexecutionpolicy.h"
 #include "pdffont.h"
+#include "pdfjobscheduler.h"
 #include "pdfoptionalcontent.h"
 #include "pdfpainter.h"
 
-#include <QtConcurrent/QtConcurrent>
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -90,7 +90,13 @@ PDFThumbnailsRenderer::PDFThumbnailsRenderer(const PDFDocument* document, QObjec
     m_pageImageCache(THUMBNAIL_CACHE_LIMIT_BYTES),
     m_revision(PDFRevisionIdentity { PDFDocumentIdentity::fromDocument(document), 0, 0, QString() })
 {
-    connect(&m_renderWatcher, &QFutureWatcher<RenderBatchResult>::finished, this, &PDFThumbnailsRenderer::onRenderFinished);
+    connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
+    {
+        if (snapshot.jobId == m_renderJobId)
+        {
+            onRenderFinished();
+        }
+    });
 }
 
 PDFThumbnailsRenderer::~PDFThumbnailsRenderer()
@@ -286,17 +292,32 @@ void PDFThumbnailsRenderer::startNextRequest()
     }
 
     m_renderInProgress = true;
-    m_renderWatcher.setFuture(QtConcurrent::run([this, requests = std::move(requests)]() mutable
+    PDFJobSpec spec;
+    spec.kind = PDFJobKind::Thumbnail;
+    spec.priority = PDFJobPriority::NearViewport;
+    spec.documentKey = currentRevision().document.documentId;
+    spec.documentRevision = currentRevision().toString();
+    spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
+    PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
+    m_renderJobId = PDFJobScheduler::global().submit(spec, [this, requests = std::move(requests)](PDFJobContext& context) mutable
     {
-        return renderBatchAsync(std::move(requests));
-    }));
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+        RenderBatchResult results = renderBatchAsync(std::move(requests));
+        QMutexLocker guard(&m_contextMutex);
+        m_batchResult = std::move(results);
+    });
 }
 
 void PDFThumbnailsRenderer::waitForCurrentRender()
 {
-    if (m_renderWatcher.isRunning())
+    if (!m_renderJobId.isEmpty())
     {
-        m_renderWatcher.waitForFinished();
+        PDFJobScheduler::global().cancel(m_renderJobId);
+        PDFJobScheduler::global().waitForFinished(m_renderJobId, 5000);
+        m_renderJobId.clear();
     }
 
     m_renderInProgress = false;
@@ -431,8 +452,21 @@ PDFThumbnailsRenderer::RenderBatchResult PDFThumbnailsRenderer::renderBatchAsync
 
 void PDFThumbnailsRenderer::onRenderFinished()
 {
-    const RenderBatchResult results = m_renderWatcher.result();
+    PDFJobSnapshot snapshot;
+    RenderBatchResult results;
+    {
+        QMutexLocker guard(&m_contextMutex);
+        snapshot = PDFJobScheduler::global().snapshot(m_renderJobId);
+        results = std::move(m_batchResult);
+        m_batchResult.clear();
+        m_renderJobId.clear();
+    }
     m_renderInProgress = false;
+    if (snapshot.status != PDFJobStatus::Succeeded)
+    {
+        startNextRequest();
+        return;
+    }
 
     for (const RenderResult& result : results)
     {

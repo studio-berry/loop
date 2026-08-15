@@ -79,6 +79,7 @@
 #include <QXmlStreamWriter>
 #include <QMenuBar>
 #include <QComboBox>
+#include <QPluginLoader>
 
 #include "pdfdbgheap.h"
 
@@ -2846,12 +2847,17 @@ void PDFProgramController::loadPlugins()
     {
         QString pluginFileName = directory.absoluteFilePath(availablePlugin);
         QPluginLoader loader(pluginFileName);
+        const QJsonObject metaData = loader.metaData();
+        pdf::PDFPluginInfo pluginInfo = pdf::PDFPluginInfo::loadFromJson(&metaData);
+        pluginInfo.pluginFile = availablePlugin;
+        pluginInfo.pluginFileWithPath = pluginFileName;
+        if (!pluginInfo.isAbiCompatible())
+        {
+            continue;
+        }
         if (loader.load())
         {
-            QJsonObject metaData = loader.metaData();
-            m_plugins.emplace_back(pdf::PDFPluginInfo::loadFromJson(&metaData));
-            m_plugins.back().pluginFile = availablePlugin;
-            m_plugins.back().pluginFileWithPath = pluginFileName;
+            m_plugins.push_back(pluginInfo);
 
             QString pluginName = m_plugins.back().name;
             if (!m_enabledPlugins.contains(pluginName) && !m_loadAllPlugins)

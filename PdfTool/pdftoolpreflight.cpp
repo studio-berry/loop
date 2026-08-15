@@ -26,17 +26,104 @@
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfartifactstore.h"
+#include "pdfjobscheduler.h"
+#include "pdfoperationhistorystore.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUuid>
 
 namespace pdftool
 {
+
+namespace
+{
+
+bool appendPreflightProvenance(const QString& documentPath,
+                               const QByteArray& sourceData,
+                               const QString& revisionDigest,
+                               const QString& profileDigest,
+                               pdf::PDFOperationHistoryStatus status,
+                               const QJsonObject& summary,
+                               QString* error)
+{
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    pdf::PDFArtifactStore artifacts(historyDirectory);
+    const auto imported = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("preflight-input.pdf") });
+    if (!imported.success)
+    {
+        if (error)
+        {
+            *error = imported.errorMessage;
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+    QString historyError;
+    if (!history.open(&historyError) || !history.registerOriginalInput(imported.artifact))
+    {
+        if (error)
+        {
+            *error = historyError.isEmpty() ? QStringLiteral("Could not open preflight history.") : historyError;
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("preflight");
+    execution.operationVersion = 1;
+    execution.input = imported.artifact;
+    QUuid executionId;
+    if (!history.beginExecution(execution, &executionId))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not begin preflight history.");
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.documentRevisionDigest = revisionDigest;
+    running.effectiveProfileDigest = profileDigest;
+    running.operatorIdentity = QStringLiteral("PdfTool");
+    if (!history.appendEvent(running))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not append preflight history start.");
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent finished;
+    finished.executionId = executionId;
+    finished.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    finished.status = status;
+    finished.documentRevisionDigest = revisionDigest;
+    finished.effectiveProfileDigest = profileDigest;
+    finished.operatorIdentity = QStringLiteral("PdfTool");
+    finished.resultSummary = summary;
+    finished.createdUtc = QDateTime::currentDateTimeUtc();
+    if (!history.appendEvent(finished))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not append preflight history result.");
+        }
+        return false;
+    }
+    return true;
+}
+
+} // namespace
 
 namespace
 {
@@ -355,10 +442,47 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
 
-    pdf::PreflightResult result = engine.run(profileJson);
+    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
+
+    pdf::PreflightResult result;
+    pdf::PDFJobScheduler scheduler(1);
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentRevision = revisionDigest;
+    spec.operationId = QStringLiteral("preflight");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    const QString jobId = scheduler.submit(spec, [&engine, &profileJson, &result](pdf::PDFJobContext& context) {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+        result = engine.run(profileJson);
+    });
+    scheduler.waitForFinished(jobId, 300000);
+    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        result.inspectionComplete = false;
+        result.errorCode = QStringLiteral("cancelled");
+        result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
+    }
+    else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        result.inspectionComplete = false;
+        if (result.errorCode.isEmpty())
+        {
+            result.errorCode = QStringLiteral("preflight-job-failed");
+            result.errorMessage = snapshot.errorMessage.isEmpty()
+                ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
+                : snapshot.errorMessage;
+        }
+    }
+
     result.profileResolution = resolved.provenance();
-    result.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
-    result.effectiveProfileDigest = QString::fromLatin1(resolved.effectiveHash);
+    result.documentRevisionDigest = revisionDigest;
+    result.effectiveProfileDigest = profileDigest;
     result.decisions = decisions;
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
@@ -409,6 +533,31 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         options.executionContext->setData(QJsonObject{
             { QStringLiteral("report"), result.toJson(options.document) }
         });
+    }
+
+    pdf::PDFOperationHistoryStatus historyStatus = pdf::PDFOperationHistoryStatus::Accepted;
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        historyStatus = pdf::PDFOperationHistoryStatus::Cancelled;
+    }
+    else if (verdict.state == pdf::PreflightVerdictState::Error || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        historyStatus = pdf::PDFOperationHistoryStatus::Failed;
+    }
+    QString historyError;
+    if (!appendPreflightProvenance(options.document,
+                                   sourceData,
+                                   revisionDigest,
+                                   profileDigest,
+                                   historyStatus,
+                                   result.toJson(options.document),
+                                   &historyError))
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("history.write-failed"),
+                         historyError);
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     return resultExitCode;
