@@ -72,6 +72,7 @@ private slots:
     void elapsedTimeIsCooperativelyChecked();
     void parserObjectDepthUsesConfiguredBudget();
     void sequentialInputIsBoundedBeforeParsing();
+    void namedPoolsReportExactKind();
 };
 
 void ProcessingBudgetTest::cumulativeDecodedBytesAreDocumentWide()
@@ -175,6 +176,25 @@ void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
 
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
     QVERIFY(reader.getErrorMessage().contains(QStringLiteral("input-bytes")));
+}
+
+void ProcessingBudgetTest::namedPoolsReportExactKind()
+{
+    pdf::PDFProcessingLimits limits;
+    limits.maxEvidenceCacheBytes = 8;
+    pdf::PDFProcessingBudget budget(limits);
+    try
+    {
+        budget.chargeEvidenceCacheBytes(16, QStringLiteral("evidence cache"));
+        QFAIL("expected budget exception");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::EvidenceCacheBytes);
+        QCOMPARE(QString::fromLatin1(pdf::getPDFBudgetKindName(exception.getDetail().kind)),
+                 QStringLiteral("evidence-cache-bytes"));
+        QCOMPARE(exception.getDetail().context, QStringLiteral("evidence cache"));
+    }
 }
 
 QTEST_MAIN(ProcessingBudgetTest)

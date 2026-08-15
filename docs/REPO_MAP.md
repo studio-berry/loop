@@ -63,10 +63,15 @@ Resolve documentation conflicts using
 [`architecture-source-of-truth.md`](architecture-source-of-truth.md). The
 generated [`architecture-catalog.json`](generated/architecture-catalog.json)
 emits branch policy names, workflow trigger branches, the Core preflight check
-catalog, registered repair operations, schema versions, and CMake test targets.
-CI runs
+catalog, registered repair operations, schema versions, schema kinds, coverage
+holes, architecture invariants, and CMake test targets. CI runs
 `scripts/generate-architecture-catalogs.py --check` so stale narrative or
 catalog claims fail before merge.
+
+Intentional fork-only behavior is listed in
+[`UPSTREAM_DIVERGENCE.md`](UPSTREAM_DIVERGENCE.md). Update that register in the
+same change that introduces a new divergence, and run the preflight corpus plus
+targeted Core tests before merging an authorized sync.
 
 ## Layout
 

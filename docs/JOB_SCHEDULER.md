@@ -54,20 +54,19 @@ for a newer document revision.
 
 ## Migration inventory
 
-The scheduler contract is landed in Core first so callers can migrate without
-inventing incompatible job types. The following existing call sites are the
-next migration set; they remain intentionally unchanged in this issue because
-each needs an owner-specific result watcher and document-revision binding:
+The scheduler contract is landed in Core. Callers migrate onto `PDFJobScheduler`
+with document-revision binding. Inventory:
 
-| Work | Existing owner | Scheduler kind | Default priority |
-| --- | --- | --- | --- |
-| Page and overlay rendering | `Pdf4QtLibGui`, `Pdf4QtLibWidgets` | `Rendering` | `VisiblePage` |
-| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` |
-| OCR and indexing | Editor plugins / Core | `OCR` | `Background` |
-| PageMaster export | `Pdf4QtPageMaster` | `Export` | `Operator` |
-| Thumbnail generation | `Pdf4QtLibWidgets` | `Thumbnail` | `NearViewport` |
-| Batch analysis | PageMaster / PdfTool | `Batch` | `Background` |
-| Agent context work | future agent surface | `Agent` | `Agent` |
+| Work | Existing owner | Scheduler kind | Default priority | Status |
+| --- | --- | --- | --- | --- |
+| Page and overlay rendering | `Pdf4QtLibGui`, `Pdf4QtLibWidgets` | `Rendering` | `VisiblePage` | remaining (`PDFExecutionPolicy`) |
+| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` | **PdfTool `preflight` migrated**; Editor remaining |
+| OCR and indexing | Editor plugins / Core | `OCR` | `Background` | remaining |
+| PageMaster export | `Pdf4QtPageMaster` | `Export` | `Operator` | remaining |
+| Thumbnail generation | `Pdf4QtLibWidgets` | `Thumbnail` | `NearViewport` | **migrated** |
+| PageMaster preview | `Pdf4QtPageMaster` | `Rendering` | `NearViewport` | revision-fenced via `PDFDocumentContext`; QtConcurrent remaining |
+| Batch analysis | PageMaster / PdfTool | `Batch` | `Background` | remaining |
+| Agent context work | future agent surface | `Agent` | `Agent` | remaining |
 
 This migration boundary is deliberate: the scheduler provides the shared
 arbitration contract, while subsequent caller changes must preserve each

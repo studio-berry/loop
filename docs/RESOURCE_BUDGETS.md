@@ -8,8 +8,10 @@ incomplete operation and must not report a normal pass or successful output.
 
 The conservative defaults bound input bytes, each decoded stream, cumulative
 decoded bytes, decompression ratio, object count, recursive content depth,
-render operations, rendered pixels, and elapsed processing time. The existing
-hard stream-filter ceilings remain active as a second line of defense.
+render operations, rendered pixels, elapsed processing time, and named pools
+for document-model, evidence-cache, raster/tile, undo, and rollback bytes.
+Exhaustion reports `INCOMPLETE` with exact `budget.kind` (see
+`getPDFBudgetKindName()`), never PASS.
 
 Reader input is accumulated in bounded chunks when the source is sequential;
 it is never passed through an unbounded `readAll()` path. Parser object nesting

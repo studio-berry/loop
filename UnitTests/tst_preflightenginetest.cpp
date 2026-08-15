@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
@@ -115,6 +116,9 @@ private slots:
     void run_outputIntent_optionalEmbeddedProfileCanBeAbsent();
     void run_outputIntent_malformedArrayEntryEmitsFinding();
     void run_outputIntent_severityWarningRoutesToWarnings();
+    void parseProfile_readsIdentityFields();
+    void run_emptyRestrictionScopeIsIncomplete();
+    void run_unresolvedVariableIsIncomplete();
 };
 
 namespace
@@ -2048,6 +2052,63 @@ void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()
     QVERIFY(result.errors.isEmpty());
     QCOMPARE(result.warnings.size(), 1);
     QCOMPARE(result.warnings.first().type, QStringLiteral("output-intent-missing"));
+}
+
+void PreflightEngineTest::parseProfile_readsIdentityFields()
+{
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject object{
+        { QStringLiteral("name"), QStringLiteral("Identity") },
+        { QStringLiteral("id"), QStringLiteral("loupe.test.identity") },
+        { QStringLiteral("version"), QStringLiteral("1.2.3") },
+        { QStringLiteral("authored"), QStringLiteral("qa") },
+        { QStringLiteral("derived_from"), QStringLiteral("loupe.test.parent") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    QVERIFY(pdf::PreflightEngine::parseProfile(object, profile, errorMessage));
+    QCOMPARE(profile.id, QStringLiteral("loupe.test.identity"));
+    QCOMPARE(profile.version, QStringLiteral("1.2.3"));
+    QCOMPARE(profile.authored, QStringLiteral("qa"));
+    QCOMPARE(profile.derivedFrom, QStringLiteral("loupe.test.parent"));
+}
+
+void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Restricted") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("scope"), QString() } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unsupported-scope"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Variables") },
+        { QStringLiteral("variables"), QJsonObject{ { QStringLiteral("stock"), QStringLiteral("${stock}") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unresolved-variable"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
 }
 
 QTEST_GUILESS_MAIN(PreflightEngineTest)

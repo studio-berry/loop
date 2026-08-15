@@ -175,6 +175,7 @@ class OverprintRenderTest : public QObject
 private slots:
     void render_data();
     void render();
+    void rendererDifferentialDoesNotDriftBeyondTolerance();
 };
 
 void OverprintRenderTest::render_data()
@@ -202,6 +203,14 @@ void OverprintRenderTest::render()
     const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + fixture, separationSimulation);
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
     compareRender(baseline, actual, expected);
+}
+
+void OverprintRenderTest::rendererDifferentialDoesNotDriftBeyondTolerance()
+{
+    const QString name = QStringLiteral("overprint-cmyk-mode0-off");
+    const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + name + QStringLiteral(".pdf"), false);
+    const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".png"));
+    compareRender(name + QStringLiteral(".png"), actual, expected);
 }
 
 QTEST_APPLESS_MAIN(OverprintRenderTest)

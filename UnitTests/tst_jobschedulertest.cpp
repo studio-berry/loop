@@ -39,6 +39,7 @@ class JobSchedulerTest : public QObject
 private slots:
     void priorityOrdersQueuedJobs();
     void reservesCapacityForInteractionJobs();
+    void interactionRunsWhenBackgroundIsSaturated();
     void allWorkKindsUseOneSubmissionApi();
     void cancellationIsTerminalAndMeasured();
     void staleRevisionIsDiscardedBeforeWorkRuns();
@@ -125,6 +126,48 @@ void JobSchedulerTest::reservesCapacityForInteractionJobs()
 
     QVERIFY(scheduler.waitForFinished(visibleId, 1000));
     QVERIFY(visibleStarted.load(std::memory_order_acquire));
+    QCOMPARE(scheduler.snapshot(secondId).status, pdf::PDFJobStatus::Queued);
+
+    releaseBackground = true;
+    QVERIFY(scheduler.waitForFinished(firstId, 1000));
+    QVERIFY(scheduler.waitForFinished(secondId, 1000));
+}
+
+void JobSchedulerTest::interactionRunsWhenBackgroundIsSaturated()
+{
+    pdf::PDFJobScheduler scheduler(2);
+    std::atomic_bool releaseBackground = false;
+    std::atomic_int backgroundStarted = 0;
+    std::atomic_bool interactionStarted = false;
+
+    auto backgroundWork = [&releaseBackground, &backgroundStarted](pdf::PDFJobContext&)
+    {
+        ++backgroundStarted;
+        while (!releaseBackground.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+    };
+
+    pdf::PDFJobSpec first;
+    first.jobId = QStringLiteral("background-1");
+    first.priority = pdf::PDFJobPriority::Background;
+    const QString firstId = scheduler.submit(first, backgroundWork);
+    pdf::PDFJobSpec second;
+    second.jobId = QStringLiteral("background-2");
+    second.priority = pdf::PDFJobPriority::Background;
+    const QString secondId = scheduler.submit(second, backgroundWork);
+    QTRY_VERIFY_WITH_TIMEOUT(backgroundStarted.load(std::memory_order_acquire) == 1, 1000);
+
+    pdf::PDFJobSpec interaction;
+    interaction.jobId = QStringLiteral("interaction-reserved");
+    interaction.priority = pdf::PDFJobPriority::Interaction;
+    const QString interactionId = scheduler.submit(interaction, [&interactionStarted](pdf::PDFJobContext&)
+                                                   { interactionStarted = true; });
+
+    QVERIFY(scheduler.waitForFinished(interactionId, 1000));
+    QVERIFY(interactionStarted.load(std::memory_order_acquire));
+    QCOMPARE(scheduler.snapshot(interactionId).status, pdf::PDFJobStatus::Succeeded);
     QCOMPARE(scheduler.snapshot(secondId).status, pdf::PDFJobStatus::Queued);
 
     releaseBackground = true;

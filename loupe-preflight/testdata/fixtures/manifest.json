@@ -451,5 +451,23 @@
     "source": "generated",
     "pending": true,
     "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "thin-strokes-hairline",
+    "pdf": "thin-strokes-hairline.pdf",
+    "profile": "testdata/profiles/test-thin-strokes.json",
+    "expect": { "pass": false, "check_ids": ["thin-strokes"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07 corpus row for thin-strokes; generate with LoupeGenerateFixtures."
+  },
+  {
+    "id": "thin-parts-fill",
+    "pdf": "thin-parts-fill.pdf",
+    "profile": "testdata/profiles/test-thin-parts.json",
+    "expect": { "pass": false, "check_ids": ["thin-parts"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07 corpus row for thin-parts; generate with LoupeGenerateFixtures."
   }
 ]
