@@ -28,10 +28,10 @@
 #include "pdfconstants.h"
 #include "pdfrenderer.h"
 #include "pdfdocumentcontext.h"
+#include "pdfjobscheduler.h"
 
 #include <QCache>
 #include <QEvent>
-#include <QFutureWatcher>
 #include <QImage>
 #include <QList>
 #include <QMarginsF>
@@ -165,6 +165,7 @@ private:
         pdf::PDFMeshQualitySettings meshQualitySettings;
         pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
         std::unique_ptr<pdf::PDFRasterizerPool> rasterizerPool;
+        std::unique_ptr<pdf::PDFDocumentContext> authority;
         pdf::PDFRevisionIdentity revision;
     };
 
@@ -210,7 +211,8 @@ private:
     QCache<QString, QImage> m_pageImageCache;
     QSet<QString> m_pendingKeys;
     QList<RenderRequest> m_requestQueue;
-    QFutureWatcher<RenderBatchResult> m_renderWatcher;
+    QString m_renderJobId;
+    RenderBatchResult m_batchResult;
     bool m_renderInProgress = false;
     quint64 m_renderEpoch = 0;
     bool m_scrollInProgress = false;

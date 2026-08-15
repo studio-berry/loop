@@ -92,10 +92,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSortFilterProxyModel>
-#include <QSpinBox>
-#include <QtConcurrent/QtConcurrent>
+#include "pdfjobscheduler.h"
 
+#include <QSpinBox>
 #include <map>
+#include <memory>
 #include <tuple>
 
 namespace pdfpagemaster
@@ -104,21 +105,13 @@ namespace pdfpagemaster
 namespace
 {
 
-bool waitForExportFinishedBounded(QFutureWatcherBase* watcher, int timeoutMs)
+bool waitForExportJob(const QString& jobId, int timeoutMs)
 {
-    if (!watcher || watcher->isFinished())
+    if (jobId.isEmpty())
     {
         return true;
     }
-
-    QEventLoop loop;
-    QObject::connect(watcher, &QFutureWatcherBase::finished, &loop, &QEventLoop::quit);
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(timeoutMs);
-    loop.exec();
-    return watcher->isFinished();
+    return pdf::PDFJobScheduler::global().waitForFinished(jobId, timeoutMs);
 }
 
 } // namespace
@@ -822,7 +815,6 @@ MainWindow::MainWindow(QWidget* parent) :
     m_exportProgressBar(new QProgressBar(this)),
     m_exportProgressLabel(new QLabel(this)),
     m_exportCancelButton(new QPushButton(tr("Cancel"), this)),
-    m_exportWatcher(nullptr),
     m_dropFeedbackLabel(new QLabel(this)),
     m_dropInsertionMarker(new QFrame(this)),
     m_dropFeedbackViewport(nullptr),
@@ -847,6 +839,13 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(m_exportProgress, &pdf::PDFProgress::progressStep, this, &MainWindow::onExportProgressStep, Qt::QueuedConnection);
     connect(m_exportProgress, &pdf::PDFProgress::progressFinished, this, &MainWindow::onExportProgressFinished, Qt::QueuedConnection);
     connect(m_exportCancelButton, &QPushButton::clicked, this, &MainWindow::onExportCancelClicked);
+    connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+    {
+        if (snapshot.jobId == m_exportJobId)
+        {
+            onExportFinished();
+        }
+    });
 
     ui->documentItemsView->setModel(m_filterModel);
     ui->documentItemsView->setItemDelegate(m_delegate);
@@ -1455,19 +1454,33 @@ void MainWindow::onExportProgressFinished()
 
 void MainWindow::onExportFinished()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
-    const pdf::PDFPageMasterExportResult result = m_exportWatcher->result();
-    m_exportWatcher->deleteLater();
-    m_exportWatcher = nullptr;
+    const pdf::PDFJobSnapshot snapshot = pdf::PDFJobScheduler::global().snapshot(m_exportJobId);
+    pdf::PDFPageMasterExportResult result;
+    if (m_exportResult)
+    {
+        result = *m_exportResult;
+    }
+    m_exportJobId.clear();
+    m_exportResult.reset();
+
+    if (m_ignoreExportFinished)
+    {
+        m_ignoreExportFinished = false;
+        return;
+    }
 
     setExportInProgress(false);
     hideExportProgress();
 
-    if (result.cancelled)
+    const bool cancelled = result.cancelled
+        || snapshot.status == pdf::PDFJobStatus::Cancelled
+        || snapshot.status == pdf::PDFJobStatus::Stale;
+    if (cancelled)
     {
         if (result.writtenFiles.isEmpty())
         {
@@ -1480,9 +1493,13 @@ void MainWindow::onExportFinished()
         return;
     }
 
-    if (!result.success)
+    if (snapshot.status != pdf::PDFJobStatus::Succeeded || !result.success)
     {
         QString message = result.errorMessage;
+        if (message.isEmpty())
+        {
+            message = snapshot.errorMessage;
+        }
         if (!result.writtenFiles.isEmpty())
         {
             message += QLatin1Char('\n');
@@ -2356,59 +2373,44 @@ void MainWindow::hideExportProgress()
 void MainWindow::requestExportCancel()
 {
     m_exportCancelToken.requestCancel();
+    if (!m_exportJobId.isEmpty())
+    {
+        pdf::PDFJobScheduler::global().cancel(m_exportJobId);
+    }
 }
 
 void MainWindow::detachExportWatcher()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
-    disconnect(m_exportWatcher, nullptr, this, nullptr);
-    m_exportWatcher->setParent(nullptr);
-    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-            m_exportWatcher, &QObject::deleteLater);
-    m_exportWatcher = nullptr;
+    m_ignoreExportFinished = true;
+    m_exportCancelToken.requestCancel();
+    pdf::PDFJobScheduler::global().cancel(m_exportJobId);
+    m_exportJobId.clear();
 }
 
 void MainWindow::stopExportWatcherBounded()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
+    m_ignoreExportFinished = true;
     m_exportCancelToken.requestCancelAndInvalidateProgress();
-
-    // Disconnect before the nested wait loop so onExportFinished cannot re-enter
-    // during closeEvent / ~MainWindow (UI / QMessageBox during teardown).
-    disconnect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-               this, &MainWindow::onExportFinished);
+    pdf::PDFJobScheduler::global().cancel(m_exportJobId);
     if (m_exportProgress)
     {
         disconnect(m_exportProgress, nullptr, this, nullptr);
     }
 
-    if (waitForExportFinishedBounded(m_exportWatcher, pdf::PDFPageMasterExport::DefaultCancelWaitMs))
+    if (waitForExportJob(m_exportJobId, pdf::PDFPageMasterExport::DefaultCancelWaitMs))
     {
-        delete m_exportWatcher;
-        m_exportWatcher = nullptr;
-        return;
-    }
-
-    // Worker still running past the bounded wait (or finished in the gap below).
-    // Keep PDFProgress alive until the future finishes: progressAlive skips new
-    // callbacks, but a stage that already holds the raw pointer
-    // (e.g. PDFImageOptimizer::optimize) must not observe a destroyed QObject
-    // after MainWindow teardown.
-    disconnect(m_exportWatcher, nullptr, this, nullptr);
-    m_exportWatcher->setParent(nullptr);
-
-    if (m_exportWatcher->isFinished())
-    {
-        delete m_exportWatcher;
-        m_exportWatcher = nullptr;
+        m_exportJobId.clear();
+        m_exportResult.reset();
         return;
     }
 
@@ -2417,12 +2419,14 @@ void MainWindow::stopExportWatcherBounded()
         m_exportProgress->setParent(nullptr);
         QObject* progressKeeper = m_exportProgress;
         m_exportProgress = nullptr;
-        QFutureWatcher<pdf::PDFPageMasterExportResult>* watcher = m_exportWatcher;
-        m_exportWatcher = nullptr;
-        connect(watcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-                watcher, [watcher, progressKeeper]() {
-                    progressKeeper->deleteLater();
-                    watcher->deleteLater();
+        const QString jobId = m_exportJobId;
+        m_exportJobId.clear();
+        connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished,
+                progressKeeper, [progressKeeper, jobId](const pdf::PDFJobSnapshot& snapshot) {
+                    if (snapshot.jobId == jobId)
+                    {
+                        progressKeeper->deleteLater();
+                    }
                 });
     }
     else
@@ -2433,7 +2437,7 @@ void MainWindow::stopExportWatcherBounded()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (m_exportWatcher && !m_exportWatcher->isFinished())
+    if (!m_exportJobId.isEmpty())
     {
         m_exportProgressLabel->setText(tr("Cancelling export..."));
         m_exportProgressLabel->show();
@@ -2693,7 +2697,7 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
         return;
     }
 
-    if (m_exportWatcher)
+    if (!m_exportJobId.isEmpty())
     {
         QMessageBox::warning(this, tr("Export"), tr("Another export is already running."));
         return;
@@ -2813,14 +2817,29 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     m_exportProgressBar->setValue(0);
     m_exportProgressBar->show();
 
-    m_exportWatcher = new QFutureWatcher<pdf::PDFPageMasterExportResult>(this);
-    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished, this, &MainWindow::onExportFinished);
+    auto resultHolder = std::make_shared<pdf::PDFPageMasterExportResult>();
+    m_exportResult = resultHolder;
+    m_ignoreExportFinished = false;
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.operationId = QStringLiteral("pagemaster-export");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
     auto cancelToken = m_exportCancelToken;
-    m_exportWatcher->setFuture(QtConcurrent::run([job = std::move(job), cancelToken]() mutable
+    m_exportJobId = pdf::PDFJobScheduler::global().submit(spec, [job = std::move(job), cancelToken, resultHolder](pdf::PDFJobContext& context) mutable
     {
         Q_UNUSED(cancelToken);
-        return pdf::PDFPageMasterExport::run(std::move(job));
-    }));
+        if (context.isCancellationRequested() && job.cancelFlag)
+        {
+            job.cancelFlag->store(true, std::memory_order_release);
+        }
+        *resultHolder = pdf::PDFPageMasterExport::run(std::move(job));
+        if (context.isCancellationRequested())
+        {
+            resultHolder->cancelled = true;
+            resultHolder->success = false;
+        }
+    });
 }
 
 void MainWindow::splitDocuments()

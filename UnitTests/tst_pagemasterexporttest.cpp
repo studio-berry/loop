@@ -24,6 +24,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfglobal.h"
+#include "pdfjobscheduler.h"
 #include "pdfprogress.h"
 
 #include <QtTest>
@@ -37,6 +38,7 @@
 #include <QFileInfo>
 #include <QFutureWatcher>
 #include <QImage>
+#include <memory>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -49,6 +51,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <functional>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -733,15 +736,39 @@ void PageMasterExportTest::cancel_midOutput_beforeWrite_writesNothing()
     std::atomic_bool cancel{false};
     job.cancelFlag = &cancel;
 
-    QFutureWatcher<pdf::PDFPageMasterExportResult> watcher;
-    watcher.setFuture(QtConcurrent::run([job = std::move(job)]() mutable {
-        return pdf::PDFPageMasterExport::run(std::move(job));
-    }));
+    auto resultHolder = std::make_shared<pdf::PDFPageMasterExportResult>();
+    std::atomic_bool started{false};
+    pdf::PDFJobScheduler scheduler(1);
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.operationId = QStringLiteral("pagemaster-export");
+    const QString jobId = scheduler.submit(spec, [job = std::move(job), resultHolder, &started](pdf::PDFJobContext& context) mutable {
+        started.store(true, std::memory_order_release);
+        while (!context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        }
+        if (job.cancelFlag)
+        {
+            job.cancelFlag->store(true, std::memory_order_release);
+        }
+        *resultHolder = pdf::PDFPageMasterExport::run(std::move(job));
+        if (context.isCancellationRequested())
+        {
+            resultHolder->cancelled = true;
+            resultHolder->success = false;
+        }
+    });
 
-    QTimer::singleShot(0, [&]() { cancel.store(true, std::memory_order_release); });
-    QVERIFY(waitForExportFinishedBounded(&watcher, 5000));
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(jobId));
+    QVERIFY(scheduler.waitForFinished(jobId, 5000));
 
-    const pdf::PDFPageMasterExportResult result = watcher.result();
+    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+    QVERIFY(snapshot.status != pdf::PDFJobStatus::Succeeded);
+    QCOMPARE(snapshot.status, pdf::PDFJobStatus::Cancelled);
+    const pdf::PDFPageMasterExportResult result = *resultHolder;
     QVERIFY(result.cancelled);
     QVERIFY(!result.success);
     QVERIFY(result.writtenFiles.isEmpty());

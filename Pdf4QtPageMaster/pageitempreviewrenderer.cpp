@@ -23,16 +23,16 @@
 #include "pageitempreviewrenderer.h"
 #include "pdfcompiler.h"
 #include "pdfexecutionpolicy.h"
-#include "pdffont.h"
+#include "pdfjobscheduler.h"
 
 #include <QAbstractItemView>
 #include <QEvent>
 #include <QListView>
+#include <QMutexLocker>
 #include <QPainter>
 #include <QPixmap>
 #include <QScrollBar>
 #include <QSortFilterProxyModel>
-#include <QtConcurrent/QtConcurrent>
 #include <cmath>
 #include <limits>
 #include <numeric>
@@ -101,7 +101,13 @@ PageItemPreviewRenderer::PageItemPreviewRenderer(PageItemModel* model, QObject* 
     m_viewportUpdateTimer.setSingleShot(true);
     m_viewportUpdateTimer.setInterval(VIEWPORT_UPDATE_TIMEOUT_MS);
 
-    connect(&m_renderWatcher, &QFutureWatcher<RenderBatchResult>::finished, this, &PageItemPreviewRenderer::onRenderFinished);
+    connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+    {
+        if (snapshot.jobId == m_renderJobId)
+        {
+            onRenderFinished();
+        }
+    });
     connect(&m_viewportUpdateTimer, &QTimer::timeout, this, &PageItemPreviewRenderer::onViewportSettled);
     connect(m_model, &QAbstractItemModel::modelAboutToBeReset, this, &PageItemPreviewRenderer::onModelAboutToBeReset);
     connect(m_model, &QAbstractItemModel::modelReset, this, &PageItemPreviewRenderer::onModelReset);
@@ -355,7 +361,8 @@ bool PageItemPreviewRenderer::ensureDocumentContext(int documentIndex)
 
     auto context = std::make_unique<DocumentRenderContext>();
     context->document = &it->second.document;
-    context->revision = pdf::PDFRevisionIdentity { pdf::PDFDocumentIdentity::fromDocument(context->document), 0, m_renderEpoch, QString() };
+    context->authority = std::make_unique<pdf::PDFDocumentContext>(const_cast<pdf::PDFDocument*>(context->document));
+    context->revision = context->authority->getRevision();
     context->fontCache = std::make_unique<pdf::PDFFontCache>(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
     context->cmsManager = std::make_unique<pdf::PDFCMSManager>(nullptr);
     context->optionalContentActivity = std::make_unique<pdf::PDFOptionalContentActivity>(context->document, pdf::OCUsage::View, nullptr);
@@ -383,6 +390,15 @@ void PageItemPreviewRenderer::clearPreviewCache()
     m_pendingKeys.clear();
     m_requestQueue.clear();
     ++m_renderEpoch;
+    QMutexLocker guard(&m_contextMutex);
+    for (auto& entry : m_documentContexts)
+    {
+        if (entry.second && entry.second->authority)
+        {
+            entry.second->authority->invalidateCaches();
+            entry.second->revision = entry.second->authority->getRevision();
+        }
+    }
 }
 
 void PageItemPreviewRenderer::pruneRequestQueue()
@@ -440,17 +456,36 @@ void PageItemPreviewRenderer::startNextRequest()
     }
 
     m_renderInProgress = true;
-    m_renderWatcher.setFuture(QtConcurrent::run([this, requests = std::move(requests)]() mutable
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Rendering;
+    spec.priority = pdf::PDFJobPriority::NearViewport;
+    spec.operationId = QStringLiteral("pagemaster-preview");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    if (!requests.isEmpty())
     {
-        return renderPreviewBatchAsync(std::move(requests));
-    }));
+        spec.documentRevision = requests.front().revision.toString();
+        spec.documentKey = requests.front().revision.document.documentId;
+        pdf::PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
+    }
+    m_renderJobId = pdf::PDFJobScheduler::global().submit(spec, [this, requests = std::move(requests)](pdf::PDFJobContext& context) mutable
+    {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+        RenderBatchResult results = renderPreviewBatchAsync(std::move(requests));
+        QMutexLocker guard(&m_contextMutex);
+        m_batchResult = std::move(results);
+    });
 }
 
 void PageItemPreviewRenderer::waitForCurrentRender()
 {
-    if (m_renderWatcher.isRunning())
+    if (!m_renderJobId.isEmpty())
     {
-        m_renderWatcher.waitForFinished();
+        pdf::PDFJobScheduler::global().cancel(m_renderJobId);
+        pdf::PDFJobScheduler::global().waitForFinished(m_renderJobId, 5000);
+        m_renderJobId.clear();
     }
 
     m_renderInProgress = false;
@@ -660,15 +695,40 @@ PageItemPreviewRenderer::RenderBatchResult PageItemPreviewRenderer::renderPrevie
 
 void PageItemPreviewRenderer::onRenderFinished()
 {
-    const RenderBatchResult results = m_renderWatcher.result();
+    pdf::PDFJobSnapshot snapshot;
+    RenderBatchResult results;
+    {
+        QMutexLocker guard(&m_contextMutex);
+        snapshot = pdf::PDFJobScheduler::global().snapshot(m_renderJobId);
+        results = std::move(m_batchResult);
+        m_batchResult.clear();
+        m_renderJobId.clear();
+    }
     m_renderInProgress = false;
+    if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        startNextRequest();
+        return;
+    }
+    const auto revisionIsCurrent = [this](const pdf::PDFRevisionIdentity& revision)
+    {
+        QMutexLocker guard(&m_contextMutex);
+        for (const auto& entry : m_documentContexts)
+        {
+            if (entry.second && entry.second->authority && entry.second->authority->isCurrent(revision))
+            {
+                return true;
+            }
+        }
+        return revision.cacheGeneration == m_renderEpoch;
+    };
     for (const RenderResult& result : results)
     {
         m_pendingKeys.remove(result.key);
 
         if (!result.image.isNull())
         {
-            const bool isCurrentResult = result.epoch == m_renderEpoch && result.revision.cacheGeneration == m_renderEpoch;
+            const bool isCurrentResult = result.epoch == m_renderEpoch && revisionIsCurrent(result.revision);
             if (isCurrentResult)
             {
                 const int cost = qMax(1, int(qMin<qint64>(result.image.sizeInBytes(), std::numeric_limits<int>::max())));

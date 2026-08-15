@@ -34,6 +34,7 @@
 #include "pdfsafefilewriter.h"
 #include "pdfdrawspacecontroller.h"
 #include "pdfdrawwidget.h"
+#include "pdfjobscheduler.h"
 #include "pdfuitheme.h"
 #include "pdfwidgetutils.h"
 #include "pdfwidgetutils.h"
@@ -61,6 +62,7 @@
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QMutexLocker>
 #include <QPainter>
 #include <QPen>
 #include <QProcess>
@@ -234,6 +236,10 @@ void LoupePreflightPlugin::setWidget(pdf::PDFWidget* widget)
     m_actionRunPreflight->setEnabled(false);
     m_actionRunPreflight->setToolTip(tr("Runs PdfTool preflight via QProcess (MIC-136)."));
     connect(m_actionRunPreflight, &QAction::triggered, this, &LoupePreflightPlugin::onRunPreflightTriggered);
+    connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+    {
+        onPreflightJobFinished(snapshot);
+    });
 
     m_actionShowPanel = new QAction(QIcon(":/pdfplugins/loupepreflight/preflight.svg"), tr("Show &Report Panel"), this);
     m_actionShowPanel->setObjectName("loupepreflight_ShowPanel");
@@ -266,7 +272,7 @@ void LoupePreflightPlugin::setDocument(const pdf::PDFModifiedDocument& document)
     }
     else if (documentChanged)
     {
-        if (m_preflightProcess)
+        if (isPreflightRunning())
         {
             cancelPreflightRun(true);
         }
@@ -330,7 +336,7 @@ void LoupePreflightPlugin::updateActions()
 
     if (m_actionRunPreflight)
     {
-        m_actionRunPreflight->setEnabled(hasDocument && !m_preflightProcess);
+        m_actionRunPreflight->setEnabled(hasDocument && !isPreflightRunning());
     }
 }
 
@@ -379,7 +385,7 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
                                                   bool ignoreRevisionMatch,
                                                   const QString& reportSourceLabel)
 {
-    if (m_preflightProcess)
+    if (isPreflightRunning())
     {
         return;
     }
@@ -412,37 +418,65 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
 
     m_preflightStdoutBuffer.clear();
     m_preflightStderrBuffer.clear();
+    m_preflightStdout.clear();
+    m_preflightStderr.clear();
+    m_preflightFailedToStart = false;
+    m_preflightExitCode = 0;
+    m_preflightExitStatus = 0;
     m_preflightRunRevision = revisionToMatch;
     m_preflightIgnoreRevision = ignoreRevisionMatch;
     m_preflightReportSourceLabel = reportSourceLabel;
-    m_preflightProcess = new QProcess(this);
-    m_preflightProcess->setProcessChannelMode(QProcess::SeparateChannels);
-    connect(m_preflightProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) { onPreflightProcessFinished(exitCode, static_cast<int>(exitStatus)); });
-    connect(m_preflightProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
-    {
-        if (error == QProcess::FailedToStart)
-        {
-            onPreflightProcessErrorOccurred();
-        }
-    });
-    connect(m_preflightProcess, &QProcess::readyReadStandardOutput, this, &LoupePreflightPlugin::onPreflightStdoutReady);
-    connect(m_preflightProcess, &QProcess::readyReadStandardError, this, &LoupePreflightPlugin::onPreflightStderrReady);
 
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentRevision = QString::number(revisionToMatch);
+    spec.operationId = QStringLiteral("preflight");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    pdf::PDFJobScheduler::global().setCurrentRevision(QStringLiteral("editor-preflight"), spec.documentRevision);
+    spec.documentKey = QStringLiteral("editor-preflight");
+
+    const QString workingDirectory = QCoreApplication::applicationDirPath();
     updateActions();
-    m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath,
-                              { QStringLiteral("preflight"),
-                                stagedPath,
-                                QStringLiteral("--profile"),
-                                profilePath,
-                                QStringLiteral("--console-format"),
-                                QStringLiteral("json") });
+    m_preflightJobId = pdf::PDFJobScheduler::global().submit(spec, [this, pdfToolPath, stagedPath, profilePath, workingDirectory](pdf::PDFJobContext& context)
+    {
+        QProcess process;
+        process.setProcessChannelMode(QProcess::SeparateChannels);
+        process.setWorkingDirectory(workingDirectory);
+        process.start(pdfToolPath,
+                      { QStringLiteral("preflight"),
+                        stagedPath,
+                        QStringLiteral("--profile"),
+                        profilePath,
+                        QStringLiteral("--console-format"),
+                        QStringLiteral("json") });
+        if (!process.waitForStarted(5000))
+        {
+            QMutexLocker locker(&m_preflightResultMutex);
+            m_preflightFailedToStart = true;
+            m_preflightStderr = process.errorString().toLocal8Bit();
+            return;
+        }
+        while (!process.waitForFinished(100))
+        {
+            if (context.isCancellationRequested())
+            {
+                process.kill();
+                process.waitForFinished(3000);
+                return;
+            }
+        }
+        QMutexLocker locker(&m_preflightResultMutex);
+        m_preflightExitCode = process.exitCode();
+        m_preflightExitStatus = static_cast<int>(process.exitStatus());
+        m_preflightStdout = process.readAllStandardOutput();
+        m_preflightStderr = process.readAllStandardError();
+    });
 }
 
 void LoupePreflightPlugin::onRunPreflightTriggered()
 {
-    if (!m_document || m_preflightProcess)
+    if (!m_document || isPreflightRunning())
     {
         return;
     }
@@ -471,60 +505,64 @@ void LoupePreflightPlugin::onRunPreflightTriggered()
         return;
     }
 
-    m_preflightTemporaryDirectory = std::move(temporaryDirectory);
-    m_preflightStdoutBuffer.clear();
-    m_preflightStderrBuffer.clear();
-    m_preflightRunRevision = m_documentRevision;
-    m_preflightIgnoreRevision = false;
-    m_preflightReportSourceLabel.clear();
-    m_preflightProcess = new QProcess(this);
-    m_preflightProcess->setProcessChannelMode(QProcess::SeparateChannels);
-    connect(m_preflightProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) { onPreflightProcessFinished(exitCode, static_cast<int>(exitStatus)); });
-    connect(m_preflightProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error)
-    {
-        if (error == QProcess::FailedToStart)
-        {
-            onPreflightProcessErrorOccurred();
-        }
-    });
-    connect(m_preflightProcess, &QProcess::readyReadStandardOutput, this, &LoupePreflightPlugin::onPreflightStdoutReady);
-    connect(m_preflightProcess, &QProcess::readyReadStandardError, this, &LoupePreflightPlugin::onPreflightStderrReady);
-
-    updateActions();
-    m_preflightProcess->setWorkingDirectory(QCoreApplication::applicationDirPath());
-    m_preflightProcess->start(pdfToolPath,
-                              { QStringLiteral("preflight"),
-                                snapshotPath,
-                                QStringLiteral("--profile"),
-                                profilePath,
-                                QStringLiteral("--console-format"),
-                                QStringLiteral("json") });
+    const QString snapshot = snapshotPath;
+    startPreflightOnFile(snapshot, profilePath, m_documentRevision, false, QString());
 }
 
-void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStatus)
+void LoupePreflightPlugin::onPreflightJobFinished(const pdf::PDFJobSnapshot& snapshot)
 {
-    if (!m_preflightProcess)
+    if (snapshot.jobId != m_preflightJobId)
     {
         return;
     }
 
-    onPreflightStdoutReady();
-    onPreflightStderrReady();
+    int exitCode = 0;
+    int exitStatus = 0;
+    bool failedToStart = false;
+    QByteArray standardOutput;
+    QByteArray standardErrorBytes;
+    {
+        QMutexLocker locker(&m_preflightResultMutex);
+        exitCode = m_preflightExitCode;
+        exitStatus = m_preflightExitStatus;
+        failedToStart = m_preflightFailedToStart;
+        standardOutput = m_preflightStdout;
+        standardErrorBytes = m_preflightStderr;
+    }
 
     const quint64 runRevision = m_preflightRunRevision;
     const bool ignoreRevision = m_preflightIgnoreRevision;
     const QString reportSourceLabel = m_preflightReportSourceLabel;
-    const QByteArray standardOutput = m_preflightStdoutBuffer.takeData();
-    const QString standardError = QString::fromLocal8Bit(m_preflightStderrBuffer.takeData()).trimmed();
     finishPreflightRun();
+
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        return;
+    }
 
     if (!ignoreRevision && runRevision != m_documentRevision)
     {
         return;
     }
 
-    if (exitStatus != QProcess::NormalExit || !preflight::isExpectedPreflightExitCode(exitCode))
+    if (failedToStart || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        const QString error = QString::fromLocal8Bit(standardErrorBytes).trimmed();
+        QMessageBox::critical(m_widget, tr("Loupe Preflight"),
+                              tr("Could not start PdfTool: %1").arg(error.isEmpty() ? snapshot.errorMessage : error));
+        return;
+    }
+
+    if (m_preflightStdoutBuffer.append(standardOutput) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow
+        || m_preflightStderrBuffer.append(standardErrorBytes) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+    {
+        QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Preflight output exceeded the maximum allowed size."));
+        return;
+    }
+    standardOutput = m_preflightStdoutBuffer.takeData();
+    const QString standardError = QString::fromLocal8Bit(m_preflightStderrBuffer.takeData()).trimmed();
+
+    if (exitStatus != static_cast<int>(QProcess::NormalExit) || !preflight::isExpectedPreflightExitCode(exitCode))
     {
         const QString detail = pdfplugin::pdftool::failureDetailFromStdout(
             standardOutput,
@@ -571,44 +609,6 @@ void LoupePreflightPlugin::onPreflightProcessFinished(int exitCode, int exitStat
     }
 }
 
-void LoupePreflightPlugin::onPreflightProcessErrorOccurred()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    const QString error = m_preflightProcess->errorString();
-    finishPreflightRun();
-    QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Could not start PdfTool: %1").arg(error));
-}
-
-void LoupePreflightPlugin::onPreflightStdoutReady()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    if (m_preflightStdoutBuffer.append(m_preflightProcess->readAllStandardOutput()) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
-    {
-        abortPreflightRun(tr("Preflight output exceeded the maximum allowed size."));
-    }
-}
-
-void LoupePreflightPlugin::onPreflightStderrReady()
-{
-    if (!m_preflightProcess)
-    {
-        return;
-    }
-
-    if (m_preflightStderrBuffer.append(m_preflightProcess->readAllStandardError()) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
-    {
-        abortPreflightRun(tr("Preflight diagnostic output exceeded the maximum allowed size."));
-    }
-}
-
 void LoupePreflightPlugin::finishPreflightRun()
 {
     cancelPreflightRun(true);
@@ -617,21 +617,18 @@ void LoupePreflightPlugin::finishPreflightRun()
 
 void LoupePreflightPlugin::cancelPreflightRun(bool silent)
 {
-    if (m_preflightProcess)
+    if (!m_preflightJobId.isEmpty())
     {
-        disconnect(m_preflightProcess, nullptr, this, nullptr);
-        if (m_preflightProcess->state() != QProcess::NotRunning)
-        {
-            m_preflightProcess->kill();
-            m_preflightProcess->waitForFinished(3000);
-        }
-        m_preflightProcess->deleteLater();
-        m_preflightProcess = nullptr;
+        pdf::PDFJobScheduler::global().cancel(m_preflightJobId);
+        pdf::PDFJobScheduler::global().waitForFinished(m_preflightJobId, 5000);
+        m_preflightJobId.clear();
     }
 
     m_preflightTemporaryDirectory.reset();
     m_preflightStdoutBuffer.clear();
     m_preflightStderrBuffer.clear();
+    m_preflightStdout.clear();
+    m_preflightStderr.clear();
     m_preflightRunRevision = 0;
     m_preflightIgnoreRevision = false;
     m_preflightReportSourceLabel.clear();
@@ -1061,7 +1058,7 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
                              tr("Bleed fixup saved to %1. The open document was not modified.")
                                  .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }
@@ -1207,7 +1204,7 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
             .arg(changedImages)
             .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }
@@ -1370,7 +1367,7 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
                                  .arg(changedAreas)
                                  .arg(QDir::toNativeSeparators(outputPath)));
 
-    if (!rerunCheckBox->isChecked() || m_preflightProcess)
+    if (!rerunCheckBox->isChecked() || isPreflightRunning())
     {
         return;
     }

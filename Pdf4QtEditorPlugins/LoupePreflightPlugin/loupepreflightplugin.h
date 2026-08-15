@@ -25,12 +25,14 @@
 
 #include "pdfplugin.h"
 #include "pdfdocumentdrawinterface.h"
+#include "pdfjobscheduler.h"
 #include "preflightsidecarutils.h"
 
 #include <memory>
+#include <QMutex>
+#include <QString>
 
 class QJsonObject;
-class QProcess;
 class QTemporaryDir;
 
 namespace pdfplugin
@@ -89,16 +91,20 @@ private:
     void onRunPreflightTriggered();
     void onShowPanelTriggered(bool checked);
     void onLoadExampleReportTriggered();
-    void onPreflightProcessFinished(int exitCode, int exitStatus);
-    void onPreflightProcessErrorOccurred();
-    void onPreflightStdoutReady();
-    void onPreflightStderrReady();
+    void onPreflightJobFinished(const pdf::PDFJobSnapshot& snapshot);
+    bool isPreflightRunning() const { return !m_preflightJobId.isEmpty(); }
 
     QAction* m_actionRunPreflight = nullptr;
     QAction* m_actionShowPanel = nullptr;
     QAction* m_actionLoadExample = nullptr;
     PreflightReportDockWidget* m_reportDockWidget = nullptr;
-    QProcess* m_preflightProcess = nullptr;
+    QString m_preflightJobId;
+    QMutex m_preflightResultMutex;
+    int m_preflightExitCode = 0;
+    int m_preflightExitStatus = 0;
+    bool m_preflightFailedToStart = false;
+    QByteArray m_preflightStdout;
+    QByteArray m_preflightStderr;
     std::unique_ptr<QTemporaryDir> m_preflightTemporaryDirectory;
     preflight::PreflightSidecarStreamBuffer m_preflightStdoutBuffer{preflight::PREFLIGHT_SIDECAR_STDOUT_MAX_BYTES};
     preflight::PreflightSidecarStreamBuffer m_preflightStderrBuffer{preflight::PREFLIGHT_SIDECAR_STDERR_MAX_BYTES};

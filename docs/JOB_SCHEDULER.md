@@ -54,20 +54,19 @@ for a newer document revision.
 
 ## Migration inventory
 
-The scheduler contract is landed in Core first so callers can migrate without
-inventing incompatible job types. The following existing call sites are the
-next migration set; they remain intentionally unchanged in this issue because
-each needs an owner-specific result watcher and document-revision binding:
+The scheduler contract is landed in Core. Callers migrate onto `PDFJobScheduler`
+with document-revision binding. Inventory:
 
-| Work | Existing owner | Scheduler kind | Default priority |
-| --- | --- | --- | --- |
-| Page and overlay rendering | `Pdf4QtLibGui`, `Pdf4QtLibWidgets` | `Rendering` | `VisiblePage` |
-| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` |
-| OCR and indexing | Editor plugins / Core | `OCR` | `Background` |
-| PageMaster export | `Pdf4QtPageMaster` | `Export` | `Operator` |
-| Thumbnail generation | `Pdf4QtLibWidgets` | `Thumbnail` | `NearViewport` |
-| Batch analysis | PageMaster / PdfTool | `Batch` | `Background` |
-| Agent context work | future agent surface | `Agent` | `Agent` |
+| Work | Existing owner | Scheduler kind | Default priority | Status |
+| --- | --- | --- | --- | --- |
+| Page and overlay rendering | `Pdf4QtLibGui`, `Pdf4QtLibWidgets` | `Rendering` | `VisiblePage` | **page compile and text layout migrated**; remaining overlay tiles stay on `PDFExecutionPolicy` |
+| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` | **PdfTool `preflight` and Editor preflight migrated** |
+| OCR and indexing | Editor plugins / Core | `OCR` | `Background` | remaining (out of S05 scope) |
+| PageMaster export | `Pdf4QtPageMaster` | `Export` | `Operator` | **migrated** |
+| Thumbnail generation | `Pdf4QtLibWidgets` | `Thumbnail` | `NearViewport` | **migrated** |
+| PageMaster preview | `Pdf4QtPageMaster` | `Rendering` | `NearViewport` | **migrated** (revision-fenced) |
+| Batch analysis | PageMaster / PdfTool | `Batch` | `Background` | remaining (out of S05 scope) |
+| Agent context work | future agent surface | `Agent` | `Agent` | remaining |
 
 This migration boundary is deliberate: the scheduler provides the shared
 arbitration contract, while subsequent caller changes must preserve each
@@ -77,6 +76,7 @@ reject new unmanaged long-running work and to track the remaining conversions.
 ## Verification
 
 `UnitTestsJobScheduler` covers stable priority ordering, terminal
-cancellation, measured cancellation latency, stale-revision discard, progress,
-metadata, and trace visibility. The test uses one worker so priority behavior
-is deterministic and does not depend on machine concurrency.
+cancellation (including Export/Preflight operator jobs), measured cancellation
+latency, stale-revision discard, progress, metadata, and trace visibility.
+`PageMasterExportTest::cancel_midOutput_beforeWrite_writesNothing` submits
+export through `PDFJobScheduler` and asserts the snapshot is not `Succeeded`.
