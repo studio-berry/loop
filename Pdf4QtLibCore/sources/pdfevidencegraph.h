@@ -1,0 +1,108 @@
+// MIT License
+//
+// Copyright (c) 2018-2025 Jakub Melka and Contributors
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+#ifndef PDFEVIDENCEGRAPH_H
+#define PDFEVIDENCEGRAPH_H
+
+#include "pdfartifactidentity.h"
+#include "pdfdocumentcontext.h"
+#include "pdfglobal.h"
+
+#include <QFlags>
+#include <QJsonObject>
+#include <QList>
+#include <QRectF>
+#include <QString>
+
+namespace pdf
+{
+
+class PDFDocumentSession;
+
+enum class PDF4QTLIBCORESHARED_EXPORT PDFEvidenceDomain
+{
+    Images = 1 << 0,
+    Colorants = 1 << 1,
+    Strokes = 1 << 2,
+    OverprintTransparency = 1 << 3,
+    Fonts = 1 << 4
+};
+Q_DECLARE_FLAGS(PDFEvidenceDomains, PDFEvidenceDomain)
+
+inline constexpr PDFEvidenceDomains PDFEvidenceAllDomains = PDFEvidenceDomains(
+    PDFEvidenceDomain::Images | PDFEvidenceDomain::Colorants | PDFEvidenceDomain::Strokes |
+    PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Fonts);
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceRecord
+{
+    QString id;
+    QString producer;
+    QString producerVersion;
+    PDFArtifactIdentity artifact;
+    PDFRevisionIdentity revision;
+    PDFEvidenceDomain domain = PDFEvidenceDomain::Images;
+    int page = 1;
+    QString objectId;
+    QString target;
+    qreal observedValue = 0.0;
+    QString units;
+    QRectF geometry;
+    QString coverageMethod;
+    QString fidelity;
+    qreal confidence = 1.0;
+    QString incompleteReason;
+    QString budgetContext;
+    QJsonObject extra;
+
+    bool isComplete() const { return incompleteReason.isEmpty(); }
+    QJsonObject toJson() const;
+};
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceGraph
+{
+    QString producer = QStringLiteral("loupe-evidence-collector");
+    QString producerVersion;
+    PDFArtifactIdentity artifact;
+    PDFRevisionIdentity revision;
+    QList<PDFEvidenceRecord> records;
+    bool complete = true;
+    QString incompleteReason;
+
+    bool isComplete() const { return complete && incompleteReason.isEmpty(); }
+    QList<PDFEvidenceRecord> recordsForDomain(PDFEvidenceDomain domain) const;
+    QJsonObject toJson() const;
+};
+
+class PDF4QTLIBCORESHARED_EXPORT PDFEvidenceCollector
+{
+public:
+    static PDFEvidenceGraph collect(PDFDocumentSession* session,
+                                    PDFEvidenceDomains domains = PDFEvidenceAllDomains);
+};
+
+PDF4QTLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
+
+} // namespace pdf
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFEvidenceDomains)
+
+#endif // PDFEVIDENCEGRAPH_H

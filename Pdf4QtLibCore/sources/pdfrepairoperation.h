@@ -25,6 +25,7 @@
 
 #include "pdfrepairdiff.h"
 #include "pdfsavepolicy.h"
+#include "pdfoperationimpact.h"
 
 #if defined(_MSC_VER)
 #pragma push_macro("analyze")
@@ -186,6 +187,11 @@ public:
     virtual PDFOperationSavePolicy savePolicy() const
     {
         return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+    }
+    /// Unknown or incomplete impact forces full revalidation.
+    virtual PDFOperationImpact impact() const
+    {
+        return PDFOperationImpact();
     }
     /// True when this registered operation may be advertised by preflight as
     /// an operator-facing fixup. Keeping this metadata on the operation makes

@@ -1,0 +1,23 @@
+{
+  "schema_kind": "preflight-report",
+  "schema_version": 3,
+  "pass": true,
+  "inspection_complete": true,
+  "profile": "golden",
+  "errors": [],
+  "warnings": [],
+  "fixups_available": [],
+  "checks": [
+    {
+      "id": "bleed",
+      "status": "passed"
+    }
+  ],
+  "verdict": {
+    "state": "pass",
+    "reason_code": "no-blocking-findings",
+    "reason": "ok",
+    "blocking_finding_ids": [],
+    "waived_finding_ids": []
+  }
+}
