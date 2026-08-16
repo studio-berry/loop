@@ -188,7 +188,7 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Wave B (S06–S08) is the scope of this branch: Evidence Graph types, one collector walk, five-family graph evaluation, and golden-corpus parity (with `evidence_ids` stripped from snapshots). Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (profiles, oracles, hostile load, lifecycle, plugin ABI, S18) land on sibling branches stacked from `cursor/s00-m0-plan-0158`.
+Wave B (S06–S08) is the scope of this branch: Evidence Graph types, one collector walk, five-family graph evaluation, and golden-corpus parity (with `evidence_ids` stripped from snapshots). Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (profiles, oracles, hostile load, lifecycle, plugin ABI, S18) land on sibling branches stacked from `cursor/s00-m0-plan-0158`. Wave A (S00–S05) substrate is already integrated on the base branch.
 
 Audited 2026-08-15 against the canonical Notion [Roadmap](https://www.notion.so/38f9cb079ddb804a96dbe26b8d86e84f) **0.1.1 exit gate** (all boxes still unchecked there — correct, this milestone is not operator-accepted) and current code on this branch.
 
@@ -212,7 +212,7 @@ Notion 0.1.1 exit gate × code:
 
 Session leftovers (do not treat Cursor checkmarks as truth):
 
-- **S05 remainder.** Overlay tile rendering stays on `PDFExecutionPolicy`. OCR, batch analysis, and agent jobs remain out of scope.
+- **S05 remainder.** Overlay tile rendering stays on `PDFExecutionPolicy`. OCR, batch analysis, and agent jobs remain out of scope. Cancelled scheduler work must not report `Succeeded` / `verdict.state = pass`.
 - **S07 remainder.** `thin-strokes-hairline` and `thin-parts-fill` corpus rows are `pending: true` (fixtures not generated). Dual-run parity is not closed for those families.
 - **S08.** Image-resolution still walks annotation `/AP` streams the collector does not visit (`preflightengine.cpp`). Start S08 only after the collector covers those appearances without changing corpus findings. Then evaluate the graph only and delete the five-family walkers.
 - **S11.** Declare complete `PDFOperationImpact` on repair ops where true; prove targeted ≡ full on a qualification corpus. Until then, incomplete → full revalidation stays the safe default.
