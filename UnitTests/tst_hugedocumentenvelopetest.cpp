@@ -70,18 +70,18 @@ void HugeDocumentEnvelopeTest::generatedEnvelopeRecordsIdentityAndStaysBounded()
 void HugeDocumentEnvelopeTest::budgetExhaustionReportsExactKind()
 {
     pdf::PDFProcessingLimits limits;
-    limits.maxRasterTileBytes = 4;
+    limits.maxRenderPixels = 4;
     pdf::PDFProcessingBudget budget(limits);
     try
     {
-        budget.chargeRasterTileBytes(16, QStringLiteral("raster"));
+        budget.chargeRenderPixels(16, QStringLiteral("raster"));
         QFAIL("expected budget exception");
     }
     catch (const pdf::PDFBudgetExceededException& exception)
     {
-        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::RasterTileBytes);
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::RenderPixels);
         QCOMPARE(QString::fromLatin1(pdf::getPDFBudgetKindName(exception.getDetail().kind)),
-                 QStringLiteral("raster-tile-bytes"));
+                 QStringLiteral("render-pixels"));
     }
 }
 

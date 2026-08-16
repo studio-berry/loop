@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 #include "pdfpreflightverdict.h"
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
@@ -2059,15 +2060,17 @@ void PreflightEngineTest::parseProfile_readsIdentityFields()
         { QStringLiteral("name"), QStringLiteral("Identity") },
         { QStringLiteral("id"), QStringLiteral("loupe.test.identity") },
         { QStringLiteral("version"), QStringLiteral("1.2.3") },
-        { QStringLiteral("authored"), QStringLiteral("qa") },
-        { QStringLiteral("derived_from"), QStringLiteral("loupe.test.parent") },
+        { QStringLiteral("authored"), QJsonObject{ { QStringLiteral("by"), QStringLiteral("qa") } } },
+        { QStringLiteral("derived_from"), QJsonObject{ { QStringLiteral("id"), QStringLiteral("loupe.test.parent") } } },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
     };
     QVERIFY(pdf::PreflightEngine::parseProfile(object, profile, errorMessage));
     QCOMPARE(profile.id, QStringLiteral("loupe.test.identity"));
     QCOMPARE(profile.version, QStringLiteral("1.2.3"));
-    QCOMPARE(profile.authored, QStringLiteral("qa"));
-    QCOMPARE(profile.derivedFrom, QStringLiteral("loupe.test.parent"));
+
+    const pdf::PreflightProfileIdentity identity = pdf::identifyPreflightProfile(object);
+    QCOMPARE(identity.authored.value(QStringLiteral("by")).toString(), QStringLiteral("qa"));
+    QCOMPARE(identity.derivedFrom.value(QStringLiteral("id")).toString(), QStringLiteral("loupe.test.parent"));
 }
 
 void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()
