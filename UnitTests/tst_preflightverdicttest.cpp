@@ -34,7 +34,14 @@ private slots:
     void budgetExceededWithoutFindings_isIncomplete();
     void activeWaiver_isPassAndRecorded();
     void engineError_isError();
+    void unsupportedScopeErrorCode_isIncomplete();
+    void unresolvedVariableErrorCode_isIncomplete();
+    void cancelledErrorCode_isIncomplete();
+    void budgetExceededErrorCode_isIncomplete();
     void reportPassIsDerivedFromVerdict();
+    void incompleteInspectionWithoutFindings_isNotPass();
+    void cancellationMarkedIncomplete_isNotPass();
+    void requiredCheckMissingStatus_isIncomplete();
 };
 
 namespace
@@ -52,7 +59,7 @@ pdf::PreflightFinding blockingFinding()
     return finding;
 }
 
-} // namespace
+}   // namespace
 
 void PreflightVerdictTest::emptyCompleteInspection_isPass()
 {
@@ -76,15 +83,14 @@ void PreflightVerdictTest::budgetExceededWithoutFindings_isIncomplete()
 {
     pdf::PreflightResult result;
     result.inspectionComplete = false;
-    result.checkStatuses.append({
-        QStringLiteral("ink-coverage"),
-        QStringLiteral("incomplete"),
-        QStringLiteral("budget-exceeded"),
-        QStringLiteral("raster-pixels"),
-        100,
-        101,
-        QStringLiteral("page 1")
-    });
+    result.checkStatuses.append({ QStringLiteral("ink-coverage"),
+                                  QStringLiteral("incomplete"),
+                                  QStringLiteral("budget-exceeded"),
+                                  QStringLiteral("raster-pixels"),
+                                  QStringLiteral("raster-tile"),
+                                  100,
+                                  101,
+                                  QStringLiteral("page 1") });
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -113,7 +119,7 @@ void PreflightVerdictTest::activeWaiver_isPassAndRecorded()
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Pass);
     QCOMPARE(verdict.reasonCode, QStringLiteral("blocking-findings-waived"));
-    QCOMPARE(verdict.waivedFindingIds, QStringList{decision.findingId});
+    QCOMPARE(verdict.waivedFindingIds, QStringList{ decision.findingId });
 }
 
 void PreflightVerdictTest::engineError_isError()
@@ -128,6 +134,59 @@ void PreflightVerdictTest::engineError_isError()
     QCOMPARE(verdict.reason, result.errorMessage);
 }
 
+void PreflightVerdictTest::unsupportedScopeErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("unsupported-scope");
+    result.errorMessage = QStringLiteral("Profile scope is empty or unsupported.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("unsupported-scope"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::unresolvedVariableErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("unresolved-variable");
+    result.errorMessage = QStringLiteral("Profile variable 'stock' is unresolved.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("unresolved-variable"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::cancelledErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("cancelled");
+    result.errorMessage = QStringLiteral("Preflight was cancelled.");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("cancelled"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::budgetExceededErrorCode_isIncomplete()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.errorCode = QStringLiteral("budget-exceeded");
+    result.errorMessage = QStringLiteral("RasterTile");
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("budget-exceeded"));
+    QCOMPARE(verdict.reason, QStringLiteral("RasterTile"));
+    QVERIFY(!verdict.isPass());
+}
+
 void PreflightVerdictTest::reportPassIsDerivedFromVerdict()
 {
     pdf::PreflightResult result;
@@ -138,6 +197,56 @@ void PreflightVerdictTest::reportPassIsDerivedFromVerdict()
     QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
              QStringLiteral("incomplete"));
     QVERIFY(!report.value(QStringLiteral("pass")).toBool());
+}
+
+void PreflightVerdictTest::incompleteInspectionWithoutFindings_isNotPass()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.pass = true;
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("inspection-incomplete"));
+    QVERIFY(!verdict.isPass());
+    QVERIFY(!result.toJson().value(QStringLiteral("pass")).toBool());
+}
+
+void PreflightVerdictTest::cancellationMarkedIncomplete_isNotPass()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = false;
+    result.checkStatuses.append({ QStringLiteral("image-resolution"),
+                                  QStringLiteral("incomplete"),
+                                  QStringLiteral("cancelled"),
+                                  QString(),
+                                  QString(),
+                                  0,
+                                  0,
+                                  QStringLiteral("operator cancel") });
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("cancelled"));
+    QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::requiredCheckMissingStatus_isIncomplete()
+{
+    pdf::PreflightProfileData profile;
+    pdf::PreflightCheckConfig check;
+    check.id = QStringLiteral("image-resolution");
+    check.required = true;
+    check.enabled = true;
+    profile.checks.append(check);
+
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result, &profile);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(verdict.reasonCode, QStringLiteral("required-check-not-run"));
+    QVERIFY(!verdict.isPass());
 }
 
 QTEST_APPLESS_MAIN(PreflightVerdictTest)

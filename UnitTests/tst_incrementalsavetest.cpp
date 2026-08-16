@@ -36,6 +36,7 @@ private slots:
     void rejectsChangedSourceBytes();
     void selectsSafeWritePolicy();
     void explicitPoliciesCannotBeDowngradedToIncremental();
+    void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
 };
 
 namespace
@@ -176,6 +177,24 @@ void IncrementalSaveTest::explicitPoliciesCannotBeDowngradedToIncremental()
     QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&document, newArtifact, false),
              pdf::PDFDocumentWriter::WriteMode::FullRewrite);
     QCOMPARE(QString::fromLatin1(pdf::getPDFSaveModeName(newArtifact.mode)), QStringLiteral("save-as-new-artifact"));
+}
+
+void IncrementalSaveTest::unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend()
+{
+    const pdf::PDFOperationSavePolicy unclassified = pdf::PDFOperationSavePolicy::saveAsNewArtifact(
+        QStringLiteral("operation did not declare a save policy"));
+    QCOMPARE(unclassified.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+
+    const pdf::PDFOperationSavePolicy incremental = pdf::PDFOperationSavePolicy::incrementalAppend(
+        QStringLiteral("ordinary edit"));
+    const pdf::PDFOperationSavePolicy redaction = pdf::PDFOperationSavePolicy::fullRewrite(
+        QStringLiteral("redaction"));
+    const pdf::PDFOperationSavePolicy merged = pdf::mergePDFSavePolicies(incremental, redaction);
+    QCOMPARE(merged.mode, pdf::PDFSaveMode::FullRewrite);
+    QVERIFY(merged.invalidatesSignatures);
+
+    const pdf::PDFOperationSavePolicy mergedUnclassified = pdf::mergePDFSavePolicies(incremental, unclassified);
+    QCOMPARE(mergedUnclassified.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
 }
 
 QTEST_MAIN(IncrementalSaveTest)

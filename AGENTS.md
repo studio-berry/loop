@@ -41,5 +41,6 @@ Approval is required for:
 - Core PDF logic belongs in `Pdf4QtLibCore`; it must not depend on Widgets.
 - Interactive plugins belong in `Pdf4QtEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.
 - Consult the generated architecture catalog and current code/tests for dynamic facts; narrative docs are not authoritative when they conflict.
+- Record parser/writer/renderer divergences from upstream PDF4QT in `docs/UPSTREAM_DIVERGENCE.md`. Cosmetic Loupe-only code does not belong there.
 
 Generated adapter: `AGENTS.md`.

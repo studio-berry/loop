@@ -30,19 +30,18 @@
 #include "pdfactionlist.h"
 #include "pdfproductiongeometry.h"
 #include "pdfprogress.h"
+#include "pdfjobscheduler.h"
 
 #include "pageitemmodel.h"
 #include "pageitemdelegate.h"
 
 #include <QMainWindow>
-#include <QFutureWatcher>
 #include <QJsonObject>
 #include <QList>
 #include <QPoint>
 #include <QSignalMapper>
 #include <QStringList>
 #include <QUrl>
-
 #include <memory>
 
 namespace Ui
@@ -261,7 +260,9 @@ private:
     QProgressBar* m_exportProgressBar;
     QLabel* m_exportProgressLabel;
     QPushButton* m_exportCancelButton;
-    QFutureWatcher<pdf::PDFPageMasterExportResult>* m_exportWatcher;
+    QString m_exportJobId;
+    std::shared_ptr<pdf::PDFPageMasterExportResult> m_exportResult;
+    bool m_ignoreExportFinished = false;
     pdf::PDFPageMasterExportCancelToken m_exportCancelToken;
     QLabel* m_dropFeedbackLabel;
     QFrame* m_dropInsertionMarker;
@@ -299,4 +300,4 @@ private:
 
 }   // namespace pdfpagemaster
 
-#endif // PDFPAGEMASTER_MAINWINDOW_H
+#endif   // PDFPAGEMASTER_MAINWINDOW_H

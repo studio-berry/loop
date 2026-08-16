@@ -86,11 +86,16 @@ QString logLevelName(PDFLogSession::Level level)
 {
     switch (level)
     {
-        case PDFLogSession::Off: return QStringLiteral("off");
-        case PDFLogSession::Error: return QStringLiteral("error");
-        case PDFLogSession::Warning: return QStringLiteral("warning");
-        case PDFLogSession::Info: return QStringLiteral("info");
-        case PDFLogSession::Debug: return QStringLiteral("debug");
+        case PDFLogSession::Off:
+            return QStringLiteral("off");
+        case PDFLogSession::Error:
+            return QStringLiteral("error");
+        case PDFLogSession::Warning:
+            return QStringLiteral("warning");
+        case PDFLogSession::Info:
+            return QStringLiteral("info");
+        case PDFLogSession::Debug:
+            return QStringLiteral("debug");
     }
     return QStringLiteral("unknown");
 }
@@ -140,6 +145,8 @@ QJsonObject buildPlugins(const PDFPluginInfos& plugins)
     {
         QJsonObject entry;
         entry[QStringLiteral("name")] = plugin.name;
+        entry[QStringLiteral("pluginId")] = plugin.pluginId;
+        entry[QStringLiteral("abiVersion")] = static_cast<int>(plugin.abiVersion);
         entry[QStringLiteral("author")] = plugin.author;
         entry[QStringLiteral("version")] = plugin.version;
         entry[QStringLiteral("license")] = plugin.license;
@@ -191,13 +198,13 @@ PDFDiagnosticsResult PDFDiagnosticsCollector::collect(const PDFDiagnosticsOption
     }
 
     const QString applicationId = options.applicationId.isEmpty()
-        ? QCoreApplication::applicationName()
-        : options.applicationId;
+                                      ? QCoreApplication::applicationName()
+                                      : options.applicationId;
     const QString applicationSlug = sanitizeForDirectoryName(applicationId);
     const QString timestamp = QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss"));
     const QString bundleDirectory = options.destinationPath.isEmpty()
-        ? QDir(options.outputDirectory).filePath(QStringLiteral("loupe-diagnostics-%1-%2").arg(applicationSlug, timestamp))
-        : QFileInfo(options.destinationPath).absoluteFilePath();
+                                        ? QDir(options.outputDirectory).filePath(QStringLiteral("loupe-diagnostics-%1-%2").arg(applicationSlug, timestamp))
+                                        : QFileInfo(options.destinationPath).absoluteFilePath();
     QDir outputDirectory(QFileInfo(bundleDirectory).absolutePath());
     if (!outputDirectory.exists() && !QDir().mkpath(outputDirectory.absolutePath()))
     {

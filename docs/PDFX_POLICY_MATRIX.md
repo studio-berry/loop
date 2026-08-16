@@ -27,7 +27,10 @@ The registry is intentionally auditable and versioned in
 `pdfx.overprint.inspectable`, and `pdfx.annotation.forbidden-action`.
 
 Each rule returns `passed`, `failed`, `not-inspected`, or `not-applicable` plus
-JSON evidence. Mandatory failures reduce the result to `non-conformant`;
+JSON evidence. The generated coverage matrix (`preflight_coverage` in
+[`generated/architecture-catalog.json`](generated/architecture-catalog.json))
+lists which Core checks feed the Evidence Graph families and which remaining
+checks are explicit coverage holes. Mandatory failures reduce the result to `non-conformant`;
 mandatory missing evidence reduces it to `incomplete`; only an all-pass
 mandatory set can produce `conformant`. A definite failure takes precedence
 over unrelated incomplete rules.

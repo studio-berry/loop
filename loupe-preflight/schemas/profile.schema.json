@@ -12,10 +12,90 @@
       "const": 1,
       "description": "Profile contract version. Bump only with a coordinated engine + plugin release."
     },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Stable profile identity. Combined with version for human identification; content digest is authoritative."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this profile's policy content."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of canonical semantic content. Import rejects a mismatch rather than repairing it."
+    },
+    "authored": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "by": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      }
+    },
+    "derived_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Provenance chain when a profile is forked from another.",
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "restrictions": { "$ref": "#/$defs/restrictions" },
+    "variables": {
+      "type": "object",
+      "description": "Declared typed variables. Whole-value ${name} substitution preserves JSON type; there are no expressions or nesting.",
+      "additionalProperties": { "$ref": "#/$defs/variable" }
+    },
     "name": {
       "type": "string",
       "minLength": 1,
       "description": "Human-readable profile name (also referenced by report.profile)."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable profile identity (not the display name)."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Profile version string; combined with id for effective identity."
+    },
+    "authored": {
+      "type": "string",
+      "description": "Attribution for who authored this profile."
+    },
+    "derived_from": {
+      "type": "string",
+      "description": "Optional parent profile identity this profile was derived from."
+    },
+    "schema_kind": {
+      "type": "string",
+      "const": "preflight-profile"
+    },
+    "restrictions": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Supported restriction scope. Empty or unsupported values fail closed as incomplete."
+        }
+      }
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean"]
+      },
+      "description": "Typed job-spec variables. Unresolved ${placeholders} fail closed."
     },
     "description": {
       "type": "string",
@@ -70,6 +150,58 @@
       "type": "string",
       "enum": ["error", "warning", "info"],
       "description": "Finding severity when the check fails. Defaults to error if omitted."
+    },
+    "restrictions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Inspection scope. Check-level restrictions can only narrow profile-level restrictions.",
+      "properties": {
+        "pages": {
+          "type": "string",
+          "pattern": "^([0-9]+(-[0-9]+)?)(,[0-9]+(-[0-9]+)?)*$",
+          "description": "1-based inclusive ranges, e.g. \"1,4-8\"."
+        },
+        "page_box": { "enum": ["media", "crop", "trim", "bleed", "art"] },
+        "regions": { "type": "array", "items": { "$ref": "#/$defs/region" } },
+        "layers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "OCG names; content outside these layers is out of scope."
+        },
+        "object_classes": {
+          "type": "array",
+          "items": { "enum": ["text", "image", "vector", "annotation", "shading", "form"] }
+        }
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "rect_pt"],
+      "properties": {
+        "name": { "type": "string" },
+        "rect_pt": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "anchor": { "enum": ["media", "crop", "trim", "bleed"], "default": "trim" },
+        "mode": { "enum": ["include", "exclude"], "default": "include" }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["string", "number", "integer", "boolean"] },
+        "default": true,
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "required": { "type": "boolean", "default": false },
+        "description": { "type": "string" }
+      }
     },
     "check": {
       "type": "object",
@@ -246,7 +378,8 @@
             "$ref": "#/$defs/severity"
           },
           "description": "Optional severity overrides keyed by thin-parts class."
-        }
+        },
+        "restrictions": { "$ref": "#/$defs/restrictions" }
       },
       "additionalProperties": true,
       "allOf": [

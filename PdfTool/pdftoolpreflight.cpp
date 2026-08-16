@@ -26,14 +26,19 @@
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfartifactstore.h"
+#include "pdfjobscheduler.h"
+#include "pdfoperationhistorystore.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUuid>
 
 namespace pdftool
 {
@@ -41,11 +46,155 @@ namespace pdftool
 namespace
 {
 
+bool appendPreflightProvenance(const QString& documentPath,
+                               const QByteArray& sourceData,
+                               const QString& revisionDigest,
+                               const QString& profileDigest,
+                               pdf::PDFOperationHistoryStatus status,
+                               const QJsonObject& summary,
+                               QString* error)
+{
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    pdf::PDFArtifactStore artifacts(historyDirectory);
+    const auto imported = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("preflight-input.pdf") });
+    if (!imported.success)
+    {
+        if (error)
+        {
+            *error = imported.errorMessage;
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryStore history(QDir(historyDirectory).filePath(QStringLiteral("history.sqlite3")));
+    QString historyError;
+    if (!history.open(&historyError) || !history.registerOriginalInput(imported.artifact))
+    {
+        if (error)
+        {
+            *error = historyError.isEmpty() ? QStringLiteral("Could not open preflight history.") : historyError;
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("preflight");
+    execution.operationVersion = 1;
+    execution.input = imported.artifact;
+    QUuid executionId;
+    if (!history.beginExecution(execution, &executionId))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not begin preflight history.");
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.documentRevisionDigest = revisionDigest;
+    running.effectiveProfileDigest = profileDigest;
+    running.operatorIdentity = QStringLiteral("PdfTool");
+    if (!history.appendEvent(running))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not append preflight history start.");
+        }
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent finished;
+    finished.executionId = executionId;
+    finished.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    finished.status = status;
+    finished.documentRevisionDigest = revisionDigest;
+    finished.effectiveProfileDigest = profileDigest;
+    finished.operatorIdentity = QStringLiteral("PdfTool");
+    finished.resultSummary = summary;
+    finished.createdUtc = QDateTime::currentDateTimeUtc();
+    if (status == pdf::PDFOperationHistoryStatus::Accepted || status == pdf::PDFOperationHistoryStatus::RolledBack)
+    {
+        finished.output = imported.artifact;
+    }
+    if (!history.appendEvent(finished))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Could not append preflight history result.");
+        }
+        return false;
+    }
+    return true;
+}
+
 static PDFToolPreflightApplication s_preflightApplication;
 
 bool loadProfileJson(const QString& profilePath, QJsonObject& profile, QString& errorMessage)
 {
     return pdf::PreflightEngine::loadProfile(profilePath, profile, errorMessage);
+}
+
+bool parseAssignment(const QString& assignment, QString* key, QJsonValue* value, QString* error)
+{
+    const int separator = assignment.indexOf(QLatin1Char('='));
+    if (separator <= 0)
+    {
+        if (error)
+        {
+            *error = PDFToolTranslationContext::tr("Profile parameter '%1' must use key=value.").arg(assignment);
+        }
+        return false;
+    }
+    *key = assignment.left(separator).trimmed();
+    const QString parameterValue = assignment.mid(separator + 1).trimmed();
+    if (key->isEmpty())
+    {
+        if (error)
+        {
+            *error = PDFToolTranslationContext::tr("Profile parameter keys may not be empty.");
+        }
+        return false;
+    }
+    if (parameterValue.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0)
+    {
+        *value = true;
+    }
+    else if (parameterValue.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0)
+    {
+        *value = false;
+    }
+    else
+    {
+        bool integerOk = false;
+        const qlonglong integer = parameterValue.toLongLong(&integerOk);
+        if (integerOk)
+        {
+            *value = QJsonValue(static_cast<double>(integer));
+        }
+        else
+        {
+            bool realOk = false;
+            const double real = parameterValue.toDouble(&realOk);
+            *value = realOk ? QJsonValue(real) : QJsonValue(parameterValue);
+        }
+    }
+    return true;
+}
+
+QJsonObject parseCliBindings(const QStringList& assignments, QString* error)
+{
+    QJsonObject bindings;
+    for (const QString& assignment : assignments)
+    {
+        QString key;
+        QJsonValue value;
+        if (!parseAssignment(assignment, &key, &value, error))
+        {
+            return {};
+        }
+        bindings.insert(key, value);
+    }
+    return bindings;
 }
 
 bool loadJobContext(const QString& contextPath, pdf::PreflightJobContext& context, QString& errorMessage)
@@ -80,12 +229,7 @@ bool loadJobContext(const QString& contextPath, pdf::PreflightJobContext& contex
 
 bool hasDirectContext(const PDFToolOptions& options)
 {
-    return !options.preflightClientId.isEmpty()
-        || !options.preflightProductId.isEmpty()
-        || !options.preflightJobType.isEmpty()
-        || !options.preflightPressId.isEmpty()
-        || !options.preflightStockId.isEmpty()
-        || !options.preflightFinishingId.isEmpty();
+    return !options.preflightClientId.isEmpty() || !options.preflightProductId.isEmpty() || !options.preflightJobType.isEmpty() || !options.preflightPressId.isEmpty() || !options.preflightStockId.isEmpty() || !options.preflightFinishingId.isEmpty();
 }
 
 QString defaultProfileStorePath()
@@ -127,7 +271,7 @@ bool loadDecisions(const QString& decisionsPath,
     if (parseError.error != QJsonParseError::NoError || !document.isObject())
     {
         errorMessage = PDFToolTranslationContext::tr("Invalid decisions JSON in '%1': %2")
-            .arg(decisionsPath, parseError.errorString());
+                           .arg(decisionsPath, parseError.errorString());
         return false;
     }
 
@@ -168,8 +312,7 @@ bool hasActiveSignoffForFinding(const pdf::PreflightFinding& finding,
     const pdf::PreflightDecision* latest = nullptr;
     for (const pdf::PreflightDecision& decision : decisions)
     {
-        if (decision.findingId != finding.stableId()
-            || (latest && decision.timestampUtc < latest->timestampUtc))
+        if (decision.findingId != finding.stableId() || (latest && decision.timestampUtc < latest->timestampUtc))
         {
             continue;
         }
@@ -179,7 +322,7 @@ bool hasActiveSignoffForFinding(const pdf::PreflightFinding& finding,
     return latest && latest->countsForSignoff(documentDigest, profileDigest);
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolPreflightApplication::getStandardString(StandardString standardString) const
 {
@@ -233,9 +376,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         return PDFToolExitCode::InvalidInvocation;
     }
 
-    const bool hasContextInput = !options.preflightJobContextPath.isEmpty()
-        || hasDirectContext(options)
-        || !options.preflightProfileStorePath.isEmpty();
+    const bool hasContextInput = !options.preflightJobContextPath.isEmpty() || hasDirectContext(options) || !options.preflightProfileStorePath.isEmpty();
     if (!options.preflightProfilePath.isEmpty() && hasContextInput)
     {
         reportDiagnostic(options,
@@ -245,7 +386,19 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         return PDFToolExitCode::InvalidInvocation;
     }
 
+    QString bindingError;
+    const QJsonObject cliBindings = parseCliBindings(options.preflightParameterAssignments, &bindingError);
+    if (!bindingError.isEmpty())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         bindingError);
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     QJsonObject profileJson;
+    QJsonObject authoredProfile;
     pdf::PreflightResolvedProfile resolved;
     pdf::PreflightProfileResolver resolver;
     QString profileError;
@@ -259,15 +412,41 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                              profileError);
             return PDFToolExitCode::InvalidInvocation;
         }
-        resolved = resolver.resolveExplicitProfile(profileJson,
+        const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(profileJson, options.preflightProfilePath);
+        if (!imported.ok)
+        {
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             imported.errorCode,
+                             imported.errorMessage);
+            return PDFToolExitCode::InvalidInvocation;
+        }
+        authoredProfile = imported.profile;
+        const pdf::PreflightVariableBindResult bound = pdf::bindPreflightProfileVariables(authoredProfile, QJsonObject(), cliBindings);
+        if (!bound.ok)
+        {
+            pdf::PreflightResult result;
+            result.inspectionComplete = false;
+            result.errorCode = bound.errorCode;
+            result.errorMessage = bound.errorMessage;
+            result.profileName = authoredProfile.value(QStringLiteral("name")).toString(QStringLiteral("Unresolved profile"));
+            result.variableBindings = bound.bindings;
+            result.profileIdentity = imported.identity.toJson();
+            if (options.executionContext)
+            {
+                options.executionContext->setData(QJsonObject{
+                    { QStringLiteral("report"), result.toJson(options.document) } });
+            }
+            return PDFToolExitCode::PreflightIncomplete;
+        }
+        resolved = resolver.resolveExplicitProfile(bound.profile,
                                                    QFileInfo(options.preflightProfilePath).completeBaseName(),
-                                                   QStringLiteral("explicit"));
+                                                   imported.identity.version.isEmpty() ? QStringLiteral("explicit") : imported.identity.version);
     }
     else
     {
         pdf::PreflightJobContext context;
-        if (!options.preflightJobContextPath.isEmpty()
-            && !loadJobContext(options.preflightJobContextPath, context, profileError))
+        if (!options.preflightJobContextPath.isEmpty() && !loadJobContext(options.preflightJobContextPath, context, profileError))
         {
             reportDiagnostic(options,
                              PDFToolDiagnosticSeverity::Error,
@@ -276,8 +455,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             return PDFToolExitCode::InvalidInvocation;
         }
 
-        auto overrideContext = [](const QString& value, QString& target) {
-            if (!value.isEmpty()) target = value;
+        auto overrideContext = [](const QString& value, QString& target)
+        {
+            if (!value.isEmpty())
+                target = value;
         };
         overrideContext(options.preflightClientId, context.clientId);
         overrideContext(options.preflightProductId, context.productId);
@@ -287,8 +468,8 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         overrideContext(options.preflightFinishingId, context.finishingId);
 
         const QString storePath = options.preflightProfileStorePath.isEmpty()
-            ? defaultProfileStorePath()
-            : options.preflightProfileStorePath;
+                                      ? defaultProfileStorePath()
+                                      : options.preflightProfileStorePath;
         if (storePath.isEmpty())
         {
             profileError = PDFToolTranslationContext::tr("No profile store found. Use --profile-store <directory> or --profile <file.json>.");
@@ -334,16 +515,36 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         if (options.executionContext)
         {
             options.executionContext->setData(QJsonObject{
-                { QStringLiteral("report"), result.toJson(options.document) }
-            });
+                { QStringLiteral("report"), result.toJson(options.document) } });
         }
         const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
         return verdict.state == pdf::PreflightVerdictState::Error
-            ? PDFToolExitCode::PreflightError
-            : PDFToolExitCode::PreflightIncomplete;
+                   ? PDFToolExitCode::PreflightError
+                   : PDFToolExitCode::PreflightIncomplete;
     }
 
-    profileJson = resolved.effectiveProfile;
+    QJsonObject jobSpec;
+    const QJsonObject runProfile = authoredProfile.isEmpty() ? resolved.effectiveProfile : authoredProfile;
+    if (authoredProfile.isEmpty())
+    {
+        const pdf::PreflightVariableBindResult bound = pdf::bindPreflightProfileVariables(runProfile, jobSpec, cliBindings);
+        if (!bound.ok)
+        {
+            pdf::PreflightResult result;
+            result.inspectionComplete = false;
+            result.errorCode = bound.errorCode;
+            result.errorMessage = bound.errorMessage;
+            result.profileName = runProfile.value(QStringLiteral("name")).toString(QStringLiteral("Unresolved profile"));
+            result.variableBindings = bound.bindings;
+            result.profileResolution = resolved.provenance();
+            if (options.executionContext)
+            {
+                options.executionContext->setData(QJsonObject{
+                    { QStringLiteral("report"), result.toJson(options.document) } });
+            }
+            return PDFToolExitCode::PreflightIncomplete;
+        }
+    }
 
     pdf::PDFDocument document;
     QByteArray sourceData;
@@ -355,10 +556,47 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     pdf::PDFDocumentSession session(&document);
     pdf::PreflightEngine engine(&session);
 
-    pdf::PreflightResult result = engine.run(profileJson);
+    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
+
+    pdf::PreflightResult result;
+    pdf::PDFJobScheduler scheduler(1);
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentRevision = revisionDigest;
+    spec.operationId = QStringLiteral("preflight");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, &result](pdf::PDFJobContext& context)
+                                           {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+        result = engine.run(runProfile, jobSpec, cliBindings); });
+    scheduler.waitForFinished(jobId, 300000);
+    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        result.inspectionComplete = false;
+        result.errorCode = QStringLiteral("cancelled");
+        result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
+    }
+    else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        result.inspectionComplete = false;
+        if (result.errorCode.isEmpty())
+        {
+            result.errorCode = QStringLiteral("preflight-job-failed");
+            result.errorMessage = snapshot.errorMessage.isEmpty()
+                                      ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
+                                      : snapshot.errorMessage;
+        }
+    }
+
     result.profileResolution = resolved.provenance();
-    result.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
-    result.effectiveProfileDigest = QString::fromLatin1(resolved.effectiveHash);
+    result.documentRevisionDigest = revisionDigest;
+    result.effectiveProfileDigest = profileDigest;
     result.decisions = decisions;
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
@@ -378,6 +616,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         case pdf::PreflightVerdictState::Error:
             resultExitCode = PDFToolExitCode::PreflightError;
             break;
+    }
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        resultExitCode = PDFToolExitCode::Cancelled;
     }
     if (options.preflightRequireSignoff && verdict.state == pdf::PreflightVerdictState::Fail)
     {
@@ -407,8 +649,32 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     if (options.executionContext)
     {
         options.executionContext->setData(QJsonObject{
-            { QStringLiteral("report"), result.toJson(options.document) }
-        });
+            { QStringLiteral("report"), result.toJson(options.document) } });
+    }
+
+    pdf::PDFOperationHistoryStatus historyStatus = pdf::PDFOperationHistoryStatus::Accepted;
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        historyStatus = pdf::PDFOperationHistoryStatus::Cancelled;
+    }
+    else if (verdict.state == pdf::PreflightVerdictState::Error || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    {
+        historyStatus = pdf::PDFOperationHistoryStatus::Failed;
+    }
+    QString historyError;
+    if (!appendPreflightProvenance(options.document,
+                                   sourceData,
+                                   revisionDigest,
+                                   profileDigest,
+                                   historyStatus,
+                                   result.toJson(options.document),
+                                   &historyError))
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("history.write-failed"),
+                         historyError);
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     return resultExitCode;

@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentsession.h"
+#include "pdfevidencegraph.h"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -33,6 +34,7 @@
 #include <QList>
 #include <QMap>
 #include <QRectF>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -124,14 +126,45 @@ PDF4QTLIBCORESHARED_EXPORT QStringList supportedPDFXTargets();
 
 /// Resolves a target name to the audited policy registry entry.
 PDF4QTLIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
-                                                     PDFXPolicy& policy,
-                                                     QString& errorMessage);
+                                                    PDFXPolicy& policy,
+                                                    QString& errorMessage);
 
 /// Reduces mandatory PDF/X rule states. A definite failure takes precedence
 /// over missing evidence; a mandatory not-applicable rule is incomplete.
 PDF4QTLIBCORESHARED_EXPORT PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
                                                                   QStringList* failedRuleIds = nullptr,
                                                                   QStringList* incompleteRuleIds = nullptr);
+
+/// Named rectangle in PDF points, anchored to a page box.
+struct PDF4QTLIBCORESHARED_EXPORT PreflightRegion
+{
+    QString name;
+    QRectF rectPt;
+    QString anchor = QStringLiteral("trim");
+    QString mode = QStringLiteral("include");
+};
+
+/// Profile- or check-level inspection scope. Check restrictions can only narrow
+/// the profile. Empty or unsupported scope fails closed as incomplete.
+struct PDF4QTLIBCORESHARED_EXPORT PreflightRestrictions
+{
+    std::optional<QSet<int>> pages;
+    std::optional<QString> pageBox;
+    QVector<PreflightRegion> regions;
+    std::optional<QSet<QString>> layers;
+    std::optional<QSet<QString>> objectClasses;
+    QString unsupportedReason;
+
+    bool isUnrestricted() const;
+    bool hasUnsupportedScope() const;
+    PreflightRestrictions intersect(const PreflightRestrictions& narrower) const;
+    bool allowsPage(int pageIndex) const;
+    QJsonObject toJson() const;
+};
+
+PDF4QTLIBCORESHARED_EXPORT bool parsePreflightRestrictions(const QJsonObject& object,
+                                                           PreflightRestrictions& restrictions,
+                                                           QString& errorMessage);
 
 /// Configuration for a single preflight check, parsed from a profile.
 struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
@@ -190,6 +223,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckConfig
     // inspection surface; clipped parts and negative space are opt-in.
     QStringList thinPartClasses;
     QMap<QString, QString> thinPartSeverityByClass;
+    PreflightRestrictions restrictions;
 };
 
 /// Configuration for a single advertised fixup, parsed from a profile.
@@ -214,6 +248,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightFinding
     QRectF bbox;
     QString checkId;
     QJsonObject evidence;
+    QStringList evidenceIds;
 
     /// Stable identity for this finding. The identity excludes translated
     /// message text and geometry so it survives locale changes and fixups.
@@ -284,6 +319,16 @@ PDF4QTLIBCORESHARED_EXPORT bool preflightDecisionsFromJson(const QJsonObject& ob
 struct PDF4QTLIBCORESHARED_EXPORT PreflightProfileData
 {
     QString name;
+    QString id;
+    QString version;
+    bool provisional = false;
+    QString sourcePath;
+    QString fileDigest;
+    QString effectiveDigest;
+    PreflightRestrictions restrictions;
+    QJsonObject profileIdentity;
+    QJsonObject coverageScope;
+    QJsonArray variableBindings;
     QList<PreflightCheckConfig> checks;
     QList<PreflightFixupConfig> fixups;
     std::optional<PDFXPolicy> pdfx;
@@ -296,6 +341,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightCheckStatus
     QString status;
     QString reason;
     QString budgetKind;
+    QString budgetPool;
     qint64 budgetLimit = 0;
     qint64 budgetAttempted = 0;
     QString budgetContext;
@@ -316,6 +362,9 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightResult
     QList<PreflightCheckStatus> checkStatuses;
     std::optional<PDFXConformanceResult> pdfx;
     QJsonObject profileResolution;
+    QJsonObject profileIdentity;
+    QJsonObject coverageScope;
+    QJsonArray variableBindings;
     QString documentRevisionDigest;
     QString effectiveProfileDigest;
     QList<PreflightDecision> decisions;
@@ -348,10 +397,16 @@ public:
 
     /// Runs the profile against the document session and returns findings plus
     /// the advertised fixups. Errors (severity "error") cause pass == false.
+    /// Job-spec and CLI bindings are applied after import/digest verification
+    /// so an authored digest is checked against unbound content.
     PreflightResult run(const QJsonObject& profile);
+    PreflightResult run(const QJsonObject& profile,
+                        const QJsonObject& jobSpecBindings,
+                        const QJsonObject& cliBindings);
     PreflightResult run(const PreflightProfileData& profile);
 
     PDFDocumentSession* getSession() const;
+    const PDFEvidenceGraph& lastEvidenceGraph() const;
 
     /// Loads a profile JSON file. On error, returns false and writes a message
     /// to \p errorMessage.
@@ -366,8 +421,9 @@ private:
 
     PDFDocumentSession* m_session;
     std::map<QString, CheckRunner> m_checks;
+    PDFEvidenceGraph m_activeGraph;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PREFLIGHTENGINE_H
+#endif   // PREFLIGHTENGINE_H

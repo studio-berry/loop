@@ -63,10 +63,8 @@ bool readRepairDocument(const PDFToolOptions& options,
                         QByteArray* sourceData,
                         QString* error)
 {
-    pdf::PDFDocumentReader reader(nullptr,
-                                  [&options](bool*) { return options.password; },
-                                  options.permissiveReading,
-                                  false);
+    pdf::PDFDocumentReader reader(nullptr, [&options](bool*)
+                                  { return options.password; }, options.permissiveReading, false);
     *document = reader.readFromFile(options.repairFiles.first());
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -204,7 +202,7 @@ int unexpectedChangeCount(const pdf::PDFRepairDiffReport& report)
     return count;
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolRepair::getStandardString(StandardString standardString) const
 {
@@ -252,7 +250,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.operation-unsupported"),
                          PDFToolTranslationContext::tr("Repair operation '%1' is not registered.").arg(options.repairOperationId),
-                         QJsonObject{{QStringLiteral("operation"), options.repairOperationId}});
+                         QJsonObject{ { QStringLiteral("operation"), options.repairOperationId } });
         return PDFToolExitCode::InputError;
     }
 
@@ -277,7 +275,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (!readRepairDocument(options, &source, &sourceData, &readError))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), readError,
-                         QJsonObject{{QStringLiteral("path"), options.repairFiles.first()}});
+                         QJsonObject{ { QStringLiteral("path"), options.repairFiles.first() } });
         return PDFToolExitCode::InputError;
     }
 
@@ -308,9 +306,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         { QStringLiteral("command"), QStringLiteral("repair") },
         { QStringLiteral("operation"), options.repairOperationId },
         { QStringLiteral("input"), QJsonObject{
-            { QStringLiteral("path"), options.repairFiles.first() },
-            { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) }
-        } },
+                                       { QStringLiteral("path"), options.repairFiles.first() },
+                                       { QStringLiteral("sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) } } },
         { QStringLiteral("plans"), plansJson(transaction.plans()) },
         { QStringLiteral("results"), resultsJson(transaction.results()) }
     };
@@ -381,7 +378,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     pdf::PDFDocument candidateDocument;
     QByteArray candidateData;
     {
-        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false);
+        pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                      { return QString(); }, false, false);
         candidateDocument = reader.readFromFile(candidatePath);
         candidateData = reader.getSource();
         if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
@@ -407,7 +405,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         if (verdict.state == pdf::PreflightVerdictState::Incomplete)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
-            reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{QStringLiteral("postflight-incomplete")});
+            reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{ QStringLiteral("postflight-incomplete") });
             if (!options.repairAllowIncomplete)
             {
                 reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
@@ -434,9 +432,8 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     else
     {
         reportJson.insert(QStringLiteral("postflight"), QJsonObject{
-            { QStringLiteral("status"), QStringLiteral("not-run") },
-            { QStringLiteral("reason"), QStringLiteral("no-profile-supplied") }
-        });
+                                                            { QStringLiteral("status"), QStringLiteral("not-run") },
+                                                            { QStringLiteral("reason"), QStringLiteral("no-profile-supplied") } });
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
                          PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
@@ -479,9 +476,9 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loupe-history");
     pdf::PDFArtifactStore historyArtifacts(historyDirectory);
     const auto historyInput = historyArtifacts.importBytes(sourceData,
-                                                            { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
+                                                           { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
     const auto historyOutput = historyArtifacts.importBytes(candidateData,
-                                                             { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
+                                                            { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
     if (!historyInput.success || !historyOutput.success)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.artifact-failed"),
@@ -512,7 +509,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     }
     pdf::PDFOperationHistoryEvent historyRunning;
     historyRunning.executionId = historyExecutionId;
+    historyRunning.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyRunning.status = pdf::PDFOperationHistoryStatus::Running;
+    historyRunning.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    historyRunning.operatorIdentity = QStringLiteral("PdfTool");
     if (!operationHistory.appendEvent(historyRunning))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
@@ -524,8 +524,16 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         options.repairOutputDocument, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
+        pdf::PDFOperationHistoryEvent historyFailed;
+        historyFailed.executionId = historyExecutionId;
+        historyFailed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
+        historyFailed.status = pdf::PDFOperationHistoryStatus::Failed;
+        historyFailed.documentRevisionDigest = historyRunning.documentRevisionDigest;
+        historyFailed.operatorIdentity = QStringLiteral("PdfTool");
+        historyFailed.resultSummary = QJsonObject{ { QStringLiteral("error"), writeResult.getErrorMessage() } };
+        operationHistory.appendEvent(historyFailed);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), writeResult.getErrorMessage(),
-                         QJsonObject{{QStringLiteral("path"), options.repairOutputDocument}});
+                         QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -537,28 +545,28 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::ProcessingFailure;
     }
     finalFile.close();
-    pdf::PDFDocumentReader finalReader(nullptr, [](bool*) { return QString(); }, false, false);
+    pdf::PDFDocumentReader finalReader(nullptr, [](bool*)
+                                       { return QString(); }, false, false);
     finalReader.readFromFile(options.repairOutputDocument);
     if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.output-unreadable"),
                          PDFToolTranslationContext::tr("The committed repair output could not be reopened."),
-                         QJsonObject{{QStringLiteral("path"), options.repairOutputDocument}});
+                         QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
     }
     const QString outputSha256 = QString::fromLatin1(QCryptographicHash::hash(candidateData, QCryptographicHash::Sha256).toHex());
     reportJson.insert(QStringLiteral("status"), QStringLiteral("passed"));
     reportJson.insert(QStringLiteral("output"), QJsonObject{
-        { QStringLiteral("path"), options.repairOutputDocument },
-        { QStringLiteral("sha256"), outputSha256 }
-    });
+                                                    { QStringLiteral("path"), options.repairOutputDocument },
+                                                    { QStringLiteral("sha256"), outputSha256 } });
     reportJson.insert(QStringLiteral("history"), QJsonObject{
-        { QStringLiteral("sidecar"), historyDirectory },
-        { QStringLiteral("database"), operationHistory.databasePath() }
-    });
+                                                     { QStringLiteral("sidecar"), historyDirectory },
+                                                     { QStringLiteral("database"), operationHistory.databasePath() } });
 
     pdf::PDFOperationHistoryEvent historyAccepted;
     historyAccepted.executionId = historyExecutionId;
+    historyAccepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyAccepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     historyAccepted.output = historyOutput.artifact;
     historyAccepted.resultSummary = reportJson;
@@ -609,4 +617,4 @@ PDFToolAbstractApplication::Options PDFToolRepair::getOptionsFlags() const
     return ConsoleFormat | Repair | DestructiveWrite | PreflightProfile;
 }
 
-} // namespace pdftool
+}   // namespace pdftool

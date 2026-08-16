@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
+#include "pdfpreflightverdict.h"
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
@@ -115,18 +117,20 @@ private slots:
     void run_outputIntent_optionalEmbeddedProfileCanBeAbsent();
     void run_outputIntent_malformedArrayEntryEmitsFinding();
     void run_outputIntent_severityWarningRoutesToWarnings();
+    void parseProfile_readsIdentityFields();
+    void run_emptyRestrictionScopeIsIncomplete();
+    void run_unresolvedVariableIsIncomplete();
 };
 
 namespace
 {
 
 const pdf::PreflightFinding* findThinPartFinding(const QList<pdf::PreflightFinding>& findings,
-                                                  const QString& classification)
+                                                 const QString& classification)
 {
     for (const pdf::PreflightFinding& finding : findings)
     {
-        if (finding.checkId != QStringLiteral("thin-parts")
-            || finding.type == QStringLiteral("check-incomplete"))
+        if (finding.checkId != QStringLiteral("thin-parts") || finding.type == QStringLiteral("check-incomplete"))
         {
             continue;
         }
@@ -142,7 +146,7 @@ const pdf::PreflightFinding* findThinPartFinding(const QList<pdf::PreflightFindi
 }
 
 void assertNormalizedThinPartFinding(const pdf::PreflightFinding& finding,
-                                       const QString& classification)
+                                     const QString& classification)
 {
     QCOMPARE(finding.checkId, QStringLiteral("thin-parts"));
     QCOMPARE(finding.evidence.value(QStringLiteral("class")).toString(), classification);
@@ -709,11 +713,9 @@ void PreflightEngineTest::run_thinParts_routesSeverityByClass()
                                             { QStringLiteral("min_effective_width_pt"), 0.5 },
                                             { QStringLiteral("probe_dpi"), 1200 },
                                             { QStringLiteral("classes"), QJsonArray{
-                                                                               QStringLiteral("thin-stroke"),
-                                                                               QStringLiteral("thin-fill") } },
-                                            { QStringLiteral("severity_by_class"), QJsonObject{
-                                                                                       { QStringLiteral("thin-stroke"), QStringLiteral("error") },
-                                                                                       { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
+                                                                             QStringLiteral("thin-stroke"),
+                                                                             QStringLiteral("thin-fill") } },
+                                            { QStringLiteral("severity_by_class"), QJsonObject{ { QStringLiteral("thin-stroke"), QStringLiteral("error") }, { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
     };
 
     const pdf::PreflightResult result = engine.run(profile);
@@ -795,9 +797,9 @@ void PreflightEngineTest::run_thinParts_reportsIncompleteNearThreshold()
     QCOMPARE(result.warnings.first().type, QStringLiteral("check-incomplete"));
     QCOMPARE(result.warnings.first().severity, QStringLiteral("info"));
     QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("reason")).toString(),
-              QStringLiteral("measurement-near-threshold"));
+             QStringLiteral("measurement-near-threshold"));
     QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("class")).toString(),
-              QStringLiteral("thin-fill"));
+             QStringLiteral("thin-fill"));
     QVERIFY(findThinPartFinding(result.errors, QStringLiteral("thin-fill")) == nullptr);
     QVERIFY(findThinPartFinding(result.warnings, QStringLiteral("thin-fill")) == nullptr);
 }
@@ -2048,6 +2050,66 @@ void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()
     QVERIFY(result.errors.isEmpty());
     QCOMPARE(result.warnings.size(), 1);
     QCOMPARE(result.warnings.first().type, QStringLiteral("output-intent-missing"));
+}
+
+void PreflightEngineTest::parseProfile_readsIdentityFields()
+{
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject object{
+        { QStringLiteral("name"), QStringLiteral("Identity") },
+        { QStringLiteral("id"), QStringLiteral("loupe.test.identity") },
+        { QStringLiteral("version"), QStringLiteral("1.2.3") },
+        { QStringLiteral("authored"), QJsonObject{ { QStringLiteral("by"), QStringLiteral("qa") } } },
+        { QStringLiteral("derived_from"), QJsonObject{ { QStringLiteral("id"), QStringLiteral("loupe.test.parent") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    QVERIFY(pdf::PreflightEngine::parseProfile(object, profile, errorMessage));
+    QCOMPARE(profile.id, QStringLiteral("loupe.test.identity"));
+    QCOMPARE(profile.version, QStringLiteral("1.2.3"));
+
+    const pdf::PreflightProfileIdentity identity = pdf::identifyPreflightProfile(object);
+    QCOMPARE(identity.authored.value(QStringLiteral("by")).toString(), QStringLiteral("qa"));
+    QCOMPARE(identity.derivedFrom.value(QStringLiteral("id")).toString(), QStringLiteral("loupe.test.parent"));
+}
+
+void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Restricted") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("scope"), QString() } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unsupported-scope"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Variables") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("bleed") },
+                                        { QStringLiteral("amount_pt"), QStringLiteral("${stock}") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unresolved-variable"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
 }
 
 QTEST_GUILESS_MAIN(PreflightEngineTest)

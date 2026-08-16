@@ -25,11 +25,11 @@
 
 #include "pdfwidgetsglobal.h"
 #include "pdfdocumentcontext.h"
+#include "pdfjobscheduler.h"
 #include "pdfrenderer.h"
 #include "pdfmeshqualitysettings.h"
 
 #include <QCache>
-#include <QFutureWatcher>
 #include <QHash>
 #include <QImage>
 #include <QList>
@@ -172,7 +172,8 @@ private:
     QCache<QString, QImage> m_pageImageCache;
     QSet<QString> m_pendingKeys;
     QList<RenderRequest> m_requestQueue;
-    QFutureWatcher<RenderBatchResult> m_renderWatcher;
+    QString m_renderJobId;
+    RenderBatchResult m_batchResult;
     bool m_renderInProgress = false;
     quint64 m_renderEpoch = 0;
     PDFRevisionIdentity m_revision;
@@ -190,4 +191,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFTHUMBNAILSRENDERER_H
+#endif   // PDFTHUMBNAILSRENDERER_H

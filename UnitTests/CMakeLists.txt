@@ -363,6 +363,135 @@ set_target_properties(UnitTestsPreflightVerdict PROPERTIES
 )
 add_test(UnitTestsPreflightVerdict "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPreflightVerdict")
 
+add_executable(UnitTestsSchemaEvolution
+    tst_schemaevolutiontest.cpp
+)
+target_link_libraries(UnitTestsSchemaEvolution PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsSchemaEvolution PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+set_target_properties(UnitTestsSchemaEvolution PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsSchemaEvolution "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsSchemaEvolution")
+
+add_executable(UnitTestsEvidenceGraph
+    tst_evidencegraphtest.cpp
+)
+target_link_libraries(UnitTestsEvidenceGraph PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsEvidenceGraph PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+set_target_properties(UnitTestsEvidenceGraph PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsEvidenceGraph "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsEvidenceGraph")
+
+add_executable(UnitTestsProfileIdentity
+    tst_preflightprofileidentitytest.cpp
+)
+target_link_libraries(UnitTestsProfileIdentity PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsProfileIdentity PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+    LOUPE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+set_target_properties(UnitTestsProfileIdentity PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsProfileIdentity "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsProfileIdentity")
+
+add_executable(UnitTestsOperationImpact
+    tst_operationimpacttest.cpp
+)
+target_link_libraries(UnitTestsOperationImpact PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsOperationImpact PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsOperationImpact "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsOperationImpact")
+
+add_executable(UnitTestsStandardOracle
+    tst_standardoracletest.cpp
+)
+target_link_libraries(UnitTestsStandardOracle PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsStandardOracle PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsStandardOracle "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsStandardOracle")
+
+add_executable(UnitTestsPluginAbi
+    tst_pluginabitest.cpp
+)
+target_link_libraries(UnitTestsPluginAbi PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsPluginAbi PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPluginAbi "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsPluginAbi")
+
+add_executable(UnitTestsLifecycle
+    tst_lifecycletest.cpp
+)
+target_link_libraries(UnitTestsLifecycle PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test)
+set_target_properties(UnitTestsLifecycle PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsLifecycle "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsLifecycle")
+
+add_executable(UnitTestsBenchmarkIdentity
+    tst_benchmarkidentitytest.cpp
+)
+target_link_libraries(UnitTestsBenchmarkIdentity PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsBenchmarkIdentity PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsBenchmarkIdentity "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsBenchmarkIdentity")
+
+add_executable(UnitTestsConversionOracle
+    tst_conversionoracletest.cpp
+)
+target_link_libraries(UnitTestsConversionOracle PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsConversionOracle PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+set_target_properties(UnitTestsConversionOracle PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsConversionOracle "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsConversionOracle")
+
+add_executable(UnitTestsHugeDocumentEnvelope
+    tst_hugedocumentenvelopetest.cpp
+)
+target_link_libraries(UnitTestsHugeDocumentEnvelope PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsHugeDocumentEnvelope PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsHugeDocumentEnvelope "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsHugeDocumentEnvelope")
+
 add_executable(UnitTestsPreflightProfileResolver
     tst_preflightprofileresolvertest.cpp
 )
@@ -749,6 +878,30 @@ set_target_properties(UnitTestsIdentitySeparation PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsIdentitySeparation "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsIdentitySeparation")
+
+add_executable(UnitTestsBudgetExhaustion
+    tst_budgetexhaustiontest.cpp
+)
+target_link_libraries(UnitTestsBudgetExhaustion PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsBudgetExhaustion "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsBudgetExhaustion")
+
+add_executable(UnitTestsWorkloadEnvelope
+    tst_workloadenvelopetest.cpp
+)
+target_link_libraries(UnitTestsWorkloadEnvelope PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsWorkloadEnvelope PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsWorkloadEnvelope "${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}/UnitTestsWorkloadEnvelope")
 
 # windeployqt copies Core/Gui/etc. but not Qt Test; all UnitTests* targets share one output dir.
 if(WIN32)

@@ -45,3 +45,6 @@ __pycache__/
 
 # CI evidence is uploaded as an artifact and must not enter the source tree.
 /agent-fast-evidence.json
+
+# PdfTool preflight/repair provenance sidecars written next to inspected PDFs.
+*.loupe-history/
