@@ -1,0 +1,103 @@
+{
+  "invariants": [
+    {
+      "id": "INV-001",
+      "title": "Incomplete inspection cannot PASS",
+      "tests": [
+        "UnitTestsPreflightVerdict"
+      ]
+    },
+    {
+      "id": "INV-002",
+      "title": "Artifact and revision identities stay distinct",
+      "tests": [
+        "UnitTestsIdentitySeparation"
+      ]
+    },
+    {
+      "id": "INV-003",
+      "title": "One provenance chain",
+      "tests": [
+        "UnitTestsOperationHistory"
+      ]
+    },
+    {
+      "id": "INV-004",
+      "title": "Cancelled jobs are not success",
+      "tests": [
+        "UnitTestsJobScheduler"
+      ]
+    },
+    {
+      "id": "INV-005",
+      "title": "Unclassified save policy is not incremental-append",
+      "tests": [
+        "UnitTestsIncrementalSave"
+      ]
+    },
+    {
+      "id": "INV-006",
+      "title": "Unsupported schema majors fail closed",
+      "tests": [
+        "UnitTestsSchemaEvolution"
+      ]
+    },
+    {
+      "id": "INV-007",
+      "title": "Incomplete evidence graph cannot PASS",
+      "tests": [
+        "UnitTestsEvidenceGraph"
+      ]
+    },
+    {
+      "id": "INV-008",
+      "title": "Unknown operation impact forces full revalidation",
+      "tests": [
+        "UnitTestsOperationImpact"
+      ]
+    },
+    {
+      "id": "INV-009",
+      "title": "Budget exhaustion is INCOMPLETE",
+      "tests": [
+        "UnitTestsProcessingBudget",
+        "UnitTestsPreflightVerdict"
+      ]
+    },
+    {
+      "id": "INV-010",
+      "title": "Plugin ABI is checked before instantiation",
+      "tests": [
+        "UnitTestsPluginAbi"
+      ]
+    },
+    {
+      "id": "INV-011",
+      "title": "Lifecycle sequences preserve revision and provenance invariants",
+      "tests": [
+        "UnitTestsLifecycle"
+      ]
+    },
+    {
+      "id": "INV-012",
+      "title": "Benchmark records carry identity",
+      "tests": [
+        "UnitTestsBenchmarkIdentity"
+      ]
+    },
+    {
+      "id": "INV-013",
+      "title": "Independent conversion oracle never self-certifies",
+      "tests": [
+        "UnitTestsConversionOracle"
+      ]
+    },
+    {
+      "id": "INV-014",
+      "title": "Huge-document envelope stays bounded",
+      "tests": [
+        "UnitTestsHugeDocumentEnvelope"
+      ]
+    }
+  ]
+}

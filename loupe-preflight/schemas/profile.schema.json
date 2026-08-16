@@ -57,6 +57,46 @@
       "minLength": 1,
       "description": "Human-readable profile name (also referenced by report.profile)."
     },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable profile identity (not the display name)."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Profile version string; combined with id for effective identity."
+    },
+    "authored": {
+      "type": "string",
+      "description": "Attribution for who authored this profile."
+    },
+    "derived_from": {
+      "type": "string",
+      "description": "Optional parent profile identity this profile was derived from."
+    },
+    "schema_kind": {
+      "type": "string",
+      "const": "preflight-profile"
+    },
+    "restrictions": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Supported restriction scope. Empty or unsupported values fail closed as incomplete."
+        }
+      }
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean"]
+      },
+      "description": "Typed job-spec variables. Unresolved ${placeholders} fail closed."
+    },
     "description": {
       "type": "string",
       "description": "Optional summary of when to use this profile."

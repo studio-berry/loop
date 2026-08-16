@@ -1,0 +1,22 @@
+{
+  "schema_kind": "package-manifest",
+  "schema_version": 1,
+  "description": "Conversion fixture triad for the independent oracle lane. PDFs are generated in tests; veraPDF is skip-if-missing and never bundled.",
+  "fixtures": [
+    {
+      "id": "already-conformant",
+      "kind": "already-conformant",
+      "notes": "Empty page used as a structural stand-in; Loupe still requires an independent validator and never self-certifies."
+    },
+    {
+      "id": "safely-convertible",
+      "kind": "safely-convertible",
+      "notes": "Missing PDF/X identification that standards-convert can rewrite when a validator is configured."
+    },
+    {
+      "id": "deliberately-unconvertible",
+      "kind": "deliberately-unconvertible",
+      "notes": "Oracle mismatch (/bin/false or veraPDF fail) must remain ERROR, not PASS."
+    }
+  ]
+}

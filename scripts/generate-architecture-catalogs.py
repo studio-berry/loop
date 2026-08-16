@@ -212,6 +212,42 @@ def parse_schema_kinds() -> list[str]:
     return kinds
 
 
+def parse_architecture_invariants() -> list[dict[str, Any]]:
+    path = ROOT / "docs" / "architecture-invariants.json"
+    document = json.loads(read(path))
+    invariants = document.get("invariants")
+    if not isinstance(invariants, list) or not invariants:
+        raise ValueError("architecture invariants are missing")
+    tests = set(parse_test_targets())
+    for invariant in invariants:
+        identifier = invariant.get("id")
+        mapped = invariant.get("tests")
+        if not identifier or not isinstance(mapped, list) or not mapped:
+            raise ValueError(f"invariant {identifier!r} is missing tests")
+        missing = [name for name in mapped if name not in tests]
+        if missing:
+            raise ValueError(f"{identifier} maps to unknown tests: {', '.join(missing)}")
+    return invariants
+
+
+def parse_coverage_matrix() -> dict[str, Any]:
+    checks = parse_preflight_checks()
+    families = {
+        "images": ["image-resolution"],
+        "colorants": ["color-mode", "color-inventory", "output-intent"],
+        "strokes": ["thin-strokes", "thin-parts"],
+        "overprint-transparency": ["white-overprint", "transparency-risk"],
+        "fonts": ["embedded-fonts", "font-integrity"],
+    }
+    covered = {check for members in families.values() for check in members}
+    holes = [check for check in checks if check not in covered]
+    return {
+        "families": families,
+        "coverage_holes": holes,
+        "standards_matrix": "docs/PDFX_POLICY_MATRIX.md",
+    }
+
+
 def parse_schema_versions() -> dict[str, Any]:
     schemas: dict[str, Any] = {}
     schema_dir = ROOT / "loupe-preflight" / "schemas"
@@ -326,6 +362,8 @@ def build_catalog() -> dict[str, Any]:
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
         "schema_kinds": parse_schema_kinds(),
+        "architecture_invariants": parse_architecture_invariants(),
+        "preflight_coverage": parse_coverage_matrix(),
         "test_targets": parse_test_targets(),
         "workflow_branches": parse_workflow_branches(),
         "sources": [
@@ -340,6 +378,8 @@ def build_catalog() -> dict[str, Any]:
             "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
             "loupe-preflight/schemas/*.json",
             "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
+            "docs/architecture-invariants.json",
+            "docs/PDFX_POLICY_MATRIX.md",
             "UnitTests/CMakeLists.txt",
             ".github/workflows/*.yml",
         ],

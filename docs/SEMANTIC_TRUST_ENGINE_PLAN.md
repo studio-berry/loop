@@ -193,4 +193,5 @@ variables, the generated check catalog and coverage matrix, `PDFOperationImpact`
 revalidation planning, the independent conversion oracle lane with a fixture
 triad, and renderer differentials for color/overprint goldens. Product
 `PDF4QT_VERSION` stays **0.1.0**. Wave D (budgets, lifecycle, plugin ABI, S18)
-is not in this change set.
+lands on a sibling branch. Waves A (S00–S05) and B (S06–S08) are already
+integrated on the base branch.
