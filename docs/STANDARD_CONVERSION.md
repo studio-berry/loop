@@ -36,3 +36,16 @@ PdfTool repair input.pdf --operation standards-convert \
 No validator or Java runtime is bundled by default. Optional veraPDF/Temurin
 packaging and licensing decisions are documented in
 [`PACKAGING_LICENSING.md`](PACKAGING_LICENSING.md).
+
+## Fixture triad
+
+`loupe-preflight/testdata/conversion/manifest.json` names three cases:
+
+| Kind | Meaning |
+|------|---------|
+| already-conformant | Structural stand-in; still requires an independent validator |
+| safely-convertible | Metadata Loupe can rewrite when a validator is configured |
+| deliberately-unconvertible | Oracle mismatch must remain ERROR, never PASS |
+
+`UnitTestsConversionOracle` proves a missing oracle cannot self-certify and that
+`/bin/false` (or a failing veraPDF) is ERROR. The veraPDF lane is skip-if-missing.

@@ -28,6 +28,7 @@
 
 #include <QObject>
 #include <QJsonObject>
+#include <QStringList>
 
 #include <vector>
 
@@ -48,6 +49,14 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFPluginInfo
     QString description;
     QString pluginFile;
     QString pluginFileWithPath;
+    QStringList capabilities;
+    int abiVersion = 0;
+    bool allowsNetwork = false;
+    bool allowsExternalProcess = false;
+
+    static constexpr int CurrentAbiVersion = 1;
+
+    bool isAbiCompatible() const { return abiVersion == CurrentAbiVersion; }
 
     static PDFPluginInfo loadFromJson(const QJsonObject* json);
 };
@@ -97,4 +106,4 @@ protected:
 
 }   // namespace pdf
 
-#endif // PDFPLUGIN_H
+#endif   // PDFPLUGIN_H
