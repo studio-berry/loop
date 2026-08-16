@@ -176,7 +176,47 @@ class CheckChangeTests(unittest.TestCase):
 
     def test_clang_tidy_is_scheduled_after_test_targets_build(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
-        self.assertLess(source.index("for test in tests:"), source.index("compile_db ="))
+        main_source = source[source.index("def main()") :]
+        self.assertLess(
+            main_source.index("for test in tests:"),
+            main_source.index("add_clang_tidy_checks("),
+        )
+
+    def test_dry_run_source_checks_do_not_probe_prerequisites(self) -> None:
+        evidence = []
+        build_dir = Path("missing-build-directory")
+        with patch.object(MODULE.shutil, "which", side_effect=AssertionError("probed tool")):
+            MODULE.add_format_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                dry_run=True,
+                fix_format=False,
+            )
+            MODULE.add_clang_tidy_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                build_dir,
+                dry_run=True,
+            )
+        self.assertEqual([item.result for item in evidence], ["not-run", "not-run"])
+        self.assertEqual([item.reason for item in evidence], ["dry-run", "dry-run"])
+
+    def test_real_source_checks_keep_missing_prerequisites_incomplete(self) -> None:
+        evidence = []
+        with patch.object(MODULE.shutil, "which", return_value=None):
+            MODULE.add_format_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                dry_run=False,
+                fix_format=False,
+            )
+            MODULE.add_clang_tidy_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                Path("missing-build-directory"),
+                dry_run=False,
+            )
+        self.assertEqual([item.result for item in evidence], ["incomplete", "incomplete"])
 
     def test_classify_still_uses_deleted_paths(self) -> None:
         policy = {
