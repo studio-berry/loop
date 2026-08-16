@@ -2,8 +2,12 @@
 
 Pull requests to `dev` run the Linux `agent-fast / build` workflow as the
 required integration gate. It classifies the diff, runs source and contract
-checks, compiles affected targets, runs focused tests, and requires one
-structured changelog fragment under `changes/`. These are the fast checks for
+checks, compiles affected targets, and runs focused tests. Pull requests
+require one structured changelog fragment under `changes/` named after the
+head branch. Subsequent `dev` pushes skip that PR-only check so a merged
+topic fragment is not rejected for not being `changes/dev.md`. Format and
+clang-tidy run on added, modified, renamed, or copied C/C++ files only;
+deleted paths still classify modules. These are the fast checks for
 the shared integration baseline. The full Linux and Windows build-and-test
 jobs run for release qualification. These are the two platforms Loupe V1
 supports; **macOS** CI is a **post-V1** track under

@@ -529,7 +529,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     }
     pdf::PDFOperationHistoryEvent historyRunning;
     historyRunning.executionId = historyExecutionId;
+    historyRunning.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyRunning.status = pdf::PDFOperationHistoryStatus::Running;
+    historyRunning.documentRevisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    historyRunning.operatorIdentity = QStringLiteral("PdfTool");
     if (!operationHistory.appendEvent(historyRunning))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
@@ -587,6 +590,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
 
     pdf::PDFOperationHistoryEvent historyAccepted;
     historyAccepted.executionId = historyExecutionId;
+    historyAccepted.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
     historyAccepted.status = pdf::PDFOperationHistoryStatus::Accepted;
     historyAccepted.output = historyOutput.artifact;
     historyAccepted.resultSummary = reportJson;

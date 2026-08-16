@@ -50,6 +50,7 @@
 #include "pdfthinpartprobe.h"
 #include "pdffixupregistry.h"
 #include "pdfproductiongeometry.h"
+#include "preflightprofileresolver.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -57,6 +58,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
+#include <QPainterPathStroker>
 #include <QPair>
 #include <QRegularExpression>
 #include <QSet>
@@ -534,6 +537,305 @@ QJsonObject PDFXConformanceResult::toJson() const
     };
 }
 
+bool PreflightRestrictions::isUnrestricted() const
+{
+    return !pages.has_value() && !pageBox.has_value() && regions.isEmpty() && !layers.has_value() && !objectClasses.has_value() && unsupportedReason.isEmpty();
+}
+
+bool PreflightRestrictions::hasUnsupportedScope() const
+{
+    return !unsupportedReason.isEmpty() || pageBox.has_value() || !regions.isEmpty() || layers.has_value() || objectClasses.has_value();
+}
+
+bool PreflightRestrictions::allowsPage(int pageIndex) const
+{
+    if (!pages.has_value())
+    {
+        return true;
+    }
+    return pages->contains(pageIndex);
+}
+
+PreflightRestrictions PreflightRestrictions::intersect(const PreflightRestrictions& narrower) const
+{
+    PreflightRestrictions result = *this;
+    if (narrower.pages.has_value())
+    {
+        if (!result.pages.has_value())
+        {
+            result.pages = narrower.pages;
+        }
+        else
+        {
+            result.pages = *result.pages & *narrower.pages;
+        }
+    }
+    if (narrower.pageBox.has_value())
+    {
+        if (result.pageBox.has_value() && *result.pageBox != *narrower.pageBox)
+        {
+            result.unsupportedReason = QStringLiteral("Check page_box cannot widen or replace the profile page_box.");
+        }
+        else
+        {
+            result.pageBox = narrower.pageBox;
+        }
+    }
+    if (!narrower.regions.isEmpty())
+    {
+        result.regions.append(narrower.regions);
+    }
+    if (narrower.layers.has_value())
+    {
+        if (!result.layers.has_value())
+        {
+            result.layers = narrower.layers;
+        }
+        else
+        {
+            result.layers = *result.layers & *narrower.layers;
+        }
+    }
+    if (narrower.objectClasses.has_value())
+    {
+        if (!result.objectClasses.has_value())
+        {
+            result.objectClasses = narrower.objectClasses;
+        }
+        else
+        {
+            result.objectClasses = *result.objectClasses & *narrower.objectClasses;
+        }
+    }
+    if (!narrower.unsupportedReason.isEmpty())
+    {
+        result.unsupportedReason = narrower.unsupportedReason;
+    }
+    return result;
+}
+
+QJsonObject PreflightRestrictions::toJson() const
+{
+    QJsonObject object;
+    if (pages.has_value())
+    {
+        QJsonArray pageArray;
+        QList<int> sorted = pages->values();
+        std::sort(sorted.begin(), sorted.end());
+        for (int page : sorted)
+        {
+            pageArray.append(page + 1);
+        }
+        object.insert(QStringLiteral("pages"), pageArray);
+    }
+    if (pageBox.has_value())
+    {
+        object.insert(QStringLiteral("page_box"), *pageBox);
+    }
+    if (!unsupportedReason.isEmpty())
+    {
+        object.insert(QStringLiteral("unsupported_reason"), unsupportedReason);
+    }
+    return object;
+}
+
+bool parsePreflightRestrictions(const QJsonObject& object,
+                                PreflightRestrictions& restrictions,
+                                QString& errorMessage)
+{
+    restrictions = PreflightRestrictions();
+    if (object.isEmpty())
+    {
+        return true;
+    }
+
+    static const QStringList allowedKeys = {
+        QStringLiteral("pages"),
+        QStringLiteral("page_box"),
+        QStringLiteral("regions"),
+        QStringLiteral("layers"),
+        QStringLiteral("object_classes"),
+        QStringLiteral("scope")
+    };
+    for (const QString& key : object.keys())
+    {
+        if (!allowedKeys.contains(key))
+        {
+            errorMessage = QStringLiteral("Restriction field '%1' is not supported.").arg(key);
+            return false;
+        }
+    }
+
+    if (object.contains(QStringLiteral("scope")))
+    {
+        const QString scope = object.value(QStringLiteral("scope")).toString().trimmed();
+        if (scope.isEmpty())
+        {
+            restrictions.unsupportedReason = QStringLiteral("Restriction scope is empty or unsupported.");
+            return true;
+        }
+        if (scope != QLatin1String("document"))
+        {
+            restrictions.unsupportedReason = QStringLiteral("Restriction scope '%1' is not supported.").arg(scope);
+            return true;
+        }
+    }
+
+    if (object.contains(QStringLiteral("pages")))
+    {
+        const QJsonValue pagesValue = object.value(QStringLiteral("pages"));
+        if (!pagesValue.isString() || pagesValue.toString().trimmed().isEmpty())
+        {
+            errorMessage = QStringLiteral("Restriction 'pages' must be a non-empty range string.");
+            return false;
+        }
+        static const QRegularExpression pattern(QStringLiteral("^([0-9]+(-[0-9]+)?)(,[0-9]+(-[0-9]+)?)*$"));
+        const QString spec = pagesValue.toString().trimmed();
+        if (!pattern.match(spec).hasMatch())
+        {
+            errorMessage = QStringLiteral("Restriction 'pages' is not a valid 1-based range.");
+            return false;
+        }
+        QSet<int> pages;
+        const QStringList parts = spec.split(QLatin1Char(','));
+        for (const QString& part : parts)
+        {
+            const int dash = part.indexOf(QLatin1Char('-'));
+            int first = 0;
+            int last = 0;
+            if (dash < 0)
+            {
+                first = part.toInt();
+                last = first;
+            }
+            else
+            {
+                first = part.left(dash).toInt();
+                last = part.mid(dash + 1).toInt();
+            }
+            if (first < 1 || last < first)
+            {
+                errorMessage = QStringLiteral("Restriction 'pages' contains an empty or inverted range.");
+                return false;
+            }
+            for (int page = first; page <= last; ++page)
+            {
+                pages.insert(page - 1);
+            }
+        }
+        if (pages.isEmpty())
+        {
+            errorMessage = QStringLiteral("Restriction 'pages' resolves to an empty scope.");
+            return false;
+        }
+        restrictions.pages = pages;
+    }
+
+    if (object.contains(QStringLiteral("page_box")))
+    {
+        const QString box = object.value(QStringLiteral("page_box")).toString();
+        if (box != QLatin1String("media") && box != QLatin1String("crop") && box != QLatin1String("trim") && box != QLatin1String("bleed") && box != QLatin1String("art"))
+        {
+            errorMessage = QStringLiteral("Restriction 'page_box' must be media, crop, trim, bleed, or art.");
+            return false;
+        }
+        restrictions.pageBox = box;
+        restrictions.unsupportedReason = QStringLiteral("page_box restrictions are not honoured by the current check runners.");
+    }
+    if (object.contains(QStringLiteral("regions")))
+    {
+        if (!object.value(QStringLiteral("regions")).isArray() || object.value(QStringLiteral("regions")).toArray().isEmpty())
+        {
+            errorMessage = QStringLiteral("Restriction 'regions' must be a non-empty array.");
+            return false;
+        }
+        for (const QJsonValue& regionValue : object.value(QStringLiteral("regions")).toArray())
+        {
+            if (!regionValue.isObject())
+            {
+                errorMessage = QStringLiteral("Each restriction region must be an object.");
+                return false;
+            }
+            const QJsonObject regionObject = regionValue.toObject();
+            PreflightRegion region;
+            region.name = regionObject.value(QStringLiteral("name")).toString();
+            const QJsonArray rect = regionObject.value(QStringLiteral("rect_pt")).toArray();
+            if (region.name.isEmpty() || rect.size() != 4)
+            {
+                errorMessage = QStringLiteral("Each restriction region requires name and rect_pt[4].");
+                return false;
+            }
+            region.rectPt = QRectF(QPointF(rect.at(0).toDouble(), rect.at(1).toDouble()), QPointF(rect.at(2).toDouble(), rect.at(3).toDouble()));
+            region.anchor = regionObject.value(QStringLiteral("anchor")).toString(QStringLiteral("trim"));
+            region.mode = regionObject.value(QStringLiteral("mode")).toString(QStringLiteral("include"));
+            restrictions.regions.push_back(region);
+        }
+        restrictions.unsupportedReason = QStringLiteral("region restrictions are not honoured by the current check runners.");
+    }
+    if (object.contains(QStringLiteral("layers")))
+    {
+        if (!object.value(QStringLiteral("layers")).isArray() || object.value(QStringLiteral("layers")).toArray().isEmpty())
+        {
+            errorMessage = QStringLiteral("Restriction 'layers' must be a non-empty array.");
+            return false;
+        }
+        QSet<QString> layers;
+        for (const QJsonValue& value : object.value(QStringLiteral("layers")).toArray())
+        {
+            if (!value.isString() || value.toString().trimmed().isEmpty())
+            {
+                errorMessage = QStringLiteral("Restriction 'layers' contains an invalid OCG name.");
+                return false;
+            }
+            layers.insert(value.toString());
+        }
+        restrictions.layers = layers;
+        restrictions.unsupportedReason = QStringLiteral("layer restrictions are not honoured by the current check runners.");
+    }
+    if (object.contains(QStringLiteral("object_classes")))
+    {
+        if (!object.value(QStringLiteral("object_classes")).isArray() || object.value(QStringLiteral("object_classes")).toArray().isEmpty())
+        {
+            errorMessage = QStringLiteral("Restriction 'object_classes' must be a non-empty array.");
+            return false;
+        }
+        static const QSet<QString> allowed = {
+            QStringLiteral("text"), QStringLiteral("image"), QStringLiteral("vector"),
+            QStringLiteral("annotation"), QStringLiteral("shading"), QStringLiteral("form")
+        };
+        QSet<QString> classes;
+        for (const QJsonValue& value : object.value(QStringLiteral("object_classes")).toArray())
+        {
+            if (!value.isString() || !allowed.contains(value.toString()))
+            {
+                errorMessage = QStringLiteral("Restriction 'object_classes' contains an unsupported class.");
+                return false;
+            }
+            classes.insert(value.toString());
+        }
+        restrictions.objectClasses = classes;
+        restrictions.unsupportedReason = QStringLiteral("object_class restrictions are not honoured by the current check runners.");
+    }
+    return true;
+}
+
+QJsonObject preflightCoverageScopeFor(const PreflightProfileData& profile)
+{
+    QJsonArray checkIds;
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (check.enabled)
+        {
+            checkIds.append(check.id);
+        }
+    }
+    return QJsonObject{
+        { QStringLiteral("claim"), QStringLiteral("Loupe does not claim formal GWG conformance.") },
+        { QStringLiteral("matrix_id"), QStringLiteral("loupe-gwg-pdfx-v1") },
+        { QStringLiteral("enabled_checks"), checkIds }
+    };
+}
+
 namespace
 {
 
@@ -579,6 +881,16 @@ QJsonObject findingToJson(const PreflightFinding& finding)
     if (!finding.evidence.isEmpty())
     {
         object.insert(QStringLiteral("evidence"), finding.evidence);
+    }
+
+    if (!finding.evidenceIds.isEmpty())
+    {
+        QJsonArray ids;
+        for (const QString& evidenceId : finding.evidenceIds)
+        {
+            ids.append(evidenceId);
+        }
+        object.insert(QStringLiteral("evidence_ids"), ids);
     }
 
     return object;
@@ -1024,6 +1336,441 @@ void pushPreflightFinding(const PreflightFinding& finding,
     }
 }
 
+bool isGraphBackedCheckId(const QString& checkId)
+{
+    return checkId == QLatin1String("image-resolution") || checkId == QLatin1String("color-mode") || checkId == QLatin1String("color-inventory") || checkId == QLatin1String("thin-strokes") || checkId == QLatin1String("white-overprint") || checkId == QLatin1String("transparency-risk") || checkId == QLatin1String("embedded-fonts");
+}
+
+PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph, const PreflightRestrictions& restrictions)
+{
+    if (!restrictions.pages.has_value())
+    {
+        return graph;
+    }
+
+    PDFEvidenceGraph scoped = graph;
+    QList<PDFEvidenceRecord> kept;
+    kept.reserve(graph.records.size());
+    for (const PDFEvidenceRecord& record : graph.records)
+    {
+        if (record.page <= 0 || restrictions.allowsPage(record.page - 1))
+        {
+            kept.append(record);
+        }
+    }
+    scoped.records = kept;
+    return scoped;
+}
+
+PDFEvidenceDomains evidenceDomainsForProfile(const PreflightProfileData& profile)
+{
+    PDFEvidenceDomains domains;
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (!check.enabled)
+        {
+            continue;
+        }
+        if (check.id == QLatin1String("image-resolution"))
+        {
+            domains |= PDFEvidenceDomain::Images;
+        }
+        else if (check.id == QLatin1String("color-mode") || check.id == QLatin1String("color-inventory"))
+        {
+            domains |= PDFEvidenceDomain::Colorants;
+        }
+        else if (check.id == QLatin1String("thin-strokes"))
+        {
+            domains |= PDFEvidenceDomain::Strokes;
+        }
+        else if (check.id == QLatin1String("white-overprint") || check.id == QLatin1String("transparency-risk"))
+        {
+            domains |= PDFEvidenceDomain::OverprintTransparency;
+        }
+        else if (check.id == QLatin1String("embedded-fonts"))
+        {
+            domains |= PDFEvidenceDomain::Fonts;
+        }
+    }
+    return domains;
+}
+
+PDFEvidenceCollectSettings evidenceSettingsForProfile(const PreflightProfileData& profile)
+{
+    PDFEvidenceCollectSettings settings;
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (!check.enabled)
+        {
+            continue;
+        }
+        if (check.id == QLatin1String("color-inventory"))
+        {
+            settings.colorProbeDpi = check.colorProbeDpi;
+            settings.richBlackKThreshold = check.richBlackKThreshold;
+        }
+        else if (check.id == QLatin1String("thin-strokes"))
+        {
+            settings.minEffectiveStrokeWidthPt = check.minEffectiveStrokeWidthPt;
+            settings.zeroWidthEpsilonPt = check.zeroWidthEpsilonPt;
+        }
+    }
+    return settings;
+}
+
+QStringList jsonStringList(const QJsonValue& value)
+{
+    QStringList items;
+    if (value.isArray())
+    {
+        const QJsonArray array = value.toArray();
+        items.reserve(array.size());
+        for (const QJsonValue& item : array)
+        {
+            items.append(item.toString());
+        }
+    }
+    else if (value.isString() && !value.toString().isEmpty())
+    {
+        items.append(value.toString());
+    }
+    return items;
+}
+
+void evaluateImageResolutionFromGraph(const PreflightCheckConfig& check,
+                                      QList<PreflightFinding>& errors,
+                                      QList<PreflightFinding>& warnings,
+                                      const PDFEvidenceGraph& graph)
+{
+    if (check.minDpi <= 0)
+    {
+        return;
+    }
+
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Images, QStringLiteral("image-effective-dpi")))
+    {
+        if (record.observedValue + 1e-6 >= check.minDpi)
+        {
+            continue;
+        }
+
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+        finding.page = record.page;
+        finding.objectId = record.objectId;
+        finding.type = QStringLiteral("image-resolution");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.bbox = record.geometry;
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr(
+                              "Image resolution %1 DPI is below minimum %2 DPI on page %3")
+                              .arg(qRound(record.observedValue))
+                              .arg(check.minDpi)
+                              .arg(record.page);
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+}
+
+void evaluateColorModeFromGraph(const PreflightCheckConfig& check,
+                                QList<PreflightFinding>& errors,
+                                QList<PreflightFinding>& warnings,
+                                const PDFEvidenceGraph& graph)
+{
+    if (check.allowedColorModes.isEmpty())
+    {
+        return;
+    }
+
+    QSet<QString> allowed;
+    for (const QString& mode : check.allowedColorModes)
+    {
+        if (mode.compare(QStringLiteral("RGB"), Qt::CaseInsensitive) == 0)
+        {
+            allowed.insert(QStringLiteral("DeviceRGB"));
+        }
+        else if (mode.compare(QStringLiteral("CMYK"), Qt::CaseInsensitive) == 0)
+        {
+            allowed.insert(QStringLiteral("DeviceCMYK"));
+        }
+        else if (mode.compare(QStringLiteral("Grayscale"), Qt::CaseInsensitive) == 0)
+        {
+            allowed.insert(QStringLiteral("DeviceGray"));
+        }
+    }
+
+    QString modeList;
+    for (const QString& mode : check.allowedColorModes)
+    {
+        if (!modeList.isEmpty())
+        {
+            modeList += QStringLiteral(", ");
+        }
+        modeList += mode;
+    }
+
+    QMap<int, QStringList> disallowedByPage;
+    QMap<int, QStringList> evidenceByPage;
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Colorants, QStringLiteral("color-space")))
+    {
+        const QString space = record.extra.value(QStringLiteral("space")).toString();
+        if (space.isEmpty() || allowed.contains(space))
+        {
+            continue;
+        }
+        QStringList& spaces = disallowedByPage[record.page];
+        if (!spaces.contains(space))
+        {
+            spaces.append(space);
+        }
+        QStringList& ids = evidenceByPage[record.page];
+        if (!ids.contains(record.id))
+        {
+            ids.append(record.id);
+        }
+    }
+
+    QList<int> pages = disallowedByPage.keys();
+    std::sort(pages.begin(), pages.end());
+    for (int pageNumber : pages)
+    {
+        QStringList disallowed = disallowedByPage.value(pageNumber);
+        disallowed.sort();
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = pageNumber;
+        finding.type = QStringLiteral("color-mode");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.bbox = QRectF();
+        finding.evidenceIds = evidenceByPage.value(pageNumber);
+        finding.message = PDFTranslationContext::tr(
+                              "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
+                              .arg(pageNumber)
+                              .arg(disallowed.join(QStringLiteral(", ")))
+                              .arg(modeList);
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+}
+
+void evaluateColorInventoryFromGraph(const PreflightCheckConfig& check,
+                                     QList<PreflightFinding>& errors,
+                                     QList<PreflightFinding>& warnings,
+                                     const PDFEvidenceGraph& graph)
+{
+    auto emitInfo = [&](PreflightFinding finding)
+    {
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    };
+
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Colorants, QStringLiteral("spot-color")))
+    {
+        const QString name = record.extra.value(QStringLiteral("name")).toString();
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.objectId = name;
+        finding.type = QStringLiteral("spot-color");
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr("Spot color detected: %1").arg(name);
+        emitInfo(finding);
+    }
+
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Colorants, QStringLiteral("separation")))
+    {
+        const QString name = record.extra.value(QStringLiteral("name")).toString();
+        const bool isSpot = record.extra.value(QStringLiteral("is_spot")).toBool();
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.objectId = name;
+        finding.type = QStringLiteral("separation");
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = isSpot
+                              ? PDFTranslationContext::tr("Spot output separation: %1").arg(name)
+                              : PDFTranslationContext::tr("Process output separation: %1").arg(name);
+        emitInfo(finding);
+    }
+
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Colorants, QStringLiteral("rich-black")))
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = record.page;
+        finding.type = QStringLiteral("rich-black");
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr(
+                              "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
+                              .arg(record.page)
+                              .arg(record.observedValue, 0, 'f', 2)
+                              .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
+        emitInfo(finding);
+    }
+}
+
+void evaluateEmbeddedFontsFromGraph(const PreflightCheckConfig& check,
+                                    QList<PreflightFinding>& errors,
+                                    QList<PreflightFinding>& warnings,
+                                    const PDFEvidenceGraph& graph)
+{
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::Fonts, QStringLiteral("font-resource")))
+    {
+        const QString fontName = record.extra.value(QStringLiteral("font_name")).toString();
+        const bool missingDescriptor = record.extra.value(QStringLiteral("missing_descriptor")).toBool();
+        const bool embedded = record.extra.value(QStringLiteral("embedded")).toBool();
+        QString message;
+        if (missingDescriptor)
+        {
+            message = PDFTranslationContext::tr(
+                          "Font '%1' on page %2 has no font descriptor (not embedded)")
+                          .arg(fontName)
+                          .arg(record.page);
+        }
+        else if (!embedded)
+        {
+            message = PDFTranslationContext::tr(
+                          "Font '%1' on page %2 is not embedded")
+                          .arg(fontName)
+                          .arg(record.page);
+        }
+        else
+        {
+            continue;
+        }
+
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+        finding.page = record.page;
+        finding.type = QStringLiteral("embedded-fonts");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.bbox = QRectF();
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = message;
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+}
+
+void evaluateWhiteOverprintFromGraph(const PreflightCheckConfig& check,
+                                     QList<PreflightFinding>& errors,
+                                     QList<PreflightFinding>& warnings,
+                                     const PDFEvidenceGraph& graph)
+{
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::OverprintTransparency, QStringLiteral("white-overprint")))
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = record.page;
+        finding.type = QStringLiteral("white-overprint");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr(
+                              "White or near-white paint is set to overprint on page %1.")
+                              .arg(record.page);
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+}
+
+void evaluateTransparencyRiskFromGraph(const PreflightCheckConfig& check,
+                                       QList<PreflightFinding>& errors,
+                                       QList<PreflightFinding>& warnings,
+                                       const PDFEvidenceGraph& graph)
+{
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::OverprintTransparency, QStringLiteral("transparency-blend-mode")))
+    {
+        const QStringList blendModes = jsonStringList(record.extra.value(QStringLiteral("blend_modes")));
+        if (blendModes.isEmpty())
+        {
+            continue;
+        }
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = record.page;
+        finding.type = QStringLiteral("transparency-blend-mode");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr(
+                              "Transparency uses blend mode configuration(s) that may not be reproduced reliably by all render paths: %1")
+                              .arg(blendModes.join(QStringLiteral(", ")));
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+
+    for (const PDFEvidenceRecord& record : graph.recordsForTarget(PDFEvidenceDomain::OverprintTransparency, QStringLiteral("transparency-blend-space")))
+    {
+        const QStringList mismatches = jsonStringList(record.extra.value(QStringLiteral("mismatches")));
+        if (mismatches.isEmpty())
+        {
+            continue;
+        }
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = record.page;
+        finding.type = QStringLiteral("transparency-blend-space");
+        finding.severity = check.severity;
+        finding.checkId = check.id;
+        finding.evidenceIds = QStringList{ record.id };
+        finding.message = PDFTranslationContext::tr("Potential transparency blend-space mismatch: %1")
+                              .arg(mismatches.join(QStringLiteral("; ")));
+        pushPreflightFinding(finding, check.severity, errors, warnings);
+    }
+}
+
+void evaluateThinStrokesFromGraph(const PreflightCheckConfig& check,
+                                  QList<PreflightFinding>& errors,
+                                  QList<PreflightFinding>& warnings,
+                                  const PDFEvidenceGraph& graph)
+{
+    if (check.minEffectiveStrokeWidthPt <= 0.0)
+    {
+        return;
+    }
+
+    const QString hairlineSeverity = check.hairlineSeverity.isEmpty() ? check.severity : check.hairlineSeverity;
+    const QString thinStrokeSeverity = check.thinStrokeSeverity.isEmpty() ? check.severity : check.thinStrokeSeverity;
+
+    for (const PDFEvidenceRecord& record : graph.recordsForDomain(PDFEvidenceDomain::Strokes))
+    {
+        const bool hairline = record.target == QLatin1String("hairline-stroke") || record.extra.value(QStringLiteral("hairline")).toBool();
+        const qreal declaredWidth = record.extra.value(QStringLiteral("declared_width")).toDouble();
+        const qreal effectiveWidth = record.extra.contains(QStringLiteral("effective_width"))
+                                         ? record.extra.value(QStringLiteral("effective_width")).toDouble()
+                                         : record.observedValue;
+        if (!hairline && !(effectiveWidth < check.minEffectiveStrokeWidthPt))
+        {
+            continue;
+        }
+
+        const QString severity = hairline ? hairlineSeverity : thinStrokeSeverity;
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_OBJECT);
+        finding.page = record.page;
+        finding.objectId = QString();
+        finding.type = hairline ? QStringLiteral("hairline-stroke") : QStringLiteral("thin-stroke");
+        finding.severity = severity;
+        finding.checkId = check.id;
+        finding.bbox = record.geometry;
+        finding.evidenceIds = QStringList{ record.id };
+        if (hairline)
+        {
+            finding.message = PDFTranslationContext::tr(
+                                  "Hairline stroke on page %1 has declared width %2 pt.")
+                                  .arg(record.page)
+                                  .arg(declaredWidth, 0, 'f', 6);
+        }
+        else
+        {
+            finding.message = PDFTranslationContext::tr(
+                                  "Thin stroke on page %1 has minimum effective width %2 pt below %3 pt.")
+                                  .arg(record.page)
+                                  .arg(effectiveWidth, 0, 'f', 6)
+                                  .arg(check.minEffectiveStrokeWidthPt, 0, 'f', 6);
+        }
+        pushPreflightFinding(finding, severity, errors, warnings);
+    }
+}
+
 bool edgeHasContent(const PDFBleedMarginProbeResult& result, PDFBleedFixupSide side)
 {
     switch (side)
@@ -1432,6 +2179,7 @@ void recordBudgetFailure(PreflightResult& result,
     status.status = QStringLiteral("incomplete");
     status.reason = QStringLiteral("budget-exceeded");
     status.budgetKind = QString::fromLatin1(getPDFBudgetKindName(detail.kind));
+    status.budgetPool = QString::fromLatin1(getPDFBudgetPoolName(detail.pool));
     status.budgetLimit = static_cast<qint64>(detail.limit);
     status.budgetAttempted = static_cast<qint64>(detail.attempted);
     status.budgetContext = detail.context;
@@ -4565,7 +5313,14 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         fontCheck.severity = QStringLiteral("error");
         QList<PreflightFinding> errors;
         QList<PreflightFinding> warnings;
-        runEmbeddedFontsCheck(session, fontCheck, errors, warnings);
+        PDFEvidenceGraph fontGraph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Fonts);
+        if (!fontGraph.isComplete())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject{ { QStringLiteral("incomplete_reason"), fontGraph.incompleteReason } },
+                                      fontGraph.incompleteReason);
+        }
+        evaluateEmbeddedFontsFromGraph(fontCheck, errors, warnings, fontGraph);
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
@@ -4588,7 +5343,14 @@ PDFXRuleResult evaluatePDFXRule(PDFDocumentSession* session,
         colorCheck.allowedColorModes = { QStringLiteral("CMYK"), QStringLiteral("Grayscale") };
         QList<PreflightFinding> errors;
         QList<PreflightFinding> warnings;
-        runColorModeCheck(session, colorCheck, errors, warnings);
+        PDFEvidenceGraph colorGraph = PDFEvidenceCollector::collect(session, PDFEvidenceDomain::Colorants);
+        if (!colorGraph.isComplete())
+        {
+            return makePDFXRuleResult(requirement.ruleId, requirement.mandatory, PDFXRuleState::NotInspected,
+                                      QJsonObject{ { QStringLiteral("incomplete_reason"), colorGraph.incompleteReason } },
+                                      colorGraph.incompleteReason);
+        }
+        evaluateColorModeFromGraph(colorCheck, errors, warnings, colorGraph);
         return makePDFXRuleResult(requirement.ruleId, requirement.mandatory,
                                   errors.isEmpty() ? PDFXRuleState::Passed : PDFXRuleState::Failed,
                                   QJsonObject{
@@ -4857,6 +5619,18 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     {
         root.insert(QStringLiteral("profile_resolution"), profileResolution);
     }
+    if (!profileIdentity.isEmpty())
+    {
+        root.insert(QStringLiteral("profile_identity"), profileIdentity);
+    }
+    if (!coverageScope.isEmpty())
+    {
+        root.insert(QStringLiteral("coverage_scope"), coverageScope);
+    }
+    if (!variableBindings.isEmpty())
+    {
+        root.insert(QStringLiteral("variable_bindings"), variableBindings);
+    }
 
     QJsonArray checksArray;
     for (const PreflightCheckStatus& status : checkStatuses)
@@ -4872,6 +5646,10 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         {
             QJsonObject budgetObject;
             budgetObject.insert(QStringLiteral("kind"), status.budgetKind);
+            if (!status.budgetPool.isEmpty())
+            {
+                budgetObject.insert(QStringLiteral("pool"), status.budgetPool);
+            }
             budgetObject.insert(QStringLiteral("limit"), status.budgetLimit);
             budgetObject.insert(QStringLiteral("attempted"), status.budgetAttempted);
             if (!status.budgetContext.isEmpty())
@@ -4910,14 +5688,60 @@ bool PreflightEngine::hasCheck(const QString& id) const
 
 PreflightResult PreflightEngine::run(const QJsonObject& profile)
 {
-    PreflightProfileData data;
-    QString errorMessage;
-    if (!parseProfile(profile, data, errorMessage))
+    return run(profile, QJsonObject(), QJsonObject());
+}
+
+PreflightResult PreflightEngine::run(const QJsonObject& profile,
+                                     const QJsonObject& jobSpecBindings,
+                                     const QJsonObject& cliBindings)
+{
+    const PreflightProfileImportResult imported = importPreflightProfile(profile);
+    if (!imported.ok)
     {
-        // Profile parsing errors are retained in the normalized report so the
-        // canonical reducer can classify them as an operator-visible error.
         PreflightResult result;
         result.profileName = profile.value(QStringLiteral("name")).toString();
+        result.profileIdentity = imported.identity.toJson();
+        result.errorCode = imported.errorCode;
+        result.errorMessage = imported.errorMessage;
+        result.inspectionComplete = imported.errorCode != QLatin1String("profile-digest-mismatch");
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("profile");
+        finding.severity = QStringLiteral("error");
+        finding.message = imported.errorMessage;
+        result.errors.push_back(finding);
+        result.pass = reducePreflightVerdict(result).isPass();
+        return result;
+    }
+
+    const PreflightVariableBindResult bound = bindPreflightProfileVariables(imported.profile, jobSpecBindings, cliBindings);
+    if (!bound.ok)
+    {
+        PreflightResult result;
+        result.profileName = imported.profile.value(QStringLiteral("name")).toString();
+        result.profileIdentity = imported.identity.toJson();
+        result.variableBindings = bound.bindings;
+        result.errorCode = bound.errorCode;
+        result.errorMessage = bound.errorMessage;
+        result.inspectionComplete = false;
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("profile");
+        finding.severity = QStringLiteral("error");
+        finding.message = bound.errorMessage;
+        result.errors.push_back(finding);
+        result.pass = reducePreflightVerdict(result).isPass();
+        return result;
+    }
+
+    PreflightProfileData data;
+    QString errorMessage;
+    if (!parseProfile(bound.profile, data, errorMessage))
+    {
+        PreflightResult result;
+        result.profileName = bound.profile.value(QStringLiteral("name")).toString();
+        result.profileIdentity = imported.identity.toJson();
+        result.variableBindings = bound.bindings;
 
         PreflightFinding finding;
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
@@ -4927,15 +5751,7 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         finding.bbox = QRectF();
         result.errors.push_back(finding);
 
-        // A profile that parses as valid JSON but defines no checks has nothing
-        // structurally wrong with it - it is a semantic finding an operator can act
-        // on (add checks to the profile), not an engine failure. Leave errorCode/
-        // errorMessage unset so reducePreflightVerdict() classifies it through the
-        // normal blocking-findings path (verdict Fail, exit code Findings) instead
-        // of its unconditional errorCode-set-means-Error short circuit. Every other
-        // parse failure (missing name, bad severity, malformed pdfx block, ...) still
-        // reports a genuine engine error.
-        if (!profile.value(QStringLiteral("checks")).toArray().isEmpty())
+        if (!bound.profile.value(QStringLiteral("checks")).toArray().isEmpty())
         {
             result.errorCode = QStringLiteral("profile-invalid");
             result.errorMessage = errorMessage;
@@ -4945,6 +5761,13 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
         return result;
     }
 
+    data.variableBindings = bound.bindings;
+    data.fileDigest = imported.identity.digest;
+    data.effectiveDigest = computeProfileDigest(bound.profile);
+    data.provisional = imported.identity.provisional;
+    data.profileIdentity = imported.identity.toJson();
+    data.profileIdentity.insert(QStringLiteral("digest"), data.fileDigest);
+    data.profileIdentity.insert(QStringLiteral("effective_digest"), data.effectiveDigest);
     return run(data);
 }
 
@@ -4953,9 +5776,121 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
     PreflightResult result;
     result.profileName = profile.name;
     result.inspectionComplete = true;
+    result.profileIdentity = profile.profileIdentity;
+    result.coverageScope = profile.coverageScope.isEmpty() ? preflightCoverageScopeFor(profile) : profile.coverageScope;
+    result.variableBindings = profile.variableBindings;
+    result.effectiveProfileDigest = profile.effectiveDigest;
+    m_activeGraph = PDFEvidenceGraph();
     if (m_session)
     {
         m_session->resetProcessingBudget();
+    }
+
+    if (profile.restrictions.hasUnsupportedScope())
+    {
+        result.inspectionComplete = false;
+        result.errorCode = QStringLiteral("unsupported-scope");
+        result.errorMessage = profile.restrictions.unsupportedReason.isEmpty()
+                                  ? PDFTranslationContext::tr("The requested inspection scope is not supported.")
+                                  : profile.restrictions.unsupportedReason;
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("unsupported-scope");
+        finding.severity = QStringLiteral("error");
+        finding.message = result.errorMessage;
+        result.errors.push_back(finding);
+        result.pass = reducePreflightVerdict(result, &profile).isPass();
+        return result;
+    }
+    if (profile.restrictions.pages.has_value())
+    {
+        bool anyPage = false;
+        const int pageCount = m_session && m_session->getDocument() && m_session->getDocument()->getCatalog()
+                                  ? int(m_session->getDocument()->getCatalog()->getPageCount())
+                                  : 0;
+        for (int pageIndex = 0; pageIndex < pageCount; ++pageIndex)
+        {
+            if (profile.restrictions.allowsPage(pageIndex))
+            {
+                anyPage = true;
+                break;
+            }
+        }
+        if (!anyPage)
+        {
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("unsupported-scope");
+            result.errorMessage = PDFTranslationContext::tr("Restriction 'pages' does not include any page in this document.");
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+            finding.type = QStringLiteral("unsupported-scope");
+            finding.severity = QStringLiteral("error");
+            finding.message = result.errorMessage;
+            result.errors.push_back(finding);
+            result.pass = reducePreflightVerdict(result, &profile).isPass();
+            return result;
+        }
+    }
+
+    const PDFEvidenceDomains graphDomains = evidenceDomainsForProfile(profile);
+    if (graphDomains != PDFEvidenceDomains())
+    {
+        m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
+        if (profile.restrictions.pages.has_value())
+        {
+            QList<PDFEvidenceRecord> kept;
+            kept.reserve(m_activeGraph.records.size());
+            for (const PDFEvidenceRecord& record : m_activeGraph.records)
+            {
+                if (profile.restrictions.allowsPage(record.page - 1))
+                {
+                    kept.append(record);
+                }
+            }
+            m_activeGraph.records = kept;
+        }
+        if (!m_activeGraph.isComplete())
+        {
+            result.inspectionComplete = false;
+            if (!m_activeGraph.budgetKind.isEmpty())
+            {
+                result.errorCode = QStringLiteral("budget-exceeded");
+                result.errorMessage = PDFTranslationContext::tr("Evidence collection exceeded the %1 processing budget.")
+                                          .arg(m_activeGraph.budgetKind);
+                PreflightCheckStatus budgetStatus;
+                budgetStatus.id = QStringLiteral("evidence-graph");
+                budgetStatus.status = QStringLiteral("incomplete");
+                budgetStatus.reason = QStringLiteral("budget-exceeded");
+                budgetStatus.budgetKind = m_activeGraph.budgetKind;
+                budgetStatus.budgetPool = m_activeGraph.budgetPool;
+                budgetStatus.budgetLimit = m_activeGraph.budgetLimit;
+                budgetStatus.budgetAttempted = m_activeGraph.budgetAttempted;
+                budgetStatus.budgetContext = m_activeGraph.budgetContext;
+                result.checkStatuses.push_back(budgetStatus);
+
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+                finding.type = QStringLiteral("budget-exceeded");
+                finding.severity = QStringLiteral("error");
+                finding.checkId = QStringLiteral("evidence-graph");
+                finding.message = result.errorMessage;
+                result.errors.push_back(finding);
+            }
+            else
+            {
+                result.errorCode = QStringLiteral("evidence-incomplete");
+                result.errorMessage = m_activeGraph.incompleteReason.isEmpty()
+                                          ? PDFTranslationContext::tr("Required inspection evidence was not collected.")
+                                          : m_activeGraph.incompleteReason;
+
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+                finding.type = QStringLiteral("evidence-incomplete");
+                finding.severity = QStringLiteral("error");
+                finding.message = result.errorMessage;
+                result.errors.push_back(finding);
+            }
+        }
     }
 
     for (const PreflightCheckConfig& check : profile.checks)
@@ -4979,6 +5914,22 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
             continue;
         }
 
+        if (check.restrictions.hasUnsupportedScope() || (check.restrictions.pages.has_value() && !isGraphBackedCheckId(check.id)))
+        {
+            status.status = QStringLiteral("incomplete");
+            status.reason = QStringLiteral("unsupported-scope");
+            result.checkStatuses.push_back(status);
+            result.inspectionComplete = false;
+            if (result.errorCode.isEmpty())
+            {
+                result.errorCode = QStringLiteral("unsupported-scope");
+                result.errorMessage = check.restrictions.unsupportedReason.isEmpty()
+                                          ? PDFTranslationContext::tr("Check '%1' cannot honour the requested restrictions.").arg(check.id)
+                                          : check.restrictions.unsupportedReason;
+            }
+            continue;
+        }
+
         auto it = m_checks.find(check.id);
         if (it == m_checks.end())
         {
@@ -4999,6 +5950,17 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
                 result.errorCode = QStringLiteral("unsupported-check");
                 result.errorMessage = finding.message;
             }
+            continue;
+        }
+
+        if (isGraphBackedCheckId(check.id) && !m_activeGraph.isComplete())
+        {
+            status.status = QStringLiteral("incomplete");
+            status.reason = m_activeGraph.incompleteReason.isEmpty()
+                                ? QStringLiteral("evidence-incomplete")
+                                : m_activeGraph.incompleteReason;
+            result.checkStatuses.push_back(status);
+            result.inspectionComplete = false;
             continue;
         }
 
@@ -5147,6 +6109,11 @@ PDFDocumentSession* PreflightEngine::getSession() const
     return m_session;
 }
 
+const PDFEvidenceGraph& PreflightEngine::lastEvidenceGraph() const
+{
+    return m_activeGraph;
+}
+
 bool PreflightEngine::loadProfile(const QString& profilePath, QJsonObject& profile, QString& errorMessage)
 {
     QFile profileFile(profilePath);
@@ -5178,6 +6145,25 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
     {
         errorMessage = PDFTranslationContext::tr("Profile is missing required field 'name'.");
         return false;
+    }
+    profile.id = profileObject.value(QStringLiteral("id")).toString().trimmed();
+    profile.version = profileObject.value(QStringLiteral("version")).toString().trimmed();
+    if (profile.id.isEmpty() || profile.version.isEmpty())
+    {
+        profile.provisional = true;
+    }
+    if (profileObject.contains(QStringLiteral("restrictions")))
+    {
+        const QJsonValue restrictionsValue = profileObject.value(QStringLiteral("restrictions"));
+        if (!restrictionsValue.isObject())
+        {
+            errorMessage = PDFTranslationContext::tr("Profile field 'restrictions' must be an object.");
+            return false;
+        }
+        if (!parsePreflightRestrictions(restrictionsValue.toObject(), profile.restrictions, errorMessage))
+        {
+            return false;
+        }
     }
 
     const QJsonArray checks = profileObject.value(QStringLiteral("checks")).toArray();
@@ -5558,6 +6544,26 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
             check.allowMultipleOutputIntents = checkObject.value(QStringLiteral("allow_multiple")).toBool(true);
         }
 
+        if (checkObject.contains(QStringLiteral("restrictions")))
+        {
+            const QJsonValue restrictionsValue = checkObject.value(QStringLiteral("restrictions"));
+            if (!restrictionsValue.isObject())
+            {
+                errorMessage = PDFTranslationContext::tr("Check '%1' field 'restrictions' must be an object.").arg(check.id);
+                return false;
+            }
+            PreflightRestrictions checkRestrictions;
+            if (!parsePreflightRestrictions(restrictionsValue.toObject(), checkRestrictions, errorMessage))
+            {
+                return false;
+            }
+            check.restrictions = profile.restrictions.intersect(checkRestrictions);
+        }
+        else
+        {
+            check.restrictions = profile.restrictions;
+        }
+
         profile.checks.push_back(check);
     }
 
@@ -5599,6 +6605,7 @@ bool PreflightEngine::parseProfile(const QJsonObject& profileObject, PreflightPr
         profile.fixups.push_back(fixup);
     }
 
+    profile.coverageScope = preflightCoverageScopeFor(profile);
     return true;
 }
 
@@ -5653,28 +6660,31 @@ void PreflightEngine::registerBuiltInChecks()
         runInkCoverageCheck(session, check, errors, warnings);
     };
 
-    m_checks[QStringLiteral("color-mode")] = [](PDFDocumentSession* session,
-                                                const PreflightCheckConfig& check,
-                                                QList<PreflightFinding>& errors,
-                                                QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("color-mode")] = [this](PDFDocumentSession* session,
+                                                    const PreflightCheckConfig& check,
+                                                    QList<PreflightFinding>& errors,
+                                                    QList<PreflightFinding>& warnings)
     {
-        runColorModeCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateColorModeFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
-    m_checks[QStringLiteral("transparency-risk")] = [](PDFDocumentSession* session,
-                                                       const PreflightCheckConfig& check,
-                                                       QList<PreflightFinding>& errors,
-                                                       QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("transparency-risk")] = [this](PDFDocumentSession* session,
+                                                           const PreflightCheckConfig& check,
+                                                           QList<PreflightFinding>& errors,
+                                                           QList<PreflightFinding>& warnings)
     {
-        runTransparencyRiskCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateTransparencyRiskFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
-    m_checks[QStringLiteral("thin-strokes")] = [](PDFDocumentSession* session,
-                                                  const PreflightCheckConfig& check,
-                                                  QList<PreflightFinding>& errors,
-                                                  QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("thin-strokes")] = [this](PDFDocumentSession* session,
+                                                      const PreflightCheckConfig& check,
+                                                      QList<PreflightFinding>& errors,
+                                                      QList<PreflightFinding>& warnings)
     {
-        runThinStrokesCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateThinStrokesFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
     m_checks[QStringLiteral("thin-parts")] = [](PDFDocumentSession* session,
@@ -5685,12 +6695,13 @@ void PreflightEngine::registerBuiltInChecks()
         runThinPartsCheck(session, check, errors, warnings);
     };
 
-    m_checks[QStringLiteral("color-inventory")] = [](PDFDocumentSession* session,
-                                                     const PreflightCheckConfig& check,
-                                                     QList<PreflightFinding>& errors,
-                                                     QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("color-inventory")] = [this](PDFDocumentSession* session,
+                                                         const PreflightCheckConfig& check,
+                                                         QList<PreflightFinding>& errors,
+                                                         QList<PreflightFinding>& warnings)
     {
-        runColorInventoryCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateColorInventoryFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
     m_checks[QStringLiteral("output-intent")] = [](PDFDocumentSession* session,
@@ -5701,12 +6712,13 @@ void PreflightEngine::registerBuiltInChecks()
         runOutputIntentCheck(session, check, errors, warnings);
     };
 
-    m_checks[QStringLiteral("embedded-fonts")] = [](PDFDocumentSession* session,
-                                                    const PreflightCheckConfig& check,
-                                                    QList<PreflightFinding>& errors,
-                                                    QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("embedded-fonts")] = [this](PDFDocumentSession* session,
+                                                        const PreflightCheckConfig& check,
+                                                        QList<PreflightFinding>& errors,
+                                                        QList<PreflightFinding>& warnings)
     {
-        runEmbeddedFontsCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateEmbeddedFontsFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
     m_checks[QStringLiteral("font-integrity")] = [](PDFDocumentSession* session,
@@ -5731,20 +6743,22 @@ void PreflightEngine::registerBuiltInChecks()
         };
     }
 
-    m_checks[QStringLiteral("image-resolution")] = [](PDFDocumentSession* session,
-                                                      const PreflightCheckConfig& check,
-                                                      QList<PreflightFinding>& errors,
-                                                      QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("image-resolution")] = [this](PDFDocumentSession* session,
+                                                          const PreflightCheckConfig& check,
+                                                          QList<PreflightFinding>& errors,
+                                                          QList<PreflightFinding>& warnings)
     {
-        runImageResolutionCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateImageResolutionFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 
-    m_checks[QStringLiteral("white-overprint")] = [](PDFDocumentSession* session,
-                                                     const PreflightCheckConfig& check,
-                                                     QList<PreflightFinding>& errors,
-                                                     QList<PreflightFinding>& warnings)
+    m_checks[QStringLiteral("white-overprint")] = [this](PDFDocumentSession* session,
+                                                         const PreflightCheckConfig& check,
+                                                         QList<PreflightFinding>& errors,
+                                                         QList<PreflightFinding>& warnings)
     {
-        runWhiteOverprintCheck(session, check, errors, warnings);
+        Q_UNUSED(session);
+        evaluateWhiteOverprintFromGraph(check, errors, warnings, evidenceGraphForCheck(m_activeGraph, check.restrictions));
     };
 }
 

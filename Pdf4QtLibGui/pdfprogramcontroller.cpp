@@ -58,6 +58,8 @@
 #include "pdfdiagnostics.h"
 
 #include <QMenu>
+#include <QPluginLoader>
+#include <QSet>
 #include <QPrinter>
 #include <QPrintDialog>
 #include <QFormLayout>
@@ -70,6 +72,7 @@
 #include <QDesktopServices>
 #include <QFileInfo>
 #include <QApplication>
+#include <QDir>
 #include <QFileDialog>
 #include <QPushButton>
 #include <QtConcurrent/QtConcurrent>
@@ -486,12 +489,12 @@ void PDFProgramController::initialize(Features features,
     m_mainWindow = mainWindow;
     m_mainWindowInterface = mainWindowInterface;
 
-    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message) {
+    connect(m_recoveryManager, &PDFRecoveryManager::checkpointFailed, this, [this](const QString&, const QString& message)
+            {
         if (m_mainWindowInterface)
         {
             m_mainWindowInterface->setStatusBarMessage(tr("Recovery checkpoint unavailable: %1").arg(message), 6000);
-        }
-    });
+        } });
 
     if (QAction* action = m_actionManager->getAction(PDFActionManager::GoToDocumentStart))
     {
@@ -1354,7 +1357,8 @@ void PDFProgramController::saveDocument(const QString& fileName)
     }
     else
     {
-        pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+        pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                      { return QString(); }, true, false);
         pdf::PDFDocument sourceDocument = reader.readFromFile(fileName);
         if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
         {
@@ -1480,8 +1484,8 @@ bool PDFProgramController::restoreRecovery(const RecoveryCandidate& candidate, Q
     setDocument(document, {}, false);
     updateTitle();
     const QString recoveryMessage = candidate.signedDocument
-        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
-        : tr("Recovered session restored. Save As is required to create a new output.");
+                                        ? tr("Recovered signed source restored as an independent working copy. Save As is required; signature coverage does not apply to edits.")
+                                        : tr("Recovered session restored. Save As is required to create a new output.");
     m_mainWindowInterface->setStatusBarMessage(recoveryMessage, 6000);
     return true;
 }
@@ -2834,6 +2838,7 @@ void PDFProgramController::loadPlugins()
 {
     QStringList availablePlugins;
     QDir directory(QApplication::applicationDirPath() + "/" PDF4QT_PLUGINS_RELATIVE_PATH);
+    const QString allowedDirectory = directory.exists() ? directory.canonicalPath() : directory.absolutePath();
 #if defined(Q_OS_WIN)
     availablePlugins = directory.entryList(QStringList("*.dll"));
 #elif defined(Q_OS_UNIX)
@@ -2842,34 +2847,60 @@ void PDFProgramController::loadPlugins()
     static_assert(false, "Implement this for another OS!");
 #endif
 
+    QSet<QString> seenPluginIds;
     for (const QString& availablePlugin : availablePlugins)
     {
         QString pluginFileName = directory.absoluteFilePath(availablePlugin);
-        QPluginLoader loader(pluginFileName);
-        if (loader.load())
+        if (!pdf::pluginPathIsInsideAllowedDirectory(pluginFileName, allowedDirectory))
         {
-            QJsonObject metaData = loader.metaData();
-            m_plugins.emplace_back(pdf::PDFPluginInfo::loadFromJson(&metaData));
-            m_plugins.back().pluginFile = availablePlugin;
-            m_plugins.back().pluginFileWithPath = pluginFileName;
+            qWarning("Skipping plugin outside packaged directory: %s", qUtf8Printable(pluginFileName));
+            continue;
+        }
 
-            QString pluginName = m_plugins.back().name;
-            if (!m_enabledPlugins.contains(pluginName) && !m_loadAllPlugins)
-            {
-                loader.unload();
-                continue;
-            }
+        QPluginLoader loader(pluginFileName);
+        const QJsonObject metaData = loader.metaData();
+        const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(metaData,
+                                                                                pluginFileName,
+                                                                                allowedDirectory,
+                                                                                seenPluginIds);
+        if (!decision.accepted)
+        {
+            qWarning("Rejected plugin %s: %s (%s)",
+                     qUtf8Printable(pluginFileName),
+                     qUtf8Printable(decision.errorCode),
+                     qUtf8Printable(decision.errorMessage));
+            continue;
+        }
 
-            if (m_loadAllPlugins)
-            {
-                m_enabledPlugins << pluginName;
-            }
+        pdf::PDFPluginInfo pluginInfo = decision.info;
+        pluginInfo.pluginFile = availablePlugin;
+        pluginInfo.pluginFileWithPath = pluginFileName;
+        m_plugins.emplace_back(pluginInfo);
+        seenPluginIds.insert(pluginInfo.pluginId);
 
-            pdf::PDFPlugin* plugin = qobject_cast<pdf::PDFPlugin*>(loader.instance());
-            if (plugin)
-            {
-                m_loadedPlugins.push_back(std::make_pair(m_plugins.back(), plugin));
-            }
+        QString pluginName = pluginInfo.name;
+        if (!m_enabledPlugins.contains(pluginName) && !m_loadAllPlugins)
+        {
+            continue;
+        }
+
+        if (m_loadAllPlugins)
+        {
+            m_enabledPlugins << pluginName;
+        }
+
+        if (!loader.load())
+        {
+            qWarning("Failed to load plugin %s: %s",
+                     qUtf8Printable(pluginFileName),
+                     qUtf8Printable(loader.errorString()));
+            continue;
+        }
+
+        pdf::PDFPlugin* plugin = qobject_cast<pdf::PDFPlugin*>(loader.instance());
+        if (plugin)
+        {
+            m_loadedPlugins.push_back(std::make_pair(m_plugins.back(), plugin));
         }
     }
     m_loadAllPlugins = false;

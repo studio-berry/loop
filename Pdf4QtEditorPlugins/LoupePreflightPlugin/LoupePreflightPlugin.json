@@ -6,6 +6,8 @@
     "Version": "1.0.0",
     "License": "MIT",
     "Description": "Run Loupe preflight checks and display the report.",
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
     "Capabilities": [
         "read-document",
         "propose-operation"

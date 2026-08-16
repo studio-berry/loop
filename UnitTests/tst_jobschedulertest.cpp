@@ -39,11 +39,13 @@ class JobSchedulerTest : public QObject
 private slots:
     void priorityOrdersQueuedJobs();
     void reservesCapacityForInteractionJobs();
+    void interactionRunsWhenBackgroundIsSaturated();
     void allWorkKindsUseOneSubmissionApi();
     void cancellationIsTerminalAndMeasured();
     void staleRevisionIsDiscardedBeforeWorkRuns();
     void progressAndOperationMetadataAreObservable();
     void waitTimeoutCancelJoinsBeforeTerminalSnapshot();
+    void cancelledPreflightAndExportJobsAreNotSuccess();
 };
 
 void JobSchedulerTest::priorityOrdersQueuedJobs()
@@ -126,6 +128,48 @@ void JobSchedulerTest::reservesCapacityForInteractionJobs()
 
     QVERIFY(scheduler.waitForFinished(visibleId, 1000));
     QVERIFY(visibleStarted.load(std::memory_order_acquire));
+    QCOMPARE(scheduler.snapshot(secondId).status, pdf::PDFJobStatus::Queued);
+
+    releaseBackground = true;
+    QVERIFY(scheduler.waitForFinished(firstId, 1000));
+    QVERIFY(scheduler.waitForFinished(secondId, 1000));
+}
+
+void JobSchedulerTest::interactionRunsWhenBackgroundIsSaturated()
+{
+    pdf::PDFJobScheduler scheduler(2);
+    std::atomic_bool releaseBackground = false;
+    std::atomic_int backgroundStarted = 0;
+    std::atomic_bool interactionStarted = false;
+
+    auto backgroundWork = [&releaseBackground, &backgroundStarted](pdf::PDFJobContext&)
+    {
+        ++backgroundStarted;
+        while (!releaseBackground.load(std::memory_order_acquire))
+        {
+            std::this_thread::yield();
+        }
+    };
+
+    pdf::PDFJobSpec first;
+    first.jobId = QStringLiteral("background-1");
+    first.priority = pdf::PDFJobPriority::Background;
+    const QString firstId = scheduler.submit(first, backgroundWork);
+    pdf::PDFJobSpec second;
+    second.jobId = QStringLiteral("background-2");
+    second.priority = pdf::PDFJobPriority::Background;
+    const QString secondId = scheduler.submit(second, backgroundWork);
+    QTRY_VERIFY_WITH_TIMEOUT(backgroundStarted.load(std::memory_order_acquire) == 1, 1000);
+
+    pdf::PDFJobSpec interaction;
+    interaction.jobId = QStringLiteral("interaction-reserved");
+    interaction.priority = pdf::PDFJobPriority::Interaction;
+    const QString interactionId = scheduler.submit(interaction, [&interactionStarted](pdf::PDFJobContext&)
+                                                   { interactionStarted = true; });
+
+    QVERIFY(scheduler.waitForFinished(interactionId, 1000));
+    QVERIFY(interactionStarted.load(std::memory_order_acquire));
+    QCOMPARE(scheduler.snapshot(interactionId).status, pdf::PDFJobStatus::Succeeded);
     QCOMPARE(scheduler.snapshot(secondId).status, pdf::PDFJobStatus::Queued);
 
     releaseBackground = true;
@@ -271,6 +315,45 @@ void JobSchedulerTest::waitTimeoutCancelJoinsBeforeTerminalSnapshot()
     QVERIFY(snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Failed);
 
     releaseBlocker = true;
+}
+
+void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    std::atomic_bool started = false;
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.operationId = QStringLiteral("pagemaster-export");
+    const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& context)
+                                           {
+        started = true;
+        while (!context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        } });
+
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(jobId));
+    QVERIFY(scheduler.waitForFinished(jobId, 1000));
+    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Cancelled);
+    QVERIFY(scheduler.snapshot(jobId).status != pdf::PDFJobStatus::Succeeded);
+
+    pdf::PDFJobSpec preflight;
+    preflight.kind = pdf::PDFJobKind::Preflight;
+    preflight.priority = pdf::PDFJobPriority::Operator;
+    std::atomic_bool preflightStarted = false;
+    const QString preflightId = scheduler.submit(preflight, [&preflightStarted](pdf::PDFJobContext& context)
+                                                 {
+        preflightStarted = true;
+        while (!context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        } });
+    QTRY_VERIFY_WITH_TIMEOUT(preflightStarted.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(preflightId));
+    QVERIFY(scheduler.waitForFinished(preflightId, 1000));
+    QCOMPARE(scheduler.snapshot(preflightId).status, pdf::PDFJobStatus::Cancelled);
 }
 
 QTEST_MAIN(JobSchedulerTest)

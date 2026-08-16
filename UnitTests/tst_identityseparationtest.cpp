@@ -40,12 +40,21 @@
 static_assert(!std::is_same_v<pdf::PDFArtifactIdentity, pdf::PDFDocumentIdentity>,
               "Persisted artifact identity and in-session document identity must stay distinct types");
 
+static_assert(std::is_same_v<pdf::PDFRevisionToken, pdf::PDFRevisionIdentity>,
+              "PDFRevisionToken must remain an alias of PDFRevisionIdentity, not a second type");
+
+static_assert(!std::is_same_v<pdf::PDFRevisionToken, pdf::PDFArtifactIdentity>,
+              "Revision tokens must not collapse to persisted PDFArtifactIdentity");
+
+static_assert(!std::is_same_v<pdf::PDFRevisionToken, pdf::PDFDocumentIdentity>,
+              "Revision tokens include document identity plus revision/cache/profile fences");
+
 static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
-                              pdf::PDFArtifactIdentity>,
+                             pdf::PDFArtifactIdentity>,
               "Operation-history executions must reference persisted PDFArtifactIdentity inputs");
 
 static_assert(std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryEvent>().output),
-                              std::optional<pdf::PDFArtifactIdentity>>,
+                             std::optional<pdf::PDFArtifactIdentity>>,
               "Operation-history events must reference persisted PDFArtifactIdentity outputs");
 
 static_assert(!std::is_same_v<decltype(std::declval<pdf::PDFOperationHistoryExecution>().input),
@@ -65,6 +74,7 @@ private slots:
     void documentIdentity_hasInSessionFields();
     void documentIdentity_fromNullDocumentIsInvalid();
     void revisionIdentity_carriesDocumentIdentity();
+    void revisionToken_isRevisionIdentityAlias();
 };
 
 void IdentitySeparationTest::persistedArtifactIdentity_hasStorageFields()
@@ -123,6 +133,22 @@ void IdentitySeparationTest::revisionIdentity_carriesDocumentIdentity()
     later.documentRevision = 1;
     QVERIFY(revision < later);
     QVERIFY(!(revision == later));
+}
+
+void IdentitySeparationTest::revisionToken_isRevisionIdentityAlias()
+{
+    pdf::PDFRevisionToken token;
+    token.document.documentId = QStringLiteral("7f3a");
+    token.documentRevision = 3;
+    token.cacheGeneration = 4;
+    token.effectiveProfileIdentity = QStringLiteral("profile-a");
+
+    const pdf::PDFRevisionIdentity identity = token;
+    QCOMPARE(identity.document.documentId, token.document.documentId);
+    QCOMPARE(identity.documentRevision, token.documentRevision);
+    QCOMPARE(identity.cacheGeneration, token.cacheGeneration);
+    QCOMPARE(identity.effectiveProfileIdentity, token.effectiveProfileIdentity);
+    QVERIFY(identity == token);
 }
 
 QTEST_GUILESS_MAIN(IdentitySeparationTest)

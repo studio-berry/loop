@@ -1,7 +1,16 @@
 {
-    "Name" : "OutputPreview",
-    "Author" : "Jakub Melka",
-    "Version" : "1.0.0",
-    "License" : "LGPL v3",
-    "Description" : "View prepress output preview (overprint, spot colors, advanced transparency). Measure ink coverage for process and spot colors for all pages."
+    "Name": "OutputPreview",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "View prepress output preview (overprint, spot colors, advanced transparency). Measure ink coverage for process and spot colors for all pages.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
+    "Capabilities": [
+        "read-document",
+        "propose-operation"
+    ],
+    "PluginId": "PDF4QT.OutputPreviewPlugin",
+    "BuildId": "loupe-0.1.0"
 }

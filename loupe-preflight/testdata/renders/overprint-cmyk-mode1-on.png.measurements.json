@@ -1,0 +1,6 @@
+{
+  "width": 128,
+  "height": 128,
+  "max_channel_delta_budget": 2,
+  "differing_pixel_budget": 64
+}
