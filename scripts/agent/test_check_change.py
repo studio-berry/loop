@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("check-change.py")
@@ -16,6 +18,13 @@ assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+POLICY_BRANCHES = {
+    "default": "stable",
+    "integration": "dev",
+    "release": "stable",
+    "protected": ["dev", "stable"],
+}
 
 
 class CheckChangeTests(unittest.TestCase):
@@ -48,6 +57,87 @@ class CheckChangeTests(unittest.TestCase):
             )
             valid, reason = MODULE.parse_changelog(path, {"internal"})
         self.assertTrue(valid, reason)
+
+    def test_resolve_merge_base_uses_both_revisions(self) -> None:
+        with patch.object(MODULE, "run_git", return_value="abc123\n") as run_git:
+            self.assertEqual(MODULE.resolve_merge_base("base", "head"), "abc123")
+        run_git.assert_called_once_with(["merge-base", "base", "head"])
+
+    def test_skip_changelog_on_integration_branch(self) -> None:
+        policy = {"branches": POLICY_BRANCHES}
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": ""}, clear=False):
+            self.assertEqual(MODULE.skip_changelog_reason("dev", policy, False), "integration branch")
+            self.assertEqual(MODULE.skip_changelog_reason("stable", policy, False), "integration branch")
+            self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
+            self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, True), "non-PR event")
+
+    def test_skip_changelog_on_non_pr_github_event(self) -> None:
+        policy = {"branches": POLICY_BRANCHES}
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=False):
+            self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, False), "non-PR event")
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
+            self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
+
+    def test_check_changelog_allows_stacked_topic_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            changes_dir = root / "changes"
+            changes_dir.mkdir()
+            body = (
+                "Category: fixed\nAudience: developers\nBreaking-Change: no\n"
+                "Summary: Wave fragment.\n"
+            )
+            for name in ("cdx-parent.md", "cdx-child.md"):
+                (changes_dir / name).write_text(body, encoding="utf-8")
+            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+            changes = [
+                MODULE.Change("A", "changes/cdx-parent.md"),
+                MODULE.Change("A", "changes/cdx-child.md"),
+            ]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cdx/child")
+        self.assertEqual(evidence.result, "pass")
+
+    def test_check_changelog_validates_every_stacked_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            changes_dir = root / "changes"
+            changes_dir.mkdir()
+            (changes_dir / "cdx-parent.md").write_text("Category: fixed\n", encoding="utf-8")
+            (changes_dir / "cdx-child.md").write_text(
+                "Category: fixed\nAudience: developers\nBreaking-Change: no\nSummary: Child.\n",
+                encoding="utf-8",
+            )
+            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+            changes = [
+                MODULE.Change("A", "changes/cdx-parent.md"),
+                MODULE.Change("A", "changes/cdx-child.md"),
+            ]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cdx/child")
+        self.assertEqual(evidence.result, "fail")
+        self.assertIn("changes/cdx-parent.md", evidence.reason or "")
+
+    def test_format_sources_excludes_deleted_paths(self) -> None:
+        changes = [
+            MODULE.Change("D", "Pdf4QtLibCore/sources/old.cpp"),
+            MODULE.Change("M", "Pdf4QtLibCore/sources/keep.cpp"),
+            MODULE.Change("A", "Pdf4QtLibCore/sources/new.h"),
+            MODULE.Change("R", "Pdf4QtLibCore/sources/renamed.cpp", "Pdf4QtLibCore/sources/was.cpp"),
+            MODULE.Change("A", "changes/foo.md"),
+        ]
+        self.assertEqual(
+            MODULE.format_sources(changes),
+            [
+                "Pdf4QtLibCore/sources/keep.cpp",
+                "Pdf4QtLibCore/sources/new.h",
+                "Pdf4QtLibCore/sources/renamed.cpp",
+            ],
+        )
+
+    def test_clang_tidy_is_scheduled_after_test_targets_build(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertLess(source.index("for test in tests:"), source.index("compile_db ="))
 
 
 if __name__ == "__main__":
