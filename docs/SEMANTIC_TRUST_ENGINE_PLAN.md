@@ -188,17 +188,19 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Audited 2026-08-15 against the canonical Notion [Roadmap](https://www.notion.so/38f9cb079ddb804a96dbe26b8d86e84f) **0.1.1 exit gate** (all boxes still unchecked there — correct, this milestone is not operator-accepted) and current code on this branch. Product `PDF4QT_VERSION` stays **0.1.0**. Cursor session todos that marked S05/S08/S11/S18 complete were wrong; those sessions are not done-when green.
+Wave A (S00–S05) is the scope of this branch. Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (Evidence Graph, profiles, oracles, hostile load, lifecycle, plugin ABI, S18) land on sibling branches stacked from `cursor/s00-m0-plan-0158`.
+
+Audited 2026-08-15 against the canonical Notion [Roadmap](https://www.notion.so/38f9cb079ddb804a96dbe26b8d86e84f) **0.1.1 exit gate** (all boxes still unchecked there — correct, this milestone is not operator-accepted) and current code on this branch.
 
 Notion 0.1.1 exit gate × code:
 
 | Notion exit item | Session | Status |
 | --- | --- | --- |
-| #234/#236/#237/#238/#239 acceptance-verified | S01–S05 | **Partial.** Reducer, revision alias, live PdfTool provenance kinds, thumbnail scheduler, and save-policy tests exist. **#238 production callers are not done:** only PdfTool `preflight` and widget thumbnails use `PDFJobScheduler`. |
+| #234/#236/#237/#238/#239 acceptance-verified | S01–S05 | **Partial.** Reducer, revision alias, live PdfTool provenance kinds, thumbnail scheduler, and save-policy tests exist. **#238 production callers are mostly migrated:** page compile, text layout, PdfTool `preflight`, Editor preflight, PageMaster export, PageMaster preview, and widget thumbnails use `PDFJobScheduler`. Overlay tile rendering remains on `PDFExecutionPolicy`. |
 | Current/previous schemas round-trip; unsupported majors fail closed | S03 | **Landed.** `pdfschemaversion.*`, `docs/schema-compatibility.json`, goldens, `UnitTestsSchemaEvolution`. |
 | Five-family Evidence Graph matches golden corpus | S06–S08 | **Partial.** Collector walks Images/Colorants/Strokes/OverprintTransparency/Fonts. Checks still use per-check processors. Findings get additive `evidence_ids` after the old walk. **S08 walker deletion is not done.** |
 | Findings cite normalized evidence records | S06–S08 | **Partial.** Citation is domain/page overlay, not graph-evaluated findings. |
-| Every async/cache result is revision-bound | S04–S05 | **Partial.** Thumbnails + PageMaster preview fence. Page compile / text layout (`QtConcurrent` in `pdfcompiler.cpp`), PageMaster export, Editor preflight, PageMaster preview render remain off the scheduler. Inventory: `docs/JOB_SCHEDULER.md`. |
+| Every async/cache result is revision-bound | S04–S05 | **Partial.** Thumbnails, PageMaster preview (scheduler), page compile, text layout, Editor preflight, and PageMaster export are revision-bound via `PDFJobScheduler`. Overlay tiles, OCR, and batch analysis remain off the scheduler. Inventory: `docs/JOB_SCHEDULER.md`. |
 | Targeted revalidation matches full-run verdicts | S11 | **Not done.** `PDFOperationImpact` exists; default incomplete impact → full revalidation (fail-closed-correct). No qualification-corpus targeted=full proof; repair ops do not declare complete scoped impact. |
 | Standards claims pass an independent oracle | S12 | **Partial.** Fixture triad + mismatch/`missing` cannot self-certify. veraPDF lane is `QSKIP` if missing (not bundled). |
 | Resource exhaustion reports attributable INCOMPLETE | S14–S15 | **Partial.** Named pools + budget→Incomplete. Huge-doc envelope is a generated 40-page identity JSON in `UnitTestsHugeDocumentEnvelope`, not a measured production envelope. |
@@ -210,7 +212,7 @@ Notion 0.1.1 exit gate × code:
 
 Session leftovers (do not treat Cursor checkmarks as truth):
 
-- **S05.** Migrate page compile, text layout, Editor preflight, and PageMaster export onto `PDFJobScheduler`. Cancelled work must not report `Succeeded` / `verdict.state = pass`. OCR/agent remain out of scope.
+- **S05 remainder.** Overlay tile rendering stays on `PDFExecutionPolicy`. OCR, batch analysis, and agent jobs remain out of scope. Cancelled scheduler work must not report `Succeeded` / `verdict.state = pass`.
 - **S07 remainder.** `thin-strokes-hairline` and `thin-parts-fill` corpus rows are `pending: true` (fixtures not generated). Dual-run parity is not closed for those families.
 - **S08.** Image-resolution still walks annotation `/AP` streams the collector does not visit (`preflightengine.cpp`). Start S08 only after the collector covers those appearances without changing corpus findings. Then evaluate the graph only and delete the five-family walkers.
 - **S11.** Declare complete `PDFOperationImpact` on repair ops where true; prove targeted ≡ full on a qualification corpus. Until then, incomplete → full revalidation stays the safe default.

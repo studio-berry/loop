@@ -44,6 +44,7 @@ private slots:
     void cancellationIsTerminalAndMeasured();
     void staleRevisionIsDiscardedBeforeWorkRuns();
     void progressAndOperationMetadataAreObservable();
+    void cancelledPreflightAndExportJobsAreNotSuccess();
 };
 
 void JobSchedulerTest::priorityOrdersQueuedJobs()
@@ -285,6 +286,45 @@ void JobSchedulerTest::progressAndOperationMetadataAreObservable()
     QCOMPARE(result.checkId, QStringLiteral("page.1"));
     QCOMPARE(result.documentRevision, QStringLiteral("revision-4"));
     QVERIFY(scheduler.trace(jobId).size() >= 3);
+}
+
+void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    std::atomic_bool started = false;
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.operationId = QStringLiteral("pagemaster-export");
+    const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& context)
+                                           {
+        started = true;
+        while (!context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        } });
+
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(jobId));
+    QVERIFY(scheduler.waitForFinished(jobId, 1000));
+    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Cancelled);
+    QVERIFY(scheduler.snapshot(jobId).status != pdf::PDFJobStatus::Succeeded);
+
+    pdf::PDFJobSpec preflight;
+    preflight.kind = pdf::PDFJobKind::Preflight;
+    preflight.priority = pdf::PDFJobPriority::Operator;
+    std::atomic_bool preflightStarted = false;
+    const QString preflightId = scheduler.submit(preflight, [&preflightStarted](pdf::PDFJobContext& context)
+                                                 {
+        preflightStarted = true;
+        while (!context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        } });
+    QTRY_VERIFY_WITH_TIMEOUT(preflightStarted.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(preflightId));
+    QVERIFY(scheduler.waitForFinished(preflightId, 1000));
+    QCOMPARE(scheduler.snapshot(preflightId).status, pdf::PDFJobStatus::Cancelled);
 }
 
 QTEST_MAIN(JobSchedulerTest)

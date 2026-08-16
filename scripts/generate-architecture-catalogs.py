@@ -339,6 +339,7 @@ def build_catalog() -> dict[str, Any]:
             "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
             "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
             "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
+            "loupe-preflight/schemas/*.json",
             "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
             "docs/architecture-invariants.json",
             "docs/PDFX_POLICY_MATRIX.md",

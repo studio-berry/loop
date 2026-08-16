@@ -92,10 +92,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSortFilterProxyModel>
-#include <QSpinBox>
-#include <QtConcurrent/QtConcurrent>
+#include "pdfjobscheduler.h"
 
+#include <QSpinBox>
 #include <map>
+#include <memory>
 #include <tuple>
 
 namespace pdfpagemaster
@@ -104,24 +105,16 @@ namespace pdfpagemaster
 namespace
 {
 
-bool waitForExportFinishedBounded(QFutureWatcherBase* watcher, int timeoutMs)
+bool waitForExportJob(const QString& jobId, int timeoutMs)
 {
-    if (!watcher || watcher->isFinished())
+    if (jobId.isEmpty())
     {
         return true;
     }
-
-    QEventLoop loop;
-    QObject::connect(watcher, &QFutureWatcherBase::finished, &loop, &QEventLoop::quit);
-    QTimer timer;
-    timer.setSingleShot(true);
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(timeoutMs);
-    loop.exec();
-    return watcher->isFinished();
+    return pdf::PDFJobScheduler::global().waitForFinished(jobId, timeoutMs);
 }
 
-} // namespace
+}   // namespace
 
 class MainWindowRecentHelper final
 {
@@ -317,9 +310,12 @@ QString bleedFixupModeToString(pdf::PDFBleedFixupMode mode)
 {
     switch (mode)
     {
-        case pdf::PDFBleedFixupMode::Mirror: return QStringLiteral("mirror");
-        case pdf::PDFBleedFixupMode::PixelRepeat: return QStringLiteral("pixel-repeat");
-        case pdf::PDFBleedFixupMode::Stretch: return QStringLiteral("stretch");
+        case pdf::PDFBleedFixupMode::Mirror:
+            return QStringLiteral("mirror");
+        case pdf::PDFBleedFixupMode::PixelRepeat:
+            return QStringLiteral("pixel-repeat");
+        case pdf::PDFBleedFixupMode::Stretch:
+            return QStringLiteral("stretch");
     }
     return QStringLiteral("mirror");
 }
@@ -342,10 +338,13 @@ QString bleedFixupReferenceBoxToString(pdf::PDFBleedFixupSettings::ReferenceBox 
 {
     switch (box)
     {
-        case pdf::PDFBleedFixupSettings::ReferenceBox::CropBox: return QStringLiteral("crop");
-        case pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox: return QStringLiteral("media");
+        case pdf::PDFBleedFixupSettings::ReferenceBox::CropBox:
+            return QStringLiteral("crop");
+        case pdf::PDFBleedFixupSettings::ReferenceBox::MediaBox:
+            return QStringLiteral("media");
         case pdf::PDFBleedFixupSettings::ReferenceBox::TrimBox:
-        default: return QStringLiteral("trim");
+        default:
+            return QStringLiteral("trim");
     }
 }
 
@@ -367,10 +366,14 @@ QString bleedFixupSideToString(pdf::PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case pdf::PDFBleedFixupSide::Left: return QStringLiteral("left");
-        case pdf::PDFBleedFixupSide::Bottom: return QStringLiteral("bottom");
-        case pdf::PDFBleedFixupSide::Right: return QStringLiteral("right");
-        case pdf::PDFBleedFixupSide::Top: return QStringLiteral("top");
+        case pdf::PDFBleedFixupSide::Left:
+            return QStringLiteral("left");
+        case pdf::PDFBleedFixupSide::Bottom:
+            return QStringLiteral("bottom");
+        case pdf::PDFBleedFixupSide::Right:
+            return QStringLiteral("right");
+        case pdf::PDFBleedFixupSide::Top:
+            return QStringLiteral("top");
     }
     return QStringLiteral("unknown");
 }
@@ -409,15 +412,15 @@ pdf::PDFBleedFixupSideMask bleedFixupSidesFromJson(const QJsonValue& value)
 QString bleedConfirmationPolicyToString(pdf::PDFPageMasterBleedConfirmationPolicy policy)
 {
     return policy == pdf::PDFPageMasterBleedConfirmationPolicy::Never
-            ? QStringLiteral("never")
-            : QStringLiteral("before-batch");
+               ? QStringLiteral("never")
+               : QStringLiteral("before-batch");
 }
 
 pdf::PDFPageMasterBleedConfirmationPolicy bleedConfirmationPolicyFromString(const QString& text)
 {
     return text.trimmed().toLower() == QStringLiteral("never")
-            ? pdf::PDFPageMasterBleedConfirmationPolicy::Never
-            : pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
+               ? pdf::PDFPageMasterBleedConfirmationPolicy::Never
+               : pdf::PDFPageMasterBleedConfirmationPolicy::BeforeBatch;
 }
 
 QJsonObject bleedFixupSettingsToJson(const pdf::PDFBleedFixupSettings& settings)
@@ -619,7 +622,7 @@ std::vector<int> parseSplitPagePositions(const QString& text, bool* ok)
     return positions;
 }
 
-} // namespace
+}   // namespace
 
 class WorkspaceFilterProxyModel : public QSortFilterProxyModel
 {
@@ -822,7 +825,6 @@ MainWindow::MainWindow(QWidget* parent) :
     m_exportProgressBar(new QProgressBar(this)),
     m_exportProgressLabel(new QLabel(this)),
     m_exportCancelButton(new QPushButton(tr("Cancel"), this)),
-    m_exportWatcher(nullptr),
     m_dropFeedbackLabel(new QLabel(this)),
     m_dropInsertionMarker(new QFrame(this)),
     m_dropFeedbackViewport(nullptr),
@@ -847,6 +849,12 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(m_exportProgress, &pdf::PDFProgress::progressStep, this, &MainWindow::onExportProgressStep, Qt::QueuedConnection);
     connect(m_exportProgress, &pdf::PDFProgress::progressFinished, this, &MainWindow::onExportProgressFinished, Qt::QueuedConnection);
     connect(m_exportCancelButton, &QPushButton::clicked, this, &MainWindow::onExportCancelClicked);
+    connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            {
+        if (snapshot.jobId == m_exportJobId)
+        {
+            onExportFinished();
+        } });
 
     ui->documentItemsView->setModel(m_filterModel);
     ui->documentItemsView->setItemDelegate(m_delegate);
@@ -1103,8 +1111,8 @@ MainWindow::MainWindow(QWidget* parent) :
     }
 
     // Initialize pixmap cache size
-    const int depth = 4; // 4 bytes (ARGB)
-    const int reserveSize = 2; // Caching of two screens
+    const int depth = 4;   // 4 bytes (ARGB)
+    const int reserveSize = 2;   // Caching of two screens
     QSize size = QGuiApplication::primaryScreen()->availableVirtualSize();
     int bytes = size.width() * size.height() * depth * reserveSize;
     int kBytes = bytes / 1024;
@@ -1204,8 +1212,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 
             const QPoint position = dragEvent->position().toPoint();
             const int insertProxyRow = getWorkspaceDropInsertProxyRow(dropView, position);
-            QString message = hasImage && supportedUrls.empty() ? tr("Insert image here") :
-                              tr("Insert %1 %2 here").arg(supportedCount).arg(supportedCount == 1 ? tr("file") : tr("files"));
+            QString message = hasImage && supportedUrls.empty() ? tr("Insert image here") : tr("Insert %1 %2 here").arg(supportedCount).arg(supportedCount == 1 ? tr("file") : tr("files"));
             if (unsupportedCount > 0)
             {
                 message += tr(" (%1 unsupported skipped)").arg(unsupportedCount);
@@ -1455,19 +1462,31 @@ void MainWindow::onExportProgressFinished()
 
 void MainWindow::onExportFinished()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
-    const pdf::PDFPageMasterExportResult result = m_exportWatcher->result();
-    m_exportWatcher->deleteLater();
-    m_exportWatcher = nullptr;
+    const pdf::PDFJobSnapshot snapshot = pdf::PDFJobScheduler::global().snapshot(m_exportJobId);
+    pdf::PDFPageMasterExportResult result;
+    if (m_exportResult)
+    {
+        result = *m_exportResult;
+    }
+    m_exportJobId.clear();
+    m_exportResult.reset();
+
+    if (m_ignoreExportFinished)
+    {
+        m_ignoreExportFinished = false;
+        return;
+    }
 
     setExportInProgress(false);
     hideExportProgress();
 
-    if (result.cancelled)
+    const bool cancelled = result.cancelled || snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale;
+    if (cancelled)
     {
         if (result.writtenFiles.isEmpty())
         {
@@ -1480,9 +1499,13 @@ void MainWindow::onExportFinished()
         return;
     }
 
-    if (!result.success)
+    if (snapshot.status != pdf::PDFJobStatus::Succeeded || !result.success)
     {
         QString message = result.errorMessage;
+        if (message.isEmpty())
+        {
+            message = snapshot.errorMessage;
+        }
         if (!result.writtenFiles.isEmpty())
         {
             message += QLatin1Char('\n');
@@ -1778,9 +1801,7 @@ QModelIndexList MainWindow::getSelectedRows() const
     }
 
     std::sort(selection.begin(), selection.end(), [](const QModelIndex& left, const QModelIndex& right)
-    {
-        return left.row() < right.row();
-    });
+              { return left.row() < right.row(); });
 
     QModelIndexList rows;
     int previousRow = -1;
@@ -2076,7 +2097,7 @@ void MainWindow::updateWorkspaceDropFeedback(QAbstractItemView* view, const QPoi
     }
 
     const QColor markerColor = accepted ? viewport->palette().color(QPalette::Active, QPalette::Highlight)
-                                      : pdf::PDFUITheme::severityErrorColor();
+                                        : pdf::PDFUITheme::severityErrorColor();
     m_dropInsertionMarker->setStyleSheet(QStringLiteral("background:%1; border:0px;").arg(markerColor.name()));
 
     if (view == m_detailsView)
@@ -2356,59 +2377,44 @@ void MainWindow::hideExportProgress()
 void MainWindow::requestExportCancel()
 {
     m_exportCancelToken.requestCancel();
+    if (!m_exportJobId.isEmpty())
+    {
+        pdf::PDFJobScheduler::global().cancel(m_exportJobId);
+    }
 }
 
 void MainWindow::detachExportWatcher()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
-    disconnect(m_exportWatcher, nullptr, this, nullptr);
-    m_exportWatcher->setParent(nullptr);
-    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-            m_exportWatcher, &QObject::deleteLater);
-    m_exportWatcher = nullptr;
+    m_ignoreExportFinished = true;
+    m_exportCancelToken.requestCancel();
+    pdf::PDFJobScheduler::global().cancel(m_exportJobId);
+    m_exportJobId.clear();
 }
 
 void MainWindow::stopExportWatcherBounded()
 {
-    if (!m_exportWatcher)
+    if (m_exportJobId.isEmpty())
     {
         return;
     }
 
+    m_ignoreExportFinished = true;
     m_exportCancelToken.requestCancelAndInvalidateProgress();
-
-    // Disconnect before the nested wait loop so onExportFinished cannot re-enter
-    // during closeEvent / ~MainWindow (UI / QMessageBox during teardown).
-    disconnect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-               this, &MainWindow::onExportFinished);
+    pdf::PDFJobScheduler::global().cancel(m_exportJobId);
     if (m_exportProgress)
     {
         disconnect(m_exportProgress, nullptr, this, nullptr);
     }
 
-    if (waitForExportFinishedBounded(m_exportWatcher, pdf::PDFPageMasterExport::DefaultCancelWaitMs))
+    if (waitForExportJob(m_exportJobId, pdf::PDFPageMasterExport::DefaultCancelWaitMs))
     {
-        delete m_exportWatcher;
-        m_exportWatcher = nullptr;
-        return;
-    }
-
-    // Worker still running past the bounded wait (or finished in the gap below).
-    // Keep PDFProgress alive until the future finishes: progressAlive skips new
-    // callbacks, but a stage that already holds the raw pointer
-    // (e.g. PDFImageOptimizer::optimize) must not observe a destroyed QObject
-    // after MainWindow teardown.
-    disconnect(m_exportWatcher, nullptr, this, nullptr);
-    m_exportWatcher->setParent(nullptr);
-
-    if (m_exportWatcher->isFinished())
-    {
-        delete m_exportWatcher;
-        m_exportWatcher = nullptr;
+        m_exportJobId.clear();
+        m_exportResult.reset();
         return;
     }
 
@@ -2417,13 +2423,15 @@ void MainWindow::stopExportWatcherBounded()
         m_exportProgress->setParent(nullptr);
         QObject* progressKeeper = m_exportProgress;
         m_exportProgress = nullptr;
-        QFutureWatcher<pdf::PDFPageMasterExportResult>* watcher = m_exportWatcher;
-        m_exportWatcher = nullptr;
-        connect(watcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished,
-                watcher, [watcher, progressKeeper]() {
-                    progressKeeper->deleteLater();
-                    watcher->deleteLater();
-                });
+        const QString jobId = m_exportJobId;
+        m_exportJobId.clear();
+        connect(&pdf::PDFJobScheduler::global(), &pdf::PDFJobScheduler::jobFinished,
+                progressKeeper, [progressKeeper, jobId](const pdf::PDFJobSnapshot& snapshot)
+                {
+                    if (snapshot.jobId == jobId)
+                    {
+                        progressKeeper->deleteLater();
+                    } });
     }
     else
     {
@@ -2433,7 +2441,7 @@ void MainWindow::stopExportWatcherBounded()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (m_exportWatcher && !m_exportWatcher->isFinished())
+    if (!m_exportJobId.isEmpty())
     {
         m_exportProgressLabel->setText(tr("Cancelling export..."));
         m_exportProgressLabel->show();
@@ -2493,13 +2501,12 @@ bool MainWindow::canPerformOperation(Operation operation) const
 
         case Operation::ResetRotation:
             return std::any_of(selection.cbegin(), selection.cend(), [this](const QModelIndex& index)
-            {
+                               {
                 const PageGroupItem* item = m_model->getItem(index);
                 return item && std::any_of(item->groups.cbegin(), item->groups.cend(), [](const PageGroupItem::GroupItem& groupItem)
                 {
                     return groupItem.pageAdditionalRotation != pdf::PageRotation::None;
-                });
-            });
+                }); });
 
         case Operation::Group:
             return isMultiSelected;
@@ -2647,7 +2654,7 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
 
     AssembleOutputSettingsDialog dialog(m_settings.directory, this);
     dialog.setOutputPreviewFactory([&]()
-    {
+                                   {
         std::vector<AssembleOutputSettingsDialog::OutputPreviewItem> previewItems;
         previewItems.reserve(assembledDocuments.size());
         QSet<QString> generatedNames;
@@ -2686,14 +2693,13 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
             previewItems.push_back({ fileName, QString::number(assembledPages.size()), sourceName, assembleModeText, status, isBlocking });
             ++outputIndex;
         }
-        return previewItems;
-    });
+        return previewItems; });
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
     }
 
-    if (m_exportWatcher)
+    if (!m_exportJobId.isEmpty())
     {
         QMessageBox::warning(this, tr("Export"), tr("Another export is already running."));
         return;
@@ -2813,14 +2819,28 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     m_exportProgressBar->setValue(0);
     m_exportProgressBar->show();
 
-    m_exportWatcher = new QFutureWatcher<pdf::PDFPageMasterExportResult>(this);
-    connect(m_exportWatcher, &QFutureWatcher<pdf::PDFPageMasterExportResult>::finished, this, &MainWindow::onExportFinished);
+    auto resultHolder = std::make_shared<pdf::PDFPageMasterExportResult>();
+    m_exportResult = resultHolder;
+    m_ignoreExportFinished = false;
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Export;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.operationId = QStringLiteral("pagemaster-export");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
     auto cancelToken = m_exportCancelToken;
-    m_exportWatcher->setFuture(QtConcurrent::run([job = std::move(job), cancelToken]() mutable
-    {
+    m_exportJobId = pdf::PDFJobScheduler::global().submit(spec, [job = std::move(job), cancelToken, resultHolder](pdf::PDFJobContext& context) mutable
+                                                          {
         Q_UNUSED(cancelToken);
-        return pdf::PDFPageMasterExport::run(std::move(job));
-    }));
+        if (context.isCancellationRequested() && job.cancelFlag)
+        {
+            job.cancelFlag->store(true, std::memory_order_release);
+        }
+        *resultHolder = pdf::PDFPageMasterExport::run(std::move(job));
+        if (context.isCancellationRequested())
+        {
+            resultHolder->cancelled = true;
+            resultHolder->success = false;
+        } });
 }
 
 void MainWindow::splitDocuments()
@@ -2992,7 +3012,7 @@ void MainWindow::splitDocuments()
     connect(approximateSizeSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged), &dialog, updateDialog);
     connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, [&]()
-    {
+            {
         std::vector<std::vector<pdf::PDFDocumentManipulator::AssembledPage>> assembledDocuments = createSplitDocuments();
         if (assembledDocuments.empty())
         {
@@ -3002,8 +3022,7 @@ void MainWindow::splitDocuments()
 
         dialog.accept();
         const SplitMode mode = SplitMode(modeComboBox->currentData().toInt());
-        exportAssembledDocuments(qMove(assembledDocuments), mode == SplitMode::ApproximateSize ? tr("Split documents (approximate size)") : tr("Split documents"));
-    });
+        exportAssembledDocuments(qMove(assembledDocuments), mode == SplitMode::ApproximateSize ? tr("Split documents (approximate size)") : tr("Split documents")); });
 
     updateDialog();
     dialog.exec();
@@ -3128,9 +3147,7 @@ void MainWindow::selectPageRange()
                 }
 
                 const bool matches = std::any_of(item->groups.cbegin(), item->groups.cend(), [&](const PageGroupItem::GroupItem& groupItem)
-                {
-                    return groupItem.pageType == PT_DocumentPage && groupItem.documentIndex == documentIndex && pageSet.contains(groupItem.pageIndex);
-                });
+                                                 { return groupItem.pageType == PT_DocumentPage && groupItem.documentIndex == documentIndex && pageSet.contains(groupItem.pageIndex); });
 
                 if (matches)
                 {
@@ -3185,7 +3202,7 @@ void MainWindow::selectPageRange()
     connect(selectionModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, updateDialog);
     connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttonBox->button(QDialogButtonBox::Ok), &QPushButton::clicked, &dialog, [&]()
-    {
+            {
         QString errorMessage;
         const QItemSelection selection = createSelection(&errorMessage);
         if (selection.isEmpty())
@@ -3196,8 +3213,7 @@ void MainWindow::selectPageRange()
 
         const bool addToExisting = selectionModeComboBox->currentData().toInt() == 1;
         selectSourceSelection(selection, addToExisting);
-        dialog.accept();
-    });
+        dialog.accept(); });
 
     updateDialog();
     dialog.exec();
@@ -3299,8 +3315,8 @@ bool MainWindow::restoreWorkspaceStateFromJson(const QJsonObject& state, QString
                     if (errorMessage)
                     {
                         *errorMessage = tr("Workspace references page %1 outside the loaded PDF source '%2'.")
-                                .arg(groupItem.pageIndex)
-                                .arg(QFileInfo(documentIt->second.fileName).fileName());
+                                            .arg(groupItem.pageIndex)
+                                            .arg(QFileInfo(documentIt->second.fileName).fileName());
                     }
                     return false;
                 }
@@ -3573,8 +3589,7 @@ bool MainWindow::loadProjectJson(const QJsonObject& project, QString* errorMessa
     {
         pdf::PDFActionList loadedActionList;
         QStringList validationErrors;
-        if (pdf::PDFActionList::fromJson(actionListObject["recipe"].toObject(), &loadedActionList)
-            && pdf::PDFActionListExecutor().validate(loadedActionList, {}, &validationErrors))
+        if (pdf::PDFActionList::fromJson(actionListObject["recipe"].toObject(), &loadedActionList) && pdf::PDFActionListExecutor().validate(loadedActionList, {}, &validationErrors))
         {
             m_actionList = std::move(loadedActionList);
             m_hasActionList = true;
@@ -3658,7 +3673,8 @@ void MainWindow::loadCheckpoint()
         return;
     }
 
-    auto it = std::find_if(m_checkpoints.cbegin(), m_checkpoints.cend(), [&name](const WorkspaceCheckpoint& checkpoint) { return checkpoint.name == name; });
+    auto it = std::find_if(m_checkpoints.cbegin(), m_checkpoints.cend(), [&name](const WorkspaceCheckpoint& checkpoint)
+                           { return checkpoint.name == name; });
     if (it == m_checkpoints.cend())
     {
         return;
@@ -4005,15 +4021,14 @@ void MainWindow::performOperation(Operation operation)
             QObject::connect(actionListCheck, &QCheckBox::toggled, actionListPathWidget, &QWidget::setEnabled);
             actionListPathWidget->setEnabled(actionListCheck->isChecked());
             QObject::connect(actionListBrowseButton, &QPushButton::clicked, &dialog, [&dialog, actionListPathEdit]()
-            {
+                             {
                 const QString path = QFileDialog::getOpenFileName(&dialog, QObject::tr("Select Action List recipe"),
                                                                    actionListPathEdit->text(),
                                                                    QObject::tr("JSON files (*.json);;All files (*.*)"));
                 if (!path.isEmpty())
                 {
                     actionListPathEdit->setText(path);
-                }
-            });
+                } });
 
             layout->addLayout(form);
             QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
@@ -4043,9 +4058,9 @@ void MainWindow::performOperation(Operation operation)
                     m_bleedFixupSettings.sides |= pdf::bleedFixupSideBit(pdf::PDFBleedFixupSide::Top);
                 }
                 m_bleedFixupSettings.bleedMM = QMarginsF(bleedLeftSpin->value(),
-                                                           bleedTopSpin->value(),
-                                                           bleedRightSpin->value(),
-                                                           bleedBottomSpin->value());
+                                                         bleedTopSpin->value(),
+                                                         bleedRightSpin->value(),
+                                                         bleedBottomSpin->value());
                 m_bleedFixupSettings.expandMediaBox = expandMediaCheck->isChecked();
                 m_bleedFixupSettings.expandCropBox = expandCropCheck->isChecked();
                 m_bleedFixupSettings.expandBleedBox = expandBleedCheck->isChecked();
@@ -4069,24 +4084,23 @@ void MainWindow::performOperation(Operation operation)
                     if (actionListPath.isEmpty() || !actionListFile.open(QIODevice::ReadOnly))
                     {
                         QMessageBox::critical(this, tr("Action List"),
-                                               tr("Choose a readable Action List recipe before enabling the stage."));
+                                              tr("Choose a readable Action List recipe before enabling the stage."));
                         break;
                     }
                     QJsonParseError parseError;
                     const QJsonDocument actionListJson = QJsonDocument::fromJson(actionListFile.readAll(), &parseError);
-                    if (parseError.error != QJsonParseError::NoError || !actionListJson.isObject()
-                        || !pdf::PDFActionList::fromJson(actionListJson.object(), &m_actionList))
+                    if (parseError.error != QJsonParseError::NoError || !actionListJson.isObject() || !pdf::PDFActionList::fromJson(actionListJson.object(), &m_actionList))
                     {
                         QMessageBox::critical(this, tr("Action List"),
-                                               tr("The selected file is not a valid loupe-action-list/1 recipe: %1")
-                                                   .arg(parseError.errorString()));
+                                              tr("The selected file is not a valid loupe-action-list/1 recipe: %1")
+                                                  .arg(parseError.errorString()));
                         break;
                     }
                     QStringList validationErrors;
                     if (!pdf::PDFActionListExecutor().validate(m_actionList, {}, &validationErrors))
                     {
                         QMessageBox::critical(this, tr("Action List"),
-                                               tr("The Action List is invalid:\n%1").arg(validationErrors.join(QStringLiteral("\n"))));
+                                              tr("The Action List is invalid:\n%1").arg(validationErrors.join(QStringLiteral("\n"))));
                         break;
                     }
                     m_actionListPath = actionListPath;

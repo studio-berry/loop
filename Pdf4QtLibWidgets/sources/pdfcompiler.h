@@ -25,15 +25,14 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentcontext.h"
+#include "pdfjobscheduler.h"
 #include "pdfwidgetsglobal.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
 #include "pdftextlayout.h"
 
-#include <QFuture>
-#include <QFutureWatcher>
-#include <QWaitCondition>
-
+#include <QMutex>
+#include <optional>
 #include <utility>
 
 template <class Key, class T>
@@ -44,28 +43,9 @@ namespace pdf
 class PDFDrawWidgetProxy;
 class PDFAsynchronousPageCompiler;
 
-class PDFAsynchronousPageCompilerWorkerThread : public QThread
-{
-    Q_OBJECT
-
-public:
-    explicit PDFAsynchronousPageCompilerWorkerThread(PDFAsynchronousPageCompiler* parent);
-
-signals:
-    void pageCompiled();
-
-protected:
-    virtual void run() override;
-
-private:
-    PDFAsynchronousPageCompiler* m_compiler;
-    QMutex* m_mutex;
-    QWaitCondition* m_waitCondition;
-};
-
 /// Asynchronous page compiler compiles pages asynchronously, and stores them in the
 /// cache. Cache size can be set. This object is designed to cooperate with
-/// draw widget proxy.
+/// draw widget proxy. Compile work is submitted to PDFJobScheduler.
 class PDFAsynchronousPageCompiler : public QObject, public PDFOperationControl
 {
     Q_OBJECT
@@ -133,14 +113,18 @@ signals:
     void renderingError(pdf::PDFInteger pageIndex, const QList<pdf::PDFRenderError>& errors);
 
 private:
-    friend class PDFAsynchronousPageCompilerWorkerThread;
-
     void onPageCompiled();
+    void submitCompileJob();
+    void onCompileJobFinished(const pdf::PDFJobSnapshot& snapshot);
 
     struct CompileTask
     {
         CompileTask() = default;
-        CompileTask(PDFInteger pageIndex, PDFRevisionIdentity revision) : pageIndex(pageIndex), revision(std::move(revision)) { }
+        CompileTask(PDFInteger pageIndex, PDFRevisionIdentity revision) :
+            pageIndex(pageIndex),
+            revision(std::move(revision))
+        {
+        }
 
         PDFInteger pageIndex = 0;
         PDFRevisionIdentity revision;
@@ -152,8 +136,7 @@ private:
 
     State m_state = State::Inactive;
     QMutex m_mutex;
-    QWaitCondition m_waitCondition;
-    PDFAsynchronousPageCompilerWorkerThread* m_thread = nullptr;
+    QString m_compileJobId;
 
     PDFDrawWidgetProxy* m_proxy;
     QCache<QString, PDFPrecompiledPage>* m_cache;
@@ -231,17 +214,19 @@ signals:
 
 private:
     void onTextLayoutCreated();
+    void onTextLayoutJobFinished(const pdf::PDFJobSnapshot& snapshot);
 
     PDFDrawWidgetProxy* m_proxy;
     State m_state = State::Inactive;
     bool m_isRunning;
     PDFRevisionIdentity m_textLayoutRevision;
     std::optional<PDFTextLayoutStorage> m_textLayouts;
-    QFuture<PDFTextLayoutStorage> m_textLayoutCompileFuture;
-    QFutureWatcher<PDFTextLayoutStorage> m_textLayoutCompileFutureWatcher;
+    QString m_textLayoutJobId;
+    PDFTextLayoutStorage m_textLayoutJobResult;
+    QMutex m_textLayoutMutex;
     PDFTextLayoutCache m_cache;
 };
 
 }   // namespace pdf
 
-#endif // PDFCOMPILER_H
+#endif   // PDFCOMPILER_H
