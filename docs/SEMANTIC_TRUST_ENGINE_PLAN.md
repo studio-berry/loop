@@ -194,5 +194,6 @@ shedding, a seeded lifecycle model, plugin ABI inspection before
 `QPluginLoader::instance()`, the upstream divergence register, benchmark
 run identity, and catalog-checked architecture invariants. Product
 `PDF4QT_VERSION` stays **0.1.0** because the 0.1.1 exit checklist is not
-green on `origin/dev` (Waves A–D are still stacked topic branches). See
+green on `origin/dev`. Waves A (S00–S05), B (S06–S08), and C (S09–S13) are
+already integrated on the base branch. See
 [`SEMANTIC_TRUST_ENGINE_EXIT.md`](SEMANTIC_TRUST_ENGINE_EXIT.md).

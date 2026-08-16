@@ -48,3 +48,16 @@ unconvertible triad are described in
 [`loupe-preflight/testdata/conversion/README.md`](../loupe-preflight/testdata/conversion/README.md).
 Renderer differentials for color and overprint live in
 [`RENDERER_DIFFERENTIALS.md`](RENDERER_DIFFERENTIALS.md).
+
+## Fixture triad
+
+`loupe-preflight/testdata/conversion/manifest.json` names three cases:
+
+| Kind | Meaning |
+|------|---------|
+| already-conformant | Structural stand-in; still requires an independent validator |
+| safely-convertible | Metadata Loupe can rewrite when a validator is configured |
+| deliberately-unconvertible | Oracle mismatch must remain ERROR, never PASS |
+
+`UnitTestsConversionOracle` proves a missing oracle cannot self-certify and that
+`/bin/false` (or a failing veraPDF) is ERROR. The veraPDF lane is skip-if-missing.

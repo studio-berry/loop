@@ -1,14 +1,16 @@
 {
-    "PluginId": "PDF4QT.ObjectInspectorPlugin",
-    "AbiVersion": 1,
     "Name": "ObjectInspector",
     "Author": "Jakub Melka",
     "Version": "1.0.0",
     "License": "LGPL v3",
     "Description": "Explore internal structure of a document. View decompressed streams and images. Modify objects directly.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
     "Capabilities": [
         "read-document",
         "propose-operation"
     ],
+    "PluginId": "PDF4QT.ObjectInspectorPlugin",
     "BuildId": "loupe-0.1.0"
 }

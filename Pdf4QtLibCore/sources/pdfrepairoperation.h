@@ -188,6 +188,11 @@ public:
     {
         return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
     }
+    /// Unknown or incomplete impact forces full revalidation.
+    virtual PDFOperationImpact impact() const
+    {
+        return PDFOperationImpact();
+    }
     /// True when this registered operation may be advertised by preflight as
     /// an operator-facing fixup. Keeping this metadata on the operation makes
     /// the preflight capability list derive from the same registry PdfTool and

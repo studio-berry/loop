@@ -199,6 +199,44 @@
     "trim",
     "white-overprint"
   ],
+  "preflight_coverage": {
+    "coverage_holes": [
+      "bleed",
+      "content-bleed",
+      "dieline",
+      "hidden-layers",
+      "ink-coverage",
+      "invisible-content",
+      "obscured-content",
+      "off-page-content",
+      "page-size",
+      "processing-steps",
+      "trim"
+    ],
+    "families": {
+      "colorants": [
+        "color-mode",
+        "color-inventory",
+        "output-intent"
+      ],
+      "fonts": [
+        "embedded-fonts",
+        "font-integrity"
+      ],
+      "images": [
+        "image-resolution"
+      ],
+      "overprint-transparency": [
+        "white-overprint",
+        "transparency-risk"
+      ],
+      "strokes": [
+        "thin-strokes",
+        "thin-parts"
+      ]
+    },
+    "standards_matrix": "docs/PDFX_POLICY_MATRIX.md"
+  },
   "registered_operations": [
     {
       "id": "add-bleed",
@@ -277,6 +315,7 @@
     "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
     "loupe-preflight/schemas/*.json",
     "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
+    "docs/PDFX_POLICY_MATRIX.md",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"
   ],
@@ -285,17 +324,20 @@
     "UnitTestsAccessibility",
     "UnitTestsActionList",
     "UnitTestsAuthorSettings",
+    "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
     "UnitTestsBudgetExhaustion",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
+    "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
     "UnitTestsDocumentSession",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
+    "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",

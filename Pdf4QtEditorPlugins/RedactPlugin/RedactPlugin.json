@@ -1,15 +1,17 @@
 {
-    "PluginId": "PDF4QT.RedactPlugin",
-    "AbiVersion": 1,
     "Name": "Redact",
     "Author": "Jakub Melka",
     "Version": "1.0.0",
     "License": "LGPL v3",
     "Description": "Redact document - remove sensitive information from the document. Create redacted document from marked redact annotations.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
     "Capabilities": [
         "read-document",
         "propose-operation",
         "execute-operation"
     ],
+    "PluginId": "PDF4QT.RedactPlugin",
     "BuildId": "loupe-0.1.0"
 }
