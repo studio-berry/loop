@@ -24,105 +24,22 @@
 #include "pdfcms.h"
 #include "pdfprogress.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfjobscheduler.h"
 #include "pdftextlayoutgenerator.h"
 #include "pdfdrawspacecontroller.h"
 
 #include <QCache>
-#include <QtConcurrent/QtConcurrent>
+#include <QMutexLocker>
 
 #include "pdfdbgheap.h"
 
+#include <algorithm>
 #include <execution>
+#include <map>
 #include <utility>
 
 namespace pdf
 {
-
-PDFAsynchronousPageCompilerWorkerThread::PDFAsynchronousPageCompilerWorkerThread(PDFAsynchronousPageCompiler* parent) :
-    QThread(parent),
-    m_compiler(parent),
-    m_mutex(&m_compiler->m_mutex),
-    m_waitCondition(&m_compiler->m_waitCondition)
-{
-
-}
-
-void PDFAsynchronousPageCompilerWorkerThread::run()
-{
-    QMutexLocker locker(m_mutex);
-    while (!isInterruptionRequested())
-    {
-        if (m_waitCondition->wait(locker.mutex(), QDeadlineTimer(QDeadlineTimer::Forever)))
-        {
-            while (!isInterruptionRequested())
-            {
-                std::vector<PDFAsynchronousPageCompiler::CompileTask> tasks;
-                for (auto& task : m_compiler->m_tasks)
-                {
-                    if (!task.second.finished)
-                    {
-                        tasks.push_back(task.second);
-                    }
-                }
-
-                if (!tasks.empty())
-                {
-                    locker.unlock();
-
-                    // Perform page compilation
-                    auto proxy = m_compiler->getProxy();
-                    proxy->getFontCache()->setCacheShrinkEnabled(this, false);
-
-                    auto compilePage = [this, proxy](PDFAsynchronousPageCompiler::CompileTask& task) -> PDFPrecompiledPage
-                    {
-                        PDFPrecompiledPage compiledPage;
-                        PDFCMSPointer cms = proxy->getCMSManager()->getCurrentCMS();
-                        PDFRenderer renderer(proxy->getDocument(), proxy->getFontCache(), cms.data(), proxy->getOptionalContentActivity(), proxy->getFeatures(), proxy->getMeshQualitySettings());
-                        renderer.setOperationControl(m_compiler);
-                        renderer.compile(&task.precompiledPage, task.pageIndex);
-                        task.finished = true;
-                        return compiledPage;
-                    };
-                    PDFExecutionPolicy::execute(PDFExecutionPolicy::Scope::Page, tasks.begin(), tasks.end(), compilePage);
-
-                    proxy->getFontCache()->setCacheShrinkEnabled(this, true);
-
-                    // Relock the mutex to write the tasks
-                    locker.relock();
-
-                    // Now, write compiled pages
-                    bool isSomethingWritten = false;
-                    for (auto& task : tasks)
-                    {
-                        if (task.finished)
-                        {
-                            const auto currentTask = m_compiler->m_tasks.find(task.pageIndex);
-                            if (currentTask == m_compiler->m_tasks.end() || currentTask->second.revision == task.revision)
-                            {
-                                isSomethingWritten = true;
-                                m_compiler->m_tasks[task.pageIndex] = std::move(task);
-                            }
-                        }
-                    }
-
-                    if (isSomethingWritten)
-                    {
-                        // Why we are unlocking the mutex? Because
-                        // we do not want to emit signals with locked mutexes.
-                        // If direct connection is applied, this can lead to deadlock.
-                        locker.unlock();
-                        Q_EMIT pageCompiled();
-                        locker.relock();
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-    }
-}
 
 PDFAsynchronousPageCompiler::PDFAsynchronousPageCompiler(PDFDrawWidgetProxy* proxy) :
     BaseClass(proxy),
@@ -130,6 +47,8 @@ PDFAsynchronousPageCompiler::PDFAsynchronousPageCompiler(PDFDrawWidgetProxy* pro
     m_cache(new QCache<QString, PDFPrecompiledPage>())
 {
     m_cache->setMaxCost(128 * 1024 * 1024);
+    connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
+            { onCompileJobFinished(snapshot); });
 }
 
 PDFAsynchronousPageCompiler::~PDFAsynchronousPageCompiler()
@@ -151,16 +70,12 @@ void PDFAsynchronousPageCompiler::start()
     {
         case State::Inactive:
         {
-            Q_ASSERT(!m_thread);
             m_state = State::Active;
-            m_thread = new PDFAsynchronousPageCompilerWorkerThread(this);
-            connect(m_thread, &PDFAsynchronousPageCompilerWorkerThread::pageCompiled, this, &PDFAsynchronousPageCompiler::onPageCompiled);
-            m_thread->start();
             break;
         }
 
         case State::Active:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Stopping:
         {
@@ -177,24 +92,19 @@ void PDFAsynchronousPageCompiler::stop(bool clearCache)
     {
         case State::Inactive:
         {
-            Q_ASSERT(!m_thread);
-            break; // We have nothing to do...
+            Q_ASSERT(m_compileJobId.isEmpty());
+            break;   // We have nothing to do...
         }
 
         case State::Active:
         {
-            // Stop the engine
             m_state = State::Stopping;
-
-            Q_ASSERT(m_thread);
-            m_thread->requestInterruption();
-            m_waitCondition.wakeAll();
-            m_thread->wait();
-            delete m_thread;
-            m_thread = nullptr;
-
-            // It is safe to do not use mutex, because
-            // we have ended the work thread.
+            if (!m_compileJobId.isEmpty())
+            {
+                PDFJobScheduler::global().cancel(m_compileJobId);
+                PDFJobScheduler::global().waitForFinished(m_compileJobId, 5000);
+                m_compileJobId.clear();
+            }
             m_tasks.clear();
 
             if (clearCache)
@@ -240,11 +150,18 @@ const PDFPrecompiledPage* PDFAsynchronousPageCompiler::getCompiledPage(PDFIntege
 
     if (!page && compile)
     {
-        QMutexLocker locker(&m_mutex);
-        if (!m_tasks.count(pageIndex) || m_tasks.at(pageIndex).revision != revision)
+        bool needSubmit = false;
         {
-            m_tasks[pageIndex] = CompileTask(pageIndex, revision);
-            m_waitCondition.wakeOne();
+            QMutexLocker locker(&m_mutex);
+            if (!m_tasks.count(pageIndex) || m_tasks.at(pageIndex).revision != revision)
+            {
+                m_tasks[pageIndex] = CompileTask(pageIndex, revision);
+                needSubmit = true;
+            }
+        }
+        if (needSubmit)
+        {
+            submitCompileJob();
         }
     }
 
@@ -292,6 +209,109 @@ void PDFAsynchronousPageCompiler::smartClearCache(const int milisecondsLimit, co
         {
             m_cache->remove(key);
         }
+    }
+}
+
+void PDFAsynchronousPageCompiler::submitCompileJob()
+{
+    if (m_state != State::Active || !m_compileJobId.isEmpty() || !m_proxy->getDocument())
+    {
+        return;
+    }
+
+    const PDFRevisionIdentity revision = m_proxy->getDocumentRevision();
+    PDFJobSpec spec;
+    spec.kind = PDFJobKind::Rendering;
+    spec.priority = PDFJobPriority::VisiblePage;
+    spec.documentKey = revision.document.documentId;
+    spec.documentRevision = revision.toString();
+    spec.operationId = QStringLiteral("page-compile");
+    spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
+    PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
+    m_compileJobId = PDFJobScheduler::global().submit(spec, [this](PDFJobContext& context)
+                                                      {
+        std::vector<CompileTask> tasks;
+        {
+            QMutexLocker locker(&m_mutex);
+            for (auto& task : m_tasks)
+            {
+                if (!task.second.finished)
+                {
+                    tasks.push_back(task.second);
+                }
+            }
+        }
+        if (tasks.empty() || context.isCancellationRequested())
+        {
+            return;
+        }
+
+        m_proxy->getFontCache()->setCacheShrinkEnabled(this, false);
+        auto compilePage = [this, &context](CompileTask& task)
+        {
+            if (context.isCancellationRequested() || isOperationCancelled())
+            {
+                return;
+            }
+            PDFCMSPointer cms = m_proxy->getCMSManager()->getCurrentCMS();
+            PDFRenderer renderer(m_proxy->getDocument(), m_proxy->getFontCache(), cms.data(),
+                                 m_proxy->getOptionalContentActivity(), m_proxy->getFeatures(),
+                                 m_proxy->getMeshQualitySettings());
+            renderer.setOperationControl(context.operationControl());
+            renderer.compile(&task.precompiledPage, task.pageIndex);
+            task.finished = true;
+        };
+        PDFExecutionPolicy::execute(PDFExecutionPolicy::Scope::Page, tasks.begin(), tasks.end(), compilePage);
+        m_proxy->getFontCache()->setCacheShrinkEnabled(this, true);
+
+        QMutexLocker locker(&m_mutex);
+        for (auto& task : tasks)
+        {
+            if (!task.finished)
+            {
+                continue;
+            }
+            const auto currentTask = m_tasks.find(task.pageIndex);
+            if (currentTask == m_tasks.end() || currentTask->second.revision == task.revision)
+            {
+                m_tasks[task.pageIndex] = std::move(task);
+            }
+        } });
+}
+
+void PDFAsynchronousPageCompiler::onCompileJobFinished(const PDFJobSnapshot& snapshot)
+{
+    bool pending = false;
+    {
+        QMutexLocker locker(&m_mutex);
+        if (snapshot.jobId != m_compileJobId)
+        {
+            return;
+        }
+        m_compileJobId.clear();
+        for (const auto& task : m_tasks)
+        {
+            if (!task.second.finished)
+            {
+                pending = true;
+                break;
+            }
+        }
+    }
+    if (snapshot.status == PDFJobStatus::Succeeded)
+    {
+        onPageCompiled();
+    }
+
+    bool needSubmit = false;
+    {
+        QMutexLocker locker(&m_mutex);
+        needSubmit = pending || std::any_of(m_tasks.begin(), m_tasks.end(), [](const auto& task)
+                                            { return !task.second.finished; });
+    }
+    if (needSubmit)
+    {
+        submitCompileJob();
     }
 }
 
@@ -364,7 +384,8 @@ PDFAsynchronousTextLayoutCompiler::PDFAsynchronousTextLayoutCompiler(PDFDrawWidg
     m_textLayoutRevision(),
     m_cache(std::bind(&PDFAsynchronousTextLayoutCompiler::createTextLayout, this, std::placeholders::_1))
 {
-    connect(&m_textLayoutCompileFutureWatcher, &QFutureWatcher<PDFTextLayoutStorage>::finished, this, &PDFAsynchronousTextLayoutCompiler::onTextLayoutCreated);
+    connect(&PDFJobScheduler::global(), &PDFJobScheduler::jobFinished, this, [this](const PDFJobSnapshot& snapshot)
+            { onTextLayoutJobFinished(snapshot); });
 }
 
 void PDFAsynchronousTextLayoutCompiler::start()
@@ -378,7 +399,7 @@ void PDFAsynchronousTextLayoutCompiler::start()
         }
 
         case State::Active:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Stopping:
         {
@@ -394,13 +415,18 @@ void PDFAsynchronousTextLayoutCompiler::stop(bool clearCache)
     switch (m_state)
     {
         case State::Inactive:
-            break; // We have nothing to do...
+            break;   // We have nothing to do...
 
         case State::Active:
         {
-            // Stop the engine
             m_state = State::Stopping;
-            m_textLayoutCompileFutureWatcher.waitForFinished();
+            if (!m_textLayoutJobId.isEmpty())
+            {
+                PDFJobScheduler::global().cancel(m_textLayoutJobId);
+                PDFJobScheduler::global().waitForFinished(m_textLayoutJobId, 5000);
+                m_textLayoutJobId.clear();
+            }
+            m_isRunning = false;
 
             if (clearCache)
             {
@@ -606,9 +632,41 @@ void PDFAsynchronousTextLayoutCompiler::makeTextLayout()
         return result;
     };
 
-    Q_ASSERT(!m_textLayoutCompileFuture.isRunning());
-    m_textLayoutCompileFuture = QtConcurrent::run(createTextLayout);
-    m_textLayoutCompileFutureWatcher.setFuture(m_textLayoutCompileFuture);
+    const PDFRevisionIdentity revision = m_textLayoutRevision;
+    PDFJobSpec spec;
+    spec.kind = PDFJobKind::Rendering;
+    spec.priority = PDFJobPriority::VisiblePage;
+    spec.documentKey = revision.document.documentId;
+    spec.documentRevision = revision.toString();
+    spec.operationId = QStringLiteral("text-layout");
+    spec.staleResultPolicy = PDFJobStaleResultPolicy::Discard;
+    PDFJobScheduler::global().setCurrentRevision(spec.documentKey, spec.documentRevision);
+    m_textLayoutJobId = PDFJobScheduler::global().submit(spec, [this, createTextLayout](PDFJobContext& context)
+                                                         {
+        if (context.isCancellationRequested())
+        {
+            return;
+        }
+        PDFTextLayoutStorage result = createTextLayout();
+        QMutexLocker locker(&m_textLayoutMutex);
+        m_textLayoutJobResult = std::move(result); });
+}
+
+void PDFAsynchronousTextLayoutCompiler::onTextLayoutJobFinished(const PDFJobSnapshot& snapshot)
+{
+    if (snapshot.jobId != m_textLayoutJobId)
+    {
+        return;
+    }
+    m_textLayoutJobId.clear();
+    if (snapshot.status != PDFJobStatus::Succeeded)
+    {
+        m_proxy->getFontCache()->setCacheShrinkEnabled(this, true);
+        m_proxy->getProgress()->finish();
+        m_isRunning = false;
+        return;
+    }
+    onTextLayoutCreated();
 }
 
 void PDFAsynchronousTextLayoutCompiler::onTextLayoutCreated()
@@ -617,7 +675,11 @@ void PDFAsynchronousTextLayoutCompiler::onTextLayoutCreated()
     m_proxy->getProgress()->finish();
     m_cache.clear();
 
-    PDFTextLayoutStorage result = m_textLayoutCompileFuture.result();
+    PDFTextLayoutStorage result;
+    {
+        QMutexLocker locker(&m_textLayoutMutex);
+        result = std::move(m_textLayoutJobResult);
+    }
     const bool isCurrent = m_proxy->getDocumentRevision() == m_textLayoutRevision;
     if (isCurrent)
     {

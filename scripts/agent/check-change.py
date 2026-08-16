@@ -304,6 +304,7 @@ def main() -> int:
                     subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
             for source in sources:
                 add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
+
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
     for test in tests:

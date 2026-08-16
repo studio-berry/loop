@@ -6,7 +6,10 @@ the cache generation, the effective profile identity, and the shared
 `PDFDocumentSession`.
 
 Every cache entry or asynchronous result that can outlive a mutation carries a
-`PDFRevisionIdentity`. Consumers must compare the complete value with
+`PDFRevisionIdentity`. The 0.1.1 spec name `PDFRevisionToken` is an alias of
+that type (`using PDFRevisionToken = PDFRevisionIdentity`); it is not a second
+freshness struct. Persisted provenance and the artifact store keep using
+`PDFArtifactIdentity`. Consumers must compare the complete value with
 `PDFDocumentContext::getRevision()` before presenting or storing a result. A
 mismatch is discarded; it is never reconciled heuristically.
 

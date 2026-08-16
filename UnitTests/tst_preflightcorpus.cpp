@@ -192,6 +192,9 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     report.remove(QStringLiteral("profile_resolution"));
     report.remove(QStringLiteral("document_revision_digest"));
     report.remove(QStringLiteral("effective_profile_digest"));
+    report.remove(QStringLiteral("profile_identity"));
+    report.remove(QStringLiteral("coverage_scope"));
+    report.remove(QStringLiteral("variable_bindings"));
     report.remove(QStringLiteral("decisions"));
     for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
     {
@@ -200,6 +203,7 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
         {
             QJsonObject finding = findings.at(index).toObject();
             finding.remove(QStringLiteral("id"));
+            finding.remove(QStringLiteral("evidence_ids"));
             findings.replace(index, finding);
         }
         report.insert(section, findings);

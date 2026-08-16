@@ -1,0 +1,7 @@
+{
+  "commit": "unspecified",
+  "os": "linux",
+  "qt": "6.11.1",
+  "pages": 40,
+  "notes": "Measured by UnitTestsHugeDocumentEnvelope. Interaction slot remains available via PDFJobPriority::Interaction."
+}

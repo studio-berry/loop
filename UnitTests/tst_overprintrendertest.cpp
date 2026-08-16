@@ -32,6 +32,9 @@
 #include "pdfrenderer.h"
 #include "pdftransparencyrenderer.h"
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QtTest>
 
 #include <limits>
@@ -71,7 +74,8 @@ bool updateSnapshotsRequested()
 
 QImage renderFixture(const QString& fixturePath, bool separationSimulation)
 {
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -151,6 +155,32 @@ void compareRender(const QString& name, const QImage& actual, const QImage& expe
         }
     }
 
+    const QJsonObject measurement{
+        { QStringLiteral("width"), actualRgba.width() },
+        { QStringLiteral("height"), actualRgba.height() },
+        { QStringLiteral("max_channel_delta"), observedMaxDelta },
+        { QStringLiteral("differing_pixels"), differingPixels },
+        { QStringLiteral("max_channel_delta_budget"), maxChannelDelta },
+        { QStringLiteral("differing_pixel_budget"), differingPixelBudget }
+    };
+    const QString measurementPath = rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".measurements.json");
+    if (updateSnapshotsRequested())
+    {
+        QFile measurementFile(measurementPath);
+        QVERIFY(measurementFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        measurementFile.write(QJsonDocument(measurement).toJson(QJsonDocument::Indented));
+    }
+    else
+    {
+        QFile measurementFile(measurementPath);
+        QVERIFY2(measurementFile.open(QIODevice::ReadOnly), qPrintable(QStringLiteral("Missing measurement baseline %1").arg(measurementPath)));
+        const QJsonObject expectedMeasurement = QJsonDocument::fromJson(measurementFile.readAll()).object();
+        QVERIFY(expectedMeasurement.value(QStringLiteral("width")).toInt() == actualRgba.width());
+        QVERIFY(expectedMeasurement.value(QStringLiteral("height")).toInt() == actualRgba.height());
+        QVERIFY(differingPixels <= expectedMeasurement.value(QStringLiteral("differing_pixel_budget")).toInt(differingPixelBudget));
+        QVERIFY(observedMaxDelta <= expectedMeasurement.value(QStringLiteral("max_channel_delta_budget")).toInt(maxChannelDelta));
+    }
+
     if (differingPixels > differingPixelBudget)
     {
         const QString actualPath = rendersDirectory() + QLatin1Char('/') + name + QStringLiteral("-actual.png");
@@ -166,7 +196,7 @@ void compareRender(const QString& name, const QImage& actual, const QImage& expe
     }
 }
 
-} // namespace
+}   // namespace
 
 class OverprintRenderTest : public QObject
 {
@@ -175,6 +205,7 @@ class OverprintRenderTest : public QObject
 private slots:
     void render_data();
     void render();
+    void rendererDifferentialDoesNotDriftBeyondTolerance();
 };
 
 void OverprintRenderTest::render_data()
@@ -202,6 +233,14 @@ void OverprintRenderTest::render()
     const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + fixture, separationSimulation);
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
     compareRender(baseline, actual, expected);
+}
+
+void OverprintRenderTest::rendererDifferentialDoesNotDriftBeyondTolerance()
+{
+    const QString name = QStringLiteral("overprint-cmyk-mode0-off");
+    const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + name + QStringLiteral(".pdf"), false);
+    const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".png"));
+    compareRender(name + QStringLiteral(".png"), actual, expected);
 }
 
 QTEST_APPLESS_MAIN(OverprintRenderTest)

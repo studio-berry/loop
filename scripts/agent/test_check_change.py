@@ -78,6 +78,13 @@ class CheckChangeTests(unittest.TestCase):
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
             self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
 
+    def test_check_changelog_demands_dev_fragment_when_branch_is_dev(self) -> None:
+        policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+        changes = [MODULE.Change("A", "changes/cursor-foo.md")]
+        evidence = MODULE.check_changelog(changes, policy, "dev")
+        self.assertEqual(evidence.result, "fail")
+        self.assertIn("changes/dev.md", evidence.reason or "")
+
     def test_check_changelog_allows_stacked_topic_fragments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -118,6 +125,38 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual(evidence.result, "fail")
         self.assertIn("changes/cdx-parent.md", evidence.reason or "")
 
+    def test_changelog_evidence_still_required_on_topic_branch(self) -> None:
+        policy = {
+            "branches": POLICY_BRANCHES,
+            "changelog": {"directory": "changes", "categories": ["fixed"]},
+        }
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
+            evidence = MODULE.changelog_evidence(
+                [MODULE.Change("A", "changes/other.md")],
+                policy,
+                "cursor/foo-0158",
+                skip=False,
+            )
+        self.assertEqual(evidence.result, "fail")
+        self.assertIn("changes/cursor-foo-0158.md", evidence.reason or "")
+
+    def test_changelog_evidence_skips_topic_fragment_after_merge_to_dev(self) -> None:
+        policy = {
+            "branches": POLICY_BRANCHES,
+            "changelog": {"directory": "changes", "categories": ["fixed"]},
+        }
+        changes = [MODULE.Change("A", "changes/cursor-foo.md")]
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": ""}, clear=False):
+            evidence = MODULE.changelog_evidence(changes, policy, "dev", skip=False)
+        self.assertEqual(evidence.result, "not-applicable")
+        self.assertEqual(evidence.reason, "integration branch")
+
+    def test_parse_name_status_deleted_is_excluded_from_format(self) -> None:
+        raw = b"D\0Pdf4QtLibCore/sources/gone.cpp\0M\0Pdf4QtLibCore/sources/keep.cpp\0"
+        changes = MODULE.parse_name_status(raw)
+        self.assertEqual(changes[0].status, "D")
+        self.assertEqual(MODULE.format_sources(changes), ["Pdf4QtLibCore/sources/keep.cpp"])
+
     def test_format_sources_excludes_deleted_paths(self) -> None:
         changes = [
             MODULE.Change("D", "Pdf4QtLibCore/sources/old.cpp"),
@@ -138,6 +177,15 @@ class CheckChangeTests(unittest.TestCase):
     def test_clang_tidy_is_scheduled_after_test_targets_build(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertLess(source.index("for test in tests:"), source.index("compile_db ="))
+
+    def test_classify_still_uses_deleted_paths(self) -> None:
+        policy = {
+            "module_boundaries": {
+                "core": {"paths": ["Pdf4QtLibCore/**"], "targets": ["Pdf4QtLibCore"], "tests": []},
+            }
+        }
+        changes = [MODULE.Change("D", "Pdf4QtLibCore/sources/gone.cpp")]
+        self.assertEqual(MODULE.classify(changes, policy), ["core"])
 
 
 if __name__ == "__main__":

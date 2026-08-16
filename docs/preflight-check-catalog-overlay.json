@@ -1,0 +1,142 @@
+{
+  "format_version": 1,
+  "claim": "Loupe does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "matrix_id": "loupe-gwg-pdfx-v1",
+  "gwg_families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"],
+  "pdfx_targets": ["PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4"],
+  "checks": {
+    "bleed": {
+      "measures": "Whether required page bleed boxes exist and meet amount_pt.",
+      "limitations": "Does not generate artwork bleed; box rewrite only.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "digital"]
+    },
+    "content-bleed": {
+      "measures": "Whether painted content reaches the requested bleed margin.",
+      "limitations": "Raster confirm is opt-in; vector-only bounds can miss sparse marks.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "packaging", "digital"]
+    },
+    "trim": {
+      "measures": "Trim box presence and optional expected size.",
+      "limitations": "Does not invent a trim from artwork.",
+      "coverage": "covered",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
+    },
+    "page-size": {
+      "measures": "Media/page size against expected width/height.",
+      "limitations": "Does not impose.",
+      "coverage": "covered",
+      "families": ["sheetfed-offset", "digital"]
+    },
+    "color-mode": {
+      "measures": "Whether page color spaces are in the allowed list.",
+      "limitations": "Does not convert color; ICC-based spaces are classified by the alternate.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
+    },
+    "color-inventory": {
+      "measures": "Spot, separation, and rich-black inventory.",
+      "limitations": "Probe DPI bounds small tints; not a GWG ink-name dictionary.",
+      "coverage": "partial",
+      "families": ["packaging", "sheetfed-offset"]
+    },
+    "output-intent": {
+      "measures": "Output intent presence, subtype, identifier, and ICC payload.",
+      "limitations": "Does not prove press calibration.",
+      "coverage": "covered",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "digital"]
+    },
+    "embedded-fonts": {
+      "measures": "Whether used fonts are embedded.",
+      "limitations": "Does not subset or repair; descriptor-less fonts are reported, not fixed.",
+      "coverage": "covered",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
+    },
+    "font-integrity": {
+      "measures": "Embedded font bytes that fail to parse or cmap.",
+      "limitations": "Not a full glyph-coverage audit.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "digital"]
+    },
+    "image-resolution": {
+      "measures": "Effective image DPI against min_dpi.",
+      "limitations": "Masks and patterns can be under-counted.",
+      "coverage": "covered",
+      "families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"]
+    },
+    "white-overprint": {
+      "measures": "White/knockout overprint flags on fills and strokes.",
+      "limitations": "Page-view overprint is not the measurement renderer; Output Preview / transparency renderer is.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "packaging"]
+    },
+    "transparency-risk": {
+      "measures": "Live transparency blend modes and blend-space mismatches.",
+      "limitations": "Does not flatten; does not simulate overprint+transparency interaction as a RIP.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "packaging", "digital"]
+    },
+    "thin-strokes": {
+      "measures": "Hairline and below-threshold stroke widths.",
+      "limitations": "Effective width after CTM; does not inspect filled parts.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "packaging"]
+    },
+    "thin-parts": {
+      "measures": "Thin filled parts and optional clipped/negative/annotation classes.",
+      "limitations": "Raster budget can skip a page as incomplete rather than pass.",
+      "coverage": "partial",
+      "families": ["packaging"]
+    },
+    "ink-coverage": {
+      "measures": "Total area coverage against max_ink_pct.",
+      "limitations": "Raster probe; not a plate-ready separation TAC.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "web-offset", "newspaper"]
+    },
+    "processing-steps": {
+      "measures": "ISO 19593-1 processing-step presence such as cutting-die.",
+      "limitations": "Does not validate die geometry.",
+      "coverage": "partial",
+      "families": ["packaging"]
+    },
+    "dieline": {
+      "measures": "Alias of processing-steps for cutting-die workflows.",
+      "limitations": "Same as processing-steps.",
+      "coverage": "partial",
+      "families": ["packaging"]
+    },
+    "invisible-content": {
+      "measures": "Content marked invisible or outside view.",
+      "limitations": "Not a full GWG hidden-content suite.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "packaging"]
+    },
+    "hidden-layers": {
+      "measures": "Optional content groups that hide print content.",
+      "limitations": "Does not enumerate every OCMD combination.",
+      "coverage": "partial",
+      "families": ["packaging"]
+    },
+    "off-page-content": {
+      "measures": "Content whose bounds fall outside the page.",
+      "limitations": "Clipping can hide false positives and false negatives.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset", "digital"]
+    },
+    "obscured-content": {
+      "measures": "Content covered by later painting.",
+      "limitations": "Heuristic; not a RIP occlusion model.",
+      "coverage": "partial",
+      "families": ["sheetfed-offset"]
+    }
+  },
+  "not_covered": [
+    "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
+    "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",
+    "DeviceN ink-limit per named colorant beyond inventory",
+    "Barcode / slug / Braille content validation",
+    "Multi-page imposition and reader-spread checks"
+  ]
+}

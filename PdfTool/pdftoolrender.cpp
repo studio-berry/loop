@@ -25,10 +25,12 @@
 #include "pdffont.h"
 #include "pdfconstants.h"
 #include "pdfsafefilewriter.h"
+#include "pdfworkloadenvelope.h"
 
 #include <QColorSpace>
 #include <QElapsedTimer>
 #include <QImageWriter>
+#include <QJsonObject>
 
 namespace pdftool
 {
@@ -100,9 +102,8 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
     // Atomic write: serialize into a QSaveFile and rename only after the image
     // bytes are durable, so a crash or short write cannot leave a truncated image.
     QString imageWriterError;
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
-        [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
-        {
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName, [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
+                                                                                    {
             QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
             imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
             imageWriter.setCompression(options.imageWriterSettings.getCompression());
@@ -116,8 +117,7 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
                 return false;
             }
 
-            return true;
-        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            return true; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
 
     if (!writeResult)
     {
@@ -127,12 +127,10 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("render"),
-            fileName,
-            writeResult ? QStringLiteral("written") : QStringLiteral("partial")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("render"),
+                                              fileName,
+                                              writeResult ? QStringLiteral("written") : QStringLiteral("partial") });
     }
 
     m_pageInfo[renderedPageImage.pageIndex].pageWriteTime = imageWriterTimer.elapsed();
@@ -166,8 +164,29 @@ PDFToolAbstractApplication::Options PDFToolBenchmark::getOptionsFlags() const
 
 void PDFToolBenchmark::finish(const PDFToolOptions& options)
 {
+    pdf::PDFRunIdentity identity = pdf::PDFRunIdentity::capture();
+    identity.fixtureDigest = pdf::PDFRunIdentity::digestFile(options.document);
+    identity.operationVersion = QStringLiteral("benchmark-render");
+    identity.renderer = QStringLiteral("pdf4qt");
+
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("benchmark", PDFToolTranslationContext::tr("Benchmark rendering of document %1").arg(options.document));
+    formatter.endl();
+
+    formatter.beginHeader("identity", PDFToolTranslationContext::tr("Run identity"));
+    formatter.writeText("commit", identity.commit);
+    formatter.writeText("compiler", identity.compiler);
+    formatter.writeText("build", identity.buildType);
+    formatter.writeText("os", identity.os);
+    formatter.writeText("qt", identity.qtVersion);
+    formatter.writeText("cpu", identity.cpuArchitecture);
+    formatter.writeText("gpu", identity.gpu);
+    formatter.writeText("renderer", identity.renderer);
+    formatter.writeText("fixture-digest", identity.fixtureDigest);
+    formatter.writeText("profile-version", identity.profileVersion);
+    formatter.writeText("operation-version", identity.operationVersion);
+    formatter.writeText("product-version", identity.productVersion);
+    formatter.endHeader();
     formatter.endl();
 
     writeStatistics(formatter);
@@ -182,7 +201,9 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->setData(formatter.getJsonObject());
+            QJsonObject data = formatter.getJsonObject();
+            data.insert(QStringLiteral("identity"), identity.toJson());
+            options.executionContext->setData(data);
         }
     }
     else

@@ -256,6 +256,7 @@ struct PDFToolOptions
     QString preflightPressId;
     QString preflightStockId;
     QString preflightFinishingId;
+    QStringList preflightParameterAssignments;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
@@ -379,17 +380,17 @@ public:
         Diff = 0x01000000,   ///< Diff settings (compare documents)
         Redact = 0x02000000,   ///< Settings for Redact tool
         AddBleed = 0x04000000,   ///< Settings for add-bleed tool
-        FlattenTransparency = 0x2000000000ULL, ///< Settings for flatten-transparency tool
+        FlattenTransparency = 0x2000000000ULL,   ///< Settings for flatten-transparency tool
         PreflightProfile = 0x08000000,   ///< Loupe preflight profile path
         VerifyRedaction = 0x10000000,   ///< Settings for verify-redaction tool
         DestructiveWrite = 0x20000000,   ///< Shared --dry-run/--report/--force for overwrite commands
         OcrOptions = 0x40000000,   ///< Loupe OCR sidecar settings
         Diagnostics = 0x80000000,   ///< Loupe diagnostics bundle collection
-        RgbToCmyk = 0x100000000ULL,  ///< ICC-managed RGB-to-CMYK fixup
-        CapabilityDiscovery = 0x200000000ULL, ///< Machine-readable command discovery
-        RepairDiff = 0x400000000ULL, ///< Deterministic before/after repair comparison
-        Repair = 0x800000000ULL, ///< Transactional prepress-safe repair operation
-        ActionList = 0x1000000000ULL, ///< Reusable declarative Action List execution
+        RgbToCmyk = 0x100000000ULL,   ///< ICC-managed RGB-to-CMYK fixup
+        CapabilityDiscovery = 0x200000000ULL,   ///< Machine-readable command discovery
+        RepairDiff = 0x400000000ULL,   ///< Deterministic before/after repair comparison
+        Repair = 0x800000000ULL,   ///< Transactional prepress-safe repair operation
+        ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
     };
     Q_DECLARE_FLAGS(Options, Option)
 

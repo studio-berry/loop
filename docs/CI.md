@@ -8,7 +8,8 @@ head branch. Subsequent `dev` pushes skip that PR-only check so a merged
 topic fragment is not rejected for not being `changes/dev.md`. Stacked topic
 branches may carry their parent fragments, but every added fragment is
 validated. Format and clang-tidy run on added, modified, renamed, or copied
-C/C++ files only; deleted paths still classify modules. These are the fast checks for
+C/C++ files only; deleted paths still classify modules. These are the fast
+checks for
 the shared integration baseline. The full Linux and Windows build-and-test
 jobs run for release qualification. These are the two platforms Loupe V1
 supports; **macOS** CI is a **post-V1** track under

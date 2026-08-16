@@ -31,9 +31,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QRegularExpression>
 #include <QSet>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace pdf
 {
@@ -214,7 +217,11 @@ bool profileSourceFromJson(const QJsonObject& profileObject,
 
     source = PreflightProfileSource();
     source.profile = profileObject;
-    source.id = profileObject.value(QStringLiteral("profile_id")).toString().trimmed();
+    source.id = profileObject.value(QStringLiteral("id")).toString().trimmed();
+    if (source.id.isEmpty())
+    {
+        source.id = profileObject.value(QStringLiteral("profile_id")).toString().trimmed();
+    }
     if (source.id.isEmpty())
     {
         source.id = fallbackId;
@@ -224,7 +231,11 @@ bool profileSourceFromJson(const QJsonObject& profileObject,
         errorMessage = QStringLiteral("Profile source is missing a stable profile_id.");
         return false;
     }
-    source.version = profileObject.value(QStringLiteral("profile_version")).toString();
+    source.version = profileObject.value(QStringLiteral("version")).toString();
+    if (source.version.isEmpty())
+    {
+        source.version = profileObject.value(QStringLiteral("profile_version")).toString();
+    }
     if (source.version.isEmpty())
     {
         source.version = QString::number(profileObject.value(QStringLiteral("schema_version")).toInt(1));
@@ -245,12 +256,7 @@ bool profileSourceFromJson(const QJsonObject& profileObject,
     PreflightProfileData parsedProfile;
     if (!validator.parseProfile(profileObject, parsedProfile, errorMessage))
     {
-        // An otherwise well-formed profile with an empty checks array is a semantic
-        // authoring problem PreflightEngine::run() itself reports as a document-scope
-        // 'profile' finding, not a source-validation failure - accept the source here
-        // (resolveMatched() below runs the same exemption for the merged/effective
-        // profile) so the real run classifies it downstream instead of this pre-check
-        // rejecting it outright as an unconditional resolver error.
+        // Empty checks are classified by PreflightEngine::run(), not as a resolver error.
         const bool isEmptyChecksOnly = !profileObject.value(QStringLiteral("name")).toString().isEmpty() && profileObject.value(QStringLiteral("checks")).toArray().isEmpty();
         if (!isEmptyChecksOnly)
         {
@@ -269,6 +275,8 @@ QJsonObject profilePolicy(const QJsonObject& sourceProfile)
     result.remove(QStringLiteral("profile_version"));
     result.remove(QStringLiteral("priority"));
     result.remove(QStringLiteral("selector"));
+    // Digest identifies an authored source file, not a merged effective profile.
+    result.remove(QStringLiteral("digest"));
     return result;
 }
 
@@ -547,12 +555,7 @@ PreflightResolvedProfile resolveMatched(const QList<RankedSource>& matched,
     PreflightProfileData parsed;
     if (!validator.parseProfile(effective, parsed, errorMessage))
     {
-        // An otherwise well-formed profile with an empty checks array is a semantic
-        // authoring problem that PreflightEngine::run() itself reports as a
-        // document-scope 'profile' finding, not a resolution/merge failure - let
-        // resolution succeed so that classification happens once, downstream,
-        // instead of being pre-empted here as a resolver error (which always maps
-        // to an Error verdict / PreflightError exit code, regardless of reason).
+        // Empty checks are classified by PreflightEngine::run(), not as a resolver error.
         const bool isEmptyChecksOnly = !effective.value(QStringLiteral("name")).toString().isEmpty() && effective.value(QStringLiteral("checks")).toArray().isEmpty();
         if (!isEmptyChecksOnly)
         {
@@ -899,6 +902,567 @@ PreflightResolvedProfile PreflightProfileResolver::resolveExplicitProfile(const 
     PreflightJobContext emptyContext;
     PreflightResolvedProfile result = resolveMatched({ RankedSource{ source, 0 } }, emptyContext, QStringLiteral("explicit"));
     result.resolutionMode = QStringLiteral("explicit");
+    return result;
+}
+
+namespace
+{
+
+QJsonObject materializeCheckDefaults(QJsonObject check)
+{
+    if (!check.contains(QStringLiteral("enabled")))
+    {
+        check.insert(QStringLiteral("enabled"), true);
+    }
+    if (!check.contains(QStringLiteral("severity")))
+    {
+        check.insert(QStringLiteral("severity"), QStringLiteral("error"));
+    }
+
+    const QString id = check.value(QStringLiteral("id")).toString();
+    const auto insertDefault = [&check](const QString& key, const QJsonValue& value)
+    {
+        if (!check.contains(key))
+        {
+            check.insert(key, value);
+        }
+    };
+
+    if (id == QLatin1String("content-bleed") || id == QLatin1String("ink-coverage") || id == QLatin1String("color-inventory"))
+    {
+        insertDefault(QStringLiteral("probe_dpi"), 150);
+    }
+    if (id == QLatin1String("content-bleed"))
+    {
+        insertDefault(QStringLiteral("raster_confirm"), false);
+        insertDefault(QStringLiteral("probe_threshold"), 16);
+    }
+    if (id == QLatin1String("color-inventory"))
+    {
+        insertDefault(QStringLiteral("rich_black_k_percent"), 10);
+    }
+    if (id == QLatin1String("ink-coverage"))
+    {
+        insertDefault(QStringLiteral("min_region_area_pct"), 0.05);
+        insertDefault(QStringLiteral("max_regions_per_page"), 20);
+        insertDefault(QStringLiteral("max_raster_pixels"), 250000000);
+        insertDefault(QStringLiteral("analysis_box"), QStringLiteral("bleed"));
+    }
+    if (id == QLatin1String("output-intent"))
+    {
+        insertDefault(QStringLiteral("require_embedded_profile"), true);
+        insertDefault(QStringLiteral("allow_multiple"), true);
+    }
+    if (id == QLatin1String("thin-strokes") || id == QLatin1String("thin-parts"))
+    {
+        insertDefault(QStringLiteral("zero_width_epsilon_pt"), 0.000001);
+    }
+    if (id == QLatin1String("thin-parts") && !check.contains(QStringLiteral("classes")))
+    {
+        check.insert(QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-stroke"), QStringLiteral("thin-fill") });
+    }
+    return check;
+}
+
+bool isValidProfileId(const QString& id)
+{
+    static const QRegularExpression pattern(QStringLiteral("^[a-z][a-z0-9-]*$"));
+    return pattern.match(id).hasMatch();
+}
+
+bool isValidProfileVersion(const QString& version)
+{
+    static const QRegularExpression pattern(QStringLiteral("^[0-9]+\\.[0-9]+\\.[0-9]+$"));
+    return pattern.match(version).hasMatch();
+}
+
+QString stemFromSourcePath(const QString& sourcePath)
+{
+    if (sourcePath.isEmpty())
+    {
+        return QStringLiteral("unnamed-profile");
+    }
+    QString stem = QFileInfo(sourcePath).completeBaseName().trimmed().toLower();
+    stem.replace(QRegularExpression(QStringLiteral("[^a-z0-9-]+")), QStringLiteral("-"));
+    stem.remove(QRegularExpression(QStringLiteral("^-+")));
+    stem.remove(QRegularExpression(QStringLiteral("-+$")));
+    if (stem.isEmpty() || !stem[0].isLetter())
+    {
+        stem = QStringLiteral("profile-") + stem;
+    }
+    return stem;
+}
+
+struct VariableDecl
+{
+    QString name;
+    QString type;
+    QJsonValue defaultValue;
+    bool hasMin = false;
+    bool hasMax = false;
+    double min = 0.0;
+    double max = 0.0;
+    bool required = false;
+};
+
+bool parseVariableDeclarations(const QJsonObject& profile, QMap<QString, VariableDecl>& declarations, QString& errorMessage)
+{
+    declarations.clear();
+    if (!profile.contains(QStringLiteral("variables")))
+    {
+        return true;
+    }
+    const QJsonValue variablesValue = profile.value(QStringLiteral("variables"));
+    if (!variablesValue.isObject())
+    {
+        errorMessage = QStringLiteral("Profile field 'variables' must be an object.");
+        return false;
+    }
+
+    const QJsonObject variables = variablesValue.toObject();
+    for (auto it = variables.constBegin(); it != variables.constEnd(); ++it)
+    {
+        if (!it.value().isObject())
+        {
+            errorMessage = QStringLiteral("Variable '%1' must be an object.").arg(it.key());
+            return false;
+        }
+        const QJsonObject object = it.value().toObject();
+        VariableDecl decl;
+        decl.name = it.key();
+        decl.type = object.value(QStringLiteral("type")).toString();
+        if (decl.type != QLatin1String("string") && decl.type != QLatin1String("number") && decl.type != QLatin1String("integer") && decl.type != QLatin1String("boolean"))
+        {
+            errorMessage = QStringLiteral("Variable '%1' has unsupported type '%2'.").arg(decl.name, decl.type);
+            return false;
+        }
+        decl.defaultValue = object.value(QStringLiteral("default"));
+        decl.required = object.value(QStringLiteral("required")).toBool(false);
+        if (object.contains(QStringLiteral("min")))
+        {
+            decl.hasMin = true;
+            decl.min = object.value(QStringLiteral("min")).toDouble();
+        }
+        if (object.contains(QStringLiteral("max")))
+        {
+            decl.hasMax = true;
+            decl.max = object.value(QStringLiteral("max")).toDouble();
+        }
+        declarations.insert(decl.name, decl);
+    }
+    return true;
+}
+
+bool coerceBinding(const VariableDecl& decl, QJsonValue incoming, QJsonValue& typed, QString& errorMessage)
+{
+    if (decl.type == QLatin1String("boolean"))
+    {
+        if (incoming.isBool())
+        {
+            typed = incoming;
+            return true;
+        }
+        if (incoming.isString())
+        {
+            const QString text = incoming.toString().trimmed().toLower();
+            if (text == QLatin1String("true") || text == QLatin1String("false"))
+            {
+                typed = text == QLatin1String("true");
+                return true;
+            }
+        }
+        errorMessage = QStringLiteral("Variable '%1' must be a boolean.").arg(decl.name);
+        return false;
+    }
+    if (decl.type == QLatin1String("string"))
+    {
+        if (!incoming.isString())
+        {
+            errorMessage = QStringLiteral("Variable '%1' must be a string.").arg(decl.name);
+            return false;
+        }
+        typed = incoming;
+        return true;
+    }
+
+    double number = incoming.toDouble();
+    bool ok = incoming.isDouble();
+    if (incoming.isString())
+    {
+        number = incoming.toString().toDouble(&ok);
+    }
+    if (!ok || !std::isfinite(number))
+    {
+        errorMessage = QStringLiteral("Variable '%1' must be a number.").arg(decl.name);
+        return false;
+    }
+    if (decl.type == QLatin1String("integer"))
+    {
+        if (std::floor(number) != number)
+        {
+            errorMessage = QStringLiteral("Variable '%1' must be an integer.").arg(decl.name);
+            return false;
+        }
+    }
+    if (decl.hasMin && number < decl.min)
+    {
+        errorMessage = QStringLiteral("Variable '%1' is below the declared minimum.").arg(decl.name);
+        return false;
+    }
+    if (decl.hasMax && number > decl.max)
+    {
+        errorMessage = QStringLiteral("Variable '%1' is above the declared maximum.").arg(decl.name);
+        return false;
+    }
+    typed = decl.type == QLatin1String("integer") ? QJsonValue(static_cast<int>(number)) : QJsonValue(number);
+    return true;
+}
+
+QString jsonValueAsText(const QJsonValue& value)
+{
+    if (value.isString())
+    {
+        return value.toString();
+    }
+    if (value.isBool())
+    {
+        return value.toBool() ? QStringLiteral("true") : QStringLiteral("false");
+    }
+    if (value.isDouble())
+    {
+        return QString::fromUtf8(QJsonDocument(QJsonArray{ value }).toJson(QJsonDocument::Compact)).mid(1).chopped(1);
+    }
+    if (value.isNull())
+    {
+        return QStringLiteral("null");
+    }
+    return QString::fromUtf8(canonicalPreflightJson(value));
+}
+
+struct SubstituteContext
+{
+    const QMap<QString, QJsonValue>* values = nullptr;
+    const QMap<QString, VariableDecl>* declarations = nullptr;
+    QString errorCode;
+    QString errorMessage;
+};
+
+QJsonValue substituteValue(const QJsonValue& value, SubstituteContext& context)
+{
+    if (!context.errorCode.isEmpty())
+    {
+        return value;
+    }
+
+    if (value.isObject())
+    {
+        QJsonObject object;
+        const QJsonObject source = value.toObject();
+        for (auto it = source.constBegin(); it != source.constEnd(); ++it)
+        {
+            object.insert(it.key(), substituteValue(it.value(), context));
+        }
+        return object;
+    }
+    if (value.isArray())
+    {
+        QJsonArray array;
+        for (const QJsonValue& item : value.toArray())
+        {
+            array.append(substituteValue(item, context));
+        }
+        return array;
+    }
+    if (!value.isString())
+    {
+        return value;
+    }
+
+    const QString text = value.toString();
+    static const QRegularExpression whole(QStringLiteral("^\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}$"));
+    static const QRegularExpression embedded(QStringLiteral("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}"));
+    const QRegularExpressionMatch wholeMatch = whole.match(text);
+    if (wholeMatch.hasMatch())
+    {
+        const QString name = wholeMatch.captured(1);
+        if (!context.declarations->contains(name))
+        {
+            context.errorCode = QStringLiteral("unresolved-variable");
+            context.errorMessage = QStringLiteral("Profile references undeclared variable '%1'.").arg(name);
+            return value;
+        }
+        return context.values->value(name);
+    }
+
+    QString result = text;
+    QRegularExpressionMatchIterator iterator = embedded.globalMatch(text);
+    while (iterator.hasNext())
+    {
+        const QRegularExpressionMatch match = iterator.next();
+        const QString name = match.captured(1);
+        if (!context.declarations->contains(name))
+        {
+            context.errorCode = QStringLiteral("unresolved-variable");
+            context.errorMessage = QStringLiteral("Profile references undeclared variable '%1'.").arg(name);
+            return value;
+        }
+        result.replace(match.captured(0), jsonValueAsText(context.values->value(name)));
+    }
+    return result;
+}
+
+}   // namespace
+
+QJsonObject materializePreflightProfileDefaults(const QJsonObject& profile)
+{
+    QJsonObject materialized = profile;
+    if (materialized.contains(QStringLiteral("checks")) && materialized.value(QStringLiteral("checks")).isArray())
+    {
+        QJsonArray checks;
+        for (const QJsonValue& checkValue : materialized.value(QStringLiteral("checks")).toArray())
+        {
+            checks.append(checkValue.isObject() ? materializeCheckDefaults(checkValue.toObject()) : checkValue);
+        }
+        materialized.insert(QStringLiteral("checks"), checks);
+    }
+    if (materialized.contains(QStringLiteral("fixups")) && materialized.value(QStringLiteral("fixups")).isArray())
+    {
+        QJsonArray fixups;
+        for (const QJsonValue& fixupValue : materialized.value(QStringLiteral("fixups")).toArray())
+        {
+            if (!fixupValue.isObject())
+            {
+                fixups.append(fixupValue);
+                continue;
+            }
+            QJsonObject fixup = fixupValue.toObject();
+            if (!fixup.contains(QStringLiteral("confirm")))
+            {
+                fixup.insert(QStringLiteral("confirm"), true);
+            }
+            fixups.append(fixup);
+        }
+        materialized.insert(QStringLiteral("fixups"), fixups);
+    }
+    return materialized;
+}
+
+QString computeProfileDigest(const QJsonObject& profile)
+{
+    QJsonObject canonical = materializePreflightProfileDefaults(profile);
+    canonical.remove(QStringLiteral("description"));
+    canonical.remove(QStringLiteral("authored"));
+    canonical.remove(QStringLiteral("digest"));
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalPreflightJson(canonical), QCryptographicHash::Sha256).toHex());
+}
+
+QJsonObject PreflightProfileIdentity::toJson() const
+{
+    QJsonObject object{
+        { QStringLiteral("id"), id },
+        { QStringLiteral("version"), version },
+        { QStringLiteral("name"), name },
+        { QStringLiteral("digest"), digest },
+        { QStringLiteral("effective_digest"), effectiveDigest.isEmpty() ? digest : effectiveDigest },
+        { QStringLiteral("provisional"), provisional }
+    };
+    if (!sourcePath.isEmpty())
+    {
+        object.insert(QStringLiteral("source_path"), sourcePath);
+    }
+    if (!authored.isEmpty())
+    {
+        object.insert(QStringLiteral("authored"), authored);
+    }
+    if (!derivedFrom.isEmpty())
+    {
+        object.insert(QStringLiteral("derived_from"), derivedFrom);
+    }
+    return object;
+}
+
+PreflightProfileIdentity identifyPreflightProfile(const QJsonObject& profile, const QString& sourcePath)
+{
+    PreflightProfileIdentity identity;
+    identity.sourcePath = sourcePath;
+    identity.name = profile.value(QStringLiteral("name")).toString();
+    identity.authored = profile.value(QStringLiteral("authored")).toObject();
+    identity.derivedFrom = profile.value(QStringLiteral("derived_from")).toObject();
+    identity.id = profile.value(QStringLiteral("id")).toString().trimmed();
+    identity.version = profile.value(QStringLiteral("version")).toString().trimmed();
+    if (identity.id.isEmpty())
+    {
+        identity.id = stemFromSourcePath(sourcePath);
+        identity.provisional = true;
+    }
+    if (identity.version.isEmpty())
+    {
+        identity.version = QStringLiteral("0.0.0");
+        identity.provisional = true;
+    }
+    identity.digest = computeProfileDigest(profile);
+    identity.effectiveDigest = identity.digest;
+    return identity;
+}
+
+PreflightProfileImportResult importPreflightProfile(const QJsonObject& profile, const QString& sourcePath)
+{
+    PreflightProfileImportResult result;
+    result.profile = profile;
+    result.identity = identifyPreflightProfile(profile, sourcePath);
+    if (!profile.value(QStringLiteral("id")).toString().trimmed().isEmpty() && !isValidProfileId(profile.value(QStringLiteral("id")).toString().trimmed()))
+    {
+        result.errorCode = QStringLiteral("profile-invalid");
+        result.errorMessage = QStringLiteral("Profile id must match ^[a-z][a-z0-9-]*$.");
+        return result;
+    }
+    if (!profile.value(QStringLiteral("version")).toString().trimmed().isEmpty() && !isValidProfileVersion(profile.value(QStringLiteral("version")).toString().trimmed()))
+    {
+        result.errorCode = QStringLiteral("profile-invalid");
+        result.errorMessage = QStringLiteral("Profile version must be MAJOR.MINOR.PATCH.");
+        return result;
+    }
+    const QString committed = profile.value(QStringLiteral("digest")).toString().trimmed().toLower();
+    if (!committed.isEmpty() && committed != result.identity.digest)
+    {
+        result.errorCode = QStringLiteral("profile-digest-mismatch");
+        result.errorMessage = QStringLiteral("Profile digest does not match the semantic content and was not repaired.");
+        return result;
+    }
+    result.ok = true;
+    return result;
+}
+
+QJsonObject exportPreflightProfile(const QJsonObject& profile)
+{
+    QJsonObject exported = materializePreflightProfileDefaults(profile);
+    const PreflightProfileIdentity provisional = identifyPreflightProfile(exported, QString());
+    if (!exported.contains(QStringLiteral("id")))
+    {
+        exported.insert(QStringLiteral("id"), provisional.id);
+    }
+    if (!exported.contains(QStringLiteral("version")))
+    {
+        exported.insert(QStringLiteral("version"), provisional.version);
+    }
+    exported.insert(QStringLiteral("digest"), computeProfileDigest(exported));
+    const QJsonDocument document(canonicalizePreflightJson(exported).toObject());
+    return QJsonDocument::fromJson(document.toJson(QJsonDocument::Compact)).object();
+}
+
+QJsonObject forkPreflightProfile(const QJsonObject& parent, const QString& newId, const QString& newVersion)
+{
+    QJsonObject forked = parent;
+    const PreflightProfileIdentity parentIdentity = identifyPreflightProfile(parent);
+    forked.insert(QStringLiteral("id"), newId);
+    forked.insert(QStringLiteral("version"), newVersion);
+    forked.insert(QStringLiteral("derived_from"), QJsonObject{
+                                                      { QStringLiteral("id"), parentIdentity.id },
+                                                      { QStringLiteral("version"), parentIdentity.version },
+                                                      { QStringLiteral("digest"), parentIdentity.digest } });
+    forked.remove(QStringLiteral("digest"));
+    return exportPreflightProfile(forked);
+}
+
+PreflightVariableBindResult bindPreflightProfileVariables(const QJsonObject& profile,
+                                                          const QJsonObject& jobSpecBindings,
+                                                          const QJsonObject& cliBindings)
+{
+    PreflightVariableBindResult result;
+    result.profile = profile;
+    QMap<QString, VariableDecl> declarations;
+    if (!parseVariableDeclarations(profile, declarations, result.errorMessage))
+    {
+        result.errorCode = QStringLiteral("profile-invalid");
+        return result;
+    }
+
+    QMap<QString, QJsonValue> values;
+    QMap<QString, QString> sources;
+    for (auto it = declarations.constBegin(); it != declarations.constEnd(); ++it)
+    {
+        if (!it.value().defaultValue.isUndefined())
+        {
+            QJsonValue typed;
+            if (!coerceBinding(it.value(), it.value().defaultValue, typed, result.errorMessage))
+            {
+                result.errorCode = QStringLiteral("unresolved-variable");
+                return result;
+            }
+            values.insert(it.key(), typed);
+            sources.insert(it.key(), QStringLiteral("default"));
+        }
+    }
+
+    const auto applyOverlay = [&](const QJsonObject& overlay, const QString& sourceName) -> bool
+    {
+        for (auto it = overlay.constBegin(); it != overlay.constEnd(); ++it)
+        {
+            if (!declarations.contains(it.key()))
+            {
+                result.errorCode = QStringLiteral("unresolved-variable");
+                result.errorMessage = QStringLiteral("Binding '%1' is not declared by the profile.").arg(it.key());
+                return false;
+            }
+            QJsonValue typed;
+            if (!coerceBinding(declarations.value(it.key()), it.value(), typed, result.errorMessage))
+            {
+                result.errorCode = QStringLiteral("unresolved-variable");
+                return false;
+            }
+            values.insert(it.key(), typed);
+            sources.insert(it.key(), sourceName);
+        }
+        return true;
+    };
+    if (!applyOverlay(jobSpecBindings, QStringLiteral("job-spec")) || !applyOverlay(cliBindings, QStringLiteral("cli")))
+    {
+        return result;
+    }
+
+    for (auto it = declarations.constBegin(); it != declarations.constEnd(); ++it)
+    {
+        if (!values.contains(it.key()) && it.value().required)
+        {
+            result.errorCode = QStringLiteral("unresolved-variable");
+            result.errorMessage = QStringLiteral("Required profile variable '%1' has no value.").arg(it.key());
+            return result;
+        }
+        if (!values.contains(it.key()) && it.value().defaultValue.isUndefined())
+        {
+            result.errorCode = QStringLiteral("unresolved-variable");
+            result.errorMessage = QStringLiteral("Profile variable '%1' has no value.").arg(it.key());
+            return result;
+        }
+    }
+
+    QJsonObject substitutable = profile;
+    substitutable.remove(QStringLiteral("variables"));
+    SubstituteContext context;
+    context.values = &values;
+    context.declarations = &declarations;
+    const QJsonValue substituted = substituteValue(substitutable, context);
+    if (!context.errorCode.isEmpty())
+    {
+        result.errorCode = context.errorCode;
+        result.errorMessage = context.errorMessage;
+        return result;
+    }
+
+    QJsonObject bound = substituted.toObject();
+    if (profile.contains(QStringLiteral("variables")))
+    {
+        bound.insert(QStringLiteral("variables"), profile.value(QStringLiteral("variables")));
+    }
+    result.profile = bound;
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    {
+        result.bindings.append(QJsonObject{
+            { QStringLiteral("name"), it.key() },
+            { QStringLiteral("value"), it.value() },
+            { QStringLiteral("source"), sources.value(it.key()) } });
+    }
+    result.ok = true;
     return result;
 }
 

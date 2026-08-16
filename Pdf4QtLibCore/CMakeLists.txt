@@ -82,12 +82,20 @@ add_library(Pdf4QtLibCore SHARED
     sources/pdfocrreport.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
+    sources/pdfworkloadenvelope.cpp
+    sources/pdfworkloadenvelope.h
     sources/pdfdocumentcontext.cpp
     sources/pdfdocumentcontext.h
     sources/pdfprocessingbudget.cpp
     sources/pdfprocessingbudget.h
     sources/pdfjobscheduler.cpp
     sources/pdfjobscheduler.h
+    sources/pdfschemaversion.cpp
+    sources/pdfschemaversion.h
+    sources/pdfevidencegraph.cpp
+    sources/pdfevidencegraph.h
+    sources/pdfoperationimpact.cpp
+    sources/pdfoperationimpact.h
     sources/preflightengine.cpp
     sources/preflightengine.h
     sources/pdfpreflightverdict.cpp
@@ -288,6 +296,20 @@ if(PDF4QT_ENABLE_SENTRY)
         target_compile_definitions(Pdf4QtLibCore PRIVATE PDF4QT_SENTRY_DSN="${PDF4QT_SENTRY_DSN}")
     endif()
     target_link_libraries(Pdf4QtLibCore PRIVATE sentry::sentry)
+endif()
+
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE PDF4QT_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE PDF4QT_GIT_COMMIT_RESULT)
+    if(PDF4QT_GIT_COMMIT AND PDF4QT_GIT_COMMIT_RESULT EQUAL 0)
+        target_compile_definitions(Pdf4QtLibCore PRIVATE PDF4QT_GIT_COMMIT="${PDF4QT_GIT_COMMIT}")
+    endif()
 endif()
 
 set_target_properties(Pdf4QtLibCore PROPERTIES

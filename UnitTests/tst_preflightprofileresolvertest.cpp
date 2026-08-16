@@ -78,6 +78,7 @@ private slots:
     void equalAuthorityConflictFailsClosed();
     void explicitProfileProducesProvenance();
     void rejectsUnknownSelectorField();
+    void legacyProfileExportImportRoundTrip();
 };
 
 void PreflightProfileResolverTest::normalizesContextAndMergesByCheckId()
@@ -182,6 +183,22 @@ void PreflightProfileResolverTest::rejectsUnknownSelectorField()
     QString error;
     QVERIFY(!pdf::PreflightProfileStore::loadDirectory(directory.path(), snapshot, error));
     QVERIFY(error.contains(QStringLiteral("not supported")));
+}
+
+void PreflightProfileResolverTest::legacyProfileExportImportRoundTrip()
+{
+    const QJsonObject legacy{
+        { QStringLiteral("name"), QStringLiteral("Legacy") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                        { QStringLiteral("min_dpi"), 300 } } } }
+    };
+    const QJsonObject exported = pdf::exportPreflightProfile(legacy);
+    QCOMPARE(exported.value(QStringLiteral("digest")).toString(),
+             pdf::computeProfileDigest(exported));
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(exported);
+    QVERIFY2(imported.ok, qPrintable(imported.errorMessage));
+    QVERIFY(imported.errorCode != QStringLiteral("profile-digest-mismatch"));
 }
 
 QTEST_APPLESS_MAIN(PreflightProfileResolverTest)
