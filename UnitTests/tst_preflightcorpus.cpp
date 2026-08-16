@@ -36,6 +36,8 @@
 // fixtures or an intentional rule change:
 //   LOUPE_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus
 
+#include "processoutputcapture.h"
+
 #include <QtTest>
 #include <QDir>
 #include <QFile>
@@ -159,14 +161,17 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
                     profilePath,
                     QStringLiteral("--console-format"),
                     QStringLiteral("json") });
-    QVERIFY2(process.waitForFinished(30000), "PdfTool preflight timed out");
+    QByteArray stdOut;
+    QByteArray stdErr;
+    QVERIFY2(test_support::waitForFinishedAndCapture(process, 30000, stdOut, stdErr),
+             qPrintable(QStringLiteral("PdfTool preflight timed out: %1\nstderr: %2")
+                            .arg(process.errorString(), QString::fromUtf8(stdErr))));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
-    const QByteArray stdOut = process.readAllStandardOutput();
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
     QVERIFY2(parseError.error == QJsonParseError::NoError,
-             qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(process.readAllStandardError()))));
+             qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(stdErr))));
     QVERIFY2(document.isObject(), "result JSON must be a top-level object");
 
     const QJsonObject envelope = document.object();

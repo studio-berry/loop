@@ -69,6 +69,10 @@ def resolve_revision(revision: str) -> str:
     return run_git(["rev-parse", "--verify", f"{revision}^{{commit}}"]).strip()
 
 
+def resolve_merge_base(base: str, head: str) -> str:
+    return run_git(["merge-base", base, head]).strip()
+
+
 def parse_name_status(raw: bytes) -> list[Change]:
     fields = raw.decode("utf-8", errors="surrogateescape").split("\0")
     changes: list[Change] = []
@@ -270,7 +274,8 @@ def main() -> int:
         policy = load_policy()
         base_sha = resolve_revision(args.base)
         head_sha = resolve_revision(args.head)
-        changes = diff_changes(base_sha, head_sha)
+        comparison_base_sha = resolve_merge_base(base_sha, head_sha)
+        changes = diff_changes(comparison_base_sha, head_sha)
     except (OSError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: unable to establish change set: {exc}", file=sys.stderr)
         return 1
@@ -318,6 +323,7 @@ def main() -> int:
     report = {
         "format_version": 1,
         "base_sha": base_sha,
+        "comparison_base_sha": comparison_base_sha,
         "head_sha": head_sha,
         "head_branch": branch,
         "changed_paths": [{"status": change.status, "path": change.path, **({"old_path": change.old_path} if change.old_path else {})} for change in changes],
