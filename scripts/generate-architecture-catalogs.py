@@ -24,6 +24,7 @@ PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.
 PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
 VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
+INVARIANTS_PATH = ROOT / "docs" / "architecture-invariants.json"
 ADR_DIR = ROOT / "docs" / "adr"
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -212,24 +213,6 @@ def parse_schema_kinds() -> list[str]:
     return kinds
 
 
-def parse_architecture_invariants() -> list[dict[str, Any]]:
-    path = ROOT / "docs" / "architecture-invariants.json"
-    document = json.loads(read(path))
-    invariants = document.get("invariants")
-    if not isinstance(invariants, list) or not invariants:
-        raise ValueError("architecture invariants are missing")
-    tests = set(parse_test_targets())
-    for invariant in invariants:
-        identifier = invariant.get("id")
-        mapped = invariant.get("tests")
-        if not identifier or not isinstance(mapped, list) or not mapped:
-            raise ValueError(f"invariant {identifier!r} is missing tests")
-        missing = [name for name in mapped if name not in tests]
-        if missing:
-            raise ValueError(f"{identifier} maps to unknown tests: {', '.join(missing)}")
-    return invariants
-
-
 def parse_coverage_matrix() -> dict[str, Any]:
     checks = parse_preflight_checks()
     families = {
@@ -283,6 +266,42 @@ def parse_test_targets() -> list[str]:
     if not targets:
         raise ValueError("CMake test target catalog is empty")
     return targets
+
+
+def parse_architecture_invariants(test_targets: list[str] | None = None) -> list[dict[str, Any]]:
+    document = json.loads(read(INVARIANTS_PATH))
+    invariants = document.get("invariants")
+    if not isinstance(invariants, list) or len(invariants) < 20:
+        raise ValueError("architecture invariants must list at least 20 numbered entries")
+    known_targets = set(test_targets if test_targets is not None else parse_test_targets())
+    seen_ids: set[str] = set()
+    parsed: list[dict[str, Any]] = []
+    for entry in invariants:
+        if not isinstance(entry, dict):
+            raise ValueError("architecture invariant entries must be objects")
+        identifier = entry.get("id")
+        title = entry.get("title")
+        mapped = entry.get("test_targets")
+        if not isinstance(identifier, str) or not re.fullmatch(r"I\d{2}", identifier):
+            raise ValueError(f"invalid architecture invariant id: {identifier!r}")
+        if identifier in seen_ids:
+            raise ValueError(f"duplicate architecture invariant id: {identifier}")
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError(f"{identifier} is missing a title")
+        if not isinstance(mapped, list) or not mapped:
+            raise ValueError(f"{identifier} must map to at least one test target")
+        unknown = sorted(target for target in mapped if target not in known_targets)
+        if unknown:
+            raise ValueError(f"{identifier} maps to unknown test targets: {', '.join(unknown)}")
+        seen_ids.add(identifier)
+        parsed.append(
+            {
+                "id": identifier,
+                "title": title.strip(),
+                "test_targets": unique_sorted(str(target) for target in mapped),
+            }
+        )
+    return parsed
 
 
 def parse_workflow_branches() -> dict[str, list[str]]:
@@ -352,9 +371,11 @@ def validate_adrs() -> list[str]:
 
 def build_catalog() -> dict[str, Any]:
     registry = parse_preflight_checks()
+    test_targets = parse_test_targets()
     return {
         "format_version": 1,
         "generated_by": "scripts/generate-architecture-catalogs.py",
+        "architecture_invariants": parse_architecture_invariants(test_targets),
         "branch_policy": parse_branch_policy(),
         "version_policy": parse_version_policy(),
         "preflight_checks": registry,
@@ -362,13 +383,13 @@ def build_catalog() -> dict[str, Any]:
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
         "schema_kinds": parse_schema_kinds(),
-        "architecture_invariants": parse_architecture_invariants(),
         "preflight_coverage": parse_coverage_matrix(),
-        "test_targets": parse_test_targets(),
+        "test_targets": test_targets,
         "workflow_branches": parse_workflow_branches(),
         "sources": [
             "docs/branch-policy.json",
             "docs/version-policy.json",
+            "docs/architecture-invariants.json",
             "Pdf4QtLibCore/sources/preflightengine.cpp",
             "Pdf4QtLibCore/sources/preflightengine.h",
             "docs/preflight-check-catalog-overlay.json",
@@ -378,7 +399,6 @@ def build_catalog() -> dict[str, Any]:
             "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
             "loupe-preflight/schemas/*.json",
             "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
-            "docs/architecture-invariants.json",
             "docs/PDFX_POLICY_MATRIX.md",
             "UnitTests/CMakeLists.txt",
             ".github/workflows/*.yml",

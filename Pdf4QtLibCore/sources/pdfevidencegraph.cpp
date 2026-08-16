@@ -178,6 +178,15 @@ void throwIfContentProcessingIncomplete(const QList<PDFRenderError>& errors)
     }
 }
 
+void appendEvidenceRecord(PDFEvidenceGraph* graph, PDFEvidenceRecord record, PDFProcessingBudget* budget)
+{
+    if (budget)
+    {
+        budget->chargeEvidenceRecords(1, QStringLiteral("evidence-graph"));
+    }
+    graph->records.append(std::move(record));
+}
+
 void processAnnotationAppearanceStreams(PDFDocument* document,
                                         const PDFPage* page,
                                         const std::function<void(const PDFStream*)>& processForm)
@@ -584,7 +593,8 @@ public:
         m_paintedSpaces(paintedSpaces),
         m_foundWhiteOverprint(foundWhiteOverprint),
         m_riskyBlendModes(riskyBlendModes),
-        m_mismatchDescriptions(mismatchDescriptions)
+        m_mismatchDescriptions(mismatchDescriptions),
+        m_budget(budget)
     {
         QRectF pageClip = page ? page->getCropBox().normalized() : QRectF();
         if (pageClip.isEmpty() && page)
@@ -668,7 +678,7 @@ protected:
         record.units = QStringLiteral("dpi");
         record.geometry = imageBoundsFromCtm(ctm, image.getImageData().getWidth(), image.getImageData().getHeight());
         record.id = QStringLiteral("img:%1:%2:%3").arg(m_pageNumber).arg(record.objectId.isEmpty() ? QStringLiteral("anon") : record.objectId).arg(++m_imageOrdinal);
-        m_graph->records.append(record);
+        appendEvidenceRecord(m_graph, record, m_budget);
         return true;
     }
 
@@ -773,7 +783,7 @@ protected:
         record.extra.insert(QStringLiteral("effective_width"), effectiveWidth);
         record.extra.insert(QStringLiteral("hairline"), hairline);
         record.id = QStringLiteral("stroke:%1:%2").arg(m_pageNumber).arg(++m_strokeOrdinal);
-        m_graph->records.append(record);
+        appendEvidenceRecord(m_graph, record, m_budget);
     }
 
     void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override
@@ -964,6 +974,7 @@ private:
     bool* m_foundWhiteOverprint = nullptr;
     QSet<QString>* m_riskyBlendModes = nullptr;
     QSet<QString>* m_mismatchDescriptions = nullptr;
+    PDFProcessingBudget* m_budget = nullptr;
     QPainterPath m_clipPath;
     std::vector<QPainterPath> m_clipStack;
     std::vector<TransparencyGroupFrame> m_groups;
@@ -971,7 +982,7 @@ private:
     int m_strokeOrdinal = 0;
 };
 
-void collectFonts(PDFDocument* document, PDFEvidenceGraph* graph)
+void collectFonts(PDFDocument* document, PDFEvidenceGraph* graph, PDFProcessingBudget* budget)
 {
     const PDFCatalog* catalog = document->getCatalog();
     std::set<PDFObjectReference> processedFonts;
@@ -1036,7 +1047,7 @@ void collectFonts(PDFDocument* document, PDFEvidenceGraph* graph)
                         record.extra.insert(QStringLiteral("font_name"), fd->fontName.isEmpty() ? keyName : fd->fontName);
                     }
                     record.id = QStringLiteral("font:%1:%2").arg(pageNumber).arg(keyName);
-                    graph->records.append(record);
+                    appendEvidenceRecord(graph, record, budget);
                 }
                 catch (const PDFException&)
                 {
@@ -1122,7 +1133,7 @@ void collectFonts(PDFDocument* document, PDFEvidenceGraph* graph)
     }
 }
 
-void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, const PDFEvidenceCollectSettings& settings)
+void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, const PDFEvidenceCollectSettings& settings, PDFProcessingBudget* budget)
 {
     PDFColorInventorySettings inventorySettings;
     inventorySettings.probeDpi = settings.colorProbeDpi;
@@ -1139,7 +1150,7 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
         record.extra.insert(QStringLiteral("name"), ink.name);
         record.extra.insert(QStringLiteral("is_spot"), isSpot);
         record.id = QStringLiteral("colorant:%1").arg(index++);
-        graph->records.append(record);
+        appendEvidenceRecord(graph, record, budget);
     };
     for (const PDFColorInventoryInk& ink : result.spotColors)
     {
@@ -1159,7 +1170,7 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
         record.extra.insert(QStringLiteral("area_mm2"), richBlack.areaMM2);
         record.extra.insert(QStringLiteral("k_threshold"), settings.richBlackKThreshold);
         record.id = QStringLiteral("rich-black:%1").arg(richBlack.page);
-        graph->records.append(record);
+        appendEvidenceRecord(graph, record, budget);
     }
 }
 
@@ -1190,11 +1201,11 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
     {
         if (domains.testFlag(PDFEvidenceDomain::Fonts))
         {
-            collectFonts(document, &graph);
+            collectFonts(document, &graph, session->getProcessingBudget());
         }
         if (domains.testFlag(PDFEvidenceDomain::Colorants))
         {
-            collectColorants(session, &graph, settings);
+            collectColorants(session, &graph, settings, session->getProcessingBudget());
         }
 
         const bool needsWalk = domains.testFlag(PDFEvidenceDomain::Images) || domains.testFlag(PDFEvidenceDomain::Strokes) || domains.testFlag(PDFEvidenceDomain::OverprintTransparency) || domains.testFlag(PDFEvidenceDomain::Colorants);
@@ -1247,7 +1258,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                         record.coverageMethod = QStringLiteral("content-stream");
                         record.extra.insert(QStringLiteral("space"), space);
                         record.id = QStringLiteral("color-space:%1:%2").arg(pageNumber).arg(space);
-                        graph.records.append(record);
+                        appendEvidenceRecord(&graph, record, session->getProcessingBudget());
                     }
                 }
                 if (domains.testFlag(PDFEvidenceDomain::OverprintTransparency) && foundWhiteOverprint)
@@ -1255,7 +1266,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                     PDFEvidenceRecord record = makeRecord(&graph, PDFEvidenceDomain::OverprintTransparency, pageNumber, QStringLiteral("white-overprint"));
                     record.observedValue = 1;
                     record.id = QStringLiteral("white-overprint:%1").arg(pageNumber);
-                    graph.records.append(record);
+                    appendEvidenceRecord(&graph, record, session->getProcessingBudget());
                 }
                 if (domains.testFlag(PDFEvidenceDomain::OverprintTransparency))
                 {
@@ -1271,7 +1282,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                         }
                         record.extra.insert(QStringLiteral("blend_modes"), names);
                         record.id = QStringLiteral("transparency-blend-mode:%1").arg(pageNumber);
-                        graph.records.append(record);
+                        appendEvidenceRecord(&graph, record, session->getProcessingBudget());
                     }
                     QStringList mismatches = mismatchDescriptions.values();
                     mismatches.sort();
@@ -1285,7 +1296,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                         }
                         record.extra.insert(QStringLiteral("mismatches"), items);
                         record.id = QStringLiteral("transparency-blend-space:%1").arg(pageNumber);
-                        graph.records.append(record);
+                        appendEvidenceRecord(&graph, record, session->getProcessingBudget());
                     }
                 }
             }
@@ -1293,11 +1304,17 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
     }
     catch (const PDFBudgetExceededException& exception)
     {
+        const PDFBudgetExceeded& detail = exception.getDetail();
         graph.complete = false;
-        graph.incompleteReason = QString::fromLatin1(getPDFBudgetKindName(exception.getDetail().kind));
+        graph.incompleteReason = QString::fromLatin1(getPDFBudgetKindName(detail.kind));
+        graph.budgetKind = graph.incompleteReason;
+        graph.budgetPool = QString::fromLatin1(getPDFBudgetPoolName(detail.pool));
+        graph.budgetLimit = static_cast<qint64>(detail.limit);
+        graph.budgetAttempted = static_cast<qint64>(detail.attempted);
+        graph.budgetContext = detail.context;
         if (!graph.records.isEmpty())
         {
-            graph.records.last().budgetContext = exception.getDetail().context;
+            graph.records.last().budgetContext = detail.context;
         }
     }
     catch (const PDFException& exception)

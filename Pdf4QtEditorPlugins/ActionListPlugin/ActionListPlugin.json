@@ -7,5 +7,11 @@
     "AbiVersion": 1,
     "AllowsNetwork": false,
     "AllowsExternalProcess": false,
-    "Capabilities": []
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation"
+    ],
+    "PluginId": "PDF4QT.ActionListPlugin",
+    "BuildId": "loupe-0.1.0"
 }

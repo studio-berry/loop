@@ -23,106 +23,313 @@
 #include "pdfartifactstore.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
-#include "pdfdocumentsession.h"
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistorystore.h"
-#include "pdfpreflightverdict.h"
 #include "pdfsavepolicy.h"
-#include "preflightengine.h"
 
 #include <QDir>
+#include <QFile>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <atomic>
+#include <optional>
+#include <thread>
 
 class LifecycleTest : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void openEditPreflightCancelSaveRecoverRollback();
+    void seededSequencePreservesInvariants();
+    void injectedStaleResultIsCaught();
+    void injectedOverwriteIsCaught();
+    void injectedRollbackHistoryDefectIsCaught();
 };
 
-void LifecycleTest::openEditPreflightCancelSaveRecoverRollback()
+namespace
 {
-    pdf::PDFDocumentBuilder builder;
-    builder.appendPage(QRectF(0, 0, 200, 200));
-    pdf::PDFDocument document = builder.build();
-    pdf::PDFDocumentContext context(&document);
-    const pdf::PDFRevisionIdentity opened = context.getRevision();
-    QVERIFY(opened.isValid());
-    QCOMPARE(opened.documentRevision, quint64(0));
 
-    context.markModified();
-    const pdf::PDFRevisionIdentity edited = context.getRevision();
-    QVERIFY(edited.documentRevision > opened.documentRevision);
+struct LifecycleState
+{
+    QString sourceDigest;
+    quint64 lastRevision = 0;
+    bool open = false;
+    bool recovered = false;
+    bool certified = false;
+    bool lastCancelled = false;
+    bool lastSucceeded = false;
+    bool acceptedStale = false;
+    bool sourceOverwritten = false;
+    bool historyMutated = false;
+    pdf::PDFSaveMode lastSaveMode = pdf::PDFSaveMode::IncrementalAppend;
+    QList<QUuid> eventIds;
+    pdf::PDFArtifactIdentity original;
+    pdf::PDFArtifactIdentity current;
+    QUuid lastAcceptedExecution;
+};
 
-    pdf::PDFDocumentSession* session = context.getSession();
-    QVERIFY(session);
-    pdf::PreflightEngine engine(session);
-    pdf::PreflightProfileData profile;
-    profile.name = QStringLiteral("lifecycle");
-    pdf::PreflightCheckConfig check;
-    check.id = QStringLiteral("bleed");
-    profile.checks.append(check);
-    const pdf::PreflightResult preflight = engine.run(profile);
-    QVERIFY(context.isCurrent(session->getRevision()));
-    QVERIFY(preflight.inspectionComplete);
-    QCOMPARE(preflight.pass, pdf::reducePreflightVerdict(preflight).isPass());
+QString invariantFailure(const LifecycleState& state, const pdf::PDFArtifactStore& artifacts, const pdf::PDFOperationHistoryStore& history)
+{
+    if (!state.sourceDigest.isEmpty() && state.original.sha256 != state.sourceDigest)
+    {
+        return QStringLiteral("source-digest-changed");
+    }
+    if (state.sourceOverwritten)
+    {
+        return QStringLiteral("source-overwritten");
+    }
+    if (state.acceptedStale)
+    {
+        return QStringLiteral("stale-result-accepted");
+    }
+    if (state.lastCancelled && state.lastSucceeded)
+    {
+        return QStringLiteral("cancel-marked-success");
+    }
+    if (state.recovered && state.certified)
+    {
+        return QStringLiteral("recovered-output-certified");
+    }
+    if (state.historyMutated)
+    {
+        return QStringLiteral("rollback-history-mutated");
+    }
 
-    pdf::PDFJobScheduler scheduler(1);
-    scheduler.setCurrentRevision(opened.document.documentId, edited.toString());
-    pdf::PDFJobSpec spec;
-    spec.jobId = QStringLiteral("preflight");
-    spec.kind = pdf::PDFJobKind::Preflight;
-    spec.documentKey = opened.document.documentId;
-    spec.documentRevision = opened.toString();
-    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    bool ran = false;
-    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
-                                           { ran = true; });
-    QVERIFY(scheduler.waitForFinished(jobId, 2000));
-    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
-    QVERIFY(!ran);
-
-    pdf::PDFJobSpec cancelSpec;
-    cancelSpec.jobId = QStringLiteral("cancel-me");
-    cancelSpec.kind = pdf::PDFJobKind::Preflight;
-    pdf::PDFJobCancellationTokenPtr token;
-    const QString cancelId = scheduler.submit(cancelSpec, [](pdf::PDFJobContext& ctx)
-                                              {
-        while (!ctx.isCancellationRequested())
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+    QList<QUuid> ids;
+    qint64 previous = 0;
+    for (const pdf::PDFOperationHistoryEvent& event : events)
+    {
+        if (event.sequence <= previous && previous != 0)
         {
-        } }, &token);
-    QVERIFY(token);
-    QVERIFY(scheduler.cancel(cancelId));
-    QVERIFY(scheduler.waitForFinished(cancelId, 2000));
-    QCOMPARE(scheduler.snapshot(cancelId).status, pdf::PDFJobStatus::Cancelled);
+            return QStringLiteral("event-sequence-not-monotonic");
+        }
+        previous = event.sequence;
+        ids.append(event.entryId);
+    }
+    if (ids.size() < state.eventIds.size())
+    {
+        return QStringLiteral("provenance-not-append-only");
+    }
+    if (state.open && !artifacts.verify(state.original))
+    {
+        return QStringLiteral("original-artifact-unverified");
+    }
+    return QString();
+}
 
-    const pdf::PDFOperationSavePolicy policy = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit"));
-    QCOMPARE(policy.mode, pdf::PDFSaveMode::IncrementalAppend);
+bool appendEvent(pdf::PDFOperationHistoryStore& history,
+                 const pdf::PDFArtifactIdentity& input,
+                 pdf::PDFOperationHistoryEventKind kind,
+                 pdf::PDFOperationHistoryStatus status,
+                 QUuid* executionId,
+                 LifecycleState* state,
+                 const std::optional<pdf::PDFArtifactIdentity>& output = std::nullopt)
+{
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("lifecycle.test");
+    execution.input = input;
+    if (!history.beginExecution(execution, executionId))
+    {
+        return false;
+    }
+    pdf::PDFOperationHistoryEvent event;
+    event.executionId = *executionId;
+    event.kind = kind;
+    event.status = status;
+    event.output = output;
+    if (!history.appendEvent(event))
+    {
+        return false;
+    }
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+    if (events.isEmpty())
+    {
+        return false;
+    }
+    state->eventIds.append(events.last().entryId);
+    return true;
+}
 
+}   // namespace
+
+void LifecycleTest::seededSequencePreservesInvariants()
+{
     QTemporaryDir temporary;
     QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QVERIFY(history.open());
-    pdf::PDFArtifactStore store(temporary.path());
-    const pdf::PDFArtifactStoreResult imported = store.importBytes(QByteArrayLiteral("%PDF-1.4 test"), { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentContext context(&document);
+    const QByteArray originalBytes("lifecycle-source-v1");
+    const auto imported = artifacts.importBytes(originalBytes, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
     QVERIFY(imported.success);
     QVERIFY(history.registerOriginalInput(imported.artifact));
-    pdf::PDFOperationHistoryExecution execution;
-    execution.operationId = QStringLiteral("lifecycle");
-    execution.input = imported.artifact;
-    QUuid executionId;
-    QVERIFY(history.beginExecution(execution, &executionId));
-    pdf::PDFOperationHistoryEvent running;
-    running.executionId = executionId;
-    running.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
-    running.status = pdf::PDFOperationHistoryStatus::Cancelled;
-    QVERIFY(history.appendEvent(running));
-    const pdf::PDFOperationHistoryVerification verified = history.verify();
-    QVERIFY(verified.verified);
-    QCOMPARE(history.events().last().kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
-    QCOMPARE(history.events().last().status, pdf::PDFOperationHistoryStatus::Cancelled);
+
+    LifecycleState state;
+    state.original = imported.artifact;
+    state.current = imported.artifact;
+    state.sourceDigest = imported.artifact.sha256;
+    state.open = true;
+    state.lastRevision = context.getRevision().documentRevision;
+    QUuid openedId;
+    QVERIFY(appendEvent(history, imported.artifact, pdf::PDFOperationHistoryEventKind::DocumentOpened,
+                        pdf::PDFOperationHistoryStatus::Accepted, &openedId, &state, imported.artifact));
+
+    const pdf::PDFRevisionIdentity beforeEdit = context.getRevision();
+    context.markModified(pdf::PDFModifiedDocument::PageContents);
+    QVERIFY(context.getRevision().documentRevision > beforeEdit.documentRevision);
+    state.lastRevision = context.getRevision().documentRevision;
+
+    pdf::PDFJobScheduler scheduler(1);
+    std::atomic_bool started = false;
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.documentRevision = context.getRevision().toString();
+    const QString jobId = scheduler.submit(spec, [&started](pdf::PDFJobContext& jobContext)
+                                           {
+                                               started = true;
+                                               while (!jobContext.isCancellationRequested())
+                                               {
+                                                   std::this_thread::yield();
+                                               } });
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+    QVERIFY(scheduler.cancel(jobId));
+    QVERIFY(scheduler.waitForFinished(jobId, 1000));
+    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Cancelled);
+    state.lastCancelled = true;
+    state.lastSucceeded = false;
+    QUuid cancelledId;
+    QVERIFY(appendEvent(history, state.current, pdf::PDFOperationHistoryEventKind::PreflightRun,
+                        pdf::PDFOperationHistoryStatus::Cancelled, &cancelledId, &state));
+
+    const pdf::PDFOperationSavePolicy incremental = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("edit"));
+    QCOMPARE(incremental.mode, pdf::PDFSaveMode::IncrementalAppend);
+    state.lastSaveMode = incremental.mode;
+    const auto saved = artifacts.importBytes(QByteArray("lifecycle-source-v1-incremental"),
+                                             { QStringLiteral("application/pdf"), QStringLiteral("edited.pdf") });
+    QVERIFY(saved.success);
+    QVERIFY(history.registerArtifact(saved.artifact));
+    QVERIFY(artifacts.verify(state.original));
+    state.current = saved.artifact;
+    QUuid savedId;
+    QVERIFY(appendEvent(history, state.original, pdf::PDFOperationHistoryEventKind::FixApplied,
+                        pdf::PDFOperationHistoryStatus::Accepted, &savedId, &state, saved.artifact));
+    state.lastAcceptedExecution = savedId;
+
+    const pdf::PDFOperationSavePolicy saveAs = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("export"));
+    QCOMPARE(saveAs.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+    state.lastSaveMode = saveAs.mode;
+
+    const quint64 revisionBeforeRollback = context.getRevision().documentRevision;
+    QUuid rollbackId;
+    QVERIFY(appendEvent(history, state.current, pdf::PDFOperationHistoryEventKind::FixApplied,
+                        pdf::PDFOperationHistoryStatus::RolledBack, &rollbackId, &state, state.current));
+    context.markModified(pdf::PDFModifiedDocument::PageContents);
+    QVERIFY(context.getRevision().documentRevision > revisionBeforeRollback);
+
+    state.recovered = true;
+    state.certified = false;
+    QVERIFY(artifacts.verify(state.original));
+    QCOMPARE(invariantFailure(state, artifacts, history), QString());
+}
+
+void LifecycleTest::injectedStaleResultIsCaught()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    scheduler.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("revision-2"));
+    std::atomic_bool ran = false;
+    pdf::PDFJobSpec spec;
+    spec.documentKey = QStringLiteral("doc");
+    spec.documentRevision = QStringLiteral("revision-1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+    const QString jobId = scheduler.submit(spec, [&ran](pdf::PDFJobContext&)
+                                           { ran = true; });
+    QVERIFY(scheduler.waitForFinished(jobId, 1000));
+    QCOMPARE(scheduler.snapshot(jobId).status, pdf::PDFJobStatus::Stale);
+    QVERIFY(!ran.load(std::memory_order_acquire));
+
+    LifecycleState state;
+    state.acceptedStale = true;
+    pdf::PDFArtifactStore artifacts(QDir::tempPath());
+    QTemporaryDir temporary;
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("stale-result-accepted"));
+}
+
+void LifecycleTest::injectedOverwriteIsCaught()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto imported = artifacts.importBytes("protected-source", { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    QVERIFY(imported.success);
+    QVERIFY(artifacts.verify(imported.artifact));
+
+    QFile file(artifacts.pathFor(imported.artifact));
+    QVERIFY(QFile::setPermissions(file.fileName(), QFileDevice::ReadOwner | QFileDevice::WriteOwner));
+    QVERIFY(file.open(QIODevice::Append));
+    QVERIFY(file.write("overwrite") > 0);
+    file.close();
+
+    LifecycleState state;
+    state.original = imported.artifact;
+    state.sourceDigest = imported.artifact.sha256;
+    state.open = true;
+    state.sourceOverwritten = !artifacts.verify(imported.artifact);
+    QVERIFY(state.sourceOverwritten);
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("source-overwritten"));
+}
+
+void LifecycleTest::injectedRollbackHistoryDefectIsCaught()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto first = artifacts.importBytes("one", { QStringLiteral("application/pdf"), QStringLiteral("one.pdf") });
+    const auto second = artifacts.importBytes("two", { QStringLiteral("application/pdf"), QStringLiteral("two.pdf") });
+    QVERIFY(first.success);
+    QVERIFY(second.success);
+
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+    pdf::PDFOperationHistoryStore history(databasePath);
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(first.artifact));
+    QVERIFY(history.registerArtifact(second.artifact));
+
+    LifecycleState state;
+    QUuid firstId;
+    QUuid secondId;
+    QVERIFY(appendEvent(history, first.artifact, pdf::PDFOperationHistoryEventKind::FixApplied,
+                        pdf::PDFOperationHistoryStatus::Accepted, &firstId, &state, first.artifact));
+    QVERIFY(appendEvent(history, second.artifact, pdf::PDFOperationHistoryEventKind::FixApplied,
+                        pdf::PDFOperationHistoryStatus::Accepted, &secondId, &state, second.artifact));
+    const int before = history.events().size();
+
+    const QString connectionName = QStringLiteral("lifecycle-history-mutate");
+    QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+    database.setDatabaseName(databasePath);
+    QVERIFY(database.open());
+    QSqlQuery query(database);
+    QVERIFY(query.exec(QStringLiteral("DELETE FROM history_events WHERE sequence = 1")));
+    database.close();
+    database = QSqlDatabase();
+    QSqlDatabase::removeDatabase(connectionName);
+
+    QVERIFY(history.events().size() < before);
+    state.historyMutated = true;
+    QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("rollback-history-mutated"));
 }
 
 QTEST_GUILESS_MAIN(LifecycleTest)

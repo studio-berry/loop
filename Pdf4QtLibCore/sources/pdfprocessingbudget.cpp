@@ -77,19 +77,64 @@ const char* getPDFBudgetKindName(PDFBudgetKind kind)
             return "render-pixels";
         case PDFBudgetKind::ElapsedTime:
             return "elapsed-time";
-        case PDFBudgetKind::DocumentModelBytes:
-            return "document-model-bytes";
-        case PDFBudgetKind::EvidenceCacheBytes:
-            return "evidence-cache-bytes";
-        case PDFBudgetKind::RasterTileBytes:
-            return "raster-tile-bytes";
-        case PDFBudgetKind::UndoBytes:
-            return "undo-bytes";
-        case PDFBudgetKind::RollbackBytes:
-            return "rollback-bytes";
+        case PDFBudgetKind::EvidenceRecords:
+            return "evidence-records";
+        case PDFBudgetKind::UndoSnapshots:
+            return "undo-snapshots";
+        case PDFBudgetKind::RollbackArtifacts:
+            return "rollback-artifacts";
     }
 
     return "unknown";
+}
+
+const char* getPDFBudgetPoolName(PDFBudgetPool pool)
+{
+    switch (pool)
+    {
+        case PDFBudgetPool::DocumentModel:
+            return "document-model";
+        case PDFBudgetPool::EvidenceCache:
+            return "evidence-cache";
+        case PDFBudgetPool::RasterTile:
+            return "raster-tile";
+        case PDFBudgetPool::DecodedStreams:
+            return "decoded-streams";
+        case PDFBudgetPool::Undo:
+            return "undo";
+        case PDFBudgetPool::Rollback:
+            return "rollback";
+    }
+
+    return "unknown";
+}
+
+PDFBudgetPool budgetPoolFor(PDFBudgetKind kind)
+{
+    switch (kind)
+    {
+        case PDFBudgetKind::SingleDecodedStreamBytes:
+        case PDFBudgetKind::CumulativeDecodedBytes:
+        case PDFBudgetKind::DecompressionRatio:
+            return PDFBudgetPool::DecodedStreams;
+        case PDFBudgetKind::RenderOperations:
+        case PDFBudgetKind::RenderPixels:
+            return PDFBudgetPool::RasterTile;
+        case PDFBudgetKind::EvidenceRecords:
+            return PDFBudgetPool::EvidenceCache;
+        case PDFBudgetKind::UndoSnapshots:
+            return PDFBudgetPool::Undo;
+        case PDFBudgetKind::RollbackArtifacts:
+            return PDFBudgetPool::Rollback;
+        case PDFBudgetKind::InputBytes:
+        case PDFBudgetKind::ObjectDepth:
+        case PDFBudgetKind::RecursiveContentDepth:
+        case PDFBudgetKind::ObjectsVisited:
+        case PDFBudgetKind::ElapsedTime:
+            return PDFBudgetPool::DocumentModel;
+    }
+
+    return PDFBudgetPool::DocumentModel;
 }
 
 PDFProcessingLimits PDFProcessingLimits::conservativeDefaults()
@@ -134,11 +179,9 @@ void PDFProcessingBudget::reset()
     m_objectsVisited = 0;
     m_renderOperations = 0;
     m_renderPixels = 0;
-    m_documentModelBytes = 0;
-    m_evidenceCacheBytes = 0;
-    m_rasterTileBytes = 0;
-    m_undoBytes = 0;
-    m_rollbackBytes = 0;
+    m_evidenceRecords = 0;
+    m_undoSnapshots = 0;
+    m_rollbackArtifacts = 0;
     m_started = m_now();
 }
 
@@ -243,31 +286,6 @@ void PDFProcessingBudget::chargeRenderPixels(std::uint64_t pixels, QString conte
                   context);
 }
 
-void PDFProcessingBudget::chargeDocumentModelBytes(std::uint64_t bytes, QString context)
-{
-    chargeCounter(m_documentModelBytes, bytes, PDFBudgetKind::DocumentModelBytes, asLimit(m_limits.maxDocumentModelBytes), context);
-}
-
-void PDFProcessingBudget::chargeEvidenceCacheBytes(std::uint64_t bytes, QString context)
-{
-    chargeCounter(m_evidenceCacheBytes, bytes, PDFBudgetKind::EvidenceCacheBytes, asLimit(m_limits.maxEvidenceCacheBytes), context);
-}
-
-void PDFProcessingBudget::chargeRasterTileBytes(std::uint64_t bytes, QString context)
-{
-    chargeCounter(m_rasterTileBytes, bytes, PDFBudgetKind::RasterTileBytes, asLimit(m_limits.maxRasterTileBytes), context);
-}
-
-void PDFProcessingBudget::chargeUndoBytes(std::uint64_t bytes, QString context)
-{
-    chargeCounter(m_undoBytes, bytes, PDFBudgetKind::UndoBytes, asLimit(m_limits.maxUndoBytes), context);
-}
-
-void PDFProcessingBudget::chargeRollbackBytes(std::uint64_t bytes, QString context)
-{
-    chargeCounter(m_rollbackBytes, bytes, PDFBudgetKind::RollbackBytes, asLimit(m_limits.maxRollbackBytes), context);
-}
-
 void PDFProcessingBudget::checkElapsed(QString context) const
 {
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(m_now() - m_started);
@@ -277,6 +295,21 @@ void PDFProcessingBudget::checkElapsed(QString context) const
     {
         fail(PDFBudgetKind::ElapsedTime, limit, attempted, context);
     }
+}
+
+void PDFProcessingBudget::chargeEvidenceRecords(std::uint64_t count, QString context)
+{
+    chargeCounter(m_evidenceRecords, count, PDFBudgetKind::EvidenceRecords, m_limits.maxEvidenceRecords, context);
+}
+
+void PDFProcessingBudget::chargeUndoSnapshot(QString context)
+{
+    chargeCounter(m_undoSnapshots, 1, PDFBudgetKind::UndoSnapshots, m_limits.maxUndoSnapshots, context);
+}
+
+void PDFProcessingBudget::chargeRollbackArtifact(QString context)
+{
+    chargeCounter(m_rollbackArtifacts, 1, PDFBudgetKind::RollbackArtifacts, m_limits.maxRollbackArtifacts, context);
 }
 
 std::uint32_t& PDFProcessingBudget::threadDepth(const PDFProcessingBudget* budget, PDFBudgetKind kind)
@@ -318,7 +351,7 @@ PDFProcessingBudget::DepthScope::~DepthScope()
                                             std::uint64_t attempted,
                                             const QString& context) const
 {
-    throw PDFBudgetExceededException({ kind, limit, attempted, context });
+    throw PDFBudgetExceededException({ kind, budgetPoolFor(kind), limit, attempted, context });
 }
 
 }   // namespace pdf

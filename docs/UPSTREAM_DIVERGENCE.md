@@ -1,17 +1,30 @@
 # Upstream divergence register
 
 Loupe is a product fork of [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT).
-This register lists intentional divergences that an upstream **Sync fork** must
-not clobber. Update this file in the same change that introduces a new
-divergence. Run the preflight corpus and targeted Core tests **before** merging
-an authorized sync. See [REPO_MAP.md](REPO_MAP.md).
+This register lists **behavioral divergences in the shared PDF
+parser, writer, or renderer**. Cosmetic Loupe-only code, branding,
+Editor plugins, PdfTool commands, and documentation do **not** belong
+here.
 
-| Area | Loupe behavior | Do not take from upstream |
-|------|----------------|---------------------------|
-| Branch policy | `stable` / `dev`; `master` inactive | Upstream `master`-centric docs |
-| Versioning | SemVer `PDF4QT_VERSION` | Four-part product versions |
-| Preflight | `PreflightEngine` + verdict reducer | Replacing fail-closed incomplete with pass |
-| Provenance | One SQLite `PDFOperationHistoryStore` | Parallel audit JSONL ledgers |
-| Identity | `PDFArtifactIdentity` vs `PDFRevisionIdentity` | Collapsing those types |
-| Plugins | Packaged `PDF4QT_PLUGINS_DIR`; ABI check before instance | Unrestricted user plugin dirs |
-| Branding | Loupe README / LICENSE / packaging | PDF4QT product naming |
+Before merging an authorized upstream sync into `dev`, grep this file
+and re-run the mapped tests. A clean merge is not verification.
+
+## Policy
+
+- Pull upstream only when explicitly requested (`docs/REPO_MAP.md`).
+- Prefer upstream engine fixes unless a current Loupe ADR or issue
+  says otherwise.
+- If Loupe must keep a parser/writer/renderer change, add a row here
+  in the same change set.
+
+## Register
+
+| Area | Loupe behavior | Upstream | Tests | Notes |
+|------|----------------|----------|-------|-------|
+| Processing budgets | `PDFProcessingBudget` bounds decode, raster, and graph work; exhaustion is incomplete | No equivalent named pools | `UnitTestsProcessingBudget`, `UnitTestsBudgetExhaustion` | #242 / #243 |
+| Plugin ABI | Manifest ABI/capabilities inspected before `QPluginLoader::instance()`; packaged plugin dir only | Loads any plugin after `load()` | `UnitTestsPluginAbi` | #269 |
+| Revision fence | `PDFRevisionIdentity` discards stale async/cache results | Viewer caches are not revision-fenced | `UnitTestsDocumentSession`, `UnitTestsJobScheduler` | #236 |
+| Incremental save | Source digest mismatch refuses a silent rewrite | Writer may overwrite | `UnitTestsIncrementalSave` | #239 |
+
+Rows are added when Loupe changes parser, xref/writer, or raster
+behavior relative to upstream. Empty product-only work stays out.

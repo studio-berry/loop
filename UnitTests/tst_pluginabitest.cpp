@@ -22,8 +22,11 @@
 
 #include "pdfplugin.h"
 
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTemporaryDir>
 #include <QtTest>
 
 class PluginAbiTest : public QObject
@@ -31,47 +34,189 @@ class PluginAbiTest : public QObject
     Q_OBJECT
 
 private slots:
-    void missingAbiFailsClosed();
-    void matchingAbiIsAccepted();
-    void mismatchedAbiFailsClosed();
+    void acceptedManifestPasses();
+    void unsupportedAbiFailsClosed();
+    void malformedIdentityFailsClosed();
+    void duplicateIdFailsClosed();
+    void unknownCapabilityFailsClosed();
+    void missingReadDocumentFailsClosed();
+    void pathOutsidePackagedDirFailsClosed();
+    void networkRequiresDeclaration();
 };
 
-void PluginAbiTest::missingAbiFailsClosed()
+namespace
 {
-    QJsonObject root{
-        { QStringLiteral("MetaData"), QJsonObject{
-                                          { QStringLiteral("Name"), QStringLiteral("test") },
-                                          { QStringLiteral("Version"), QStringLiteral("1.0.0") } } }
+
+QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStringLiteral("PDF4QT.TestPlugin"))
+{
+    return QJsonObject{
+        { QStringLiteral("IID"), iid },
+        { QStringLiteral("MetaData"), metadata }
     };
-    const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
-    QVERIFY(!info.isAbiCompatible());
 }
 
-void PluginAbiTest::matchingAbiIsAccepted()
+QJsonObject validMetadata()
 {
-    QJsonObject root{
-        { QStringLiteral("MetaData"), QJsonObject{
-                                          { QStringLiteral("Name"), QStringLiteral("test") },
-                                          { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion },
-                                          { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("preflight") } } } }
+    return QJsonObject{
+        { QStringLiteral("PluginId"), QStringLiteral("PDF4QT.TestPlugin") },
+        { QStringLiteral("AbiVersion"), 1 },
+        { QStringLiteral("Name"), QStringLiteral("Test Plugin") },
+        { QStringLiteral("Author"), QStringLiteral("Loupe") },
+        { QStringLiteral("Version"), QStringLiteral("1.0.0") },
+        { QStringLiteral("License"), QStringLiteral("MIT") },
+        { QStringLiteral("Description"), QStringLiteral("ABI unit test plugin") },
+        { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("read-document"), QStringLiteral("propose-operation") } },
+        { QStringLiteral("BuildId"), QStringLiteral("loupe-0.1.0") }
     };
-    const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
-    QVERIFY(info.isAbiCompatible());
-    QCOMPARE(info.abiVersion, pdf::PDFPluginInfo::CurrentAbiVersion);
-    QVERIFY(!info.allowsNetwork);
-    QVERIFY(!info.allowsExternalProcess);
 }
 
-void PluginAbiTest::mismatchedAbiFailsClosed()
+}   // namespace
+
+void PluginAbiTest::acceptedManifestPasses()
 {
-    QJsonObject root{
-        { QStringLiteral("MetaData"), QJsonObject{
-                                          { QStringLiteral("Name"), QStringLiteral("test") },
-                                          { QStringLiteral("AbiVersion"), pdf::PDFPluginInfo::CurrentAbiVersion + 1 } } }
-    };
-    const pdf::PDFPluginInfo info = pdf::PDFPluginInfo::loadFromJson(&root);
-    QVERIFY(!info.isAbiCompatible());
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            {});
+    QVERIFY(decision.accepted);
+    QCOMPARE(decision.info.abiVersion, quint32(pdf::PDF_PLUGIN_ABI_VERSION));
+    QCOMPARE(decision.info.pluginId, QStringLiteral("PDF4QT.TestPlugin"));
+    QVERIFY(decision.info.capabilities.contains(QStringLiteral("read-document")));
 }
 
-QTEST_APPLESS_MAIN(PluginAbiTest)
+void PluginAbiTest::unsupportedAbiFailsClosed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    QJsonObject metadata = validMetadata();
+    metadata.insert(QStringLiteral("AbiVersion"), 99);
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(metadata),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            {});
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("unsupported-plugin-abi"));
+}
+
+void PluginAbiTest::malformedIdentityFailsClosed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    QJsonObject metadata = validMetadata();
+    metadata.remove(QStringLiteral("PluginId"));
+    metadata.remove(QStringLiteral("Name"));
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(metadata, QString()),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            {});
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("malformed-plugin-identity"));
+}
+
+void PluginAbiTest::duplicateIdFailsClosed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    const QSet<QString> seen{ QStringLiteral("PDF4QT.TestPlugin") };
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            seen);
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("duplicate-plugin-id"));
+}
+
+void PluginAbiTest::unknownCapabilityFailsClosed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    QJsonObject metadata = validMetadata();
+    metadata.insert(QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("read-document"), QStringLiteral("pwn") });
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(metadata),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            {});
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("unknown-plugin-capability"));
+}
+
+void PluginAbiTest::missingReadDocumentFailsClosed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    QJsonObject metadata = validMetadata();
+    metadata.insert(QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("network") });
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(metadata),
+                                                                            pluginPath,
+                                                                            directory.path(),
+                                                                            {});
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("missing-read-document-capability"));
+}
+
+void PluginAbiTest::pathOutsidePackagedDirFailsClosed()
+{
+    QTemporaryDir allowed;
+    QTemporaryDir other;
+    QVERIFY(allowed.isValid());
+    QVERIFY(other.isValid());
+    const QString pluginPath = other.filePath(QStringLiteral("evil.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
+                                                                            pluginPath,
+                                                                            allowed.path(),
+                                                                            {});
+    QVERIFY(!decision.accepted);
+    QCOMPARE(decision.errorCode, QStringLiteral("plugin-path-outside-packaged-dir"));
+}
+
+void PluginAbiTest::networkRequiresDeclaration()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
+    QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
+
+    const pdf::PDFPluginTrustDecision withoutNetwork = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
+                                                                                  pluginPath,
+                                                                                  directory.path(),
+                                                                                  {});
+    QVERIFY(withoutNetwork.accepted);
+    QVERIFY(!withoutNetwork.info.capabilities.contains(QStringLiteral("network")));
+    QVERIFY(!withoutNetwork.info.capabilities.contains(QStringLiteral("external-process")));
+
+    QJsonObject metadata = validMetadata();
+    metadata.insert(QStringLiteral("Capabilities"),
+                    QJsonArray{ QStringLiteral("read-document"), QStringLiteral("network"), QStringLiteral("external-process") });
+    const pdf::PDFPluginTrustDecision withNetwork = pdf::inspectPluginManifest(qtPluginJson(metadata),
+                                                                               pluginPath,
+                                                                               directory.path(),
+                                                                               {});
+    QVERIFY(withNetwork.accepted);
+    QVERIFY(withNetwork.info.capabilities.contains(QStringLiteral("network")));
+    QVERIFY(withNetwork.info.capabilities.contains(QStringLiteral("external-process")));
+}
+
+QTEST_GUILESS_MAIN(PluginAbiTest)
 #include "tst_pluginabitest.moc"

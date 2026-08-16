@@ -1,103 +1,159 @@
 {
   "architecture_invariants": [
     {
-      "id": "INV-001",
-      "tests": [
+      "id": "I01",
+      "test_targets": [
         "UnitTestsPreflightVerdict"
       ],
-      "title": "Incomplete inspection cannot PASS"
+      "title": "Incomplete inspection cannot reduce to PASS"
     },
     {
-      "id": "INV-002",
-      "tests": [
-        "UnitTestsIdentitySeparation"
+      "id": "I02",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProcessingBudget"
       ],
-      "title": "Artifact and revision identities stay distinct"
+      "title": "Budget exhaustion reports INCOMPLETE with exact budget.kind and never PASS"
     },
     {
-      "id": "INV-003",
-      "tests": [
-        "UnitTestsOperationHistory"
+      "id": "I03",
+      "test_targets": [
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightVerdict"
       ],
-      "title": "One provenance chain"
+      "title": "Engine, profile, or document failure is error, never PASS"
     },
     {
-      "id": "INV-004",
-      "tests": [
-        "UnitTestsJobScheduler"
-      ],
-      "title": "Cancelled jobs are not success"
-    },
-    {
-      "id": "INV-005",
-      "tests": [
-        "UnitTestsIncrementalSave"
-      ],
-      "title": "Unclassified save policy is not incremental-append"
-    },
-    {
-      "id": "INV-006",
-      "tests": [
+      "id": "I04",
+      "test_targets": [
         "UnitTestsSchemaEvolution"
       ],
       "title": "Unsupported schema majors fail closed"
     },
     {
-      "id": "INV-007",
-      "tests": [
-        "UnitTestsEvidenceGraph"
+      "id": "I05",
+      "test_targets": [
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
       ],
-      "title": "Incomplete evidence graph cannot PASS"
+      "title": "Cancellation is terminal and is not success"
     },
     {
-      "id": "INV-008",
-      "tests": [
-        "UnitTestsOperationImpact"
+      "id": "I06",
+      "test_targets": [
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProfileIdentity"
       ],
-      "title": "Unknown operation impact forces full revalidation"
+      "title": "Unresolved profile variables and unsupported scopes are incomplete"
     },
     {
-      "id": "INV-009",
-      "tests": [
-        "UnitTestsProcessingBudget",
-        "UnitTestsPreflightVerdict"
-      ],
-      "title": "Budget exhaustion is INCOMPLETE"
-    },
-    {
-      "id": "INV-010",
-      "tests": [
-        "UnitTestsPluginAbi"
-      ],
-      "title": "Plugin ABI is checked before instantiation"
-    },
-    {
-      "id": "INV-011",
-      "tests": [
+      "id": "I07",
+      "test_targets": [
+        "UnitTestsDocumentSession",
+        "UnitTestsJobScheduler",
         "UnitTestsLifecycle"
       ],
-      "title": "Lifecycle sequences preserve revision and provenance invariants"
+      "title": "Stale revision results are discarded and are not current"
     },
     {
-      "id": "INV-012",
-      "tests": [
-        "UnitTestsBenchmarkIdentity"
+      "id": "I08",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
       ],
-      "title": "Benchmark records carry identity"
+      "title": "Provenance events are append-only"
     },
     {
-      "id": "INV-013",
-      "tests": [
-        "UnitTestsConversionOracle"
+      "id": "I09",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory"
       ],
-      "title": "Independent conversion oracle never self-certifies"
+      "title": "Rollback appends a new event and advances revision"
     },
     {
-      "id": "INV-014",
-      "tests": [
-        "UnitTestsHugeDocumentEnvelope"
+      "id": "I10",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsRecovery"
       ],
-      "title": "Huge-document envelope stays bounded"
+      "title": "Recovered or unapproved output is not certified"
+    },
+    {
+      "id": "I11",
+      "test_targets": [
+        "UnitTestsLifecycle",
+        "UnitTestsRepairOperation"
+      ],
+      "title": "Save policy matches the declared operation"
+    },
+    {
+      "id": "I12",
+      "test_targets": [
+        "UnitTestsPluginAbi"
+      ],
+      "title": "Malformed or unsupported plugin ABI fails closed before instance()"
+    },
+    {
+      "id": "I13",
+      "test_targets": [
+        "UnitTestsPluginAbi"
+      ],
+      "title": "Plugins load only from the packaged plugin directory by default"
+    },
+    {
+      "id": "I14",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsProcessingBudget"
+      ],
+      "title": "Named budget pools map every kind; exhaustion names the kind"
+    },
+    {
+      "id": "I15",
+      "test_targets": [
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsEvidenceGraph"
+      ],
+      "title": "An incomplete Evidence Graph cannot reduce to PASS"
+    },
+    {
+      "id": "I16",
+      "test_targets": [
+        "UnitTestsOperationImpact"
+      ],
+      "title": "Unknown or incomplete operation impact forces full revalidation"
+    },
+    {
+      "id": "I17",
+      "test_targets": [
+        "UnitTestsStandardOracle"
+      ],
+      "title": "Standards claims require an independent conversion oracle"
+    },
+    {
+      "id": "I18",
+      "test_targets": [
+        "UnitTestsOverprintRender"
+      ],
+      "title": "Color and overprint renderer measurements stay within golden tolerance"
+    },
+    {
+      "id": "I19",
+      "test_targets": [
+        "UnitTestsJobScheduler",
+        "UnitTestsWorkloadEnvelope"
+      ],
+      "title": "Interaction work still runs when background jobs saturate the scheduler"
+    },
+    {
+      "id": "I20",
+      "test_targets": [
+        "UnitTestsWorkloadEnvelope"
+      ],
+      "title": "Measured envelopes and benchmarks carry run identity fields"
     }
   ],
   "branch_policy": {
@@ -249,6 +305,7 @@
   "sources": [
     "docs/branch-policy.json",
     "docs/version-policy.json",
+    "docs/architecture-invariants.json",
     "Pdf4QtLibCore/sources/preflightengine.cpp",
     "Pdf4QtLibCore/sources/preflightengine.h",
     "docs/preflight-check-catalog-overlay.json",
@@ -258,7 +315,6 @@
     "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
     "loupe-preflight/schemas/*.json",
     "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
-    "docs/architecture-invariants.json",
     "docs/PDFX_POLICY_MATRIX.md",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"
@@ -272,6 +328,7 @@
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
+    "UnitTestsBudgetExhaustion",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
@@ -318,7 +375,8 @@
     "UnitTestsStandardOracle",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
-    "UnitTestsUndoRedoManager"
+    "UnitTestsUndoRedoManager",
+    "UnitTestsWorkloadEnvelope"
   ],
   "version_policy": {
     "cmake_format": "MAJOR.MINOR.PATCH",

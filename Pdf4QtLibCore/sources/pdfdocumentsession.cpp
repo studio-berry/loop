@@ -29,6 +29,7 @@
 #include "pdfprocessingbudget.h"
 
 #include <tuple>
+#include <QtGlobal>
 
 namespace pdf
 {
@@ -97,12 +98,12 @@ void PDFDocumentSession::setRendererFeatures(PDFRenderer::Features features)
     {
         PDFMeshQualitySettings meshQualitySettings;
         m_renderer = std::make_unique<PDFRenderer>(m_document,
-                                                    m_fontCache.get(),
-                                                    m_cms.get(),
-                                                    m_optionalContentActivity.get(),
-                                                    m_features,
-                                                    meshQualitySettings,
-                                                    m_processingBudget.get());
+                                                   m_fontCache.get(),
+                                                   m_cms.get(),
+                                                   m_optionalContentActivity.get(),
+                                                   m_features,
+                                                   meshQualitySettings,
+                                                   m_processingBudget.get());
     }
 }
 
@@ -145,6 +146,30 @@ void PDFDocumentSession::resetProcessingBudget()
     m_processingBudget->reset();
 }
 
+void PDFDocumentSession::shedPrefetchAndQuality()
+{
+    m_prefetchEnabled = false;
+    m_qualityPercent = qMin(m_qualityPercent, ShedQualityPercent);
+    m_qualityPrefetchShed = true;
+    m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
+    m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
+    trimCachesToLimits();
+}
+
+void PDFDocumentSession::trimCachesToLimits()
+{
+    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() > m_compileCacheLimit)
+    {
+        m_compileCache.erase(m_compileCacheOrder.front());
+        m_compileCacheOrder.pop_front();
+    }
+    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() > m_streamCacheLimit)
+    {
+        m_streamCache.erase(m_streamCacheOrder.front());
+        m_streamCacheOrder.pop_front();
+    }
+}
+
 const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
 {
     if (!isValid())
@@ -152,7 +177,7 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         return nullptr;
     }
 
-    const PageCacheKey key { getRevision(), pageIndex };
+    const PageCacheKey key{ getRevision(), pageIndex };
     auto it = m_compileCache.find(key);
     if (it != m_compileCache.cend())
     {
@@ -170,7 +195,7 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
 
     // Evict before inserting, so the pointer returned below is never the entry
     // this call dropped.
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= CompileCacheLimit)
+    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= m_compileCacheLimit)
     {
         m_compileCache.erase(m_compileCacheOrder.front());
         m_compileCacheOrder.pop_front();
@@ -188,7 +213,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
         return QByteArray();
     }
 
-    const StreamCacheKey key { getRevision(), reference };
+    const StreamCacheKey key{ getRevision(), reference };
     auto it = m_streamCache.find(key);
     if (it != m_streamCache.cend())
     {
@@ -203,7 +228,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
 
     QByteArray decoded = m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
 
-    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= StreamCacheLimit)
+    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= m_streamCacheLimit)
     {
         m_streamCache.erase(m_streamCacheOrder.front());
         m_streamCacheOrder.pop_front();
@@ -266,12 +291,12 @@ void PDFDocumentSession::initializeRendering()
 
     PDFMeshQualitySettings meshQualitySettings;
     m_renderer = std::make_unique<PDFRenderer>(m_document,
-                                                m_fontCache.get(),
-                                                m_cms.get(),
-                                                m_optionalContentActivity.get(),
-                                                m_features,
-                                                meshQualitySettings,
-                                                m_processingBudget.get());
+                                               m_fontCache.get(),
+                                               m_cms.get(),
+                                               m_optionalContentActivity.get(),
+                                               m_features,
+                                               meshQualitySettings,
+                                               m_processingBudget.get());
 }
 
-} // namespace pdf
+}   // namespace pdf

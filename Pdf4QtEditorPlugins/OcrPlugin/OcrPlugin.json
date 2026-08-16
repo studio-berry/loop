@@ -6,6 +6,13 @@
     "Description": "Run Loupe OCR on image-only pages and display extracted text.",
     "AbiVersion": 1,
     "AllowsNetwork": false,
-    "AllowsExternalProcess": false,
-    "Capabilities": []
+    "AllowsExternalProcess": true,
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation",
+        "external-process"
+    ],
+    "PluginId": "PDF4QT.OcrPlugin",
+    "BuildId": "loupe-0.1.0"
 }

@@ -7,5 +7,10 @@
     "AbiVersion": 1,
     "AllowsNetwork": false,
     "AllowsExternalProcess": false,
-    "Capabilities": []
+    "Capabilities": [
+        "read-document",
+        "propose-operation"
+    ],
+    "PluginId": "PDF4QT.ObjectInspectorPlugin",
+    "BuildId": "loupe-0.1.0"
 }

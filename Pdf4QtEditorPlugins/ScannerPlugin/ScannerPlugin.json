@@ -6,6 +6,13 @@
     "Description": "Scan pages from a document scanner and append them to the current PDF document.",
     "AbiVersion": 1,
     "AllowsNetwork": false,
-    "AllowsExternalProcess": false,
-    "Capabilities": []
+    "AllowsExternalProcess": true,
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation",
+        "external-process"
+    ],
+    "PluginId": "PDF4QT.ScannerPlugin",
+    "BuildId": "loupe-0.1.0"
 }

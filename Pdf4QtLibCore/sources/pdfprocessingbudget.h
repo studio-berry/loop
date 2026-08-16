@@ -49,14 +49,25 @@ enum class PDFBudgetKind
     RenderOperations,
     RenderPixels,
     ElapsedTime,
-    DocumentModelBytes,
-    EvidenceCacheBytes,
-    RasterTileBytes,
-    UndoBytes,
-    RollbackBytes
+    EvidenceRecords,
+    UndoSnapshots,
+    RollbackArtifacts
+};
+
+/// Named finite pools. Individual kinds remain the exact exhaustion reason.
+enum class PDFBudgetPool
+{
+    DocumentModel,
+    EvidenceCache,
+    RasterTile,
+    DecodedStreams,
+    Undo,
+    Rollback
 };
 
 PDF4QTLIBCORESHARED_EXPORT const char* getPDFBudgetKindName(PDFBudgetKind kind);
+PDF4QTLIBCORESHARED_EXPORT const char* getPDFBudgetPoolName(PDFBudgetPool pool);
+PDF4QTLIBCORESHARED_EXPORT PDFBudgetPool budgetPoolFor(PDFBudgetKind kind);
 
 struct PDF4QTLIBCORESHARED_EXPORT PDFProcessingLimits
 {
@@ -72,11 +83,10 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFProcessingLimits
     std::uint64_t maxRenderOperations = 20'000'000;
     std::uint64_t maxRenderPixels = 500'000'000;
     std::chrono::milliseconds maxElapsed = std::chrono::minutes(2);
-    std::int64_t maxDocumentModelBytes = 1LL * 1024 * 1024 * 1024;
-    std::int64_t maxEvidenceCacheBytes = 512LL * 1024 * 1024;
-    std::int64_t maxRasterTileBytes = 512LL * 1024 * 1024;
-    std::int64_t maxUndoBytes = 512LL * 1024 * 1024;
-    std::int64_t maxRollbackBytes = 2LL * 1024 * 1024 * 1024;
+
+    std::uint64_t maxEvidenceRecords = 2'000'000;
+    std::uint64_t maxUndoSnapshots = 64;
+    std::uint64_t maxRollbackArtifacts = 256;
 
     static PDFProcessingLimits conservativeDefaults();
 };
@@ -84,6 +94,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFProcessingLimits
 struct PDF4QTLIBCORESHARED_EXPORT PDFBudgetExceeded
 {
     PDFBudgetKind kind = PDFBudgetKind::ElapsedTime;
+    PDFBudgetPool pool = PDFBudgetPool::DocumentModel;
     std::uint64_t limit = 0;
     std::uint64_t attempted = 0;
     QString context;
@@ -131,11 +142,9 @@ public:
     void chargeRenderOperation(std::uint64_t count = 1, QString context = {});
     void chargeRenderPixels(std::uint64_t pixels, QString context = {});
     void checkElapsed(QString context = {}) const;
-    void chargeDocumentModelBytes(std::uint64_t bytes, QString context = {});
-    void chargeEvidenceCacheBytes(std::uint64_t bytes, QString context = {});
-    void chargeRasterTileBytes(std::uint64_t bytes, QString context = {});
-    void chargeUndoBytes(std::uint64_t bytes, QString context = {});
-    void chargeRollbackBytes(std::uint64_t bytes, QString context = {});
+    void chargeEvidenceRecords(std::uint64_t count = 1, QString context = {});
+    void chargeUndoSnapshot(QString context = {});
+    void chargeRollbackArtifact(QString context = {});
 
     class PDF4QTLIBCORESHARED_EXPORT DepthScope
     {
@@ -177,11 +186,9 @@ private:
     std::atomic<std::uint64_t> m_objectsVisited = 0;
     std::atomic<std::uint64_t> m_renderOperations = 0;
     std::atomic<std::uint64_t> m_renderPixels = 0;
-    std::atomic<std::uint64_t> m_documentModelBytes = 0;
-    std::atomic<std::uint64_t> m_evidenceCacheBytes = 0;
-    std::atomic<std::uint64_t> m_rasterTileBytes = 0;
-    std::atomic<std::uint64_t> m_undoBytes = 0;
-    std::atomic<std::uint64_t> m_rollbackBytes = 0;
+    std::atomic<std::uint64_t> m_evidenceRecords = 0;
+    std::atomic<std::uint64_t> m_undoSnapshots = 0;
+    std::atomic<std::uint64_t> m_rollbackArtifacts = 0;
 };
 
 }   // namespace pdf

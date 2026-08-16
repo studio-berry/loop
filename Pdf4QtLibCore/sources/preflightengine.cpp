@@ -1979,6 +1979,7 @@ void recordBudgetFailure(PreflightResult& result,
     status.status = QStringLiteral("incomplete");
     status.reason = QStringLiteral("budget-exceeded");
     status.budgetKind = QString::fromLatin1(getPDFBudgetKindName(detail.kind));
+    status.budgetPool = QString::fromLatin1(getPDFBudgetPoolName(detail.pool));
     status.budgetLimit = static_cast<qint64>(detail.limit);
     status.budgetAttempted = static_cast<qint64>(detail.attempted);
     status.budgetContext = detail.context;
@@ -4004,6 +4005,10 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
         {
             QJsonObject budgetObject;
             budgetObject.insert(QStringLiteral("kind"), status.budgetKind);
+            if (!status.budgetPool.isEmpty())
+            {
+                budgetObject.insert(QStringLiteral("pool"), status.budgetPool);
+            }
             budgetObject.insert(QStringLiteral("limit"), status.budgetLimit);
             budgetObject.insert(QStringLiteral("attempted"), status.budgetAttempted);
             if (!status.budgetContext.isEmpty())
@@ -4206,17 +4211,44 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         if (!m_activeGraph.isComplete())
         {
             result.inspectionComplete = false;
-            result.errorCode = QStringLiteral("evidence-incomplete");
-            result.errorMessage = m_activeGraph.incompleteReason.isEmpty()
-                                      ? PDFTranslationContext::tr("Required inspection evidence was not collected.")
-                                      : m_activeGraph.incompleteReason;
+            if (!m_activeGraph.budgetKind.isEmpty())
+            {
+                result.errorCode = QStringLiteral("budget-exceeded");
+                result.errorMessage = PDFTranslationContext::tr("Evidence collection exceeded the %1 processing budget.")
+                                          .arg(m_activeGraph.budgetKind);
+                PreflightCheckStatus budgetStatus;
+                budgetStatus.id = QStringLiteral("evidence-graph");
+                budgetStatus.status = QStringLiteral("incomplete");
+                budgetStatus.reason = QStringLiteral("budget-exceeded");
+                budgetStatus.budgetKind = m_activeGraph.budgetKind;
+                budgetStatus.budgetPool = m_activeGraph.budgetPool;
+                budgetStatus.budgetLimit = m_activeGraph.budgetLimit;
+                budgetStatus.budgetAttempted = m_activeGraph.budgetAttempted;
+                budgetStatus.budgetContext = m_activeGraph.budgetContext;
+                result.checkStatuses.push_back(budgetStatus);
 
-            PreflightFinding finding;
-            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
-            finding.type = QStringLiteral("evidence-incomplete");
-            finding.severity = QStringLiteral("error");
-            finding.message = result.errorMessage;
-            result.errors.push_back(finding);
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+                finding.type = QStringLiteral("budget-exceeded");
+                finding.severity = QStringLiteral("error");
+                finding.checkId = QStringLiteral("evidence-graph");
+                finding.message = result.errorMessage;
+                result.errors.push_back(finding);
+            }
+            else
+            {
+                result.errorCode = QStringLiteral("evidence-incomplete");
+                result.errorMessage = m_activeGraph.incompleteReason.isEmpty()
+                                          ? PDFTranslationContext::tr("Required inspection evidence was not collected.")
+                                          : m_activeGraph.incompleteReason;
+
+                PreflightFinding finding;
+                finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+                finding.type = QStringLiteral("evidence-incomplete");
+                finding.severity = QStringLiteral("error");
+                finding.message = result.errorMessage;
+                result.errors.push_back(finding);
+            }
         }
     }
 
