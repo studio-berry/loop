@@ -64,7 +64,7 @@ with document-revision binding. Inventory:
 | OCR and indexing | Editor plugins / Core | `OCR` | `Background` | remaining (out of S05 scope) |
 | PageMaster export | `Pdf4QtPageMaster` | `Export` | `Operator` | **migrated** |
 | Thumbnail generation | `Pdf4QtLibWidgets` | `Thumbnail` | `NearViewport` | **migrated** |
-| PageMaster preview | `Pdf4QtPageMaster` | `Rendering` | `NearViewport` | **migrated** (revision-fenced) |
+| PageMaster preview | `Pdf4QtPageMaster` | `Rendering` | `NearViewport` | **migrated** (revision-fenced via `PDFJobScheduler`) |
 | Batch analysis | PageMaster / PdfTool | `Batch` | `Background` | remaining (out of S05 scope) |
 | Agent context work | future agent surface | `Agent` | `Agent` | remaining |
 

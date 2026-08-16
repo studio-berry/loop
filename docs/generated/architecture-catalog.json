@@ -1,4 +1,105 @@
 {
+  "architecture_invariants": [
+    {
+      "id": "INV-001",
+      "tests": [
+        "UnitTestsPreflightVerdict"
+      ],
+      "title": "Incomplete inspection cannot PASS"
+    },
+    {
+      "id": "INV-002",
+      "tests": [
+        "UnitTestsIdentitySeparation"
+      ],
+      "title": "Artifact and revision identities stay distinct"
+    },
+    {
+      "id": "INV-003",
+      "tests": [
+        "UnitTestsOperationHistory"
+      ],
+      "title": "One provenance chain"
+    },
+    {
+      "id": "INV-004",
+      "tests": [
+        "UnitTestsJobScheduler"
+      ],
+      "title": "Cancelled jobs are not success"
+    },
+    {
+      "id": "INV-005",
+      "tests": [
+        "UnitTestsIncrementalSave"
+      ],
+      "title": "Unclassified save policy is not incremental-append"
+    },
+    {
+      "id": "INV-006",
+      "tests": [
+        "UnitTestsSchemaEvolution"
+      ],
+      "title": "Unsupported schema majors fail closed"
+    },
+    {
+      "id": "INV-007",
+      "tests": [
+        "UnitTestsEvidenceGraph"
+      ],
+      "title": "Incomplete evidence graph cannot PASS"
+    },
+    {
+      "id": "INV-008",
+      "tests": [
+        "UnitTestsOperationImpact"
+      ],
+      "title": "Unknown operation impact forces full revalidation"
+    },
+    {
+      "id": "INV-009",
+      "tests": [
+        "UnitTestsProcessingBudget",
+        "UnitTestsPreflightVerdict"
+      ],
+      "title": "Budget exhaustion is INCOMPLETE"
+    },
+    {
+      "id": "INV-010",
+      "tests": [
+        "UnitTestsPluginAbi"
+      ],
+      "title": "Plugin ABI is checked before instantiation"
+    },
+    {
+      "id": "INV-011",
+      "tests": [
+        "UnitTestsLifecycle"
+      ],
+      "title": "Lifecycle sequences preserve revision and provenance invariants"
+    },
+    {
+      "id": "INV-012",
+      "tests": [
+        "UnitTestsBenchmarkIdentity"
+      ],
+      "title": "Benchmark records carry identity"
+    },
+    {
+      "id": "INV-013",
+      "tests": [
+        "UnitTestsConversionOracle"
+      ],
+      "title": "Independent conversion oracle never self-certifies"
+    },
+    {
+      "id": "INV-014",
+      "tests": [
+        "UnitTestsHugeDocumentEnvelope"
+      ],
+      "title": "Huge-document envelope stays bounded"
+    }
+  ],
   "branch_policy": {
     "default": "stable",
     "integration": "dev",
@@ -41,6 +142,44 @@
     "trim",
     "white-overprint"
   ],
+  "preflight_coverage": {
+    "coverage_holes": [
+      "bleed",
+      "content-bleed",
+      "dieline",
+      "hidden-layers",
+      "ink-coverage",
+      "invisible-content",
+      "obscured-content",
+      "off-page-content",
+      "page-size",
+      "processing-steps",
+      "trim"
+    ],
+    "families": {
+      "colorants": [
+        "color-mode",
+        "color-inventory",
+        "output-intent"
+      ],
+      "fonts": [
+        "embedded-fonts",
+        "font-integrity"
+      ],
+      "images": [
+        "image-resolution"
+      ],
+      "overprint-transparency": [
+        "white-overprint",
+        "transparency-risk"
+      ],
+      "strokes": [
+        "thin-strokes",
+        "thin-parts"
+      ]
+    },
+    "standards_matrix": "docs/PDFX_POLICY_MATRIX.md"
+  },
   "registered_operations": [
     {
       "id": "add-bleed",
@@ -117,6 +256,8 @@
     "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
     "loupe-preflight/schemas/*.json",
     "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
+    "docs/architecture-invariants.json",
+    "docs/PDFX_POLICY_MATRIX.md",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"
   ],
@@ -125,30 +266,37 @@
     "UnitTestsAccessibility",
     "UnitTestsActionList",
     "UnitTestsAuthorSettings",
+    "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
+    "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
     "UnitTestsDocumentSession",
+    "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
+    "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
+    "UnitTestsLifecycle",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
     "UnitTestsOperationHistory",
+    "UnitTestsOperationImpact",
     "UnitTestsOperatorAcceptance",
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
     "UnitTestsPageMasterExport",
     "UnitTestsPdfToolContract",
+    "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",

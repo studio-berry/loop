@@ -23,6 +23,8 @@
 #include "pdfplugin.h"
 #include "pdfdbgheap.h"
 
+#include <QJsonArray>
+
 namespace pdf
 {
 
@@ -33,7 +35,6 @@ PDFPlugin::PDFPlugin(QObject* parent) :
     m_cmsManager(nullptr),
     m_document(nullptr)
 {
-
 }
 
 void PDFPlugin::setDataExchangeInterface(IPluginDataExchange* dataExchangeInterface)
@@ -71,6 +72,14 @@ PDFPluginInfo PDFPluginInfo::loadFromJson(const QJsonObject* json)
     result.version = metadata.value(QLatin1String("Version")).toString();
     result.license = metadata.value(QLatin1String("License")).toString();
     result.description = metadata.value(QLatin1String("Description")).toString();
+    result.abiVersion = metadata.value(QLatin1String("AbiVersion")).toInt(0);
+    result.allowsNetwork = metadata.value(QLatin1String("AllowsNetwork")).toBool(false);
+    result.allowsExternalProcess = metadata.value(QLatin1String("AllowsExternalProcess")).toBool(false);
+    const QJsonArray capabilities = metadata.value(QLatin1String("Capabilities")).toArray();
+    for (const QJsonValue& capability : capabilities)
+    {
+        result.capabilities.append(capability.toString());
+    }
 
     return result;
 }

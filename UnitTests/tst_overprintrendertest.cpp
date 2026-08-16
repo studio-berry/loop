@@ -71,7 +71,8 @@ bool updateSnapshotsRequested()
 
 QImage renderFixture(const QString& fixturePath, bool separationSimulation)
 {
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, true, false);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -166,7 +167,7 @@ void compareRender(const QString& name, const QImage& actual, const QImage& expe
     }
 }
 
-} // namespace
+}   // namespace
 
 class OverprintRenderTest : public QObject
 {
@@ -175,6 +176,7 @@ class OverprintRenderTest : public QObject
 private slots:
     void render_data();
     void render();
+    void rendererDifferentialDoesNotDriftBeyondTolerance();
 };
 
 void OverprintRenderTest::render_data()
@@ -202,6 +204,14 @@ void OverprintRenderTest::render()
     const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + fixture, separationSimulation);
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
     compareRender(baseline, actual, expected);
+}
+
+void OverprintRenderTest::rendererDifferentialDoesNotDriftBeyondTolerance()
+{
+    const QString name = QStringLiteral("overprint-cmyk-mode0-off");
+    const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + name + QStringLiteral(".pdf"), false);
+    const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".png"));
+    compareRender(name + QStringLiteral(".png"), actual, expected);
 }
 
 QTEST_APPLESS_MAIN(OverprintRenderTest)

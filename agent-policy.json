@@ -55,13 +55,21 @@
       "targets": ["Pdf4QtLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsBenchmarkIdentity",
+        "UnitTestsConversionOracle",
+        "UnitTestsEvidenceGraph",
+        "UnitTestsHugeDocumentEnvelope",
         "UnitTestsIdentitySeparation",
         "UnitTestsIncrementalSave",
         "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
         "UnitTestsOperationHistory",
+        "UnitTestsOperationImpact",
+        "UnitTestsOverprintRender",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
+        "UnitTestsProcessingBudget",
         "UnitTestsSchemaEvolution"
       ]
     },
@@ -108,7 +116,7 @@
         "SignaturePlugin",
         "SoftProofingPlugin"
       ],
-      "tests": ["UnitTestsPreflightPlugin"]
+      "tests": ["UnitTestsPreflightPlugin", "UnitTestsPluginAbi"]
     },
     "schemas_contracts": {
       "paths": [

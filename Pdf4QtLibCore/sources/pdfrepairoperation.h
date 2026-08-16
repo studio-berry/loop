@@ -25,6 +25,7 @@
 
 #include "pdfrepairdiff.h"
 #include "pdfsavepolicy.h"
+#include "pdfoperationimpact.h"
 
 #if defined(_MSC_VER)
 #pragma push_macro("analyze")
@@ -187,6 +188,11 @@ public:
     {
         return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
     }
+    /// Unknown or incomplete impact forces full revalidation.
+    virtual PDFOperationImpact impact() const
+    {
+        return PDFOperationImpact();
+    }
     /// True when this registered operation may be advertised by preflight as
     /// an operator-facing fixup. Keeping this metadata on the operation makes
     /// the preflight capability list derive from the same registry PdfTool and
@@ -246,8 +252,8 @@ public:
     PDFOperationResult apply();
 
     PDFOperationResult serializeCandidate(const QString& candidatePath,
-                                           PDFDocument* reopenedCandidate,
-                                           QByteArray* candidateSha256 = nullptr) const;
+                                          PDFDocument* reopenedCandidate,
+                                          QByteArray* candidateSha256 = nullptr) const;
     PDFOperationResult compareCandidate(const QString& candidatePath,
                                         PDFRepairDiffOptions options,
                                         PDFRepairDiffReport* report);
@@ -284,7 +290,7 @@ QString pdfRepairRiskName(PDFRepairRisk risk);
 QString pdfRepairDomainName(PDFRepairDomain domain);
 QString pdfRepairValidatorName(PDFRepairValidatorKind validator);
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFRepairDomains)
 
@@ -293,4 +299,4 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFRepairDomains)
 #pragma pop_macro("analyze")
 #endif
 
-#endif // PDFREPAIROPERATION_H
+#endif   // PDFREPAIROPERATION_H

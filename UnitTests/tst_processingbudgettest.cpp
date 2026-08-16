@@ -33,7 +33,10 @@
 class SequentialByteDevice final : public QIODevice
 {
 public:
-    explicit SequentialByteDevice(QByteArray data) : m_data(std::move(data)) { }
+    explicit SequentialByteDevice(QByteArray data) :
+        m_data(std::move(data))
+    {
+    }
 
     bool isSequential() const override { return true; }
 
@@ -72,6 +75,7 @@ private slots:
     void elapsedTimeIsCooperativelyChecked();
     void parserObjectDepthUsesConfiguredBudget();
     void sequentialInputIsBoundedBeforeParsing();
+    void namedPoolsReportExactKind();
 };
 
 void ProcessingBudgetTest::cumulativeDecodedBytesAreDocumentWide()
@@ -105,14 +109,14 @@ void ProcessingBudgetTest::depthIsBoundedAndTyped()
     limits.maxRecursiveContentDepth = 1;
     pdf::PDFProcessingBudget budget(limits);
     pdf::PDFProcessingBudget::DepthScope outer(budget,
-                                                pdf::PDFBudgetKind::RecursiveContentDepth,
-                                                QStringLiteral("form"));
+                                               pdf::PDFBudgetKind::RecursiveContentDepth,
+                                               QStringLiteral("form"));
 
     try
     {
         pdf::PDFProcessingBudget::DepthScope inner(budget,
-                                                    pdf::PDFBudgetKind::RecursiveContentDepth,
-                                                    QStringLiteral("nested form"));
+                                                   pdf::PDFBudgetKind::RecursiveContentDepth,
+                                                   QStringLiteral("nested form"));
         QFAIL("expected recursive-depth budget failure");
     }
     catch (const pdf::PDFBudgetExceededException& exception)
@@ -128,7 +132,8 @@ void ProcessingBudgetTest::elapsedTimeIsCooperativelyChecked()
     Clock::time_point now = Clock::time_point{};
     pdf::PDFProcessingLimits limits;
     limits.maxElapsed = std::chrono::milliseconds(10);
-    pdf::PDFProcessingBudget budget(limits, [&now] { return now; });
+    pdf::PDFProcessingBudget budget(limits, [&now]
+                                    { return now; });
 
     now += std::chrono::milliseconds(11);
     try
@@ -167,7 +172,8 @@ void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
 {
     pdf::PDFProcessingLimits limits;
     limits.maxInputBytes = 4;
-    pdf::PDFDocumentReader reader(nullptr, [](bool*) { return QString(); }, false, false, limits);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, false, false, limits);
     SequentialByteDevice device(QByteArrayLiteral("0123456789"));
     QVERIFY(device.open(QIODevice::ReadOnly));
 
@@ -175,6 +181,25 @@ void ProcessingBudgetTest::sequentialInputIsBoundedBeforeParsing()
 
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
     QVERIFY(reader.getErrorMessage().contains(QStringLiteral("input-bytes")));
+}
+
+void ProcessingBudgetTest::namedPoolsReportExactKind()
+{
+    pdf::PDFProcessingLimits limits;
+    limits.maxEvidenceCacheBytes = 8;
+    pdf::PDFProcessingBudget budget(limits);
+    try
+    {
+        budget.chargeEvidenceCacheBytes(16, QStringLiteral("evidence cache"));
+        QFAIL("expected budget exception");
+    }
+    catch (const pdf::PDFBudgetExceededException& exception)
+    {
+        QCOMPARE(exception.getDetail().kind, pdf::PDFBudgetKind::EvidenceCacheBytes);
+        QCOMPARE(QString::fromLatin1(pdf::getPDFBudgetKindName(exception.getDetail().kind)),
+                 QStringLiteral("evidence-cache-bytes"));
+        QCOMPARE(exception.getDetail().context, QStringLiteral("evidence cache"));
+    }
 }
 
 QTEST_MAIN(ProcessingBudgetTest)

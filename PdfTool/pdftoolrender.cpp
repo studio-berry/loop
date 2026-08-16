@@ -27,7 +27,12 @@
 #include "pdfsafefilewriter.h"
 
 #include <QColorSpace>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSysInfo>
 #include <QImageWriter>
 
 namespace pdftool
@@ -100,9 +105,8 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
     // Atomic write: serialize into a QSaveFile and rename only after the image
     // bytes are durable, so a crash or short write cannot leave a truncated image.
     QString imageWriterError;
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName,
-        [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
-        {
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(fileName, [&options, &renderedPageImage, &imageWriterError](QIODevice* device) -> bool
+                                                                                    {
             QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
             imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
             imageWriter.setCompression(options.imageWriterSettings.getCompression());
@@ -116,8 +120,7 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
                 return false;
             }
 
-            return true;
-        }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+            return true; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
 
     if (!writeResult)
     {
@@ -127,12 +130,10 @@ void PDFToolRender::onPageRendered(const PDFToolOptions& options, pdf::PDFRender
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("render"),
-            fileName,
-            writeResult ? QStringLiteral("written") : QStringLiteral("partial")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("render"),
+                                              fileName,
+                                              writeResult ? QStringLiteral("written") : QStringLiteral("partial") });
     }
 
     m_pageInfo[renderedPageImage.pageIndex].pageWriteTime = imageWriterTimer.elapsed();
@@ -180,9 +181,36 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     formatter.endDocument();
     if (options.outputStyle == PDFOutputFormatter::Style::Json)
     {
+        QJsonObject root = formatter.getJsonObject();
+        QString fixtureDigest = QStringLiteral("unspecified");
+        QFile fixture(options.document);
+        if (fixture.open(QIODevice::ReadOnly))
+        {
+            fixtureDigest = QString::fromLatin1(QCryptographicHash::hash(fixture.readAll(), QCryptographicHash::Sha256).toHex());
+        }
+        const QString compiler =
+#if defined(__clang__)
+            QStringLiteral("clang");
+#elif defined(__GNUC__)
+            QStringLiteral("g++");
+#else
+            QStringLiteral("unknown");
+#endif
+        root.insert(QStringLiteral("commit"), qEnvironmentVariable("GIT_COMMIT", QStringLiteral("unspecified")));
+        root.insert(QStringLiteral("compiler"), compiler);
+        root.insert(QStringLiteral("os"), QSysInfo::prettyProductName());
+        root.insert(QStringLiteral("qt"), QString::fromLatin1(qVersion()));
+        root.insert(QStringLiteral("cpu"), QSysInfo::currentCpuArchitecture());
+        root.insert(QStringLiteral("renderer"), QStringLiteral("QPainter"));
+        root.insert(QStringLiteral("fixture_digest"), fixtureDigest);
+        root.insert(QStringLiteral("profile_or_operation_version"), QString::fromLatin1(pdf::PDF_LIBRARY_VERSION));
         if (options.executionContext)
         {
-            options.executionContext->setData(formatter.getJsonObject());
+            options.executionContext->setData(root);
+        }
+        else
+        {
+            PDFConsole::writeText(QString::fromUtf8(QJsonDocument(root).toJson()), options.outputCodec);
         }
     }
     else
