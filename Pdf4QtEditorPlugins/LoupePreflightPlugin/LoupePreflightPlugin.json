@@ -1,16 +1,16 @@
 {
+    "PluginId": "PDF4QT.LoupePreflightPlugin",
+    "AbiVersion": 1,
     "Name": "Loupe Preflight",
     "Author": "Michael Berry",
     "Version": "1.0.0",
     "License": "MIT",
     "Description": "Run Loupe preflight checks and display the report.",
-    "AbiVersion": 1,
     "AllowsNetwork": false,
     "AllowsExternalProcess": false,
     "Capabilities": [
         "read-document",
         "propose-operation"
     ],
-    "PluginId": "PDF4QT.LoupePreflightPlugin",
     "BuildId": "loupe-0.1.0"
 }

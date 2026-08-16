@@ -41,6 +41,26 @@
 #include <QJsonValue>
 #include <QTemporaryDir>
 
+namespace
+{
+
+void appendRepairHistoryFailed(pdf::PDFOperationHistoryStore& history,
+                               const QUuid& executionId,
+                               const QString& errorCode,
+                               const QString& message)
+{
+    pdf::PDFOperationHistoryEvent historyFailed;
+    historyFailed.executionId = executionId;
+    historyFailed.status = pdf::PDFOperationHistoryStatus::Failed;
+    historyFailed.resultSummary = QJsonObject{
+        { QStringLiteral("error_code"), errorCode },
+        { QStringLiteral("error"), message }
+    };
+    history.appendEvent(historyFailed);
+}
+
+}   // namespace
+
 namespace pdftool
 {
 
@@ -524,14 +544,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         options.repairOutputDocument, candidateData, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
-        pdf::PDFOperationHistoryEvent historyFailed;
-        historyFailed.executionId = historyExecutionId;
-        historyFailed.kind = pdf::PDFOperationHistoryEventKind::FixApplied;
-        historyFailed.status = pdf::PDFOperationHistoryStatus::Failed;
-        historyFailed.documentRevisionDigest = historyRunning.documentRevisionDigest;
-        historyFailed.operatorIdentity = QStringLiteral("PdfTool");
-        historyFailed.resultSummary = QJsonObject{ { QStringLiteral("error"), writeResult.getErrorMessage() } };
-        operationHistory.appendEvent(historyFailed);
+        appendRepairHistoryFailed(operationHistory,
+                                  historyExecutionId,
+                                  QStringLiteral("output.write-failed"),
+                                  writeResult.getErrorMessage());
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), writeResult.getErrorMessage(),
                          QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
@@ -540,6 +556,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     QFile finalFile(options.repairOutputDocument);
     if (!finalFile.open(QIODevice::ReadOnly) || finalFile.readAll() != candidateData)
     {
+        appendRepairHistoryFailed(operationHistory,
+                                  historyExecutionId,
+                                  QStringLiteral("repair.output-mismatch"),
+                                  PDFToolTranslationContext::tr("The committed output does not match the reviewed candidate."));
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.output-mismatch"),
                          PDFToolTranslationContext::tr("The committed output does not match the reviewed candidate."));
         return PDFToolExitCode::ProcessingFailure;
@@ -550,6 +570,10 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     finalReader.readFromFile(options.repairOutputDocument);
     if (finalReader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
+        appendRepairHistoryFailed(operationHistory,
+                                  historyExecutionId,
+                                  QStringLiteral("repair.output-unreadable"),
+                                  PDFToolTranslationContext::tr("The committed repair output could not be reopened."));
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.output-unreadable"),
                          PDFToolTranslationContext::tr("The committed repair output could not be reopened."),
                          QJsonObject{ { QStringLiteral("path"), options.repairOutputDocument } });

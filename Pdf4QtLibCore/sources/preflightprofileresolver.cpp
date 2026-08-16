@@ -1336,16 +1336,16 @@ PreflightProfileImportResult importPreflightProfile(const QJsonObject& profile, 
 QJsonObject exportPreflightProfile(const QJsonObject& profile)
 {
     QJsonObject exported = materializePreflightProfileDefaults(profile);
-    const PreflightProfileIdentity identity = identifyPreflightProfile(exported);
+    const PreflightProfileIdentity provisional = identifyPreflightProfile(exported, QString());
     if (!exported.contains(QStringLiteral("id")))
     {
-        exported.insert(QStringLiteral("id"), identity.id);
+        exported.insert(QStringLiteral("id"), provisional.id);
     }
     if (!exported.contains(QStringLiteral("version")))
     {
-        exported.insert(QStringLiteral("version"), identity.version);
+        exported.insert(QStringLiteral("version"), provisional.version);
     }
-    exported.insert(QStringLiteral("digest"), identity.digest);
+    exported.insert(QStringLiteral("digest"), computeProfileDigest(exported));
     const QJsonDocument document(canonicalizePreflightJson(exported).toObject());
     return QJsonDocument::fromJson(document.toJson(QJsonDocument::Compact)).object();
 }

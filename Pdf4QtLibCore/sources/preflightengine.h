@@ -24,6 +24,7 @@
 #define PREFLIGHTENGINE_H
 
 #include "pdfglobal.h"
+#include "pdfoperationcontrol.h"
 #include "pdfdocumentsession.h"
 #include "pdfevidencegraph.h"
 
@@ -405,6 +406,8 @@ public:
                         const QJsonObject& cliBindings);
     PreflightResult run(const PreflightProfileData& profile);
 
+    void setOperationControl(const PDFOperationControl* operationControl) { m_operationControl = operationControl; }
+
     PDFDocumentSession* getSession() const;
     const PDFEvidenceGraph& lastEvidenceGraph() const;
 
@@ -420,6 +423,7 @@ private:
     void registerBuiltInChecks();
 
     PDFDocumentSession* m_session;
+    const PDFOperationControl* m_operationControl = nullptr;
     std::map<QString, CheckRunner> m_checks;
     PDFEvidenceGraph m_activeGraph;
 };

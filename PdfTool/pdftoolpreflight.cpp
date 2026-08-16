@@ -40,6 +40,8 @@
 #include <QJsonObject>
 #include <QUuid>
 
+#include <optional>
+
 namespace pdftool
 {
 
@@ -118,16 +120,24 @@ bool appendPreflightProvenance(const QString& documentPath,
     }
     if (!history.appendEvent(finished))
     {
+        const QString appendError = QStringLiteral("Could not append preflight history result.");
+        pdf::PDFOperationHistoryEvent failed;
+        failed.executionId = executionId;
+        failed.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+        failed.status = pdf::PDFOperationHistoryStatus::Failed;
+        failed.documentRevisionDigest = revisionDigest;
+        failed.effectiveProfileDigest = profileDigest;
+        failed.operatorIdentity = QStringLiteral("PdfTool");
+        failed.resultSummary = QJsonObject{ { QStringLiteral("error"), appendError } };
+        history.appendEvent(failed);
         if (error)
         {
-            *error = QStringLiteral("Could not append preflight history result.");
+            *error = appendError;
         }
         return false;
     }
     return true;
 }
-
-static PDFToolPreflightApplication s_preflightApplication;
 
 bool loadProfileJson(const QString& profilePath, QJsonObject& profile, QString& errorMessage)
 {
@@ -321,6 +331,8 @@ bool hasActiveSignoffForFinding(const pdf::PreflightFinding& finding,
 
     return latest && latest->countsForSignoff(documentDigest, profileDigest);
 }
+
+static PDFToolPreflightApplication s_preflightApplication;
 
 }   // namespace
 
@@ -559,7 +571,12 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
     const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
 
-    pdf::PreflightResult result;
+    struct PreflightJobOutcome
+    {
+        std::optional<pdf::PreflightResult> result;
+    };
+    PreflightJobOutcome outcome;
+
     pdf::PDFJobScheduler scheduler(1);
     pdf::PDFJobSpec spec;
     spec.kind = pdf::PDFJobKind::Preflight;
@@ -567,30 +584,51 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     spec.documentRevision = revisionDigest;
     spec.operationId = QStringLiteral("preflight");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, &result](pdf::PDFJobContext& context)
+    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, &outcome](pdf::PDFJobContext& context)
                                            {
         if (context.isCancellationRequested())
         {
             return;
         }
-        result = engine.run(runProfile, jobSpec, cliBindings); });
-    scheduler.waitForFinished(jobId, 300000);
-    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
-    {
-        result.inspectionComplete = false;
-        result.errorCode = QStringLiteral("cancelled");
-        result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
-    }
-    else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
-    {
-        result.inspectionComplete = false;
-        if (result.errorCode.isEmpty())
+        engine.setOperationControl(context.operationControl());
+        pdf::PreflightResult runResult = engine.run(runProfile, jobSpec, cliBindings);
+        if (context.isCancellationRequested())
         {
-            result.errorCode = QStringLiteral("preflight-job-failed");
-            result.errorMessage = snapshot.errorMessage.isEmpty()
+            return;
+        }
+        outcome.result = std::move(runResult); });
+
+    constexpr int preflightTimeoutMs = 300000;
+    if (!scheduler.waitForFinished(jobId, preflightTimeoutMs))
+    {
+        scheduler.cancel(jobId);
+        scheduler.waitForFinished(jobId, 30000);
+    }
+    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+
+    pdf::PreflightResult result;
+    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome.result.has_value())
+    {
+        result = std::move(*outcome.result);
+    }
+    else
+    {
+        if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+        {
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("cancelled");
+            result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
+        }
+        else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+        {
+            result.inspectionComplete = false;
+            if (result.errorCode.isEmpty())
+            {
+                result.errorCode = QStringLiteral("preflight-job-failed");
+                result.errorMessage = snapshot.errorMessage.isEmpty()
                                       ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
                                       : snapshot.errorMessage;
+            }
         }
     }
 
@@ -635,6 +673,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             }
             resultExitCode = PDFToolExitCode::Success;
         }
+    }
+    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    {
+        resultExitCode = PDFToolExitCode::Cancelled;
     }
 
     if (!exportDecisions(options.preflightDecisionsExportPath, result.decisions, decisionsError))

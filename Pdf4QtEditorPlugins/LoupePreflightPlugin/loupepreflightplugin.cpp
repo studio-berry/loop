@@ -415,6 +415,7 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
     m_preflightStdout.clear();
     m_preflightStderr.clear();
     m_preflightFailedToStart = false;
+    m_preflightOutputOverflow = false;
     m_preflightExitCode = 0;
     m_preflightExitStatus = 0;
     m_preflightRunRevision = revisionToMatch;
@@ -451,6 +452,26 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
             m_preflightStderr = process.errorString().toLocal8Bit();
             return;
         }
+
+        preflight::PreflightSidecarStreamBuffer stdoutBuffer(preflight::PREFLIGHT_SIDECAR_STDOUT_MAX_BYTES);
+        preflight::PreflightSidecarStreamBuffer stderrBuffer(preflight::PREFLIGHT_SIDECAR_STDERR_MAX_BYTES);
+        bool outputOverflow = false;
+        const auto drainChannels = [&]()
+        {
+            const QByteArray stdoutChunk = process.readAllStandardOutput();
+            if (!stdoutChunk.isEmpty()
+                && stdoutBuffer.append(stdoutChunk) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+            {
+                outputOverflow = true;
+            }
+            const QByteArray stderrChunk = process.readAllStandardError();
+            if (!stderrChunk.isEmpty()
+                && stderrBuffer.append(stderrChunk) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+            {
+                outputOverflow = true;
+            }
+        };
+
         while (!process.waitForFinished(100))
         {
             if (context.isCancellationRequested())
@@ -459,12 +480,30 @@ void LoupePreflightPlugin::startPreflightOnFile(const QString& filePath,
                 process.waitForFinished(3000);
                 return;
             }
+            drainChannels();
+            if (outputOverflow)
+            {
+                process.kill();
+                process.waitForFinished(3000);
+                break;
+            }
         }
+        drainChannels();
+
         QMutexLocker locker(&m_preflightResultMutex);
+        m_preflightOutputOverflow = outputOverflow;
+        if (outputOverflow)
+        {
+            m_preflightStdout.clear();
+            m_preflightStderr = tr("Preflight output exceeded the maximum allowed size.").toLocal8Bit();
+            m_preflightExitCode = 1;
+            m_preflightExitStatus = static_cast<int>(QProcess::NormalExit);
+            return;
+        }
         m_preflightExitCode = process.exitCode();
         m_preflightExitStatus = static_cast<int>(process.exitStatus());
-        m_preflightStdout = process.readAllStandardOutput();
-        m_preflightStderr = process.readAllStandardError(); });
+        m_preflightStdout = stdoutBuffer.takeData();
+        m_preflightStderr = stderrBuffer.takeData(); });
 }
 
 void LoupePreflightPlugin::onRunPreflightTriggered()
@@ -512,6 +551,7 @@ void LoupePreflightPlugin::onPreflightJobFinished(const pdf::PDFJobSnapshot& sna
     int exitCode = 0;
     int exitStatus = 0;
     bool failedToStart = false;
+    bool outputOverflow = false;
     QByteArray standardOutput;
     QByteArray standardErrorBytes;
     {
@@ -519,6 +559,7 @@ void LoupePreflightPlugin::onPreflightJobFinished(const pdf::PDFJobSnapshot& sna
         exitCode = m_preflightExitCode;
         exitStatus = m_preflightExitStatus;
         failedToStart = m_preflightFailedToStart;
+        outputOverflow = m_preflightOutputOverflow;
         standardOutput = m_preflightStdout;
         standardErrorBytes = m_preflightStderr;
     }
@@ -546,13 +587,13 @@ void LoupePreflightPlugin::onPreflightJobFinished(const pdf::PDFJobSnapshot& sna
         return;
     }
 
-    if (m_preflightStdoutBuffer.append(standardOutput) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow || m_preflightStderrBuffer.append(standardErrorBytes) == preflight::PreflightSidecarStreamBuffer::AppendResult::Overflow)
+    if (outputOverflow)
     {
         QMessageBox::critical(m_widget, tr("Loupe Preflight"), tr("Preflight output exceeded the maximum allowed size."));
         return;
     }
-    standardOutput = m_preflightStdoutBuffer.takeData();
-    const QString standardError = QString::fromLocal8Bit(m_preflightStderrBuffer.takeData()).trimmed();
+
+    const QString standardError = QString::fromLocal8Bit(standardErrorBytes).trimmed();
 
     if (exitStatus != static_cast<int>(QProcess::NormalExit) || !preflight::isExpectedPreflightExitCode(exitCode))
     {
@@ -621,6 +662,8 @@ void LoupePreflightPlugin::cancelPreflightRun(bool silent)
     m_preflightStderrBuffer.clear();
     m_preflightStdout.clear();
     m_preflightStderr.clear();
+    m_preflightFailedToStart = false;
+    m_preflightOutputOverflow = false;
     m_preflightRunRevision = 0;
     m_preflightIgnoreRevision = false;
     m_preflightReportSourceLabel.clear();

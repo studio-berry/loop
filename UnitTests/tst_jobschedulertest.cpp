@@ -44,6 +44,7 @@ private slots:
     void cancellationIsTerminalAndMeasured();
     void staleRevisionIsDiscardedBeforeWorkRuns();
     void progressAndOperationMetadataAreObservable();
+    void waitTimeoutCancelJoinsBeforeTerminalSnapshot();
     void cancelledPreflightAndExportJobsAreNotSuccess();
 };
 
@@ -286,6 +287,34 @@ void JobSchedulerTest::progressAndOperationMetadataAreObservable()
     QCOMPARE(result.checkId, QStringLiteral("page.1"));
     QCOMPARE(result.documentRevision, QStringLiteral("revision-4"));
     QVERIFY(scheduler.trace(jobId).size() >= 3);
+}
+
+void JobSchedulerTest::waitTimeoutCancelJoinsBeforeTerminalSnapshot()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    std::atomic_bool releaseBlocker = false;
+    std::atomic_bool blockerStarted = false;
+
+    pdf::PDFJobSpec blocker;
+    blocker.jobId = QStringLiteral("blocker");
+    blocker.priority = pdf::PDFJobPriority::Background;
+    const QString blockerId = scheduler.submit(blocker, [&releaseBlocker, &blockerStarted](pdf::PDFJobContext& context)
+                                               {
+        blockerStarted = true;
+        while (!releaseBlocker.load(std::memory_order_acquire) && !context.isCancellationRequested())
+        {
+            std::this_thread::yield();
+        } });
+    QVERIFY(!blockerId.isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(blockerStarted.load(std::memory_order_acquire), 1000);
+
+    QVERIFY(!scheduler.waitForFinished(blockerId, 50));
+    QVERIFY(scheduler.cancel(blockerId));
+    QVERIFY(scheduler.waitForFinished(blockerId, 5000));
+    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(blockerId);
+    QVERIFY(snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Failed);
+
+    releaseBlocker = true;
 }
 
 void JobSchedulerTest::cancelledPreflightAndExportJobsAreNotSuccess()

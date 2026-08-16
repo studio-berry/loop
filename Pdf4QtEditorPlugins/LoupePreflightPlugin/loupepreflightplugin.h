@@ -103,6 +103,7 @@ private:
     int m_preflightExitCode = 0;
     int m_preflightExitStatus = 0;
     bool m_preflightFailedToStart = false;
+    bool m_preflightOutputOverflow = false;
     QByteArray m_preflightStdout;
     QByteArray m_preflightStderr;
     std::unique_ptr<QTemporaryDir> m_preflightTemporaryDirectory;

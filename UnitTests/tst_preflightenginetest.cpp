@@ -101,6 +101,7 @@ private slots:
     void run_inkCoverage_budgetAbortIsIncomplete();
     void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
     void run_downsampleFixupAdvertisedForHighDpiImage();
+    void run_imageResolutionBBoxMatchesCtmPlacement();
     void run_downsampleFixupHiddenWhenNoCandidateExists();
     void run_downsampleFixupCarriesTargetDpi();
     void run_colorRgbFixtureFailsColorMode();
@@ -1650,6 +1651,30 @@ void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
     const pdf::PDFInkCoverageProbeResult mediaResult = probe.probe(page, 0, settings);
     QVERIFY(!mediaResult.rasterized);
     QVERIFY(mediaResult.budgetExceeded);
+}
+
+void PreflightEngineTest::run_imageResolutionBBoxMatchesCtmPlacement()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Image bbox geometry") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                                     { QStringLiteral("min_dpi"), 1000 } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    const QList<pdf::PreflightFinding> findings = result.errors + result.warnings;
+    const auto imageFinding = std::find_if(findings.cbegin(), findings.cend(), [](const pdf::PreflightFinding& finding)
+                                           { return finding.type == QStringLiteral("image-resolution"); });
+    QVERIFY(imageFinding != findings.cend());
+    QVERIFY(imageFinding->bbox.width() < 200.0);
+    QVERIFY(imageFinding->bbox.height() < 200.0);
+    QCOMPARE(qRound(imageFinding->bbox.width()), 144);
+    QCOMPARE(qRound(imageFinding->bbox.height()), 144);
 }
 
 void PreflightEngineTest::run_downsampleFixupAdvertisedForHighDpiImage()

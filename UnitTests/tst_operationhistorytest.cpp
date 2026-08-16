@@ -52,6 +52,7 @@ private slots:
     void schemaVersionPersistsAcrossReopen();
     void schemaV2MigratesOnceAndPreservesChain();
     void concurrentIdenticalArtifactImportsSucceed();
+    void runningFailureAppendsTerminalFailedEvent();
     void livePreflightRunCarriesRevisionAndProfileDigests();
     void cancelledPreflightRunIsNotAccepted();
 };
@@ -676,6 +677,45 @@ void OperationHistoryTest::concurrentIdenticalArtifactImportsSucceed()
         QVERIFY(store.verify(results[1].artifact));
         QCOMPARE(store.pathFor(results[0].artifact), store.pathFor(results[1].artifact));
     }
+}
+
+void OperationHistoryTest::runningFailureAppendsTerminalFailedEvent()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QString openError;
+    QVERIFY(history.open(&openError));
+    QVERIFY(history.registerArtifact(input.artifact));
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("repair");
+    execution.operationVersion = 1;
+    execution.input = input.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    QVERIFY(history.appendEvent(running));
+
+    pdf::PDFOperationHistoryEvent failed;
+    failed.executionId = executionId;
+    failed.status = pdf::PDFOperationHistoryStatus::Failed;
+    failed.resultSummary = QJsonObject{
+        { QStringLiteral("error_code"), QStringLiteral("repair.output-mismatch") },
+        { QStringLiteral("error"), QStringLiteral("mismatch") }
+    };
+    QVERIFY(history.appendEvent(failed));
+
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+    QCOMPARE(events.size(), 2);
+    QCOMPARE(events.last().status, pdf::PDFOperationHistoryStatus::Failed);
 }
 
 void OperationHistoryTest::livePreflightRunCarriesRevisionAndProfileDigests()
