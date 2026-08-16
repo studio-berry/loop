@@ -20,6 +20,8 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
+PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
+PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
 VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
 ADR_DIR = ROOT / "docs" / "adr"
@@ -112,6 +114,38 @@ def parse_preflight_checks() -> list[str]:
     if not checks:
         raise ValueError("preflight check catalog is empty")
     return checks
+
+
+def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
+    overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
+    overlay_ids = unique_sorted(overlay.get("checks", {}).keys())
+    missing = sorted(set(registry) - set(overlay_ids))
+    extra = sorted(set(overlay_ids) - set(registry))
+    if missing or extra:
+        problems = []
+        if missing:
+            problems.append("registered without catalog: " + ", ".join(missing))
+        if extra:
+            problems.append("catalog without registry: " + ", ".join(extra))
+        raise ValueError("; ".join(problems))
+    required = {"measures", "limitations", "coverage"}
+    for check_id, entry in overlay["checks"].items():
+        absent = sorted(required - set(entry))
+        if absent:
+            raise ValueError(f"catalog entry '{check_id}' missing {', '.join(absent)}")
+        if entry["coverage"] not in {"covered", "partial", "not_covered"}:
+            raise ValueError(f"catalog entry '{check_id}' has invalid coverage")
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "gwg_families": overlay["gwg_families"],
+        "pdfx_targets": overlay["pdfx_targets"],
+        "checks": overlay["checks"],
+        "not_covered": overlay["not_covered"],
+        "registry": registry,
+    }
 
 
 def parse_repair_operations() -> list[dict[str, str]]:
@@ -317,12 +351,14 @@ def validate_adrs() -> list[str]:
 
 
 def build_catalog() -> dict[str, Any]:
+    registry = parse_preflight_checks()
     return {
         "format_version": 1,
         "generated_by": "scripts/generate-architecture-catalogs.py",
         "branch_policy": parse_branch_policy(),
         "version_policy": parse_version_policy(),
-        "preflight_checks": parse_preflight_checks(),
+        "preflight_checks": registry,
+        "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
         "schema_kinds": parse_schema_kinds(),
@@ -335,6 +371,7 @@ def build_catalog() -> dict[str, Any]:
             "docs/version-policy.json",
             "Pdf4QtLibCore/sources/preflightengine.cpp",
             "Pdf4QtLibCore/sources/preflightengine.h",
+            "docs/preflight-check-catalog-overlay.json",
             "Pdf4QtLibCore/sources/pdfactionlist.cpp",
             "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
             "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
@@ -353,21 +390,26 @@ def serialized_catalog() -> str:
     return json.dumps(build_catalog(), indent=2, sort_keys=True) + "\n"
 
 
-def check_catalog(expected: str) -> int:
-    if not CATALOG_PATH.exists():
-        print(f"error: generated catalog is missing: {CATALOG_PATH.relative_to(ROOT)}", file=sys.stderr)
+def serialized_preflight_catalog() -> str:
+    registry = parse_preflight_checks()
+    return json.dumps(build_preflight_check_catalog(registry), indent=2, sort_keys=True) + "\n"
+
+
+def check_generated(path: Path, expected: str, label: str) -> int:
+    if not path.exists():
+        print(f"error: generated {label} is missing: {path.relative_to(ROOT)}", file=sys.stderr)
         return 1
-    actual = read(CATALOG_PATH)
+    actual = read(path)
     if actual == expected:
         return 0
     diff = difflib.unified_diff(
         actual.splitlines(),
         expected.splitlines(),
-        fromfile=str(CATALOG_PATH.relative_to(ROOT)),
+        fromfile=str(path.relative_to(ROOT)),
         tofile="generated output",
         lineterm="",
     )
-    print("generated architecture catalog is stale:", file=sys.stderr)
+    print(f"generated {label} is stale:", file=sys.stderr)
     print("\n".join(diff), file=sys.stderr)
     return 1
 
@@ -387,6 +429,7 @@ def main() -> int:
 
     try:
         expected = serialized_catalog()
+        expected_preflight = serialized_preflight_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
         return 1
@@ -394,8 +437,11 @@ def main() -> int:
     if args.write:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
+        PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
         return 0
-    return check_catalog(expected)
+    return check_generated(CATALOG_PATH, expected, "architecture catalog") or check_generated(
+        PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog"
+    )
 
 
 if __name__ == "__main__":

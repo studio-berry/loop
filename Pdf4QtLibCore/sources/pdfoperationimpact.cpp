@@ -23,67 +23,150 @@
 #include "pdfoperationimpact.h"
 
 #include <QJsonArray>
-#include <QSet>
+
 #include <algorithm>
 
 namespace pdf
 {
 
-QJsonObject PDFOperationImpact::toJson() const
+namespace
 {
-    QJsonArray domainArray;
-    const PDFEvidenceDomain all[] = {
-        PDFEvidenceDomain::Images,
-        PDFEvidenceDomain::Colorants,
-        PDFEvidenceDomain::Strokes,
-        PDFEvidenceDomain::OverprintTransparency,
-        PDFEvidenceDomain::Fonts
-    };
-    for (PDFEvidenceDomain domain : all)
+
+QJsonArray domainNames(PDFEvidenceDomains domains)
+{
+    QJsonArray names;
+    for (PDFEvidenceDomain domain : { PDFEvidenceDomain::Images,
+                                      PDFEvidenceDomain::Colorants,
+                                      PDFEvidenceDomain::Strokes,
+                                      PDFEvidenceDomain::OverprintTransparency,
+                                      PDFEvidenceDomain::Fonts })
     {
         if (domains.testFlag(domain))
         {
-            domainArray.append(pdfEvidenceDomainToString(domain));
+            names.append(pdfEvidenceDomainToString(domain));
         }
     }
+    return names;
+}
+
+}   // namespace
+
+bool PDFOperationImpact::isFullRevalidation() const
+{
+    return !impactComplete || documentWide || requiresIndependentOracle || domains == PDFEvidenceDomains();
+}
+
+QJsonObject PDFOperationImpact::toJson() const
+{
     QJsonArray pageArray;
-    for (int page : pages)
+    QList<int> sortedPages = pages.values();
+    std::sort(sortedPages.begin(), sortedPages.end());
+    for (int page : sortedPages)
     {
         pageArray.append(page);
     }
+
     return QJsonObject{
-        { QStringLiteral("domains"), domainArray },
+        { QStringLiteral("domains"), domainNames(domains) },
         { QStringLiteral("pages"), pageArray },
         { QStringLiteral("object_ids"), QJsonArray::fromStringList(objectIds) },
         { QStringLiteral("document_wide"), documentWide },
         { QStringLiteral("full_rewrite"), fullRewrite },
-        { QStringLiteral("impact_complete"), impactComplete }
+        { QStringLiteral("impact_complete"), impactComplete },
+        { QStringLiteral("requires_independent_oracle"), requiresIndependentOracle }
     };
 }
 
-PDFOperationImpact mergePDFOperationImpact(const PDFOperationImpact& first,
-                                           const PDFOperationImpact& second)
+QJsonObject PDFRevalidationPlan::toJson() const
 {
-    PDFOperationImpact merged = first;
-    merged.domains |= second.domains;
-    merged.documentWide = first.documentWide || second.documentWide;
-    merged.fullRewrite = first.fullRewrite || second.fullRewrite;
-    merged.impactComplete = first.impactComplete && second.impactComplete;
-    QSet<int> pages(first.pages.cbegin(), first.pages.cend());
-    for (int page : second.pages)
+    QJsonArray pageArray;
+    QList<int> sortedPages = pages.values();
+    std::sort(sortedPages.begin(), sortedPages.end());
+    for (int page : sortedPages)
     {
-        pages.insert(page);
+        pageArray.append(page);
     }
-    merged.pages = QList<int>(pages.cbegin(), pages.cend());
-    std::sort(merged.pages.begin(), merged.pages.end());
-    QSet<QString> objects(first.objectIds.cbegin(), first.objectIds.cend());
-    for (const QString& objectId : second.objectIds)
+
+    return QJsonObject{
+        { QStringLiteral("full"), full },
+        { QStringLiteral("check_ids"), QJsonArray::fromStringList(checkIds) },
+        { QStringLiteral("pages"), pageArray },
+        { QStringLiteral("reason"), reason }
+    };
+}
+
+std::optional<PDFEvidenceDomain> preflightEvidenceDomainForCheck(const QString& checkId)
+{
+    if (checkId == QLatin1String("image-resolution"))
     {
-        objects.insert(objectId);
+        return PDFEvidenceDomain::Images;
     }
-    merged.objectIds = QStringList(objects.cbegin(), objects.cend());
-    merged.objectIds.sort();
-    return merged;
+    if (checkId == QLatin1String("color-mode") || checkId == QLatin1String("color-inventory"))
+    {
+        return PDFEvidenceDomain::Colorants;
+    }
+    if (checkId == QLatin1String("thin-strokes"))
+    {
+        return PDFEvidenceDomain::Strokes;
+    }
+    if (checkId == QLatin1String("white-overprint") || checkId == QLatin1String("transparency-risk"))
+    {
+        return PDFEvidenceDomain::OverprintTransparency;
+    }
+    if (checkId == QLatin1String("embedded-fonts"))
+    {
+        return PDFEvidenceDomain::Fonts;
+    }
+    return std::nullopt;
+}
+
+PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
+                                     const QStringList& enabledCheckIds)
+{
+    PDFRevalidationPlan plan;
+    plan.pages = impact.pages;
+
+    if (!impact.impactComplete)
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = QStringLiteral("impact-incomplete");
+        return plan;
+    }
+    if (impact.requiresIndependentOracle)
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = QStringLiteral("independent-oracle");
+        return plan;
+    }
+    if (impact.documentWide || impact.domains == PDFEvidenceDomains())
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = impact.documentWide ? QStringLiteral("document-wide") : QStringLiteral("unspecified-domains");
+        return plan;
+    }
+
+    for (const QString& checkId : enabledCheckIds)
+    {
+        const std::optional<PDFEvidenceDomain> domain = preflightEvidenceDomainForCheck(checkId);
+        if (!domain.has_value())
+        {
+            plan.full = true;
+            plan.checkIds = enabledCheckIds;
+            plan.reason = QStringLiteral("unmapped-check");
+            return plan;
+        }
+        if (impact.domains.testFlag(*domain))
+        {
+            plan.checkIds.append(checkId);
+        }
+    }
+
+    plan.full = false;
+    plan.reason = QStringLiteral("targeted");
+    return plan;
 }
 
 }   // namespace pdf

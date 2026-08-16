@@ -119,6 +119,7 @@
   },
   "format_version": 1,
   "generated_by": "scripts/generate-architecture-catalogs.py",
+  "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
   "preflight_checks": [
     "bleed",
     "color-inventory",
@@ -250,6 +251,7 @@
     "docs/version-policy.json",
     "Pdf4QtLibCore/sources/preflightengine.cpp",
     "Pdf4QtLibCore/sources/preflightengine.h",
+    "docs/preflight-check-catalog-overlay.json",
     "Pdf4QtLibCore/sources/pdfactionlist.cpp",
     "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
     "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
@@ -305,6 +307,7 @@
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
+    "UnitTestsProfileIdentity",
     "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",
@@ -312,6 +315,7 @@
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",
+    "UnitTestsStandardOracle",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager"

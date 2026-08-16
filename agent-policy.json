@@ -70,7 +70,8 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
-        "UnitTestsSchemaEvolution"
+        "UnitTestsSchemaEvolution",
+        "UnitTestsStandardOracle"
       ]
     },
     "pdftool": {
@@ -87,7 +88,8 @@
         "UnitTestsPreflightPlugin",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsProfileIdentity"
       ]
     },
     "pagemaster": {

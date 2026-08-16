@@ -214,9 +214,8 @@ void addDescribedOption(QCommandLineParser* parser,
                         const QString& id,
                         const QString& description)
 {
-    const auto found = std::find_if(descriptors.cbegin(), descriptors.cend(), [&](const auto& descriptor) {
-        return descriptor.id == id;
-    });
+    const auto found = std::find_if(descriptors.cbegin(), descriptors.cend(), [&](const auto& descriptor)
+                                    { return descriptor.id == id; });
     if (found == descriptors.cend())
     {
         return;
@@ -230,7 +229,7 @@ void addDescribedOption(QCommandLineParser* parser,
     parser->addOption(QCommandLineOption(names, description, found->valueName, found->defaultValue));
 }
 
-} // namespace
+}   // namespace
 
 PDFToolCommandDescriptor PDFToolAbstractApplication::describe() const
 {
@@ -266,7 +265,8 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
                    const QString& defaultValue = QString(),
                    bool required = false,
                    bool repeatable = false,
-                   bool sensitive = false) {
+                   bool sensitive = false)
+    {
         appendOption(options, makeOption(id, names, valueName, valueType, allowedValues, defaultValue, required, repeatable, sensitive));
     };
 
@@ -357,6 +357,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("press"), { QStringLiteral("--press") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("stock"), { QStringLiteral("--stock") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("finishing"), { QStringLiteral("--finishing") }, QStringLiteral("id"), PDFToolValueType::String);
+        add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
@@ -550,7 +551,8 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("enc-permissions"), { QStringLiteral("--enc-permissions") }, QStringLiteral("permissions"), PDFToolValueType::Integer);
     }
 
-    std::sort(options.begin(), options.end(), [](const auto& left, const auto& right) { return left.id < right.id; });
+    std::sort(options.begin(), options.end(), [](const auto& left, const auto& right)
+              { return left.id < right.id; });
     return options;
 }
 
@@ -600,7 +602,8 @@ QList<PDFToolPositionalDescriptor> PDFToolAbstractApplication::describePositiona
 QStringList PDFToolAbstractApplication::describeCapabilities(Options optionFlags)
 {
     QStringList capabilities;
-    auto add = [&](Option option, const QString& id) {
+    auto add = [&](Option option, const QString& id)
+    {
         if (optionFlags.testFlag(option))
         {
             capabilities.append(id);
@@ -803,6 +806,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("press"), QStringLiteral("Stable press/device identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("stock"), QStringLiteral("Stable stock identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("param"), QStringLiteral("Profile variable binding as key=value; may be repeated. Overrides job-spec and profile defaults."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1295,8 +1299,8 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
 
         const QString outputIntentPolicy = parser->value("output-intent").trimmed().toLower();
         options.rgbToCmykSettings.outputIntentPolicy = outputIntentPolicy == QStringLiteral("preserve-matching")
-            ? pdf::PDFRgbToCmykOutputIntentPolicy::PreserveMatching
-            : pdf::PDFRgbToCmykOutputIntentPolicy::Replace;
+                                                           ? pdf::PDFRgbToCmykOutputIntentPolicy::PreserveMatching
+                                                           : pdf::PDFRgbToCmykOutputIntentPolicy::Replace;
     }
 
     if (optionFlags.testFlag(PreflightProfile))
@@ -1313,6 +1317,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightPressId = parser->value("press");
         options.preflightStockId = parser->value("stock");
         options.preflightFinishingId = parser->value("finishing");
+        options.preflightParameterAssignments = parser->values("param");
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -2457,7 +2462,7 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
                          PDFToolDiagnosticSeverity::Error,
                          QStringLiteral("output.destination-is-directory"),
                          PDFToolTranslationContext::tr("Output '%1' is a directory.").arg(outputPath),
-                         QJsonObject{{QStringLiteral("path"), outputPath}});
+                         QJsonObject{ { QStringLiteral("path"), outputPath } });
         return PDFToolExitCode::InvalidInvocation;
     }
 
@@ -2498,7 +2503,7 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutputs(const PDF
         }
 
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, conflict.code, message,
-                         QJsonObject{{QStringLiteral("path"), conflict.path}});
+                         QJsonObject{ { QStringLiteral("path"), conflict.path } });
         return PDFToolExitCode::InvalidInvocation;
     }
 

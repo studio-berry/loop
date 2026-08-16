@@ -74,18 +74,12 @@ QJsonObject addBleedParameterSchema()
         { QStringLiteral("type"), QStringLiteral("object") },
         { QStringLiteral("additionalProperties"), false },
         { QStringLiteral("properties"), QJsonObject{
-            { QStringLiteral("mode"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("string") },
-                { QStringLiteral("enum"), QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat"), QStringLiteral("stretch") } }
-            } },
-            { QStringLiteral("bleed_mm"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("number") },
-                { QStringLiteral("minimum"), 0.0 },
-                { QStringLiteral("maximum"), 1000.0 }
-            } },
-            { QStringLiteral("page_range"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
-            { QStringLiteral("force"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } }
-        } }
+                                            { QStringLiteral("mode"), QJsonObject{
+                                                                          { QStringLiteral("type"), QStringLiteral("string") },
+                                                                          { QStringLiteral("enum"), QJsonArray{ QStringLiteral("mirror"), QStringLiteral("pixel-repeat"), QStringLiteral("stretch") } } } },
+                                            { QStringLiteral("bleed_mm"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("number") }, { QStringLiteral("minimum"), 0.0 }, { QStringLiteral("maximum"), 1000.0 } } },
+                                            { QStringLiteral("page_range"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("force"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } } } }
     };
 }
 
@@ -118,7 +112,6 @@ public:
     {
         return PDFRepairDomain::PageGeometry | PDFRepairDomain::Images | PDFRepairDomain::Structure;
     }
-
     PDFOperationResult analyze(const PDFDocument& source,
                                const QJsonObject& parameters,
                                PDFRepairPlan* plan) const override
@@ -140,8 +133,8 @@ public:
         PDFDocument candidate = source;
         PDFBleedFixupReport report;
         const PDFOperationResult result = PDFBleedFixup::apply(&candidate,
-                                                                bleedSettings(parameters, true),
-                                                                &report);
+                                                               bleedSettings(parameters, true),
+                                                               &report);
         if (!result)
         {
             return result;
@@ -160,8 +153,8 @@ public:
         }
         PDFBleedFixupReport report;
         const PDFOperationResult fixupResult = PDFBleedFixup::apply(candidate,
-                                                                      bleedSettings(plan.parameters, false),
-                                                                      &report);
+                                                                    bleedSettings(plan.parameters, false),
+                                                                    &report);
         if (!fixupResult)
         {
             return fixupResult;
@@ -213,17 +206,11 @@ QJsonObject downsampleImagesParameterSchema()
         { QStringLiteral("type"), QStringLiteral("object") },
         { QStringLiteral("additionalProperties"), false },
         { QStringLiteral("properties"), QJsonObject{
-            { QStringLiteral("target_dpi"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("integer") },
-                { QStringLiteral("minimum"), 72 },
-                { QStringLiteral("maximum"), 1200 }
-            } },
-            { QStringLiteral("quality"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("integer") },
-                { QStringLiteral("minimum"), 50 },
-                { QStringLiteral("maximum"), 100 }
-            } }
-        } }
+                                            { QStringLiteral("target_dpi"), QJsonObject{
+                                                                                { QStringLiteral("type"), QStringLiteral("integer") },
+                                                                                { QStringLiteral("minimum"), 72 },
+                                                                                { QStringLiteral("maximum"), 1200 } } },
+                                            { QStringLiteral("quality"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 50 }, { QStringLiteral("maximum"), 100 } } } } }
     };
 }
 
@@ -236,6 +223,16 @@ public:
     PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::fullRewrite(QStringLiteral("image downsampling removes prior image data")); }
     QJsonObject parameterSchema() const override { return downsampleImagesParameterSchema(); }
     PDFRepairDomains domains() const override { return PDFRepairDomain::Images | PDFRepairDomain::Color; }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains.setFlag(PDFEvidenceDomain::Images);
+        declared.domains.setFlag(PDFEvidenceDomain::Colorants);
+        declared.fullRewrite = true;
+        declared.documentWide = true;
+        declared.impactComplete = true;
+        return declared;
+    }
 
     PDFOperationResult analyze(const PDFDocument& source,
                                const QJsonObject& parameters,
@@ -288,8 +285,8 @@ public:
         }
         PDFImageDownsampleFixupReport report;
         const PDFOperationResult fixupResult = PDFImageDownsampleFixup::apply(candidate,
-                                                                               downsampleSettings(plan.parameters),
-                                                                               &report);
+                                                                              downsampleSettings(plan.parameters),
+                                                                              &report);
         if (!fixupResult)
         {
             return fixupResult;
@@ -334,20 +331,14 @@ QJsonObject rgbToCmykParameterSchema()
         { QStringLiteral("additionalProperties"), false },
         { QStringLiteral("required"), QJsonArray{ QStringLiteral("target_icc_base64") } },
         { QStringLiteral("properties"), QJsonObject{
-            { QStringLiteral("target_icc_base64"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("string") },
-                { QStringLiteral("minLength"), 1 }
-            } },
-            { QStringLiteral("target_icc_id"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
-            { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
-            { QStringLiteral("intent"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("integer") },
-                { QStringLiteral("minimum"), 0 },
-                { QStringLiteral("maximum"), 3 }
-            } },
-            { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
-            { QStringLiteral("embed_output_intent"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } }
-        } }
+                                            { QStringLiteral("target_icc_base64"), QJsonObject{
+                                                                                       { QStringLiteral("type"), QStringLiteral("string") },
+                                                                                       { QStringLiteral("minLength"), 1 } } },
+                                            { QStringLiteral("target_icc_id"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("intent"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 0 }, { QStringLiteral("maximum"), 3 } } },
+                                            { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+                                            { QStringLiteral("embed_output_intent"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } } } }
     };
 }
 
@@ -362,6 +353,14 @@ public:
     PDFRepairDomains domains() const override
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Images | PDFRepairDomain::Structure;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains = PDFEvidenceDomains(PDFEvidenceDomain::Colorants) | PDFEvidenceDomain::Images;
+        declared.documentWide = true;
+        declared.impactComplete = true;
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument& source,
@@ -404,7 +403,7 @@ public:
         {
             return PDFOperationResult(QStringLiteral("RGB-to-CMYK contains unsupported constructs."));
         }
-        plan->targets.append({ -1, {}, QStringLiteral("document/color" ) });
+        plan->targets.append({ -1, {}, QStringLiteral("document/color") });
         return PDFOperationResult(true);
     }
 
@@ -418,8 +417,8 @@ public:
         }
         PDFRgbToCmykReport report;
         const PDFOperationResult fixupResult = PDFRgbToCmykFixup::writeRgbToCmyk(candidate,
-                                                                         cmykSettings(plan.parameters),
-                                                                         &report);
+                                                                                 cmykSettings(plan.parameters),
+                                                                                 &report);
         if (!fixupResult)
         {
             return fixupResult;
@@ -453,14 +452,15 @@ PDFStandardConversionSettings standardConversionSettings(const QJsonObject& para
     settings.outputIntentIccId = parameters.value(QStringLiteral("target_icc_id")).toString(QStringLiteral("loupe-output-intent")).toUtf8();
     settings.outputIntentName = parameters.value(QStringLiteral("target_profile_name")).toString();
     settings.normalizeColor = parameters.contains(QStringLiteral("normalize_color"))
-        ? parameters.value(QStringLiteral("normalize_color")).toBool()
-        : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
+                                  ? parameters.value(QStringLiteral("normalize_color")).toBool()
+                                  : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
     settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
     settings.independentValidatorProgram = parameters.value(QStringLiteral("validator_program")).toString();
     const QJsonValue validatorArguments = parameters.value(QStringLiteral("validator_arguments"));
     if (validatorArguments.isArray())
     {
-        for (const QJsonValue& value : validatorArguments.toArray()) settings.independentValidatorArguments.append(value.toString());
+        for (const QJsonValue& value : validatorArguments.toArray())
+            settings.independentValidatorArguments.append(value.toString());
     }
     else
     {
@@ -478,25 +478,18 @@ QJsonObject standardConversionParameterSchema()
         { QStringLiteral("additionalProperties"), false },
         { QStringLiteral("required"), QJsonArray{ QStringLiteral("target"), QStringLiteral("target_icc_base64") } },
         { QStringLiteral("properties"), QJsonObject{
-            { QStringLiteral("target"), QJsonObject{
-                { QStringLiteral("type"), QStringLiteral("string") },
-                { QStringLiteral("enum"), QJsonArray::fromStringList(supportedPDFStandardTargets()) }
-            } },
-            { QStringLiteral("target_icc_base64"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }, { QStringLiteral("minLength"), 1 }} },
-            { QStringLiteral("target_icc_id"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
-            { QStringLiteral("target_profile_name"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
-            { QStringLiteral("normalize_color"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} },
-            { QStringLiteral("black_point_compensation"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} },
-            { QStringLiteral("validator_program"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} },
-            { QStringLiteral("validator_arguments"), QJsonObject{
-                { QStringLiteral("oneOf"), QJsonArray{
-                    QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }},
-                    QJsonObject{{ QStringLiteral("type"), QStringLiteral("array") }, { QStringLiteral("items"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("string") }} }}
-                } }
-            } },
-            { QStringLiteral("validator_timeout_ms"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 1000 }, { QStringLiteral("maximum"), 3600000 }} },
-            { QStringLiteral("dry_run_only"), QJsonObject{{ QStringLiteral("type"), QStringLiteral("boolean") }} }
-        } }
+                                            { QStringLiteral("target"), QJsonObject{
+                                                                            { QStringLiteral("type"), QStringLiteral("string") },
+                                                                            { QStringLiteral("enum"), QJsonArray::fromStringList(supportedPDFStandardTargets()) } } },
+                                            { QStringLiteral("target_icc_base64"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") }, { QStringLiteral("minLength"), 1 } } },
+                                            { QStringLiteral("target_icc_id"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("normalize_color"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+                                            { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+                                            { QStringLiteral("validator_program"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
+                                            { QStringLiteral("validator_arguments"), QJsonObject{ { QStringLiteral("oneOf"), QJsonArray{ QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } }, QJsonObject{ { QStringLiteral("type"), QStringLiteral("array") }, { QStringLiteral("items"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } } } } } } },
+                                            { QStringLiteral("validator_timeout_ms"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 1000 }, { QStringLiteral("maximum"), 3600000 } } },
+                                            { QStringLiteral("dry_run_only"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } } } }
     };
 }
 
@@ -509,8 +502,16 @@ public:
     QJsonObject parameterSchema() const override { return standardConversionParameterSchema(); }
     PDFRepairDomains domains() const override
     {
-        return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images
-            | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
+        return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
+    }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.documentWide = true;
+        declared.fullRewrite = true;
+        declared.impactComplete = false;
+        declared.requiresIndependentOracle = true;
+        return declared;
     }
 
     PDFOperationResult analyze(const PDFDocument& source,
@@ -564,8 +565,8 @@ public:
         }
         PDFStandardConversionReport report;
         const PDFOperationResult conversionResult = PDFStandardConversion::apply(candidate,
-                                                                                   standardConversionSettings(plan.parameters),
-                                                                                   &report);
+                                                                                 standardConversionSettings(plan.parameters),
+                                                                                 &report);
         result->warnings.append(report.warnings);
         for (const PDFStandardConversionChange& change : report.changes)
         {
@@ -579,7 +580,7 @@ public:
         validation.status = conversionResult ? PDFRepairStatus::Passed : PDFRepairStatus::Failed;
         validation.validatorId = QStringLiteral("independent-standard-validator");
         validation.summary = conversionResult ? QStringLiteral("Independent validator and postflight passed.")
-                                               : conversionResult.getErrorMessage();
+                                              : conversionResult.getErrorMessage();
         result->validations.append(validation);
         return conversionResult;
     }
@@ -594,6 +595,6 @@ const bool registerBuiltInRepairOperations = []
     return true;
 }();
 
-} // namespace
+}   // namespace
 
-} // namespace pdf
+}   // namespace pdf
