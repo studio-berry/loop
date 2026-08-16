@@ -2101,8 +2101,9 @@ void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
     pdf::PreflightEngine engine(&session);
     const QJsonObject profile{
         { QStringLiteral("name"), QStringLiteral("Variables") },
-        { QStringLiteral("variables"), QJsonObject{ { QStringLiteral("stock"), QStringLiteral("${stock}") } } },
-        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("bleed") },
+                                        { QStringLiteral("amount_pt"), QStringLiteral("${stock}") } } } }
     };
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(!result.pass);

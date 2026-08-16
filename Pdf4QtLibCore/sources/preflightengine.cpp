@@ -653,7 +653,8 @@ bool parsePreflightRestrictions(const QJsonObject& object,
         QStringLiteral("page_box"),
         QStringLiteral("regions"),
         QStringLiteral("layers"),
-        QStringLiteral("object_classes")
+        QStringLiteral("object_classes"),
+        QStringLiteral("scope")
     };
     for (const QString& key : object.keys())
     {
@@ -661,6 +662,21 @@ bool parsePreflightRestrictions(const QJsonObject& object,
         {
             errorMessage = QStringLiteral("Restriction field '%1' is not supported.").arg(key);
             return false;
+        }
+    }
+
+    if (object.contains(QStringLiteral("scope")))
+    {
+        const QString scope = object.value(QStringLiteral("scope")).toString().trimmed();
+        if (scope.isEmpty())
+        {
+            restrictions.unsupportedReason = QStringLiteral("Restriction scope is empty or unsupported.");
+            return true;
+        }
+        if (scope != QLatin1String("document"))
+        {
+            restrictions.unsupportedReason = QStringLiteral("Restriction scope '%1' is not supported.").arg(scope);
+            return true;
         }
     }
 
