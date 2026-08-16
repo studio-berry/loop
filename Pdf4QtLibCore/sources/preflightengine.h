@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentsession.h"
+#include "pdfevidencegraph.h"
 
 #include <QByteArray>
 #include <QDateTime>
@@ -214,6 +215,7 @@ struct PDF4QTLIBCORESHARED_EXPORT PreflightFinding
     QRectF bbox;
     QString checkId;
     QJsonObject evidence;
+    QStringList evidenceIds;
 
     /// Stable identity for this finding. The identity excludes translated
     /// message text and geometry so it survives locale changes and fixups.
@@ -358,6 +360,7 @@ public:
     PreflightResult run(const PreflightProfileData& profile);
 
     PDFDocumentSession* getSession() const;
+    const PDFEvidenceGraph& lastEvidenceGraph() const;
 
     /// Loads a profile JSON file. On error, returns false and writes a message
     /// to \p errorMessage.
@@ -372,6 +375,7 @@ private:
 
     PDFDocumentSession* m_session;
     std::map<QString, CheckRunner> m_checks;
+    PDFEvidenceGraph m_activeGraph;
 };
 
 }   // namespace pdf

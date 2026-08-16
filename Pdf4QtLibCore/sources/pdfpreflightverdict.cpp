@@ -32,7 +32,7 @@ namespace
 
 bool isNonBlockingIncompleteFinding(const PreflightFinding& finding)
 {
-    return finding.type == QStringLiteral("budget-exceeded") || finding.type == QStringLiteral("check-incomplete") || finding.evidence.value(QStringLiteral("budget_exceeded")).toBool(false);
+    return finding.type == QStringLiteral("budget-exceeded") || finding.type == QStringLiteral("check-incomplete") || finding.type == QStringLiteral("evidence-incomplete") || finding.evidence.value(QStringLiteral("budget_exceeded")).toBool(false);
 }
 
 bool isActiveDecisionForFinding(const PreflightFinding& finding,

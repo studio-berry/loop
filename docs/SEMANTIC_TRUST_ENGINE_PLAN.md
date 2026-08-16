@@ -188,7 +188,7 @@ Do not hand-edit `docs/generated/architecture-catalog.json`.
 
 ## Open work
 
-Wave A (S00–S05) is the scope of this branch. Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (Evidence Graph, profiles, oracles, hostile load, lifecycle, plugin ABI, S18) land on sibling branches stacked from `cursor/s00-m0-plan-0158`.
+Wave B (S06–S08) is the scope of this branch: Evidence Graph types, one collector walk, five-family graph evaluation, and golden-corpus parity (with `evidence_ids` stripped from snapshots). Product `PDF4QT_VERSION` stays **0.1.0**. Later waves (profiles, oracles, hostile load, lifecycle, plugin ABI, S18) land on sibling branches stacked from `cursor/s00-m0-plan-0158`. Wave A (S00–S05) substrate is already integrated on the base branch.
 
 Audited 2026-08-15 against the canonical Notion [Roadmap](https://www.notion.so/38f9cb079ddb804a96dbe26b8d86e84f) **0.1.1 exit gate** (all boxes still unchecked there — correct, this milestone is not operator-accepted) and current code on this branch.
 
@@ -198,8 +198,8 @@ Notion 0.1.1 exit gate × code:
 | --- | --- | --- |
 | #234/#236/#237/#238/#239 acceptance-verified | S01–S05 | **Partial.** Reducer, revision alias, live PdfTool provenance kinds, thumbnail scheduler, and save-policy tests exist. **#238 production callers are mostly migrated:** page compile, text layout, PdfTool `preflight`, Editor preflight, PageMaster export, PageMaster preview, and widget thumbnails use `PDFJobScheduler`. Overlay tile rendering remains on `PDFExecutionPolicy`. |
 | Current/previous schemas round-trip; unsupported majors fail closed | S03 | **Landed.** `pdfschemaversion.*`, `docs/schema-compatibility.json`, goldens, `UnitTestsSchemaEvolution`. |
-| Five-family Evidence Graph matches golden corpus | S06–S08 | **Partial.** Collector walks Images/Colorants/Strokes/OverprintTransparency/Fonts. Checks still use per-check processors. Findings get additive `evidence_ids` after the old walk. **S08 walker deletion is not done.** |
-| Findings cite normalized evidence records | S06–S08 | **Partial.** Citation is domain/page overlay, not graph-evaluated findings. |
+| Five-family Evidence Graph matches golden corpus | S06–S08 | **Partial on this branch.** Collector walks Images/Colorants/Strokes/OverprintTransparency/Fonts; graph evaluation drives findings with `evidence_ids`. Corpus snapshots strip `evidence_ids` for parity. **S08 walker deletion is not done** (legacy per-check processors remain for some paths). |
+| Findings cite normalized evidence records | S06–S08 | **Partial.** Findings carry `evidence_ids`; citation is not yet graph-only evaluation for every check path. |
 | Every async/cache result is revision-bound | S04–S05 | **Partial.** Thumbnails, PageMaster preview (scheduler), page compile, text layout, Editor preflight, and PageMaster export are revision-bound via `PDFJobScheduler`. Overlay tiles, OCR, and batch analysis remain off the scheduler. Inventory: `docs/JOB_SCHEDULER.md`. |
 | Targeted revalidation matches full-run verdicts | S11 | **Not done.** `PDFOperationImpact` exists; default incomplete impact → full revalidation (fail-closed-correct). No qualification-corpus targeted=full proof; repair ops do not declare complete scoped impact. |
 | Standards claims pass an independent oracle | S12 | **Partial.** Fixture triad + mismatch/`missing` cannot self-certify. veraPDF lane is `QSKIP` if missing (not bundled). |

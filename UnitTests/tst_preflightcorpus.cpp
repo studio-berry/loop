@@ -195,16 +195,7 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
         {
             QJsonObject finding = findings.at(index).toObject();
             finding.remove(QStringLiteral("id"));
-            QJsonObject evidence = finding.value(QStringLiteral("evidence")).toObject();
-            evidence.remove(QStringLiteral("evidence_ids"));
-            if (evidence.isEmpty())
-            {
-                finding.remove(QStringLiteral("evidence"));
-            }
-            else
-            {
-                finding.insert(QStringLiteral("evidence"), evidence);
-            }
+            finding.remove(QStringLiteral("evidence_ids"));
             findings.replace(index, finding);
         }
         report.insert(section, findings);

@@ -381,6 +381,8 @@ add_executable(UnitTestsEvidenceGraph
     tst_evidencegraphtest.cpp
 )
 target_link_libraries(UnitTestsEvidenceGraph PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsEvidenceGraph PRIVATE
+    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 set_target_properties(UnitTestsEvidenceGraph PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF

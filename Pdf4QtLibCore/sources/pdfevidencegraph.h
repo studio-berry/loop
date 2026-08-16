@@ -85,30 +85,31 @@ struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceGraph
 
     bool isComplete() const { return complete && incompleteReason.isEmpty(); }
     QList<PDFEvidenceRecord> recordsForDomain(PDFEvidenceDomain domain) const;
+    QList<PDFEvidenceRecord> recordsForTarget(PDFEvidenceDomain domain, const QString& target) const;
     QJsonObject toJson() const;
+};
+
+struct PDF4QTLIBCORESHARED_EXPORT PDFEvidenceCollectSettings
+{
+    int colorProbeDpi = 150;
+    qreal richBlackKThreshold = 0.10;
+    qreal minEffectiveStrokeWidthPt = 0.0;
+    qreal zeroWidthEpsilonPt = 1.0e-6;
 };
 
 class PDF4QTLIBCORESHARED_EXPORT PDFEvidenceCollector
 {
 public:
     static PDFEvidenceGraph collect(PDFDocumentSession* session,
-                                    PDFEvidenceDomains domains = {});
+                                    PDFEvidenceDomains domains = {},
+                                    const PDFEvidenceCollectSettings& settings = {});
 };
 
 PDF4QTLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
+PDF4QTLIBCORESHARED_EXPORT PDFEvidenceDomains pdfEvidenceAllDomains();
 
 }   // namespace pdf
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(pdf::PDFEvidenceDomains)
-
-namespace pdf
-{
-
-inline PDFEvidenceDomains pdfEvidenceAllDomains()
-{
-    return PDFEvidenceDomains(PDFEvidenceDomain::Images) | PDFEvidenceDomain::Colorants | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Fonts;
-}
-
-}   // namespace pdf
 
 #endif   // PDFEVIDENCEGRAPH_H
