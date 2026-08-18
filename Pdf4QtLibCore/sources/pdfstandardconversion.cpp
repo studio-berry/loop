@@ -27,6 +27,7 @@
 #include "pdfstreamfilters.h"
 #include "pdfrgbtocmykfixup.h"
 #include "preflightengine.h"
+#include "pdfutils.h"
 
 #include <QJsonArray>
 #include <QCryptographicHash>
@@ -269,8 +270,7 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
         arguments.append(value);
     }
     QProcess process;
-    process.setProgram(settings.independentValidatorProgram);
-    process.setArguments(arguments);
+    PDFSysUtils::configureScriptOrProgramProcess(process, settings.independentValidatorProgram, arguments);
     process.start();
     if (!process.waitForStarted(5000))
     {

@@ -29,6 +29,8 @@
 #include <QColor>
 #include <QByteArray>
 #include <QDataStream>
+#include <QProcess>
+#include <QStringList>
 
 #include <set>
 #include <vector>
@@ -676,6 +678,20 @@ class PDF4QTLIBCORESHARED_EXPORT PDFSysUtils
 public:
 
     static QString getUserName();
+
+    /// Configures \p process to run the script or program at \p path, dispatching on
+    /// file suffix so interpreter-dependent scripts (.py, and .sh on non-Windows
+    /// platforms) are launched through their interpreter instead of being executed
+    /// directly. Windows' CreateProcess has no shebang support, so a #!/bin/sh script
+    /// handed to QProcess::start() as the program silently fails to start there;
+    /// POSIX shells are not assumed to be present on Windows, so .sh is not dispatched
+    /// on that platform. Native executables and platform-native scripts (.cmd/.bat on
+    /// Windows) are run directly. Does not start the process.
+    /// \param process Process to configure
+    /// \param path Path to the script or program to run
+    /// \param arguments Additional arguments to pass to the script/program (appended
+    ///        after the interpreter argument, if any)
+    static void configureScriptOrProgramProcess(QProcess& process, const QString& path, const QStringList& arguments = QStringList());
 };
 
 /// Settings of the author name, which is used, when new user generated content

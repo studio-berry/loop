@@ -489,13 +489,14 @@ inline bool validateFixup(const QJsonValue& value, int index, QString* errorMess
     return true;
 }
 
-inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMessage = nullptr)
+/// Top-level keys accepted on a normalized preflight report. Must stay in sync with
+/// the "properties" object in loupe-preflight/schemas/report.schema.json; a parity
+/// test (UnitTestsOperatorAcceptance) cross-checks the two so producer/validator
+/// contract drift like coverage_scope/profile_identity/variable_bindings/error being
+/// added to PreflightResult::toJson() without a matching allow-list update fails CI
+/// instead of silently rejecting every real preflight report.
+inline const QSet<QString>& normalizedReportAllowedProperties()
 {
-    if (errorMessage)
-    {
-        errorMessage->clear();
-    }
-
     static const QSet<QString> allowedProperties = {
         QStringLiteral("schema_version"),
         QStringLiteral("inspection_complete"),
@@ -512,9 +513,23 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         QStringLiteral("warnings"),
         QStringLiteral("fixups_available"),
         QStringLiteral("checks"),
-        QStringLiteral("verdict")
+        QStringLiteral("verdict"),
+        QStringLiteral("error"),
+        QStringLiteral("profile_identity"),
+        QStringLiteral("coverage_scope"),
+        QStringLiteral("variable_bindings")
     };
-    if (!hasOnlyProperties(report, allowedProperties, QStringLiteral("report"), errorMessage))
+    return allowedProperties;
+}
+
+inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMessage = nullptr)
+{
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+
+    if (!hasOnlyProperties(report, normalizedReportAllowedProperties(), QStringLiteral("report"), errorMessage))
     {
         return false;
     }

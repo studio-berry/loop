@@ -23,6 +23,7 @@
 #include "ocrsidecarclient.h"
 
 #include "pdftoolabstractapplication.h"
+#include "pdfutils.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -75,36 +76,7 @@ bool OcrSidecarClient::start(const QString& sidecarPath, QString& errorMessage)
         return false;
     }
 
-    const QFileInfo info(sidecarPath);
-    const QString suffix = info.suffix();
-#ifndef Q_OS_WIN
-    if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
-    {
-        m_process.setProgram(QStringLiteral("python3"));
-        m_process.setArguments({ sidecarPath });
-    }
-    else if (suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0)
-    {
-        m_process.setProgram(QStringLiteral("bash"));
-        m_process.setArguments({ sidecarPath });
-    }
-    else
-    {
-        m_process.setProgram(sidecarPath);
-        m_process.setArguments({});
-    }
-#else
-    if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
-    {
-        m_process.setProgram(QStringLiteral("python"));
-        m_process.setArguments({ sidecarPath });
-    }
-    else
-    {
-        m_process.setProgram(sidecarPath);
-        m_process.setArguments({});
-    }
-#endif
+    pdf::PDFSysUtils::configureScriptOrProgramProcess(m_process, sidecarPath);
     m_process.setProcessChannelMode(QProcess::SeparateChannels);
     m_process.start();
     if (!m_process.waitForStarted(30000))

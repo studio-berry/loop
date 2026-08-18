@@ -27,6 +27,7 @@
 #include <QtGlobal>
 #include <QtMath>
 #include <QMutex>
+#include <QFileInfo>
 #include "pdfdbgheap.h"
 
 #include <jpeglib.h>
@@ -568,6 +569,41 @@ QString PDFSysUtils::getUserName()
         userName = qgetenv("USERNAME");
     }
     return userName;
+}
+
+void PDFSysUtils::configureScriptOrProgramProcess(QProcess& process, const QString& path, const QStringList& arguments)
+{
+    const QString suffix = QFileInfo(path).suffix();
+    QStringList fullArguments;
+
+#ifdef Q_OS_WIN
+    if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
+    {
+        process.setProgram(QStringLiteral("python"));
+        fullArguments << path << arguments;
+        process.setArguments(fullArguments);
+        return;
+    }
+#else
+    if (suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0)
+    {
+        process.setProgram(QStringLiteral("python3"));
+        fullArguments << path << arguments;
+        process.setArguments(fullArguments);
+        return;
+    }
+    if (suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0)
+    {
+        process.setProgram(QStringLiteral("bash"));
+        fullArguments << path << arguments;
+        process.setArguments(fullArguments);
+        return;
+    }
+#endif
+
+    // Native executable, or a platform-native script (.cmd/.bat on Windows): run directly.
+    process.setProgram(path);
+    process.setArguments(arguments);
 }
 
 struct PDFAuthorSettingsHolder
