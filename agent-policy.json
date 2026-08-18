@@ -83,7 +83,7 @@
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
     },
     "preflight": {
-      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*"],
+      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp"],
       "targets": ["PdfTool"],
       "tests": [
         "UnitTestsPreflightChecks",
@@ -92,7 +92,9 @@
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightVerdict",
         "UnitTestsPreflightProfileResolver",
-        "UnitTestsProfileIdentity"
+        "UnitTestsProfileIdentity",
+        "UnitTestsOperatorAcceptance",
+        "UnitTestsStandardOracle"
       ]
     },
     "pagemaster": {
