@@ -55,7 +55,7 @@
 
 #ifdef Q_OS_WIN
 #pragma warning(push)
-#pragma warning(disable:5033)
+#pragma warning(disable : 5033)
 #endif
 #ifndef CMS_NO_REGISTER_KEYWORD
 #define CMS_NO_REGISTER_KEYWORD
@@ -215,7 +215,6 @@ PDFBitWriter::PDFBitWriter(Value bitsPerComponent) :
     m_buffer(0),
     m_bitsInBuffer(0)
 {
-
 }
 
 void PDFBitWriter::write(Value value)
@@ -315,7 +314,8 @@ std::vector<PDFDependentLibraryInfo> PDFDependentLibraryInfo::getLibraryInfo()
     PDFDependentLibraryInfo lcms2Info;
     lcms2Info.library = tr("LittleCMS");
     lcms2Info.license = tr("2-clause MIT license");
-    lcms2Info.version = tr("%1.%2").arg(lcmsMajor).arg(lcmsMinor);;
+    lcms2Info.version = tr("%1.%2").arg(lcmsMajor).arg(lcmsMinor);
+    ;
     lcms2Info.url = tr("http://www.littlecms.com/");
     result.emplace_back(qMove(lcms2Info));
 
@@ -363,7 +363,8 @@ bool PDFClosedIntervalSet::isCovered(PDFInteger low, PDFInteger high)
 
 PDFInteger PDFClosedIntervalSet::getTotalLength() const
 {
-    return std::accumulate(m_intervals.cbegin(), m_intervals.cend(), 0, [](PDFInteger count, const auto& b) { return count + b.second - b.first + 1; });
+    return std::accumulate(m_intervals.cbegin(), m_intervals.cend(), 0, [](PDFInteger count, const auto& b)
+                           { return count + b.second - b.first + 1; });
 }
 
 QString PDFClosedIntervalSet::toText(bool withoutBrackets) const
@@ -678,7 +679,6 @@ PDFColorScale::PDFColorScale() :
     m_min(0.0),
     m_max(0.0)
 {
-
 }
 
 PDFColorScale::PDFColorScale(PDFReal min, PDFReal max) :
@@ -731,7 +731,7 @@ QDataStream& operator<<(QDataStream& stream, long unsigned int i)
     return stream;
 }
 
-QDataStream& operator>>(QDataStream& stream, long unsigned int &i)
+QDataStream& operator>>(QDataStream& stream, long unsigned int& i)
 {
     quint64 value = 0;
     stream >> value;
