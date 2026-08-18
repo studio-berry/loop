@@ -29,6 +29,7 @@
 #include "pdfoptionalcontent.h"
 #include "pdfpainter.h"
 
+#include <QColor>
 #include <QPainter>
 #include <QtMath>
 
@@ -419,6 +420,58 @@ QRectF edgeStripDestRect(const QRectF& reference, PDFBleedFixupSide side, PDFRea
     return QRectF();
 }
 
+static bool isHorizontalBleedSide(PDFBleedFixupSide side)
+{
+    return side == PDFBleedFixupSide::Left || side == PDFBleedFixupSide::Right;
+}
+
+static bool isVerticalBleedSide(PDFBleedFixupSide side)
+{
+    return side == PDFBleedFixupSide::Top || side == PDFBleedFixupSide::Bottom;
+}
+
+QRectF cornerStripSourceRect(const QRectF& reference,
+                             PDFBleedFixupSide horizontal,
+                             PDFBleedFixupSide vertical,
+                             PDFReal horizontalDepthPt,
+                             PDFReal verticalDepthPt)
+{
+    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid()
+        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    {
+        return QRectF();
+    }
+
+    const qreal x = (horizontal == PDFBleedFixupSide::Left)
+            ? reference.left()
+            : reference.right() - horizontalDepthPt;
+    const qreal y = (vertical == PDFBleedFixupSide::Bottom)
+            ? reference.top()
+            : reference.bottom() - verticalDepthPt;
+    return QRectF(x, y, horizontalDepthPt, verticalDepthPt);
+}
+
+QRectF cornerStripDestRect(const QRectF& reference,
+                           PDFBleedFixupSide horizontal,
+                           PDFBleedFixupSide vertical,
+                           PDFReal horizontalDepthPt,
+                           PDFReal verticalDepthPt)
+{
+    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid()
+        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    {
+        return QRectF();
+    }
+
+    const qreal x = (horizontal == PDFBleedFixupSide::Left)
+            ? reference.left() - horizontalDepthPt
+            : reference.right();
+    const qreal y = (vertical == PDFBleedFixupSide::Bottom)
+            ? reference.top() - verticalDepthPt
+            : reference.bottom();
+    return QRectF(x, y, horizontalDepthPt, verticalDepthPt);
+}
+
 QImage buildEdgeFillImage(const QImage& pageImage,
                           const QRect& sourcePx,
                           PDFBleedFixupSide side,
@@ -485,6 +538,52 @@ QImage buildEdgeFillImage(const QImage& pageImage,
             }
             return strip.scaled(strip.width(), bleedDepthPx, Qt::IgnoreAspectRatio, Qt::FastTransformation);
         }
+    }
+
+    return QImage();
+}
+
+QImage buildCornerFillImage(const QImage& pageImage,
+                            const QRect& sourcePx,
+                            PDFBleedFixupSide horizontal,
+                            PDFBleedFixupSide vertical,
+                            PDFBleedFixupMode mode,
+                            int destWidthPx,
+                            int destHeightPx)
+{
+    if (pageImage.isNull() || !sourcePx.isValid() || destWidthPx <= 0 || destHeightPx <= 0
+        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    {
+        return QImage();
+    }
+
+    const QRect clipped = sourcePx.intersected(pageImage.rect());
+    if (!clipped.isValid() || clipped.isEmpty())
+    {
+        return QImage();
+    }
+
+    QImage strip = pageImage.copy(clipped);
+    if (strip.isNull() || strip.width() <= 0 || strip.height() <= 0)
+    {
+        return QImage();
+    }
+
+    switch (mode)
+    {
+        case PDFBleedFixupMode::Mirror:
+            return strip.flipped(Qt::Horizontal | Qt::Vertical);
+        case PDFBleedFixupMode::PixelRepeat:
+        {
+            QImage out(destWidthPx, destHeightPx, QImage::Format_ARGB32_Premultiplied);
+            const int srcX = (horizontal == PDFBleedFixupSide::Left) ? 0 : (strip.width() - 1);
+            // After page->device Y flip, page top maps near image y=0.
+            const int srcY = (vertical == PDFBleedFixupSide::Top) ? 0 : (strip.height() - 1);
+            out.fill(QColor::fromRgba(strip.pixel(srcX, srcY)));
+            return out;
+        }
+        case PDFBleedFixupMode::Stretch:
+            return strip.scaled(destWidthPx, destHeightPx, Qt::IgnoreAspectRatio, Qt::FastTransformation);
     }
 
     return QImage();
@@ -804,6 +903,73 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
 
                 painter->drawImage(mapOutputRect(destPageRect), fill);
                 pageReport.sidesApplied.append(work.side);
+                isPageContentChanged = true;
+            }
+
+            struct CornerWork
+            {
+                PDFBleedFixupSide horizontal = PDFBleedFixupSide::Left;
+                PDFBleedFixupSide vertical = PDFBleedFixupSide::Bottom;
+            };
+            const CornerWork corners[4] = {
+                {PDFBleedFixupSide::Left, PDFBleedFixupSide::Bottom},
+                {PDFBleedFixupSide::Right, PDFBleedFixupSide::Bottom},
+                {PDFBleedFixupSide::Left, PDFBleedFixupSide::Top},
+                {PDFBleedFixupSide::Right, PDFBleedFixupSide::Top}
+            };
+
+            auto depthPtFor = [&sidesToApply](PDFBleedFixupSide side) -> PDFReal {
+                for (const SideWork& work : sidesToApply)
+                {
+                    if (work.side == side)
+                    {
+                        return work.depthPt;
+                    }
+                }
+                return 0.0;
+            };
+
+            for (const CornerWork& corner : corners)
+            {
+                const PDFReal horizontalDepthPt = depthPtFor(corner.horizontal);
+                const PDFReal verticalDepthPt = depthPtFor(corner.vertical);
+                if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0))
+                {
+                    continue;
+                }
+
+                const PDFReal sampleHorizontalPt = (settings.mode == PDFBleedFixupMode::Mirror)
+                        ? horizontalDepthPt
+                        : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
+                const PDFReal sampleVerticalPt = (settings.mode == PDFBleedFixupMode::Mirror)
+                        ? verticalDepthPt
+                        : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
+
+                const QRectF sourcePageRect = PDFBleedFixupMath::cornerStripSourceRect(
+                        reference, corner.horizontal, corner.vertical, sampleHorizontalPt, sampleVerticalPt);
+                const QRectF destPageRect = PDFBleedFixupMath::cornerStripDestRect(
+                        reference, corner.horizontal, corner.vertical, horizontalDepthPt, verticalDepthPt);
+                if (!sourcePageRect.isValid() || !destPageRect.isValid())
+                {
+                    continue;
+                }
+
+                const QRect sourcePx = mapPageRectToImage(sourcePageRect, pageToDevice, pageImage.size());
+                const int destWidthPx = qMax(1, qCeil(horizontalDepthPt * settings.dpi / 72.0));
+                const int destHeightPx = qMax(1, qCeil(verticalDepthPt * settings.dpi / 72.0));
+                QImage fill = PDFBleedFixupMath::buildCornerFillImage(pageImage,
+                                                                      sourcePx,
+                                                                      corner.horizontal,
+                                                                      corner.vertical,
+                                                                      settings.mode,
+                                                                      destWidthPx,
+                                                                      destHeightPx);
+                if (fill.isNull())
+                {
+                    continue;
+                }
+
+                painter->drawImage(mapOutputRect(destPageRect), fill);
                 isPageContentChanged = true;
             }
 

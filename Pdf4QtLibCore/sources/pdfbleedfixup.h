@@ -162,11 +162,28 @@ PDF4QTLIBCORESHARED_EXPORT QRectF edgeStripSourceRect(const QRectF& reference,
 PDF4QTLIBCORESHARED_EXPORT QRectF edgeStripDestRect(const QRectF& reference,
                                                     PDFBleedFixupSide side,
                                                     PDFReal depthPt);
+PDF4QTLIBCORESHARED_EXPORT QRectF cornerStripSourceRect(const QRectF& reference,
+                                                        PDFBleedFixupSide horizontal,
+                                                        PDFBleedFixupSide vertical,
+                                                        PDFReal horizontalDepthPt,
+                                                        PDFReal verticalDepthPt);
+PDF4QTLIBCORESHARED_EXPORT QRectF cornerStripDestRect(const QRectF& reference,
+                                                      PDFBleedFixupSide horizontal,
+                                                      PDFBleedFixupSide vertical,
+                                                      PDFReal horizontalDepthPt,
+                                                      PDFReal verticalDepthPt);
 PDF4QTLIBCORESHARED_EXPORT QImage buildEdgeFillImage(const QImage& pageImage,
                                                      const QRect& sourcePx,
                                                      PDFBleedFixupSide side,
                                                      PDFBleedFixupMode mode,
                                                      int bleedDepthPx);
+PDF4QTLIBCORESHARED_EXPORT QImage buildCornerFillImage(const QImage& pageImage,
+                                                       const QRect& sourcePx,
+                                                       PDFBleedFixupSide horizontal,
+                                                       PDFBleedFixupSide vertical,
+                                                       PDFBleedFixupMode mode,
+                                                       int destWidthPx,
+                                                       int destHeightPx);
 
 } // namespace PDFBleedFixupMath
 
