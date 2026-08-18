@@ -72,7 +72,10 @@ private slots:
     void sideAlreadyBleeding_detectsSufficientMargin();
     void stripWidthPx_dependsOnMode();
     void edgeStripRects_areOutsideAndInsideReference();
+    void cornerStripRects_fillBleedQuadrants();
     void buildEdgeFillImage_mirrorFlipsHorizontally();
+    void buildCornerFillImage_mirrorFlipsBothAxes();
+    void buildCornerFillImage_pixelRepeatTilesCornerPixel();
     void buildEdgeFillImage_pixelRepeatTilesEdge();
     void buildEdgeFillImage_stretchScalesToBleedDepth();
     void apply_selectedSidesOnly_reportsAndExpandsSelectedEdges();
@@ -128,6 +131,32 @@ void BleedFixupTest::edgeStripRects_areOutsideAndInsideReference()
     QCOMPARE(topDst.top(), reference.bottom());
 }
 
+void BleedFixupTest::cornerStripRects_fillBleedQuadrants()
+{
+    const QRectF reference(10.0, 20.0, 100.0, 200.0);
+    const qreal leftDepth = 4.0;
+    const qreal topDepth = 6.0;
+
+    const QRectF source = pdf::PDFBleedFixupMath::cornerStripSourceRect(
+            reference, pdf::PDFBleedFixupSide::Left, pdf::PDFBleedFixupSide::Top, leftDepth, topDepth);
+    const QRectF dest = pdf::PDFBleedFixupMath::cornerStripDestRect(
+            reference, pdf::PDFBleedFixupSide::Left, pdf::PDFBleedFixupSide::Top, leftDepth, topDepth);
+
+    QCOMPARE(source.left(), 10.0);
+    QCOMPARE(source.right(), 14.0);
+    QCOMPARE(source.bottom(), reference.bottom());
+    QCOMPARE(source.top(), reference.bottom() - topDepth);
+
+    QCOMPARE(dest.right(), 10.0);
+    QCOMPARE(dest.left(), 6.0);
+    QCOMPARE(dest.top(), reference.bottom());
+    QCOMPARE(dest.bottom(), reference.bottom() + topDepth);
+    QVERIFY(!source.intersects(dest));
+
+    QVERIFY(!pdf::PDFBleedFixupMath::cornerStripDestRect(
+            reference, pdf::PDFBleedFixupSide::Top, pdf::PDFBleedFixupSide::Left, leftDepth, topDepth).isValid());
+}
+
 void BleedFixupTest::buildEdgeFillImage_mirrorFlipsHorizontally()
 {
     QImage page(4, 2, QImage::Format_ARGB32);
@@ -146,6 +175,43 @@ void BleedFixupTest::buildEdgeFillImage_mirrorFlipsHorizontally()
     QCOMPARE(qRed(fill.pixel(0, 0)), 0);
     QCOMPARE(qGreen(fill.pixel(0, 0)), 255);
     QCOMPARE(qRed(fill.pixel(1, 0)), 255);
+}
+
+void BleedFixupTest::buildCornerFillImage_mirrorFlipsBothAxes()
+{
+    QImage page(2, 2, QImage::Format_ARGB32);
+    page.setPixel(0, 0, qRgb(255, 0, 0));
+    page.setPixel(1, 0, qRgb(0, 255, 0));
+    page.setPixel(0, 1, qRgb(0, 0, 255));
+    page.setPixel(1, 1, qRgb(255, 255, 0));
+
+    const QImage fill = pdf::PDFBleedFixupMath::buildCornerFillImage(
+            page, QRect(0, 0, 2, 2),
+            pdf::PDFBleedFixupSide::Left, pdf::PDFBleedFixupSide::Top,
+            pdf::PDFBleedFixupMode::Mirror, 2, 2);
+    QVERIFY(!fill.isNull());
+    QCOMPARE(fill.size(), QSize(2, 2));
+    QCOMPARE(qRed(fill.pixel(0, 0)), 255);
+    QCOMPARE(qGreen(fill.pixel(0, 0)), 255);
+    QCOMPARE(qBlue(fill.pixel(1, 0)), 255);
+    QCOMPARE(qGreen(fill.pixel(0, 1)), 255);
+    QCOMPARE(qRed(fill.pixel(1, 1)), 255);
+}
+
+void BleedFixupTest::buildCornerFillImage_pixelRepeatTilesCornerPixel()
+{
+    QImage page(2, 2, QImage::Format_ARGB32);
+    page.fill(Qt::black);
+    page.setPixel(0, 0, qRgb(10, 20, 30));
+
+    const QImage fill = pdf::PDFBleedFixupMath::buildCornerFillImage(
+            page, QRect(0, 0, 2, 2),
+            pdf::PDFBleedFixupSide::Left, pdf::PDFBleedFixupSide::Top,
+            pdf::PDFBleedFixupMode::PixelRepeat, 3, 4);
+    QCOMPARE(fill.size(), QSize(3, 4));
+    QCOMPARE(qRed(fill.pixel(2, 3)), 10);
+    QCOMPARE(qGreen(fill.pixel(0, 0)), 20);
+    QCOMPARE(qBlue(fill.pixel(1, 1)), 30);
 }
 
 void BleedFixupTest::buildEdgeFillImage_pixelRepeatTilesEdge()
