@@ -411,13 +411,15 @@ void collectColorSpacesFromResources(const PDFDocument* document,
     }
 }
 
-QRectF imageBoundsFromCtm(const QTransform& ctm, int pixelWidth, int pixelHeight)
+QRectF imageBoundsFromCtm(const QTransform& ctm)
 {
+    // An image's CTM maps the unit square (0,0)-(1,1) to placement space; the
+    // image's pixel dimensions affect resolution/DPI only, never placement geometry.
     const QPointF corners[4] = {
         ctm.map(QPointF(0, 0)),
-        ctm.map(QPointF(pixelWidth, 0)),
-        ctm.map(QPointF(pixelWidth, pixelHeight)),
-        ctm.map(QPointF(0, pixelHeight))
+        ctm.map(QPointF(1, 0)),
+        ctm.map(QPointF(1, 1)),
+        ctm.map(QPointF(0, 1))
     };
     QRectF bounds;
     for (const QPointF& corner : corners)
@@ -676,7 +678,7 @@ protected:
         record.observedValue = qMin(qreal(image.getImageData().getWidth()) / widthInches,
                                     qreal(image.getImageData().getHeight()) / heightInches);
         record.units = QStringLiteral("dpi");
-        record.geometry = imageBoundsFromCtm(ctm, image.getImageData().getWidth(), image.getImageData().getHeight());
+        record.geometry = imageBoundsFromCtm(ctm);
         record.id = QStringLiteral("img:%1:%2:%3").arg(m_pageNumber).arg(record.objectId.isEmpty() ? QStringLiteral("anon") : record.objectId).arg(++m_imageOrdinal);
         appendEvidenceRecord(m_graph, record, m_budget);
         return true;

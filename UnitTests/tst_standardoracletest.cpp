@@ -61,16 +61,29 @@ pdf::PDFDocument emptyPage()
     return builder.build();
 }
 
-QString writeScript(const QTemporaryDir& directory, const QString& name, const QString& body)
+// Writes a script that exits with the given status. The name/extension and body are
+// chosen per-platform because PDFSysUtils::configureScriptOrProgramProcess (which
+// backs the independent-validator invocation under test) does not dispatch .sh
+// scripts to an interpreter on Windows -- Windows has no POSIX shell by default, so
+// that mirrors production behavior rather than working around it.
+QString writeExitStatusScript(const QTemporaryDir& directory, const QString& baseName, int exitStatus)
 {
-    const QString path = directory.filePath(name);
+#ifdef Q_OS_WIN
+    const QString path = directory.filePath(baseName + QStringLiteral(".bat"));
+    const QString body = QStringLiteral("@echo off\r\nexit /b %1\r\n").arg(exitStatus);
+#else
+    const QString path = directory.filePath(baseName + QStringLiteral(".sh"));
+    const QString body = QStringLiteral("#!/bin/sh\nexit %1\n").arg(exitStatus);
+#endif
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
     {
         return {};
     }
     file.write(body.toUtf8());
+#ifndef Q_OS_WIN
     file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+#endif
     return path;
 }
 
@@ -111,7 +124,7 @@ void StandardOracleTest::alwaysFailValidatorIsError()
     }
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString script = writeScript(directory, QStringLiteral("fail.sh"), QStringLiteral("#!/bin/sh\nexit 1\n"));
+    const QString script = writeExitStatusScript(directory, QStringLiteral("fail"), 1);
     pdf::PDFDocument document = emptyPage();
     pdf::PDFStandardConversionSettings settings = pdfaSettings(script);
     pdf::PDFStandardConversionReport report;
@@ -129,7 +142,7 @@ void StandardOracleTest::alwaysPassValidatorCanCommitPdfa()
     }
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
-    const QString script = writeScript(directory, QStringLiteral("pass.sh"), QStringLiteral("#!/bin/sh\nexit 0\n"));
+    const QString script = writeExitStatusScript(directory, QStringLiteral("pass"), 0);
     pdf::PDFDocument document = emptyPage();
     pdf::PDFStandardConversionSettings settings = pdfaSettings(script);
     pdf::PDFStandardConversionReport report;
