@@ -226,6 +226,11 @@
           "type": "object",
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional ids of Evidence Graph records this finding cites."
         }
       }
     },
@@ -277,6 +282,11 @@
           "type": "object",
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional ids of Evidence Graph records this finding cites."
         }
       }
     },

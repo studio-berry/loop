@@ -868,11 +868,12 @@ void OperatorAcceptanceTest::reportContract_rejectsUnsupportedSchema()
 
 void OperatorAcceptanceTest::reportContract_allowedPropertiesMatchSchema()
 {
-    // Guards against producer/validator drift: PreflightResult::toJson() and
-    // validateNormalizedReport()'s allow-list must agree with the shipped JSON
-    // schema's top-level "properties", or a real engine run can start emitting a
-    // key the validator silently rejects (this happened with coverage_scope,
-    // profile_identity, variable_bindings, and error).
+    // Guards against producer/validator drift: PreflightResult::toJson() /
+    // findingToJson() and the validator allow-lists in preflightsidecarutils.h
+    // must agree with the shipped JSON schema's property lists, or a real engine
+    // run can start emitting a key the validator silently rejects. This happened
+    // twice: coverage_scope/profile_identity/variable_bindings/error at the report
+    // level, and evidence_ids on findings emitted by evidence-graph-based checks.
     const QString schemaPath = QDir(sourceDir()).filePath(QStringLiteral("schemas/report.schema.json"));
     QFile schemaFile(schemaPath);
     QVERIFY2(schemaFile.open(QIODevice::ReadOnly), qPrintable(QStringLiteral("Missing report schema at %1").arg(schemaPath)));
@@ -881,26 +882,60 @@ void OperatorAcceptanceTest::reportContract_allowedPropertiesMatchSchema()
     const QJsonDocument schemaDoc = QJsonDocument::fromJson(schemaFile.readAll(), &parseError);
     QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
 
-    const QJsonObject properties = schemaDoc.object().value(QStringLiteral("properties")).toObject();
-    QVERIFY(!properties.isEmpty());
-
-    QSet<QString> schemaKeys;
-    for (auto it = properties.constBegin(); it != properties.constEnd(); ++it)
+    const auto schemaPropertyKeys = [](const QJsonObject& schemaObject) -> QSet<QString>
     {
-        schemaKeys.insert(it.key());
-    }
+        const QJsonObject properties = schemaObject.value(QStringLiteral("properties")).toObject();
+        QSet<QString> keys;
+        for (auto it = properties.constBegin(); it != properties.constEnd(); ++it)
+        {
+            keys.insert(it.key());
+        }
+        return keys;
+    };
 
-    const QSet<QString> validatorKeys = pdfplugin::preflight::normalizedReportAllowedProperties();
+    // Returns a diagnostic message describing any mismatch, or an empty string when
+    // the schema and validator allow-lists agree. QVERIFY2 must run at the top level
+    // of the test slot (not inside this helper) so a failure actually aborts the test.
+    const auto mismatchMessage = [](const QString& label, const QSet<QString>& schemaKeys, const QSet<QString>& validatorKeys) -> QString
+    {
+        if (schemaKeys.isEmpty())
+        {
+            return QStringLiteral("%1: schema definition was empty or missing").arg(label);
+        }
+        const QSet<QString> missingFromValidator = schemaKeys - validatorKeys;
+        const QSet<QString> extraInValidator = validatorKeys - schemaKeys;
+        if (missingFromValidator.isEmpty() && extraInValidator.isEmpty())
+        {
+            return QString();
+        }
+        QStringList parts;
+        if (!missingFromValidator.isEmpty())
+        {
+            parts << QStringLiteral("missing from allow-list: %1").arg(QStringList(missingFromValidator.values()).join(QStringLiteral(", ")));
+        }
+        if (!extraInValidator.isEmpty())
+        {
+            parts << QStringLiteral("extra in allow-list: %1").arg(QStringList(extraInValidator.values()).join(QStringLiteral(", ")));
+        }
+        return QStringLiteral("%1: %2").arg(label, parts.join(QStringLiteral("; ")));
+    };
 
-    const QSet<QString> missingFromValidator = schemaKeys - validatorKeys;
-    const QSet<QString> extraInValidator = validatorKeys - schemaKeys;
+    const QJsonObject defs = schemaDoc.object().value(QStringLiteral("$defs")).toObject();
 
-    QVERIFY2(missingFromValidator.isEmpty(),
-             qPrintable(QStringLiteral("validateNormalizedReport's allow-list is missing schema properties: %1")
-                        .arg(QStringList(missingFromValidator.values()).join(QStringLiteral(", ")))));
-    QVERIFY2(extraInValidator.isEmpty(),
-             qPrintable(QStringLiteral("validateNormalizedReport's allow-list has properties absent from the schema: %1")
-                        .arg(QStringList(extraInValidator.values()).join(QStringLiteral(", ")))));
+    const QString reportMismatch = mismatchMessage(QStringLiteral("validateNormalizedReport"),
+                                                    schemaPropertyKeys(schemaDoc.object()),
+                                                    pdfplugin::preflight::normalizedReportAllowedProperties());
+    QVERIFY2(reportMismatch.isEmpty(), qPrintable(reportMismatch));
+
+    const QString findingV1Mismatch = mismatchMessage(QStringLiteral("validateFindingV1"),
+                                                       schemaPropertyKeys(defs.value(QStringLiteral("finding_v1")).toObject()),
+                                                       pdfplugin::preflight::findingV1AllowedProperties());
+    QVERIFY2(findingV1Mismatch.isEmpty(), qPrintable(findingV1Mismatch));
+
+    const QString findingV2Mismatch = mismatchMessage(QStringLiteral("validateFindingV2"),
+                                                       schemaPropertyKeys(defs.value(QStringLiteral("finding_v2")).toObject()),
+                                                       pdfplugin::preflight::findingV2AllowedProperties());
+    QVERIFY2(findingV2Mismatch.isEmpty(), qPrintable(findingV2Mismatch));
 }
 
 void OperatorAcceptanceTest::reportContract_classifiesVisualOverlays()
