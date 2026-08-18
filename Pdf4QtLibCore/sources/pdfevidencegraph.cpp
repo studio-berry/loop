@@ -421,12 +421,22 @@ QRectF imageBoundsFromCtm(const QTransform& ctm)
         ctm.map(QPointF(1, 1)),
         ctm.map(QPointF(0, 1))
     };
-    QRectF bounds;
-    for (const QPointF& corner : corners)
+    // Accumulate via explicit min/max, not QRectF::operator|=: a zero-size rect built
+    // from a single point (QRectF(corner, corner)) is null, and QRectF's union with a
+    // null rect just returns the other rect rather than growing the bounds, so unioning
+    // four single-point rects collapses to only the last corner instead of their bbox.
+    qreal minX = corners[0].x();
+    qreal maxX = minX;
+    qreal minY = corners[0].y();
+    qreal maxY = minY;
+    for (int i = 1; i < 4; ++i)
     {
-        bounds |= QRectF(corner, corner);
+        minX = qMin(minX, corners[i].x());
+        maxX = qMax(maxX, corners[i].x());
+        minY = qMin(minY, corners[i].y());
+        maxY = qMax(maxY, corners[i].y());
     }
-    return bounds.normalized();
+    return QRectF(QPointF(minX, minY), QPointF(maxX, maxY)).normalized();
 }
 
 bool isNearWhiteDevicePaint(const PDFAbstractColorSpace* colorSpace, const PDFColor& color, int recursionDepth = 0)

@@ -318,7 +318,10 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
     return true;
 }
 
-inline bool validateFindingV1(const QJsonObject& finding, const QString& context, QString* errorMessage)
+/// Keys accepted on a schema-version-1 finding. Must stay in sync with
+/// loupe-preflight/schemas/report.schema.json's finding_v1 definition; see
+/// normalizedReportAllowedProperties() for why this is a named accessor.
+inline const QSet<QString>& findingV1AllowedProperties()
 {
     static const QSet<QString> allowedProperties = {
         QStringLiteral("page"),
@@ -328,9 +331,36 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
         QStringLiteral("message"),
         QStringLiteral("bbox"),
         QStringLiteral("check_id"),
-        QStringLiteral("evidence")
+        QStringLiteral("evidence"),
+        QStringLiteral("evidence_ids")
     };
-    if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
+    return allowedProperties;
+}
+
+/// Keys accepted on a schema-version-2+ finding. Must stay in sync with
+/// loupe-preflight/schemas/report.schema.json's finding_v2 definition; see
+/// normalizedReportAllowedProperties() for why this is a named accessor.
+inline const QSet<QString>& findingV2AllowedProperties()
+{
+    static const QSet<QString> allowedProperties = {
+        QStringLiteral("scope"),
+        QStringLiteral("id"),
+        QStringLiteral("page"),
+        QStringLiteral("object_id"),
+        QStringLiteral("type"),
+        QStringLiteral("severity"),
+        QStringLiteral("message"),
+        QStringLiteral("bbox"),
+        QStringLiteral("check_id"),
+        QStringLiteral("evidence"),
+        QStringLiteral("evidence_ids")
+    };
+    return allowedProperties;
+}
+
+inline bool validateFindingV1(const QJsonObject& finding, const QString& context, QString* errorMessage)
+{
+    if (!hasOnlyProperties(finding, findingV1AllowedProperties(), context, errorMessage))
     {
         return false;
     }
@@ -351,19 +381,7 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
 
 inline bool validateFindingV2(const QJsonObject& finding, const QString& context, QString* errorMessage)
 {
-    static const QSet<QString> allowedProperties = {
-        QStringLiteral("scope"),
-        QStringLiteral("id"),
-        QStringLiteral("page"),
-        QStringLiteral("object_id"),
-        QStringLiteral("type"),
-        QStringLiteral("severity"),
-        QStringLiteral("message"),
-        QStringLiteral("bbox"),
-        QStringLiteral("check_id"),
-        QStringLiteral("evidence")
-    };
-    if (!hasOnlyProperties(finding, allowedProperties, context, errorMessage))
+    if (!hasOnlyProperties(finding, findingV2AllowedProperties(), context, errorMessage))
     {
         return false;
     }
