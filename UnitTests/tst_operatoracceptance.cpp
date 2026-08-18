@@ -216,15 +216,7 @@ bool writeLargeFormatPdf(const QString& path, double widthInches, double heightI
 
     appendObject(1, "<< /Type /Catalog /Pages 2 0 R >>\n");
     appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
-    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ")
-                              + QByteArray::number(widthPt)
-                              + ' '
-                              + QByteArray::number(heightPt)
-                              + "] /TrimBox [0 0 "
-                              + QByteArray::number(widthPt)
-                              + ' '
-                              + QByteArray::number(heightPt)
-                              + "] /Resources << >> /Contents 4 0 R >>\n");
+    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ") + QByteArray::number(widthPt) + ' ' + QByteArray::number(heightPt) + "] /TrimBox [0 0 " + QByteArray::number(widthPt) + ' ' + QByteArray::number(heightPt) + "] /Resources << >> /Contents 4 0 R >>\n");
     appendObject(4, "<< /Length 0 >>\nstream\n\nendstream\n");
 
     const int xrefOffset = pdf.size();
@@ -239,8 +231,7 @@ bool writeLargeFormatPdf(const QString& path, double widthInches, double heightI
     pdf.append("\n%%EOF\n");
 
     QFile file(path);
-    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
-            && file.write(pdf) == pdf.size();
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(pdf) == pdf.size();
 }
 
 }   // namespace
@@ -420,7 +411,7 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     if (process.exitStatus() != QProcess::NormalExit)
     {
         qWarning().noquote() << "PdfTool exited abnormally:" << process.errorString() << arguments
-                              << QString::fromUtf8(capturedStdErr);
+                             << QString::fromUtf8(capturedStdErr);
         return false;
     }
 
@@ -481,9 +472,7 @@ bool OperatorAcceptanceTest::runAddBleed(const QString& inputPath,
                           bleedMm,
                           QStringLiteral("--force"),
                       },
-                      nullptr,
-                      nullptr,
-                      exitCode);
+                      nullptr, nullptr, exitCode);
 }
 
 QString OperatorAcceptanceTest::fixturePath(const QString& pdf) const
@@ -640,7 +629,7 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     QByteArray refusedError;
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
                          QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
-                        nullptr, &refusedError, &refusedExitCode));
+                       nullptr, &refusedError, &refusedExitCode));
     QVERIFY2(refusedExitCode != 0, "add-bleed must not overwrite the existing output without --overwrite.");
     QVERIFY(!refusedError.trimmed().isEmpty());
     QCOMPARE(fileSha256(outputPath), firstHash);
@@ -649,7 +638,7 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
                          QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
                          QStringLiteral("--overwrite") },
-                        nullptr, nullptr, &overwriteExitCode));
+                       nullptr, nullptr, &overwriteExitCode));
     QCOMPARE(overwriteExitCode, 0);
     QVERIFY(QFile::exists(outputPath));
     // add-bleed is deterministic, so a re-run of the same input legitimately
@@ -667,9 +656,9 @@ void OperatorAcceptanceTest::addBleedDryRun_largeFormatPlansWithoutRasterOrOutpu
     for (const auto& size : { QSizeF(48.0, 96.0), QSizeF(240.0, 60.0) })
     {
         const QString inputPath = temporaryDirectory.filePath(
-                QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
+            QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
         const QString outputPath = temporaryDirectory.filePath(
-                QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
+            QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
         QVERIFY(writeLargeFormatPdf(inputPath, size.width(), size.height()));
 
         QByteArray stdOut;
@@ -923,18 +912,18 @@ void OperatorAcceptanceTest::reportContract_allowedPropertiesMatchSchema()
     const QJsonObject defs = schemaDoc.object().value(QStringLiteral("$defs")).toObject();
 
     const QString reportMismatch = mismatchMessage(QStringLiteral("validateNormalizedReport"),
-                                                    schemaPropertyKeys(schemaDoc.object()),
-                                                    pdfplugin::preflight::normalizedReportAllowedProperties());
+                                                   schemaPropertyKeys(schemaDoc.object()),
+                                                   pdfplugin::preflight::normalizedReportAllowedProperties());
     QVERIFY2(reportMismatch.isEmpty(), qPrintable(reportMismatch));
 
     const QString findingV1Mismatch = mismatchMessage(QStringLiteral("validateFindingV1"),
-                                                       schemaPropertyKeys(defs.value(QStringLiteral("finding_v1")).toObject()),
-                                                       pdfplugin::preflight::findingV1AllowedProperties());
+                                                      schemaPropertyKeys(defs.value(QStringLiteral("finding_v1")).toObject()),
+                                                      pdfplugin::preflight::findingV1AllowedProperties());
     QVERIFY2(findingV1Mismatch.isEmpty(), qPrintable(findingV1Mismatch));
 
     const QString findingV2Mismatch = mismatchMessage(QStringLiteral("validateFindingV2"),
-                                                       schemaPropertyKeys(defs.value(QStringLiteral("finding_v2")).toObject()),
-                                                       pdfplugin::preflight::findingV2AllowedProperties());
+                                                      schemaPropertyKeys(defs.value(QStringLiteral("finding_v2")).toObject()),
+                                                      pdfplugin::preflight::findingV2AllowedProperties());
     QVERIFY2(findingV2Mismatch.isEmpty(), qPrintable(findingV2Mismatch));
 }
 

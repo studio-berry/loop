@@ -44,7 +44,7 @@ namespace pdf
 /// Class for easy storing of cached item. This class is not thread safe,
 /// and for this reason, access function are not constant (they can modify the
 /// object).
-template<typename T>
+template <typename T>
 class PDFCachedItem
 {
 public:
@@ -52,14 +52,13 @@ public:
         m_dirty(true),
         m_object()
     {
-
     }
 
     /// Returns the cached object. If object is dirty, then cached object is refreshed.
     /// \param holder Holder object, which owns the cached item
     /// \param function Refresh function
-    template<typename H>
-    inline const T& get(const H* holder, T(H::* function)(void) const)
+    template <typename H>
+    inline const T& get(const H* holder, T (H::*function)(void) const)
     {
         if (m_dirty)
         {
@@ -73,8 +72,8 @@ public:
     /// Returns the cached object. If object is dirty, then cached object is refreshed.
     /// \param holder Holder object, which owns the cached item
     /// \param function Refresh function
-    template<typename H>
-    inline const T& get(H* holder, T(H::* function)(void))
+    template <typename H>
+    inline const T& get(H* holder, T (H::*function)(void))
     {
         if (m_dirty)
         {
@@ -230,7 +229,7 @@ private:
 /// Simple class guard, for properly saving/restoring new/old value. In the constructor,
 /// new value is stored in the pointer (old one is being saved), and in the destructor,
 /// old value is restored. This object assumes, that value is not a null pointer.
-template<typename Value>
+template <typename Value>
 class PDFTemporaryValueChange
 {
 public:
@@ -255,22 +254,32 @@ private:
 };
 
 /// Implements range for range based for cycles
-template<typename T>
+template <typename T>
 class PDFIntegerRange
 {
 public:
-    explicit inline constexpr PDFIntegerRange(T begin, T end) : m_begin(begin), m_end(end) { }
+    explicit inline constexpr PDFIntegerRange(T begin, T end) :
+        m_begin(begin),
+        m_end(end)
+    {
+    }
 
     struct Iterator
     {
         using iterator_category = std::random_access_iterator_tag;
-        using difference_type   = ptrdiff_t;
-        using value_type        = T;
-        using pointer           = const T*;
-        using reference         = const T&;
+        using difference_type = ptrdiff_t;
+        using value_type = T;
+        using pointer = const T*;
+        using reference = const T&;
 
-        inline Iterator() : value(T(0)) { }
-        inline Iterator(T value) : value(value) { }
+        inline Iterator() :
+            value(T(0))
+        {
+        }
+        inline Iterator(T value) :
+            value(value)
+        {
+        }
 
         inline bool operator==(const Iterator& other) const { return value == other.value; }
         inline bool operator!=(const Iterator& other) const { return value != other.value; }
@@ -283,8 +292,16 @@ public:
         inline pointer operator->() const { return &value; }
         inline T operator[](difference_type n) const { return value + T(n); }
 
-        inline Iterator& operator+=(difference_type movement) { value += T(movement); return *this; }
-        inline Iterator& operator-=(difference_type movement) { value -= T(movement); return *this; }
+        inline Iterator& operator+=(difference_type movement)
+        {
+            value += T(movement);
+            return *this;
+        }
+        inline Iterator& operator-=(difference_type movement)
+        {
+            value -= T(movement);
+            return *this;
+        }
         inline Iterator operator+(difference_type movement) const { return Iterator(value + T(movement)); }
         friend inline Iterator operator+(difference_type movement, const Iterator& it) { return Iterator(it.value + T(movement)); }
         inline Iterator operator-(difference_type movement) const { return Iterator(value - T(movement)); }
@@ -327,7 +344,7 @@ private:
     T m_end;
 };
 
-template<typename T>
+template <typename T>
 bool contains(T value, std::initializer_list<T> list)
 {
     return (std::find(list.begin(), list.end(), value) != list.end());
@@ -355,20 +372,17 @@ static inline constexpr PDFColorComponent interpolateColors(PDFColorComponent x,
     return y_min + (x - x_min) * (y_max - y_min) / (x_max - x_min);
 }
 
-inline
-std::vector<uint8_t> convertByteArrayToVector(const QByteArray& data)
+inline std::vector<uint8_t> convertByteArrayToVector(const QByteArray& data)
 {
     return std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(data.constData()), reinterpret_cast<const uint8_t*>(data.constData()) + data.size());
 }
 
-inline
-const unsigned char* convertByteArrayToUcharPtr(const QByteArray& data)
+inline const unsigned char* convertByteArrayToUcharPtr(const QByteArray& data)
 {
     return reinterpret_cast<const unsigned char*>(data.constData());
 }
 
-inline
-unsigned char* convertByteArrayToUcharPtr(QByteArray& data)
+inline unsigned char* convertByteArrayToUcharPtr(QByteArray& data)
 {
     return reinterpret_cast<unsigned char*>(data.data());
 }
@@ -379,10 +393,9 @@ unsigned char* convertByteArrayToUcharPtr(QByteArray& data)
 inline constexpr uint8_t log2ceil(uint32_t value)
 {
     const uint32_t originalValue = value;
-    constexpr uint8_t MULTIPLY_DE_BRUIJN_BIT_POSITION[32] =
-    {
-      0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
-      8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31
+    constexpr uint8_t MULTIPLY_DE_BRUIJN_BIT_POSITION[32] = {
+        0, 9, 1, 10, 13, 21, 2, 29, 11, 14, 16, 18, 22, 25, 3, 30,
+        8, 12, 20, 28, 15, 17, 24, 7, 19, 27, 23, 6, 26, 5, 4, 31
     };
 
     value |= value >> 1;
@@ -418,7 +431,7 @@ public:
 /// Union-find algorithm, which uses path compression optimization. It can run in time
 /// O(n + f * (1 + log(n)/log(2 + f/n)), where n is number of unions (resp. size of the
 /// array) and f is number of find operations.
-template<typename T>
+template <typename T>
 class PDFUnionFindAlgorithm
 {
 public:
@@ -460,7 +473,7 @@ private:
     std::vector<T> m_indices;
 };
 
-template<typename T>
+template <typename T>
 constexpr bool isIntervalOverlap(T x1_min, T x1_max, T x2_min, T x2_max)
 {
     // We have two situations, where intervals doesn't overlap:
@@ -505,7 +518,7 @@ inline QColor invertColor(QColor color)
 /// using formula y = y1 + (x - x1) * (y2 - y1) / (x2 - x1), transformed
 /// to formula y = k * x + q, where q = y1 - x1 * k and
 /// k = (y2 - y1) / (x2 - x1).
-template<typename T>
+template <typename T>
 class PDFLinearInterpolation
 {
 public:
@@ -513,7 +526,6 @@ public:
         m_k((y2 - y1) / (x2 - x1)),
         m_q(y1 - x1 * m_k)
     {
-
     }
 
     /// Maps value from x interval to y interval
@@ -540,7 +552,7 @@ static inline bool isFuzzyComparedPointsSame(const QPointF& p1, const QPointF& p
 }
 
 /// View on the array
-template<typename T>
+template <typename T>
 class PDFBuffer
 {
 public:
@@ -555,14 +567,12 @@ public:
         m_begin(nullptr),
         m_end(nullptr)
     {
-
     }
 
     explicit inline PDFBuffer(value_ptr value, size_t size) :
         m_begin(value),
         m_end(value + size)
     {
-
     }
 
     inline value_ptr begin() { return m_begin; }
@@ -598,14 +608,12 @@ public:
     inline PDFOperationResult(bool success) :
         m_success(success)
     {
-
     }
 
     inline PDFOperationResult(QString message) :
         m_success(false),
         m_errorMessage(qMove(message))
     {
-
     }
 
     explicit operator bool() const { return m_success; }
@@ -617,25 +625,67 @@ private:
     QString m_errorMessage;
 };
 
-template<typename Enum>
+template <typename Enum>
 class PDFFlags
 {
 public:
     using Integer = typename std::underlying_type<Enum>::type;
 
     constexpr inline PDFFlags() noexcept = default;
-    constexpr inline PDFFlags(Integer flags) noexcept : m_flags(flags) { }
-    constexpr inline PDFFlags(Enum flag) noexcept : m_flags(flag) { }
+    constexpr inline PDFFlags(Integer flags) noexcept :
+        m_flags(flags)
+    {
+    }
+    constexpr inline PDFFlags(Enum flag) noexcept :
+        m_flags(flag)
+    {
+    }
 
-    constexpr inline PDFFlags& operator|=(Integer flags) { m_flags |= flags; return *this; }
-    constexpr inline PDFFlags& operator|=(PDFFlags flags) { m_flags |= flags.m_flags; return *this; }
-    constexpr inline PDFFlags& operator|=(Enum flag) { m_flags |= flag; return *this; }
-    constexpr inline PDFFlags& operator&=(Integer flags) { m_flags &= flags; return *this; }
-    constexpr inline PDFFlags& operator&=(PDFFlags flags) { m_flags &= flags.m_flags; return *this; }
-    constexpr inline PDFFlags& operator&=(Enum flag) { m_flags &= flag; return *this; }
-    constexpr inline PDFFlags& operator^=(Integer flags) { m_flags ^= flags; return *this; }
-    constexpr inline PDFFlags& operator^=(PDFFlags flags) { m_flags ^= flags.m_flags; return *this; }
-    constexpr inline PDFFlags& operator^=(Enum flag) { m_flags ^= flag; return *this; }
+    constexpr inline PDFFlags& operator|=(Integer flags)
+    {
+        m_flags |= flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator|=(PDFFlags flags)
+    {
+        m_flags |= flags.m_flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator|=(Enum flag)
+    {
+        m_flags |= flag;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator&=(Integer flags)
+    {
+        m_flags &= flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator&=(PDFFlags flags)
+    {
+        m_flags &= flags.m_flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator&=(Enum flag)
+    {
+        m_flags &= flag;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator^=(Integer flags)
+    {
+        m_flags ^= flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator^=(PDFFlags flags)
+    {
+        m_flags ^= flags.m_flags;
+        return *this;
+    }
+    constexpr inline PDFFlags& operator^=(Enum flag)
+    {
+        m_flags ^= flag;
+        return *this;
+    }
 
     constexpr inline operator Integer() const { return m_flags; }
 
@@ -676,7 +726,6 @@ private:
 class PDF4QTLIBCORESHARED_EXPORT PDFSysUtils
 {
 public:
-
     static QString getUserName();
 
     /// Configures \p process to run the script or program at \p path, dispatching on
@@ -701,12 +750,11 @@ public:
 class PDF4QTLIBCORESHARED_EXPORT PDFAuthorSettings
 {
 public:
-
     enum class AuthorNameMode : int
     {
-        Anonymous       = 0,    ///< Neutral placeholder name is used, no personal information is disclosed
-        SystemUserName  = 1,    ///< Name of the system user is used
-        CustomName      = 2     ///< Name entered by the user is used
+        Anonymous = 0,   ///< Neutral placeholder name is used, no personal information is disclosed
+        SystemUserName = 1,   ///< Name of the system user is used
+        CustomName = 2   ///< Name entered by the user is used
     };
 
     /// Returns neutral placeholder author name, which doesn't disclose
@@ -733,7 +781,7 @@ class PDF4QTLIBCORESHARED_EXPORT PDFClosedIntervalSet
 public:
     explicit inline PDFClosedIntervalSet() = default;
 
-    bool operator ==(const PDFClosedIntervalSet&) const = default;
+    bool operator==(const PDFClosedIntervalSet&) const = default;
 
     using ClosedInterval = std::pair<PDFInteger, PDFInteger>;
 
@@ -796,9 +844,9 @@ private:
     std::vector<ClosedInterval> m_intervals;
 };
 
-QDataStream& operator>>(QDataStream& stream, long unsigned int &i);
+QDataStream& operator>>(QDataStream& stream, long unsigned int& i);
 
-template<typename T>
+template <typename T>
 QDataStream& operator>>(QDataStream& stream, std::vector<T>& vector)
 {
     typename std::vector<T>::size_type size = 0;
@@ -813,7 +861,7 @@ QDataStream& operator>>(QDataStream& stream, std::vector<T>& vector)
 
 QDataStream& operator<<(QDataStream& stream, long unsigned int i);
 
-template<typename T>
+template <typename T>
 QDataStream& operator<<(QDataStream& stream, const std::vector<T>& vector)
 {
     stream << vector.size();
@@ -824,7 +872,7 @@ QDataStream& operator<<(QDataStream& stream, const std::vector<T>& vector)
     return stream;
 }
 
-template<typename T, size_t Size>
+template <typename T, size_t Size>
 QDataStream& operator>>(QDataStream& stream, std::array<T, Size>& array)
 {
     typename std::array<T, Size>::size_type size = 0;
@@ -852,7 +900,7 @@ QDataStream& operator>>(QDataStream& stream, std::array<T, Size>& array)
     return stream;
 }
 
-template<typename T, size_t Size>
+template <typename T, size_t Size>
 QDataStream& operator<<(QDataStream& stream, const std::array<T, Size>& array)
 {
     stream << array.size();
@@ -863,7 +911,7 @@ QDataStream& operator<<(QDataStream& stream, const std::array<T, Size>& array)
     return stream;
 }
 
-template<typename T>
+template <typename T>
 QDataStream& operator>>(QDataStream& stream, std::set<T>& set)
 {
     typename std::set<T>::size_type size = 0;
@@ -877,7 +925,7 @@ QDataStream& operator>>(QDataStream& stream, std::set<T>& set)
     return stream;
 }
 
-template<typename T>
+template <typename T>
 QDataStream& operator<<(QDataStream& stream, const std::set<T>& set)
 {
     stream << set.size();
@@ -922,4 +970,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFUTILS_H
+#endif   // PDFUTILS_H

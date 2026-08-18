@@ -77,8 +77,8 @@ public:
         Overflow
     };
 
-    explicit PreflightSidecarStreamBuffer(int maxBytes)
-        : m_maxBytes(maxBytes)
+    explicit PreflightSidecarStreamBuffer(int maxBytes) :
+        m_maxBytes(maxBytes)
     {
     }
 
@@ -594,14 +594,11 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
 
         const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
         const QString state = verdict.value(QStringLiteral("state")).toString();
-        if (!QSet<QString>{QStringLiteral("pass"), QStringLiteral("fail"), QStringLiteral("incomplete"), QStringLiteral("error")}.contains(state))
+        if (!QSet<QString>{ QStringLiteral("pass"), QStringLiteral("fail"), QStringLiteral("incomplete"), QStringLiteral("error") }.contains(state))
         {
             return setValidationError(errorMessage, QStringLiteral("verdict.state must be pass, fail, incomplete, or error."));
         }
-        if (!verdict.value(QStringLiteral("reason_code")).isString()
-            || !verdict.value(QStringLiteral("reason")).isString()
-            || !verdict.value(QStringLiteral("blocking_finding_ids")).isArray()
-            || !verdict.value(QStringLiteral("waived_finding_ids")).isArray())
+        if (!verdict.value(QStringLiteral("reason_code")).isString() || !verdict.value(QStringLiteral("reason")).isString() || !verdict.value(QStringLiteral("blocking_finding_ids")).isArray() || !verdict.value(QStringLiteral("waived_finding_ids")).isArray())
         {
             return setValidationError(errorMessage, QStringLiteral("verdict must contain machine-readable reason and finding arrays."));
         }
@@ -712,7 +709,7 @@ inline bool isNormalizedReport(const QJsonObject& report)
 inline QString overprintDisclosureText(bool hasWhiteOverprintFinding)
 {
     QString text = QObject::tr("Page view does not simulate overprint — use Output Preview to proof "
-                                "overprint-sensitive documents accurately.");
+                               "overprint-sensitive documents accurately.");
 
     if (hasWhiteOverprintFinding)
     {
@@ -726,4 +723,4 @@ inline QString overprintDisclosureText(bool hasWhiteOverprintFinding)
 
 }   // namespace pdfplugin::preflight
 
-#endif // PREFLIGHTSIDECARUTILS_H
+#endif   // PREFLIGHTSIDECARUTILS_H
