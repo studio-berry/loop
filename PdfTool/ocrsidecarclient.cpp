@@ -40,12 +40,9 @@ bool isScript(const QFileInfo& info)
 {
     const QString suffix = info.suffix();
 #ifdef Q_OS_WIN
-    return suffix.compare(QStringLiteral("cmd"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("bat"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
+    return suffix.compare(QStringLiteral("cmd"), Qt::CaseInsensitive) == 0 || suffix.compare(QStringLiteral("bat"), Qt::CaseInsensitive) == 0 || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
 #else
-    return suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0
-        || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
+    return suffix.compare(QStringLiteral("sh"), Qt::CaseInsensitive) == 0 || suffix.compare(QStringLiteral("py"), Qt::CaseInsensitive) == 0;
 #endif
 }
 
