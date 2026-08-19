@@ -26,6 +26,7 @@
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
+#include "pdfoperationimpact.h"
 #include "pdfartifactstore.h"
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistorystore.h"
@@ -571,6 +572,19 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
     const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
 
+    pdf::PDFRevalidationPlan revalidationPlan;
+    if (options.preflightCheckFilter.isEmpty())
+    {
+        revalidationPlan.full = true;
+        revalidationPlan.reason = QStringLiteral("full-run");
+    }
+    else
+    {
+        revalidationPlan.full = false;
+        revalidationPlan.checkIds = options.preflightCheckFilter;
+        revalidationPlan.reason = QStringLiteral("cli-check-filter");
+    }
+
     struct PreflightJobOutcome
     {
         std::optional<pdf::PreflightResult> result;
@@ -584,14 +598,14 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     spec.documentRevision = revisionDigest;
     spec.operationId = QStringLiteral("preflight");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, &outcome](pdf::PDFJobContext& context)
+    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, revalidationPlan, &outcome](pdf::PDFJobContext& context)
                                            {
         if (context.isCancellationRequested())
         {
             return;
         }
         engine.setOperationControl(context.operationControl());
-        pdf::PreflightResult runResult = engine.run(runProfile, jobSpec, cliBindings);
+        pdf::PreflightResult runResult = engine.run(runProfile, jobSpec, cliBindings, revalidationPlan);
         if (context.isCancellationRequested())
         {
             return;

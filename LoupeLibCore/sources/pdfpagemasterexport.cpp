@@ -30,6 +30,8 @@
 #include "pdfdocumentsession.h"
 #include "pdfcontourbleedfixup.h"
 #include "pdfoperationcontrol.h"
+#include "pdfoperationimpact.h"
+#include "pdfrepairoperation.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -245,6 +247,52 @@ bool writeFileAtomically(const QString& finalPath, const QByteArray& payload)
 {
     const PDFOperationResult result = PDFSafeFileWriter::writeData(finalPath, payload, PDFSafeFileWriter::OverwritePolicy::Overwrite);
     return static_cast<bool>(result);
+}
+
+QStringList enabledPreflightCheckIds(const QJsonObject& profileObject)
+{
+    PreflightProfileData profileData;
+    QString errorMessage;
+    if (!PreflightEngine::parseProfile(profileObject, profileData, errorMessage))
+    {
+        return {};
+    }
+
+    QStringList enabledCheckIds;
+    for (const PreflightCheckConfig& check : profileData.checks)
+    {
+        if (check.enabled)
+        {
+            enabledCheckIds.append(check.id);
+        }
+    }
+    return enabledCheckIds;
+}
+
+void appendRepairImpact(QList<PDFOperationImpact>* impacts,
+                        const PDFRepairOperation* operation,
+                        const PDFDocument* document,
+                        const QJsonObject& parameters = QJsonObject())
+{
+    if (impacts && operation)
+    {
+        impacts->append(operation->impact(document, parameters));
+    }
+}
+
+PDFRevalidationPlan revalidationPlanAfterFixups(const QJsonObject& profileObject, const QList<PDFOperationImpact>& fixupImpacts)
+{
+    PreflightProfileData profileData;
+    QString errorMessage;
+    if (!PreflightEngine::parseProfile(profileObject, profileData, errorMessage))
+    {
+        PDFRevalidationPlan plan;
+        plan.full = true;
+        plan.reason = QStringLiteral("profile-unparsed");
+        return plan;
+    }
+
+    return planRevalidation(combineOperationImpacts(fixupImpacts), enabledPreflightCheckIds(profileObject));
 }
 
 QString outlineModeName(PDFDocumentManipulator::OutlineMode mode)
@@ -1101,6 +1149,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         }
 
         PDFDocument assembledDocument = manipulator.takeAssembledDocument();
+        QList<PDFOperationImpact> fixupImpacts;
 
         if (isCancelRequested(job))
         {
@@ -1257,6 +1306,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasBleedFixupSettings)
         {
+            appendRepairImpact(&fixupImpacts, PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), &assembledDocument);
             PDFBleedFixupReport bleedReport;
             const PDFOperationResult bleedResult = PDFBleedFixup::apply(&assembledDocument, job.bleedFixupSettings, &bleedReport);
             if (!bleedResult)
@@ -1311,6 +1361,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.optimizeImages)
         {
+            appendRepairImpact(&fixupImpacts, PDFRepairRegistry::instance().find(QStringLiteral("downsample-images")), &assembledDocument);
             PDFImageOptimizer imageOptimizer;
             PDFImageOptimizer::Settings optimizeSettings = job.imageOptimizationSettings;
             optimizeSettings.enabled = true;
@@ -1319,6 +1370,11 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasStandardConversionSettings)
         {
+            appendRepairImpact(&fixupImpacts,
+                               PDFRepairRegistry::instance().find(QStringLiteral("standards-convert")),
+                               &assembledDocument,
+                               QJsonObject{
+                                   { QStringLiteral("target"), pdfStandardTargetToString(job.standardConversionSettings.target) } });
             PDFStandardConversionReport conversionReport;
             const PDFOperationResult conversionResult = PDFStandardConversion::apply(&assembledDocument,
                                                                                        job.standardConversionSettings,
@@ -1342,7 +1398,18 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             PDFDocumentSession session(&assembledDocument);
             PreflightEngine engine(&session);
-            PreflightResult preflightResult = engine.run(preflightProfile);
+            const PDFRevalidationPlan revalidationPlan = revalidationPlanAfterFixups(preflightProfile, fixupImpacts);
+            PreflightProfileData profileData;
+            QString profileParseError;
+            PreflightResult preflightResult;
+            if (PreflightEngine::parseProfile(preflightProfile, profileData, profileParseError))
+            {
+                preflightResult = engine.run(profileData, revalidationPlan);
+            }
+            else
+            {
+                preflightResult = engine.run(preflightProfile, revalidationPlan);
+            }
             preflightResult.profileResolution = preflightResolution;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);

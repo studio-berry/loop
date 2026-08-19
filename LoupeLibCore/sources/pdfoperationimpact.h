@@ -72,6 +72,9 @@ LOUPELIBCORESHARED_EXPORT std::optional<PDFEvidenceDomain> preflightEvidenceDoma
 LOUPELIBCORESHARED_EXPORT PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
                                                                 const QStringList& enabledCheckIds);
 
+/// Merges multiple declared impacts into one conservative superset.
+LOUPELIBCORESHARED_EXPORT PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impacts);
+
 }   // namespace pdf
 
 #endif   // PDFOPERATIONIMPACT_H

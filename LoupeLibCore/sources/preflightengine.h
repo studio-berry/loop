@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfoperationcontrol.h"
+#include "pdfoperationimpact.h"
 #include "pdfdocumentsession.h"
 #include "pdfevidencegraph.h"
 
@@ -401,10 +402,16 @@ public:
     /// Job-spec and CLI bindings are applied after import/digest verification
     /// so an authored digest is checked against unbound content.
     PreflightResult run(const QJsonObject& profile);
+    PreflightResult run(const QJsonObject& profile, const PDFRevalidationPlan& plan);
     PreflightResult run(const QJsonObject& profile,
                         const QJsonObject& jobSpecBindings,
                         const QJsonObject& cliBindings);
+    PreflightResult run(const QJsonObject& profile,
+                        const QJsonObject& jobSpecBindings,
+                        const QJsonObject& cliBindings,
+                        const PDFRevalidationPlan& plan);
     PreflightResult run(const PreflightProfileData& profile);
+    PreflightResult run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan);
 
     void setOperationControl(const PDFOperationControl* operationControl) { m_operationControl = operationControl; }
 

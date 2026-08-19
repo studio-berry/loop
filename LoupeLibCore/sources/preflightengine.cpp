@@ -1372,6 +1372,50 @@ PDFEvidenceDomains evidenceDomainsForProfile(const PreflightProfileData& profile
     return domains;
 }
 
+PDFEvidenceDomains evidenceDomainsForCheckIds(const QStringList& checkIds)
+{
+    PDFEvidenceDomains domains;
+    for (const QString& checkId : checkIds)
+    {
+        if (checkId == QLatin1String("image-resolution"))
+        {
+            domains |= PDFEvidenceDomain::Images;
+        }
+        else if (checkId == QLatin1String("color-mode") || checkId == QLatin1String("color-inventory"))
+        {
+            domains |= PDFEvidenceDomain::Colorants;
+        }
+        else if (checkId == QLatin1String("thin-strokes"))
+        {
+            domains |= PDFEvidenceDomain::Strokes;
+        }
+        else if (checkId == QLatin1String("white-overprint") || checkId == QLatin1String("transparency-risk"))
+        {
+            domains |= PDFEvidenceDomain::OverprintTransparency;
+        }
+        else if (checkId == QLatin1String("embedded-fonts"))
+        {
+            domains |= PDFEvidenceDomain::Fonts;
+        }
+    }
+    return domains;
+}
+
+PDFRevalidationPlan fullRevalidationPlan(const PreflightProfileData& profile)
+{
+    PDFRevalidationPlan plan;
+    plan.full = true;
+    plan.reason = QStringLiteral("full-run");
+    for (const PreflightCheckConfig& check : profile.checks)
+    {
+        if (check.enabled)
+        {
+            plan.checkIds.append(check.id);
+        }
+    }
+    return plan;
+}
+
 PDFEvidenceCollectSettings evidenceSettingsForProfile(const PreflightProfileData& profile)
 {
     PDFEvidenceCollectSettings settings;
@@ -5499,9 +5543,25 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile)
     return run(profile, QJsonObject(), QJsonObject());
 }
 
+PreflightResult PreflightEngine::run(const QJsonObject& profile, const PDFRevalidationPlan& plan)
+{
+    return run(profile, QJsonObject(), QJsonObject(), plan);
+}
+
 PreflightResult PreflightEngine::run(const QJsonObject& profile,
                                      const QJsonObject& jobSpecBindings,
                                      const QJsonObject& cliBindings)
+{
+    PDFRevalidationPlan fullPlan;
+    fullPlan.full = true;
+    fullPlan.reason = QStringLiteral("full-run");
+    return run(profile, jobSpecBindings, cliBindings, fullPlan);
+}
+
+PreflightResult PreflightEngine::run(const QJsonObject& profile,
+                                     const QJsonObject& jobSpecBindings,
+                                     const QJsonObject& cliBindings,
+                                     const PDFRevalidationPlan& plan)
 {
     const PreflightProfileImportResult imported = importPreflightProfile(profile);
     if (!imported.ok)
@@ -5576,10 +5636,15 @@ PreflightResult PreflightEngine::run(const QJsonObject& profile,
     data.profileIdentity = imported.identity.toJson();
     data.profileIdentity.insert(QStringLiteral("digest"), data.fileDigest);
     data.profileIdentity.insert(QStringLiteral("effective_digest"), data.effectiveDigest);
-    return run(data);
+    return run(data, plan);
 }
 
 PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
+{
+    return run(profile, fullRevalidationPlan(profile));
+}
+
+PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan)
 {
     PreflightResult result;
     result.profileName = profile.name;
@@ -5640,7 +5705,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         }
     }
 
-    const PDFEvidenceDomains graphDomains = evidenceDomainsForProfile(profile);
+    const PDFEvidenceDomains graphDomains = plan.full ? evidenceDomainsForProfile(profile) : evidenceDomainsForCheckIds(plan.checkIds);
     if (graphDomains != PDFEvidenceDomains())
     {
         m_activeGraph = PDFEvidenceCollector::collect(m_session, graphDomains, evidenceSettingsForProfile(profile));
@@ -5718,6 +5783,14 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         {
             status.status = QStringLiteral("skipped");
             status.reason = QStringLiteral("disabled");
+            result.checkStatuses.push_back(status);
+            continue;
+        }
+
+        if (!plan.full && !plan.checkIds.contains(check.id))
+        {
+            status.status = QStringLiteral("skipped");
+            status.reason = QStringLiteral("revalidation-plan");
             result.checkStatuses.push_back(status);
             continue;
         }
@@ -5854,7 +5927,7 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
         result.checkStatuses.push_back(status);
     }
 
-    if (profile.pdfx.has_value())
+    if (profile.pdfx.has_value() && plan.full)
     {
         const PDFXConformanceResult pdfxResult = evaluatePDFXPolicy(m_session, profile.pdfx.value());
         result.pdfx = pdfxResult;
