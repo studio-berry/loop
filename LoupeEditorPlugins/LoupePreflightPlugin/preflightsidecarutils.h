@@ -254,6 +254,31 @@ inline bool isSupportedSchemaVersion(int schemaVersion)
     return schemaVersion >= 1 && schemaVersion <= LOUPE_PREFLIGHT_SCHEMA_VERSION;
 }
 
+inline bool isGraphBackedFindingType(const QString& type)
+{
+    return type == QStringLiteral("image-resolution") || type == QStringLiteral("color-mode") || type == QStringLiteral("spot-color") || type == QStringLiteral("separation") || type == QStringLiteral("rich-black") || type == QStringLiteral("embedded-fonts") || type == QStringLiteral("white-overprint") || type == QStringLiteral("transparency-blend-mode") || type == QStringLiteral("transparency-blend-space") || type == QStringLiteral("hairline-stroke") || type == QStringLiteral("thin-stroke");
+}
+
+inline bool validateEvidenceIdsValue(const QJsonValue& value, const QString& context, QString* errorMessage)
+{
+    if (!value.isArray() || value.toArray().isEmpty())
+    {
+        return setValidationError(errorMessage,
+                                  QStringLiteral("%1.evidence_ids must be a non-empty array of record ids.").arg(context));
+    }
+
+    for (const QJsonValue& item : value.toArray())
+    {
+        if (!item.isString() || item.toString().isEmpty())
+        {
+            return setValidationError(errorMessage,
+                                      QStringLiteral("%1.evidence_ids must contain non-empty strings.").arg(context));
+        }
+    }
+
+    return true;
+}
+
 inline bool validateBboxValue(const QJsonValue& bboxValue, const QString& context, QString* errorMessage)
 {
     if (!bboxValue.isArray() || bboxValue.toArray().size() != 4)
@@ -313,6 +338,14 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
     if (!checkId.isUndefined() && !checkId.isString())
     {
         return setValidationError(errorMessage, QStringLiteral("%1.check_id must be a string.").arg(context));
+    }
+
+    if (isGraphBackedFindingType(type))
+    {
+        if (!validateEvidenceIdsValue(finding.value(QStringLiteral("evidence_ids")), context, errorMessage))
+        {
+            return false;
+        }
     }
 
     return true;
