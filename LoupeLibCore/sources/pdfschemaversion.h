@@ -93,7 +93,6 @@ struct LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult
     PDFSchemaVersion toVersion;
 };
 
-/// Fail closed on unsupported majors; migrate deterministically to the current version.
 LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject document);
 
 }   // namespace pdf

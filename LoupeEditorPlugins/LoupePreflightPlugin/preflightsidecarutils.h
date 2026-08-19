@@ -577,11 +577,6 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
     }
 
     const pdf::PDFSchemaCompatibility compatibility = pdf::checkSchemaCompatibility(kind, version);
-    if (compatibility == pdf::PDFSchemaCompatibility::UnsupportedMajor
-        || compatibility == pdf::PDFSchemaCompatibility::UnknownKind)
-    {
-        return setValidationError(errorMessage, QStringLiteral("schema_version is not supported."));
-    }
 
     const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(kind, report);
     if (prepared.document.isEmpty())
