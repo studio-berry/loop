@@ -70,7 +70,10 @@ LOUPELIBCORESHARED_EXPORT std::optional<PDFEvidenceDomain> preflightEvidenceDoma
 /// Plans which enabled checks to rerun. Incomplete, document-wide,
 /// oracle-required, or unmapped-check impact falls back to a full run.
 LOUPELIBCORESHARED_EXPORT PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
-                                                                const QStringList& enabledCheckIds);
+                                                               const QStringList& enabledCheckIds);
+
+/// Merges multiple declared impacts into one conservative superset.
+LOUPELIBCORESHARED_EXPORT PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impacts);
 
 }   // namespace pdf
 

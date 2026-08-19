@@ -76,7 +76,8 @@ private:
                               const QString& profilePath,
                               quint64 revisionToMatch,
                               bool ignoreRevisionMatch,
-                              const QString& reportSourceLabel);
+                              const QString& reportSourceLabel,
+                              const QStringList& checkFilter = {});
     void onApplyFixupRequested(const QString& id);
     void onApplyBleedFixupRequested();
     void onApplyRgbToCmykFixupRequested();

@@ -807,6 +807,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("stock"), QStringLiteral("Stable stock identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("param"), QStringLiteral("Profile variable binding as key=value; may be repeated. Overrides job-spec and profile defaults."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("checks"), QStringLiteral("Comma-separated preflight check ids for targeted revalidation; default runs all enabled checks."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1318,6 +1319,15 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightStockId = parser->value("stock");
         options.preflightFinishingId = parser->value("finishing");
         options.preflightParameterAssignments = parser->values("param");
+        const QString checksValue = parser->value("checks").trimmed();
+        if (!checksValue.isEmpty())
+        {
+            options.preflightCheckFilter = checksValue.split(QLatin1Char(','), Qt::SkipEmptyParts);
+            for (QString& checkId : options.preflightCheckFilter)
+            {
+                checkId = checkId.trimmed();
+            }
+        }
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
