@@ -1275,7 +1275,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             if (const PDFRepairOperation* operation = PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")))
             {
-                fixupImpacts.append(operation->impact(&assembledDocument));
+                fixupImpacts.append(operation->impact(&assembledDocument, QJsonObject()));
             }
             PDFBleedFixupReport bleedReport;
             const PDFOperationResult bleedResult = PDFBleedFixup::apply(&assembledDocument, job.bleedFixupSettings, &bleedReport);
@@ -1333,7 +1333,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             if (const PDFRepairOperation* operation = PDFRepairRegistry::instance().find(QStringLiteral("downsample-images")))
             {
-                fixupImpacts.append(operation->impact(&assembledDocument));
+                fixupImpacts.append(operation->impact(&assembledDocument, QJsonObject()));
             }
             PDFImageOptimizer imageOptimizer;
             PDFImageOptimizer::Settings optimizeSettings = job.imageOptimizationSettings;
