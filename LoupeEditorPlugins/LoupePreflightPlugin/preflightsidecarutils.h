@@ -25,6 +25,7 @@
 
 #include "pdffixupregistry.h"
 #include "pdfpreflightverdict.h"
+#include "pdfschemaversion.h"
 
 #include <cmath>
 #include <memory>
@@ -217,8 +218,17 @@ inline bool setValidationError(QString* errorMessage, const QString& message)
     return false;
 }
 
-inline bool hasOnlyProperties(const QJsonObject& object, const QSet<QString>& allowedProperties, const QString& context, QString* errorMessage)
+inline bool hasOnlyProperties(const QJsonObject& object,
+                              const QSet<QString>& allowedProperties,
+                              const QString& context,
+                              QString* errorMessage,
+                              bool allowUnknownFields = false)
 {
+    if (allowUnknownFields)
+    {
+        return true;
+    }
+
     for (auto iterator = object.constBegin(); iterator != object.constEnd(); ++iterator)
     {
         if (!allowedProperties.contains(iterator.key()))
@@ -516,6 +526,7 @@ inline bool validateFixup(const QJsonValue& value, int index, QString* errorMess
 inline const QSet<QString>& normalizedReportAllowedProperties()
 {
     static const QSet<QString> allowedProperties = {
+        QStringLiteral("schema_kind"),
         QStringLiteral("schema_version"),
         QStringLiteral("inspection_complete"),
         QStringLiteral("pass"),
@@ -547,12 +558,48 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         errorMessage->clear();
     }
 
-    if (!hasOnlyProperties(report, normalizedReportAllowedProperties(), QStringLiteral("report"), errorMessage))
+    const pdf::PDFSchemaEnvelope envelope = pdf::readSchemaEnvelope(report);
+    pdf::PDFSchemaKind kind = envelope.kind;
+    if (kind == pdf::PDFSchemaKind::Unknown)
+    {
+        kind = pdf::PDFSchemaKind::PreflightReport;
+    }
+
+    pdf::PDFSchemaVersion version = envelope.version;
+    if (!version.isValid())
+    {
+        bool ok = false;
+        version = pdf::PDFSchemaVersion::fromJsonValue(report.value(QStringLiteral("schema_version")), &ok);
+        if (!ok)
+        {
+            return setValidationError(errorMessage, QStringLiteral("schema_version must be a supported version."));
+        }
+    }
+
+    if (pdf::checkSchemaCompatibility(kind, version) == pdf::PDFSchemaCompatibility::UnsupportedMajor)
+    {
+        return setValidationError(errorMessage, QStringLiteral("schema_version is not supported."));
+    }
+
+    const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(kind, report);
+    if (prepared.document.isEmpty())
+    {
+        return setValidationError(errorMessage, QStringLiteral("schema_version is not supported."));
+    }
+
+    const QJsonObject normalizedReport = prepared.document;
+    const bool allowUnknownFields = pdf::checkSchemaCompatibility(kind, version) == pdf::PDFSchemaCompatibility::Compatible;
+
+    if (!hasOnlyProperties(normalizedReport,
+                           normalizedReportAllowedProperties(),
+                           QStringLiteral("report"),
+                           errorMessage,
+                           allowUnknownFields))
     {
         return false;
     }
 
-    const QJsonValue schemaVersion = report.value(QStringLiteral("schema_version"));
+    const QJsonValue schemaVersion = normalizedReport.value(QStringLiteral("schema_version"));
     if (!isInteger(schemaVersion) || !isSupportedSchemaVersion(schemaVersion.toInt()))
     {
         return setValidationError(errorMessage, QStringLiteral("schema_version must be between 1 and %1.").arg(LOUPE_PREFLIGHT_SCHEMA_VERSION));
@@ -560,19 +607,19 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
 
     const int schemaVersionValue = schemaVersion.toInt();
 
-    if (!report.value(QStringLiteral("pass")).isBool())
+    if (!normalizedReport.value(QStringLiteral("pass")).isBool())
     {
         return setValidationError(errorMessage, QStringLiteral("pass must be a boolean."));
     }
 
     if (schemaVersionValue >= 3)
     {
-        if (!report.value(QStringLiteral("inspection_complete")).isBool())
+        if (!normalizedReport.value(QStringLiteral("inspection_complete")).isBool())
         {
             return setValidationError(errorMessage, QStringLiteral("inspection_complete must be a boolean."));
         }
 
-        const QJsonValue checksValue = report.value(QStringLiteral("checks"));
+        const QJsonValue checksValue = normalizedReport.value(QStringLiteral("checks"));
         if (!checksValue.isArray())
         {
             return setValidationError(errorMessage, QStringLiteral("checks must be an array."));
@@ -592,7 +639,7 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
             }
         }
 
-        const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
+        const QJsonObject verdict = normalizedReport.value(QStringLiteral("verdict")).toObject();
         const QString state = verdict.value(QStringLiteral("state")).toString();
         if (!QSet<QString>{ QStringLiteral("pass"), QStringLiteral("fail"), QStringLiteral("incomplete"), QStringLiteral("error") }.contains(state))
         {
@@ -604,14 +651,14 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    if (!report.value(QStringLiteral("profile")).isString() || report.value(QStringLiteral("profile")).toString().isEmpty())
+    if (!normalizedReport.value(QStringLiteral("profile")).isString() || normalizedReport.value(QStringLiteral("profile")).toString().isEmpty())
     {
         return setValidationError(errorMessage, QStringLiteral("profile must be a non-empty string."));
     }
 
     for (const QString& optionalString : { QStringLiteral("engine_version"), QStringLiteral("pdf") })
     {
-        const QJsonValue value = report.value(optionalString);
+        const QJsonValue value = normalizedReport.value(optionalString);
         if (!value.isUndefined() && !value.isString())
         {
             return setValidationError(errorMessage, QStringLiteral("%1 must be a string.").arg(optionalString));
@@ -620,14 +667,14 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
 
     for (const QString& digestName : { QStringLiteral("document_revision_digest"), QStringLiteral("effective_profile_digest") })
     {
-        const QJsonValue value = report.value(digestName);
+        const QJsonValue value = normalizedReport.value(digestName);
         if (!value.isUndefined() && (!value.isString() || !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$")).match(value.toString()).hasMatch()))
         {
             return setValidationError(errorMessage, QStringLiteral("%1 must be a lowercase SHA-256 digest.").arg(digestName));
         }
     }
 
-    const QJsonValue decisionsValue = report.value(QStringLiteral("decisions"));
+    const QJsonValue decisionsValue = normalizedReport.value(QStringLiteral("decisions"));
     if (!decisionsValue.isUndefined())
     {
         if (!decisionsValue.isArray())
@@ -646,7 +693,7 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
 
     for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
     {
-        const QJsonValue sectionValue = report.value(section);
+        const QJsonValue sectionValue = normalizedReport.value(section);
         if (!sectionValue.isArray())
         {
             return setValidationError(errorMessage, QStringLiteral("%1 must be an array.").arg(section));
@@ -662,7 +709,7 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    const QJsonValue fixupsValue = report.value(QStringLiteral("fixups_available"));
+    const QJsonValue fixupsValue = normalizedReport.value(QStringLiteral("fixups_available"));
     if (!fixupsValue.isArray())
     {
         return setValidationError(errorMessage, QStringLiteral("fixups_available must be an array."));
@@ -677,14 +724,14 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    bool expectedPass = report.value(QStringLiteral("pass")).toBool();
+    bool expectedPass = normalizedReport.value(QStringLiteral("pass")).toBool();
     if (schemaVersionValue >= 3)
     {
-        const QString state = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
+        const QString state = normalizedReport.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
         expectedPass = state == QStringLiteral("pass");
     }
 
-    if (report.value(QStringLiteral("pass")).toBool() != expectedPass)
+    if (normalizedReport.value(QStringLiteral("pass")).toBool() != expectedPass)
     {
         return setValidationError(errorMessage, QStringLiteral("pass must be derived from verdict.state."));
     }

@@ -25,6 +25,7 @@
 
 #include "pdfoperationhistory.h"
 #include "pdfutils.h"
+#include "pdfschemaversion.h"
 
 #include <QString>
 
@@ -77,6 +78,12 @@ public:
     /// delete API; corrections and rollback are new events.
     PDFOperationResult appendEvent(PDFOperationHistoryEvent event,
                                    qint64* sequence = nullptr);
+
+    PDFOperationResult appendSchemaMigratedEvent(const PDFArtifactIdentity& artifact,
+                                                 PDFSchemaKind kind,
+                                                 PDFSchemaVersion fromVersion,
+                                                 PDFSchemaVersion toVersion,
+                                                 const QString& documentRevisionDigest = QString());
 
     QList<PDFOperationHistoryEvent> events(QString* errorMessage = nullptr) const;
     PDFOperationHistoryVerification verify() const;

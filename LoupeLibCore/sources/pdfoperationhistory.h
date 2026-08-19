@@ -58,7 +58,8 @@ enum class PDFOperationHistoryEventKind
     DecisionRecorded,
     DecisionInvalidated,
     CertificateIssued,
-    CertificateInvalidated
+    CertificateInvalidated,
+    SchemaMigrated
 };
 
 enum class PDFApprovalKind

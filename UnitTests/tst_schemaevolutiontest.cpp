@@ -36,6 +36,8 @@ private slots:
     void unsupportedMajorFailsClosed();
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
+    void v2GoldenMigratesToV3Deterministically();
+    void unknownFieldsSurviveOnCompatibleMinor();
 };
 
 void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
@@ -98,6 +100,42 @@ void SchemaEvolutionTest::migrateIsPure()
     QJsonObject document{ { QStringLiteral("extra"), QStringLiteral("keep") } };
     const QJsonObject migrated = pdf::migrateSchemaDocument(pdf::PDFSchemaKind::PreflightReport, { 2, 0 }, document);
     QCOMPARE(migrated.value(QStringLiteral("extra")).toString(), QStringLiteral("keep"));
+}
+
+void SchemaEvolutionTest::v2GoldenMigratesToV3Deterministically()
+{
+    QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QJsonObject source = QJsonDocument::fromJson(file.readAll()).object();
+
+    const pdf::PDFSchemaMigrationResult first = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
+    QVERIFY(first.migrated);
+    QCOMPARE(int(first.toVersion.major), 3);
+    QCOMPARE(first.document.value(QStringLiteral("schema_version")).toInt(), 3);
+    QVERIFY(first.document.contains(QStringLiteral("verdict")));
+    QVERIFY(first.document.contains(QStringLiteral("inspection_complete")));
+
+    const pdf::PDFSchemaMigrationResult second = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
+    QCOMPARE(QJsonDocument(second.document).toJson(QJsonDocument::Compact),
+             QJsonDocument(first.document).toJson(QJsonDocument::Compact));
+}
+
+void SchemaEvolutionTest::unknownFieldsSurviveOnCompatibleMinor()
+{
+    QJsonObject document{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-report") },
+        { QStringLiteral("schema_version"), 2 },
+        { QStringLiteral("pass"), true },
+        { QStringLiteral("profile"), QStringLiteral("golden") },
+        { QStringLiteral("errors"), QJsonArray{} },
+        { QStringLiteral("warnings"), QJsonArray{} },
+        { QStringLiteral("fixups_available"), QJsonArray{} },
+        { QStringLiteral("future_field"), QStringLiteral("preserved") }
+    };
+
+    const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, document);
+    QVERIFY(prepared.migrated);
+    QCOMPARE(prepared.document.value(QStringLiteral("future_field")).toString(), QStringLiteral("preserved"));
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)
