@@ -1,0 +1,59 @@
+{
+    "checks": [
+        {
+            "id": "color-inventory",
+            "status": "ok"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Color Inventory Test",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Cyan",
+            "object_id": "Cyan",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Magenta",
+            "object_id": "Magenta",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Yellow",
+            "object_id": "Yellow",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        },
+        {
+            "check_id": "color-inventory",
+            "message": "Process output separation: Black",
+            "object_id": "Black",
+            "scope": "document",
+            "severity": "info",
+            "type": "separation"
+        }
+    ]
+}

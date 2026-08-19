@@ -421,9 +421,9 @@ void generateWhiteOverprintColorSpaceFixtures(const QDir& outputDir)
 
 pdf::PDFObjectReference appendTieredBleedPage(pdf::PDFDocumentBuilder& builder, const QRectF& contentRect)
 {
-  // MediaBox 220x220, TrimBox 200x200 inset 10pt on every side. BleedBox is left
-  // unset; per PDFPage::parse it falls back to CropBox -> MediaBox, giving a
-  // 10pt margin over TrimBox (>= the 9pt amount_pt used by tiered-bleed profiles).
+    // MediaBox 220x220, TrimBox 200x200 inset 10pt on every side. BleedBox is left
+    // unset; per PDFPage::parse it falls back to CropBox -> MediaBox, giving a
+    // 10pt margin over TrimBox (>= the 9pt amount_pt used by tiered-bleed profiles).
     const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, MEDIA_SIZE_PT, MEDIA_SIZE_PT));
     builder.setPageTrimBox(page, QRectF(TRIM_INSET_PT, TRIM_INSET_PT, TRIM_SIZE_PT, TRIM_SIZE_PT));
 
@@ -525,9 +525,9 @@ void generateOutputIntentCmykFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "CMYK",
-                                                    createIccProfile(cmsSigCmykData)) });
+                                                   "CGATS TR 001",
+                                                   "CMYK",
+                                                   createIccProfile(cmsSigCmykData)) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-cmyk.pdf", builder.build());
 }
@@ -566,9 +566,9 @@ void generateOutputIntentRgbFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "RGB",
-                                                    createIccProfile(cmsSigRgbData)) });
+                                                   "CGATS TR 001",
+                                                   "RGB",
+                                                   createIccProfile(cmsSigRgbData)) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-rgb.pdf", builder.build());
 }
@@ -582,11 +582,117 @@ void generateOutputIntentProfileInvalidFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "CMYK",
-                                                    QByteArrayLiteral("not an ICC profile")) });
+                                                   "CGATS TR 001",
+                                                   "CMYK",
+                                                   QByteArrayLiteral("not an ICC profile")) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-profile-invalid.pdf", builder.build());
+}
+
+void appendColorInventoryPage(pdf::PDFDocumentBuilder& builder, const QByteArray& paintOps)
+{
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 400, 400));
+    builder.setPageTrimBox(page, QRectF(20, 20, 360, 360));
+    builder.setPageBleedBox(page, QRectF(0, 0, 400, 400));
+    const QByteArray content = QByteArray("/DeviceCMYK cs\n") + paintOps + QByteArray("50 50 300 300 re\nf\n");
+    const pdf::PDFObjectReference contentReference = addContentStream(builder, content);
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+}
+
+void generateColorInventoryRichBlackFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - rich black");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loupe-preflight golden corpus: rich black inventory");
+    appendColorInventoryPage(builder, QByteArray("0.40 0.30 0.30 1.00 sc\n"));
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "rich-black.pdf", builder.build());
+}
+
+void generateColorInventoryBlackOnlyFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - black only");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loupe-preflight golden corpus: process black only");
+    appendColorInventoryPage(builder, QByteArray("0 0 0 1 sc\n"));
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "black-only.pdf", builder.build());
+}
+
+void generateColorInventoryCmyRichNoKFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - CMY rich no K");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loupe-preflight golden corpus: chromatic CMY without K");
+    appendColorInventoryPage(builder, QByteArray("0.40 0.30 0.30 0 sc\n"));
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "cmy-rich-no-k.pdf", builder.build());
+}
+
+void generateColorInventorySpotFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - color inventory spot");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loupe-preflight golden corpus: named separation colorant");
+
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 400, 400));
+    builder.setPageTrimBox(page, QRectF(20, 20, 360, 360));
+    builder.setPageBleedBox(page, QRectF(0, 0, 400, 400));
+
+    const pdf::PDFObjectReference tintFunction = addType2TintFunction(builder, { 0.0, 0.91, 0.76, 0.0 });
+    pdf::PDFArray separationArray;
+    separationArray.appendItem(pdf::PDFObject::createName("Separation"));
+    separationArray.appendItem(pdf::PDFObject::createName("PANTONE#20185#20C"));
+    separationArray.appendItem(pdf::PDFObject::createName("DeviceCMYK"));
+    separationArray.appendItem(pdf::PDFObject::createReference(tintFunction));
+    const pdf::PDFObjectReference separationReference = builder.addObject(
+        pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(separationArray))));
+
+    pdf::PDFDictionary colorSpaces;
+    colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("CS1"), pdf::PDFObject::createReference(separationReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(colorSpaces))));
+
+    const QByteArray content = QByteArray("/CS1 cs\n0.8 scn\n50 50 300 300 re\nf\n");
+    const pdf::PDFObjectReference contentReference = addContentStream(builder, content);
+    pdf::PDFDictionary pageUpdate;
+    pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    pageUpdate.setEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
+    builder.mergeTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
+
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "color-inventory-spot.pdf", builder.build());
+}
+
+void generateThinStrokesHairlineFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loupe fixture - thin strokes hairline");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loupe-preflight golden corpus: hairline stroke");
+
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = contentBuilder.begin(page))
+    {
+        QPen pen(Qt::black);
+        pen.setWidthF(0.0);
+        painter->setPen(pen);
+        painter->drawLine(QPointF(20, 100), QPointF(180, 100));
+        contentBuilder.end(painter);
+    }
+
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "thin-strokes-hairline.pdf", builder.build());
 }
 
 }   // namespace
@@ -613,6 +719,11 @@ int main(int argc, char* argv[])
     generateOutputIntentProfileMissingFixture(outputDir);
     generateOutputIntentRgbFixture(outputDir);
     generateOutputIntentProfileInvalidFixture(outputDir);
+    generateColorInventoryRichBlackFixture(outputDir);
+    generateColorInventoryBlackOnlyFixture(outputDir);
+    generateColorInventoryCmyRichNoKFixture(outputDir);
+    generateColorInventorySpotFixture(outputDir);
+    generateThinStrokesHairlineFixture(outputDir);
 
     return 0;
 }
