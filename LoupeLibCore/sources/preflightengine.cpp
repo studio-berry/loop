@@ -1521,7 +1521,8 @@ void evaluateColorModeFromGraph(const PreflightCheckConfig& check,
         finding.severity = check.severity;
         finding.checkId = check.id;
         finding.bbox = QRectF();
-        finding.evidenceIds = evidenceByPage.value(pageNumber);
+        const QStringList pageEvidenceIds = evidenceByPage.value(pageNumber);
+        finding.evidenceIds = pageEvidenceIds;
         finding.message = PDFTranslationContext::tr(
                               "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
                               .arg(pageNumber)

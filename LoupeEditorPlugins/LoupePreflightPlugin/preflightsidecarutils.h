@@ -264,6 +264,31 @@ inline bool isSupportedSchemaVersion(int schemaVersion)
     return schemaVersion >= 1 && schemaVersion <= LOUPE_PREFLIGHT_SCHEMA_VERSION;
 }
 
+inline bool isGraphBackedFindingType(const QString& type)
+{
+    return type == QStringLiteral("image-resolution") || type == QStringLiteral("color-mode") || type == QStringLiteral("spot-color") || type == QStringLiteral("separation") || type == QStringLiteral("rich-black") || type == QStringLiteral("embedded-fonts") || type == QStringLiteral("white-overprint") || type == QStringLiteral("transparency-blend-mode") || type == QStringLiteral("transparency-blend-space") || type == QStringLiteral("hairline-stroke") || type == QStringLiteral("thin-stroke");
+}
+
+inline bool validateEvidenceIdsValue(const QJsonValue& value, const QString& context, QString* errorMessage)
+{
+    if (!value.isArray() || value.toArray().isEmpty())
+    {
+        return setValidationError(errorMessage,
+                                  QStringLiteral("%1.evidence_ids must be a non-empty array of record ids.").arg(context));
+    }
+
+    for (const QJsonValue& item : value.toArray())
+    {
+        if (!item.isString() || item.toString().isEmpty())
+        {
+            return setValidationError(errorMessage,
+                                      QStringLiteral("%1.evidence_ids must contain non-empty strings.").arg(context));
+        }
+    }
+
+    return true;
+}
+
 inline bool validateBboxValue(const QJsonValue& bboxValue, const QString& context, QString* errorMessage)
 {
     if (!bboxValue.isArray() || bboxValue.toArray().size() != 4)
@@ -288,7 +313,7 @@ inline bool validateBboxValue(const QJsonValue& bboxValue, const QString& contex
     return true;
 }
 
-inline bool validateFindingCommonFields(const QJsonObject& finding, const QString& context, QString* errorMessage)
+inline bool validateFindingCommonFields(const QJsonObject& finding, const QString& context, int schemaVersion, QString* errorMessage)
 {
     const QString type = finding.value(QStringLiteral("type")).toString();
     if (!finding.value(QStringLiteral("type")).isString() || !isContractIdentifier(type))
@@ -323,6 +348,19 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
     if (!checkId.isUndefined() && !checkId.isString())
     {
         return setValidationError(errorMessage, QStringLiteral("%1.check_id must be a string.").arg(context));
+    }
+
+    if (finding.contains(QStringLiteral("evidence_ids")))
+    {
+        if (!validateEvidenceIdsValue(finding.value(QStringLiteral("evidence_ids")), context, errorMessage))
+        {
+            return false;
+        }
+    }
+    else if (schemaVersion >= 3 && isGraphBackedFindingType(type))
+    {
+        return setValidationError(errorMessage,
+                                  QStringLiteral("%1.evidence_ids is required for graph-backed findings.").arg(context));
     }
 
     return true;
@@ -381,7 +419,7 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
         return setValidationError(errorMessage, QStringLiteral("%1.page must be a positive integer.").arg(context));
     }
 
-    if (!validateFindingCommonFields(finding, context, errorMessage))
+    if (!validateFindingCommonFields(finding, context, 1, errorMessage))
     {
         return false;
     }
@@ -389,7 +427,7 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
     return validateBboxValue(finding.value(QStringLiteral("bbox")), context, errorMessage);
 }
 
-inline bool validateFindingV2(const QJsonObject& finding, const QString& context, QString* errorMessage)
+inline bool validateFindingV2(const QJsonObject& finding, const QString& context, int schemaVersion, QString* errorMessage)
 {
     if (!hasOnlyProperties(finding, findingV2AllowedProperties(), context, errorMessage))
     {
@@ -402,7 +440,7 @@ inline bool validateFindingV2(const QJsonObject& finding, const QString& context
         return setValidationError(errorMessage, QStringLiteral("%1.scope must be document, page, or object.").arg(context));
     }
 
-    if (!validateFindingCommonFields(finding, context, errorMessage))
+    if (!validateFindingCommonFields(finding, context, schemaVersion, errorMessage))
     {
         return false;
     }
@@ -469,7 +507,7 @@ inline bool validateFinding(const QJsonValue& value, const QString& section, int
         return validateFindingV1(finding, context, errorMessage);
     }
 
-    return validateFindingV2(finding, context, errorMessage);
+    return validateFindingV2(finding, context, schemaVersion, errorMessage);
 }
 
 inline bool validateFixup(const QJsonValue& value, int index, QString* errorMessage)
