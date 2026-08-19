@@ -51,11 +51,12 @@
   ],
   "module_boundaries": {
     "core": {
-      "paths": ["Pdf4QtLibCore/**"],
+      "paths": ["Pdf4QtLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
       "targets": ["Pdf4QtLibCore"],
       "tests": [
         "UnitTests",
         "UnitTestsBenchmarkIdentity",
+        "UnitTestsBleedFixup",
         "UnitTestsBudgetExhaustion",
         "UnitTestsConversionOracle",
         "UnitTestsEvidenceGraph",
