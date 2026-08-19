@@ -128,14 +128,14 @@ LOUPELIBCORESHARED_EXPORT QStringList supportedPDFXTargets();
 
 /// Resolves a target name to the audited policy registry entry.
 LOUPELIBCORESHARED_EXPORT bool pdfxPolicyForTarget(const QString& target,
-                                                    PDFXPolicy& policy,
-                                                    QString& errorMessage);
+                                                   PDFXPolicy& policy,
+                                                   QString& errorMessage);
 
 /// Reduces mandatory PDF/X rule states. A definite failure takes precedence
 /// over missing evidence; a mandatory not-applicable rule is incomplete.
 LOUPELIBCORESHARED_EXPORT PDFXConformanceStatus reducePDFXStatus(const QVector<PDFXRuleResult>& rules,
-                                                                  QStringList* failedRuleIds = nullptr,
-                                                                  QStringList* incompleteRuleIds = nullptr);
+                                                                 QStringList* failedRuleIds = nullptr,
+                                                                 QStringList* incompleteRuleIds = nullptr);
 
 /// Named rectangle in PDF points, anchored to a page box.
 struct LOUPELIBCORESHARED_EXPORT PreflightRegion
@@ -165,8 +165,8 @@ struct LOUPELIBCORESHARED_EXPORT PreflightRestrictions
 };
 
 LOUPELIBCORESHARED_EXPORT bool parsePreflightRestrictions(const QJsonObject& object,
-                                                           PreflightRestrictions& restrictions,
-                                                           QString& errorMessage);
+                                                          PreflightRestrictions& restrictions,
+                                                          QString& errorMessage);
 
 /// Configuration for a single preflight check, parsed from a profile.
 struct LOUPELIBCORESHARED_EXPORT PreflightCheckConfig
@@ -308,14 +308,14 @@ struct LOUPELIBCORESHARED_EXPORT PreflightDecision
 
 LOUPELIBCORESHARED_EXPORT QString preflightDecisionKindToString(PreflightDecisionKind kind);
 LOUPELIBCORESHARED_EXPORT bool preflightDecisionKindFromString(const QString& value,
-                                                                PreflightDecisionKind& kind);
+                                                               PreflightDecisionKind& kind);
 LOUPELIBCORESHARED_EXPORT QString preflightDecisionStateToString(PreflightDecisionState state);
 
 /// Standalone decision-file contract used by PdfTool import/export.
 LOUPELIBCORESHARED_EXPORT QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions);
 LOUPELIBCORESHARED_EXPORT bool preflightDecisionsFromJson(const QJsonObject& object,
-                                                           QList<PreflightDecision>& decisions,
-                                                           QString& errorMessage);
+                                                          QList<PreflightDecision>& decisions,
+                                                          QString& errorMessage);
 
 /// Parsed preflight profile.
 struct LOUPELIBCORESHARED_EXPORT PreflightProfileData

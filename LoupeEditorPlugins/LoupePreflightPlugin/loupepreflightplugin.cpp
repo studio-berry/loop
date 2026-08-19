@@ -1037,7 +1037,8 @@ void LoupePreflightPlugin::onApplyBleedFixupRequested()
     const QJsonObject repairParameters = QJsonObject{
         { QStringLiteral("mode"), mode },
         { QStringLiteral("bleed_mm"), bleedMm },
-        { QStringLiteral("force"), true } };
+        { QStringLiteral("force"), true }
+    };
     const pdf::PDFRepairOperation* operation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
     if (!operation)
     {
@@ -1256,7 +1257,8 @@ void LoupePreflightPlugin::onApplyDownsampleImagesRequested()
 
     const QJsonObject repairParameters = QJsonObject{
         { QStringLiteral("target_dpi"), dpiSpin->value() },
-        { QStringLiteral("quality"), qualitySpin->value() } };
+        { QStringLiteral("quality"), qualitySpin->value() }
+    };
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, repairParameters);
     if (!addResult || !transaction.analyze() || !transaction.apply())
@@ -1421,7 +1423,8 @@ void LoupePreflightPlugin::onApplyRgbToCmykFixupRequested()
         { QStringLiteral("target_profile_name"), profile.name },
         { QStringLiteral("intent"), intentCombo->currentData().toInt() },
         { QStringLiteral("black_point_compensation"), blackPointCheck->isChecked() },
-        { QStringLiteral("embed_output_intent"), true } };
+        { QStringLiteral("embed_output_intent"), true }
+    };
     pdf::PDFRepairTransaction transaction(*m_document);
     const pdf::PDFOperationResult addResult = transaction.add(operation, repairParameters);
     if (!addResult || !transaction.analyze() || !transaction.apply())

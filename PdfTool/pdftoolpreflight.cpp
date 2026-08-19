@@ -640,8 +640,8 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             {
                 result.errorCode = QStringLiteral("preflight-job-failed");
                 result.errorMessage = snapshot.errorMessage.isEmpty()
-                                      ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
-                                      : snapshot.errorMessage;
+                                          ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
+                                          : snapshot.errorMessage;
             }
         }
     }
