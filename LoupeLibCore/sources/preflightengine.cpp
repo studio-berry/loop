@@ -1318,21 +1318,6 @@ bool isGraphBackedCheckId(const QString& checkId)
     return checkId == QLatin1String("image-resolution") || checkId == QLatin1String("color-mode") || checkId == QLatin1String("color-inventory") || checkId == QLatin1String("thin-strokes") || checkId == QLatin1String("white-overprint") || checkId == QLatin1String("transparency-risk") || checkId == QLatin1String("embedded-fonts");
 }
 
-QStringList evidenceIdsForRecord(const PDFEvidenceRecord& record)
-{
-    Q_ASSERT(!record.id.isEmpty());
-    return QStringList{ record.id };
-}
-
-void requireNonEmptyEvidenceIds(const QStringList& ids)
-{
-    Q_ASSERT(!ids.isEmpty());
-    for (const QString& id : ids)
-    {
-        Q_ASSERT(!id.isEmpty());
-    }
-}
-
 PDFEvidenceGraph evidenceGraphForCheck(const PDFEvidenceGraph& graph, const PreflightRestrictions& restrictions)
 {
     if (!restrictions.pages.has_value())
@@ -1454,7 +1439,7 @@ void evaluateImageResolutionFromGraph(const PreflightCheckConfig& check,
         finding.severity = check.severity;
         finding.checkId = check.id;
         finding.bbox = record.geometry;
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr(
                               "Image resolution %1 DPI is below minimum %2 DPI on page %3")
                               .arg(qRound(record.observedValue))
@@ -1536,7 +1521,6 @@ void evaluateColorModeFromGraph(const PreflightCheckConfig& check,
         finding.checkId = check.id;
         finding.bbox = QRectF();
         const QStringList pageEvidenceIds = evidenceByPage.value(pageNumber);
-        requireNonEmptyEvidenceIds(pageEvidenceIds);
         finding.evidenceIds = pageEvidenceIds;
         finding.message = PDFTranslationContext::tr(
                               "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
@@ -1566,7 +1550,7 @@ void evaluateColorInventoryFromGraph(const PreflightCheckConfig& check,
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
         finding.objectId = name;
         finding.type = QStringLiteral("spot-color");
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr("Spot color detected: %1").arg(name);
         emitInfo(finding);
     }
@@ -1579,7 +1563,7 @@ void evaluateColorInventoryFromGraph(const PreflightCheckConfig& check,
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
         finding.objectId = name;
         finding.type = QStringLiteral("separation");
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = isSpot
                               ? PDFTranslationContext::tr("Spot output separation: %1").arg(name)
                               : PDFTranslationContext::tr("Process output separation: %1").arg(name);
@@ -1592,7 +1576,7 @@ void evaluateColorInventoryFromGraph(const PreflightCheckConfig& check,
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
         finding.page = record.page;
         finding.type = QStringLiteral("rich-black");
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr(
                               "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
                               .arg(record.page)
@@ -1639,7 +1623,7 @@ void evaluateEmbeddedFontsFromGraph(const PreflightCheckConfig& check,
         finding.severity = check.severity;
         finding.checkId = check.id;
         finding.bbox = QRectF();
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = message;
         pushPreflightFinding(finding, check.severity, errors, warnings);
     }
@@ -1658,7 +1642,7 @@ void evaluateWhiteOverprintFromGraph(const PreflightCheckConfig& check,
         finding.type = QStringLiteral("white-overprint");
         finding.severity = check.severity;
         finding.checkId = check.id;
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr(
                               "White or near-white paint is set to overprint on page %1.")
                               .arg(record.page);
@@ -1684,7 +1668,7 @@ void evaluateTransparencyRiskFromGraph(const PreflightCheckConfig& check,
         finding.type = QStringLiteral("transparency-blend-mode");
         finding.severity = check.severity;
         finding.checkId = check.id;
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr(
                               "Transparency uses blend mode configuration(s) that may not be reproduced reliably by all render paths: %1")
                               .arg(blendModes.join(QStringLiteral(", ")));
@@ -1704,7 +1688,7 @@ void evaluateTransparencyRiskFromGraph(const PreflightCheckConfig& check,
         finding.type = QStringLiteral("transparency-blend-space");
         finding.severity = check.severity;
         finding.checkId = check.id;
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         finding.message = PDFTranslationContext::tr("Potential transparency blend-space mismatch: %1")
                               .arg(mismatches.join(QStringLiteral("; ")));
         pushPreflightFinding(finding, check.severity, errors, warnings);
@@ -1745,7 +1729,7 @@ void evaluateThinStrokesFromGraph(const PreflightCheckConfig& check,
         finding.severity = severity;
         finding.checkId = check.id;
         finding.bbox = record.geometry;
-        finding.evidenceIds = evidenceIdsForRecord(record);
+        finding.evidenceIds = QStringList{ record.id };
         if (hairline)
         {
             finding.message = PDFTranslationContext::tr(
