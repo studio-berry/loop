@@ -90,7 +90,9 @@ QJsonObject migratePreflightReportV2ToV3(QJsonObject document)
 
     if (!document.contains(QStringLiteral("inspection_complete")))
     {
-        document.insert(QStringLiteral("inspection_complete"), true);
+        const bool pass = document.value(QStringLiteral("pass")).toBool(false);
+        const QJsonArray errors = document.value(QStringLiteral("errors")).toArray();
+        document.insert(QStringLiteral("inspection_complete"), pass || !errors.isEmpty());
     }
 
     if (!document.contains(QStringLiteral("checks")))
@@ -413,7 +415,7 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
         }
     }
 
-    if (checkSchemaCompatibility(envelope.kind, envelope.version) == PDFSchemaCompatibility::UnsupportedMajor)
+    if (checkSchemaCompatibility(envelope.kind, envelope.version) != PDFSchemaCompatibility::Compatible)
     {
         result.document = {};
         return result;

@@ -576,7 +576,9 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         }
     }
 
-    if (pdf::checkSchemaCompatibility(kind, version) == pdf::PDFSchemaCompatibility::UnsupportedMajor)
+    const pdf::PDFSchemaCompatibility compatibility = pdf::checkSchemaCompatibility(kind, version);
+    if (compatibility == pdf::PDFSchemaCompatibility::UnsupportedMajor
+        || compatibility == pdf::PDFSchemaCompatibility::UnknownKind)
     {
         return setValidationError(errorMessage, QStringLiteral("schema_version is not supported."));
     }
@@ -588,7 +590,7 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
     }
 
     const QJsonObject normalizedReport = prepared.document;
-    const bool allowUnknownFields = pdf::checkSchemaCompatibility(kind, version) == pdf::PDFSchemaCompatibility::Compatible;
+    const bool allowUnknownFields = compatibility == pdf::PDFSchemaCompatibility::Compatible;
 
     if (!hasOnlyProperties(normalizedReport,
                            normalizedReportAllowedProperties(),
