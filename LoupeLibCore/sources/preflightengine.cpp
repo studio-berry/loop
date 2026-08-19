@@ -23,6 +23,7 @@
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
 #include "pdfoperationcontrol.h"
+#include "pdfschemaversion.h"
 
 #include "pdfbleedmarginprobe.h"
 #include "pdfblendfunction.h"
@@ -5387,7 +5388,7 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     }
 
     QJsonObject root;
-    root.insert(QStringLiteral("schema_version"), PREFLIGHT_REPORT_SCHEMA_VERSION);
+    writeSchemaEnvelope(root, PDFSchemaKind::PreflightReport, PDFSchemaVersion{ static_cast<quint16>(PREFLIGHT_REPORT_SCHEMA_VERSION), 0 });
     root.insert(QStringLiteral("inspection_complete"), inspectionComplete);
     const PreflightVerdict verdict = reducePreflightVerdict(*this);
     root.insert(QStringLiteral("pass"), verdict.isPass());

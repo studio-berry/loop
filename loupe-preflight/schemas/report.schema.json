@@ -7,6 +7,11 @@
   "additionalProperties": false,
   "required": ["schema_version", "pass", "profile", "errors", "warnings", "fixups_available", "inspection_complete", "checks", "verdict"],
   "properties": {
+    "schema_kind": {
+      "type": "string",
+      "const": "preflight-report",
+      "description": "Machine-readable schema kind for compatibility routing."
+    },
     "schema_version": {
       "type": "integer",
       "enum": [1, 2, 3],

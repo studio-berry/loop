@@ -55,6 +55,7 @@ private slots:
     void runningFailureAppendsTerminalFailedEvent();
     void livePreflightRunCarriesRevisionAndProfileDigests();
     void cancelledPreflightRunIsNotAccepted();
+    void schemaMigratedEventAppendedOnRewrite();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -348,7 +349,8 @@ void OperationHistoryTest::provenanceKindsRoundTripAndMiddleDeletionCompromisesC
         pdf::PDFOperationHistoryEventKind::DecisionRecorded,
         pdf::PDFOperationHistoryEventKind::DecisionInvalidated,
         pdf::PDFOperationHistoryEventKind::CertificateIssued,
-        pdf::PDFOperationHistoryEventKind::CertificateInvalidated
+        pdf::PDFOperationHistoryEventKind::CertificateInvalidated,
+        pdf::PDFOperationHistoryEventKind::SchemaMigrated
     };
 
     for (const auto kind : kinds)
@@ -780,6 +782,35 @@ void OperationHistoryTest::cancelledPreflightRunIsNotAccepted()
     QCOMPARE(history.events().last().status, pdf::PDFOperationHistoryStatus::Cancelled);
     QVERIFY(history.events().last().status != pdf::PDFOperationHistoryStatus::Accepted);
     QVERIFY(history.verify().verified);
+}
+
+void OperationHistoryTest::schemaMigratedEventAppendedOnRewrite()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+
+    pdf::PDFArtifactIdentity artifact;
+    artifact.sha256 = QString(64, QLatin1Char('a'));
+    artifact.size = 42;
+    artifact.mediaType = QStringLiteral("application/json");
+    artifact.logicalName = QStringLiteral("report.json");
+    artifact.storageToken = QStringLiteral("token");
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QVERIFY(history.registerArtifact(artifact));
+
+    QVERIFY(history.appendSchemaMigratedEvent(artifact,
+                                              pdf::PDFSchemaKind::PreflightReport,
+                                              { 2, 0 },
+                                              { 3, 0 },
+                                              artifact.sha256));
+
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+    QCOMPARE(events.size(), 1);
+    QCOMPARE(events.first().kind, pdf::PDFOperationHistoryEventKind::SchemaMigrated);
+    QCOMPARE(events.first().resultSummary.value(QStringLiteral("from_version")).toString(), QStringLiteral("2.0"));
+    QCOMPARE(events.first().resultSummary.value(QStringLiteral("to_version")).toString(), QStringLiteral("3.0"));
 }
 
 QTEST_MAIN(OperationHistoryTest)
