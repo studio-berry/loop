@@ -1383,7 +1383,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                 }
             }
 
-            completedFamilies |= domains & (PDFEvidenceDomain::Images | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Colorants);
+            completedFamilies |= domains & (PDFEvidenceDomains(PDFEvidenceDomain::Images) | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Colorants);
         }
         ensureRequestedFamiliesComplete(graph, domains, completedFamilies);
     }
