@@ -164,6 +164,14 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
         }
     }
 
+    if (plan.checkIds.isEmpty())
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = QStringLiteral("no-targeted-checks");
+        return plan;
+    }
+
     plan.full = false;
     plan.reason = QStringLiteral("targeted");
     return plan;

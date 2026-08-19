@@ -39,6 +39,7 @@ private slots:
     void incompleteImpactSelectsFullRevalidation();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
+    void emptyTargetedPlanFallsBackToFull();
     void standardsConvertRequiresOracle();
     void registeredOperationsDeclareImpact();
     void targetedMatchesFullOnImageProfile();
@@ -134,6 +135,17 @@ void OperationImpactTest::unmappedCheckForcesFullPlan()
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("bleed") });
     QVERIFY(plan.full);
     QCOMPARE(plan.reason, QStringLiteral("unmapped-check"));
+}
+
+void OperationImpactTest::emptyTargetedPlanFallsBackToFull()
+{
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("embedded-fonts") });
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("no-targeted-checks"));
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("embedded-fonts") });
 }
 
 void OperationImpactTest::standardsConvertRequiresOracle()
