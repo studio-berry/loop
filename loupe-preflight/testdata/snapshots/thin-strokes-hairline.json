@@ -1,0 +1,42 @@
+{
+    "checks": [
+        {
+            "id": "thin-strokes",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "bbox": [
+                19.9999995,
+                99.9999995,
+                180.0000005,
+                100.0000005
+            ],
+            "check_id": "thin-strokes",
+            "message": "Hairline stroke on page 1 has declared width 0.000000 pt.",
+            "page": 1,
+            "scope": "object",
+            "severity": "error",
+            "type": "hairline-stroke"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loupe Test - Thin Strokes",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "7abc9fd5f07d9fb8"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

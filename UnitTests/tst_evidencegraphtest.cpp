@@ -22,6 +22,7 @@
 
 #include "pdfconstants.h"
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
 #include "pdfevidencegraph.h"
 #include "pdfimage.h"
@@ -29,9 +30,11 @@
 #include "pdfschemaversion.h"
 #include "preflightengine.h"
 
+#include <QFile>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QPainter>
 #include <QtTest>
 
 class EvidenceGraphTest : public QObject
@@ -43,6 +46,10 @@ private slots:
     void emptyPage_isComplete();
     void incompleteGraphCannotPass();
     void imageFamilyDualRunMatchesEngine();
+    void colorantsFamilyDualRunMatchesEngine();
+    void strokesFamilyDualRunMatchesEngine();
+    void overprintTransparencyFamilyDualRunMatchesEngine();
+    void fontsFamilyDualRunMatchesEngine();
     void remainingFamiliesCollectOnEmptyPage();
     void graphEnvelopeUsesEvidenceGraphKind();
 };
@@ -85,6 +92,37 @@ pdf::PDFDocument buildLowDpiImagePage()
     builder.mergeTo(pageReference,
                     pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageUpdate))));
     return builder.build();
+}
+
+pdf::PDFDocument loadFixtureDocument(const char* relativePath)
+{
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/") + QString::fromUtf8(relativePath);
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        qFatal("Failed to load fixture '%s'", relativePath);
+    }
+    return document;
+}
+
+void assertFindingCitesGraphRecord(const QList<pdf::PreflightFinding>& findings,
+                                   const QString& checkId,
+                                   const QString& findingType,
+                                   const pdf::PDFEvidenceRecord& record)
+{
+    for (const pdf::PreflightFinding& finding : findings)
+    {
+        if (finding.checkId == checkId && finding.type == findingType)
+        {
+            QVERIFY2(!finding.evidenceIds.isEmpty(),
+                     qPrintable(QStringLiteral("Expected evidence_ids on %1 finding").arg(findingType)));
+            QCOMPARE(finding.evidenceIds.first(), record.id);
+            return;
+        }
+    }
+    QFAIL(qPrintable(QStringLiteral("Expected finding type '%1' for check '%2'").arg(findingType, checkId)));
 }
 
 }   // namespace
@@ -155,6 +193,135 @@ void EvidenceGraphTest::imageFamilyDualRunMatchesEngine()
     QCOMPARE(result.warnings.first().type, QStringLiteral("image-resolution"));
     QVERIFY(!result.warnings.first().evidenceIds.isEmpty());
     QCOMPARE(result.warnings.first().evidenceIds.first(), images.first().id);
+    QVERIFY(engine.lastEvidenceGraph().isComplete());
+}
+
+void EvidenceGraphTest::colorantsFamilyDualRunMatchesEngine()
+{
+    pdf::PDFDocument document = loadFixtureDocument("rich-black.pdf");
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants);
+    QVERIFY(graph.isComplete());
+    const QList<pdf::PDFEvidenceRecord> richBlack = graph.recordsForTarget(pdf::PDFEvidenceDomain::Colorants,
+                                                                         QStringLiteral("rich-black"));
+    QVERIFY(!richBlack.isEmpty());
+
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Color inventory") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                            { QStringLiteral("severity"), QStringLiteral("info") },
+                                            { QStringLiteral("probe_dpi"), 150 },
+                                            { QStringLiteral("rich_black_k_percent"), 10 } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    assertFindingCitesGraphRecord(result.warnings,
+                                    QStringLiteral("color-inventory"),
+                                    QStringLiteral("rich-black"),
+                                    richBlack.first());
+    QVERIFY(engine.lastEvidenceGraph().isComplete());
+}
+
+void EvidenceGraphTest::strokesFamilyDualRunMatchesEngine()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    QPen thinPen(Qt::black);
+    thinPen.setWidthF(0.1);
+    painter->setPen(thinPen);
+    painter->drawLine(QPointF(20, 20), QPointF(180, 20));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Strokes);
+    QVERIFY(graph.isComplete());
+    const QList<pdf::PDFEvidenceRecord> strokes = graph.recordsForTarget(pdf::PDFEvidenceDomain::Strokes,
+                                                                         QStringLiteral("stroke-width"));
+    QVERIFY(!strokes.isEmpty());
+
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin strokes") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-strokes") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.25 },
+                                            { QStringLiteral("thin_stroke_severity"), QStringLiteral("warning") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    assertFindingCitesGraphRecord(result.warnings,
+                                    QStringLiteral("thin-strokes"),
+                                    QStringLiteral("thin-stroke"),
+                                    strokes.first());
+    QVERIFY(engine.lastEvidenceGraph().isComplete());
+}
+
+void EvidenceGraphTest::overprintTransparencyFamilyDualRunMatchesEngine()
+{
+    pdf::PDFDocument document = loadFixtureDocument("white-overprint.pdf");
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session,
+                                                                           pdf::PDFEvidenceDomain::OverprintTransparency);
+    QVERIFY(graph.isComplete());
+    const QList<pdf::PDFEvidenceRecord> whiteOverprint = graph.recordsForTarget(
+        pdf::PDFEvidenceDomain::OverprintTransparency, QStringLiteral("white-overprint"));
+    QVERIFY(!whiteOverprint.isEmpty());
+
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("White overprint") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("white-overprint") },
+                                            { QStringLiteral("severity"), QStringLiteral("warning") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    assertFindingCitesGraphRecord(result.warnings,
+                                    QStringLiteral("white-overprint"),
+                                    QStringLiteral("white-overprint"),
+                                    whiteOverprint.first());
+    QVERIFY(engine.lastEvidenceGraph().isComplete());
+}
+
+void EvidenceGraphTest::fontsFamilyDualRunMatchesEngine()
+{
+    pdf::PDFDocument document = loadFixtureDocument("font-not-embedded.pdf");
+    pdf::PDFDocumentSession session(&document);
+
+    const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Fonts);
+    QVERIFY(graph.isComplete());
+    const QList<pdf::PDFEvidenceRecord> fonts = graph.recordsForTarget(pdf::PDFEvidenceDomain::Fonts,
+                                                                       QStringLiteral("font-resource"));
+    QVERIFY(!fonts.isEmpty());
+
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Embedded fonts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("embedded-fonts") },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(result.inspectionComplete);
+    assertFindingCitesGraphRecord(result.errors,
+                                    QStringLiteral("embedded-fonts"),
+                                    QStringLiteral("embedded-fonts"),
+                                    fonts.first());
     QVERIFY(engine.lastEvidenceGraph().isComplete());
 }
 
