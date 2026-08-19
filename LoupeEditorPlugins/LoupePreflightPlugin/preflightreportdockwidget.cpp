@@ -44,9 +44,9 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     QWidget* container = new QWidget(this);
     QVBoxLayout* layout = new QVBoxLayout(container);
     layout->setContentsMargins(pdf::PDFUITheme::kDialogMarginPx,
-                                 pdf::PDFUITheme::kDialogMarginPx,
-                                 pdf::PDFUITheme::kDialogMarginPx,
-                                 pdf::PDFUITheme::kDialogMarginPx);
+                               pdf::PDFUITheme::kDialogMarginPx,
+                               pdf::PDFUITheme::kDialogMarginPx,
+                               pdf::PDFUITheme::kDialogMarginPx);
     layout->setSpacing(pdf::PDFUITheme::kDialogMarginPx);
 
     m_headerLabel = new QLabel(tr("No preflight report loaded."), container);
@@ -94,10 +94,10 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
 
     connect(m_findingsView->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex& current, const QModelIndex& previous)
-    {
-        Q_UNUSED(previous);
-        Q_EMIT findingSelectionChanged(current.isValid() ? current.row() : -1);
-    });
+            {
+                Q_UNUSED(previous);
+                Q_EMIT findingSelectionChanged(current.isValid() ? current.row() : -1);
+            });
 
     m_fixupsList = new QListWidget(reportPage);
     m_fixupsList->setObjectName(QStringLiteral("preflightFixupsList"));
@@ -112,7 +112,7 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
     m_applyFixupButton->setAccessibleDescription(tr("Apply the selected bounded fixup after reviewing its scope."));
     m_applyFixupButton->setEnabled(false);
     connect(m_applyFixupButton, &QPushButton::clicked, this, [this]
-    {
+            {
         QListWidgetItem* item = m_fixupsList ? m_fixupsList->currentItem() : nullptr;
         if (!item && m_fixupsList && m_fixupsList->count() > 0)
         {
@@ -125,8 +125,7 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
             {
                 Q_EMIT applyFixupRequested(id);
             }
-        }
-    });
+        } });
     reportLayout->addWidget(m_applyFixupButton);
 
     m_contentStack->addWidget(reportPage);
@@ -177,9 +176,12 @@ void PreflightReportDockWidget::refreshHeader()
         return;
     }
 
-    const QString statusText = [&]() {
-        if (m_model.verdictState() == QStringLiteral("incomplete")) return tr("Incomplete");
-        if (m_model.verdictState() == QStringLiteral("error")) return tr("Error");
+    const QString statusText = [&]()
+    {
+        if (m_model.verdictState() == QStringLiteral("incomplete"))
+            return tr("Incomplete");
+        if (m_model.verdictState() == QStringLiteral("error"))
+            return tr("Error");
         return m_model.pass() ? tr("Pass") : tr("Fail");
     }();
     const bool positive = m_model.pass();
@@ -207,6 +209,15 @@ void PreflightReportDockWidget::refreshHeader()
     if (m_model.verdictState() == QStringLiteral("incomplete"))
     {
         summaryText += tr("Could not finish inspecting the document.");
+        if (!m_model.verdictReason().isEmpty())
+        {
+            summaryText += QStringLiteral(" ") + m_model.verdictReason();
+        }
+        summaryText += QStringLiteral(" ");
+    }
+    else if (m_model.verdictState() == QStringLiteral("error"))
+    {
+        summaryText += tr("The inspection result could not be validated.");
         if (!m_model.verdictReason().isEmpty())
         {
             summaryText += QStringLiteral(" ") + m_model.verdictReason();

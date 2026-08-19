@@ -778,13 +778,15 @@ add_test(UnitTestsPreflightChecks  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 # Locks the Editor plugin's pure sidecar path, exit-code, and report-contract helpers.
 add_executable(UnitTestsPreflightPlugin
     tst_preflightplugintest.cpp
+    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
 )
 
-target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test LoupeLibCore)
+target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test LoupeLibCore LoupeLibWidgets)
 target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
     ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
     ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
     ${CMAKE_BINARY_DIR})
 target_compile_definitions(UnitTestsPreflightPlugin PRIVATE
     LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
