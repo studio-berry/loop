@@ -340,12 +340,17 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
         return setValidationError(errorMessage, QStringLiteral("%1.check_id must be a string.").arg(context));
     }
 
-    if (isGraphBackedFindingType(type))
+    if (finding.contains(QStringLiteral("evidence_ids")))
     {
         if (!validateEvidenceIdsValue(finding.value(QStringLiteral("evidence_ids")), context, errorMessage))
         {
             return false;
         }
+    }
+    else if (isGraphBackedFindingType(type) && finding.contains(QStringLiteral("check_id")))
+    {
+        return setValidationError(errorMessage,
+                                  QStringLiteral("%1.evidence_ids is required for graph-backed findings."));
     }
 
     return true;
