@@ -26,6 +26,7 @@
 
 #include <QtTest>
 #include <QBuffer>
+#include <QDateTime>
 
 class IncrementalSaveTest : public QObject
 {
@@ -35,6 +36,7 @@ private slots:
     void preservesOriginalPrefixAndChangedObjects();
     void rejectsChangedSourceBytes();
     void selectsSafeWritePolicy();
+    void signedPdfIncrementalSave_preservesSignedPrefix();
     void explicitPoliciesCannotBeDowngradedToIncremental();
     void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
 };
@@ -151,6 +153,41 @@ void IncrementalSaveTest::selectsSafeWritePolicy()
     const pdf::PDFDocument signedDocument = signedBuilder.build();
     QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&signedDocument, false, false),
              pdf::PDFDocumentWriter::WriteMode::Incremental);
+}
+
+void IncrementalSaveTest::signedPdfIncrementalSave_preservesSignedPrefix()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    const pdf::PDFObjectReference signature = builder.createSignatureDictionary(
+        QByteArrayLiteral("Adobe.PPKLite"),
+        QByteArrayLiteral("adbe.pkcs7.detached"),
+        QByteArrayLiteral("signed-placeholder"),
+        QDateTime::currentDateTimeUtc(),
+        0);
+    const pdf::PDFObjectReference field = builder.createFormFieldSignature(
+        QStringLiteral("LoupeSignature"), {}, signature);
+    builder.createInvisibleFormFieldWidget(field, page);
+    builder.setCatalogMetadata(QByteArrayLiteral("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF/></x:xmpmeta>"));
+
+    const QByteArray originalData = writeDocument(builder.build());
+    QVERIFY(originalData.contains("/ByteRange"));
+    QVERIFY(originalData.contains("/Contents"));
+    QVERIFY(originalData.contains("/Subtype /Widget"));
+    QVERIFY(originalData.contains("/Metadata"));
+
+    const pdf::PDFDocument original = readDocument(originalData);
+    const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+    QVERIFY(modified);
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    QBuffer output;
+    output.open(QIODevice::WriteOnly);
+    QVERIFY(writer.writeIncremental(&output, originalData, &original, modified.data()));
+    QVERIFY(output.data().size() > originalData.size());
+    QCOMPARE(output.data().left(originalData.size()), originalData);
+    QVERIFY(output.data().contains("/Prev"));
+    QVERIFY(output.data().contains("/ByteRange"));
 }
 
 void IncrementalSaveTest::explicitPoliciesCannotBeDowngradedToIncremental()

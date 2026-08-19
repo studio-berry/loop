@@ -213,6 +213,15 @@ void PreflightReportDockWidget::refreshHeader()
         }
         summaryText += QStringLiteral(" ");
     }
+    else if (m_model.verdictState() == QStringLiteral("error"))
+    {
+        summaryText += tr("The inspection result could not be validated.");
+        if (!m_model.verdictReason().isEmpty())
+        {
+            summaryText += QStringLiteral(" ") + m_model.verdictReason();
+        }
+        summaryText += QStringLiteral(" ");
+    }
     else if (m_model.verdictState() == QStringLiteral("pass"))
     {
         summaryText += tr("No blocking problems found.");
