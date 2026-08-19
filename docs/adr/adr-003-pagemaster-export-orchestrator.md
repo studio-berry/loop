@@ -10,14 +10,14 @@
 
 ## Context
 
-PageMaster batch export lives in `Pdf4QtPageMaster/mainwindow.cpp` as an anonymous
+PageMaster batch export lives in `LoupePageMaster/mainwindow.cpp` as an anonymous
 `runExportJob` helper. MIC-307/308/309 all rewrite that loop (memory bounding,
 cancellation, atomic writes + manifest). Without a headless Core service, those
 changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
 
 ## Decision
 
-- **Location:** `Pdf4QtLibCore/sources/pdfpagemasterexport.h/.cpp`, namespace `pdf`.
+- **Location:** `LoupeLibCore/sources/pdfpagemasterexport.h/.cpp`, namespace `pdf`.
 - **API:** `PDFPageMasterExport::run(PDFPageMasterExportJob)` returns
   `PDFPageMasterExportResult`. Job owns source `PDFDocument` copies and `QImage`
   sources; optional `PDFProgress*` is borrowed.

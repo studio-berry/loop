@@ -17,9 +17,9 @@ _loupe_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export LOUPE_REPO_ROOT="${LOUPE_REPO_ROOT:-${_loupe_repo_root}}"
 
 export LOUPE_QT_VERSION="${LOUPE_QT_VERSION:-6.11.1}"
-export PDF4QT_QT_ROOT="${PDF4QT_QT_ROOT:-/opt/Qt/${LOUPE_QT_VERSION}/gcc_64}"
-export QT_ROOT_DIR="${QT_ROOT_DIR:-${PDF4QT_QT_ROOT}}"
-export CMAKE_PREFIX_PATH="${PDF4QT_QT_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+export LOUPE_QT_ROOT="${LOUPE_QT_ROOT:-/opt/Qt/${LOUPE_QT_VERSION}/gcc_64}"
+export QT_ROOT_DIR="${QT_ROOT_DIR:-${LOUPE_QT_ROOT}}"
+export CMAKE_PREFIX_PATH="${LOUPE_QT_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
 
 export VCPKG_ROOT="${VCPKG_ROOT:-/opt/vcpkg}"
 export VCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR:-/opt/vcpkg_installed}"
@@ -32,10 +32,10 @@ export CXX="${CXX:-g++}"
 # Headless CLI default; unset or set QT_QPA_PLATFORM=xcb for GUI on DISPLAY.
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 
-if [[ -d "${PDF4QT_QT_ROOT}/lib" ]]; then
+if [[ -d "${LOUPE_QT_ROOT}/lib" ]]; then
     case ":${LD_LIBRARY_PATH:-}:" in
-        *":${PDF4QT_QT_ROOT}/lib:"*) ;;
-        *) export LD_LIBRARY_PATH="${PDF4QT_QT_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" ;;
+        *":${LOUPE_QT_ROOT}/lib:"*) ;;
+        *) export LD_LIBRARY_PATH="${LOUPE_QT_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" ;;
     esac
 fi
 

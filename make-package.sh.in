@@ -5,7 +5,7 @@ file="install/DEBIAN/control"
 
 >$file
 echo "Package: Loupe-pdf" >>$file
-echo "Version: ${PDF4QT_VERSION}" >>$file
+echo "Version: ${LOUPE_VERSION}" >>$file
 echo "Section: base" >>$file
 echo "Priority: optional" >>$file
 echo "Architecture: amd64" >>$file
@@ -17,4 +17,4 @@ echo "Vcs-Browser: https://github.com/mberrys/Loupe-pdf" >>$file
 
 dpkg-deb --build install
 
-mv install.deb Loupe-pdf-${PDF4QT_VERSION}.deb
+mv install.deb Loupe-pdf-${LOUPE_VERSION}.deb

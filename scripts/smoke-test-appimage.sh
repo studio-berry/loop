@@ -52,7 +52,7 @@ fi
 
 BIN_DIR="${ROOT}/usr/bin"
 LIB_DIR="${ROOT}/usr/lib"
-PLUGINS_DIR="${ROOT}/usr/lib/pdf4qt"
+PLUGINS_DIR="${ROOT}/usr/lib/loupe"
 PROFILES_DIR="${ROOT}/usr/share/loupe/profiles"
 
 assert_file() {
@@ -67,7 +67,7 @@ assert_file() {
 
 echo "Smoke-testing AppImage at ${APPIMAGE_PATH}"
 
-assert_file "${BIN_DIR}/Pdf4QtEditor" "Editor"
+assert_file "${BIN_DIR}/LoupeEditor" "Editor"
 assert_file "${BIN_DIR}/PdfTool" "PdfTool"
 assert_file "${PLUGINS_DIR}/libLoupePreflightPlugin.so" "Loupe preflight plugin"
 assert_file "${PROFILES_DIR}/loupe-default.json" "Default preflight profile"

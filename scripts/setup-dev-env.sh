@@ -118,12 +118,12 @@ export VCPKG_OVERLAY_PORTS="${REPO_ROOT}/vcpkg/overlays/linux:${REPO_ROOT}/vcpkg
 
 log "Configuring CMake build directory at ${BUILD_DIR}..."
 cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}" -G Ninja \
-    -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
+    -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
     -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
     -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}" \
     -DVCPKG_MANIFEST_INSTALL=OFF \
     -DCMAKE_BUILD_TYPE=Release \
-    -DPDF4QT_QT_ROOT="${PDF4QT_QT_ROOT}" \
+    -DLOUPE_QT_ROOT="${LOUPE_QT_ROOT}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
 log "Writing ~/.bashrc Loupe dev block..."
@@ -150,10 +150,10 @@ Next steps:
   1. Open a new shell, or run:  source scripts/dev-env.sh
   2. Build a target:            cmake --build build --target PdfTool -j\$(nproc)
   3. Run CLI:                   PdfTool help
-  4. Run GUI apps (VNC):        unset QT_QPA_PLATFORM; DISPLAY=:1 ./build/usr/bin/Pdf4QtEditor
+  4. Run GUI apps (VNC):        unset QT_QPA_PLATFORM; DISPLAY=:1 ./build/usr/bin/LoupeEditor
 
 Key variables (see scripts/dev-env.sh):
-  PDF4QT_QT_ROOT=${PDF4QT_QT_ROOT}
+  LOUPE_QT_ROOT=${LOUPE_QT_ROOT}
   VCPKG_ROOT=${VCPKG_ROOT}
   VCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}
   LOUPE_BUILD_DIR=${BUILD_DIR}

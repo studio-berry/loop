@@ -41,11 +41,11 @@ This mirrors Acrobat/Sinalite behavior: flag most bleed gaps structurally, escal
 - **Generating** bleed artwork. That is `PDFBleedFixup` / `PdfTool add-bleed` (MIC-121/122) — see [MIRROR_BLEED_PLAN.md](MIRROR_BLEED_PLAN.md). This feature *detects* and may *advertise* `add-bleed` as a fixup; it never paints.
 - Changing the shipped `loupe-default` profile's pass/fail behavior. Without `raster_confirm`, Tier 2 never runs and the default profile stays exactly as fast as today.
 - Async / GUI page compilation. The engine path is synchronous and headless (`PDFRenderer::compile`), not the Editor's `PDFAsynchronousPageCompiler`.
-- New toolchains or dependencies. This stays on Pdf4QtLibCore (MIT) + QPDF (Apache-2.0); no JRE, Ghostscript, PDFBox, or PikePDF (per the hybrid sidecar plan).
+- New toolchains or dependencies. This stays on LoupeLibCore (MIT) + QPDF (Apache-2.0); no JRE, Ghostscript, PDFBox, or PikePDF (per the hybrid sidecar plan).
 
 ### Architecture alignment
 
-Consistent with the **hybrid sidecar** plan of record: all preflight logic lives in the **engine** (`Pdf4QtLibCore` + the PdfTool `preflight` command, a separate process), never inside the Editor GUI process. `PDFDocumentSession` and `PDFBleedMarginProbe` are **reuse-extensions** built on the existing `PDFRenderer` / `PDFPrecompiledPage` stack — a shared perf foundation, not a parallel renderer. Because they use the same document model as the PDF4QT renderer, the `bbox`es they emit match what Phase 2 overlays (`IDocumentDrawInterface`) draw — the core reason the engine is C++/PdfTool rather than Java.
+Consistent with the **hybrid sidecar** plan of record: all preflight logic lives in the **engine** (`LoupeLibCore` + the PdfTool `preflight` command, a separate process), never inside the Editor GUI process. `PDFDocumentSession` and `PDFBleedMarginProbe` are **reuse-extensions** built on the existing `PDFRenderer` / `PDFPrecompiledPage` stack — a shared perf foundation, not a parallel renderer. Because they use the same document model as the LOUPE renderer, the `bbox`es they emit match what Phase 2 overlays (`IDocumentDrawInterface`) draw — the core reason the engine is C++/PdfTool rather than Java.
 
 ## Architecture
 
@@ -164,7 +164,7 @@ inline bool contentWithinBleed(const QRectF& contentBounds,
 A headless Core session that owns a document plus the caches the tiered checks need. Grounded in the existing wiring at `pdftoolrender.cpp:178` and `pdfbleedfixup.cpp:464` (which already assemble document + OC activity + CMS + font cache + renderer — the session is that wiring plus ownership and caching).
 
 ```cpp
-class PDF4QTLIBCORESHARED_EXPORT PDFDocumentSession
+class LOUPELIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
     explicit PDFDocumentSession(const PDFDocument* document,
@@ -183,7 +183,7 @@ public:
 };
 ```
 
-Backing primitives (all confirmed present in `Pdf4QtLibCore/sources/`):
+Backing primitives (all confirmed present in `LoupeLibCore/sources/`):
 
 - Owns `PDFOptionalContentActivity` (`OCUsage::Export`), a `PDFCMSManager` (→ `PDFCMSPointer`), and `PDFFontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT)` with `setCacheShrinkEnabled(nullptr, false)` — exactly the `pdfbleedfixup.cpp:464` pattern.
 - `compiledPage()` compiles via `PDFRenderer::compile(PDFPrecompiledPage*, pageIndex)` into a `QCache<PDFInteger, PDFPrecompiledPage>`, reusing `PDFPrecompiledPage::markAccessed()` / `hasExpired()` for LRU (the same hooks the Editor's `PDFAsynchronousPageCompiler` uses).
@@ -252,12 +252,12 @@ All three `raster_*` params fit `profile.schema.json`'s check objects (which all
 
 | Area | Path |
 |------|------|
-| Page boxes | `Pdf4QtLibCore/sources/pdfpage.h` (`getMediaBox/getCropBox/getBleedBox/getTrimBox`) |
-| Renderer / compile | `Pdf4QtLibCore/sources/pdfrenderer.h`, `pdfpainter.h` (`PDFPrecompiledPage`) |
-| Session prototype | `Pdf4QtLibCore/sources/pdfbleedfixup.cpp` (wiring + strip raster) |
+| Page boxes | `LoupeLibCore/sources/pdfpage.h` (`getMediaBox/getCropBox/getBleedBox/getTrimBox`) |
+| Renderer / compile | `LoupeLibCore/sources/pdfrenderer.h`, `pdfpainter.h` (`PDFPrecompiledPage`) |
+| Session prototype | `LoupeLibCore/sources/pdfbleedfixup.cpp` (wiring + strip raster) |
 | Headless wiring example | `PdfTool/pdftoolrender.cpp` |
-| Decoded streams | `Pdf4QtLibCore/sources/pdfdocument.h`, `pdfstreamfilters.h` |
-| Editor session split | `Pdf4QtLibWidgets/sources/pdfdrawspacecontroller.h`, `pdfcompiler.h` |
+| Decoded streams | `LoupeLibCore/sources/pdfdocument.h`, `pdfstreamfilters.h` |
+| Editor session split | `LoupeLibWidgets/sources/pdfdrawspacecontroller.h`, `pdfcompiler.h` |
 | Preflight command | `PdfTool/pdftoolpreflight.cpp` |
 | Preflight box math | `PdfTool/pdftoolpreflightchecks.h` |
 | Report / profile schema | `loupe-preflight/schemas/report.schema.json`, `profile.schema.json` |

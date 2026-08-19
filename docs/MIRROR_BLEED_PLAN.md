@@ -121,7 +121,7 @@ PdfTool add-bleed --mode mirror|pixel-repeat|stretch \
 | Boxes | `pdfpage.h` / `pdfdocumentbuilder.h` |
 | Geometry (not solution) | `pdfpagegeometry.*` |
 | Renderer | `pdfrenderer.*` |
-| PageMaster export | `Pdf4QtPageMaster/mainwindow.cpp` |
+| PageMaster export | `LoupePageMaster/mainwindow.cpp` |
 | Planning process | `docs/PLANNING.md` |
 | Prepress note | `NOTES.txt` §14.11 |
 

@@ -4,7 +4,7 @@
 Complements check_generated_dependency_paths.py, which covers vcpkg state. This
 check exists because PR #188 shipped a 207-file Docker build tree (including a
 46 MB shared library), a root debug log, and a committed merge-conflict block
-that broke the Pdf4QtLibCore build.
+that broke the LoupeLibCore build.
 
 Everything here is judged from `git ls-files`, so it reports what is *tracked*
 and not merely present in a dirty working tree.

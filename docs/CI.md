@@ -97,7 +97,7 @@ the signing step refuses to run against an unpinned toolchain.
 
 ## Sentry debug files
 
-Windows Release builds with `PDF4QT_ENABLE_SENTRY` emit PDBs (`/Zi` +
+Windows Release builds with `LOUPE_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
 uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region

@@ -9,7 +9,7 @@ the pre-0.1.1 GUI scope.
 
 Loupe has two product surfaces:
 
-- **Loupe** — `Pdf4QtEditor`, the interactive desktop shell. Opening a PDF is
+- **Loupe** — `LoupeEditor`, the interactive desktop shell. Opening a PDF is
   the Document workspace and includes the inherited Viewer behavior.
 - **Loupe CLI** — `PdfTool`, the headless and automation surface. Its command
   names, JSON envelopes, and machine-readable capability discovery remain the
@@ -23,13 +23,13 @@ identity in the release profile.
 
 | Workspace | Owns | Drives | Explicitly does not own |
 | --- | --- | --- | --- |
-| Document | Open, view, navigate, save/export, and ordinary PDF interaction | `Pdf4QtEditor`, `Pdf4QtLibGui`, shared document/session contracts | A separate Viewer product or a second document model |
+| Document | Open, view, navigate, save/export, and ordinary PDF interaction | `LoupeEditor`, `LoupeLibGui`, shared document/session contracts | A separate Viewer product or a second document model |
 | Preflight | Run/rerun/cancel inspection, findings, evidence, report export, and stale-result state | Core `PreflightEngine`, `PdfTool preflight`, `LoupePreflightPlugin` | A GUI-only interpretation of the CLI report |
 | Production Preview | Soft proofing, output preview, separations, and production rendering evidence | `OutputPreviewPlugin`, `SoftProofingPlugin`, shared render/color contracts | Final approval or an alternate PDF-writing pipeline |
 | Pages / Production | Multi-document assembly, page geometry, crop, regrouping, bleed, optimization, and export | `PDFPageMasterExport`, ADR-003 stage order, ADR-004 batch manifest | A copied PageMaster engine or a reordered export pipeline |
 | Inspect | Contextual page, image, object, dimension, color, and evidence inspection | `DimensionsPlugin`, `ObjectInspectorPlugin`, Core inspection APIs | A standalone inspector application |
 | Fix | Deterministic, bounded corrective operations with preview, approval, output, and revalidation | Core repair operations and `PdfTool repair` | Silent mutation, GUI-only business logic, or implicit approval |
-| Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of `Pdf4QtDiff` while the decision is `OPEN` |
+| Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of `LoupeDiff` while the decision is `OPEN` |
 
 The shell issue (#193) may model these as stateful workspaces, but switching
 workspace must preserve the open document and preflight revision. A workspace
@@ -37,10 +37,10 @@ is not a new executable and must not own a duplicate Core semantic path.
 
 ## PageMaster disposition and capability crosswalk
 
-`Pdf4QtPageMaster` is **ABSORB**: its UI becomes the Pages / Production
+`LoupePageMaster` is **ABSORB**: its UI becomes the Pages / Production
 workspace later, while `PDFPageMasterExport` and its ADR-003/ADR-004 contracts
 remain the single source of truth. The following is the complete action
-inventory from `Pdf4QtPageMaster/mainwindow.ui`; every action is assigned a
+inventory from `LoupePageMaster/mainwindow.ui`; every action is assigned a
 destination or an explicit compatibility disposition.
 
 | PageMaster action IDs | Disposition | Destination / contract |
@@ -67,7 +67,7 @@ rollback behavior unchanged.
 ## Compare disposition
 
 Compare is **OPEN**, not implicitly absorbed. The Core `PDFDiff` contract is
-retained and `Pdf4QtDiff` remains directly invokable in both developer and
+retained and `LoupeDiff` remains directly invokable in both developer and
 release compatibility inventories, but the release package has no Diff desktop
 entry or AppX product entry. The owner is `m.berry`; #193 is the follow-up for
 the shell boundary and #197 is the release exit gate. No deletion or UI
@@ -81,8 +81,8 @@ surface disposition and the expected developer/release packaging inventory.
 must have:
 
 - one Linux desktop entry, `io.github.mberrys.Loupe-pdf.desktop`, launching
-  `Pdf4QtEditor` with `application/pdf` association;
-- one AppX application, `Pdf4QtEditor`, with the same PDF association;
+  `LoupeEditor` with `application/pdf` association;
+- one AppX application, `LoupeEditor`, with the same PDF association;
 - no Viewer, PageMaster, Diff, or LaunchPad desktop/AppX entry; and
 - the retained compatibility binaries/plugins listed by the manifest where
   direct invocation or release-profile policy requires them.

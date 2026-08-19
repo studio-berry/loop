@@ -240,31 +240,31 @@
   "registered_operations": [
     {
       "id": "add-bleed",
-      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "downsample-images",
-      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "production.add-contour-bleed",
-      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "production.place-grommets",
-      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "production.validate-wide-format",
-      "implementation": "Pdf4QtLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "rgb-to-cmyk",
-      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "standards-convert",
-      "implementation": "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
     }
   ],
   "schema_kinds": [
@@ -306,15 +306,15 @@
     "docs/branch-policy.json",
     "docs/version-policy.json",
     "docs/architecture-invariants.json",
-    "Pdf4QtLibCore/sources/preflightengine.cpp",
-    "Pdf4QtLibCore/sources/preflightengine.h",
+    "LoupeLibCore/sources/preflightengine.cpp",
+    "LoupeLibCore/sources/preflightengine.h",
     "docs/preflight-check-catalog-overlay.json",
-    "Pdf4QtLibCore/sources/pdfactionlist.cpp",
-    "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
-    "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
-    "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
+    "LoupeLibCore/sources/pdfactionlist.cpp",
+    "LoupeLibCore/sources/pdfrepairoperation.cpp",
+    "LoupeLibCore/sources/pdfrepairprimitives.cpp",
+    "LoupeLibCore/sources/pdfproductionrepair.cpp",
     "loupe-preflight/schemas/*.json",
-    "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
+    "LoupeLibCore/sources/pdfschemaversion.cpp",
     "docs/PDFX_POLICY_MATRIX.md",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"

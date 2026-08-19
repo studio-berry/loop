@@ -3,7 +3,7 @@
 Loupe's repair-diff layer compares a source PDF with a serialized candidate
 without treating indirect object numbers, xref offsets, compression filters, or
 dictionary ordering as production changes. The Core API lives in
-`Pdf4QtLibCore/sources/pdfrepairdiff.h` and is usable by Editor, PdfTool, and
+`LoupeLibCore/sources/pdfrepairdiff.h` and is usable by Editor, PdfTool, and
 future repair transactions.
 
 ## Headless usage

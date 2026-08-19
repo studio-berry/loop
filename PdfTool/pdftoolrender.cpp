@@ -167,7 +167,7 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     pdf::PDFRunIdentity identity = pdf::PDFRunIdentity::capture();
     identity.fixtureDigest = pdf::PDFRunIdentity::digestFile(options.document);
     identity.operationVersion = QStringLiteral("benchmark-render");
-    identity.renderer = QStringLiteral("pdf4qt");
+    identity.renderer = QStringLiteral("loupe");
 
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("benchmark", PDFToolTranslationContext::tr("Benchmark rendering of document %1").arg(options.document));

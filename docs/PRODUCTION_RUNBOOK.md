@@ -15,12 +15,12 @@ Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** d
 
 **`.deb` is built but does not work — do not distribute it.** `ci.yml`'s `build_ubuntu` job runs `make-package.sh` (generated from `make-package.sh.in` via CMake `configure_file`) on every push to `master` and uploads a `ubuntu-deb-package` artifact. Verified 2026-08-02 by installing the artifact from a real CI run on a clean Ubuntu 22.04 Docker container: `dpkg -i` succeeds, but the installed binary fails to launch — `libQt6Gui.so.6: cannot open shared object file` — because, unlike the AppImage (which uses `linuxdeployqt`), the `.deb` doesn't bundle the Qt runtime or declare any `Depends:` in its control file. It also has a glibc version mismatch against 22.04 (`GLIBC_2.38' not found`). It is not attached to GitHub releases by `CreateReleaseDraft.yml`. Linux V1 ships AppImage (and, once wired into the release process, Flatpak) only, until this is fixed.
 
-**V1 slim bundle** (`PDF4QT_LOUPE_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
+**V1 slim bundle** (`LOUPE_LOUPE_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
 
 **Bundled paths (Linux):**
 
-- Binaries: `usr/bin/Pdf4QtEditor`, `usr/bin/PdfTool`
-- Plugins: `usr/lib/pdf4qt/`
+- Binaries: `usr/bin/LoupeEditor`, `usr/bin/PdfTool`
+- Plugins: `usr/lib/loupe/`
 - Preflight profile: `usr/share/loupe/profiles/loupe-default.json`
 
 ---
@@ -48,7 +48,7 @@ Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** d
 
 1. Clean Windows 10/11 VM (no Qt/MSVC installed).
 2. Install MSI.
-3. Launch **Pdf4QtEditor**.
+3. Launch **LoupeEditor**.
 4. Open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
 5. **Loupe Preflight → Run Preflight** — expect fail + bleed finding.
 6. Confirm `PdfTool.exe` exists beside Editor and `share/loupe/profiles/loupe-default.json` is present.
@@ -94,7 +94,7 @@ Publish draft only after smoke tests pass.
 
 ### 4.2 Crash telemetry and tracing
 
-Windows builds enable sentry-native by default (`PDF4QT_ENABLE_SENTRY`) and
+Windows builds enable sentry-native by default (`LOUPE_ENABLE_SENTRY`) and
 compile in the `berry-studios/loupe-pdf` EU DSN. Opening Editor (or running
 `PdfTool sentry-verify`) sends a startup trace to
 [Explore → Traces](https://de.sentry.io/explore/traces/?project=4511866328449104).
@@ -133,7 +133,7 @@ Then open [Issues](https://de.sentry.io/issues/?project=4511866328449104) for th
 
 ### 4.4 Logs
 
-Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via `pdf::PDFLogSession` (`Pdf4QtLibCore/sources/pdflogger.{h,cpp}`), in addition to PdfTool's existing stderr/stdout behavior (unchanged — the log handler chains to it).
+Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via `pdf::PDFLogSession` (`LoupeLibCore/sources/pdflogger.{h,cpp}`), in addition to PdfTool's existing stderr/stdout behavior (unchanged — the log handler chains to it).
 
 **Location** (resolved in this order):
 
@@ -146,7 +146,7 @@ Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via
 | Windows | `%LOCALAPPDATA%\MelkaJ\<AppName>\logs\` |
 | Linux | `~/.local/share/MelkaJ/<AppName>/logs/` |
 
-`<AppName>` is `PdfTool` or `PDF4QT Editor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
+`<AppName>` is `PdfTool` or `LOUPE Editor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
 
 **Rotation:** `<applicationId>.log` (`pdftool.log` / `editor.log`), rolling to `.log.1` at 2 MiB, keeping 3 files total (`.log`, `.log.1`, `.log.2`). Bounded footprint, no unbounded growth.
 
@@ -185,7 +185,7 @@ On any failure (e.g. an unwritable output directory), no partial bundle director
 
 | Symptom | Check |
 |---------|-------|
-| "Could not find PdfTool" | `PdfTool` beside `Pdf4QtEditor` in install prefix |
+| "Could not find PdfTool" | `PdfTool` beside `LoupeEditor` in install prefix |
 | "Could not find profile" | `share/loupe/profiles/loupe-default.json` relative to bin |
 | Hang | Task Manager for stuck `PdfTool`; kill and retry |
 | Invalid report JSON | stderr buffer overflow (>16 MB stdout) — reduce document complexity |
@@ -254,7 +254,7 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 | `SENTRY_DSN` | All GUI apps + PdfTool | Override compile-time DSN, or `off` to disable |
 | `LOUPE_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
 | `QT_QPA_PLATFORM` | Headless CI | `offscreen` for tests |
-| `PDF4QT_*` | Build-time | See `CMakeLists.txt` |
+| `LOUPE_*` | Build-time | See `CMakeLists.txt` |
 
 **Settings CLI:** `--config <path>` on all major apps for portable installs.
 
@@ -301,7 +301,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 - [x] README documents unsigned Windows installer, SmartScreen steps, and `SHA256SUMS.txt` integrity check (MIC-342)
 - [ ] `PACKAGING_LICENSING.md` critical items reviewed (full checklist gates *paid* distribution)
 - [ ] `THIRD_PARTY_NOTICES.txt` generated for the release artifact
-- [x] README points to Loupe release artifacts (not upstream PDF4QT)
+- [x] README points to Loupe release artifacts (not upstream packages)
 - [ ] Draft release artifacts attached with `SHA256SUMS.txt`
 - [ ] Release notes state: unsigned installer, no overprint simulation in page view, Windows + Linux only
 - [ ] `docs/V1_RELEASE_READINESS.md` recommendation reviewed by product owner

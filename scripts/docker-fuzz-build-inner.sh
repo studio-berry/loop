@@ -8,9 +8,9 @@ export VCPKG_ROOT=/work/.docker-vcpkg
 export VCPKG_INSTALLED_DIR=/work/.docker-vcpkg-installed
 export VCPKG_OVERLAY_PORTS=/work/vcpkg/overlays/linux:/work/vcpkg/overlays/general
 export VCPKG_DEFAULT_BINARY_CACHE=/work/.docker-vcpkg-cache
-export PDF4QT_QT_ROOT=/opt/Qt/6.11.1/gcc_64
-export CMAKE_PREFIX_PATH="${PDF4QT_QT_ROOT}:${CMAKE_PREFIX_PATH:-}"
-export LD_LIBRARY_PATH="${PDF4QT_QT_ROOT}/lib:${LD_LIBRARY_PATH:-}"
+export LOUPE_QT_ROOT=/opt/Qt/6.11.1/gcc_64
+export CMAKE_PREFIX_PATH="${LOUPE_QT_ROOT}:${CMAKE_PREFIX_PATH:-}"
+export LD_LIBRARY_PATH="${LOUPE_QT_ROOT}/lib:${LD_LIBRARY_PATH:-}"
 
 apt-get update -qq
 apt-get install -y --no-install-recommends \
@@ -65,7 +65,7 @@ if [[ "$ACTUAL" != "$VCPKG_COMMIT" ]]; then
     exit 1
 fi
 
-if [[ ! -x "${PDF4QT_QT_ROOT}/bin/qmake" ]]; then
+if [[ ! -x "${LOUPE_QT_ROOT}/bin/qmake" ]]; then
     python3 -m venv /tmp/aqt-venv
     /tmp/aqt-venv/bin/pip install -q aqtinstall
     /tmp/aqt-venv/bin/aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
@@ -93,13 +93,13 @@ cmake -B /work/build-fuzz-docker -S /work -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
     -DCMAKE_VCPKG_BUILD_TYPE=Release \
     -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}" \
-    -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
-    -DPDF4QT_BUILD_ONLY_CORE_LIBRARY=ON \
-    -DPDF4QT_BUILD_TESTS=OFF \
-    -DPDF4QT_ENABLE_SENTRY=OFF \
-    -DPDF4QT_ENABLE_SANITIZERS=ON \
-    -DPDF4QT_BUILD_FUZZERS=ON \
-    -DPDF4QT_QT_ROOT="${PDF4QT_QT_ROOT}"
+    -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
+    -DLOUPE_BUILD_ONLY_CORE_LIBRARY=ON \
+    -DLOUPE_BUILD_TESTS=OFF \
+    -DLOUPE_ENABLE_SENTRY=OFF \
+    -DLOUPE_ENABLE_SANITIZERS=ON \
+    -DLOUPE_BUILD_FUZZERS=ON \
+    -DLOUPE_QT_ROOT="${LOUPE_QT_ROOT}"
 
 cmake --build /work/build-fuzz-docker \
     --target fuzz_pdf_parser fuzz_stream_filters fuzz_content_stream fuzz_images \

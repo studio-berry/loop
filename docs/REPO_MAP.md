@@ -82,11 +82,11 @@ targeted Core tests before merging an authorized sync.
 
 | Area | Path | Purpose |
 |------|------|---------|
-| Core PDF library | `Pdf4QtLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
-| Interactive editor | `Pdf4QtEditor/`, `Pdf4QtLibGui/` | Primary interactive shell and plugin host |
+| Core PDF library | `LoupeLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
+| Interactive editor | `LoupeEditor/`, `LoupeLibGui/` | Primary interactive shell and plugin host |
 | Headless CLI | `PdfTool/` | Automation, batch checks, rendering, and repair |
-| Page production | `Pdf4QtPageMaster/` | Batch geometry, assembly, and production export |
-| Editor plugins | `Pdf4QtEditorPlugins/` | Editor-only capabilities |
+| Page production | `LoupePageMaster/` | Batch geometry, assembly, and production export |
+| Editor plugins | `LoupeEditorPlugins/` | Editor-only capabilities |
 | Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
 | Preflight contract | `loupe-preflight/` | Profiles, schemas, examples, and report documentation |
 | Architecture records | `docs/adr/`, `docs/` | Decisions, policy, plans, and generated factual catalogs |

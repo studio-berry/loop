@@ -8,13 +8,13 @@ Planning review for Loupe desktop distribution — **not legal advice**. A quali
 
 ## Recommendation
 
-Ship Loupe’s **default desktop bundle as C++/Qt only**: PDF4QT host + Loupe plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
+Ship Loupe’s **default desktop bundle as C++/Qt only**: Loupe host + Loupe plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
 
 ## Decision record
 
 | Component | Default bundle | Optional add-on | Decision |
 |-----------|:--------------:|:---------------:|----------|
-| Loupe / PDF4QT fork | Yes | — | MIT; re-verify at each release commit |
+| Loupe host (upstream fork) | Yes | — | MIT; re-verify at each release commit |
 | Qt runtime | Yes | — | Dynamically linked LGPL-eligible modules; avoid requiring a commercial Qt license unless chosen |
 | PdfTool `preflight` engine | Yes | — | Separate C++ process; no JVM. Version with plugin and JSON schema |
 | Little CMS | Transitive | — | MIT; include notice |
@@ -23,12 +23,12 @@ Ship Loupe’s **default desktop bundle as C++/Qt only**: PDF4QT host + Loupe pl
 | veraPDF CLI | No | Yes | MPL 2.0 option; pin exact release; process-separated; include MPL text and controlled source location |
 | Eclipse Temurin runtime | No | With veraPDF | Pin LTS supported by selected veraPDF; ship license/NOTICE unchanged; `jlink` only after license/runtime validation |
 | Ghostscript | No | No without contract | Exclude from proprietary packages unless Artifex grants commercial distribution license |
-| PDFBox | No | No current need | Superseded by Pdf4QtLibCore + optional veraPDF |
+| PDFBox | No | No current need | Superseded by LoupeLibCore + optional veraPDF |
 | PikePDF / Python | No | No current need | Dropped from architecture |
 
 ## Why the original MIC-140 issue is stale
 
-Default checks run in PdfTool on Pdf4QtLibCore. PDFBox and Ghostscript were removed from the default path; veraPDF is optional for client-driven PDF/A or PDF/UA validation. The default engine needs **neither Java nor a JRE**.
+Default checks run in PdfTool on LoupeLibCore. PDFBox and Ghostscript were removed from the default path; veraPDF is optional for client-driven PDF/A or PDF/UA validation. The default engine needs **neither Java nor a JRE**.
 
 MIC-140 is therefore a **release packaging and license-compliance gate**, not a “bundle Ghostscript/veraPDF/JRE” task:
 
@@ -44,7 +44,7 @@ MIC-140 is therefore a **release packaging and license-compliance gate**, not a 
 ```text
 Loupe/
 ├─ app/
-│  ├─ Pdf4QtEditor[.exe]
+│  ├─ LoupeEditor[.exe]
 │  ├─ PdfTool[.exe]
 │  └─ required shared libraries
 ├─ plugins/
@@ -54,7 +54,7 @@ Loupe/
 │  └─ schemas/
 ├─ licenses/
 │  ├─ THIRD_PARTY_NOTICES.txt
-│  ├─ PDF4QT-MIT.txt
+│  ├─ LOUPE-MIT.txt
 │  ├─ Qt-LGPL-3.0.txt
 │  └─ component license and NOTICE files
 ├─ manifest/
@@ -88,9 +88,9 @@ Loupe-ValidatorPack/
 
 ## License findings
 
-### PDF4QT and transitive runtime
+### Loupe host and transitive runtime
 
-PDF4QT moved from LGPLv3 to MIT (April 27, 2025) but lists third-party libraries with independent terms (Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, Blend2D). Re-verify the exact fork commit and resolved binaries at release time; top-level MIT does not replace dependency obligations.
+The upstream engine moved from LGPLv3 to MIT (April 27, 2025) but lists third-party libraries with independent terms (Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, Blend2D). Re-verify the exact fork commit and resolved binaries at release time; top-level MIT does not replace dependency obligations.
 
 Sources: [PDF4QT](https://github.com/JakubMelka/PDF4QT), [Little CMS](https://littlecms.com/color-engine/), [OpenSSL](https://openssl-library.org/source/license/), [Blend2D](https://blend2d.com/).
 
@@ -164,7 +164,7 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 - [ ] Scan installer/archive for undeclared executables, shared libraries, JARs, Python wheels, fonts, ICC profiles, and data files
 - [ ] Generate `THIRD_PARTY_NOTICES.txt` from resolved manifest; manual review
 - [ ] Archive every license and NOTICE file exactly as shipped
-- [ ] Verify PDF4QT upstream/fork license at release commit
+- [ ] Verify the upstream fork license at release commit
 - [ ] Audit every used Qt module and plugin; choose LGPL compliance or commercial license
 - [ ] Under LGPL, test recipient can replace/relink Qt libraries and still launch the app
 - [ ] Keep Qt and other corresponding source archives or written offers under Berry Studio control
@@ -189,7 +189,7 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 
 **Title:** `[Plan] Release packaging + OSS licensing gate (Qt / optional veraPDF)`
 
-**Summary:** Default Loupe packaging is C++/Qt only: PDF4QT host, Loupe plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
+**Summary:** Default Loupe packaging is C++/Qt only: Loupe host, Loupe plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
 
 **Deliverables:**
 

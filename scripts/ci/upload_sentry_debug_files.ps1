@@ -48,12 +48,12 @@ if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     -OutFile $cliPath `
     -Sha256 $cli.sha256
 
-$pdbFilter = '^(Pdf4Qt|PdfTool|pdf)'
+$pdbFilter = '^(Loupe|PdfTool|pdf)'
 $pdbs = @(Get-ChildItem -LiteralPath $BuildDir -Recurse -Filter *.pdb -File -ErrorAction SilentlyContinue |
     Where-Object { $_.BaseName -match $pdbFilter })
 
 if ($pdbs.Count -eq 0) {
-    throw "upload_sentry_debug_files.ps1: no Loupe PDBs under $BuildDir. Release builds need /Zi when PDF4QT_ENABLE_SENTRY is on."
+    throw "upload_sentry_debug_files.ps1: no Loupe PDBs under $BuildDir. Release builds need /Zi when LOUPE_ENABLE_SENTRY is on."
 }
 
 Write-Host "upload_sentry_debug_files.ps1: uploading $($pdbs.Count) PDB(s) to $org/$project ($url)"

@@ -8,7 +8,7 @@ workspaces such as Preflight.
 
 ## Shared policy
 
-`Pdf4QtLibWidgets/sources/pdfaccessibility.*` is the shared policy and test
+`LoupeLibWidgets/sources/pdfaccessibility.*` is the shared policy and test
 surface. It provides:
 
 - widget-tree findings for controls that require explicit names or descriptions;

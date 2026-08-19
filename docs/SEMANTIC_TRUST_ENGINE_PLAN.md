@@ -1,7 +1,7 @@
 # Semantic Trust Engine — Implementation Plan
 
 Status: **locked for 0.1.1** (M0). Former planning alias: **0.0.3**. Living product gate: **0.1.1**.
-Scope: UI-neutral Core / PdfTool / tests. Product `PDF4QT_VERSION` stays **0.1.0** until session S18’s exit checklist is green.
+Scope: UI-neutral Core / PdfTool / tests. Product `LOUPE_VERSION` stays **0.1.0** until session S18’s exit checklist is green.
 Related: GitHub #234, #236, #237, #238, #239, #240, #241, #242, #243, #244, #245, #246, #266, #267, #268, #269, #125, #128, #129, #132, #165.
 
 ## Goal
@@ -133,7 +133,7 @@ Unknown or incomplete impact → full revalidation. Cache invalidation and check
 
 ## Schema vs product SemVer
 
-Product versions follow [VERSIONING.md](VERSIONING.md). JSON/`history-db` schema versions are a **separate** contract ([SCHEMA_EVOLUTION.md](SCHEMA_EVOLUTION.md) from S03). Never bump `PDF4QT_VERSION` because a schema minor moved, and never bump a report major because a product patch shipped.
+Product versions follow [VERSIONING.md](VERSIONING.md). JSON/`history-db` schema versions are a **separate** contract ([SCHEMA_EVOLUTION.md](SCHEMA_EVOLUTION.md) from S03). Never bump `LOUPE_VERSION` because a schema minor moved, and never bump a report major because a product patch shipped.
 
 Compatibility:
 
@@ -193,7 +193,7 @@ generated exhaustion corpus, huge-document envelopes with prefetch/quality
 shedding, a seeded lifecycle model, plugin ABI inspection before
 `QPluginLoader::instance()`, the upstream divergence register, benchmark
 run identity, and catalog-checked architecture invariants. Product
-`PDF4QT_VERSION` stays **0.1.0** because the 0.1.1 exit checklist is not
+`LOUPE_VERSION` stays **0.1.0** because the 0.1.1 exit checklist is not
 green on `origin/dev`. Waves A (S00–S05), B (S06–S08), and C (S09–S13) are
 already integrated on the base branch. See
 [`SEMANTIC_TRUST_ENGINE_EXIT.md`](SEMANTIC_TRUST_ENGINE_EXIT.md).

@@ -15,7 +15,7 @@ by PdfTool and the Editor plugin.
 ## Stable rule registry
 
 The registry is intentionally auditable and versioned in
-`Pdf4QtLibCore/sources/preflightengine.cpp`:
+`LoupeLibCore/sources/preflightengine.cpp`:
 
 `pdfx.document.version`, `pdfx.document.trailer-id`,
 `pdfx.document.encryption`, `pdfx.metadata.identification`,

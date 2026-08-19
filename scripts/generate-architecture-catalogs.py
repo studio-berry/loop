@@ -102,7 +102,7 @@ def parse_version_policy() -> dict[str, Any]:
 
 
 def parse_preflight_checks() -> list[str]:
-    source = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.cpp")
+    source = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.cpp")
     match = re.search(
         r"void\s+PreflightEngine::registerBuiltInChecks\(\)\s*\{(?P<body>.*?)\n\}",
         source,
@@ -157,7 +157,7 @@ def parse_repair_operations() -> list[dict[str, str]]:
         r'return\s+QStringLiteral\("([^"]+)"\)',
         re.DOTALL,
     )
-    for path in sorted((ROOT / "Pdf4QtLibCore" / "sources").glob("*.cpp")):
+    for path in sorted((ROOT / "LoupeLibCore" / "sources").glob("*.cpp")):
         for class_name, operation_id in pattern.findall(read(path)):
             operations.append(
                 {"id": operation_id, "implementation": path.relative_to(ROOT).as_posix()}
@@ -198,7 +198,7 @@ def schema_version_values(value: Any) -> list[int]:
 
 
 def parse_schema_kinds() -> list[str]:
-    source = read(ROOT / "Pdf4QtLibCore" / "sources" / "pdfschemaversion.cpp")
+    source = read(ROOT / "LoupeLibCore" / "sources" / "pdfschemaversion.cpp")
     match = re.search(
         r"QString\s+pdfSchemaKindToString\(PDFSchemaKind kind\)\s*\{(?P<body>.*?)\n\}",
         source,
@@ -239,13 +239,13 @@ def parse_schema_versions() -> dict[str, Any]:
         versions = unique_sorted(str(value) for value in schema_version_values(document))
         schemas[path.relative_to(ROOT).as_posix()] = [int(value) for value in versions]
 
-    engine_header = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.h")
+    engine_header = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.h")
     report_match = re.search(r"PREFLIGHT_REPORT_SCHEMA_VERSION\s*=\s*(\d+)", engine_header)
-    engine_cpp = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.cpp")
+    engine_cpp = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.cpp")
     decision_match = re.search(
         r'preflightDecisionsToJson.*?schema_version"\),\s*(\d+)', engine_cpp, re.DOTALL
     )
-    action_list = read(ROOT / "Pdf4QtLibCore" / "sources" / "pdfactionlist.cpp")
+    action_list = read(ROOT / "LoupeLibCore" / "sources" / "pdfactionlist.cpp")
     action_match = re.search(r'loupe-action-list/(\d+)', action_list)
     if not report_match or not decision_match or not action_match:
         raise ValueError("could not find one or more runtime schema versions")
@@ -390,15 +390,15 @@ def build_catalog() -> dict[str, Any]:
             "docs/branch-policy.json",
             "docs/version-policy.json",
             "docs/architecture-invariants.json",
-            "Pdf4QtLibCore/sources/preflightengine.cpp",
-            "Pdf4QtLibCore/sources/preflightengine.h",
+            "LoupeLibCore/sources/preflightengine.cpp",
+            "LoupeLibCore/sources/preflightengine.h",
             "docs/preflight-check-catalog-overlay.json",
-            "Pdf4QtLibCore/sources/pdfactionlist.cpp",
-            "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
-            "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
-            "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
+            "LoupeLibCore/sources/pdfactionlist.cpp",
+            "LoupeLibCore/sources/pdfrepairoperation.cpp",
+            "LoupeLibCore/sources/pdfrepairprimitives.cpp",
+            "LoupeLibCore/sources/pdfproductionrepair.cpp",
             "loupe-preflight/schemas/*.json",
-            "Pdf4QtLibCore/sources/pdfschemaversion.cpp",
+            "LoupeLibCore/sources/pdfschemaversion.cpp",
             "docs/PDFX_POLICY_MATRIX.md",
             "UnitTests/CMakeLists.txt",
             ".github/workflows/*.yml",

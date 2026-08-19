@@ -47,7 +47,7 @@ private slots:
 namespace
 {
 
-QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStringLiteral("PDF4QT.TestPlugin"))
+QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStringLiteral("LOUPE.TestPlugin"))
 {
     return QJsonObject{
         { QStringLiteral("IID"), iid },
@@ -58,7 +58,7 @@ QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStri
 QJsonObject validMetadata()
 {
     return QJsonObject{
-        { QStringLiteral("PluginId"), QStringLiteral("PDF4QT.TestPlugin") },
+        { QStringLiteral("PluginId"), QStringLiteral("LOUPE.TestPlugin") },
         { QStringLiteral("AbiVersion"), 1 },
         { QStringLiteral("Name"), QStringLiteral("Test Plugin") },
         { QStringLiteral("Author"), QStringLiteral("Loupe") },
@@ -85,7 +85,7 @@ void PluginAbiTest::acceptedManifestPasses()
                                                                             {});
     QVERIFY(decision.accepted);
     QCOMPARE(decision.info.abiVersion, quint32(pdf::PDF_PLUGIN_ABI_VERSION));
-    QCOMPARE(decision.info.pluginId, QStringLiteral("PDF4QT.TestPlugin"));
+    QCOMPARE(decision.info.pluginId, QStringLiteral("LOUPE.TestPlugin"));
     QVERIFY(decision.info.capabilities.contains(QStringLiteral("read-document")));
 }
 
@@ -131,7 +131,7 @@ void PluginAbiTest::duplicateIdFailsClosed()
     const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
     QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
 
-    const QSet<QString> seen{ QStringLiteral("PDF4QT.TestPlugin") };
+    const QSet<QString> seen{ QStringLiteral("LOUPE.TestPlugin") };
     const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
                                                                             pluginPath,
                                                                             directory.path(),

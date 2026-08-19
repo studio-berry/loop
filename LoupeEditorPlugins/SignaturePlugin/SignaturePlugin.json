@@ -1,0 +1,17 @@
+{
+    "Name": "Signature",
+    "Author": "Jakub Melka",
+    "Version": "1.0.0",
+    "License": "LGPL v3",
+    "Description": "Electronically or digitally sign PDF document.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": false,
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation"
+    ],
+    "PluginId": "LOUPE.SignaturePlugin",
+    "BuildId": "loupe-0.1.0"
+}

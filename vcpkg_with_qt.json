@@ -1,5 +1,5 @@
 {
-  "name": "pdf4qt",
+  "name": "loupe",
   "version-string": "1.5.2",
   "dependencies": [ "openssl", "lcms", "zlib", "openjpeg", "freetype", "libjpeg-turbo", "libpng", "qt" ]
 }

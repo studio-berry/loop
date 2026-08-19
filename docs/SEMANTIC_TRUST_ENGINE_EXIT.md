@@ -1,6 +1,6 @@
 # Semantic Trust Engine — 0.1.1 exit audit (S18)
 
-Product `PDF4QT_VERSION` remains **0.1.0**. This audit does **not** bump
+Product `LOUPE_VERSION` remains **0.1.0**. This audit does **not** bump
 SemVer. Waves A–D land as stacked topic branches; they are not yet
 merged to `origin/dev`. Re-run this checklist on `dev` after that merge
 before tagging `0.1.1`.
@@ -26,7 +26,7 @@ before tagging `0.1.1`.
 
 - Merge Waves A–D to `dev` and re-run the mapped `UnitTests*` targets plus `scripts/generate-architecture-catalogs.py --check`.
 - Confirm independent oracle coverage still matches the S12 fixture triad on `dev`.
-- Do not bump `PDF4QT_VERSION` until every row is green on `dev`.
+- Do not bump `LOUPE_VERSION` until every row is green on `dev`.
 
 ## Identity fields
 

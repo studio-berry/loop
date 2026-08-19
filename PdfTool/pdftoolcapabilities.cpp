@@ -118,7 +118,7 @@ QJsonArray buildCapabilities()
         QStringLiteral("core.pdf.write"),
         QStringLiteral("pdftool.discovery.v1")
     };
-#ifdef PDF4QT_ENABLE_SENTRY
+#ifdef LOUPE_ENABLE_SENTRY
     capabilities.append(QStringLiteral("telemetry.sentry"));
 #endif
     if (PDFToolApplicationStorage::getApplicationByCommand(QStringLiteral("preflight")))

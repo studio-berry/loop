@@ -30,10 +30,10 @@ are best-effort only and produce no official release artifacts.
 
 ## Install and plugin layout
 
-| Platform | Binaries | Plugins (`PDF4QT_PLUGINS_DIR`) | Preflight profiles |
+| Platform | Binaries | Plugins (`LOUPE_PLUGINS_DIR`) | Preflight profiles |
 |----------|----------|--------------------------------|--------------------|
 | Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/loupe/profiles/` in bundle |
-| Linux | `<prefix>/bin` | `<prefix>/lib/pdf4qt` | `/usr/share/loupe/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
+| Linux | `<prefix>/bin` | `<prefix>/lib/loupe` | `/usr/share/loupe/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
 
 Flatpak packaging uses the bounded `--filesystem=home` permission; see
 `docs/FLATPAK_SANDBOX.md` for named-path overrides and the portal-only
@@ -43,15 +43,15 @@ Editor must resolve **PdfTool** and **LoupePreflightPlugin** without a
 developer toolchain on PATH.
 
 The profile directory is set by `LOUPE_PREFLIGHT_PROFILES_DIR` in
-`Pdf4QtEditorPlugins/LoupePreflightPlugin/CMakeLists.txt`, derived from
-`PDF4QT_INSTALL_SHARE_DIR`. Note that `-DPDF4QT_INSTALL_TO_USR=ON` (used by the
+`LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt`, derived from
+`LOUPE_INSTALL_SHARE_DIR`. Note that `-DLOUPE_INSTALL_TO_USR=ON` (used by the
 Windows CI and MSI builds) prefixes that with `usr/`, so the shipped path is
 `usr/share/loupe/profiles/`. Any smoke test must derive this from the install
 prefix rather than assuming a fixed absolute location.
 
 ## V1 slim distribution
 
-When `PDF4QT_LOUPE_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
+When `LOUPE_LOUPE_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
 (LoupePreflight and required inspection plugins). PageMaster / Diff / Viewer /
 LaunchPad may ship in full packages; still build them in CI on both supported OS.
 
@@ -64,21 +64,21 @@ bundling** and **installer packaging** for modules that are already complete.
 
 | Module / surface | Already complete? | Win | Linux | What to verify |
 |------------------|-------------------|:--:|:-----:|----------------|
-| Pdf4QtLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
-| Pdf4QtLibWidgets / Pdf4QtLibGui | Yes | ☐ | ☐ | Plugin relative path; settings paths |
+| LoupeLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
+| LoupeLibWidgets / LoupeLibGui | Yes | ☐ | ☐ | Plugin relative path; settings paths |
 | PdfTool (`preflight`, `add-bleed`, …) | Yes | ☐ | ☐ | Bundled next to Editor; working directory; offscreen CI |
 | LoupePreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `loupe-default.json`; `.dll` / `.so` |
-| Pdf4QtEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
+| LoupeEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
 | Other Editor plugins | Yes | ☐ | ☐ | Present in intended bundle set; load without system Qt |
-| Pdf4QtPageMaster export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
-| Pdf4QtViewer / Diff / LaunchPad | Adjacent | ☐ | ☐ | Build in CI; optional in slim package |
+| LoupePageMaster export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
+| LoupeViewer / Diff / LaunchPad | Adjacent | ☐ | ☐ | Build in CI; optional in slim package |
 | loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
 | UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
 | Windows MSI | In review (MIC-301) | ☐ | — | Clean VM smoke; redist. **V1 ships unsigned** (MIC-342 / MIC-345) |
 | Linux AppImage / Flatpak | Exists | — | ☐ | Smoke; Flatpak sandbox workflows and portal behavior are tracked in [Flatpak sandbox policy](FLATPAK_SANDBOX.md). **`.deb` builds but doesn't run** (missing Qt runtime, glibc mismatch) — do not gate on it until fixed |
 | Sentry (optional) | Partial | ☐ | ☐ | Opt-in DSN only; DB path; no default PII |
 | OCR sidecar (optional) | Not V1-gated | ☐ | ☐ | Bundled-only guidance; do not block platform gate |
-| OcrPlugin (Editor UI) | **Not shipped in V1 — CLI-only, MIC-343** | ☐ | ☐ | `pdfplugins/OcrPlugin.dll` (or `.so`) must be **absent**. Built with `-DPDF4QT_PLUGIN_OCR=OFF`; `PdfTool ocr` is unaffected and remains available |
+| OcrPlugin (Editor UI) | **Not shipped in V1 — CLI-only, MIC-343** | ☐ | ☐ | `pdfplugins/OcrPlugin.dll` (or `.so`) must be **absent**. Built with `-DLOUPE_PLUGIN_OCR=OFF`; `PdfTool ocr` is unaffected and remains available |
 
 ### Bundling rules (all OS)
 
@@ -93,7 +93,7 @@ bundling** and **installer packaging** for modules that are already complete.
 
 1. Clean machine (no Qt / MSVC required at runtime).
 2. Install the platform package.
-3. Launch Pdf4QtEditor.
+3. Launch LoupeEditor.
 4. Open a sample PDF; run Loupe Preflight; confirm findings JSON.
 5. Confirm PdfTool exists beside the app and profiles resolve.
 
@@ -126,7 +126,7 @@ MIC-301.
    under `Program Files (x86)`, fix the WiX arch to `x64` before sign-off — the smoke
    test will fail on the expected `InstallDir`, which is the intended signal.
 2. **Profiles path.** `smoke-test-install.ps1` probes several layouts because
-   `PDF4QT_INSTALL_TO_USR=ON` shifts the share tree. Record which candidate resolved and
+   `LOUPE_INSTALL_TO_USR=ON` shifts the share tree. Record which candidate resolved and
    make the layout table above match what actually ships.
 
 ## macOS (post-V1)
@@ -135,7 +135,7 @@ macOS is explicitly **out of scope for V1**. The work below is retained as the
 entry criteria for adding it in a later release, not as a V1 checklist.
 
 - Apps already set `MACOSX_BUNDLE ON` for Editor, Viewer, PageMaster, Diff, LaunchPad.
-- CMake today treats non-`PDF4QT_LINUX` like Windows for `PDF4QT_PLUGINS_DIR` (`pdfplugins`, `CMakeLists.txt:198-201`). That path must be confirmed inside a `.app` bundle or the install rules adjusted.
+- CMake today treats non-`LOUPE_LINUX` like Windows for `LOUPE_PLUGINS_DIR` (`pdfplugins`, `CMakeLists.txt:198-201`). That path must be confirmed inside a `.app` bundle or the install rules adjusted.
 - A `macos` job in `ci.yml` with Qt 6.11.1 + vcpkg, mirroring the Ubuntu/Windows `ctest` set, is the minimum bar before any macOS claim is restored.
 - Notarization and staple steps belong in a dedicated `macOSInstall.yml` before attaching artifacts to the release draft. This requires an **Apple Developer Program** enrollment, which is not currently held.
 

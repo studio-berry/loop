@@ -11,7 +11,7 @@ Editor action inventory is recorded in [`loupe-shell-actions.json`](loupe-shell-
 
 ## Product shell
 
-`Pdf4QtEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
+`LoupeEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
 CLI. Opening a PDF is the Document workspace and includes inherited Viewer
 behavior. PageMaster, Diff, and Viewer are not new windows in this contract;
 their retained Core/CLI semantics are routed into the product workspaces when
@@ -76,7 +76,7 @@ the prior preflight result `STALE` until revalidation completes.
 Every action declared in the current Editor `.ui` is listed in
 `loupe-shell-actions.json` with a disposition and target group. The verifier
 compares the policy against the 107 action IDs in
-`Pdf4QtLibGui/pdfeditormainwindow.ui`; missing or extra IDs fail the check.
+`LoupeLibGui/pdfeditormainwindow.ui`; missing or extra IDs fail the check.
 This keeps the future shell from silently inventing routes.
 
 Plugin actions follow the same policy. Their target group is determined by what

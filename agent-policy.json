@@ -46,13 +46,13 @@
     "vcpkg/**",
     "loupe-preflight/schemas/**",
     "docs/schemas/**",
-    "Pdf4QtLibCore/sources/**",
+    "LoupeLibCore/sources/**",
     "UnitTests/CMakeLists.txt"
   ],
   "module_boundaries": {
     "core": {
-      "paths": ["Pdf4QtLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
-      "targets": ["Pdf4QtLibCore"],
+      "paths": ["LoupeLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
+      "targets": ["LoupeLibCore"],
       "tests": [
         "UnitTests",
         "UnitTestsBenchmarkIdentity",
@@ -99,17 +99,17 @@
       ]
     },
     "pagemaster": {
-      "paths": ["Pdf4QtPageMaster/**"],
-      "targets": ["Pdf4QtPageMaster"],
+      "paths": ["LoupePageMaster/**"],
+      "targets": ["LoupePageMaster"],
       "tests": ["UnitTestsPageMasterExport"]
     },
     "widgets_gui": {
-      "paths": ["Pdf4QtLibWidgets/**", "Pdf4QtLibGui/**", "Pdf4QtEditor/**", "Pdf4QtViewer/**"],
-      "targets": ["Pdf4QtEditor", "Pdf4QtViewer"],
+      "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
+      "targets": ["LoupeEditor", "LoupeViewer"],
       "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
     },
     "plugins": {
-      "paths": ["Pdf4QtEditorPlugins/**"],
+      "paths": ["LoupeEditorPlugins/**"],
       "targets": [
         "ActionListPlugin",
         "AudioBookPlugin",
@@ -140,7 +140,7 @@
     },
     "build_policy": {
       "paths": ["CMakeLists.txt", "**/CMakeLists.txt", "cmake/**", "vcpkg.json", "vcpkg-configuration.json", "vcpkg/**"],
-      "targets": ["Pdf4QtLibCore", "PdfTool", "UnitTests"],
+      "targets": ["LoupeLibCore", "PdfTool", "UnitTests"],
       "tests": ["UnitTests"]
     },
     "documentation": {
