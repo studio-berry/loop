@@ -192,14 +192,6 @@ PDFArtifactIdentity artifactIdentityFromDocument(const PDFDocument* document)
     return artifact;
 }
 
-void markFamilyComplete(PDFEvidenceDomains* completedFamilies, PDFEvidenceDomain domain)
-{
-    if (completedFamilies)
-    {
-        *completedFamilies |= domain;
-    }
-}
-
 void ensureRequestedFamiliesComplete(PDFEvidenceGraph& graph, PDFEvidenceDomains requested, PDFEvidenceDomains completed)
 {
     if (!graph.isComplete())
@@ -1290,12 +1282,12 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
         if (domains.testFlag(PDFEvidenceDomain::Fonts))
         {
             collectFonts(document, &graph, session->getProcessingBudget());
-            markFamilyComplete(&completedFamilies, PDFEvidenceDomain::Fonts);
+            completedFamilies |= PDFEvidenceDomain::Fonts;
         }
         if (domains.testFlag(PDFEvidenceDomain::Colorants))
         {
             collectColorants(session, &graph, settings, session->getProcessingBudget());
-            markFamilyComplete(&completedFamilies, PDFEvidenceDomain::Colorants);
+            completedFamilies |= PDFEvidenceDomain::Colorants;
         }
 
         const bool needsWalk = domains.testFlag(PDFEvidenceDomain::Images) || domains.testFlag(PDFEvidenceDomain::Strokes) || domains.testFlag(PDFEvidenceDomain::OverprintTransparency) || domains.testFlag(PDFEvidenceDomain::Colorants);
@@ -1391,22 +1383,7 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                 }
             }
 
-            if (domains.testFlag(PDFEvidenceDomain::Images))
-            {
-                markFamilyComplete(&completedFamilies, PDFEvidenceDomain::Images);
-            }
-            if (domains.testFlag(PDFEvidenceDomain::Strokes))
-            {
-                markFamilyComplete(&completedFamilies, PDFEvidenceDomain::Strokes);
-            }
-            if (domains.testFlag(PDFEvidenceDomain::OverprintTransparency))
-            {
-                markFamilyComplete(&completedFamilies, PDFEvidenceDomain::OverprintTransparency);
-            }
-            if (domains.testFlag(PDFEvidenceDomain::Colorants))
-            {
-                markFamilyComplete(&completedFamilies, PDFEvidenceDomain::Colorants);
-            }
+            completedFamilies |= domains & (PDFEvidenceDomain::Images | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Colorants);
         }
         ensureRequestedFamiliesComplete(graph, domains, completedFamilies);
     }
