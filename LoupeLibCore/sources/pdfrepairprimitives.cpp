@@ -112,6 +112,15 @@ public:
     {
         return PDFRepairDomain::PageGeometry | PDFRepairDomain::Images | PDFRepairDomain::Structure;
     }
+    PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
+    {
+        PDFOperationImpact declared;
+        declared.domains = PDFEvidenceDomain::Images;
+        declared.documentWide = true;
+        declared.impactComplete = true;
+        return declared;
+    }
+
     PDFOperationResult analyze(const PDFDocument& source,
                                const QJsonObject& parameters,
                                PDFRepairPlan* plan) const override

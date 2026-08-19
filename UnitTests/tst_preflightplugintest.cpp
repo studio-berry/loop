@@ -22,6 +22,7 @@
 
 #include "preflightsidecarutils.h"
 #include "pdftoolenvelopeutils.h"
+#include "preflightreportmodel.h"
 
 #include <QtTest>
 #include <QJsonArray>
@@ -41,7 +42,9 @@ private slots:
     void isNormalizedReport_acceptsFixupParams();
     void isNormalizedReport_acceptsSchemaV2ScopeFixtures();
     void isNormalizedReport_acceptsSchemaV3InspectionIncompletePass();
+    void isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict();
     void isNormalizedReport_rejectsInvalidScopeCombinations();
+    void preflightReportModel_failsClosedOnMalformedCurrentSchemaVerdict();
     void findingHasVisualOverlay_respectsScopeAndBbox();
     void filterAdvertisedFixups_removesUnimplementedFixups();
     void isImplementedFixupId_advertisesImplementedFixups();
@@ -118,7 +121,7 @@ QJsonObject scopeFixtureReport(const QJsonObject& finding, bool pass)
     };
 }
 
-} // namespace
+}   // namespace
 
 void PreflightPluginTest::resolveBundlePath_combinesApplicationAndRelativePaths()
 {
@@ -196,14 +199,30 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncomplete
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
     report.insert(QStringLiteral("checks"), QJsonArray());
     report.insert(QStringLiteral("verdict"), QJsonObject{
-        { QStringLiteral("state"), QStringLiteral("incomplete") },
-        { QStringLiteral("reason_code"), QStringLiteral("inspection-incomplete") },
-        { QStringLiteral("reason"), QStringLiteral("Required inspection evidence was not collected.") },
-        { QStringLiteral("blocking_finding_ids"), QJsonArray() },
-        { QStringLiteral("waived_finding_ids"), QJsonArray() }
-    });
+                                                 { QStringLiteral("state"), QStringLiteral("incomplete") },
+                                                 { QStringLiteral("reason_code"), QStringLiteral("inspection-incomplete") },
+                                                 { QStringLiteral("reason"), QStringLiteral("Required inspection evidence was not collected.") },
+                                                 { QStringLiteral("blocking_finding_ids"), QJsonArray() },
+                                                 { QStringLiteral("waived_finding_ids"), QJsonArray() } });
 
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
+}
+
+void PreflightPluginTest::isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict()
+{
+    QJsonObject report;
+    report.insert(QStringLiteral("schema_version"), 3);
+    report.insert(QStringLiteral("inspection_complete"), true);
+    report.insert(QStringLiteral("pass"), true);
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("errors"), QJsonArray());
+    report.insert(QStringLiteral("warnings"), QJsonArray());
+    report.insert(QStringLiteral("fixups_available"), QJsonArray());
+    report.insert(QStringLiteral("checks"), QJsonArray());
+
+    QString errorMessage;
+    QVERIFY(!pdfplugin::preflight::validateNormalizedReport(report, &errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("verdict")));
 }
 
 void PreflightPluginTest::isNormalizedReport_rejectsInvalidScopeCombinations()
@@ -213,6 +232,26 @@ void PreflightPluginTest::isNormalizedReport_rejectsInvalidScopeCombinations()
     QJsonObject report = scopeFixtureReport(finding, false);
 
     QVERIFY(!pdfplugin::preflight::isNormalizedReport(report));
+}
+
+void PreflightPluginTest::preflightReportModel_failsClosedOnMalformedCurrentSchemaVerdict()
+{
+    const QJsonObject report{
+        { QStringLiteral("schema_version"), 3 },
+        { QStringLiteral("inspection_complete"), true },
+        { QStringLiteral("pass"), true },
+        { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
+        { QStringLiteral("errors"), QJsonArray() },
+        { QStringLiteral("warnings"), QJsonArray() },
+        { QStringLiteral("fixups_available"), QJsonArray() },
+        { QStringLiteral("checks"), QJsonArray() }
+    };
+
+    pdfplugin::PreflightReportModel model;
+    model.setReport(report);
+    QCOMPARE(model.verdictState(), QStringLiteral("error"));
+    QVERIFY(!model.pass());
+    QVERIFY(model.verdictReason().contains(QStringLiteral("canonical verdict")));
 }
 
 void PreflightPluginTest::findingHasVisualOverlay_respectsScopeAndBbox()
@@ -228,18 +267,15 @@ void PreflightPluginTest::filterAdvertisedFixups_removesUnimplementedFixups()
     fixups.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("rgb-to-cmyk") },
         { QStringLiteral("safe"), false },
-        { QStringLiteral("description"), QStringLiteral("Convert all RGB colors to CMYK") }
-    });
+        { QStringLiteral("description"), QStringLiteral("Convert all RGB colors to CMYK") } });
     fixups.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("add-bleed") },
         { QStringLiteral("safe"), false },
-        { QStringLiteral("description"), QStringLiteral("Extend page boxes / artwork to provide bleed") }
-    });
+        { QStringLiteral("description"), QStringLiteral("Extend page boxes / artwork to provide bleed") } });
     fixups.append(QJsonObject{
         { QStringLiteral("id"), QStringLiteral("downsample-images") },
         { QStringLiteral("safe"), false },
-        { QStringLiteral("description"), QStringLiteral("Downsample images above target DPI") }
-    });
+        { QStringLiteral("description"), QStringLiteral("Downsample images above target DPI") } });
 
     QJsonObject report = scopeFixtureReport(pageScopeFinding(), false);
     report.insert(QStringLiteral("fixups_available"), fixups);
@@ -263,8 +299,8 @@ void PreflightPluginTest::shippedProfileFixups_areImplemented()
 {
     const QDir profiles(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles"));
     const QFileInfoList profileFiles = profiles.entryInfoList({ QStringLiteral("*.json") },
-                                                               QDir::Files,
-                                                               QDir::Name);
+                                                              QDir::Files,
+                                                              QDir::Name);
     QVERIFY2(!profileFiles.isEmpty(), qPrintable(profiles.absolutePath()));
 
     for (const QFileInfo& profileInfo : profileFiles)
@@ -353,22 +389,11 @@ void PreflightPluginTest::pdfToolEnvelope_extractsReportAndDiagnostics()
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("command"), QStringLiteral("preflight") },
         { QStringLiteral("diagnostics"), QJsonArray{
-              QJsonObject{
-                  { QStringLiteral("severity"), QStringLiteral("error") },
-                  { QStringLiteral("code"), QStringLiteral("cli.invalid-arguments") },
-                  { QStringLiteral("message"), QStringLiteral("No profile specified.") }
-              }
-          } },
-        { QStringLiteral("data"), QJsonObject{
-              { QStringLiteral("report"), QJsonObject{
-                    { QStringLiteral("schema_version"), 3 },
-                    { QStringLiteral("pass"), true },
-                    { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
-                    { QStringLiteral("errors"), QJsonArray() },
-                    { QStringLiteral("warnings"), QJsonArray() },
-                    { QStringLiteral("fixups_available"), QJsonArray() }
-                } }
-          } }
+                                             QJsonObject{
+                                                 { QStringLiteral("severity"), QStringLiteral("error") },
+                                                 { QStringLiteral("code"), QStringLiteral("cli.invalid-arguments") },
+                                                 { QStringLiteral("message"), QStringLiteral("No profile specified.") } } } },
+        { QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), QJsonObject{ { QStringLiteral("schema_version"), 3 }, { QStringLiteral("pass"), true }, { QStringLiteral("profile"), QStringLiteral("Loupe Default") }, { QStringLiteral("errors"), QJsonArray() }, { QStringLiteral("warnings"), QJsonArray() }, { QStringLiteral("fixups_available"), QJsonArray() }, { QStringLiteral("inspection_complete"), true }, { QStringLiteral("checks"), QJsonArray() }, { QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("pass") }, { QStringLiteral("reason_code"), QStringLiteral("no-blocking-findings") }, { QStringLiteral("reason"), QStringLiteral("No blocking findings were reported.") }, { QStringLiteral("blocking_finding_ids"), QJsonArray() }, { QStringLiteral("waived_finding_ids"), QJsonArray() } } } } } } }
     };
 
     QVERIFY(pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")));

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentcontext.h"
 #include "pdfthumbnailsrenderer.h"
 
 #include <QtTest>
@@ -38,6 +39,7 @@ private slots:
     void invalidatePage_triggersReRender();
     void clear_dropsPendingAndCachedImages();
     void setDocument_waitsForRunningBatch();
+    void revisionSupersession_discardsStaleAsyncResult();
 
 private:
     /// Waits until a new page render is reported (or the timeout expires).
@@ -172,6 +174,25 @@ void ThumbnailsRendererTest::setDocument_waitsForRunningBatch()
     QCOMPARE(spy.count(), 1);
     QVERIFY(renderer.getPageImage(0, 100).isNull());
     QVERIFY2(waitForRendered(spy, 5000), "thumbnail was not re-rendered in time");
+    QVERIFY(!renderer.getPageImage(0, 100).isNull());
+}
+
+void ThumbnailsRendererTest::revisionSupersession_discardsStaleAsyncResult()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    pdf::PDFDocument document = builder.build();
+
+    pdf::PDFDocumentContext context(&document);
+    pdf::PDFThumbnailsRenderer renderer(nullptr);
+    renderer.setDocumentContext(&context);
+
+    QSignalSpy spy(&renderer, &pdf::PDFThumbnailsRenderer::pageImageReady);
+    renderer.getPageImage(0, 100);
+    context.markModified(pdf::PDFModifiedDocument::PageContents);
+
+    QVERIFY(renderer.getPageImage(0, 100).isNull());
+    QVERIFY2(waitForRendered(spy, 5000), "thumbnail was not re-rendered after revision supersession");
     QVERIFY(!renderer.getPageImage(0, 100).isNull());
 }
 

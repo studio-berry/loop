@@ -51,7 +51,12 @@
   ],
   "module_boundaries": {
     "core": {
-      "paths": ["LoupeLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
+      "paths": [
+        "LoupeLibCore/**",
+        "UnitTests/tst_bleedfixuptest.cpp",
+        "UnitTests/tst_documentsessiontest.cpp",
+        "UnitTests/tst_incrementalsavetest.cpp"
+      ],
       "targets": ["LoupeLibCore"],
       "tests": [
         "UnitTests",
@@ -59,6 +64,7 @@
         "UnitTestsBleedFixup",
         "UnitTestsBudgetExhaustion",
         "UnitTestsConversionOracle",
+        "UnitTestsDocumentSession",
         "UnitTestsEvidenceGraph",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsIdentitySeparation",

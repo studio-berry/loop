@@ -164,9 +164,52 @@ PDFRevalidationPlan planRevalidation(const PDFOperationImpact& impact,
         }
     }
 
+    if (plan.checkIds.isEmpty())
+    {
+        plan.full = true;
+        plan.checkIds = enabledCheckIds;
+        plan.reason = QStringLiteral("no-targeted-checks");
+        return plan;
+    }
+
     plan.full = false;
     plan.reason = QStringLiteral("targeted");
     return plan;
+}
+
+PDFOperationImpact combineOperationImpacts(const QList<PDFOperationImpact>& impacts)
+{
+    PDFOperationImpact combined;
+    combined.impactComplete = true;
+    for (const PDFOperationImpact& impact : impacts)
+    {
+        if (!impact.impactComplete)
+        {
+            combined.impactComplete = false;
+        }
+        if (impact.documentWide)
+        {
+            combined.documentWide = true;
+        }
+        if (impact.requiresIndependentOracle)
+        {
+            combined.requiresIndependentOracle = true;
+        }
+        if (impact.fullRewrite)
+        {
+            combined.fullRewrite = true;
+        }
+        combined.domains |= impact.domains;
+        combined.pages.unite(impact.pages);
+        for (const QString& objectId : impact.objectIds)
+        {
+            if (!combined.objectIds.contains(objectId))
+            {
+                combined.objectIds.append(objectId);
+            }
+        }
+    }
+    return combined;
 }
 
 }   // namespace pdf

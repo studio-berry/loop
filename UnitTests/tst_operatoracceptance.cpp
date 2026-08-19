@@ -194,6 +194,16 @@ QByteArray fileSha256(const QString& path)
     return hash.result();
 }
 
+QByteArray readFileBytes(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    return file.readAll();
+}
+
 bool writeLargeFormatPdf(const QString& path, double widthInches, double heightInches)
 {
     const int widthPt = static_cast<int>(widthInches * 72.0 + 0.5);
@@ -248,6 +258,7 @@ private slots:
 
     void operatorLoop_bleedFixupAndRevalidate();
     void operatorLoop_preservesOriginalBytes();
+    void livePdfToolFlows_writeVerifiableProvenance();
 
     void overwriteExplicit_addBleedRequiresOverwriteFlag();
     void addBleedDryRun_largeFormatPlansWithoutRasterOrOutput();
@@ -425,7 +436,8 @@ bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
                                           qint64* peakChildMemoryKb) const
 {
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath },
+    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath,
+                      QStringLiteral("--console-format"), QStringLiteral("json") },
                     &stdOut,
                     nullptr,
                     exitCode,
@@ -602,6 +614,53 @@ void OperatorAcceptanceTest::operatorLoop_preservesOriginalBytes()
     QCOMPARE(fileSha256(pdfPath), beforeHash);
     QVERIFY(!fileSha256(outputPath).isEmpty());
     QVERIFY(fileSha256(outputPath) != beforeHash);
+}
+
+void OperatorAcceptanceTest::livePdfToolFlows_writeVerifiableProvenance()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    const QString sourcePath = temporaryDirectory.filePath(QStringLiteral("source.pdf"));
+    QVERIFY(QFile::copy(fixturePath(QStringLiteral("bleed-missing.pdf")), sourcePath));
+    const QByteArray sourceHash = fileSha256(sourcePath);
+    QVERIFY(!sourceHash.isEmpty());
+
+    QJsonObject preflightReport;
+    int preflightExitCode = -1;
+    QVERIFY(runPreflight(sourcePath, m_defaultProfilePath, &preflightReport, &preflightExitCode));
+    QCOMPARE(preflightExitCode, 1);
+    QVERIFY(pdfplugin::preflight::validateNormalizedReport(preflightReport));
+
+    const QString preflightDatabasePath = sourcePath + QStringLiteral(".loupe-history/history.sqlite3");
+    QVERIFY(QFileInfo::exists(preflightDatabasePath));
+    const QByteArray preflightHistoryBytes = readFileBytes(preflightDatabasePath);
+    QVERIFY(preflightHistoryBytes.startsWith("SQLite format 3"));
+    QVERIFY(preflightHistoryBytes.contains("PreflightRun"));
+    QVERIFY(preflightHistoryBytes.contains("accepted"));
+    QVERIFY(preflightHistoryBytes.contains(sourceHash.toHex()));
+    QVERIFY(preflightHistoryBytes.contains(
+        preflightReport.value(QStringLiteral("effective_profile_digest")).toString().toLatin1()));
+
+    QString mode;
+    QString bleedMm;
+    QVERIFY(advertisedAddBleedParams(preflightReport, &mode, &bleedMm));
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("repaired.pdf"));
+    int repairExitCode = -1;
+    QVERIFY(runAddBleed(sourcePath, outputPath, mode, bleedMm, &repairExitCode));
+    QCOMPARE(repairExitCode, 0);
+    QVERIFY(QFileInfo::exists(outputPath));
+    QCOMPARE(fileSha256(sourcePath), sourceHash);
+
+    const QString repairDatabasePath = outputPath + QStringLiteral(".loupe-history/history.sqlite3");
+    QVERIFY(QFileInfo::exists(repairDatabasePath));
+    const QByteArray repairHistoryBytes = readFileBytes(repairDatabasePath);
+    QVERIFY(repairHistoryBytes.startsWith("SQLite format 3"));
+    QVERIFY(repairHistoryBytes.contains("FixApplied"));
+    QVERIFY(repairHistoryBytes.contains("accepted"));
+    QVERIFY(repairHistoryBytes.contains(sourceHash.toHex()));
+    QVERIFY(repairHistoryBytes.contains(fileSha256(outputPath).toHex()));
+    QVERIFY(repairHistoryBytes.contains("approve"));
 }
 
 void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()

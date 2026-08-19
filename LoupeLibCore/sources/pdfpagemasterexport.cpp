@@ -30,6 +30,8 @@
 #include "pdfdocumentsession.h"
 #include "pdfcontourbleedfixup.h"
 #include "pdfoperationcontrol.h"
+#include "pdfoperationimpact.h"
+#include "pdfrepairoperation.h"
 
 #include <QCoreApplication>
 #include <QBuffer>
@@ -437,6 +439,19 @@ bool writeFileAtomically(const QString& finalPath, const QByteArray& payload)
 {
     const PDFOperationResult result = PDFSafeFileWriter::writeData(finalPath, payload, PDFSafeFileWriter::OverwritePolicy::Overwrite);
     return static_cast<bool>(result);
+}
+
+PDFRevalidationPlan revalidationPlanAfterFixups(const PreflightProfileData& profileData, const QList<PDFOperationImpact>& fixupImpacts)
+{
+    QStringList enabledCheckIds;
+    for (const PreflightCheckConfig& check : profileData.checks)
+    {
+        if (check.enabled)
+        {
+            enabledCheckIds.append(check.id);
+        }
+    }
+    return planRevalidation(combineOperationImpacts(fixupImpacts), enabledCheckIds);
 }
 
 QString outlineModeName(PDFDocumentManipulator::OutlineMode mode)
@@ -1368,6 +1383,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         }
 
         PDFDocument assembledDocument = manipulator.takeAssembledDocument();
+        QList<PDFOperationImpact> fixupImpacts;
 
         if (isCancelRequested(job))
         {
@@ -1528,6 +1544,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasBleedFixupSettings)
         {
+            if (const PDFRepairOperation* operation = PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")))
+            {
+                fixupImpacts.append(operation->impact(&assembledDocument, QJsonObject()));
+            }
             PDFBleedFixupReport bleedReport;
             const PDFOperationResult bleedResult = PDFBleedFixup::apply(&assembledDocument, job.bleedFixupSettings, &bleedReport);
             if (!bleedResult)
@@ -1582,6 +1602,10 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.optimizeImages)
         {
+            if (const PDFRepairOperation* operation = PDFRepairRegistry::instance().find(QStringLiteral("downsample-images")))
+            {
+                fixupImpacts.append(operation->impact(&assembledDocument, QJsonObject()));
+            }
             PDFImageOptimizer imageOptimizer;
             PDFImageOptimizer::Settings optimizeSettings = job.imageOptimizationSettings;
             optimizeSettings.enabled = true;
@@ -1590,6 +1614,12 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasStandardConversionSettings)
         {
+            if (const PDFRepairOperation* operation = PDFRepairRegistry::instance().find(QStringLiteral("standards-convert")))
+            {
+                fixupImpacts.append(operation->impact(&assembledDocument,
+                                                      QJsonObject{
+                                                          { QStringLiteral("target"), pdfStandardTargetToString(job.standardConversionSettings.target) } }));
+            }
             PDFStandardConversionReport conversionReport;
             const PDFOperationResult conversionResult = PDFStandardConversion::apply(&assembledDocument,
                                                                                      job.standardConversionSettings,
@@ -1613,7 +1643,21 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             PDFDocumentSession session(&assembledDocument);
             PreflightEngine engine(&session);
-            PreflightResult preflightResult = engine.run(preflightProfile);
+            PreflightProfileData profileData;
+            QString profileParseError;
+            const bool profileParsed = PreflightEngine::parseProfile(preflightProfile, profileData, profileParseError);
+            PDFRevalidationPlan revalidationPlan;
+            if (profileParsed)
+            {
+                revalidationPlan = revalidationPlanAfterFixups(profileData, fixupImpacts);
+            }
+            else
+            {
+                revalidationPlan.full = true;
+                revalidationPlan.reason = QStringLiteral("profile-unparsed");
+            }
+            PreflightResult preflightResult = profileParsed ? engine.run(profileData, revalidationPlan)
+                                                            : engine.run(preflightProfile, revalidationPlan);
             preflightResult.profileResolution = preflightResolution;
             const PreflightVerdict verdict = reducePreflightVerdict(preflightResult);
             const QJsonObject preflightReport = preflightResult.toJson(fileName);

@@ -86,9 +86,20 @@ LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSch
 LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
                                                                                     PDFSchemaVersion version,
                                                                                     const QJsonObject& matrix);
+LOUPELIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
 LOUPELIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
 LOUPELIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
 LOUPELIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);
+
+struct LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult
+{
+    QJsonObject document;
+    bool migrated = false;
+    PDFSchemaVersion fromVersion;
+    PDFSchemaVersion toVersion;
+};
+
+LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject document);
 
 }   // namespace pdf
 
