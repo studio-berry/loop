@@ -421,9 +421,9 @@ void generateWhiteOverprintColorSpaceFixtures(const QDir& outputDir)
 
 pdf::PDFObjectReference appendTieredBleedPage(pdf::PDFDocumentBuilder& builder, const QRectF& contentRect)
 {
-  // MediaBox 220x220, TrimBox 200x200 inset 10pt on every side. BleedBox is left
-  // unset; per PDFPage::parse it falls back to CropBox -> MediaBox, giving a
-  // 10pt margin over TrimBox (>= the 9pt amount_pt used by tiered-bleed profiles).
+    // MediaBox 220x220, TrimBox 200x200 inset 10pt on every side. BleedBox is left
+    // unset; per PDFPage::parse it falls back to CropBox -> MediaBox, giving a
+    // 10pt margin over TrimBox (>= the 9pt amount_pt used by tiered-bleed profiles).
     const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, MEDIA_SIZE_PT, MEDIA_SIZE_PT));
     builder.setPageTrimBox(page, QRectF(TRIM_INSET_PT, TRIM_INSET_PT, TRIM_SIZE_PT, TRIM_SIZE_PT));
 
@@ -525,9 +525,9 @@ void generateOutputIntentCmykFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "CMYK",
-                                                    createIccProfile(cmsSigCmykData)) });
+                                                   "CGATS TR 001",
+                                                   "CMYK",
+                                                   createIccProfile(cmsSigCmykData)) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-cmyk.pdf", builder.build());
 }
@@ -566,9 +566,9 @@ void generateOutputIntentRgbFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "RGB",
-                                                    createIccProfile(cmsSigRgbData)) });
+                                                   "CGATS TR 001",
+                                                   "RGB",
+                                                   createIccProfile(cmsSigRgbData)) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-rgb.pdf", builder.build());
 }
@@ -582,9 +582,9 @@ void generateOutputIntentProfileInvalidFixture(const QDir& outputDir)
     builder.appendPage(QRectF(0, 0, 200, 200));
 
     setOutputIntents(builder, { appendOutputIntent(builder,
-                                                    "CGATS TR 001",
-                                                    "CMYK",
-                                                    QByteArrayLiteral("not an ICC profile")) });
+                                                   "CGATS TR 001",
+                                                   "CMYK",
+                                                   QByteArrayLiteral("not an ICC profile")) });
     setDeterministicMetadata(builder);
     writeFixture(outputDir, "output-intent-profile-invalid.pdf", builder.build());
 }

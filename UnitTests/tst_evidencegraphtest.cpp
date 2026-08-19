@@ -204,7 +204,7 @@ void EvidenceGraphTest::colorantsFamilyDualRunMatchesEngine()
     const pdf::PDFEvidenceGraph graph = pdf::PDFEvidenceCollector::collect(&session, pdf::PDFEvidenceDomain::Colorants);
     QVERIFY(graph.isComplete());
     const QList<pdf::PDFEvidenceRecord> richBlack = graph.recordsForTarget(pdf::PDFEvidenceDomain::Colorants,
-                                                                         QStringLiteral("rich-black"));
+                                                                           QStringLiteral("rich-black"));
     QVERIFY(!richBlack.isEmpty());
 
     pdf::PreflightEngine engine(&session);
@@ -220,9 +220,9 @@ void EvidenceGraphTest::colorantsFamilyDualRunMatchesEngine()
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
     assertFindingCitesGraphRecord(result.warnings,
-                                    QStringLiteral("color-inventory"),
-                                    QStringLiteral("rich-black"),
-                                    richBlack.first());
+                                  QStringLiteral("color-inventory"),
+                                  QStringLiteral("rich-black"),
+                                  richBlack.first());
     QVERIFY(engine.lastEvidenceGraph().isComplete());
 }
 
@@ -262,9 +262,9 @@ void EvidenceGraphTest::strokesFamilyDualRunMatchesEngine()
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
     assertFindingCitesGraphRecord(result.warnings,
-                                    QStringLiteral("thin-strokes"),
-                                    QStringLiteral("thin-stroke"),
-                                    strokes.first());
+                                  QStringLiteral("thin-strokes"),
+                                  QStringLiteral("thin-stroke"),
+                                  strokes.first());
     QVERIFY(engine.lastEvidenceGraph().isComplete());
 }
 
@@ -291,9 +291,9 @@ void EvidenceGraphTest::overprintTransparencyFamilyDualRunMatchesEngine()
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
     assertFindingCitesGraphRecord(result.warnings,
-                                    QStringLiteral("white-overprint"),
-                                    QStringLiteral("white-overprint"),
-                                    whiteOverprint.first());
+                                  QStringLiteral("white-overprint"),
+                                  QStringLiteral("white-overprint"),
+                                  whiteOverprint.first());
     QVERIFY(engine.lastEvidenceGraph().isComplete());
 }
 
@@ -319,9 +319,9 @@ void EvidenceGraphTest::fontsFamilyDualRunMatchesEngine()
     const pdf::PreflightResult result = engine.run(profile);
     QVERIFY(result.inspectionComplete);
     assertFindingCitesGraphRecord(result.errors,
-                                    QStringLiteral("embedded-fonts"),
-                                    QStringLiteral("embedded-fonts"),
-                                    fonts.first());
+                                  QStringLiteral("embedded-fonts"),
+                                  QStringLiteral("embedded-fonts"),
+                                  fonts.first());
     QVERIFY(engine.lastEvidenceGraph().isComplete());
 }
 
