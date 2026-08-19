@@ -303,7 +303,7 @@ inline bool validateBboxValue(const QJsonValue& bboxValue, const QString& contex
     return true;
 }
 
-inline bool validateFindingCommonFields(const QJsonObject& finding, const QString& context, QString* errorMessage)
+inline bool validateFindingCommonFields(const QJsonObject& finding, const QString& context, int schemaVersion, QString* errorMessage)
 {
     const QString type = finding.value(QStringLiteral("type")).toString();
     if (!finding.value(QStringLiteral("type")).isString() || !isContractIdentifier(type))
@@ -347,10 +347,10 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
             return false;
         }
     }
-    else if (isGraphBackedFindingType(type) && finding.contains(QStringLiteral("check_id")))
+    else if (schemaVersion >= 3 && isGraphBackedFindingType(type))
     {
         return setValidationError(errorMessage,
-                                  QStringLiteral("%1.evidence_ids is required for graph-backed findings."));
+                                  QStringLiteral("%1.evidence_ids is required for graph-backed findings.").arg(context));
     }
 
     return true;
@@ -409,7 +409,7 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
         return setValidationError(errorMessage, QStringLiteral("%1.page must be a positive integer.").arg(context));
     }
 
-    if (!validateFindingCommonFields(finding, context, errorMessage))
+    if (!validateFindingCommonFields(finding, context, 1, errorMessage))
     {
         return false;
     }
@@ -417,7 +417,7 @@ inline bool validateFindingV1(const QJsonObject& finding, const QString& context
     return validateBboxValue(finding.value(QStringLiteral("bbox")), context, errorMessage);
 }
 
-inline bool validateFindingV2(const QJsonObject& finding, const QString& context, QString* errorMessage)
+inline bool validateFindingV2(const QJsonObject& finding, const QString& context, int schemaVersion, QString* errorMessage)
 {
     if (!hasOnlyProperties(finding, findingV2AllowedProperties(), context, errorMessage))
     {
@@ -430,7 +430,7 @@ inline bool validateFindingV2(const QJsonObject& finding, const QString& context
         return setValidationError(errorMessage, QStringLiteral("%1.scope must be document, page, or object.").arg(context));
     }
 
-    if (!validateFindingCommonFields(finding, context, errorMessage))
+    if (!validateFindingCommonFields(finding, context, schemaVersion, errorMessage))
     {
         return false;
     }
@@ -497,7 +497,7 @@ inline bool validateFinding(const QJsonValue& value, const QString& section, int
         return validateFindingV1(finding, context, errorMessage);
     }
 
-    return validateFindingV2(finding, context, errorMessage);
+    return validateFindingV2(finding, context, schemaVersion, errorMessage);
 }
 
 inline bool validateFixup(const QJsonValue& value, int index, QString* errorMessage)
