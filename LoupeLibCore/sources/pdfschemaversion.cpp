@@ -140,8 +140,7 @@ QJsonObject migratePreflightReportV2ToV3(QJsonObject document)
                             { QStringLiteral("reason_code"), reasonCode },
                             { QStringLiteral("reason"), reason },
                             { QStringLiteral("blocking_finding_ids"), blockingFindingIds },
-                            { QStringLiteral("waived_finding_ids"), QJsonArray{} }
-                        });
+                            { QStringLiteral("waived_finding_ids"), QJsonArray{} } });
     }
 
     document.insert(QStringLiteral("schema_version"), 3);

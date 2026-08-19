@@ -494,10 +494,10 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
 }
 
 PDFOperationResult PDFOperationHistoryStore::appendSchemaMigratedEvent(const PDFArtifactIdentity& artifact,
-                                                                     PDFSchemaKind kind,
-                                                                     PDFSchemaVersion fromVersion,
-                                                                     PDFSchemaVersion toVersion,
-                                                                     const QString& documentRevisionDigest)
+                                                                       PDFSchemaKind kind,
+                                                                       PDFSchemaVersion fromVersion,
+                                                                       PDFSchemaVersion toVersion,
+                                                                       const QString& documentRevisionDigest)
 {
     PDFOperationHistoryExecution execution;
     execution.operationId = QStringLiteral("schema.migrate");
