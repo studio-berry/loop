@@ -1,0 +1,18 @@
+{
+    "Name": "Loupe OCR",
+    "Author": "Michael Berry",
+    "Version": "1.0.0",
+    "License": "MIT",
+    "Description": "Run Loupe OCR on image-only pages and display extracted text.",
+    "AbiVersion": 1,
+    "AllowsNetwork": false,
+    "AllowsExternalProcess": true,
+    "Capabilities": [
+        "read-document",
+        "propose-operation",
+        "execute-operation",
+        "external-process"
+    ],
+    "PluginId": "LOUPE.OcrPlugin",
+    "BuildId": "loupe-0.1.0"
+}

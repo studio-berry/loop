@@ -10,7 +10,7 @@
     "schema_version": {
       "type": "integer",
       "enum": [1, 2, 3],
-      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, and stable finding IDs are additive fields in version 3."
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
     },
     "inspection_complete": {
       "type": "boolean",
@@ -55,6 +55,38 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "description": "SHA-256 digest of the effective profile JSON used for this run."
+    },
+    "profile_identity": {
+      "type": "object",
+      "description": "Resolved profile identity. digest is the file digest; effective_digest is after restrictions and variable substitution.",
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "name": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "source_path": { "type": "string" },
+        "provisional": { "type": "boolean" }
+      }
+    },
+    "coverage_scope": {
+      "type": "object",
+      "description": "Coverage claim for this profile. A clean pass is clean against this scope, not a GWG conformance certificate.",
+      "additionalProperties": true
+    },
+    "variable_bindings": {
+      "type": "array",
+      "description": "Variable values used for this run, including the winning binding source.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "value": true,
+          "source": { "type": "string", "enum": ["default", "job-spec", "cli"] }
+        }
+      }
     },
     "decisions": {
       "type": "array",
@@ -194,6 +226,11 @@
           "type": "object",
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional ids of Evidence Graph records this finding cites."
         }
       }
     },
@@ -245,6 +282,11 @@
           "type": "object",
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Optional ids of Evidence Graph records this finding cites."
         }
       }
     },

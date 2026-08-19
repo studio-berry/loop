@@ -15,7 +15,7 @@ CLI), the Editor sidecar integration, and PageMaster's batch preflight gate.
 
 ## Decision
 
-- **Location:** `Pdf4QtLibCore/sources/preflightengine.h/.cpp`, namespace `pdf`.
+- **Location:** `LoupeLibCore/sources/preflightengine.h/.cpp`, namespace `pdf`.
 - **Construction:** `PreflightEngine(PDFDocumentSession*)`. The engine borrows
   the session; the caller manages session lifetime.
 - **API:** `PreflightResult run(const QJsonObject& profile)` or

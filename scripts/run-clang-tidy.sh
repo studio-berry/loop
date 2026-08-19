@@ -7,7 +7,7 @@
 #     (see scripts/setup-dev-env.sh or cmake configure in AGENTS.md)
 #
 # Usage:
-#   ./scripts/run-clang-tidy.sh [path ...]        # default: Pdf4QtLibCore PdfTool
+#   ./scripts/run-clang-tidy.sh [path ...]        # default: LoupeLibCore PdfTool
 #   ./scripts/run-clang-tidy.sh --fix [path ...]
 #   ./scripts/run-clang-tidy.sh --all             # all project .cpp under repo
 #
@@ -84,7 +84,7 @@ if [[ ${SCAN_ALL} -eq 1 ]]; then
         -print | sort)
 elif [[ ${#PATHS[@]} -eq 0 ]]; then
     mapfile -t SOURCES < <(
-        collect_sources "${REPO_ROOT}/Pdf4QtLibCore"
+        collect_sources "${REPO_ROOT}/LoupeLibCore"
         collect_sources "${REPO_ROOT}/PdfTool"
     )
 else

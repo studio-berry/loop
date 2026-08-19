@@ -19,10 +19,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          path: pdf4qt
+          path: loupe
 
       - name: Verify supply-chain pins
-        working-directory: pdf4qt
+        working-directory: loupe
         run: python scripts\ci\check_supply_chain_pins.py
 
       - name: Add pinned MakeAppx to PATH
@@ -32,7 +32,7 @@ jobs:
           # .github/pins/packaging-tools.json and verify its SHA-256 before use.
           # This replaces the previous "highest SDK found" scan, which silently
           # followed runner image drift.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $sdkVersion = $pins.windowsSdk.version
           $expectedHash = "$($pins.windowsSdk.makeAppxSha256)".ToLowerInvariant()
 
@@ -63,7 +63,7 @@ jobs:
           # Supply-chain gate: signing MUST NOT proceed while the DigiCert
           # KeyLocker toolset is unpinned. The pin block (version/url/sha256)
           # lives in .github/pins/packaging-tools.json.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $keylocker = $pins.digicertKeylocker
           if ([string]::IsNullOrWhiteSpace([string]$keylocker.version) -or
               [string]::IsNullOrWhiteSpace([string]$keylocker.url) -or
@@ -101,7 +101,7 @@ jobs:
           echo "C:\Program Files\DigiCert\DigiCert Keylocker Tools" >> $env:GITHUB_PATH
 
           # Download and install the Keylocker tools
-          & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
+          & "$env:GITHUB_WORKSPACE\loupe\scripts\ci\download_verified.ps1" `
             -Url $pins.digicertKeylocker.url `
             -OutFile $installer `
             -Sha256 $pins.digicertKeylocker.sha256
@@ -129,7 +129,7 @@ jobs:
 
       - name: 'VCPKG: Set up VCPKG'
         run: |
-          $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\vcpkg-configuration.json" | ConvertFrom-Json
+          $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\vcpkg-configuration.json" | ConvertFrom-Json
           $VCPKG_COMMIT = $manifest.'default-registry'.baseline
           if ($VCPKG_COMMIT -notmatch '^[0-9a-f]{40}$') {
             throw "Invalid vcpkg baseline in vcpkg-configuration.json: $VCPKG_COMMIT"
@@ -207,15 +207,15 @@ jobs:
           }
 
       - name: Build project
-        working-directory: pdf4qt
+        working-directory: loupe
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_QT_DEPENDENCIES=ON -DPDF4QT_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DPDF4QT_QT_ROOT="${env:QT_ROOT_DIR}" -DPDF4QT_INSTALL_MSVC_REDISTRIBUTABLE=ON -DPDF4QT_INSTALL_PREPARE_WIX_INSTALLER=ON -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_LOUPE_DISTRIBUTION=ON -DPDF4QT_PLUGIN_OCR=OFF -DPDF4QT_BUNDLE_OCR_SERVICE=OFF
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUNDLE_OCR_SERVICE=OFF
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
           ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
-          .\pdf4qt\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin"
+          .\loupe\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin"
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
@@ -226,7 +226,7 @@ jobs:
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
         # conditionals and the workflow file fails to parse. The script no-ops
         # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
-        working-directory: pdf4qt
+        working-directory: loupe
         shell: pwsh
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -235,7 +235,7 @@ jobs:
           SENTRY_PROJECT: loupe-pdf
           SENTRY_URL: https://de.sentry.io
         run: |
-          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\pdf4qt\build"
+          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loupe\build"
 
       - name: Validate staged install tree
         shell: pwsh
@@ -245,8 +245,8 @@ jobs:
           # docs/PACKAGING_LICENSING.md prohibition on Ghostscript / JRE / Python
           # payloads -- previously a manual checklist item with nothing checking it.
           # Editor launch is skipped: no interactive desktop on the runner.
-          .\pdf4qt\scripts\smoke-test-install.ps1 `
-            -InstallDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin" `
+          .\loupe\scripts\smoke-test-install.ps1 `
+            -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" `
             -SkipEditorLaunch
 
       - name: Generate third-party notices
@@ -254,17 +254,17 @@ jobs:
         env:
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg\installed
         run: |
-          .\pdf4qt\scripts\generate-third-party-notices.ps1 `
-            -OutputPath "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\THIRD_PARTY_NOTICES.txt"
+          .\loupe\scripts\generate-third-party-notices.ps1 `
+            -OutputPath "${env:GITHUB_WORKSPACE}\loupe\build\install\THIRD_PARTY_NOTICES.txt"
 
       - name: Read version
         id: get_version
         shell: pwsh
         run: |
-          $version = Get-Content -Path ".\pdf4qt\build\version.txt" -Raw
+          $version = Get-Content -Path ".\loupe\build\version.txt" -Raw
           $version = $version.Trim()  # Odstraní případné prázdné znaky kolem verze
           Write-Host "Version: $version"
-          echo "pdf4qt_version=$version" >> $env:GITHUB_ENV
+          echo "loupe_version=$version" >> $env:GITHUB_ENV
           echo "msipackagefilename=mberrys.Loupe-pdf_${version}.msi" >> $env:GITHUB_ENV
           Write-Host "MSI package file name: mberrys.Loupe-pdf_${version}.msi"
 
@@ -275,9 +275,9 @@ jobs:
           # (wix.url + wix.sha256). Download it and verify the digest before any
           # candle/light run; the previous step relied on whatever WiX toolset
           # happened to be preinstalled on the runner image.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\pdf4qt\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $wixZip = "$env:GITHUB_WORKSPACE\wix314-binaries.zip"
-          & "$env:GITHUB_WORKSPACE\pdf4qt\scripts\ci\download_verified.ps1" `
+          & "$env:GITHUB_WORKSPACE\loupe\scripts\ci\download_verified.ps1" `
             -Url $pins.wix.url `
             -OutFile $wixZip `
             -Sha256 $pins.wix.sha256
@@ -299,52 +299,52 @@ jobs:
         run: |
           # cmake --install stages runtime DLLs that the hand-maintained Product.wxs.in
           # may omit. Light only packages listed files — close the gap before candle.
-          & "${env:GITHUB_WORKSPACE}\pdf4qt\scripts\Inject-WixMissingDlls.ps1" `
-            -ProductWxs "${env:GITHUB_WORKSPACE}\pdf4qt\build\WixInstaller\Product.wxs" `
-            -InstallBinDir "${env:GITHUB_WORKSPACE}\pdf4qt\build\install\usr\bin"
+          & "${env:GITHUB_WORKSPACE}\loupe\scripts\Inject-WixMissingDlls.ps1" `
+            -ProductWxs "${env:GITHUB_WORKSPACE}\loupe\build\WixInstaller\Product.wxs" `
+            -InstallBinDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin"
 
       - name: Create MSI Package
-        working-directory: pdf4qt\build\WixInstaller
+        working-directory: loupe\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
-          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=PDF4QT.sln" -d"SolutionName=PDF4QT" -d"SolutionPath=PDF4QT.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=PDF4QT.wixproj" -d"ProjectName=PDF4QT" -d"ProjectPath=PDF4QT.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=PDF4QT" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\PDF4QT.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\PDF4QT.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\PDF4QT.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\PDF4QT.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\PDF4QT.wixproj obj\Release\Product.wixobj
+          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOUPE.sln" -d"SolutionName=LOUPE" -d"SolutionPath=LOUPE.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOUPE.wixproj" -d"ProjectName=LOUPE" -d"ProjectPath=LOUPE.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOUPE" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext $env:wixuiextpath Product.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOUPE.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOUPE.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOUPE.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOUPE.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOUPE.wixproj obj\Release\Product.wixobj
 
       - name: Sign MSI Package
         shell: pwsh
         if: vars.SIGN_MSI == 'true'
         run: |
-          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"
-          signtool.exe verify /v /pa "${{ github.workspace }}\pdf4qt\build\install\${{ env.msipackagefilename }}"
+          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
+          signtool.exe verify /v /pa "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
 
       - name: Run MSI lifecycle smoke test
         shell: pwsh
         run: |
           # WiX is invoked with -arch x86, so INSTALLFOLDER resolves under ProgramFilesX86.
           # Editor launch is skipped: no interactive desktop on the runner.
-          $msiPath = Join-Path $env:GITHUB_WORKSPACE "pdf4qt\build\install\${{ env.msipackagefilename }}"
-          $installDir = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'PDF4QT'
-          & "${env:GITHUB_WORKSPACE}\pdf4qt\scripts\Invoke-MsiSmokeTest.ps1" `
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\${{ env.msipackagefilename }}"
+          $installDir = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'LOUPE'
+          & "${env:GITHUB_WORKSPACE}\loupe\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
             -SkipEditorLaunch
 
       - name: Create MSIX Package
         run: |
-          MakeAppx pack /d ".\pdf4qt\build\install\usr\bin" /p ".\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix"
+          MakeAppx pack /d ".\loupe\build\install\usr\bin" /p ".\loupe\build\install\mberrys.Loupe-pdf_${{ env.loupe_version }}.msix"
 
       - name: Upload ZIP directory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip'
-          path: .\pdf4qt\build\install\usr\bin
+          name: 'Loupe-pdf-Windows-${{ env.loupe_version }}.zip'
+          path: .\loupe\build\install\usr\bin
           retention-days: 30
 
       - name: Upload MSIX package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix'
-          path: .\pdf4qt\build\install\mberrys.Loupe-pdf_${{ env.pdf4qt_version }}.msix
+          name: 'mberrys.Loupe-pdf_${{ env.loupe_version }}.msix'
+          path: .\loupe\build\install\mberrys.Loupe-pdf_${{ env.loupe_version }}.msix
           retention-days: 30
           compression-level: 0
 
@@ -352,6 +352,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: '${{ env.msipackagefilename }}'
-          path: .\pdf4qt\build\install\${{ env.msipackagefilename }}
+          path: .\loupe\build\install\${{ env.msipackagefilename }}
           retention-days: 30
           compression-level: 0

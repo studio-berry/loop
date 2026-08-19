@@ -30,14 +30,14 @@ class VersionPolicyTests(unittest.TestCase):
 
     def test_rejects_four_part_cmake_version(self):
         with self.assertRaisesRegex(ValueError, "MAJOR.MINOR.PATCH"):
-            parse_cmake_version("set(PDF4QT_VERSION 1.6.0.0)\n")
+            parse_cmake_version("set(LOUPE_VERSION 1.6.0.0)\n")
 
     def test_accepts_three_part_cmake_version(self):
-        self.assertEqual(parse_cmake_version("set(PDF4QT_VERSION 0.1.0)\n"), "0.1.0")
+        self.assertEqual(parse_cmake_version("set(LOUPE_VERSION 0.1.0)\n"), "0.1.0")
 
     def test_rejects_four_part_release_grep(self):
         workflow = (
-            'version=$(grep -oP \'set\\(PDF4QT_VERSION \\K[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\' '
+            'version=$(grep -oP \'set\\(LOUPE_VERSION \\K[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\' '
             '"CMakeLists.txt")\n'
         )
         errors = validate_release_workflow(workflow)
@@ -45,23 +45,23 @@ class VersionPolicyTests(unittest.TestCase):
 
     def test_accepts_three_part_release_grep(self):
         workflow = (
-            'version=$(grep -oP \'set\\(PDF4QT_VERSION \\K[0-9]+\\.[0-9]+\\.[0-9]+\' '
+            'version=$(grep -oP \'set\\(LOUPE_VERSION \\K[0-9]+\\.[0-9]+\\.[0-9]+\' '
             '"CMakeLists.txt")\n'
         )
         self.assertEqual(validate_release_workflow(workflow), [])
 
     def test_rejects_appx_on_product_version(self):
         errors = validate_appx_manifest(
-            'Version="${PDF4QT_VERSION}"',
-            {"windows_variable": "PDF4QT_WINDOWS_VERSION"},
+            'Version="${LOUPE_VERSION}"',
+            {"windows_variable": "LOUPE_WINDOWS_VERSION"},
         )
         self.assertTrue(errors)
 
     def test_accepts_appx_windows_version(self):
         self.assertEqual(
             validate_appx_manifest(
-                'Version="${PDF4QT_WINDOWS_VERSION}"',
-                {"windows_variable": "PDF4QT_WINDOWS_VERSION"},
+                'Version="${LOUPE_WINDOWS_VERSION}"',
+                {"windows_variable": "LOUPE_WINDOWS_VERSION"},
             ),
             [],
         )

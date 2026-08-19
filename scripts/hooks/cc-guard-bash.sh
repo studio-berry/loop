@@ -11,7 +11,7 @@ deny() { echo "BLOCKED — $1" >&2; exit 2; }
 python "$here/detect_force_push.py" "$cmd" \
   || deny "BSP-002 §3.3: force-push is blocked on protected branches."
 branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-[[ "$cmd" =~ ^git[[:space:]]+commit ]] && [[ "$branch" =~ ^(main|master|stable)$ ]] \
+[[ "$cmd" =~ ^git[[:space:]]+commit ]] && [[ "$branch" =~ ^(main|master|stable|dev)$ ]] \
   && deny "BSP-002 §3.3: commit directly on $branch. Create feature/<desc> first."
 [[ "$cmd" =~ protection.*-X[[:space:]]+DELETE ]] && deny "BSP-002 §3.3: removing branch protection requires an exception under BSP-001 §8."
 exit 0

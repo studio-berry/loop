@@ -1,11 +1,21 @@
 # CI and diagnostic artifacts
 
-Pull requests to `dev` run the **Linux** and **Windows** build-and-test jobs
-as an informational integration workflow. These are the two platforms Loupe V1
+Pull requests to `dev` run the Linux `agent-fast / build` workflow as the
+required integration gate. It classifies the diff, runs source and contract
+checks, compiles affected targets, and runs focused tests. Pull requests
+require one structured changelog fragment under `changes/` named after the
+head branch. Subsequent `dev` pushes skip that PR-only check so a merged
+topic fragment is not rejected for not being `changes/dev.md`. Stacked topic
+branches may carry their parent fragments, but every added fragment is
+validated. Format and clang-tidy run on added, modified, renamed, or copied
+C/C++ files only; deleted paths still classify modules. These are the fast
+checks for
+the shared integration baseline. The full Linux and Windows build-and-test
+jobs run for release qualification. These are the two platforms Loupe V1
 supports; **macOS** CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
-produced only for `dev` and `stable` pushes and manual workflow runs.
+produced only for `stable` pushes and manual workflow runs.
 
 The standalone `Documentation truth` workflow runs for the policy branches
 `dev` and `stable` pull requests and pushes. It checks every ADR's verification
@@ -20,7 +30,8 @@ runs and fails when any required dependency failed, was cancelled, was
 skipped, or did not report. Requiring the platform-specific jobs directly
 would create multiple checks for the same gate. The release-gate workflow
 runs for every pull request targeting `stable` and for `merge_group` events;
-it has no path filters. `dev` does not require this check for merging.
+it has no path filters. `dev` requires `agent-fast / build` for merging;
+`stable` requires `release_ok`.
 
 Hosted fuzzing (`.github/workflows/fuzz.yml`) validates the manifested
 regression corpus under `Fuzz/corpus/` and runs each harness's owned seeds
@@ -86,7 +97,7 @@ the signing step refuses to run against an unpinned toolchain.
 
 ## Sentry debug files
 
-Windows Release builds with `PDF4QT_ENABLE_SENTRY` emit PDBs (`/Zi` +
+Windows Release builds with `LOUPE_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
 uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region

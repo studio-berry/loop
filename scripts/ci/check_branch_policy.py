@@ -23,6 +23,7 @@ GITHUB_API = "https://api.github.com"
 DOCUMENTED_CI_BRANCHES = re.compile(r"^[-*]\s+CI branches:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_PROTECTED_BRANCHES = re.compile(r"^[-*]\s+Protected branches:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required check:\s*`([^`]+)`$", re.MULTILINE)
+DOCUMENTED_INTEGRATION_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required integration check:\s*`([^`]+)`$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK_APP = re.compile(r"^[-*]\s+Required check app:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_RELEASE_GATE_WORKFLOW = re.compile(
     r"^[-*]\s+Release gate workflow:\s*`([^`]+)`$", re.MULTILINE
@@ -46,6 +47,7 @@ class DocumentedPolicy:
     ci_branches: tuple[str, ...]
     protected_branches: tuple[str, ...]
     required_check: str
+    integration_required_check: str
     required_check_app: str
     release_gate_workflow: str
     release_gate_events: tuple[str, ...]
@@ -89,6 +91,9 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
     if not protected:
         raise ValueError("policy declares no protected branches")
     required_check = required(DOCUMENTED_REQUIRED_CHECK, "Required check:")
+    integration_required_check = required(
+        DOCUMENTED_INTEGRATION_REQUIRED_CHECK, "Required integration check:"
+    )
     required_app = required(DOCUMENTED_REQUIRED_CHECK_APP, "Required check app:")
     release_workflow = required(DOCUMENTED_RELEASE_GATE_WORKFLOW, "Release gate workflow:")
     release_events = _branch_names(required(DOCUMENTED_RELEASE_GATE_EVENTS, "Release gate events:"))
@@ -109,6 +114,7 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
         ci_branches=ci_branches,
         protected_branches=protected,
         required_check=required_check,
+        integration_required_check=integration_required_check,
         required_check_app=required_app,
         release_gate_workflow=release_workflow,
         release_gate_events=release_events,
@@ -228,6 +234,23 @@ def on_block_has_path_filters(text: str) -> bool:
     return False
 
 
+def workflow_job_block(text: str, job_name: str) -> str:
+    """Return one top-level job block without requiring a YAML dependency."""
+    lines = text.splitlines()
+    start = next(
+        (index for index, line in enumerate(lines) if line.rstrip() == f"  {job_name}:"),
+        None,
+    )
+    if start is None:
+        return ""
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[index]):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def validate_workflow_branches(
     path: Path, text: str, expected_branches: tuple[str, ...]
 ) -> list[str]:
@@ -266,6 +289,10 @@ def validate_release_gate_workflow(path: Path, text: str, policy: DocumentedPoli
         violations.append(f"{path}: missing release_ok job")
     if "if: always()" not in text and "if: ${{ always() }}" not in text:
         violations.append(f"{path}: release_ok must use if: always()")
+    if "github.event.merge_group.base_sha" not in text:
+        violations.append(f"{path}: agent contract must use the merge_group base SHA")
+    if "github.event.merge_group.head_sha" not in text:
+        violations.append(f"{path}: agent contract must use the merge_group head SHA")
     return violations
 
 
@@ -288,6 +315,16 @@ def validate_integration_workflow(path: Path, text: str, policy: DocumentedPolic
         )
     if re.search(r"^\s*ci_ok\s*:", text, re.MULTILINE):
         violations.append(f"{path}: obsolete ci_ok aggregate must not remain")
+    if not re.search(r"^\s*agent-fast\s*:", text, re.MULTILINE):
+        violations.append(f"{path}: missing required agent-fast job")
+    for job_name in ("linux", "windows"):
+        block = workflow_job_block(text, job_name)
+        if not block:
+            violations.append(f"{path}: missing {job_name} job")
+        elif "github.event_name == 'workflow_dispatch'" not in block:
+            violations.append(
+                f"{path}: {job_name} job must run for workflow_dispatch"
+            )
     return violations
 
 
@@ -309,6 +346,33 @@ def _required_check_entries(protection: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _validate_required_check(
+    *,
+    branch: str,
+    protection: dict[str, Any] | None,
+    expected: str,
+    required_check_app: str,
+) -> list[str]:
+    if not isinstance(protection, dict):
+        return [f"live protection: {branch} rules were not returned"]
+    checks = _required_check_entries(protection)
+    contexts = [str(item.get("context")) for item in checks]
+    if contexts != [expected]:
+        return [
+            f"live protection: {branch} required checks "
+            f"{contexts} do not match `[{expected}]`"
+        ]
+    if checks and required_check_app.lower() == "github actions":
+        app_id = checks[0].get("app_id")
+        if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
+            return [
+                f"live protection: {branch} required check "
+                f"`{expected}` must be bound to GitHub Actions "
+                f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
+            ]
+    return []
+
+
 def validate_live_protection(
     *,
     stable_protection: dict[str, Any] | None,
@@ -318,28 +382,26 @@ def validate_live_protection(
     """Compare live GitHub protection JSON with the documented contract."""
     violations: list[str] = []
     if "stable" in policy.protected_branches:
-        if not isinstance(stable_protection, dict):
-            violations.append("live protection: stable rules were not returned")
-        else:
-            checks = _required_check_entries(stable_protection)
-            contexts = [str(item.get("context")) for item in checks]
-            if contexts != [policy.required_check]:
-                violations.append(
-                    "live protection: stable required checks "
-                    f"{contexts} do not match `[{policy.required_check}]`"
-                )
-            elif checks and policy.required_check_app.lower() == "github actions":
-                app_id = checks[0].get("app_id")
-                if app_id not in (GITHUB_ACTIONS_APP_ID, str(GITHUB_ACTIONS_APP_ID)):
-                    violations.append(
-                        "live protection: stable required check "
-                        f"`{policy.required_check}` must be bound to GitHub Actions "
-                        f"(app_id {GITHUB_ACTIONS_APP_ID}), got {app_id!r}"
-                    )
-    if isinstance(dev_protection, dict):
-        dev_checks = _required_check_entries(dev_protection)
-        if dev_checks:
-            contexts = [str(item.get("context")) for item in dev_checks]
+        violations.extend(
+            _validate_required_check(
+                branch="stable",
+                protection=stable_protection,
+                expected=policy.required_check,
+                required_check_app=policy.required_check_app,
+            )
+        )
+    if "dev" in policy.protected_branches:
+        violations.extend(
+            _validate_required_check(
+                branch="dev",
+                protection=dev_protection,
+                expected=policy.integration_required_check,
+                required_check_app=policy.required_check_app,
+            )
+        )
+    elif isinstance(dev_protection, dict):
+        contexts = [str(item.get("context")) for item in _required_check_entries(dev_protection)]
+        if contexts:
             violations.append(
                 "live protection: dev must not require status checks, "
                 f"got {contexts}"

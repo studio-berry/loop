@@ -5,7 +5,7 @@
     "runtime-branch": "stable",
     "sdk": "org.kde.Sdk",
     "sdk-branch": "stable",
-    "command": "Pdf4QtEditor",
+    "command": "LoupeEditor",
     "finish-args": [
         "--socket=fallback-x11",
         "--socket=wayland",
@@ -121,15 +121,15 @@
             "name": "loupe-pdf",
             "buildsystem": "cmake-ninja",
             "builddir": true,
-            "cflags-cpp": ["-DPDF4QT_FLATPAK_BUILD"],
+            "cflags-cpp": ["-DLOUPE_FLATPAK_BUILD"],
             "config-opts": [
                 "-DCMAKE_BUILD_TYPE=Release",
-                "-DPDF4QT_INSTALL_QT_DEPENDENCIES=OFF",
-                "-DPDF4QT_INSTALL_DEPENDENCIES=OFF",
-                "-DPDF4QT_INSTALL_TO_USR=OFF",
+                "-DLOUPE_INSTALL_QT_DEPENDENCIES=OFF",
+                "-DLOUPE_INSTALL_DEPENDENCIES=OFF",
+                "-DLOUPE_INSTALL_TO_USR=OFF",
                 "-DCMAKE_VERBOSE_MAKEFILE=OFF",
-                "-DPDF4QT_LOUPE_DISTRIBUTION=ON",
-                "-DPDF4QT_PLUGIN_OCR=OFF"
+                "-DLOUPE_LOUPE_DISTRIBUTION=ON",
+                "-DLOUPE_PLUGIN_OCR=OFF"
             ],
             "build-commands": [
               "ninja all",
@@ -139,7 +139,7 @@
                 {
                     "type": "git",
                     "url": "https://github.com/mberrys/Loupe-pdf.git",
-                    "commit": "PDF4QT_LAST_COMMIT"
+                    "commit": "LOUPE_LAST_COMMIT"
                 }
             ]
         }

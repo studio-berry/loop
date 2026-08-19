@@ -1,12 +1,12 @@
 {
   "scheme": "semver",
   "spec": "https://semver.org/spec/v2.0.0.html",
-  "cmake_variable": "PDF4QT_VERSION",
+  "cmake_variable": "LOUPE_VERSION",
   "cmake_format": "MAJOR.MINOR.PATCH",
   "current": "0.1.0",
   "prerelease": "",
   "tag_prefix": "v",
-  "windows_variable": "PDF4QT_WINDOWS_VERSION",
+  "windows_variable": "LOUPE_WINDOWS_VERSION",
   "windows_four_part": "MAJOR.MINOR.PATCH.0",
   "release_workflow": ".github/workflows/CreateReleaseDraft.yml"
 }

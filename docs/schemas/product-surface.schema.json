@@ -92,7 +92,7 @@
           "additionalProperties": false,
           "required": ["executable", "file_associations"],
           "properties": {
-            "executable": { "const": "Pdf4QtEditor" },
+            "executable": { "const": "LoupeEditor" },
             "file_associations": { "type": "array", "items": { "type": "string" } }
           }
         }

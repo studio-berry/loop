@@ -2,7 +2,7 @@
 # Run MIC-304 libFuzzer harnesses locally with ASan/UBSan.
 #
 # Prerequisites:
-#   - Clang with libFuzzer (PDF4QT_BUILD_FUZZERS=ON)
+#   - Clang with libFuzzer (LOUPE_BUILD_FUZZERS=ON)
 #   - Qt + vcpkg deps (see scripts/setup-dev-env.sh)
 #
 # Usage:
@@ -22,7 +22,7 @@ else
     TARGETS=()
 fi
 
-export LD_LIBRARY_PATH="${PDF4QT_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${LOUPE_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
 
 python3 "${REPO_ROOT}/scripts/ci/check_fuzz_corpus.py"
 

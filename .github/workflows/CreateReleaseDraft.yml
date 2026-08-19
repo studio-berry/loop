@@ -30,17 +30,17 @@ jobs:
       - name: Read version
         id: get_version
         run: |
-          version=$(grep -oP 'set\(PDF4QT_VERSION \K[0-9]+\.[0-9]+\.[0-9]+' "CMakeLists.txt")
-          prerelease=$(grep -oP 'set\(PDF4QT_VERSION_PRERELEASE \K[A-Za-z0-9.-]+' "CMakeLists.txt" || true)
+          version=$(grep -oP 'set\(LOUPE_VERSION \K[0-9]+\.[0-9]+\.[0-9]+' "CMakeLists.txt")
+          prerelease=$(grep -oP 'set\(LOUPE_VERSION_PRERELEASE \K[A-Za-z0-9.-]+' "CMakeLists.txt" || true)
           if [ -n "$prerelease" ]; then
             version="${version}-${prerelease}"
           fi
           echo "Version: $version"
-          echo "pdf4qt_version=$version" >> $GITHUB_ENV
+          echo "loupe_version=$version" >> $GITHUB_ENV
 
       - name: Stop if release already exists
         run: |
-          tag="v${{ env.pdf4qt_version }}"
+          tag="v${{ env.loupe_version }}"
           if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             if [ "${{ inputs.allow_existing_release }}" != "true" ]; then
               echo "::error::Release $tag already exists. Refusing to upload assets because this would modify an existing release."
@@ -121,13 +121,13 @@ jobs:
       - name: Rezip zip file
         id: rezip_zip_file
         run: |
-          cd artifacts/Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip
-          zip -r ../Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip.backup *
+          cd artifacts/Loupe-pdf-Windows-${{ env.loupe_version }}.zip
+          zip -r ../Loupe-pdf-Windows-${{ env.loupe_version }}.zip.backup *
 
       - name: Rename zip archive
         run: |
-          rm -rf artifacts/Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip/
-          mv artifacts/Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip.backup artifacts/Loupe-pdf-Windows-${{ env.pdf4qt_version }}.zip
+          rm -rf artifacts/Loupe-pdf-Windows-${{ env.loupe_version }}.zip/
+          mv artifacts/Loupe-pdf-Windows-${{ env.loupe_version }}.zip.backup artifacts/Loupe-pdf-Windows-${{ env.loupe_version }}.zip
 
       - name: Correct file paths
         run: |
@@ -167,8 +167,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
         with:
-          tag_name: 'v${{ env.pdf4qt_version }}'
-          name: "Release of Loupe-pdf ${{ env.pdf4qt_version }} (Draft)"
+          tag_name: 'v${{ env.loupe_version }}'
+          name: "Release of Loupe-pdf ${{ env.loupe_version }} (Draft)"
           draft: true
           prerelease: false
           generate_release_notes: true

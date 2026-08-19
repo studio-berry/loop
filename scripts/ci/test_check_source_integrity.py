@@ -33,7 +33,7 @@ class ForbiddenPathTests(unittest.TestCase):
     def test_rejects_build_trees(self):
         for path in (
             "build/CMakeFiles/rules.ninja",
-            "build-fuzz-docker/usr/lib/libPdf4QtLibCore.so.1.6.0.0",
+            "build-fuzz-docker/usr/lib/libLoupeLibCore.so.1.6.0.0",
             "build-fuzz-docker/.ninja_log",
             ".docker-vcpkg",
             ".docker-vcpkg/installed/x64-linux/include/zlib.h",
@@ -64,7 +64,7 @@ class ForbiddenPathTests(unittest.TestCase):
             "scripts/hooks/cc-guard-bash.sh",
             "build-notes.md",
             "buildsystem/toolchain.cmake",
-            "Pdf4QtLibCore/sources/pdfdocument.cpp",
+            "LoupeLibCore/sources/pdfdocument.cpp",
             "docs/adr/adr-003-pagemaster-export-orchestrator.md",
             "loupe-preflight/testdata/fixtures/image-dpi-excessive.pdf",
         ):

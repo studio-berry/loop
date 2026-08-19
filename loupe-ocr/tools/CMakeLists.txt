@@ -20,12 +20,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-option(PDF4QT_BUILD_OCR_SERVICE "Build LoupeOcrService via PyInstaller (requires Python venv)" OFF)
-option(PDF4QT_BUNDLE_OCR_SERVICE "Install prebuilt LoupeOcrService from loupe-ocr/prebuilt" OFF)
+option(LOUPE_BUILD_OCR_SERVICE "Build LoupeOcrService via PyInstaller (requires Python venv)" OFF)
+option(LOUPE_BUNDLE_OCR_SERVICE "Install prebuilt LoupeOcrService from loupe-ocr/prebuilt" OFF)
 
 set(LOUPE_OCR_PREBUILT_DIR ${CMAKE_SOURCE_DIR}/loupe-ocr/prebuilt/LoupeOcrService)
 
-if(PDF4QT_BUILD_OCR_SERVICE)
+if(LOUPE_BUILD_OCR_SERVICE)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_custom_target(LoupeOcrServiceBundle
         COMMAND ${Python3_EXECUTABLE} -m PyInstaller
@@ -38,17 +38,17 @@ if(PDF4QT_BUILD_OCR_SERVICE)
     )
 endif()
 
-if(PDF4QT_BUNDLE_OCR_SERVICE)
+if(LOUPE_BUNDLE_OCR_SERVICE)
     if(NOT EXISTS "${LOUPE_OCR_PREBUILT_DIR}/LoupeOcrService.exe" AND NOT EXISTS "${LOUPE_OCR_PREBUILT_DIR}/LoupeOcrService")
-        message(WARNING "PDF4QT_BUNDLE_OCR_SERVICE is ON but prebuilt LoupeOcrService was not found at ${LOUPE_OCR_PREBUILT_DIR}")
+        message(WARNING "LOUPE_BUNDLE_OCR_SERVICE is ON but prebuilt LoupeOcrService was not found at ${LOUPE_OCR_PREBUILT_DIR}")
     else()
         install(DIRECTORY ${LOUPE_OCR_PREBUILT_DIR}/
-                DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/LoupeOcrService
+                DESTINATION ${LOUPE_INSTALL_BIN_DIR}/LoupeOcrService
                 USE_SOURCE_PERMISSIONS)
         install(FILES ${CMAKE_SOURCE_DIR}/loupe-ocr/THIRD_PARTY_NOTICES.txt
-                DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/LoupeOcrService)
+                DESTINATION ${LOUPE_INSTALL_BIN_DIR}/LoupeOcrService)
     endif()
 endif()
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/loupe-ocr/schemas/
-        DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/loupe/ocr/schemas)
+        DESTINATION ${LOUPE_INSTALL_SHARE_DIR}/loupe/ocr/schemas)

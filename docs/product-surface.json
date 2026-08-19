@@ -4,16 +4,16 @@
   "profiles": ["developer", "loupe-release"],
   "surfaces": [
     {
-      "id": "pdf4qt-editor",
+      "id": "loupe-editor",
       "kind": "application",
-      "artifact": "Pdf4QtEditor",
+      "artifact": "LoupeEditor",
       "artifact_scope": "install",
       "disposition": "KEEP",
       "owner": "m.berry",
       "rationale": "Primary interactive Loupe desktop shell.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": null,
-      "dependencies": ["Pdf4QtLibCore", "Pdf4QtLibGui"],
+      "dependencies": ["LoupeLibCore", "LoupeLibGui"],
       "validation_evidence": "scripts/verify-loupe-surface.ps1",
       "follow_up_issue": null
     },
@@ -27,28 +27,28 @@
       "rationale": "Headless and automation surface; command names and JSON contracts remain stable.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": null,
-      "dependencies": ["Pdf4QtLibCore"],
+      "dependencies": ["LoupeLibCore"],
       "validation_evidence": "PdfTool capabilities --console-format json",
       "follow_up_issue": null
     },
     {
-      "id": "pdf4qt-viewer",
+      "id": "loupe-viewer",
       "kind": "application",
-      "artifact": "Pdf4QtViewer",
+      "artifact": "LoupeViewer",
       "artifact_scope": "install",
       "disposition": "ABSORB",
       "owner": "m.berry",
       "rationale": "Viewing is normal document-open behavior in Loupe, not a second product shell; compatibility invocation remains available.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-document",
-      "dependencies": ["Pdf4QtLibCore", "Pdf4QtLibGui"],
+      "dependencies": ["LoupeLibCore", "LoupeLibGui"],
       "validation_evidence": "docs/LOUPE_WORKSPACES.md",
       "follow_up_issue": 193
     },
     {
-      "id": "pdf4qt-pagemaster",
+      "id": "loupe-pagemaster",
       "kind": "application",
-      "artifact": "Pdf4QtPageMaster",
+      "artifact": "LoupePageMaster",
       "artifact_scope": "install",
       "disposition": "ABSORB",
       "owner": "m.berry",
@@ -60,9 +60,9 @@
       "follow_up_issue": 193
     },
     {
-      "id": "pdf4qt-diff",
+      "id": "loupe-diff",
       "kind": "application",
-      "artifact": "Pdf4QtDiff",
+      "artifact": "LoupeDiff",
       "artifact_scope": "install",
       "disposition": "OPEN",
       "owner": "m.berry",
@@ -74,15 +74,15 @@
       "follow_up_issue": 193
     },
     {
-      "id": "pdf4qt-launchpad",
+      "id": "loupe-launchpad",
       "kind": "application",
-      "artifact": "Pdf4QtLaunchPad",
+      "artifact": "LoupeLaunchPad",
       "artifact_scope": "install",
       "disposition": "HIDE",
       "owner": "m.berry",
       "rationale": "A hub for upstream executables contradicts the Loupe product model; retain direct compatibility invocation but expose no entrypoint.",
       "profiles": { "developer": "present", "loupe-release": "present" },
-      "replacement_surface": "pdf4qt-editor",
+      "replacement_surface": "loupe-editor",
       "dependencies": [],
       "validation_evidence": "scripts/verify-loupe-surface.ps1",
       "follow_up_issue": null
@@ -97,8 +97,8 @@
       "rationale": "Retained for developer/upstream comparison workflows; not a Loupe operator product entry.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": null,
-      "dependencies": ["Pdf4QtLibCore"],
-      "validation_evidence": "CMakeLists.txt PDF4QT_BUILD_CODE_GENERATOR",
+      "dependencies": ["LoupeLibCore"],
+      "validation_evidence": "CMakeLists.txt LOUPE_BUILD_CODE_GENERATOR",
       "follow_up_issue": null
     },
     {
@@ -111,8 +111,8 @@
       "rationale": "Retained for developer/upstream comparison workflows; no separate Loupe product entry.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-inspect",
-      "dependencies": ["Pdf4QtLibCore"],
-      "validation_evidence": "CMakeLists.txt PDF4QT_BUILD_JBIG2_VIEWER",
+      "dependencies": ["LoupeLibCore"],
+      "validation_evidence": "CMakeLists.txt LOUPE_BUILD_JBIG2_VIEWER",
       "follow_up_issue": null
     },
     {
@@ -125,8 +125,8 @@
       "rationale": "Retained for deterministic fixture generation and developer workflows, not shipped as a user surface.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": null,
-      "dependencies": ["Pdf4QtLibCore"],
-      "validation_evidence": "CMakeLists.txt PDF4QT_BUILD_EXAMPLE_GENERATOR",
+      "dependencies": ["LoupeLibCore"],
+      "validation_evidence": "CMakeLists.txt LOUPE_BUILD_EXAMPLE_GENERATOR",
       "follow_up_issue": null
     },
     {
@@ -139,8 +139,8 @@
       "rationale": "Page geometry and measurement belong to Pages / Inspect inside Loupe.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-pages-production",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 193
     },
     {
@@ -153,8 +153,8 @@
       "rationale": "Object inspection remains available as an explicit advanced workflow.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-inspect",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 193
     },
     {
@@ -167,8 +167,8 @@
       "rationale": "Output Preview is the Production Preview workspace, not a separate product.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-production-preview",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 193
     },
     {
@@ -181,8 +181,8 @@
       "rationale": "Separations and proofing belong to Production Preview.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-production-preview",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 193
     },
     {
@@ -209,8 +209,8 @@
       "rationale": "Signing and verification remain available as an advanced workflow.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-fix",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": null
     },
     {
@@ -223,8 +223,8 @@
       "rationale": "Only deterministic editing primitives that support Loupe workflows remain reachable through Fix.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-fix",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 193
     },
     {
@@ -237,8 +237,8 @@
       "rationale": "Preflight is a Loupe workspace over the shared Core and CLI contracts.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-preflight",
-      "dependencies": ["Pdf4QtLibCore", "PdfTool preflight"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeLibCore", "PdfTool preflight"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 195
     },
     {
@@ -251,8 +251,8 @@
       "rationale": "Reusable Action Lists are batch execution of registered operations, surfaced contextually within Loupe Fix rather than as a separate product.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-fix",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": 30
     },
     {
@@ -265,8 +265,8 @@
       "rationale": "Scanner remains retained by the release profile but is not a separate Loupe product entry.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "loupe-document",
-      "dependencies": ["Pdf4QtEditor"],
-      "validation_evidence": "Pdf4QtEditorPlugins/CMakeLists.txt",
+      "dependencies": ["LoupeEditor"],
+      "validation_evidence": "LoupeEditorPlugins/CMakeLists.txt",
       "follow_up_issue": null
     },
     {
@@ -279,8 +279,8 @@
       "rationale": "Retain source and developer support, but keep audiobook conversion outside the Loupe release plugin pack.",
       "profiles": { "developer": "present", "loupe-release": "absent" },
       "replacement_surface": null,
-      "dependencies": ["PDF4QT_PLUGIN_AUDIOBOOK"],
-      "validation_evidence": "CMakeLists.txt PDF4QT_PLUGIN_AUDIOBOOK",
+      "dependencies": ["LOUPE_PLUGIN_AUDIOBOOK"],
+      "validation_evidence": "CMakeLists.txt LOUPE_PLUGIN_AUDIOBOOK",
       "follow_up_issue": null
     },
     {
@@ -294,7 +294,7 @@
       "profiles": { "developer": "present", "loupe-release": "absent" },
       "replacement_surface": "loupe-cli",
       "dependencies": ["PdfTool ocr"],
-      "validation_evidence": "PDF4QT_PLUGIN_OCR and PDF4QT_BUNDLE_OCR_SERVICE",
+      "validation_evidence": "LOUPE_PLUGIN_OCR and LOUPE_BUNDLE_OCR_SERVICE",
       "follow_up_issue": 41
     },
     {
@@ -306,8 +306,8 @@
       "owner": "m.berry",
       "rationale": "Opening a PDF is the normal document workspace and includes Viewer behavior.",
       "profiles": { "developer": "present", "loupe-release": "present" },
-      "replacement_surface": "pdf4qt-editor",
-      "dependencies": ["Pdf4QtLibGui"],
+      "replacement_surface": "loupe-editor",
+      "dependencies": ["LoupeLibGui"],
       "validation_evidence": "docs/LOUPE_WORKSPACES.md",
       "follow_up_issue": 193
     },
@@ -348,7 +348,7 @@
       "owner": "m.berry",
       "rationale": "Pages / Production owns batch assembly and geometry over the existing PageMaster export contract; no duplicate engine is permitted.",
       "profiles": { "developer": "present", "loupe-release": "present" },
-      "replacement_surface": "pdf4qt-pagemaster",
+      "replacement_surface": "loupe-pagemaster",
       "dependencies": ["PDFPageMasterExport", "ADR-003", "ADR-004"],
       "validation_evidence": "docs/LOUPE_WORKSPACES.md",
       "follow_up_issue": 193
@@ -377,7 +377,7 @@
       "rationale": "Corrective actions remain Core/PdfTool contracts surfaced contextually by Editor; approvals and revalidation stay explicit.",
       "profiles": { "developer": "present", "loupe-release": "present" },
       "replacement_surface": "editor-plugin",
-      "dependencies": ["Pdf4QtLibCore", "PdfTool repair"],
+      "dependencies": ["LoupeLibCore", "PdfTool repair"],
       "validation_evidence": "docs/LOUPE_WORKSPACES.md",
       "follow_up_issue": 126
     },
@@ -388,9 +388,9 @@
       "artifact_scope": "none",
       "disposition": "OPEN",
       "owner": "m.berry",
-      "rationale": "Compare remains a product decision, not an implicit absorption of Pdf4QtDiff; preserve the Core diff contract until approved.",
+      "rationale": "Compare remains a product decision, not an implicit absorption of LoupeDiff; preserve the Core diff contract until approved.",
       "profiles": { "developer": "present", "loupe-release": "present" },
-      "replacement_surface": "pdf4qt-diff",
+      "replacement_surface": "loupe-diff",
       "dependencies": ["PDFDiff"],
       "validation_evidence": "docs/LOUPE_WORKSPACES.md",
       "follow_up_issue": 193
@@ -400,19 +400,19 @@
     "desktop_entries": {
       "developer": [
         "io.github.mberrys.Loupe-pdf.desktop",
-        "io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop",
-        "io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop",
-        "io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop",
-        "io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop"
+        "io.github.mberrys.Loupe-pdf.LoupeEditor.desktop",
+        "io.github.mberrys.Loupe-pdf.LoupeViewer.desktop",
+        "io.github.mberrys.Loupe-pdf.LoupePageMaster.desktop",
+        "io.github.mberrys.Loupe-pdf.LoupeDiff.desktop"
       ],
       "loupe-release": ["io.github.mberrys.Loupe-pdf.desktop"]
     },
     "appx_applications": {
-      "developer": ["Pdf4QtEditor", "Pdf4QtViewer", "Pdf4QtPageMaster", "Pdf4QtDiff", "Pdf4QtLaunchPad"],
-      "loupe-release": ["Pdf4QtEditor"]
+      "developer": ["LoupeEditor", "LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"],
+      "loupe-release": ["LoupeEditor"]
     },
     "loupe_launcher": {
-      "executable": "Pdf4QtEditor",
+      "executable": "LoupeEditor",
       "file_associations": ["application/pdf"]
     }
   },

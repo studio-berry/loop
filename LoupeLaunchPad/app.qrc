@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>app-icon.svg</file>
+		<file alias="app-editor.svg">../LoupeEditor/app-icon.svg</file>
+		<file alias="app-viewer.svg">../LoupeViewer/app-icon.svg</file>
+		<file alias="app-diff.svg">../LoupeDiff/app-icon.svg</file>
+		<file alias="app-pagemaster.svg">../LoupePageMaster/app-icon.svg</file>
+    </qresource>
+</RCC>

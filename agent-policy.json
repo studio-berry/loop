@@ -1,0 +1,166 @@
+{
+  "$schema": "docs/schemas/agent-policy.schema.json",
+  "format_version": 1,
+  "repository": "studio-berry/loupe",
+  "language": "C++20",
+  "qt_minimum": "6.11.1",
+  "branches": {
+    "default": "stable",
+    "integration": "dev",
+    "release": "stable",
+    "topic_source": "dev",
+    "topic_branch_patterns": ["gh-*", "feature/*", "fix/*", "chore/*", "docs/*"],
+    "protected": ["dev", "stable"]
+  },
+  "autonomy": {
+    "allowed": [
+      "format_touched_files",
+      "static_analyze_touched_translation_units",
+      "build_affected_targets_in_existing_build",
+      "run_mapped_focused_tests",
+      "run_source_and_contract_checks"
+    ],
+    "approval_required": [
+      "dependency_or_toolchain_changes",
+      "configure_or_reconfigure",
+      "clean_or_full_rebuild",
+      "packaging_or_installation",
+      "external_writes",
+      "push_or_merge",
+      "history_rewrite",
+      "upstream_sync",
+      "signing_or_credential_operations"
+    ]
+  },
+  "source_of_truth": [
+    "current_code_and_tests_on_dev",
+    "reverified_issue_status",
+    "accepted_current_adr",
+    "generated_architecture_catalog",
+    "narrative_repository_docs"
+  ],
+  "protected_paths": [
+    "CMakeLists.txt",
+    "vcpkg.json",
+    "vcpkg-configuration.json",
+    "vcpkg/**",
+    "loupe-preflight/schemas/**",
+    "docs/schemas/**",
+    "LoupeLibCore/sources/**",
+    "UnitTests/CMakeLists.txt"
+  ],
+  "module_boundaries": {
+    "core": {
+      "paths": ["LoupeLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
+      "targets": ["LoupeLibCore"],
+      "tests": [
+        "UnitTests",
+        "UnitTestsBenchmarkIdentity",
+        "UnitTestsBleedFixup",
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsConversionOracle",
+        "UnitTestsEvidenceGraph",
+        "UnitTestsHugeDocumentEnvelope",
+        "UnitTestsIdentitySeparation",
+        "UnitTestsIncrementalSave",
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory",
+        "UnitTestsOperationImpact",
+        "UnitTestsOverprintRender",
+        "UnitTestsPluginAbi",
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProcessingBudget",
+        "UnitTestsSchemaEvolution",
+        "UnitTestsStandardOracle",
+        "UnitTestsWorkloadEnvelope"
+      ]
+    },
+    "pdftool": {
+      "paths": ["PdfTool/**"],
+      "targets": ["PdfTool"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
+    },
+    "preflight": {
+      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp"],
+      "targets": ["PdfTool"],
+      "tests": [
+        "UnitTestsPreflightChecks",
+        "UnitTestsPreflightCorpus",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsProfileIdentity",
+        "UnitTestsOperatorAcceptance",
+        "UnitTestsStandardOracle"
+      ]
+    },
+    "pagemaster": {
+      "paths": ["LoupePageMaster/**"],
+      "targets": ["LoupePageMaster"],
+      "tests": ["UnitTestsPageMasterExport"]
+    },
+    "widgets_gui": {
+      "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
+      "targets": ["LoupeEditor", "LoupeViewer"],
+      "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
+    },
+    "plugins": {
+      "paths": ["LoupeEditorPlugins/**"],
+      "targets": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin"
+      ],
+      "tests": ["UnitTestsPreflightPlugin", "UnitTestsPluginAbi"]
+    },
+    "schemas_contracts": {
+      "paths": [
+        "docs/schemas/product-surface.schema.json",
+        "docs/schemas/pdftool-result.schema.json",
+        "docs/schemas/loupe-shell.schema.json",
+        "docs/schemas/loupe-shell-actions.schema.json",
+        "loupe-ocr/schemas/**",
+        "loupe-preflight/schemas/**"
+      ],
+      "targets": ["PdfTool"],
+      "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrContract", "UnitTestsPreflightCorpus"]
+    },
+    "build_policy": {
+      "paths": ["CMakeLists.txt", "**/CMakeLists.txt", "cmake/**", "vcpkg.json", "vcpkg-configuration.json", "vcpkg/**"],
+      "targets": ["LoupeLibCore", "PdfTool", "UnitTests"],
+      "tests": ["UnitTests"]
+    },
+    "documentation": {
+      "paths": ["docs/**", "AGENTS.md", ".claude/**", ".cursor/**", "agent-policy.json"],
+      "targets": [],
+      "tests": ["architecture_catalog", "policy_adapters"]
+    }
+  },
+  "global_checks": [
+    "source_integrity",
+    "architecture_catalog",
+    "policy_adapters",
+    "changelog"
+  ],
+  "changelog": {
+    "directory": "changes",
+    "required_per_pr": 1,
+    "filename": "<sanitized-head-branch>.md",
+    "categories": ["added", "changed", "fixed", "security", "internal"],
+    "required_fields": ["Category", "Audience", "Breaking-Change", "Summary"]
+  },
+  "adapters": ["AGENTS.md", ".claude/policy-brief.md", ".cursor/agent-policy.md", "docs/branch-policy.json"]
+}

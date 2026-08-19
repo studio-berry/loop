@@ -13,7 +13,7 @@ param(
     [string]$ProductSurfacePath = (Join-Path $PSScriptRoot "..\docs\product-surface.json"),
     [string]$ShellContractPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell.json"),
     [string]$ActionPolicyPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell-actions.json"),
-    [string]$EditorUiPath = (Join-Path $PSScriptRoot "..\Pdf4QtLibGui\pdfeditormainwindow.ui")
+    [string]$EditorUiPath = (Join-Path $PSScriptRoot "..\LoupeLibGui\pdfeditormainwindow.ui")
 )
 
 Set-StrictMode -Version Latest
@@ -39,8 +39,8 @@ if ($shell.schema_version -ne 1 -or $shell.issue -ne 193) {
 if ($shell.gui_status -ne "deferred-until-0.1.1") {
     throw "GUI deferral gate changed without an explicit scope update: $($shell.gui_status)"
 }
-if ($shell.shell_surface -ne "Pdf4QtEditor") {
-    throw "Loupe shell must remain Pdf4QtEditor: $($shell.shell_surface)"
+if ($shell.shell_surface -ne "LoupeEditor") {
+    throw "Loupe shell must remain LoupeEditor: $($shell.shell_surface)"
 }
 if ($shell.ui_foundation.candidate -ne "Qt Quick Controls" -or $shell.ui_foundation.decision_issue -ne 178) {
     throw "Shell foundation is not linked to the Qt Quick Controls decision issue."
@@ -69,7 +69,7 @@ $policyActions = @($actionPolicy.actions)
 if ($actionPolicy.schema_version -ne 1 -or $actionPolicy.issue -ne 193) {
     throw "Unsupported Editor action policy version or issue number."
 }
-if ($actionPolicy.source_ui -ne "Pdf4QtLibGui/pdfeditormainwindow.ui") {
+if ($actionPolicy.source_ui -ne "LoupeLibGui/pdfeditormainwindow.ui") {
     throw "Editor action policy points to an unexpected source UI."
 }
 $policyIds = @($policyActions | ForEach-Object id)

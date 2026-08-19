@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
-  <Identity Name="mberrys.Loupe-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${PDF4QT_WINDOWS_VERSION}" />
+  <Identity Name="mberrys.Loupe-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${LOUPE_WINDOWS_VERSION}" />
   <Properties>
     <DisplayName>Loupe</DisplayName>
     <PublisherDisplayName>Michael Berry</PublisherDisplayName>
@@ -11,12 +11,12 @@
     <Resource Language="en-us" />
   </Resources>
   <Applications>
-    <Application Id="Pdf4QtEditor" Executable="Pdf4QtEditor.exe" EntryPoint="windows.fullTrustApplication">
+    <Application Id="LoupeEditor" Executable="LoupeEditor.exe" EntryPoint="windows.fullTrustApplication">
       <uap:VisualElements DisplayName="Loupe"
                           Description="Inspect and prepare production PDFs with deterministic preflight and production tools."
                           BackgroundColor="transparent"
-                          Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png"
-                          Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png">
+                          Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeEditor.png"
+                          Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeEditor.png">
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.fileTypeAssociation">
@@ -29,7 +29,7 @@
         </uap:Extension>
       </Extensions>
     </Application>
-@PDF4QT_LOUPE_COMPAT_APPLICATIONS@
+@LOUPE_LOUPE_COMPAT_APPLICATIONS@
   </Applications>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19045.0" />

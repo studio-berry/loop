@@ -14,9 +14,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Least privilege for GITHUB_TOKEN. `contents: read` is what actions/checkout needs;
-# nothing here writes back to the repository. actions/upload-artifact@v4 uses the job
-# token against the artifact service and needs no additional scope.
 permissions:
   contents: read
 
@@ -33,11 +30,21 @@ jobs:
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
 
+  agent-fast:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
+    uses: ./.github/workflows/reusable-linux.yml
+    with:
+      fast: true
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.before }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+
   linux:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
     secrets:

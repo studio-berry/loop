@@ -10,7 +10,7 @@ integration remains planned for #193 / 0.0.1B.
 
 The release package presents two product surfaces:
 
-- **Loupe** is the `Pdf4QtEditor` desktop shell. Opening a PDF provides the
+- **Loupe** is the `LoupeEditor` desktop shell. Opening a PDF provides the
   normal viewing behavior; future Editor workspaces are named Pages /
   Production, Compare, and Production Preview.
 - **Loupe CLI** is the product-facing name for `PdfTool`. The `PdfTool`
@@ -18,8 +18,8 @@ The release package presents two product surfaces:
   compatibility remain unchanged.
 
 The release profile keeps the following targets buildable and installed for
-compatibility/direct invocation: `Pdf4QtViewer`, `Pdf4QtPageMaster`,
-`Pdf4QtDiff`, and `Pdf4QtLaunchPad`. CodeGenerator, JBIG2 Viewer,
+compatibility/direct invocation: `LoupeViewer`, `LoupePageMaster`,
+`LoupeDiff`, and `LoupeLaunchPad`. CodeGenerator, JBIG2 Viewer,
 PdfExampleGenerator, and the Scanner plugin remain retained by the release
 build profile. None of these compatibility surfaces receives a separate Loupe
 desktop or AppX product entry.
@@ -37,7 +37,7 @@ ADR-005 remain the decision record.
 ## Objective
 
 Move Loupe from an upstream-shaped multi-application distribution to a focused
-print-production product surface while preserving shared PDF4QT engine code,
+print-production product surface while preserving shared upstream engine code,
 PdfTool automation, and upstream-sync flexibility.
 
 The implementation must follow the ADR-005 order:
@@ -78,13 +78,13 @@ The implementation must follow the ADR-005 order:
 
 | Concern | Current anchor | Planning implication |
 | --- | --- | --- |
-| Distribution switch | `CMakeLists.txt:68-107` | Reuse `PDF4QT_LOUPE_DISTRIBUTION`; do not introduce per-surface flags until a real exception needs one. |
+| Distribution switch | `CMakeLists.txt:68-107` | Reuse `LOUPE_LOUPE_DISTRIBUTION`; do not introduce per-surface flags until a real exception needs one. |
 | Conditional application targets | `CMakeLists.txt:250-274` | Keep source directories and gate targets through the release profile. |
 | Linux install surface | `CMakeLists.txt:344-368` | Make `.desktop`, icon, and metainfo installation follow the same product profile as binaries. |
 | Windows packaging | `WixInstaller/CMakeLists.txt` and `WixInstaller/Product.wxs.in` | Preserve conditional Viewer/PageMaster/Diff features; verify file associations resolve to Loupe when those features are absent. |
-| Editor menus | `Pdf4QtLibGui/pdfeditormainwindow.ui` and `pdfeditormainwindow.cpp` | Reorganize or hide inherited menus through the Editor shell; avoid deleting action implementations prematurely. |
-| Plugin registry/build | `Pdf4QtEditorPlugins/CMakeLists.txt` and `pdfprogramcontroller.cpp` | Separate retained production plugins from optional/deferred plugins without changing shared action contracts. |
-| LaunchPad | `Pdf4QtLaunchPad/` and `Desktop/io.github.mberrys.Loupe-pdf.desktop` | Compatibility target remains available for direct invocation; the release desktop entry launches Editor, and the developer profile may retain compatibility entries. |
+| Editor menus | `LoupeLibGui/pdfeditormainwindow.ui` and `pdfeditormainwindow.cpp` | Reorganize or hide inherited menus through the Editor shell; avoid deleting action implementations prematurely. |
+| Plugin registry/build | `LoupeEditorPlugins/CMakeLists.txt` and `pdfprogramcontroller.cpp` | Separate retained production plugins from optional/deferred plugins without changing shared action contracts. |
+| LaunchPad | `LoupeLaunchPad/` and `Desktop/io.github.mberrys.Loupe-pdf.desktop` | Compatibility target remains available for direct invocation; the release desktop entry launches Editor, and the developer profile may retain compatibility entries. |
 | Product manifest | `docs/product-surface.json` and `docs/schemas/product-surface.schema.json` | The profile-aware manifest is the executable inventory; ADR-005 remains the decision source and implementation status links both records. |
 
 ## Implementation phases
@@ -98,7 +98,7 @@ The implementation must follow the ADR-005 order:
 - [ ] Resolve the redaction decision against GitHub #66 before changing the
       Editor plugin or the supported CLI surface.
 - [ ] Decide whether Compare is a supported Loupe workspace or remains
-      deferred; do not remove `Pdf4QtDiff` while this is `OPEN`.
+      deferred; do not remove `LoupeDiff` while this is `OPEN`.
 - [ ] Decide whether developer-menu visibility is a build flag, a release
       setting, or both. The existing `m_allowDeveloperMode` setting is a useful
       compatibility mechanism.
@@ -113,7 +113,7 @@ artifact inventory.
 
 **Goal:** Produce a slim Loupe build without deleting upstream-syncable sources.
 
-- [ ] Keep `PDF4QT_LOUPE_DISTRIBUTION` as the top-level release switch and make
+- [ ] Keep `LOUPE_LOUPE_DISTRIBUTION` as the top-level release switch and make
       release/packaging workflows pass it explicitly rather than relying on a
       developer default.
 - [ ] Verify that the profile disables Viewer, PageMaster, Diff, LaunchPad,
@@ -129,7 +129,7 @@ artifact inventory.
 - [ ] Keep a full developer configuration available for upstream comparison and
       development workflows.
 
-**Primary files:** `CMakeLists.txt`, `Pdf4QtEditorPlugins/CMakeLists.txt`, CI
+**Primary files:** `CMakeLists.txt`, `LoupeEditorPlugins/CMakeLists.txt`, CI
 workflow configure commands, and a new narrow packaging-surface verification
 script if existing checks cannot express the inventory.
 
@@ -142,7 +142,7 @@ Loupe release build.
 
 - [ ] Gate Linux `.desktop`, icon, and metainfo installation on the release
       surface; retain source assets for developer/full builds.
-- [ ] Make the primary Loupe desktop entry launch `Pdf4QtEditor` directly in
+- [ ] Make the primary Loupe desktop entry launch `LoupeEditor` directly in
       the slim profile instead of exposing LaunchPad as the product shell.
 - [ ] Remove Viewer, Diff, and PageMaster desktop entries from slim Linux
       artifacts while retaining them in the full developer profile.
@@ -180,8 +180,8 @@ shortcuts or names.
 - [ ] Add UI-level tests or deterministic action-visibility checks for release
       and developer modes where the existing test harness permits them.
 
-**Primary files:** `Pdf4QtLibGui/pdfeditormainwindow.ui`,
-`Pdf4QtLibGui/pdfeditormainwindow.cpp`, `pdfprogramcontroller.cpp`, relevant
+**Primary files:** `LoupeLibGui/pdfeditormainwindow.ui`,
+`LoupeLibGui/pdfeditormainwindow.cpp`, `pdfprogramcontroller.cpp`, relevant
 plugin action registration, and UI test fixtures.
 
 **Deliverable:** an Editor shell whose visible actions match the Loupe product

@@ -52,6 +52,9 @@ private slots:
     void schemaVersionPersistsAcrossReopen();
     void schemaV2MigratesOnceAndPreservesChain();
     void concurrentIdenticalArtifactImportsSucceed();
+    void runningFailureAppendsTerminalFailedEvent();
+    void livePreflightRunCarriesRevisionAndProfileDigests();
+    void cancelledPreflightRunIsNotAccepted();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -637,8 +640,8 @@ void OperationHistoryTest::concurrentIdenticalArtifactImportsSucceed()
         QTemporaryDir temporary;
         QVERIFY(temporary.isValid());
         pdf::PDFArtifactStore store(temporary.path());
-        std::atomic_int ready{0};
-        std::atomic_bool go{false};
+        std::atomic_int ready{ 0 };
+        std::atomic_bool go{ false };
         pdf::PDFArtifactStoreResult results[2];
 
         auto worker = [&](int index)
@@ -674,6 +677,109 @@ void OperationHistoryTest::concurrentIdenticalArtifactImportsSucceed()
         QVERIFY(store.verify(results[1].artifact));
         QCOMPARE(store.pathFor(results[0].artifact), store.pathFor(results[1].artifact));
     }
+}
+
+void OperationHistoryTest::runningFailureAppendsTerminalFailedEvent()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
+    const auto input = artifacts.importBytes("source", { QStringLiteral("application/pdf"), QStringLiteral("input.pdf") });
+    QVERIFY2(input.success, qPrintable(input.errorMessage));
+
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QString openError;
+    QVERIFY(history.open(&openError));
+    QVERIFY(history.registerArtifact(input.artifact));
+
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("repair");
+    execution.operationVersion = 1;
+    execution.input = input.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    QVERIFY(history.appendEvent(running));
+
+    pdf::PDFOperationHistoryEvent failed;
+    failed.executionId = executionId;
+    failed.status = pdf::PDFOperationHistoryStatus::Failed;
+    failed.resultSummary = QJsonObject{
+        { QStringLiteral("error_code"), QStringLiteral("repair.output-mismatch") },
+        { QStringLiteral("error"), QStringLiteral("mismatch") }
+    };
+    QVERIFY(history.appendEvent(failed));
+
+    const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+    QCOMPARE(events.size(), 2);
+    QCOMPARE(events.last().status, pdf::PDFOperationHistoryStatus::Failed);
+}
+
+void OperationHistoryTest::livePreflightRunCarriesRevisionAndProfileDigests()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore store(temporary.path());
+    const QByteArray payload("%PDF-1.4 provenance");
+    const pdf::PDFArtifactStoreResult imported = store.importBytes(payload, { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    QVERIFY(imported.success);
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QVERIFY(history.registerOriginalInput(imported.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("preflight");
+    execution.input = imported.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent running;
+    running.executionId = executionId;
+    running.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    running.status = pdf::PDFOperationHistoryStatus::Running;
+    running.documentRevisionDigest = QString(64, QLatin1Char('a'));
+    running.effectiveProfileDigest = QString(64, QLatin1Char('b'));
+    QVERIFY(history.appendEvent(running));
+    pdf::PDFOperationHistoryEvent finished;
+    finished.executionId = executionId;
+    finished.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    finished.status = pdf::PDFOperationHistoryStatus::Accepted;
+    finished.documentRevisionDigest = running.documentRevisionDigest;
+    finished.effectiveProfileDigest = running.effectiveProfileDigest;
+    finished.output = imported.artifact;
+    QVERIFY(history.appendEvent(finished));
+    const pdf::PDFOperationHistoryVerification verified = history.verify();
+    QVERIFY(verified.verified);
+    QCOMPARE(history.events().last().kind, pdf::PDFOperationHistoryEventKind::PreflightRun);
+    QVERIFY(history.events().last().kind != pdf::PDFOperationHistoryEventKind::Operation);
+    QCOMPARE(history.events().last().documentRevisionDigest, running.documentRevisionDigest);
+    QCOMPARE(history.events().last().effectiveProfileDigest, running.effectiveProfileDigest);
+}
+
+void OperationHistoryTest::cancelledPreflightRunIsNotAccepted()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore store(temporary.path());
+    const pdf::PDFArtifactStoreResult imported = store.importBytes(QByteArrayLiteral("%PDF-1.4 cancel"), { QStringLiteral("application/pdf"), QStringLiteral("source.pdf") });
+    QVERIFY(imported.success);
+    pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
+    QVERIFY(history.open());
+    QVERIFY(history.registerOriginalInput(imported.artifact));
+    pdf::PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("preflight");
+    execution.input = imported.artifact;
+    QUuid executionId;
+    QVERIFY(history.beginExecution(execution, &executionId));
+    pdf::PDFOperationHistoryEvent cancelled;
+    cancelled.executionId = executionId;
+    cancelled.kind = pdf::PDFOperationHistoryEventKind::PreflightRun;
+    cancelled.status = pdf::PDFOperationHistoryStatus::Cancelled;
+    QVERIFY(history.appendEvent(cancelled));
+    QCOMPARE(history.events().last().status, pdf::PDFOperationHistoryStatus::Cancelled);
+    QVERIFY(history.events().last().status != pdf::PDFOperationHistoryStatus::Accepted);
+    QVERIFY(history.verify().verified);
 }
 
 QTEST_MAIN(OperationHistoryTest)
