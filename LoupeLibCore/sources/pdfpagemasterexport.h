@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfactionlist.h"
+#include "pdfartifactidentity.h"
 #include "pdfbleedfixup.h"
 #include "pdfdocument.h"
 #include "pdfdocumentmanipulator.h"
@@ -104,6 +105,11 @@ struct LOUPELIBCORESHARED_EXPORT PDFPageMasterExportJob
 
     std::map<int, PDFDocument> documents;
     std::map<int, QImage> images;
+    /// Optional identities of the immutable source artifacts represented by
+    /// documents/images. When absent, the export derives a deterministic
+    /// identity from the owned content before creating or resuming a batch.
+    std::map<int, PDFArtifactIdentity> documentSourceIdentities;
+    std::map<int, PDFArtifactIdentity> imageSourceIdentities;
     std::vector<PDFDocumentManipulator::AssembledPages> assembledDocuments;
     std::vector<QString> outputFileNames;
     bool overwriteFiles = false;

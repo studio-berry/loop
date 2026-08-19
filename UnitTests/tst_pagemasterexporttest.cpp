@@ -87,6 +87,9 @@ private slots:
     void resume_skipsAlreadyWrittenOutputs();
     void resume_mismatchedManifestRejectsResume();
     void resume_configDriftAfterInterruptRejectsResume();
+    void resume_sourceAndImageIdentityDriftRejectsResume();
+    void resume_matchingSourceIdentityResumes();
+    void resume_preflightProfileIdentityDriftRejectsResume();
     void preflight_gate_blocksFailedOutput();
     void preflight_sidecarWriteFailure_failsClosed();
     void preflight_finalSidecarWriteFailure_keepsPriorOutput();
@@ -133,6 +136,18 @@ pdf::PDFDocument readDocument(const QString& fileName)
     pdf::PDFDocument document = reader.readFromFile(fileName);
     Q_ASSERT(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
     return document;
+}
+
+pdf::PDFArtifactIdentity testArtifactIdentity(const QByteArray& bytes,
+                                              const QString& mediaType,
+                                              const QString& logicalName)
+{
+    pdf::PDFArtifactIdentity identity;
+    identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    identity.size = bytes.size();
+    identity.mediaType = mediaType;
+    identity.logicalName = logicalName;
+    return identity;
 }
 
 /// Rewrites the manifest at \p manifestPath so every output is pending again, which makes a
@@ -918,6 +933,10 @@ void PageMasterExportTest::manifest_persistFailure_removesNewOutput()
     pdf::PDFPageMasterExportJob initialJob;
     initialJob.assembledDocuments.push_back({ documentPage(0, initialSource) });
     initialJob.documents.emplace(0, std::move(initialSource));
+    initialJob.documentSourceIdentities.emplace(0,
+                                                testArtifactIdentity(QByteArrayLiteral("stable-source"),
+                                                                     QStringLiteral("application/pdf"),
+                                                                     QStringLiteral("source.pdf")));
     initialJob.outputFileNames.push_back(outputPath);
     initialJob.overwriteFiles = true;
     initialJob.manifestPath = manifestPath;
@@ -934,8 +953,16 @@ void PageMasterExportTest::manifest_persistFailure_removesNewOutput()
 
     pdf::PDFDocument resumeSource = buildFilledPage();
     pdf::PDFPageMasterExportJob resumeJob;
-    resumeJob.assembledDocuments.push_back({ documentPage(0, resumeSource) });
+    resumeJob.assembledDocuments.push_back({ pdf::PDFDocumentManipulator::createDocumentPage(0,
+                                                                                               0,
+                                                                                               QSizeF(200.0 * pdf::PDF_POINT_TO_MM,
+                                                                                                      200.0 * pdf::PDF_POINT_TO_MM),
+                                                                                               pdf::PageRotation::None) });
     resumeJob.documents.emplace(0, std::move(resumeSource));
+    resumeJob.documentSourceIdentities.emplace(0,
+                                               testArtifactIdentity(QByteArrayLiteral("stable-source"),
+                                                                    QStringLiteral("application/pdf"),
+                                                                    QStringLiteral("source.pdf")));
     resumeJob.outputFileNames.push_back(outputPath);
     resumeJob.overwriteFiles = true;
     resumeJob.resume = true;
@@ -977,6 +1004,10 @@ void PageMasterExportTest::manifest_persistFailure_keepsOverwrittenOutput()
     pdf::PDFPageMasterExportJob initialJob;
     initialJob.assembledDocuments.push_back({ documentPage(0, initialSource) });
     initialJob.documents.emplace(0, std::move(initialSource));
+    initialJob.documentSourceIdentities.emplace(0,
+                                                testArtifactIdentity(QByteArrayLiteral("stable-source"),
+                                                                     QStringLiteral("application/pdf"),
+                                                                     QStringLiteral("source.pdf")));
     initialJob.outputFileNames.push_back(outputPath);
     initialJob.overwriteFiles = true;
     initialJob.manifestPath = manifestPath;
@@ -996,8 +1027,16 @@ void PageMasterExportTest::manifest_persistFailure_keepsOverwrittenOutput()
 
     pdf::PDFDocument resumeSource = buildFilledPage(QRectF(0, 0, 320, 320));
     pdf::PDFPageMasterExportJob resumeJob;
-    resumeJob.assembledDocuments.push_back({ documentPage(0, resumeSource) });
+    resumeJob.assembledDocuments.push_back({ pdf::PDFDocumentManipulator::createDocumentPage(0,
+                                                                                               0,
+                                                                                               QSizeF(200.0 * pdf::PDF_POINT_TO_MM,
+                                                                                                      200.0 * pdf::PDF_POINT_TO_MM),
+                                                                                               pdf::PageRotation::None) });
     resumeJob.documents.emplace(0, std::move(resumeSource));
+    resumeJob.documentSourceIdentities.emplace(0,
+                                               testArtifactIdentity(QByteArrayLiteral("stable-source"),
+                                                                    QStringLiteral("application/pdf"),
+                                                                    QStringLiteral("source.pdf")));
     resumeJob.outputFileNames.push_back(outputPath);
     resumeJob.overwriteFiles = true;
     resumeJob.resume = true;
@@ -1152,6 +1191,12 @@ void PageMasterExportTest::resume_skipsAlreadyWrittenOutputs()
 
     pdf::PDFDocument sourceA = buildFilledPage(QRectF(0, 0, 200, 200));
     pdf::PDFDocument sourceB = buildFilledPage(QRectF(0, 0, 300, 300));
+    const pdf::PDFArtifactIdentity sourceAIdentity = testArtifactIdentity(QByteArrayLiteral("source-a"),
+                                                                            QStringLiteral("application/pdf"),
+                                                                            QStringLiteral("source-a.pdf"));
+    const pdf::PDFArtifactIdentity sourceBIdentity = testArtifactIdentity(QByteArrayLiteral("source-b"),
+                                                                            QStringLiteral("application/pdf"),
+                                                                            QStringLiteral("source-b.pdf"));
     const QString outputA = tempDir.filePath(QStringLiteral("resume-a.pdf"));
     const QString outputB = tempDir.filePath(QStringLiteral("resume-b.pdf"));
 
@@ -1160,6 +1205,8 @@ void PageMasterExportTest::resume_skipsAlreadyWrittenOutputs()
     initialJob.assembledDocuments.push_back({ documentPage(1, sourceB) });
     initialJob.documents.emplace(0, std::move(sourceA));
     initialJob.documents.emplace(1, std::move(sourceB));
+    initialJob.documentSourceIdentities.emplace(0, sourceAIdentity);
+    initialJob.documentSourceIdentities.emplace(1, sourceBIdentity);
     initialJob.outputFileNames.push_back(outputA);
     initialJob.outputFileNames.push_back(outputB);
     initialJob.overwriteFiles = true;
@@ -1184,9 +1231,11 @@ void PageMasterExportTest::resume_skipsAlreadyWrittenOutputs()
 
     pdf::PDFPageMasterExportJob resumeJob;
     resumeJob.assembledDocuments.push_back({ documentPage(0, readDocument(outputA)) });
-    resumeJob.assembledDocuments.push_back({ documentPage(1, buildFilledPage(QRectF(0, 0, 400, 400))) });
+    resumeJob.assembledDocuments.push_back({ documentPage(1, buildFilledPage(QRectF(0, 0, 300, 300))) });
     resumeJob.documents.emplace(0, readDocument(outputA));
-    resumeJob.documents.emplace(1, buildFilledPage(QRectF(0, 0, 400, 400)));
+    resumeJob.documents.emplace(1, buildFilledPage(QRectF(0, 0, 300, 300)));
+    resumeJob.documentSourceIdentities.emplace(0, sourceAIdentity);
+    resumeJob.documentSourceIdentities.emplace(1, sourceBIdentity);
     resumeJob.outputFileNames.push_back(outputA);
     resumeJob.outputFileNames.push_back(outputB);
     resumeJob.overwriteFiles = true;
@@ -1199,7 +1248,7 @@ void PageMasterExportTest::resume_skipsAlreadyWrittenOutputs()
     QVERIFY(QFile::exists(outputB));
 
     const qreal resumedWidth = readDocument(outputB).getCatalog()->getPage(0)->getMediaBox().width();
-    QCOMPARE(resumedWidth, 400.0);
+    QCOMPARE(resumedWidth, 300.0);
 }
 
 void PageMasterExportTest::resume_mismatchedManifestRejectsResume()
@@ -1344,6 +1393,159 @@ void PageMasterExportTest::resume_configDriftAfterInterruptRejectsResume()
         QVERIFY(kept.open(QIODevice::ReadOnly));
         QCOMPARE(kept.readAll(), originalBytes);
     }
+}
+
+void PageMasterExportTest::resume_sourceAndImageIdentityDriftRejectsResume()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString sourceOutput = tempDir.filePath(QStringLiteral("source-output.pdf"));
+    const QString sourceManifest = tempDir.filePath(QStringLiteral("source-manifest.json"));
+    pdf::PDFDocument source = buildFilledPage();
+    pdf::PDFPageMasterExportJob initialSourceJob;
+    initialSourceJob.documents.emplace(0, source);
+    initialSourceJob.documentSourceIdentities.emplace(0,
+                                                      testArtifactIdentity(QByteArrayLiteral("source-a"),
+                                                                           QStringLiteral("application/pdf"),
+                                                                           QStringLiteral("source.pdf")));
+    initialSourceJob.assembledDocuments.push_back({ documentPage(0, source) });
+    initialSourceJob.outputFileNames.push_back(sourceOutput);
+    initialSourceJob.overwriteFiles = true;
+    initialSourceJob.manifestPath = sourceManifest;
+    const pdf::PDFPageMasterExportResult initialSource = pdf::PDFPageMasterExport::run(std::move(initialSourceJob));
+    QVERIFY2(initialSource.success, qPrintable(initialSource.errorMessage));
+
+    pdf::PDFPageMasterExportJob changedSourceJob;
+    changedSourceJob.documents.emplace(0, source);
+    changedSourceJob.documentSourceIdentities.emplace(0,
+                                                       testArtifactIdentity(QByteArrayLiteral("source-b"),
+                                                                            QStringLiteral("application/pdf"),
+                                                                            QStringLiteral("source.pdf")));
+    changedSourceJob.assembledDocuments.push_back({ documentPage(0, source) });
+    changedSourceJob.outputFileNames.push_back(sourceOutput);
+    changedSourceJob.overwriteFiles = true;
+    changedSourceJob.resume = true;
+    changedSourceJob.manifestPath = sourceManifest;
+    const pdf::PDFPageMasterExportResult changedSource = pdf::PDFPageMasterExport::run(std::move(changedSourceJob));
+    QVERIFY(!changedSource.success);
+    QVERIFY(changedSource.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive));
+
+    const QString imageOutput = tempDir.filePath(QStringLiteral("image-output.pdf"));
+    const QString imageManifest = tempDir.filePath(QStringLiteral("image-manifest.json"));
+    const auto imagePage = pdf::PDFDocumentManipulator::createImagePage(0, QSizeF(50.0, 50.0), pdf::PageRotation::None);
+    QImage red(32, 32, QImage::Format_RGB32);
+    red.fill(Qt::red);
+    pdf::PDFPageMasterExportJob initialImageJob;
+    initialImageJob.images.emplace(0, red);
+    initialImageJob.imageSourceIdentities.emplace(0,
+                                                  testArtifactIdentity(QByteArrayLiteral("image-a"),
+                                                                       QStringLiteral("image/png"),
+                                                                       QStringLiteral("image.png")));
+    initialImageJob.assembledDocuments.push_back({ imagePage });
+    initialImageJob.outputFileNames.push_back(imageOutput);
+    initialImageJob.overwriteFiles = true;
+    initialImageJob.manifestPath = imageManifest;
+    const pdf::PDFPageMasterExportResult initialImage = pdf::PDFPageMasterExport::run(std::move(initialImageJob));
+    QVERIFY2(initialImage.success, qPrintable(initialImage.errorMessage));
+
+    QImage blue(32, 32, QImage::Format_RGB32);
+    blue.fill(Qt::blue);
+    pdf::PDFPageMasterExportJob changedImageJob;
+    changedImageJob.images.emplace(0, blue);
+    changedImageJob.imageSourceIdentities.emplace(0,
+                                                  testArtifactIdentity(QByteArrayLiteral("image-b"),
+                                                                       QStringLiteral("image/png"),
+                                                                       QStringLiteral("image.png")));
+    changedImageJob.assembledDocuments.push_back({ imagePage });
+    changedImageJob.outputFileNames.push_back(imageOutput);
+    changedImageJob.overwriteFiles = true;
+    changedImageJob.resume = true;
+    changedImageJob.manifestPath = imageManifest;
+    const pdf::PDFPageMasterExportResult changedImage = pdf::PDFPageMasterExport::run(std::move(changedImageJob));
+    QVERIFY(!changedImage.success);
+    QVERIFY(changedImage.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive));
+}
+
+void PageMasterExportTest::resume_matchingSourceIdentityResumes()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString outputPath = tempDir.filePath(QStringLiteral("matching.pdf"));
+    const QString manifestPath = tempDir.filePath(QStringLiteral("matching-manifest.json"));
+    const pdf::PDFDocument source = buildFilledPage();
+    const pdf::PDFArtifactIdentity identity = testArtifactIdentity(QByteArrayLiteral("same-source"),
+                                                                    QStringLiteral("application/pdf"),
+                                                                    QStringLiteral("source.pdf"));
+
+    pdf::PDFPageMasterExportJob initialJob;
+    initialJob.documents.emplace(0, source);
+    initialJob.documentSourceIdentities.emplace(0, identity);
+    initialJob.assembledDocuments.push_back({ documentPage(0, source) });
+    initialJob.outputFileNames.push_back(outputPath);
+    initialJob.overwriteFiles = true;
+    initialJob.manifestPath = manifestPath;
+    const pdf::PDFPageMasterExportResult initial = pdf::PDFPageMasterExport::run(std::move(initialJob));
+    QVERIFY2(initial.success, qPrintable(initial.errorMessage));
+
+    pdf::PDFPageMasterExportJob resumeJob;
+    resumeJob.documents.emplace(0, source);
+    resumeJob.documentSourceIdentities.emplace(0, identity);
+    resumeJob.assembledDocuments.push_back({ documentPage(0, source) });
+    resumeJob.outputFileNames.push_back(outputPath);
+    resumeJob.overwriteFiles = true;
+    resumeJob.resume = true;
+    resumeJob.manifestPath = manifestPath;
+    const pdf::PDFPageMasterExportResult resumed = pdf::PDFPageMasterExport::run(std::move(resumeJob));
+    QVERIFY2(resumed.success, qPrintable(resumed.errorMessage));
+    QCOMPARE(resumed.writtenFiles, QStringList{ outputPath });
+}
+
+void PageMasterExportTest::resume_preflightProfileIdentityDriftRejectsResume()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    const QString profilePath = tempDir.filePath(QStringLiteral("profile.json"));
+    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    QVERIFY(QFile::copy(fixturePath, profilePath));
+    const QString outputPath = tempDir.filePath(QStringLiteral("profile-output.pdf"));
+    const QString manifestPath = tempDir.filePath(QStringLiteral("profile-manifest.json"));
+    const pdf::PDFDocument source = buildFilledPage();
+
+    auto makeJob = [&]()
+    {
+        pdf::PDFPageMasterExportJob job;
+        job.documents.emplace(0, source);
+        job.assembledDocuments.push_back({ documentPage(0, source) });
+        job.outputFileNames.push_back(outputPath);
+        job.overwriteFiles = true;
+        job.hasPreflightGate = true;
+        job.preflightProfilePath = profilePath;
+        job.forcePreflight = true;
+        job.manifestPath = manifestPath;
+        return job;
+    };
+
+    pdf::PDFPageMasterExportJob initialJob = makeJob();
+    const pdf::PDFPageMasterExportResult initial = pdf::PDFPageMasterExport::run(std::move(initialJob));
+    QVERIFY2(initial.success, qPrintable(initial.errorMessage));
+
+    QFile profileFile(profilePath);
+    QVERIFY(profileFile.open(QIODevice::ReadOnly));
+    QJsonObject profile = QJsonDocument::fromJson(profileFile.readAll()).object();
+    profileFile.close();
+    profile.insert(QStringLiteral("name"), QStringLiteral("mutated-profile"));
+    QVERIFY(profileFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QVERIFY(profileFile.write(QJsonDocument(profile).toJson(QJsonDocument::Compact)) > 0);
+    profileFile.close();
+
+    pdf::PDFPageMasterExportJob resumeJob = makeJob();
+    resumeJob.resume = true;
+    const pdf::PDFPageMasterExportResult resumed = pdf::PDFPageMasterExport::run(std::move(resumeJob));
+    QVERIFY(!resumed.success);
+    QVERIFY(resumed.errorMessage.contains(QStringLiteral("configuration"), Qt::CaseInsensitive));
 }
 
 void PageMasterExportTest::preflight_gate_blocksFailedOutput()

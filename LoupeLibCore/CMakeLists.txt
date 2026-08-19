@@ -224,6 +224,7 @@ add_library(LoupeLibCore SHARED
     sources/pdfwidgetsnapshot.cpp
     sources/pdfwidgetsnapshot.h
     cmaps.qrc
+    schema-compatibility.qrc
     aatl.qrc
     sources/pdfcertificatestore.h
     sources/pdfcertificatestore.cpp

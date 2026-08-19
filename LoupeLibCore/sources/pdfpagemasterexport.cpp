@@ -32,6 +32,7 @@
 #include "pdfoperationcontrol.h"
 
 #include <QCoreApplication>
+#include <QBuffer>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -41,6 +42,7 @@
 #include <QJsonObject>
 #include <QUuid>
 
+#include <set>
 #include <utility>
 
 namespace pdf
@@ -152,6 +154,192 @@ QString outputConflictMessage(const PDFOutputConflict& conflict)
     }
     return QCoreApplication::translate("pdf::PDFPageMasterExport",
                                        "Output path '%1' already exists.").arg(conflict.path);
+}
+
+PDFArtifactIdentity artifactIdentityFromBytes(const QByteArray& bytes,
+                                              const QString& mediaType,
+                                              const QString& logicalName)
+{
+    PDFArtifactIdentity identity;
+    identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+    identity.size = bytes.size();
+    identity.mediaType = mediaType;
+    identity.logicalName = logicalName;
+    return identity;
+}
+
+QByteArray structuralDocumentIdentity(const PDFDocument& document)
+{
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(QByteArrayLiteral("loupe-pdf-structural-identity-v1\0"));
+    hash.addData(QByteArray::number(document.getInfo()->version.major));
+    hash.addData(QByteArrayLiteral("."));
+    hash.addData(QByteArray::number(document.getInfo()->version.minor));
+    hash.addData(QByteArrayLiteral("\0"));
+
+    const PDFObjectStorage& storage = document.getStorage();
+    const PDFObjectStorage::PDFObjects& objects = storage.getObjects();
+    for (size_t index = 0; index < objects.size(); ++index)
+    {
+        const PDFObjectStorage::Entry& entry = objects[index];
+        hash.addData(QByteArray::number(index));
+        hash.addData(QByteArrayLiteral(":"));
+        hash.addData(QByteArray::number(entry.generation));
+        hash.addData(QByteArrayLiteral(":"));
+        hash.addData(PDFDocumentWriter::getSerializedObject(entry.object));
+        hash.addData(QByteArrayLiteral("\0"));
+    }
+
+    hash.addData(QByteArrayLiteral("trailer:\0"));
+    hash.addData(PDFDocumentWriter::getSerializedObject(storage.getTrailerDictionary()));
+    return hash.result();
+}
+
+PDFArtifactIdentity deriveDocumentSourceIdentity(const PDFDocument& document)
+{
+    const QByteArray sourceHash = document.getSourceDataHash();
+    if (sourceHash.size() == QCryptographicHash::hashLength(QCryptographicHash::Sha256))
+    {
+        PDFArtifactIdentity identity;
+        identity.sha256 = QString::fromLatin1(sourceHash.toHex());
+        identity.size = PDFDocumentWriter::getDocumentFileSize(&document);
+        identity.mediaType = QStringLiteral("application/pdf");
+        if (identity.isValid())
+        {
+            return identity;
+        }
+    }
+
+    return artifactIdentityFromBytes(structuralDocumentIdentity(document),
+                                     QStringLiteral("application/pdf"),
+                                     QStringLiteral("document.pdf"));
+}
+
+PDFArtifactIdentity deriveImageSourceIdentity(const QImage& image)
+{
+    if (image.isNull())
+    {
+        return {};
+    }
+
+    QByteArray encoded;
+    QBuffer buffer(&encoded);
+    if (!buffer.open(QIODevice::WriteOnly) || !image.save(&buffer, "PNG"))
+    {
+        return {};
+    }
+    return artifactIdentityFromBytes(encoded,
+                                     QStringLiteral("image/png"),
+                                     QStringLiteral("image.png"));
+}
+
+bool collectSourceIdentities(const PDFPageMasterExportJob& job,
+                             QJsonObject* identities,
+                             QString* errorMessage)
+{
+    std::set<int> documentIndices;
+    std::set<int> imageIndices;
+    for (const PDFDocumentManipulator::AssembledPages& assembled : job.assembledDocuments)
+    {
+        for (const PDFDocumentManipulator::AssembledPage& page : assembled)
+        {
+            if (page.documentIndex >= 0)
+            {
+                documentIndices.insert(page.documentIndex);
+            }
+            if (page.imageIndex >= 0)
+            {
+                imageIndices.insert(page.imageIndex);
+            }
+        }
+    }
+
+    QJsonArray documents;
+    for (const int index : documentIndices)
+    {
+        const auto document = job.documents.find(index);
+        if (document == job.documents.cend())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                             "PageMaster source document %1 is missing from the export job.").arg(index);
+            }
+            return false;
+        }
+
+        PDFArtifactIdentity identity;
+        const auto supplied = job.documentSourceIdentities.find(index);
+        if (supplied != job.documentSourceIdentities.cend())
+        {
+            identity = supplied->second;
+        }
+        else
+        {
+            identity = deriveDocumentSourceIdentity(document->second);
+        }
+        if (!identity.isValid())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                             "PageMaster source document %1 has no valid immutable identity; resume is rejected.").arg(index);
+            }
+            return false;
+        }
+        documents.append(QJsonObject{
+            { QStringLiteral("index"), index },
+            { QStringLiteral("identity"), identity.toJson() }
+        });
+    }
+
+    QJsonArray images;
+    for (const int index : imageIndices)
+    {
+        const auto image = job.images.find(index);
+        if (image == job.images.cend())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                             "PageMaster source image %1 is missing from the export job.").arg(index);
+            }
+            return false;
+        }
+
+        PDFArtifactIdentity identity;
+        const auto supplied = job.imageSourceIdentities.find(index);
+        if (supplied != job.imageSourceIdentities.cend())
+        {
+            identity = supplied->second;
+        }
+        else
+        {
+            identity = deriveImageSourceIdentity(image->second);
+        }
+        if (!identity.isValid())
+        {
+            if (errorMessage)
+            {
+                *errorMessage = QCoreApplication::translate("pdf::PDFPageMasterExport",
+                                                             "PageMaster source image %1 has no valid immutable identity; resume is rejected.").arg(index);
+            }
+            return false;
+        }
+        images.append(QJsonObject{
+            { QStringLiteral("index"), index },
+            { QStringLiteral("identity"), identity.toJson() }
+        });
+    }
+
+    if (identities)
+    {
+        *identities = QJsonObject{
+            { QStringLiteral("documents"), documents },
+            { QStringLiteral("images"), images }
+        };
+    }
+    return true;
 }
 
 QJsonObject productionReport(const PDFPageMasterProductionSettings& settings,
@@ -516,7 +704,9 @@ QJsonArray assemblyTopologyToJson(const PDFPageMasterExportJob& job)
     return documents;
 }
 
-QJsonObject exportConfigurationObject(const PDFPageMasterExportJob& job)
+QJsonObject exportConfigurationObject(const PDFPageMasterExportJob& job,
+                                      const QJsonObject& sourceIdentities,
+                                      const QString& effectiveProfileDigest)
 {
     QJsonArray outputs;
     for (const QString& path : job.outputFileNames)
@@ -535,12 +725,14 @@ QJsonObject exportConfigurationObject(const PDFPageMasterExportJob& job)
         { QStringLiteral("bleedFixup"), job.hasBleedFixupSettings ? QJsonValue(bleedFixupSettingsToJson(job.bleedFixupSettings)) : QJsonValue() },
         { QStringLiteral("transparencyFlatten"), job.hasTransparencyFlattenSettings ? QJsonValue(flattenSettingsToJson(job.transparencyFlattenSettings)) : QJsonValue() },
         { QStringLiteral("productionGeometry"), job.hasProductionGeometrySettings ? QJsonValue(job.productionGeometrySettings.toJson()) : QJsonValue() },
+        { QStringLiteral("sourceIdentities"), sourceIdentities },
         { QStringLiteral("preflight"), QJsonObject{
             { QStringLiteral("enabled"), job.hasPreflightGate },
             { QStringLiteral("profilePath"), job.preflightProfilePath },
             { QStringLiteral("hasContext"), job.hasPreflightContext },
             { QStringLiteral("context"), job.hasPreflightContext ? QJsonValue(job.preflightContext.toJson()) : QJsonValue() },
             { QStringLiteral("profileStorePath"), job.preflightProfileStorePath },
+            { QStringLiteral("effectiveProfileDigest"), effectiveProfileDigest },
             { QStringLiteral("force"), job.forcePreflight },
             { QStringLiteral("revalidateAfterFixups"), job.revalidatePreflightAfterFixups }
         } },
@@ -549,9 +741,13 @@ QJsonObject exportConfigurationObject(const PDFPageMasterExportJob& job)
     };
 }
 
-QString exportConfigurationDigest(const PDFPageMasterExportJob& job)
+QString exportConfigurationDigest(const PDFPageMasterExportJob& job,
+                                  const QJsonObject& sourceIdentities,
+                                  const QString& effectiveProfileDigest)
 {
-    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(exportConfigurationObject(job)),
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(exportConfigurationObject(job,
+                                                                                         sourceIdentities,
+                                                                                         effectiveProfileDigest)),
                                                         QCryptographicHash::Sha256).toHex());
 }
 
@@ -574,10 +770,16 @@ QJsonObject createManifestObject(const QString& batchId, const QStringList& outp
 }
 
 QJsonObject createManifestObject(const QString& batchId, const QStringList& outputFileNames,
-                                 const PDFPageMasterExportJob& job)
+                                 const PDFPageMasterExportJob& job,
+                                 const QJsonObject& sourceIdentities,
+                                 const QString& effectiveProfileDigest)
 {
     QJsonObject manifest = createManifestObject(batchId, outputFileNames);
-    manifest.insert(QStringLiteral("export_config_digest"), exportConfigurationDigest(job));
+    manifest.insert(QStringLiteral("source_identities"), sourceIdentities);
+    manifest.insert(QStringLiteral("effective_profile_digest"), effectiveProfileDigest);
+    manifest.insert(QStringLiteral("export_config_digest"), exportConfigurationDigest(job,
+                                                                                         sourceIdentities,
+                                                                                         effectiveProfileDigest));
     if (job.hasActionList)
     {
         manifest.insert(QStringLiteral("action_list"), job.actionList.toJson());
@@ -792,7 +994,10 @@ bool loadExistingManifest(const QString& manifestPath, QJsonObject* manifest, QS
     return true;
 }
 
-bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterExportJob& job)
+bool manifestCompatibleWithJob(const QJsonObject& manifest,
+                               const PDFPageMasterExportJob& job,
+                               const QJsonObject& sourceIdentities,
+                               const QString& effectiveProfileDigest)
 {
     const QJsonArray outputs = manifest.value(QStringLiteral("outputs")).toArray();
     if (outputs.size() != int(job.outputFileNames.size()))
@@ -809,7 +1014,9 @@ bool manifestCompatibleWithJob(const QJsonObject& manifest, const PDFPageMasterE
         }
     }
 
-    const QString expectedDigest = exportConfigurationDigest(job);
+    const QString expectedDigest = exportConfigurationDigest(job,
+                                                             sourceIdentities,
+                                                             effectiveProfileDigest);
     const QString actualDigest = manifest.value(QStringLiteral("export_config_digest")).toString();
     if (expectedDigest.isEmpty() || actualDigest != expectedDigest)
     {
@@ -965,6 +1172,51 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         job.hasProductionGeometrySettings = false;
     }
 
+    const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
+    PageMasterOperationControl actionListOperationControl(job.cancelFlag);
+    QJsonObject preflightProfile;
+    QJsonObject preflightResolution;
+    QString effectiveProfileDigest;
+    if (runPreflight)
+    {
+        PreflightProfileResolver resolver;
+        PreflightResolvedProfile resolved;
+        QString profileError;
+        if (!job.preflightProfilePath.isEmpty())
+        {
+            if (!PreflightEngine::loadProfile(job.preflightProfilePath, preflightProfile, profileError))
+            {
+                return createExportError(std::move(profileError));
+            }
+            resolved = resolver.resolveExplicitProfile(preflightProfile,
+                                                       QFileInfo(job.preflightProfilePath).completeBaseName(),
+                                                       QStringLiteral("explicit"));
+        }
+        else
+        {
+            PreflightProfileSnapshot snapshot;
+            if (!PreflightProfileStore::loadDirectory(job.preflightProfileStorePath, snapshot, profileError))
+            {
+                return createExportError(std::move(profileError));
+            }
+            resolved = resolver.resolve(job.preflightContext, snapshot);
+        }
+        if (!resolved.ok)
+        {
+            return createExportError(resolved.errorMessage);
+        }
+        preflightProfile = resolved.effectiveProfile;
+        preflightResolution = resolved.provenance();
+        effectiveProfileDigest = QString::fromLatin1(resolved.effectiveHash);
+    }
+
+    QJsonObject sourceIdentities;
+    QString sourceIdentityError;
+    if (!collectSourceIdentities(job, &sourceIdentities, &sourceIdentityError))
+    {
+        return createExportError(std::move(sourceIdentityError));
+    }
+
     const QString manifestPath = resolveManifestPath(job);
     const QStringList plannedPaths = plannedOutputPaths(job, manifestPath);
     for (const PDFOutputConflict& conflict : PDFSafeFileWriter::findOutputConflicts(plannedPaths, false))
@@ -989,7 +1241,7 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
                                                                  "Batch manifest schema is incompatible with this PageMaster export version."));
         }
 
-        if (!manifestCompatibleWithJob(manifest, job))
+        if (!manifestCompatibleWithJob(manifest, job, sourceIdentities, effectiveProfileDigest))
         {
             return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
                                                                  "Existing batch manifest does not match this export configuration. Resume is rejected to avoid mixing outputs from different jobs. Start a new batch without resume, using overwrite if existing files must be replaced."));
@@ -1006,7 +1258,11 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         {
             return createExportError(outputConflictMessage(conflict));
         }
-        manifest = createManifestObject(batchId, QStringList(job.outputFileNames.begin(), job.outputFileNames.end()), job);
+        manifest = createManifestObject(batchId,
+                                        QStringList(job.outputFileNames.begin(), job.outputFileNames.end()),
+                                        job,
+                                        sourceIdentities,
+                                        effectiveProfileDigest);
         if (!manifestPath.isEmpty() && !persistManifestForJob(manifestPath, manifest))
         {
             return createExportError(QCoreApplication::translate("pdf::PDFPageMasterExport",
@@ -1028,45 +1284,6 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
         info.showDialog = true;
         info.text = QCoreApplication::translate("pdf::PDFPageMasterExport", "Exporting documents...");
         progress->start(job.assembledDocuments.size(), std::move(info));
-    }
-
-    const bool runPreflight = job.hasPreflightGate && (!job.preflightProfilePath.isEmpty() || job.hasPreflightContext);
-    PageMasterOperationControl actionListOperationControl(job.cancelFlag);
-    QJsonObject preflightProfile;
-    QJsonObject preflightResolution;
-    if (runPreflight)
-    {
-        PreflightProfileResolver resolver;
-        PreflightResolvedProfile resolved;
-        QString profileError;
-        if (!job.preflightProfilePath.isEmpty())
-        {
-            if (!PreflightEngine::loadProfile(job.preflightProfilePath, preflightProfile, profileError))
-            {
-                finishProgressIfActive(activeProgress(job));
-                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
-            }
-            resolved = resolver.resolveExplicitProfile(preflightProfile,
-                                                       QFileInfo(job.preflightProfilePath).completeBaseName(),
-                                                       QStringLiteral("explicit"));
-        }
-        else
-        {
-            PreflightProfileSnapshot snapshot;
-            if (!PreflightProfileStore::loadDirectory(job.preflightProfileStorePath, snapshot, profileError))
-            {
-                finishProgressIfActive(activeProgress(job));
-                return createExportError(std::move(profileError), std::move(result.writtenFiles), manifestPath, manifest);
-            }
-            resolved = resolver.resolve(job.preflightContext, snapshot);
-        }
-        if (!resolved.ok)
-        {
-            finishProgressIfActive(activeProgress(job));
-            return createExportError(resolved.errorMessage, std::move(result.writtenFiles), manifestPath, manifest);
-        }
-        preflightProfile = resolved.effectiveProfile;
-        preflightResolution = resolved.provenance();
     }
 
     for (size_t index = 0; index < job.assembledDocuments.size(); ++index)

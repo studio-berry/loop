@@ -23,9 +23,13 @@
 #include "pdfschemaversion.h"
 
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTemporaryDir>
 #include <QtTest>
+
+#include <algorithm>
 
 class SchemaEvolutionTest : public QObject
 {
@@ -33,7 +37,10 @@ class SchemaEvolutionTest : public QObject
 
 private slots:
     void integerSchemaVersionIsMajorWithZeroMinor();
+    void malformedAndOversizedSchemaVersionsFailClosed();
     void unsupportedMajorFailsClosed();
+    void compatibilityResourceIsCwdIndependentAndMatchesEveryKind();
+    void unavailableCompatibilityMatrixFailsClosed();
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
 };
@@ -47,6 +54,40 @@ void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
     QCOMPARE(int(version.minor), 0);
 }
 
+void SchemaEvolutionTest::malformedAndOversizedSchemaVersionsFailClosed()
+{
+    const QList<QJsonValue> invalidValues{
+        QJsonValue(65536),
+        QJsonValue(65537),
+        QJsonValue(1.5),
+        QJsonValue(QStringLiteral("65536.0")),
+        QJsonValue(QStringLiteral("65537.0")),
+        QJsonValue(QStringLiteral("1.0.1")),
+        QJsonValue(QStringLiteral("-1")),
+        QJsonValue(QStringLiteral("1.-1")),
+        QJsonValue(QStringLiteral("1.")),
+        QJsonValue(QStringLiteral(".1"))
+    };
+    for (const QJsonValue& value : invalidValues)
+    {
+        bool ok = true;
+        QVERIFY2(!pdf::PDFSchemaVersion::fromJsonValue(value, &ok).isValid(),
+                 qPrintable(QStringLiteral("accepted invalid schema version %1").arg(value.toVariant().toString())));
+        QVERIFY(!ok);
+    }
+
+    bool ok = false;
+    const pdf::PDFSchemaVersion maximum = pdf::PDFSchemaVersion::fromJsonValue(QStringLiteral("65535.65535"), &ok);
+    QVERIFY(ok);
+    QCOMPARE(maximum.major, quint16(65535));
+    QCOMPARE(maximum.minor, quint16(65535));
+
+    const pdf::PDFSchemaVersion zeroMinor = pdf::PDFSchemaVersion::fromJsonValue(QStringLiteral("1.0"), &ok);
+    QVERIFY(ok);
+    const pdf::PDFSchemaVersion expectedZeroMinor{ 1, 0 };
+    QCOMPARE(zeroMinor, expectedZeroMinor);
+}
+
 void SchemaEvolutionTest::unsupportedMajorFailsClosed()
 {
     QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 99, 0 }),
@@ -55,6 +96,57 @@ void SchemaEvolutionTest::unsupportedMajorFailsClosed()
              pdf::PDFSchemaCompatibility::UnknownKind);
     QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 3, 0 }),
              pdf::PDFSchemaCompatibility::Compatible);
+}
+
+void SchemaEvolutionTest::compatibilityResourceIsCwdIndependentAndMatchesEveryKind()
+{
+    QFile resource(QStringLiteral(":/loupe/schema-compatibility.json"));
+    QVERIFY(resource.open(QIODevice::ReadOnly));
+    const QJsonObject matrix = QJsonDocument::fromJson(resource.readAll()).object();
+    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
+    QVERIFY(!kinds.isEmpty());
+
+    const QList<QString> kindNames = kinds.keys();
+    for (const QString& kindName : kindNames)
+    {
+        const pdf::PDFSchemaKind kind = pdf::pdfSchemaKindFromString(kindName);
+        QVERIFY2(kind != pdf::PDFSchemaKind::Unknown, qPrintable(kindName));
+        const QJsonArray supported = kinds.value(kindName).toObject().value(QStringLiteral("supported_majors")).toArray();
+        for (const QJsonValue& major : { QJsonValue(1), QJsonValue(2), QJsonValue(3) })
+        {
+            const bool expected = std::any_of(supported.cbegin(), supported.cend(), [&](const QJsonValue& value)
+                                              { return value.toInt() == major.toInt(); });
+            const auto actual = pdf::checkSchemaCompatibilityWithMatrix(kind,
+                                                                          { quint16(major.toInt()), 0 },
+                                                                          matrix);
+            QCOMPARE(actual == pdf::PDFSchemaCompatibility::Compatible, expected);
+        }
+    }
+
+    QCOMPARE(pdf::checkSchemaCompatibilityWithMatrix(pdf::PDFSchemaKind::PageMasterManifest, { 2, 0 }, matrix),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QCOMPARE(pdf::checkSchemaCompatibilityWithMatrix(pdf::PDFSchemaKind::PageMasterManifest, { 3, 0 }, matrix),
+             pdf::PDFSchemaCompatibility::Compatible);
+
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString previousPath = QDir::currentPath();
+    QVERIFY(QDir::setCurrent(tempDir.path()));
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PageMasterManifest, { 3, 0 }),
+             pdf::PDFSchemaCompatibility::Compatible);
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PageMasterManifest, { 2, 0 }),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QVERIFY(QDir::setCurrent(previousPath));
+}
+
+void SchemaEvolutionTest::unavailableCompatibilityMatrixFailsClosed()
+{
+    QCOMPARE(pdf::checkSchemaCompatibilityWithMatrix(pdf::PDFSchemaKind::PreflightReport, { 1, 0 }, {}),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QCOMPARE(pdf::checkSchemaCompatibilityWithMatrix(pdf::PDFSchemaKind::PageMasterManifest, { 3, 0 }, {}),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QCOMPARE(pdf::checkSchemaCompatibilityWithMatrix(pdf::PDFSchemaKind::Unknown, { 1, 0 }, {}),
+             pdf::PDFSchemaCompatibility::UnknownKind);
 }
 
 void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()

@@ -27,6 +27,9 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
+#include <cmath>
+#include <limits>
+
 namespace pdf
 {
 
@@ -42,18 +45,9 @@ QJsonObject loadCompatibilityMatrix()
         return cached;
     }
 
-    const QStringList candidates = {
-        QStringLiteral("docs/schema-compatibility.json"),
-        QStringLiteral("../docs/schema-compatibility.json"),
-        QStringLiteral("../../docs/schema-compatibility.json")
-    };
-    for (const QString& candidate : candidates)
+    QFile file(QStringLiteral(":/loupe/schema-compatibility.json"));
+    if (file.open(QIODevice::ReadOnly))
     {
-        QFile file(candidate);
-        if (!file.open(QIODevice::ReadOnly))
-        {
-            continue;
-        }
         QJsonParseError error;
         const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
         if (error.error == QJsonParseError::NoError && document.isObject())
@@ -80,8 +74,8 @@ PDFSchemaVersion PDFSchemaVersion::fromJsonValue(const QJsonValue& value, bool* 
     bool parsed = false;
     if (value.isDouble())
     {
-        const int major = value.toInt();
-        if (major > 0)
+        const double major = value.toDouble();
+        if (std::isfinite(major) && std::floor(major) == major && major >= 1.0 && major <= double(std::numeric_limits<quint16>::max()))
         {
             version.major = static_cast<quint16>(major);
             version.minor = 0;
@@ -92,15 +86,40 @@ PDFSchemaVersion PDFSchemaVersion::fromJsonValue(const QJsonValue& value, bool* 
     {
         const QString text = value.toString().trimmed();
         const QStringList parts = text.split(QLatin1Char('.'));
-        bool majorOk = false;
-        const int major = parts.value(0).toInt(&majorOk);
-        bool minorOk = true;
-        const int minor = parts.size() > 1 ? parts.value(1).toInt(&minorOk) : 0;
-        if (majorOk && minorOk && major > 0 && minor >= 0)
+        auto parseComponent = [](const QString& component, bool allowZero, quint16* result)
         {
-            version.major = static_cast<quint16>(major);
-            version.minor = static_cast<quint16>(minor);
-            parsed = true;
+            if (component.isEmpty())
+            {
+                return false;
+            }
+            for (const QChar character : component)
+            {
+                if (!character.isDigit())
+                {
+                    return false;
+                }
+            }
+            bool converted = false;
+            const quint64 value = component.toULongLong(&converted);
+            if (!converted || value > std::numeric_limits<quint16>::max() || (!allowZero && value == 0))
+            {
+                return false;
+            }
+            *result = static_cast<quint16>(value);
+            return true;
+        };
+
+        if (parts.size() == 1 || parts.size() == 2)
+        {
+            quint16 major = 0;
+            quint16 minor = 0;
+            if (parseComponent(parts.at(0), false, &major) &&
+                (parts.size() == 1 || parseComponent(parts.at(1), true, &minor)))
+            {
+                version.major = major;
+                version.minor = minor;
+                parsed = true;
+            }
         }
     }
     if (ok)
@@ -195,46 +214,20 @@ PDFSchemaKind pdfSchemaKindFromString(const QString& value)
     return PDFSchemaKind::Unknown;
 }
 
-PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version)
+PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
+                                                          PDFSchemaVersion version,
+                                                          const QJsonObject& matrix)
 {
     if (kind == PDFSchemaKind::Unknown || !version.isValid())
     {
         return PDFSchemaCompatibility::UnknownKind;
     }
 
-    const QJsonObject matrix = loadCompatibilityMatrix();
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
     QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
     if (entry.isEmpty())
     {
-        switch (kind)
-        {
-            case PDFSchemaKind::PreflightReport:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1, 2, 3 } } };
-                break;
-            case PDFSchemaKind::PreflightProfile:
-            case PDFSchemaKind::PdfToolEnvelope:
-            case PDFSchemaKind::PreflightDecisions:
-            case PDFSchemaKind::OcrReport:
-            case PDFSchemaKind::CapabilityDiscovery:
-            case PDFSchemaKind::EvidenceGraph:
-            case PDFSchemaKind::OperationPlan:
-            case PDFSchemaKind::OperationResult:
-            case PDFSchemaKind::ProvenanceEvent:
-            case PDFSchemaKind::Certificate:
-            case PDFSchemaKind::PackageManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
-                break;
-            case PDFSchemaKind::ActionList:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
-                break;
-            case PDFSchemaKind::HistoryDb:
-            case PDFSchemaKind::PageMasterManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 2, 3 } } };
-                break;
-            case PDFSchemaKind::Unknown:
-                return PDFSchemaCompatibility::UnknownKind;
-        }
+        return PDFSchemaCompatibility::UnsupportedMajor;
     }
 
     const QJsonArray supported = entry.value(QStringLiteral("supported_majors")).toArray();
@@ -252,6 +245,11 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
         return PDFSchemaCompatibility::UnsupportedMajor;
     }
     return PDFSchemaCompatibility::Compatible;
+}
+
+PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version)
+{
+    return checkSchemaCompatibilityWithMatrix(kind, version, loadCompatibilityMatrix());
 }
 
 QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document)
