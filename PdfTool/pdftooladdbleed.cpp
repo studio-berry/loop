@@ -61,9 +61,12 @@ static QString modeName(pdf::PDFBleedFixupMode mode)
 {
     switch (mode)
     {
-        case pdf::PDFBleedFixupMode::Mirror: return QStringLiteral("mirror");
-        case pdf::PDFBleedFixupMode::PixelRepeat: return QStringLiteral("pixel-repeat");
-        case pdf::PDFBleedFixupMode::Stretch: return QStringLiteral("stretch");
+        case pdf::PDFBleedFixupMode::Mirror:
+            return QStringLiteral("mirror");
+        case pdf::PDFBleedFixupMode::PixelRepeat:
+            return QStringLiteral("pixel-repeat");
+        case pdf::PDFBleedFixupMode::Stretch:
+            return QStringLiteral("stretch");
     }
     return QStringLiteral("unknown");
 }
@@ -72,10 +75,14 @@ static QString sideName(pdf::PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case pdf::PDFBleedFixupSide::Left: return QStringLiteral("left");
-        case pdf::PDFBleedFixupSide::Right: return QStringLiteral("right");
-        case pdf::PDFBleedFixupSide::Top: return QStringLiteral("top");
-        case pdf::PDFBleedFixupSide::Bottom: return QStringLiteral("bottom");
+        case pdf::PDFBleedFixupSide::Left:
+            return QStringLiteral("left");
+        case pdf::PDFBleedFixupSide::Right:
+            return QStringLiteral("right");
+        case pdf::PDFBleedFixupSide::Top:
+            return QStringLiteral("top");
+        case pdf::PDFBleedFixupSide::Bottom:
+            return QStringLiteral("bottom");
     }
     return QStringLiteral("unknown");
 }
@@ -89,9 +96,9 @@ pdf::PDFOperationResult appendAddBleedProvenance(const QString& outputPath,
     const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loupe-history");
     pdf::PDFArtifactStore artifacts(historyDirectory);
     const auto input = artifacts.importBytes(sourceData,
-                                              { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
+                                             { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
     const auto output = artifacts.importBytes(outputData,
-                                               { QStringLiteral("application/pdf"), QStringLiteral("add-bleed-output.pdf") });
+                                              { QStringLiteral("application/pdf"), QStringLiteral("add-bleed-output.pdf") });
     if (!input.success || !output.success)
     {
         return pdf::PDFOperationResult(input.success ? output.errorMessage : input.errorMessage);
@@ -186,8 +193,10 @@ static void writeReport(const PDFToolOptions& options,
     writeSetting(QStringLiteral("dpi"), QString::number(settings.dpi));
     writeSetting(QStringLiteral("sample-pixels"), QString::number(settings.samplePixels));
     writeSetting(QStringLiteral("bleed-mm"), QStringLiteral("%1,%2,%3,%4")
-                 .arg(settings.bleedMM.left()).arg(settings.bleedMM.top())
-                 .arg(settings.bleedMM.right()).arg(settings.bleedMM.bottom()));
+                                                 .arg(settings.bleedMM.left())
+                                                 .arg(settings.bleedMM.top())
+                                                 .arg(settings.bleedMM.right())
+                                                 .arg(settings.bleedMM.bottom()));
     writeSetting(QStringLiteral("force"), settings.force ? QStringLiteral("true") : QStringLiteral("false"));
     writeSetting(QStringLiteral("dry-run"), options.destructiveDryRun ? QStringLiteral("true") : QStringLiteral("false"));
     formatter.endTable();
@@ -206,10 +215,10 @@ static void writeReport(const PDFToolOptions& options,
     auto formatRect = [](const QRectF& rect)
     {
         return QStringLiteral("[%1 %2 %3 %4]")
-                .arg(rect.left(), 0, 'f', 2)
-                .arg(rect.bottom(), 0, 'f', 2)
-                .arg(rect.right(), 0, 'f', 2)
-                .arg(rect.top(), 0, 'f', 2);
+            .arg(rect.left(), 0, 'f', 2)
+            .arg(rect.bottom(), 0, 'f', 2)
+            .arg(rect.right(), 0, 'f', 2)
+            .arg(rect.top(), 0, 'f', 2);
     };
 
     for (const pdf::PDFBleedFixupPageReport& page : report.pages)
@@ -295,12 +304,10 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->addOutput({
-                QStringLiteral("file"),
-                QStringLiteral("primary"),
-                options.addBleedOutputDocument,
-                QStringLiteral("planned")
-            });
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("primary"),
+                                                  options.addBleedOutputDocument,
+                                                  QStringLiteral("planned") });
         }
         return PDFToolExitCode::Success;
     }
@@ -314,7 +321,7 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
     const pdf::PDFOperationResult writeResult = writer.write(options.addBleedOutputDocument, &document, true);
     if (!writeResult)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.addBleedOutputDocument}});
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write output document. %1").arg(writeResult.getErrorMessage()), QJsonObject{ { QStringLiteral("path"), options.addBleedOutputDocument } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -328,10 +335,11 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
     const QByteArray outputData = outputFile.readAll();
     outputFile.close();
     if (const pdf::PDFOperationResult provenance = appendAddBleedProvenance(options.addBleedOutputDocument,
-                                                                              sourceData,
-                                                                              outputData,
-                                                                              settings,
-                                                                              report); !provenance)
+                                                                            sourceData,
+                                                                            outputData,
+                                                                            settings,
+                                                                            report);
+        !provenance)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("history.write-failed"),
                          provenance.getErrorMessage());
@@ -340,12 +348,10 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("primary"),
-            options.addBleedOutputDocument,
-            QStringLiteral("written")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("primary"),
+                                              options.addBleedOutputDocument,
+                                              QStringLiteral("written") });
     }
 
     return PDFToolExitCode::Success;
@@ -356,4 +362,4 @@ PDFToolAbstractApplication::Options PDFToolAddBleed::getOptionsFlags() const
     return ConsoleFormat | OpenDocument | PageSelector | ColorManagementSystem | AddBleed | DestructiveWrite;
 }
 
-} // namespace pdftool
+}   // namespace pdftool

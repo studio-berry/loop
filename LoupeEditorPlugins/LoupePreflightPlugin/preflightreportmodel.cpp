@@ -31,7 +31,6 @@ namespace pdfplugin
 PreflightReportModel::PreflightReportModel(QObject* parent) :
     QAbstractTableModel(parent)
 {
-
 }
 
 int PreflightReportModel::rowCount(const QModelIndex& parent) const
@@ -154,8 +153,7 @@ void PreflightReportModel::setReport(const QJsonObject& report)
     }
     else
     {
-        m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(false)
-            ? QStringLiteral("pass") : QStringLiteral("fail"));
+        m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(false) ? QStringLiteral("pass") : QStringLiteral("fail"));
         m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
     }
     m_pass = m_verdictState == QStringLiteral("pass");

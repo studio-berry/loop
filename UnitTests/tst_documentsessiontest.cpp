@@ -196,14 +196,13 @@ void DocumentSessionTest::concurrentScheduledResults_rejectSupersededRevisions()
             spec.operationId = index == 3 ? QStringLiteral("repair-plan") : QStringLiteral("session-stress");
             spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
             jobIds.append(scheduler.submit(spec, [&releaseJobs, &startedJobs, index](pdf::PDFJobContext&)
-                                            {
+                                           {
                                                 ++startedJobs;
                                                 while (!releaseJobs.load(std::memory_order_acquire))
                                                 {
                                                     std::this_thread::yield();
                                                 }
-                                                std::this_thread::sleep_for(std::chrono::milliseconds(index % 3));
-                                            }));
+                                                std::this_thread::sleep_for(std::chrono::milliseconds(index % 3)); }));
         }
 
         QTRY_VERIFY_WITH_TIMEOUT(startedJobs.load(std::memory_order_acquire) == jobKinds.size(), 1000);
@@ -238,7 +237,7 @@ void DocumentSessionTest::concurrentScheduledResults_rejectSupersededRevisions()
         currentSpec.documentRevision = currentRevision.toString();
         currentSpec.operationId = QStringLiteral("current-render");
         const QString currentJobId = scheduler.submit(currentSpec, [](pdf::PDFJobContext& context)
-                                                       { context.reportProgress(100); });
+                                                      { context.reportProgress(100); });
         QVERIFY(scheduler.waitForFinished(currentJobId, 1000));
         const pdf::PDFJobSnapshot currentSnapshot = scheduler.snapshot(currentJobId);
         QCOMPARE(currentSnapshot.status, pdf::PDFJobStatus::Succeeded);
