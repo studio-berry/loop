@@ -796,6 +796,7 @@ QString exportConfigurationDigest(const PDFPageMasterExportJob& job,
     return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(exportConfigurationObject(job,
                                                                                                 sourceIdentities,
                                                                                                 effectiveProfileDigest)),
+    return QString::fromLatin1(QCryptographicHash::hash(canonicalJson(exportConfigurationObject(job)),
                                                         QCryptographicHash::Sha256)
                                    .toHex());
 }
