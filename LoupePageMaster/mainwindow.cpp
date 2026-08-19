@@ -2786,7 +2786,8 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
         {
             pdf::PDFArtifactIdentity identity;
             identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(imageItem.second.imageData,
-                                                                            QCryptographicHash::Sha256).toHex());
+                                                                           QCryptographicHash::Sha256)
+                                                      .toHex());
             identity.size = imageItem.second.imageData.size();
             identity.mediaType = QStringLiteral("image/") + imageItem.second.format;
             identity.logicalName = imageItem.second.displayName;

@@ -117,8 +117,8 @@ void SchemaEvolutionTest::compatibilityResourceIsCwdIndependentAndMatchesEveryKi
             const bool expected = std::any_of(supported.cbegin(), supported.cend(), [&](const QJsonValue& value)
                                               { return value.toInt() == major.toInt(); });
             const auto actual = pdf::checkSchemaCompatibilityWithMatrix(kind,
-                                                                          { quint16(major.toInt()), 0 },
-                                                                          matrix);
+                                                                        { quint16(major.toInt()), 0 },
+                                                                        matrix);
             QCOMPARE(actual == pdf::PDFSchemaCompatibility::Compatible, expected);
         }
     }
