@@ -47,6 +47,9 @@ jobs:
       - name: Verify Quick shell admission policy
         working-directory: loupe
         run: python3 scripts/verify-quick-shell-policy.py
+      - name: Verify Quick runtime/package contract
+        working-directory: loupe
+        run: python3 scripts/verify-quick-runtime-contract.py
       - name: Verify branch policy
         working-directory: loupe
         run: python3 scripts/ci/check_branch_policy.py

@@ -194,7 +194,8 @@ def validate_tokens(tokens: dict) -> None:
 def qml_files(root: Path) -> list[Path]:
     files: list[Path] = []
     for path in root.rglob("*.qml"):
-        if any(directory in EXCLUDED_DIRECTORIES for directory in path.parts):
+        relative = path.relative_to(root)
+        if any(directory in EXCLUDED_DIRECTORIES for directory in relative.parts):
             continue
         files.append(path)
     return sorted(files)

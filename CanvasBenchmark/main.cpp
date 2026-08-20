@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 #include <QApplication>
+#include <QAccessible>
 #include <QColor>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -11,6 +12,7 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QList>
+#include <QLineEdit>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QQuickItem>
@@ -21,6 +23,7 @@
 #include <QSize>
 #include <QTimer>
 #include <QUrl>
+#include <QVBoxLayout>
 #include <QWidget>
 #include <QtMath>
 
@@ -160,6 +163,19 @@ void processEvents()
 {
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
     QCoreApplication::sendPostedEvents();
+}
+
+void sendTab(QWidget *receiver, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+{
+    if (!receiver) {
+        return;
+    }
+
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Tab, modifiers);
+    QCoreApplication::sendEvent(receiver, &press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Tab, modifiers);
+    QCoreApplication::sendEvent(receiver, &release);
+    processEvents();
 }
 
 bool hasExpectedColor(const QImage &image)
@@ -325,6 +341,98 @@ QJsonObject runQuickCandidate(Candidate candidate)
     return result;
 }
 
+QJsonObject runFocusBridgeProbe()
+{
+    QWidget host;
+    host.setObjectName(QStringLiteral("focusBridgeHost"));
+    host.setFocusPolicy(Qt::StrongFocus);
+
+    QLineEdit before;
+    before.setObjectName(QStringLiteral("widgetBeforeQuick"));
+    before.setAccessibleName(QStringLiteral("Widget before Quick"));
+
+    QQuickWidget quickWidget;
+    quickWidget.setObjectName(QStringLiteral("quickBridge"));
+    quickWidget.setResizeMode(QQuickWidget::SizeRootObjectToView);
+    quickWidget.setFocusPolicy(Qt::StrongFocus);
+    quickWidget.setSource(QUrl(QStringLiteral("qrc:/qt/qml/Loupe/CanvasBenchmark/CanvasBenchmark.qml")));
+
+    QLineEdit after;
+    after.setObjectName(QStringLiteral("widgetAfterQuick"));
+    after.setAccessibleName(QStringLiteral("Widget after Quick"));
+
+    auto *layout = new QVBoxLayout(&host);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->addWidget(&before);
+    layout->addWidget(&quickWidget);
+    layout->addWidget(&after);
+    QWidget::setTabOrder(&before, &quickWidget);
+    QWidget::setTabOrder(&quickWidget, &after);
+
+    host.resize(kWidth, kHeight + 96);
+    host.show();
+    host.activateWindow();
+    processEvents();
+
+    QObject *rootObject = quickWidget.rootObject();
+    const bool qmlLoaded = quickWidget.status() == QQuickWidget::Ready && rootObject;
+    const QString accessibleName = rootObject
+                                       ? rootObject->property("bridgeAccessibleName").toString()
+                                       : QString();
+    const QString accessibleDescription = rootObject
+                                              ? rootObject->property("bridgeAccessibleDescription").toString()
+                                              : QString();
+    const int accessibleRole = rootObject
+                                   ? rootObject->property("bridgeAccessibleRole").toInt()
+                                   : static_cast<int>(QAccessible::NoRole);
+
+    before.setFocus(Qt::OtherFocusReason);
+    processEvents();
+    const bool initialWidgetFocus = before.hasFocus();
+
+    sendTab(&before);
+    const bool widgetToQuick = quickWidget.hasFocus()
+                               && rootObject
+                               && rootObject->property("bridgeProbeActiveFocus").toBool();
+
+    sendTab(&quickWidget);
+    const bool quickToWidget = after.hasFocus();
+
+    after.setFocus(Qt::OtherFocusReason);
+    processEvents();
+    sendTab(&after, Qt::ShiftModifier);
+    const bool widgetToQuickReverse = quickWidget.hasFocus()
+                                      && rootObject
+                                      && rootObject->property("bridgeProbeActiveFocus").toBool();
+
+    sendTab(&quickWidget, Qt::ShiftModifier);
+    const bool quickToWidgetReverse = before.hasFocus();
+
+    const bool accessibilityContract = qmlLoaded
+                                       && accessibleName == QStringLiteral("Quick action")
+                                       && accessibleDescription == QStringLiteral("Activate the Quick action.")
+                                       && accessibleRole == static_cast<int>(QAccessible::Button);
+    const bool roundTrip = initialWidgetFocus && widgetToQuick && quickToWidget
+                           && widgetToQuickReverse && quickToWidgetReverse;
+
+    QJsonObject result;
+    result.insert(QStringLiteral("probe"), QStringLiteral("widget-quick-widget-focus-accessibility"));
+    result.insert(QStringLiteral("qml_loaded"), qmlLoaded);
+    result.insert(QStringLiteral("widget_to_quick"), widgetToQuick);
+    result.insert(QStringLiteral("quick_to_widget"), quickToWidget);
+    result.insert(QStringLiteral("widget_to_quick_reverse"), widgetToQuickReverse);
+    result.insert(QStringLiteral("quick_to_widget_reverse"), quickToWidgetReverse);
+    result.insert(QStringLiteral("accessibility_name"), accessibleName);
+    result.insert(QStringLiteral("accessibility_description"), accessibleDescription);
+    result.insert(QStringLiteral("accessibility_role"), accessibleRole);
+    result.insert(QStringLiteral("accessibility_contract"), accessibilityContract);
+    result.insert(QStringLiteral("native_accessibility_backend_active"), QAccessible::isActive());
+    result.insert(QStringLiteral("status"), roundTrip && accessibilityContract
+                       ? QStringLiteral("pass")
+                       : QStringLiteral("partial"));
+    return result;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -333,13 +441,17 @@ int main(int argc, char **argv)
     QString requested = QStringLiteral("all");
     for (int index = 1; index < argc; ++index) {
         const QString argument = QString::fromLocal8Bit(argv[index]);
-        if (argument.startsWith(QStringLiteral("--candidate="))) {
+        if (argument == QStringLiteral("--focus-bridge")) {
+            requested = QStringLiteral("focus-bridge");
+        } else if (argument.startsWith(QStringLiteral("--candidate="))) {
             requested = argument.sliced(QStringLiteral("--candidate=").size());
         }
     }
 
     QList<QJsonObject> results;
-    if (requested == QStringLiteral("all")) {
+    if (requested == QStringLiteral("focus-bridge")) {
+        results.append(runFocusBridgeProbe());
+    } else if (requested == QStringLiteral("all")) {
         results.append(runWidgetBaseline());
         results.append(runQuickCandidate(Candidate::QuickWidget));
         results.append(runQuickCandidate(Candidate::WindowContainer));

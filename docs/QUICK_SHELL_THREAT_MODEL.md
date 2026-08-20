@@ -37,6 +37,24 @@ or filesystem authority. The canonical machine-readable contract is
 | Renderer/backend failure hidden by headless startup | smoke must observe `scene_graph_initialized` and a non-`Unknown` `GraphicsApi` | native/software CI logs |
 | Qt runtime or license omission | actual linked QML/Quick modules appear in SBOM/notices and clean-machine package smoke | release artifact dossier |
 
+## Session 6 qualification surfaces
+
+The opt-in [`quick-runtime-manifest.json`](quick-runtime-manifest.json) names
+the two current Quick targets and keeps both explicitly qualification-only.
+[`verify-quick-runtime-contract.py`](../scripts/verify-quick-runtime-contract.py)
+fails if either target defaults on, is installed, loses its declared Qt module
+links, or is treated as proof of final-artifact SBOM, notices, clean-machine,
+or LGPL relink completion.
+
+The S22 bridge probe is run with
+[`run-quick-focus-bridge.ps1`](../scripts/run-quick-focus-bridge.ps1). It
+exercises keyboard focus from QWidget to Quick and back in both directions and
+checks the Quick control's name, description, and role. The probe records
+whether a native accessibility backend is active, but does not claim
+screen-reader runtime evidence when the platform accessibility backend is not
+enabled. Product Quick accessibility and installed-runtime evidence remain
+release gates.
+
 ## Admission rules
 
 Product Quick work may proceed from the qualification harness only when:
