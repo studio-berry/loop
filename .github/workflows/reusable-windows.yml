@@ -46,6 +46,10 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: .\scripts\verify-loupe-shell-contract.ps1
+      - name: Verify Quick shell admission policy
+        working-directory: loupe
+        shell: pwsh
+        run: python scripts\verify-quick-shell-policy.py
       - name: Verify branch policy
         working-directory: loupe
         shell: pwsh
@@ -129,7 +133,7 @@ jobs:
           # which read like a Windows install race instead of the build error it was.
           # Check $LASTEXITCODE after each cmake invocation so a real failure stops
           # the step immediately, at the command that actually failed.
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:Qt6_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:Qt6_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
 
           cmake --build build --target release_translations --config Release -j6
@@ -154,6 +158,20 @@ jobs:
           if (-not $installSucceeded) {
               throw "cmake --install failed after 3 attempts."
           }
+
+      - name: Smoke Qt Quick preferred backend
+        working-directory: loupe
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
+        run: .\scripts\run-quick-backend-smoke.ps1 -BuildDir .\build -Mode native -ExpectedGraphicsApi d3d11
+
+      - name: Smoke Qt Quick software backend
+        working-directory: loupe
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
+        run: .\scripts\run-quick-backend-smoke.ps1 -BuildDir .\build -Mode software -ExpectedGraphicsApi software
 
       - name: Verify developer product surface
         working-directory: loupe

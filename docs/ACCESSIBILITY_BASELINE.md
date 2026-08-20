@@ -49,6 +49,8 @@ approval cancellation, and focus restoration. During mixed mode, the test
 must cross the QWidget/Quick boundary in both directions. The composition
 rules and test shape are documented in [QUICK_COMPOSITION.md](QUICK_COMPOSITION.md).
 
-No Qt Quick module or QML surface is shipped by this decision record. The
-first implementation must add screen-reader and software-renderer evidence to
-the same release gate used for the existing Editor baseline.
+No product Qt Quick module or QML surface is shipped by this decision record.
+S22 adds only a qualification harness plus static token and boundary checks.
+The first product implementation must add screen-reader, focus-bridge, and
+software-renderer evidence to the same release gate used for the existing
+Editor baseline.

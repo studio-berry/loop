@@ -1,9 +1,11 @@
 # Loupe shell contract
 
-This is the non-visual foundation for issue #193. Per the product scope gate,
-GUI elements remain deferred until after 0.1.1. This document therefore defines
-the state, routing, and verification contract without changing the existing Qt
-Widgets shell or adding QML.
+This is the non-visual foundation for issue #193. The 0.1.1 release gate is
+complete, but product GUI work remains gated by the S21 canvas and S22 Quick
+admission contracts. This document therefore defines the state, routing, and
+verification contract without changing the existing Widgets shell. The
+repository may contain the qualification-only Quick smoke harness; it is not
+product UI or a shipped Qt Quick surface.
 
 The machine-readable source is [`loupe-shell.json`](loupe-shell.json), validated
 by [`loupe-shell.schema.json`](schemas/loupe-shell.schema.json). The existing
@@ -87,12 +89,13 @@ remain outside the operator shell.
 
 ## UI foundation gate
 
-Issue #178 proposes Qt Quick Controls for the later application shell, but it is
-still open. The contract records Qt Quick Controls as the candidate and keeps
-the decision pending. No Qt Quick module, QML file, `QQuickWidget`, or shell
-restyle is introduced by this slice. Once the 0.1.1 GUI gate opens, #178 must
-resolve the migration strategy, canvas hosting, rendering fallback, licensing,
-and accessibility baseline before large-scale shell wiring begins.
+Issue #178 selects Qt Quick Controls for the later application shell. The
+decision is accepted with admission gates. No product Qt Quick module, product
+QML file, `QQuickWidget`, or shell restyle is introduced by this slice; the
+optional `QuickShellSmoke` target is qualification-only. ADR-010 and the
+Quick policy contracts resolve the migration strategy, canvas hosting,
+rendering fallback, licensing, and accessibility evidence required before
+large-scale shell wiring begins.
 
 ## Accessibility gate
 
@@ -112,5 +115,5 @@ pwsh ./scripts/verify-loupe-shell-contract.ps1
 
 This verifies JSON shape, workspace parity with the #192 product-surface
 manifest, plugin disposition targets, and complete Editor action coverage. It
-does not claim GUI behavior, accessibility runtime success, or Qt Quick
-rendering validation; those remain post-0.1.1 gates.
+does not claim GUI behavior, accessibility runtime success, or product Qt Quick
+rendering validation; those remain S21/S22 and later runtime/package gates.
