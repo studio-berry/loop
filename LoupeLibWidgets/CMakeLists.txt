@@ -38,6 +38,8 @@ add_library(LoupeLibWidgets SHARED
     sources/pdfcreatecertificatedialog.ui
     sources/pdfdrawwidget.cpp
     sources/pdfdrawwidget.h
+    sources/pdfinteractiontrace_p.cpp
+    sources/pdfinteractiontrace_p.h
     sources/pdfobjecteditorwidget.h
     sources/pdfobjecteditorwidget_impl.h
     sources/pdfobjecteditorwidget.cpp

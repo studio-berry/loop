@@ -342,6 +342,7 @@
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
+    "UnitTestsInteractionTrace",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
