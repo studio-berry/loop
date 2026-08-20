@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       - name: Test source integrity checker
         run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Test workflow contracts
+        run: python3 -m unittest scripts.ci.test_workflow_contracts -v
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
       - name: Verify unmanaged async launch allowlist

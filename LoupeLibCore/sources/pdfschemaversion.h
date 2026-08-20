@@ -80,6 +80,12 @@ struct LOUPELIBCORESHARED_EXPORT PDFSchemaEnvelope
 LOUPELIBCORESHARED_EXPORT QString pdfSchemaKindToString(PDFSchemaKind kind);
 LOUPELIBCORESHARED_EXPORT PDFSchemaKind pdfSchemaKindFromString(const QString& value);
 LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version);
+/// Evaluates one explicit compatibility matrix. An empty or incomplete matrix
+/// fails closed for known schema kinds; the resource-backed overload below is
+/// the production entry point.
+LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
+                                                                                    PDFSchemaVersion version,
+                                                                                    const QJsonObject& matrix);
 LOUPELIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
 LOUPELIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
 LOUPELIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);

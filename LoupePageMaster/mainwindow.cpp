@@ -43,6 +43,7 @@
 
 #include <QFileDialog>
 #include <QCheckBox>
+#include <QCryptographicHash>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QBuffer>
@@ -2761,10 +2762,40 @@ void MainWindow::exportAssembledDocuments(std::vector<std::vector<pdf::PDFDocume
     for (const auto& documentItem : m_model->getDocuments())
     {
         job.documents.emplace(documentItem.first, documentItem.second.document);
+
+        const QByteArray sourceHash = documentItem.second.document.getSourceDataHash();
+        const QFileInfo sourceFile(documentItem.second.fileName);
+        if (sourceHash.size() == QCryptographicHash::hashLength(QCryptographicHash::Sha256) && sourceFile.exists())
+        {
+            pdf::PDFArtifactIdentity identity;
+            identity.sha256 = QString::fromLatin1(sourceHash.toHex());
+            identity.size = sourceFile.size();
+            identity.mediaType = QStringLiteral("application/pdf");
+            identity.logicalName = sourceFile.fileName();
+            if (identity.isValid())
+            {
+                job.documentSourceIdentities.emplace(documentItem.first, std::move(identity));
+            }
+        }
     }
     for (const auto& imageItem : m_model->getImages())
     {
         job.images.emplace(imageItem.first, imageItem.second.image);
+
+        if (!imageItem.second.imageData.isEmpty())
+        {
+            pdf::PDFArtifactIdentity identity;
+            identity.sha256 = QString::fromLatin1(QCryptographicHash::hash(imageItem.second.imageData,
+                                                                           QCryptographicHash::Sha256)
+                                                      .toHex());
+            identity.size = imageItem.second.imageData.size();
+            identity.mediaType = QStringLiteral("image/") + imageItem.second.format;
+            identity.logicalName = imageItem.second.displayName;
+            if (identity.isValid())
+            {
+                job.imageSourceIdentities.emplace(imageItem.first, std::move(identity));
+            }
+        }
     }
     job.assembledDocuments = std::move(assembledDocuments);
     job.outputFileNames = std::move(outputFileNames);
