@@ -32,6 +32,7 @@
 #include "pdfpainterutils.h"
 #include "pdfwidgetutils.h"
 #include "pdfuitheme.h"
+#include "pdfinteractiontrace_p.h"
 
 #include <QTimer>
 #include <QPainter>
@@ -804,6 +805,10 @@ void PDFDrawWidgetProxy::draw(QPainter* painter, QRect rect)
 {
     drawPages(painter, rect, m_features);
 
+    PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
+    auto overlayScope = traceRecorder
+        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
+        : PDFInteractionTraceRecorder::StageScope();
     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
     {
         painter->save();
@@ -855,8 +860,16 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
             }
 
             const PDFPrecompiledPage* compiledPage = m_compiler->getCompiledPage(item.pageIndex, true);
+            if (PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current())
+            {
+                traceRecorder->recordCacheLookup(compiledPage && compiledPage->isValid());
+            }
             if (compiledPage && compiledPage->isValid())
             {
+                PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
+                auto pageRenderScope = traceRecorder
+                    ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::PageRender)
+                    : PDFInteractionTraceRecorder::StageScope();
                 QElapsedTimer timer;
                 timer.start();
 
@@ -929,6 +942,9 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
                 QList<PDFRenderError> drawInterfaceErrors;
                 if (!features.testFlag(PDFRenderer::DenyExtraGraphics))
                 {
+                    auto overlayScope = traceRecorder
+                        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
+                        : PDFInteractionTraceRecorder::StageScope();
                     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
                     {
                         painter->save();
@@ -1070,6 +1086,11 @@ std::vector<PDFInteger> PDFDrawWidgetProxy::getActivePages() const
 
 PDFInteger PDFDrawWidgetProxy::getPageUnderPoint(QPoint point, QPointF* pagePoint) const
 {
+    PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
+    auto hitTestScope = traceRecorder
+        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::HitTest)
+        : PDFInteractionTraceRecorder::StageScope();
+
     // Iterate trough pages, place them and test, if they intersects with rectangle
     for (const LayoutItem& item : m_layout.items)
     {
