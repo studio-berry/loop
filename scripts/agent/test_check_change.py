@@ -68,17 +68,12 @@ class CheckChangeTests(unittest.TestCase):
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": ""}, clear=False):
             self.assertEqual(MODULE.skip_changelog_reason("dev", policy, False), "integration branch")
             self.assertEqual(MODULE.skip_changelog_reason("stable", policy, False), "integration branch")
-            self.assertIsNone(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False))
-            self.assertEqual(MODULE.skip_changelog_reason("cursor/foo-0158", policy, True), "non-PR event")
             self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
             self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, True), "non-PR event")
 
     def test_skip_changelog_on_non_pr_github_event(self) -> None:
         policy = {"branches": POLICY_BRANCHES}
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=False):
-            self.assertEqual(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False), "non-PR event")
-        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
-            self.assertIsNone(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False))
             self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, False), "non-PR event")
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
             self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
@@ -95,22 +90,6 @@ class CheckChangeTests(unittest.TestCase):
             root = Path(directory)
             changes_dir = root / "changes"
             changes_dir.mkdir()
-            parent = changes_dir / "cursor-wave-b.md"
-            child = changes_dir / "cursor-wave-c.md"
-            body = (
-                "Category: fixed\nAudience: developers\nBreaking-Change: no\nSummary: Wave fragment.\n"
-            )
-            parent.write_text(body, encoding="utf-8")
-            child.write_text(body, encoding="utf-8")
-            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
-            changes = [
-                MODULE.Change("A", "changes/cursor-wave-b.md"),
-                MODULE.Change("A", "changes/cursor-wave-c.md"),
-            ]
-            with patch.object(MODULE, "ROOT", root):
-                evidence = MODULE.check_changelog(changes, policy, "cursor/wave-c")
-        self.assertEqual(evidence.result, "pass")
-
             body = (
                 "Category: fixed\nAudience: developers\nBreaking-Change: no\n"
                 "Summary: Wave fragment.\n"
@@ -173,17 +152,6 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual(evidence.reason, "integration branch")
 
     def test_parse_name_status_deleted_is_excluded_from_format(self) -> None:
-        raw = b"D\0Pdf4QtLibCore/sources/gone.cpp\0M\0Pdf4QtLibCore/sources/keep.cpp\0"
-        changes = MODULE.parse_name_status(raw)
-        self.assertEqual(changes[0].status, "D")
-        self.assertEqual(MODULE.format_sources(changes), ["Pdf4QtLibCore/sources/keep.cpp"])
-
-    def test_format_sources_excludes_deleted_paths(self) -> None:
-        changes = [
-            MODULE.Change("D", "Pdf4QtLibCore/sources/old.cpp"),
-            MODULE.Change("M", "Pdf4QtLibCore/sources/keep.cpp"),
-            MODULE.Change("A", "Pdf4QtLibCore/sources/new.h"),
-            MODULE.Change("R", "Pdf4QtLibCore/sources/renamed.cpp", "Pdf4QtLibCore/sources/was.cpp"),
         raw = b"D\0LoupeLibCore/sources/gone.cpp\0M\0LoupeLibCore/sources/keep.cpp\0"
         changes = MODULE.parse_name_status(raw)
         self.assertEqual(changes[0].status, "D")
@@ -200,19 +168,6 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual(
             MODULE.format_sources(changes),
             [
-                "Pdf4QtLibCore/sources/keep.cpp",
-                "Pdf4QtLibCore/sources/new.h",
-                "Pdf4QtLibCore/sources/renamed.cpp",
-            ],
-        )
-
-    def test_classify_still_uses_deleted_paths(self) -> None:
-        policy = {
-            "module_boundaries": {
-                "core": {"paths": ["Pdf4QtLibCore/**"], "targets": ["Pdf4QtLibCore"], "tests": []},
-            }
-        }
-        changes = [MODULE.Change("D", "Pdf4QtLibCore/sources/gone.cpp")]
                 "LoupeLibCore/sources/keep.cpp",
                 "LoupeLibCore/sources/new.h",
                 "LoupeLibCore/sources/renamed.cpp",

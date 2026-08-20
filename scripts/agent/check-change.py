@@ -369,14 +369,6 @@ def main() -> int:
     add_result(evidence, "policy_adapters", [python, "scripts/agent/generate-adapters.py"], ROOT, args.dry_run)
 
     if sources:
-        if not clang_format:
-            evidence.append(Evidence("format", ["clang-format", "--dry-run"], result="incomplete", reason="prerequisite unavailable: clang-format"))
-        else:
-            if args.fix_format and not args.dry_run:
-                for source in sources:
-                    subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
-            for source in sources:
-                add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
         add_format_checks(
             evidence,
             sources,
@@ -389,12 +381,6 @@ def main() -> int:
     for test in tests:
         add_result(evidence, f"build:{test}", ["cmake", "--build", str(build_dir), "--target", test, "--config", "Release"], ROOT, args.dry_run)
 
-    compile_db = build_dir / "compile_commands.json"
-    if sources and compile_db.exists() and shutil.which("clang-tidy-18"):
-        for source in sources:
-            add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
-    elif sources:
-        evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
     if sources:
         add_clang_tidy_checks(evidence, sources, build_dir, dry_run=args.dry_run)
     if tests:
