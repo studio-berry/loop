@@ -1,0 +1,18 @@
+name: Sync GitHub milestones
+
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync milestone descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/github/sync_milestones.py --apply
