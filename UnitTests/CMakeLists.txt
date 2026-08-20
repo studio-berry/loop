@@ -219,6 +219,34 @@ set_target_properties(UnitTestsInteractionWidget PROPERTIES
 
 add_test(UnitTestsInteractionWidget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionWidget")
 
+add_executable(UnitTestsPageSurfaceProbe
+    tst_pagesurfaceprobetest.cpp
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources/pdfinteractiontrace_p.cpp
+)
+
+target_link_libraries(UnitTestsPageSurfaceProbe PRIVATE
+    LoupeLibWidgets
+    LoupeLibCore
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+target_include_directories(UnitTestsPageSurfaceProbe PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
+    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
+)
+
+set_target_properties(UnitTestsPageSurfaceProbe PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsPageSurfaceProbe "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurfaceProbe")
+
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
 )

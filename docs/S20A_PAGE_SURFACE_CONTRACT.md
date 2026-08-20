@@ -1,0 +1,60 @@
+# S20a / #142 page-surface contract
+
+Status: internal proof contract; not a shipped API.
+
+This document records the smallest contract needed to evaluate cached and
+progressive page rendering without creating a presentation-neutral target. The
+current Widgets renderer remains the behavior baseline. The test-only probe in
+`UnitTestsPageSurfaceProbe` exercises this contract and must not be promoted to
+production code without the G2 module/dependency decision.
+
+## Key and identity
+
+Every page surface is identified by the complete `PDFRevisionIdentity`, page
+index, rotation, render/output mode, zoom bucket or target pixel size,
+color/output settings, and device-pixel ratio. A request adds a monotonically
+increasing generation. The pair is immutable while work is in flight.
+
+The generation advances for every new viewport request, page switch,
+cancellation, document revision, cache-generation change, and document
+replacement. A result is accepted only when its complete key and generation
+still equal the active request. Stale results cannot be inserted, presented, or
+uploaded.
+
+## Cache and queue policy
+
+- The existing `setCacheLimit()`/`QCache` byte limit is the sole byte-budget
+  authority; this session does not add a second per-document or process-wide
+  cache policy.
+- An entry whose checked byte cost exceeds the budget is rejected explicitly.
+- Eviction is deterministic least-recently-used by access sequence.
+- A compatible surface may be transformed immediately while a newer surface is
+  requested. Compatibility requires the same revision, page, rotation,
+  render mode, color/output settings, and device-pixel ratio. Zoom bucket and
+  target size select the nearest usable surface.
+- Interactive/visible work supersedes the previous request for the same active
+  surface. Near-viewport work is capped at two pending requests and is shed
+  before interactive work.
+- No customer-content surface is written to disk.
+
+## Progressive flow
+
+1. Pan or zoom changes the viewport and advances the request generation.
+2. The best compatible cached surface is transformed for the next frame.
+3. The existing Widgets render path receives the higher-fidelity request.
+4. Completion is checked against revision, generation, page, and key.
+5. Only a current result replaces the surface and requests a frame.
+6. Overlay-only changes remain an independent pass and do not trigger page
+   rendering.
+
+The probe records cache hit/miss, stale-result, cancellation, queue-shed, and
+render-error outcomes using the existing interaction evidence vocabulary. It
+does not add a second scheduler or fold in issue #54's backend partial-page
+render contract.
+
+## G2 boundary
+
+If the current `PDFDrawWidgetProxy` path cannot provide a valid reusable surface
+without a production-neutral seam, the result is a documented G2 blocker and a
+minimal module/dependency ADR. It is not permission to add a neutral library to
+S20a or to expose the probe as a product API.
