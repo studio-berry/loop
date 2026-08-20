@@ -80,7 +80,8 @@ the software-backend contract.
 - [x] Static security, accessibility, and design-token contracts added.
 - [x] Qualification-only scene-graph smoke harness added and wired for native
       and software modes in Windows/Linux CI.
-- [ ] S21 benchmark and ADR-009 outcome admit a canvas candidate.
+- [x] S21 benchmark and ADR-009 outcome retain the Widgets/hybrid production
+      canvas and leave Quick PDF-canvas migration conditional.
 - [ ] Windows and Linux CI runs produce native and software smoke evidence.
 - [ ] Final-artifact SBOM, notices, LGPL replacement/relink evidence, and
       clean-machine package smoke close the packaging gate.
