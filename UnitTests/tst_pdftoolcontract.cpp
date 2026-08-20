@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "processoutputcapture.h"
+
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -49,15 +51,17 @@ ToolRun runPdfTool(const QStringList& arguments)
     process.start();
 
     ToolRun run;
-    if (!process.waitForFinished(120000))
+    if (!test_support::waitForFinishedAndCapture(process, 120000, run.stdoutData, run.stderrData))
     {
-        run.stderrData = process.errorString().toUtf8();
+        if (!run.stderrData.isEmpty())
+        {
+            run.stderrData.append('\n');
+        }
+        run.stderrData.append(process.errorString().toUtf8());
         return run;
     }
 
     run.exitCode = process.exitCode();
-    run.stdoutData = process.readAllStandardOutput();
-    run.stderrData = process.readAllStandardError();
 
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(run.stdoutData, &parseError);
@@ -104,20 +108,20 @@ private slots:
 
 void PdfToolContractTest::helpIsWrapped()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("help"), QStringLiteral("--console-format"), QStringLiteral("json")});
+    const ToolRun run = runPdfTool({ QStringLiteral("help"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 0, QStringLiteral("help"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("success"));
 }
 
 void PdfToolContractTest::equalsFormIsDetected()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("help"), QStringLiteral("--console-format=json")});
+    const ToolRun run = runPdfTool({ QStringLiteral("help"), QStringLiteral("--console-format=json") });
     verifyEnvelope(run, 0, QStringLiteral("help"));
 }
 
 void PdfToolContractTest::capabilitiesIsWrapped()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("capabilities")});
+    const ToolRun run = runPdfTool({ QStringLiteral("capabilities") });
     verifyEnvelope(run, 0, QStringLiteral("capabilities"));
 
     const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
@@ -130,7 +134,7 @@ void PdfToolContractTest::capabilitiesIsWrapped()
 
 void PdfToolContractTest::capabilitiesCanFilterCommand()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("preflight")});
+    const ToolRun run = runPdfTool({ QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("preflight") });
     verifyEnvelope(run, 0, QStringLiteral("capabilities"));
 
     const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
@@ -143,7 +147,7 @@ void PdfToolContractTest::capabilitiesCanFilterCommand()
 
 void PdfToolContractTest::capabilitiesRejectUnknownCommand()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("does-not-exist")});
+    const ToolRun run = runPdfTool({ QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("does-not-exist") });
     verifyEnvelope(run, 2, QStringLiteral("capabilities"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
     const QJsonArray diagnostics = run.json.value(QStringLiteral("diagnostics")).toArray();
@@ -153,8 +157,8 @@ void PdfToolContractTest::capabilitiesRejectUnknownCommand()
 
 void PdfToolContractTest::capabilitiesAreDeterministicallySorted()
 {
-    const ToolRun first = runPdfTool({QStringLiteral("capabilities")});
-    const ToolRun second = runPdfTool({QStringLiteral("capabilities")});
+    const ToolRun first = runPdfTool({ QStringLiteral("capabilities") });
+    const ToolRun second = runPdfTool({ QStringLiteral("capabilities") });
     verifyEnvelope(first, 0, QStringLiteral("capabilities"));
     verifyEnvelope(second, 0, QStringLiteral("capabilities"));
 
@@ -163,14 +167,13 @@ void PdfToolContractTest::capabilitiesAreDeterministicallySorted()
     QVERIFY(firstCommands == secondCommands);
     for (int i = 1; i < firstCommands.size(); ++i)
     {
-        QVERIFY(firstCommands.at(i - 1).toObject().value(QStringLiteral("id")).toString()
-                < firstCommands.at(i).toObject().value(QStringLiteral("id")).toString());
+        QVERIFY(firstCommands.at(i - 1).toObject().value(QStringLiteral("id")).toString() < firstCommands.at(i).toObject().value(QStringLiteral("id")).toString());
     }
 }
 
 void PdfToolContractTest::capabilitiesExposeSensitiveOptionMetadata()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("info")});
+    const ToolRun run = runPdfTool({ QStringLiteral("capabilities"), QStringLiteral("--command"), QStringLiteral("info") });
     verifyEnvelope(run, 0, QStringLiteral("capabilities"));
 
     const QJsonArray options = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("commands")).toArray().first().toObject().value(QStringLiteral("options")).toArray();
@@ -189,7 +192,7 @@ void PdfToolContractTest::capabilitiesExposeSensitiveOptionMetadata()
 
 void PdfToolContractTest::unknownCommandIsInvalidInvocation()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("frobnicate"), QStringLiteral("--console-format"), QStringLiteral("json")});
+    const ToolRun run = runPdfTool({ QStringLiteral("frobnicate"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 2, QStringLiteral("frobnicate"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
     const QJsonArray diagnostics = run.json.value(QStringLiteral("diagnostics")).toArray();
@@ -199,21 +202,21 @@ void PdfToolContractTest::unknownCommandIsInvalidInvocation()
 
 void PdfToolContractTest::malformedInvocationIsWrapped()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("help"), QStringLiteral("--console-format"), QStringLiteral("json"), QStringLiteral("--not-an-option")});
+    const ToolRun run = runPdfTool({ QStringLiteral("help"), QStringLiteral("--console-format"), QStringLiteral("json"), QStringLiteral("--not-an-option") });
     verifyEnvelope(run, 2, QStringLiteral("help"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
 }
 
 void PdfToolContractTest::defaultPreflightMalformedInvocationIsWrapped()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("preflight"), QStringLiteral("--profile")});
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--profile") });
     verifyEnvelope(run, 2, QStringLiteral("preflight"));
     QCOMPARE(run.json.value(QStringLiteral("status")).toString(), QStringLiteral("invalid-invocation"));
 }
 
 void PdfToolContractTest::preflightRejectsNonJsonOutput()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("text")});
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("text") });
     QCOMPARE(run.exitCode, 2);
     QVERIFY(run.json.isEmpty());
     QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
@@ -221,12 +224,12 @@ void PdfToolContractTest::preflightRejectsNonJsonOutput()
 
 void PdfToolContractTest::preflightKeepsNestedReportBoundary()
 {
-    const ToolRun run = runPdfTool({QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json")});
+    const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
 }
 
-} // namespace
+}   // namespace
 
 QTEST_MAIN(PdfToolContractTest)
 #include "tst_pdftoolcontract.moc"

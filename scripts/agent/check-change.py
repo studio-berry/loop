@@ -69,6 +69,10 @@ def resolve_revision(revision: str) -> str:
     return run_git(["rev-parse", "--verify", f"{revision}^{{commit}}"]).strip()
 
 
+def resolve_merge_base(base: str, head: str) -> str:
+    return run_git(["merge-base", base, head]).strip()
+
+
 def parse_name_status(raw: bytes) -> list[Change]:
     fields = raw.decode("utf-8", errors="surrogateescape").split("\0")
     changes: list[Change] = []
@@ -253,6 +257,80 @@ def add_result(evidence: list[Evidence], name: str, command: list[str], cwd: Pat
     evidence.append(item)
 
 
+def add_format_checks(
+    evidence: list[Evidence], sources: list[str], *, dry_run: bool, fix_format: bool
+) -> None:
+    if dry_run:
+        for source in sources:
+            add_result(
+                evidence,
+                f"format:{source}",
+                ["clang-format", "--dry-run", "--Werror", source],
+                ROOT,
+                True,
+            )
+        return
+
+    if not shutil.which("clang-format"):
+        evidence.append(
+            Evidence(
+                "format",
+                ["clang-format", "--dry-run"],
+                result="incomplete",
+                reason="prerequisite unavailable: clang-format",
+            )
+        )
+        return
+
+    if fix_format:
+        for source in sources:
+            subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
+    for source in sources:
+        add_result(
+            evidence,
+            f"format:{source}",
+            ["clang-format", "--dry-run", "--Werror", source],
+            ROOT,
+            False,
+        )
+
+
+def add_clang_tidy_checks(
+    evidence: list[Evidence], sources: list[str], build_dir: Path, *, dry_run: bool
+) -> None:
+    if dry_run:
+        for source in sources:
+            add_result(
+                evidence,
+                f"clang_tidy:{source}",
+                ["clang-tidy-18", "-p", str(build_dir), "--quiet", source],
+                ROOT,
+                True,
+            )
+        return
+
+    compile_db = build_dir / "compile_commands.json"
+    if compile_db.exists() and shutil.which("clang-tidy-18"):
+        for source in sources:
+            add_result(
+                evidence,
+                f"clang_tidy:{source}",
+                ["clang-tidy-18", "-p", str(build_dir), "--quiet", source],
+                ROOT,
+                False,
+            )
+        return
+
+    evidence.append(
+        Evidence(
+            "clang_tidy",
+            ["clang-tidy-18", "-p", str(build_dir)],
+            result="incomplete",
+            reason="compile_commands.json or clang-tidy-18 unavailable",
+        )
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True, help="base commit or ref")
@@ -270,7 +348,8 @@ def main() -> int:
         policy = load_policy()
         base_sha = resolve_revision(args.base)
         head_sha = resolve_revision(args.head)
-        changes = diff_changes(base_sha, head_sha)
+        comparison_base_sha = resolve_merge_base(base_sha, head_sha)
+        changes = diff_changes(comparison_base_sha, head_sha)
     except (OSError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: unable to establish change set: {exc}", file=sys.stderr)
         return 1
@@ -289,7 +368,6 @@ def main() -> int:
     add_result(evidence, "architecture_catalog", [python, "scripts/generate-architecture-catalogs.py", "--check"], ROOT, args.dry_run)
     add_result(evidence, "policy_adapters", [python, "scripts/agent/generate-adapters.py"], ROOT, args.dry_run)
 
-    clang_format = shutil.which("clang-format")
     if sources:
         if not clang_format:
             evidence.append(Evidence("format", ["clang-format", "--dry-run"], result="incomplete", reason="prerequisite unavailable: clang-format"))
@@ -299,6 +377,12 @@ def main() -> int:
                     subprocess.run(["clang-format", "-i", source], cwd=ROOT, check=True)
             for source in sources:
                 add_result(evidence, f"format:{source}", ["clang-format", "--dry-run", "--Werror", source], ROOT, args.dry_run)
+        add_format_checks(
+            evidence,
+            sources,
+            dry_run=args.dry_run,
+            fix_format=args.fix_format,
+        )
 
     for target in targets:
         add_result(evidence, f"build:{target}", ["cmake", "--build", str(build_dir), "--target", target, "--config", "Release"], ROOT, args.dry_run)
@@ -311,6 +395,8 @@ def main() -> int:
             add_result(evidence, f"clang_tidy:{source}", ["clang-tidy-18", "-p", str(build_dir), "--quiet", source], ROOT, args.dry_run)
     elif sources:
         evidence.append(Evidence("clang_tidy", ["clang-tidy-18", "-p", str(build_dir)], result="incomplete", reason="compile_commands.json or clang-tidy-18 unavailable"))
+    if sources:
+        add_clang_tidy_checks(evidence, sources, build_dir, dry_run=args.dry_run)
     if tests:
         expression = "^(" + "|".join(re.escape(test) for test in tests) + ")$"
         add_result(evidence, "focused_tests", ["ctest", "--test-dir", str(build_dir), "--output-on-failure", "-R", expression], ROOT, args.dry_run)
@@ -318,6 +404,7 @@ def main() -> int:
     report = {
         "format_version": 1,
         "base_sha": base_sha,
+        "comparison_base_sha": comparison_base_sha,
         "head_sha": head_sha,
         "head_branch": branch,
         "changed_paths": [{"status": change.status, "path": change.path, **({"old_path": change.old_path} if change.old_path else {})} for change in changes],

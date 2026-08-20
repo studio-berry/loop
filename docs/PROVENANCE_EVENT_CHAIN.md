@@ -25,6 +25,12 @@ bytes. The PDF is therefore not changed merely by recording provenance.
 The shared event fields are `kind`, `operatorIdentity`,
 `documentRevisionDigest`, `effectiveProfileDigest`, report/diff digest,
 `approval.decisionReference`, and the existing artifact/output identities.
+
+PdfTool `preflight` appends live `PreflightRun` events (with revision and
+profile digests) on the document sidecar. PdfTool `repair` appends `FixApplied`.
+Cancellation and write failure append `Cancelled` / `Failed` of that kind —
+never a success/`Accepted` kind. The default `Operation` kind is not used for
+those live commands.
 The canonical naming maps #133's `eventId` to `entryId`, `eventDigest` to
 `eventHash`, and `previousEventId` to the prior event's `previousEventHash` /
 current-chain predecessor. `previousEventHash` and `eventHash` remain the only chain links. Schema-v2

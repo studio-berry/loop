@@ -12,7 +12,7 @@ jobs:
   build_ubuntu:
     runs-on: ubuntu-24.04
     env:
-      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/pdf4qt/vcpkg/overlays/linux:${{ github.workspace }}/pdf4qt/vcpkg/overlays/general
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loupe/vcpkg/overlays/linux:${{ github.workspace }}/loupe/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       GNUPGHOME: ${{ github.workspace }}/gnupg
       QT_QPA_PLATFORM: offscreen
@@ -26,14 +26,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          path: pdf4qt
+          path: loupe
 
       - name: Verify supply-chain pins
-        working-directory: pdf4qt
+        working-directory: loupe
         run: python3 scripts/ci/check_supply_chain_pins.py
 
       - name: Resolve verified packaging tool pins
-        working-directory: pdf4qt
+        working-directory: loupe
         run: |
           python3 - <<'PY'
           import json
@@ -57,7 +57,7 @@ jobs:
           PY
 
       - name: Install appimagetool
-        working-directory: pdf4qt
+        working-directory: loupe
         run: |
           bash scripts/ci/download_verified.sh \
             --gh-asset "AppImage/appimagetool" \
@@ -68,7 +68,7 @@ jobs:
           sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
 
       - name: Download verified AppImage runtime
-        working-directory: pdf4qt
+        working-directory: loupe
         run: |
           # appimagetool otherwise resolves the *latest* type-2 runtime on its own.
           # Supply the exact pinned runtime so packaging never resolves a mutable
@@ -84,7 +84,7 @@ jobs:
         run: |
           VCPKG_COMMIT="$(python3 - <<'PY'
           import json
-          with open("pdf4qt/vcpkg-configuration.json", encoding="utf-8") as f:
+          with open("loupe/vcpkg-configuration.json", encoding="utf-8") as f:
               print(json.load(f)["default-registry"]["baseline"])
           PY
           )"
@@ -119,7 +119,7 @@ jobs:
 
       - name: 'VCPKG: Install Project Dependencies'
         run: |
-          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/pdf4qt --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loupe --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt
@@ -135,27 +135,27 @@ jobs:
           cache-key-prefix: ${{ runner.os }}-qt-6111
 
       - name: Build Project
-        working-directory: pdf4qt
+        working-directory: loupe
         run: |
-          cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DPDF4QT_INSTALL_TO_USR=ON -DPDF4QT_LOUPE_DISTRIBUTION=ON -DPDF4QT_PLUGIN_OCR=OFF
+          cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF
           cmake --build build --target all release_translations -j6
           cmake --install build
-          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/pdf4qt/build/install"
+          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install"
 
       - name: Read version
         id: get_version
         run: |
-          version=$(cat "pdf4qt/build/version.txt")
+          version=$(cat "loupe/build/version.txt")
           echo "Version: $version"
           echo "appimagefilename=Loupe-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
           echo "appimage_update_info=gh-releases-zsync|mberrys|Loupe-pdf|latest|Loupe-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
           echo "AppImage file name: Loupe-pdf-$version-x86_64.AppImage"
 
       - name: 'Linux Deploy Qt'
-        working-directory: pdf4qt/build
+        working-directory: loupe/build
         run: |
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
-          bash "$GITHUB_WORKSPACE/pdf4qt/scripts/ci/download_verified.sh" \
+          bash "$GITHUB_WORKSPACE/loupe/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
             "$LINUXDEPLOYQT_ASSET_ID" \
             deploy.AppImage \
@@ -182,7 +182,7 @@ jobs:
 
       - name: Pack AppImage (unsigned — V1 default)
         if: vars.SIGN_APPIMAGE != 'true'
-        working-directory: pdf4qt/build
+        working-directory: loupe/build
         run: |
           appimagetool \
             --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
@@ -191,7 +191,7 @@ jobs:
 
       - name: Sign and Repack AppImage
         if: vars.SIGN_APPIMAGE == 'true'
-        working-directory: pdf4qt/build
+        working-directory: loupe/build
         run: |
           appimagetool \
             --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
@@ -204,7 +204,7 @@ jobs:
       - name: Manual signature
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
-          gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --passphrase "${{ secrets.PGP_PASSPHRASE }}" --local-user "${{ secrets.PGP_KEY_ID }}" --output pdf4qt/build/${{ env.appimagefilename }}.sig pdf4qt/build/${{ env.appimagefilename }}
+          gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --passphrase "${{ secrets.PGP_PASSPHRASE }}" --local-user "${{ secrets.PGP_KEY_ID }}" --output loupe/build/${{ env.appimagefilename }}.sig loupe/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
@@ -212,12 +212,12 @@ jobs:
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
           echo "${{ secrets.PGP_PUBLIC_KEY }}" | gpg --batch --import
-          gpg --verify pdf4qt/build/${{ env.appimagefilename }}.sig pdf4qt/build/${{ env.appimagefilename }}
+          gpg --verify loupe/build/${{ env.appimagefilename }}.sig loupe/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
       - name: Run AppImage smoke test
-        working-directory: pdf4qt
+        working-directory: loupe
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
@@ -228,7 +228,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}
-          path: ./pdf4qt/build/${{ env.appimagefilename }}
+          path: ./loupe/build/${{ env.appimagefilename }}
           retention-days: 30
           compression-level: 0
 
@@ -237,7 +237,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.sig
-          path: ./pdf4qt/build/${{ env.appimagefilename }}.sig
+          path: ./loupe/build/${{ env.appimagefilename }}.sig
           retention-days: 30
           if-no-files-found: warn
           compression-level: 0
@@ -246,7 +246,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.zsync
-          path: ./pdf4qt/build/${{ env.appimagefilename }}.zsync
+          path: ./loupe/build/${{ env.appimagefilename }}.zsync
           retention-days: 30
           if-no-files-found: warn
           compression-level: 0

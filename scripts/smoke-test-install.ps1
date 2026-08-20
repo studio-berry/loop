@@ -13,7 +13,7 @@
     calls this script.
 
 .PARAMETER InstallDir
-    Directory containing Pdf4QtEditor.exe and PdfTool.exe.
+    Directory containing LoupeEditor.exe and PdfTool.exe.
 
 .PARAMETER ProfilesDir
     Override for the preflight profiles directory. When omitted the script probes
@@ -31,7 +31,7 @@
     this is off by default and the scan fails when it is found.
 #>
 param(
-    [string]$InstallDir = "${env:ProgramFiles}\PDF4QT",
+    [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
     [string]$ProfilesDir = "",
     [string]$TestPdf = "",
     [switch]$SkipEditorLaunch,
@@ -51,8 +51,8 @@ function Assert-FileExists {
 
 function Resolve-ProfilesDir {
     <#
-        LOUPE_PREFLIGHT_PROFILES_DIR is ${PDF4QT_INSTALL_SHARE_DIR}/loupe/profiles
-        (Pdf4QtEditorPlugins/LoupePreflightPlugin/CMakeLists.txt). PDF4QT_INSTALL_TO_USR=ON
+        LOUPE_PREFLIGHT_PROFILES_DIR is ${LOUPE_INSTALL_SHARE_DIR}/loupe/profiles
+        (LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt). LOUPE_INSTALL_TO_USR=ON
         -- used by the Windows CI and MSI builds -- prefixes that with usr/, so the share
         tree can sit beside the bin directory or one level above it depending on how the
         installer flattens the staged prefix. Probe rather than assume.
@@ -157,7 +157,7 @@ Write-Host "Smoke-testing install at $InstallDir"
 Write-Host "Resolved preflight profiles to $ProfilesDir"
 
 $requiredFiles = @(
-    @{ Path = (Join-Path $InstallDir "Pdf4QtEditor.exe"); Label = "Editor" },
+    @{ Path = (Join-Path $InstallDir "LoupeEditor.exe"); Label = "Editor" },
     @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
     @{ Path = (Join-Path $pluginsDir "LoupePreflightPlugin.dll"); Label = "Loupe preflight plugin" },
     @{ Path = (Join-Path $ProfilesDir "loupe-default.json"); Label = "Default preflight profile" },
@@ -179,7 +179,7 @@ if (Test-Path -LiteralPath $ocrPlugin) {
         Write-Host "OK: OcrPlugin.dll present (explicitly allowed via -AllowOcrPlugin)"
     } else {
         $ocrPluginMessage = "OcrPlugin.dll found at $ocrPlugin. V1 ships OCR as CLI-only (MIC-343) -- " +
-            "this plugin must not be in a release bundle. Build with -DPDF4QT_PLUGIN_OCR=OFF, " +
+            "this plugin must not be in a release bundle. Build with -DLOUPE_PLUGIN_OCR=OFF, " +
             "or re-run with -AllowOcrPlugin if this is an intentional non-V1 build."
         throw $ocrPluginMessage
     }
@@ -203,7 +203,7 @@ $profilePath = Join-Path $ProfilesDir "loupe-default.json"
 $pdfTool = Join-Path $InstallDir "PdfTool.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
-$qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:PDF4QT_QT_ROOT) |
+$qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOUPE_QT_ROOT) |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 $pathParts = @($env:PATH -split ';' | Where-Object {
     $part = $_
@@ -262,14 +262,14 @@ for ($i = 0; $i -lt 2; $i++) {
 Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidecar
 
 if (-not $SkipEditorLaunch) {
-    $editor = Join-Path $InstallDir "Pdf4QtEditor.exe"
+    $editor = Join-Path $InstallDir "LoupeEditor.exe"
     $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
     Start-Sleep -Seconds 5
     if ($editorProcess.HasExited) {
-        throw "Pdf4QtEditor exited early with code $($editorProcess.ExitCode)"
+        throw "LoupeEditor exited early with code $($editorProcess.ExitCode)"
     }
     Stop-Process -Id $editorProcess.Id -Force
-    Write-Host "OK: Pdf4QtEditor launched without immediate crash"
+    Write-Host "OK: LoupeEditor launched without immediate crash"
 }
 
 Write-Host "Smoke test passed."

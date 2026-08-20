@@ -22,6 +22,8 @@
 
 // Stress-tests bleed preflight + add-bleed repair on AI-artwork-like fixtures (MIC-316).
 
+#include "processoutputcapture.h"
+
 #include <QtTest>
 #include <QDir>
 #include <QFile>
@@ -36,7 +38,7 @@ namespace
 {
 
 constexpr char STRESS_PROFILE[] = "examples/profile-tiered-bleed-raster.json";
-constexpr char BLEED_MM[] = "3.175"; // 9 pt
+constexpr char BLEED_MM[] = "3.175";   // 9 pt
 
 QString fixturesDir()
 {
@@ -106,7 +108,9 @@ bool BleedStressTest::runPdfTool(const QStringList& arguments, QByteArray* stdOu
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     process.setProcessEnvironment(environment);
     process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH), arguments);
-    if (!process.waitForFinished(120000))
+    QByteArray capturedOutput;
+    QByteArray capturedError;
+    if (!test_support::waitForFinishedAndCapture(process, 120000, capturedOutput, capturedError))
     {
         return false;
     }
@@ -118,7 +122,7 @@ bool BleedStressTest::runPdfTool(const QStringList& arguments, QByteArray* stdOu
 
     if (stdOut)
     {
-        *stdOut = process.readAllStandardOutput();
+        *stdOut = capturedOutput;
     }
 
     return process.exitStatus() == QProcess::NormalExit;
@@ -161,8 +165,7 @@ bool BleedStressTest::runAddBleed(const QString& inputPath, const QString& outpu
                           QString::fromLatin1(BLEED_MM),
                           QStringLiteral("--force"),
                       },
-                      nullptr,
-                      exitCode);
+                      nullptr, exitCode);
 }
 
 void BleedStressTest::aiArtFixtures_failBleedPreflight_data()

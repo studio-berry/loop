@@ -20,7 +20,7 @@ The generated
 [`architecture-catalog.json`](generated/architecture-catalog.json) is the
 current factual inventory of policy branches, workflow trigger branches,
 built-in preflight checks, registered repair operations, runtime/schema
-versions, and CMake test targets.
+versions, numbered architecture invariants, and CMake test targets.
 Regenerate it after changing one of its source files:
 
 ```bash

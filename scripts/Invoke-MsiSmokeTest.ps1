@@ -33,7 +33,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,
     [string]$PreviousMsiPath = "",
-    [string]$InstallDir = "${env:ProgramFiles}\PDF4QT",
+    [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
     [string]$TestPdf = "",
     [string]$LogDir = "$env:TEMP\loupe-msi-smoke",
     [switch]$SkipEditorLaunch,

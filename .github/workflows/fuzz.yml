@@ -14,7 +14,7 @@ on:
       - ".github/workflows/fuzz.yml"
       - "CMakeLists.txt"
       - "vcpkg.json"
-      - "Pdf4QtLibCore/**"
+      - "LoupeLibCore/**"
 
 jobs:
   fuzz:
@@ -119,13 +119,13 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
-            -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
-            -DPDF4QT_BUILD_ONLY_CORE_LIBRARY=ON \
-            -DPDF4QT_BUILD_TESTS=OFF \
-            -DPDF4QT_ENABLE_SENTRY=OFF \
-            -DPDF4QT_ENABLE_SANITIZERS=ON \
-            -DPDF4QT_BUILD_FUZZERS=ON \
-            -DPDF4QT_QT_ROOT="${{ github.workspace }}/qt/Qt/6.11.1/gcc_64"
+            -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
+            -DLOUPE_BUILD_ONLY_CORE_LIBRARY=ON \
+            -DLOUPE_BUILD_TESTS=OFF \
+            -DLOUPE_ENABLE_SENTRY=OFF \
+            -DLOUPE_ENABLE_SANITIZERS=ON \
+            -DLOUPE_BUILD_FUZZERS=ON \
+            -DLOUPE_QT_ROOT="${{ github.workspace }}/qt/Qt/6.11.1/gcc_64"
 
       - name: Build fuzz harnesses
         run: |

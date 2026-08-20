@@ -39,12 +39,12 @@ jobs:
       head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
 
   linux:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
     secrets:

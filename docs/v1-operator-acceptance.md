@@ -37,7 +37,7 @@ Run on a supported Windows or Linux machine with a release or dev build that bun
 
 ### Open and preflight
 
-1. Launch **Pdf4QtEditor** and open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
+1. Launch **LoupeEditor** and open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
 2. **Loupe Preflight → Run Preflight**.
 3. Confirm the report panel opens with profile name, pass/fail summary, and at least one `bleed` error.
 4. Confirm `add-bleed` appears under advertised fixups.

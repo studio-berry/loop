@@ -234,6 +234,23 @@ def on_block_has_path_filters(text: str) -> bool:
     return False
 
 
+def workflow_job_block(text: str, job_name: str) -> str:
+    """Return one top-level job block without requiring a YAML dependency."""
+    lines = text.splitlines()
+    start = next(
+        (index for index, line in enumerate(lines) if line.rstrip() == f"  {job_name}:"),
+        None,
+    )
+    if start is None:
+        return ""
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[index]):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 def validate_workflow_branches(
     path: Path, text: str, expected_branches: tuple[str, ...]
 ) -> list[str]:
@@ -272,6 +289,10 @@ def validate_release_gate_workflow(path: Path, text: str, policy: DocumentedPoli
         violations.append(f"{path}: missing release_ok job")
     if "if: always()" not in text and "if: ${{ always() }}" not in text:
         violations.append(f"{path}: release_ok must use if: always()")
+    if "github.event.merge_group.base_sha" not in text:
+        violations.append(f"{path}: agent contract must use the merge_group base SHA")
+    if "github.event.merge_group.head_sha" not in text:
+        violations.append(f"{path}: agent contract must use the merge_group head SHA")
     return violations
 
 
@@ -296,6 +317,14 @@ def validate_integration_workflow(path: Path, text: str, policy: DocumentedPolic
         violations.append(f"{path}: obsolete ci_ok aggregate must not remain")
     if not re.search(r"^\s*agent-fast\s*:", text, re.MULTILINE):
         violations.append(f"{path}: missing required agent-fast job")
+    for job_name in ("linux", "windows"):
+        block = workflow_job_block(text, job_name)
+        if not block:
+            violations.append(f"{path}: missing {job_name} job")
+        elif "github.event_name == 'workflow_dispatch'" not in block:
+            violations.append(
+                f"{path}: {job_name} job must run for workflow_dispatch"
+            )
     return violations
 
 

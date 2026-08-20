@@ -201,12 +201,12 @@ void FontEncodingTest::test_fallback_font_generator()
     std::vector<pdf::PDFEditorFallbackFontManager::Run> runs = manager.encode(codePoints, nullptr, fontDictionary, errorCallback);
 
     QCOMPARE(runs.size(), size_t(1));
-    QCOMPARE(runs.front().fontResourceKey, QByteArray("PDF4QT_Fb1"));
+    QCOMPARE(runs.front().fontResourceKey, QByteArray("LOUPE_Fb1"));
     QCOMPARE(runs.front().encodedBytes.size(), qsizetype(2));
 
     // The generated font dictionary must be accepted by the font parser
-    QVERIFY(fontDictionary.hasKey("PDF4QT_Fb1"));
-    pdf::PDFObject fontObject = fontDictionary.get("PDF4QT_Fb1");
+    QVERIFY(fontDictionary.hasKey("LOUPE_Fb1"));
+    pdf::PDFObject fontObject = fontDictionary.get("LOUPE_Fb1");
     QVERIFY(fontObject.isDictionary());
 
     pdf::PDFDocumentBuilder documentBuilder;
@@ -216,7 +216,7 @@ void FontEncodingTest::test_fallback_font_generator()
     pdf::PDFFontPointer font;
     try
     {
-        font = pdf::PDFFont::createFont(fontObject, "PDF4QT_Fb1", &document);
+        font = pdf::PDFFont::createFont(fontObject, "LOUPE_Fb1", &document);
     }
     catch (const pdf::PDFException& exception)
     {

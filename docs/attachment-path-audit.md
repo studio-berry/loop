@@ -11,12 +11,12 @@ Paths where PDF-embedded attachment filenames or URIs are written to disk or ope
 | Location | Operation | Guard | Status |
 |----------|-----------|-------|--------|
 | `PdfTool/pdftoolattachments.cpp` | Save attachments to directory | `PDFFilenameSanitizer::sanitize()` + `isPathContained()` | OK (existing) |
-| `Pdf4QtLibGui/pdfsidebarwidget.cpp` — Save to File | User-chosen path via `QFileDialog`; default name sanitized | `PDFFilenameSanitizer::sanitize()` | OK (existing) |
-| `Pdf4QtLibGui/pdfsidebarwidget.cpp` — Open Attachment | Write to temp dir, then `QDesktopServices::openUrl` | `sanitize()` + `isPathContained()` + launch setting gate | **Fixed** (was `QFileInfo::fileName()` only) |
-| `Pdf4QtLibGui/pdfprogramcontroller.cpp` — Launch action | Execute platform file from PDF | `m_allowLaunchApplications` + dangerous-extension prompt | OK (existing, commit f0bb09cb) |
-| `Pdf4QtLibGui/pdfprogramcontroller.cpp` — URI action | Open URL | `m_allowLaunchURI` + scheme allowlist (http/https/mailto) | OK (existing) |
-| `Pdf4QtLibWidgets/sources/pdfitemmodels.cpp` | Display attachment names in tree | Display only; no filesystem write | N/A |
-| `Pdf4QtLaunchPad/launchapplication.cpp` | Start bundled apps | Hard-coded internal paths | N/A (not PDF-sourced) |
+| `LoupeLibGui/pdfsidebarwidget.cpp` — Save to File | User-chosen path via `QFileDialog`; default name sanitized | `PDFFilenameSanitizer::sanitize()` | OK (existing) |
+| `LoupeLibGui/pdfsidebarwidget.cpp` — Open Attachment | Write to temp dir, then `QDesktopServices::openUrl` | `sanitize()` + `isPathContained()` + launch setting gate | **Fixed** (was `QFileInfo::fileName()` only) |
+| `LoupeLibGui/pdfprogramcontroller.cpp` — Launch action | Execute platform file from PDF | `m_allowLaunchApplications` + dangerous-extension prompt | OK (existing, commit f0bb09cb) |
+| `LoupeLibGui/pdfprogramcontroller.cpp` — URI action | Open URL | `m_allowLaunchURI` + scheme allowlist (http/https/mailto) | OK (existing) |
+| `LoupeLibWidgets/sources/pdfitemmodels.cpp` | Display attachment names in tree | Display only; no filesystem write | N/A |
+| `LoupeLaunchPad/launchapplication.cpp` | Start bundled apps | Hard-coded internal paths | N/A (not PDF-sourced) |
 
 ## Tests
 

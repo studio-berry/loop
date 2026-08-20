@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue": 193,
   "gui_status": "deferred-until-0.1.1",
-  "shell_surface": "Pdf4QtEditor",
+  "shell_surface": "LoupeEditor",
   "ui_foundation": {
     "candidate": "Qt Quick Controls",
     "decision_issue": 178,

@@ -58,6 +58,11 @@ class CheckChangeTests(unittest.TestCase):
             valid, reason = MODULE.parse_changelog(path, {"internal"})
         self.assertTrue(valid, reason)
 
+    def test_resolve_merge_base_uses_both_revisions(self) -> None:
+        with patch.object(MODULE, "run_git", return_value="abc123\n") as run_git:
+            self.assertEqual(MODULE.resolve_merge_base("base", "head"), "abc123")
+        run_git.assert_called_once_with(["merge-base", "base", "head"])
+
     def test_skip_changelog_on_integration_branch(self) -> None:
         policy = {"branches": POLICY_BRANCHES}
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": ""}, clear=False):
@@ -65,6 +70,8 @@ class CheckChangeTests(unittest.TestCase):
             self.assertEqual(MODULE.skip_changelog_reason("stable", policy, False), "integration branch")
             self.assertIsNone(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False))
             self.assertEqual(MODULE.skip_changelog_reason("cursor/foo-0158", policy, True), "non-PR event")
+            self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
+            self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, True), "non-PR event")
 
     def test_skip_changelog_on_non_pr_github_event(self) -> None:
         policy = {"branches": POLICY_BRANCHES}
@@ -72,6 +79,9 @@ class CheckChangeTests(unittest.TestCase):
             self.assertEqual(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False), "non-PR event")
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
             self.assertIsNone(MODULE.skip_changelog_reason("cursor/foo-0158", policy, False))
+            self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, False), "non-PR event")
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "pull_request"}, clear=False):
+            self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
 
     def test_check_changelog_demands_dev_fragment_when_branch_is_dev(self) -> None:
         policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
@@ -100,6 +110,41 @@ class CheckChangeTests(unittest.TestCase):
             with patch.object(MODULE, "ROOT", root):
                 evidence = MODULE.check_changelog(changes, policy, "cursor/wave-c")
         self.assertEqual(evidence.result, "pass")
+
+            body = (
+                "Category: fixed\nAudience: developers\nBreaking-Change: no\n"
+                "Summary: Wave fragment.\n"
+            )
+            for name in ("cdx-parent.md", "cdx-child.md"):
+                (changes_dir / name).write_text(body, encoding="utf-8")
+            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+            changes = [
+                MODULE.Change("A", "changes/cdx-parent.md"),
+                MODULE.Change("A", "changes/cdx-child.md"),
+            ]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cdx/child")
+        self.assertEqual(evidence.result, "pass")
+
+    def test_check_changelog_validates_every_stacked_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            changes_dir = root / "changes"
+            changes_dir.mkdir()
+            (changes_dir / "cdx-parent.md").write_text("Category: fixed\n", encoding="utf-8")
+            (changes_dir / "cdx-child.md").write_text(
+                "Category: fixed\nAudience: developers\nBreaking-Change: no\nSummary: Child.\n",
+                encoding="utf-8",
+            )
+            policy = {"changelog": {"directory": "changes", "categories": ["fixed"]}}
+            changes = [
+                MODULE.Change("A", "changes/cdx-parent.md"),
+                MODULE.Change("A", "changes/cdx-child.md"),
+            ]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cdx/child")
+        self.assertEqual(evidence.result, "fail")
+        self.assertIn("changes/cdx-parent.md", evidence.reason or "")
 
     def test_changelog_evidence_still_required_on_topic_branch(self) -> None:
         policy = {
@@ -139,6 +184,17 @@ class CheckChangeTests(unittest.TestCase):
             MODULE.Change("M", "Pdf4QtLibCore/sources/keep.cpp"),
             MODULE.Change("A", "Pdf4QtLibCore/sources/new.h"),
             MODULE.Change("R", "Pdf4QtLibCore/sources/renamed.cpp", "Pdf4QtLibCore/sources/was.cpp"),
+        raw = b"D\0LoupeLibCore/sources/gone.cpp\0M\0LoupeLibCore/sources/keep.cpp\0"
+        changes = MODULE.parse_name_status(raw)
+        self.assertEqual(changes[0].status, "D")
+        self.assertEqual(MODULE.format_sources(changes), ["LoupeLibCore/sources/keep.cpp"])
+
+    def test_format_sources_excludes_deleted_paths(self) -> None:
+        changes = [
+            MODULE.Change("D", "LoupeLibCore/sources/old.cpp"),
+            MODULE.Change("M", "LoupeLibCore/sources/keep.cpp"),
+            MODULE.Change("A", "LoupeLibCore/sources/new.h"),
+            MODULE.Change("R", "LoupeLibCore/sources/renamed.cpp", "LoupeLibCore/sources/was.cpp"),
             MODULE.Change("A", "changes/foo.md"),
         ]
         self.assertEqual(
@@ -157,6 +213,63 @@ class CheckChangeTests(unittest.TestCase):
             }
         }
         changes = [MODULE.Change("D", "Pdf4QtLibCore/sources/gone.cpp")]
+                "LoupeLibCore/sources/keep.cpp",
+                "LoupeLibCore/sources/new.h",
+                "LoupeLibCore/sources/renamed.cpp",
+            ],
+        )
+
+    def test_clang_tidy_is_scheduled_after_test_targets_build(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        main_source = source[source.index("def main()") :]
+        self.assertLess(
+            main_source.index("for test in tests:"),
+            main_source.index("add_clang_tidy_checks("),
+        )
+
+    def test_dry_run_source_checks_do_not_probe_prerequisites(self) -> None:
+        evidence = []
+        build_dir = Path("missing-build-directory")
+        with patch.object(MODULE.shutil, "which", side_effect=AssertionError("probed tool")):
+            MODULE.add_format_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                dry_run=True,
+                fix_format=False,
+            )
+            MODULE.add_clang_tidy_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                build_dir,
+                dry_run=True,
+            )
+        self.assertEqual([item.result for item in evidence], ["not-run", "not-run"])
+        self.assertEqual([item.reason for item in evidence], ["dry-run", "dry-run"])
+
+    def test_real_source_checks_keep_missing_prerequisites_incomplete(self) -> None:
+        evidence = []
+        with patch.object(MODULE.shutil, "which", return_value=None):
+            MODULE.add_format_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                dry_run=False,
+                fix_format=False,
+            )
+            MODULE.add_clang_tidy_checks(
+                evidence,
+                ["UnitTests/tst_example.cpp"],
+                Path("missing-build-directory"),
+                dry_run=False,
+            )
+        self.assertEqual([item.result for item in evidence], ["incomplete", "incomplete"])
+
+    def test_classify_still_uses_deleted_paths(self) -> None:
+        policy = {
+            "module_boundaries": {
+                "core": {"paths": ["LoupeLibCore/**"], "targets": ["LoupeLibCore"], "tests": []},
+            }
+        }
+        changes = [MODULE.Change("D", "LoupeLibCore/sources/gone.cpp")]
         self.assertEqual(MODULE.classify(changes, policy), ["core"])
 
 

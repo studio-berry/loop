@@ -8,12 +8,17 @@ head branch. Subsequent `dev` pushes skip that PR-only check so a merged
 topic fragment is not rejected for not being `changes/dev.md`. Format and
 clang-tidy run on added, modified, renamed, or copied C/C++ files only;
 deleted paths still classify modules. These are the fast checks for
+topic fragment is not rejected for not being `changes/dev.md`. Stacked topic
+branches may carry their parent fragments, but every added fragment is
+validated. Format and clang-tidy run on added, modified, renamed, or copied
+C/C++ files only; deleted paths still classify modules. These are the fast
+checks for
 the shared integration baseline. The full Linux and Windows build-and-test
 jobs run for release qualification. These are the two platforms Loupe V1
 supports; **macOS** CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
-produced only for `dev` and `stable` pushes and manual workflow runs.
+produced only for `stable` pushes and manual workflow runs.
 
 The standalone `Documentation truth` workflow runs for the policy branches
 `dev` and `stable` pull requests and pushes. It checks every ADR's verification
@@ -95,7 +100,7 @@ the signing step refuses to run against an unpinned toolchain.
 
 ## Sentry debug files
 
-Windows Release builds with `PDF4QT_ENABLE_SENTRY` emit PDBs (`/Zi` +
+Windows Release builds with `LOUPE_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
 uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region

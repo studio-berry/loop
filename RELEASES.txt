@@ -16,7 +16,7 @@ CURRENT:
  - Issue #299: PDF element display error
  - Issue #258: feat: Insert page number
  - Issue #238: Pdf Editor: "Edit page content" makes image disappear
- - Issue #231: PDF4Qt Diff does not open files on Linux
+ - Issue #231: Loupe Diff does not open files on Linux
  - Issue #169: Option to render text as text when using Qpainter backend
 
 V: 1.6.0.0 14.6.2026
@@ -24,7 +24,7 @@ V: 1.6.0.0 14.6.2026
  - Issue #388: Update windows color management systém
  - Issue #385: PDFTextLayoutGenerator::isContentKindSuppressed(ContentKind kind) is missing ContentKind::Form
  - Issue #384: In the "Optimize Images" dialog, the info on the final image resolution and final dpi does not update
- - Issue #383: UX improvements for PDF4QT PageMaster tool (v1.5.3.1) (ex. DocPage Organizer)
+ - Issue #383: UX improvements for LOUPE PageMaster tool (v1.5.3.1) (ex. DocPage Organizer)
  - Issue #382: [feature request] Startup Settings
  - Issue #381: Separated apps for double-click viewer in Linux
  - Issue #380: Ability to run app with custom settings directory - executable parameter with path
@@ -44,18 +44,18 @@ V: 1.6.0.0 14.6.2026
  - Issue #349: Add inherit zoom to bookmark zoom options
  - Issue #338: Editor toolbox higher than editor window
  - Issue #334: Impossible to set french language
- - Issue #326: Checkboxes don't render in PDF4QT
+ - Issue #326: Checkboxes don't render in LOUPE
  - Issue #324: [regression] Menu text not rendered with correct color
  - Issue #321: Select text in Viewer
  - Issue #291: Support for editing XMP metadata or exporting to PDF/UA format
  - Issue #282: editor outline view: always zooms to around 50%
- - Issue #256: PDF4QT cannot show some specific fonts correctly
+ - Issue #256: LOUPE cannot show some specific fonts correctly
  - Issue #253: undo/redo doesn't work in "edit page content" mode
  - Issue #250: snapping
  - Issue #242: Full screen
  - Issue #234: setting font , font size and area of text annotations
- - Issue #230: I got some garbled characters when I open pdf with pdf4qt
- - Issue #225: PDF4QT cannot open PDF files with embedded files
+ - Issue #230: I got some garbled characters when I open pdf with loupe
+ - Issue #225: LOUPE cannot open PDF files with embedded files
  - Issue #224: Suggestion - option to remove invisible text
  - Issue #194: Change page size
  - Issue #160: Color | Custom (green/black) does not work
@@ -72,7 +72,7 @@ V: 1.5.3.0 18.1.2026 - removed
  - Issue #333: ijg-libjpeg obsoleted in vcpkg
  - Issue #329: How to remove "External links"
  - Issue #269: Nested Bookmarks loses children when moving.
- - Issue #179: Signature: Adding .jpg or .png image crashes PDF4QT
+ - Issue #179: Signature: Adding .jpg or .png image crashes LOUPE
  - Issue #146: Incorrect fonts displayed on Linux
  - Issue #144: Text notes - drag and drop annotations
 
@@ -80,7 +80,7 @@ V: 1.5.2.0 20.9.2025
  - Issue #313: Remove history UX improvement
  - Issue #310: Docpage organiser uses PDF title rather than filename
  - Issue #306: Unable to delete the recent files history.
- - Issue #303: Add Dockerfile for Simplified PDF4QT Setup with Qt 6.9.1 and All Dependencies
+ - Issue #303: Add Dockerfile for Simplified LOUPE Setup with Qt 6.9.1 and All Dependencies
  - Issue #301: Russian Language file
  - Issue #296: Redaction annotation support in PdfTool
  - Issue #295: Request: Make page layout choice persist between files
@@ -92,7 +92,7 @@ V: 1.5.2.0 20.9.2025
 V: 1.5.1.0 27.4.2025
  - Issue #271: Change of the license to MIT
  - Issue #257: Force light mode (or dark mode)
- - Issue #255: PDF4QT Page Master invert selection does not work
+ - Issue #255: LOUPE Page Master invert selection does not work
  - Issue #254: Unit Settings default window size too small
  - Issue #248: update version and year in Help > About page
  - Issue #247: option to hide cross when adding annotations
@@ -119,9 +119,9 @@ V: 1.4.0.0 4.7.2024
  - Issue #190: PageMaster crash + black bubbles instead of bubbles with correct color
  - Issue #184: Form field font size too large
  - Issue #183: Option to ignore PDF security settings
- - Issue #182: PDF4QT Document Diff command line cmd line arguments ignored
+ - Issue #182: LOUPE Document Diff command line cmd line arguments ignored
  - Issue #181: where is the dark mode?
- - Issue #180: PDF4QT editor and options windows higher than desktop
+ - Issue #180: LOUPE editor and options windows higher than desktop
  - Issue #174: Support for Linux seems to be very limited
  - Issue #173: errors loading file Echoplex.pdf
  - Issue #172: access keys are missing from most menu items/action text strings
@@ -159,7 +159,7 @@ V: 1.3.7 10.1.2024
  - Issue #54: Bookmarks for pages
 
 V: 1.3.6 24.11.2023
- - Issue #110: PDF4QT Viewer Lite : Arbitrary Code can execute when using Send by Email
+ - Issue #110: LOUPE Viewer Lite : Arbitrary Code can execute when using Send by Email
  - Issue #109: No text, font. Parts missing
  - Issue #108: Add accessibility options in pdf reader
  - Issue #107: Create document with converted bitonic images

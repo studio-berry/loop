@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "id": "loupe-default",
+  "version": "1.0.0",
+  "digest": "b738807103cf89325c7235d8c5789e91b0237c5d7f357769fb29f669aae1b28e",
   "name": "Loupe Default",
   "description": "Default prepress profile for Loupe print jobs (Venue Poster, Handbill, Signage).",
   "job_types": ["Venue Poster", "Handbill", "Signage"],

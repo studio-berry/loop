@@ -8,7 +8,7 @@
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "issue": { "type": "integer", "const": 193 },
-    "source_ui": { "const": "Pdf4QtLibGui/pdfeditormainwindow.ui" },
+    "source_ui": { "const": "LoupeLibGui/pdfeditormainwindow.ui" },
     "expected_action_count": { "type": "integer", "minimum": 1 },
     "actions": {
       "type": "array",

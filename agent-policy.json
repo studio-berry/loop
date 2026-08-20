@@ -46,18 +46,36 @@
     "vcpkg/**",
     "loupe-preflight/schemas/**",
     "docs/schemas/**",
-    "Pdf4QtLibCore/sources/**",
+    "LoupeLibCore/sources/**",
     "UnitTests/CMakeLists.txt"
   ],
   "module_boundaries": {
     "core": {
-      "paths": ["Pdf4QtLibCore/**"],
-      "targets": ["Pdf4QtLibCore"],
+      "paths": ["LoupeLibCore/**", "UnitTests/tst_bleedfixuptest.cpp"],
+      "targets": ["LoupeLibCore"],
       "tests": [
         "UnitTests",
+        "UnitTestsBenchmarkIdentity",
+        "UnitTestsBleedFixup",
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsConversionOracle",
+        "UnitTestsEvidenceGraph",
+        "UnitTestsHugeDocumentEnvelope",
+        "UnitTestsIdentitySeparation",
+        "UnitTestsIncrementalSave",
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOperationHistory",
+        "UnitTestsOperationImpact",
+        "UnitTestsOverprintRender",
+        "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",
+        "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsProcessingBudget",
+        "UnitTestsSchemaEvolution",
+        "UnitTestsStandardOracle",
+        "UnitTestsWorkloadEnvelope"
       ]
     },
     "pdftool": {
@@ -66,7 +84,7 @@
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
     },
     "preflight": {
-      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*"],
+      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp"],
       "targets": ["PdfTool"],
       "tests": [
         "UnitTestsPreflightChecks",
@@ -74,21 +92,24 @@
         "UnitTestsPreflightPlugin",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightVerdict",
-        "UnitTestsPreflightProfileResolver"
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsProfileIdentity",
+        "UnitTestsOperatorAcceptance",
+        "UnitTestsStandardOracle"
       ]
     },
     "pagemaster": {
-      "paths": ["Pdf4QtPageMaster/**"],
-      "targets": ["Pdf4QtPageMaster"],
+      "paths": ["LoupePageMaster/**"],
+      "targets": ["LoupePageMaster"],
       "tests": ["UnitTestsPageMasterExport"]
     },
     "widgets_gui": {
-      "paths": ["Pdf4QtLibWidgets/**", "Pdf4QtLibGui/**", "Pdf4QtEditor/**", "Pdf4QtViewer/**"],
-      "targets": ["Pdf4QtEditor", "Pdf4QtViewer"],
+      "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
+      "targets": ["LoupeEditor", "LoupeViewer"],
       "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
     },
     "plugins": {
-      "paths": ["Pdf4QtEditorPlugins/**"],
+      "paths": ["LoupeEditorPlugins/**"],
       "targets": [
         "ActionListPlugin",
         "AudioBookPlugin",
@@ -103,7 +124,7 @@
         "SignaturePlugin",
         "SoftProofingPlugin"
       ],
-      "tests": ["UnitTestsPreflightPlugin"]
+      "tests": ["UnitTestsPreflightPlugin", "UnitTestsPluginAbi"]
     },
     "schemas_contracts": {
       "paths": [
@@ -119,7 +140,7 @@
     },
     "build_policy": {
       "paths": ["CMakeLists.txt", "**/CMakeLists.txt", "cmake/**", "vcpkg.json", "vcpkg-configuration.json", "vcpkg/**"],
-      "targets": ["Pdf4QtLibCore", "PdfTool", "UnitTests"],
+      "targets": ["LoupeLibCore", "PdfTool", "UnitTests"],
       "tests": ["UnitTests"]
     },
     "documentation": {

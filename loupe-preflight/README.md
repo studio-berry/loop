@@ -1,6 +1,6 @@
 # loupe-preflight
 
-Standalone preflight **engine** for Loupe (sidecar CLI). Lives outside the PDF4QT / Loupe Editor process. The Qt plugin (Phase 2) shells out to this tool and only consumes the normalized report JSON defined here.
+Standalone preflight **engine** for Loupe (sidecar CLI). Lives outside the LOUPE / Loupe Editor process. The Qt plugin (Phase 2) shells out to this tool and only consumes the normalized report JSON defined here.
 
 This directory currently locks the **contract** (MIC-131). The CLI binary itself is MIC-133.
 

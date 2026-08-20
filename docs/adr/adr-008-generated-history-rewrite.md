@@ -18,7 +18,7 @@ That window closed when [PR #188](https://github.com/studio-berry/loupe/pull/188
 merged to `stable` on 2026-08-13. After the merge, both `origin/dev` and
 `origin/stable` still contained the same 982 blobs (~400.5 MiB):
 `.docker-vcpkg*`, `build-fuzz-docker/` (including a 45 MiB
-`libPdf4QtLibCore.so`), `debug-b0e75b.log`, `scripts/debug-pr188.*`, and stray
+`libLoupeLibCore.so`), `debug-b0e75b.log`, `scripts/debug-pr188.*`, and stray
 `loupe-ocr` bytecode. Branch tips were already clean ([#249](https://github.com/studio-berry/loupe/pull/249),
 [#258](https://github.com/studio-berry/loupe/pull/258)); only history held the
 blobs.

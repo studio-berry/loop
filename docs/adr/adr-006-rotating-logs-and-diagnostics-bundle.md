@@ -11,7 +11,7 @@
 
 Loupe had no application logging: zero use of `qInstallMessageHandler` or
 `QLoggingCategory` repo-wide, `qWarning` used twice in shipping GUI code
-(`Pdf4QtLibGui/pdfwintaskbarprogress.cpp`), and the support story documented
+(`LoupeLibGui/pdfwintaskbarprogress.cpp`), and the support story documented
 in `docs/PRODUCTION_RUNBOOK.md` was "ask the user to run the failing command
 in a terminal and attach stderr." Diagnostic signal that does exist today is
 thrown away: `PDFRenderError`s die with the widget, preflight sidecar stderr
@@ -82,7 +82,7 @@ the one that leaks document content.
   disclosed privacy property (R-008) that this feature does not change or
   paper over.
 - **Surfaces:** Editor and PdfTool, with the API living in Core
-  (`Pdf4QtLibCore/sources/pdflogger.*`, `pdflogscrubber.*`,
+  (`LoupeLibCore/sources/pdflogger.*`, `pdflogscrubber.*`,
   `pdfdiagnostics.*`) so Viewer/PageMaster/Diff can adopt the same logger and
   collector later without duplicating the scrubbing logic.
 
