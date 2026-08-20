@@ -390,10 +390,13 @@ void PDFDrawWidget::ensureInteractionRevisionConnection()
     }
 
     m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this,
-                                                       [this](const PDFRevisionIdentity&, const PDFRevisionIdentity&) {
+                                                       [this](const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current) {
                                                            if (m_interactionState)
                                                            {
-                                                               m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+                                                               const PDFInteractionState::CancelReason reason = previous.document == current.document
+                                                                   ? PDFInteractionState::CancelReason::RevisionChanged
+                                                                   : PDFInteractionState::CancelReason::DocumentReplaced;
+                                                               m_interactionState->cancel(reason);
                                                            }
                                                            resetInteractionInputs();
                                                            updateCursor();
