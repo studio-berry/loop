@@ -55,3 +55,11 @@ present. Include `qoffscreen.dll` when using `QT_QPA_PLATFORM=offscreen`;
 `windeployqt` normally selects the desktop platform plugin only. Keep this
 generated runtime output untracked; the source dependency of truth remains
 CMake, vcpkg, and the configured Qt installation.
+
+Session 2 adds `UnitTestsInteractionState.exe` and
+`UnitTestsInteractionWidget.exe`; deploy both with the same complete dependency
+set before running the focused interaction suite. In particular, a local test
+directory without the vcpkg/Loupe DLLs can report `gt6gui.dll` or `lcm2-2.dll`
+as missing and may look hung while Windows displays the system error. The
+dependency set is part of every local Windows test run, not an optional cleanup
+step.

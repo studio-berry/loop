@@ -30,6 +30,7 @@
 #include "pdfwidgetformmanager.h"
 #include "pdfblpainter.h"
 #include "pdfpagecontentelements.h"
+#include "pdfinteractionstate_p.h"
 #include "pdfinteractiontrace_p.h"
 #include "pdfjobscheduler.h"
 
@@ -43,7 +44,9 @@
 #include <QColorSpace>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
+#include <QDragLeaveEvent>
 #include <QDropEvent>
+#include <QFocusEvent>
 #include <QScreen>
 #include <QWindow>
 #include <QStringList>
@@ -347,7 +350,8 @@ void PDFWidget::setAnnotationManager(PDFWidgetAnnotationManager* annotationManag
 PDFDrawWidget::PDFDrawWidget(PDFWidget* widget, QWidget* parent) :
     BaseClass(parent),
     m_widget(widget),
-    m_mouseOperation(MouseOperation::None)
+    m_mouseOperation(MouseOperation::None),
+    m_interactionState(std::make_unique<PDFInteractionState>())
 {
     auto* traceRecorder = new PDFInteractionTraceRecorder({}, this);
     traceRecorder->setObjectName(QString::fromLatin1(InteractionTraceObjectName));
@@ -362,6 +366,97 @@ PDFDrawWidget::PDFDrawWidget(PDFWidget* widget, QWidget* parent) :
     QObject::connect(&m_wheelScrollTimer, &QTimer::timeout, this, &PDFDrawWidget::onWheelScrollTimeout);
 }
 
+PDFDrawWidget::~PDFDrawWidget()
+{
+    if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::Destroyed);
+    }
+    resetInteractionInputs();
+}
+
+void PDFDrawWidget::ensureInteractionRevisionConnection()
+{
+    if (m_interactionRevisionConnected || !m_widget)
+    {
+        return;
+    }
+
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    PDFDocumentContext* context = proxy ? proxy->getDocumentContext() : nullptr;
+    if (!context)
+    {
+        return;
+    }
+
+    m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this,
+                                                       [this](const PDFRevisionIdentity&, const PDFRevisionIdentity&) {
+                                                           if (m_interactionState)
+                                                           {
+                                                               m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+                                                           }
+                                                           resetInteractionInputs();
+                                                           updateCursor();
+                                                       }, Qt::UniqueConnection);
+    m_interactionRevisionConnected = true;
+}
+
+void PDFDrawWidget::resetInteractionInputs()
+{
+    m_autoScrollTimer.stop();
+    m_wheelScrollTimer.stop();
+    m_autoScrollOffset = QPointF(0.0, 0.0);
+    m_wheelScrollPendingOffset = QPointF(0.0, 0.0);
+    m_mouseOperation = MouseOperation::None;
+    m_lastMousePosition = QPoint();
+    m_autoScrollMousePosition = QPoint();
+    m_autoScrollLastElapsedTimer.invalidate();
+}
+
+void PDFDrawWidget::cancelTransientInteraction()
+{
+    ensureInteractionRevisionConnection();
+    if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::Explicit);
+    }
+    resetInteractionInputs();
+    updateCursor();
+}
+
+void PDFDrawWidget::finishTransientInteraction()
+{
+    ensureInteractionRevisionConnection();
+    if (!m_interactionState || !m_widget || !m_widget->getDrawWidgetProxy())
+    {
+        return;
+    }
+
+    const PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    const PDFInteractionState::Token token = m_interactionState->currentToken();
+    if (!token.isValid())
+    {
+        return;
+    }
+
+    if (!m_interactionState->complete(token, proxy->getDocumentRevision()))
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+        resetInteractionInputs();
+    }
+}
+
+bool PDFDrawWidget::isTransientInteractionCurrent() const
+{
+    if (!m_interactionState || !m_widget || !m_widget->getDrawWidgetProxy())
+    {
+        return false;
+    }
+
+    const PDFInteractionState::Token token = m_interactionState->currentToken();
+    return m_interactionState->isCurrent(token, m_widget->getDrawWidgetProxy()->getDocumentRevision());
+}
+
 void PDFDrawWidget::setSmoothWheelScrolling(bool enabled)
 {
     m_smoothWheelScrolling = enabled;
@@ -369,6 +464,10 @@ void PDFDrawWidget::setSmoothWheelScrolling(bool enabled)
     {
         m_wheelScrollTimer.stop();
         m_wheelScrollPendingOffset = QPointF(0.0, 0.0);
+        if (m_interactionState && m_interactionState->isActive(PDFInteractionState::Kind::ZoomPan))
+        {
+            finishTransientInteraction();
+        }
     }
 }
 
@@ -415,6 +514,8 @@ QSize PDFDrawWidget::minimumSizeHint() const
 
 bool PDFDrawWidget::event(QEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     if (event->type() == QEvent::ShortcutOverride)
     {
         PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
@@ -432,6 +533,16 @@ bool PDFDrawWidget::event(QEvent* event)
 
 void PDFDrawWidget::performMouseOperation(QPoint currentMousePosition)
 {
+    if (m_mouseOperation != MouseOperation::None && !isTransientInteractionCurrent())
+    {
+        if (m_interactionState)
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+        }
+        resetInteractionInputs();
+        return;
+    }
+
     switch (m_mouseOperation)
     {
         case MouseOperation::None:
@@ -487,6 +598,8 @@ bool PDFDrawWidget::processEvent(Event* event)
 
 void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyPress)
@@ -496,6 +609,16 @@ void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
         : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
+
+    if (event->key() == Qt::Key_Escape)
+    {
+        if (m_interactionState)
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::Escape);
+        }
+        resetInteractionInputs();
+        updateCursor();
+    }
 
     if (processEvent<QKeyEvent, &IDrawWidgetInputInterface::keyPressEvent>(event))
     {
@@ -531,6 +654,8 @@ void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
 
 void PDFDrawWidget::keyReleaseEvent(QKeyEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyRelease)
@@ -551,6 +676,8 @@ void PDFDrawWidget::keyReleaseEvent(QKeyEvent* event)
 
 void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MousePress)
@@ -561,6 +688,12 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
 
     event->ignore();
 
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    if (m_interactionState && proxy)
+    {
+        m_interactionState->begin(PDFInteractionState::Kind::ToolGesture, proxy->getDocumentRevision());
+    }
+
     if (processEvent<QMouseEvent, &IDrawWidgetInputInterface::mousePressEvent>(event))
     {
         return;
@@ -568,6 +701,10 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
 
     if (event->button() == Qt::LeftButton)
     {
+        if (m_interactionState && proxy)
+        {
+            m_interactionState->begin(PDFInteractionState::Kind::Drag, proxy->getDocumentRevision());
+        }
         m_mouseOperation = MouseOperation::Translate;
         m_lastMousePosition = event->pos();
     }
@@ -580,9 +717,14 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
             m_autoScrollTimer.stop();
             m_autoScrollLastElapsedTimer.restart();
             m_autoScrollOffset = QPointF(0.0, 0.0);
+            finishTransientInteraction();
         }
         else
         {
+            if (m_interactionState && proxy)
+            {
+                m_interactionState->begin(PDFInteractionState::Kind::Drag, proxy->getDocumentRevision());
+            }
             m_mouseOperation = MouseOperation::AutoScroll;
             m_autoScrollMousePosition = event->pos();
             m_autoScrollLastElapsedTimer.restart();
@@ -592,6 +734,10 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
             m_autoScrollTimer.start();
         }
     }
+    else if (event->button() != Qt::LeftButton && m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::Explicit);
+    }
 
     updateCursor();
     event->accept();
@@ -599,6 +745,8 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
 
 void PDFDrawWidget::mouseDoubleClickEvent(QMouseEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseDoubleClick)
@@ -617,6 +765,8 @@ void PDFDrawWidget::mouseDoubleClickEvent(QMouseEvent* event)
 
 void PDFDrawWidget::mouseReleaseEvent(QMouseEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseRelease)
@@ -629,6 +779,10 @@ void PDFDrawWidget::mouseReleaseEvent(QMouseEvent* event)
 
     if (processEvent<QMouseEvent, &IDrawWidgetInputInterface::mouseReleaseEvent>(event))
     {
+        if (m_mouseOperation != MouseOperation::AutoScroll)
+        {
+            finishTransientInteraction();
+        }
         return;
     }
 
@@ -644,6 +798,7 @@ void PDFDrawWidget::mouseReleaseEvent(QMouseEvent* event)
             if (event->button() != Qt::MiddleButton)
             {
                 m_mouseOperation = MouseOperation::None;
+                finishTransientInteraction();
             }
             break;
         }
@@ -662,6 +817,8 @@ void PDFDrawWidget::mouseReleaseEvent(QMouseEvent* event)
 
 void PDFDrawWidget::mouseMoveEvent(QMouseEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseMove)
@@ -672,18 +829,35 @@ void PDFDrawWidget::mouseMoveEvent(QMouseEvent* event)
 
     event->ignore();
 
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    if (m_interactionState && proxy && m_mouseOperation == MouseOperation::None && !m_interactionState->snapshot().active())
+    {
+        m_interactionState->begin(PDFInteractionState::Kind::Hover, proxy->getDocumentRevision());
+    }
+
     if (processEvent<QMouseEvent, &IDrawWidgetInputInterface::mouseMoveEvent>(event))
     {
         return;
     }
 
     performMouseOperation(event->pos());
+    if (m_interactionState && proxy && m_mouseOperation != MouseOperation::None)
+    {
+        const PDFInteractionState::Token token = m_interactionState->currentToken();
+        if (!m_interactionState->update(token, proxy->getDocumentRevision()))
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+            resetInteractionInputs();
+        }
+    }
     updateCursor();
     event->accept();
 }
 
 void PDFDrawWidget::dragEnterEvent(QDragEnterEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragEnter)
@@ -694,6 +868,12 @@ void PDFDrawWidget::dragEnterEvent(QDragEnterEvent* event)
 
     event->ignore();
 
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    if (m_interactionState && proxy)
+    {
+        m_interactionState->begin(PDFInteractionState::Kind::Drag, proxy->getDocumentRevision());
+    }
+
     PDFWidgetAnnotationManager* annotationManager = m_widget->getAnnotationManager();
     if (annotationManager && annotationManager->canAcceptAnnotationDrag(event->mimeData()))
     {
@@ -701,10 +881,16 @@ void PDFDrawWidget::dragEnterEvent(QDragEnterEvent* event)
         event->setDropAction(action);
         event->accept();
     }
+    else if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::InvalidDrop);
+    }
 }
 
 void PDFDrawWidget::dragMoveEvent(QDragMoveEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragMove)
@@ -715,6 +901,12 @@ void PDFDrawWidget::dragMoveEvent(QDragMoveEvent* event)
 
     event->ignore();
 
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    if (m_interactionState && proxy)
+    {
+        m_interactionState->begin(PDFInteractionState::Kind::Drag, proxy->getDocumentRevision());
+    }
+
     PDFWidgetAnnotationManager* annotationManager = m_widget->getAnnotationManager();
     if (annotationManager && annotationManager->canAcceptAnnotationDrag(event->mimeData()))
     {
@@ -722,10 +914,26 @@ void PDFDrawWidget::dragMoveEvent(QDragMoveEvent* event)
         event->setDropAction(action);
         event->accept();
     }
+    else if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::InvalidDrop);
+    }
+}
+
+void PDFDrawWidget::dragLeaveEvent(QDragLeaveEvent* event)
+{
+    ensureInteractionRevisionConnection();
+    if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::InvalidDrop);
+    }
+    event->accept();
 }
 
 void PDFDrawWidget::dropEvent(QDropEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Drop)
@@ -736,6 +944,12 @@ void PDFDrawWidget::dropEvent(QDropEvent* event)
 
     event->ignore();
 
+    PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    if (m_interactionState && proxy)
+    {
+        m_interactionState->begin(PDFInteractionState::Kind::Drag, proxy->getDocumentRevision());
+    }
+
     PDFWidgetAnnotationManager* annotationManager = m_widget->getAnnotationManager();
     if (annotationManager && annotationManager->canAcceptAnnotationDrag(event->mimeData()))
     {
@@ -744,7 +958,16 @@ void PDFDrawWidget::dropEvent(QDropEvent* event)
         {
             event->setDropAction(action);
             event->accept();
+            finishTransientInteraction();
         }
+        else if (m_interactionState)
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::InvalidDrop);
+        }
+    }
+    else if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::InvalidDrop);
     }
 }
 
@@ -797,8 +1020,21 @@ void PDFDrawWidget::updateCursor()
 
 void PDFDrawWidget::onAutoScrollTimeout()
 {
+    ensureInteractionRevisionConnection();
+
     if (m_mouseOperation != MouseOperation::AutoScroll)
     {
+        return;
+    }
+
+    if (!isTransientInteractionCurrent())
+    {
+        if (m_interactionState)
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+        }
+        resetInteractionInputs();
+        updateCursor();
         return;
     }
 
@@ -821,9 +1057,26 @@ void PDFDrawWidget::onAutoScrollTimeout()
 
 void PDFDrawWidget::onWheelScrollTimeout()
 {
+    ensureInteractionRevisionConnection();
+
     if (m_wheelScrollPendingOffset.isNull())
     {
         m_wheelScrollTimer.stop();
+        if (m_interactionState && m_interactionState->isActive(PDFInteractionState::Kind::ZoomPan))
+        {
+            finishTransientInteraction();
+        }
+        return;
+    }
+
+    if (!isTransientInteractionCurrent())
+    {
+        if (m_interactionState)
+        {
+            m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+        }
+        resetInteractionInputs();
+        updateCursor();
         return;
     }
 
@@ -889,11 +1142,14 @@ void PDFDrawWidget::onWheelScrollTimeout()
     if (m_wheelScrollPendingOffset.isNull())
     {
         m_wheelScrollTimer.stop();
+        finishTransientInteraction();
     }
 }
 
 void PDFDrawWidget::wheelEvent(QWheelEvent* event)
 {
+    ensureInteractionRevisionConnection();
+
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
         ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Wheel)
@@ -915,15 +1171,24 @@ void PDFDrawWidget::wheelEvent(QWheelEvent* event)
     PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
     if (keyboardModifiers.testFlag(Qt::ControlModifier))
     {
+        if (m_interactionState)
+        {
+            m_interactionState->begin(PDFInteractionState::Kind::ZoomPan, proxy->getDocumentRevision());
+        }
         // Zoom in/Zoom out
         const int angleDeltaY = event->angleDelta().y();
         const PDFReal zoom = m_widget->getDrawWidgetProxy()->getZoom();
         const PDFReal zoomStep = std::pow(PDFDrawWidgetProxy::ZOOM_STEP, static_cast<PDFReal>(angleDeltaY) / static_cast<PDFReal>(QWheelEvent::DefaultDeltasPerStep));
         const PDFReal newZoom = zoom * zoomStep;
         proxy->zoom(newZoom, event->position());
+        finishTransientInteraction();
     }
     else
     {
+        if (m_interactionState)
+        {
+            m_interactionState->begin(PDFInteractionState::Kind::ZoomPan, proxy->getDocumentRevision());
+        }
         // Move Up/Down. Angle is negative, if wheel is scrolled down. First we try to scroll by pixel delta.
         // Otherwise we compute scroll using angle.
         QPoint scrollByPixels = event->pixelDelta();
@@ -1009,6 +1274,7 @@ void PDFDrawWidget::wheelEvent(QWheelEvent* event)
                     proxy->scrollByPixels(QPoint(0, up ? std::numeric_limits<int>::min() : std::numeric_limits<int>::max()));
                 }
             }
+            finishTransientInteraction();
         }
     }
 
@@ -1018,6 +1284,13 @@ void PDFDrawWidget::wheelEvent(QWheelEvent* event)
 void PDFDrawWidget::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
+
+    ensureInteractionRevisionConnection();
+    if (m_interactionState && m_interactionState->snapshot().active() && !isTransientInteractionCurrent())
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::RevisionChanged);
+        resetInteractionInputs();
+    }
 
     PDFDrawWidgetProxy* proxy = getPDFWidget()->getDrawWidgetProxy();
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
@@ -1116,9 +1389,31 @@ void PDFDrawWidget::paintEvent(QPaintEvent* event)
 
 void PDFDrawWidget::resizeEvent(QResizeEvent* event)
 {
+    ensureInteractionRevisionConnection();
     BaseClass::resizeEvent(event);
 
     getPDFWidget()->getDrawWidgetProxy()->update();
+}
+
+void PDFDrawWidget::focusOutEvent(QFocusEvent* event)
+{
+    if (m_interactionState)
+    {
+        m_interactionState->cancel(PDFInteractionState::CancelReason::FocusLost);
+    }
+    resetInteractionInputs();
+    updateCursor();
+    BaseClass::focusOutEvent(event);
+}
+
+void PDFDrawWidget::leaveEvent(QEvent* event)
+{
+    ensureInteractionRevisionConnection();
+    if (m_interactionState)
+    {
+        m_interactionState->clearHover();
+    }
+    BaseClass::leaveEvent(event);
 }
 
 }   // namespace pdf
