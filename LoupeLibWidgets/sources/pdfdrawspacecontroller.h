@@ -52,6 +52,7 @@ class PDFTextLayoutGetter;
 class PDFWidgetAnnotationManager;
 class PDFAsynchronousPageCompiler;
 class PDFAsynchronousTextLayoutCompiler;
+class PDFPageSurfaceCache;
 
 /// This class controls draw space - page layout. Pages are divided into blocks
 /// each block can contain one or multiple pages. Units are in milimeters.
@@ -205,6 +206,11 @@ public:
 
     /// Updates the draw space area
     void update();
+
+    /// Updates the shared byte limit used by the compiled-page and rendered
+    /// surface caches.
+    /// \param limit Cache limit in bytes
+    void setCacheLimit(qsizetype limit);
 
     /// Creates page point to device point matrix for the given rectangle. It creates transformation
     /// from page's media box to the target rectangle.
@@ -582,6 +588,10 @@ private:
 
     /// Signature verification results
     std::vector<PDFSignatureVerificationResult> m_signatureVerificationResult;
+
+    /// Bounded, revision-fenced rendered page surfaces used by the Widgets
+    /// viewport for progressive reuse.
+    std::unique_ptr<PDFPageSurfaceCache> m_pageSurfaceCache;
 };
 
 }   // namespace pdf

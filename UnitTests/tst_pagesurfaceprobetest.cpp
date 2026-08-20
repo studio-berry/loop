@@ -325,7 +325,12 @@ private:
 void PageSurfaceProbeTest::init()
 {
     m_cmsManager = std::make_unique<pdf::PDFCMSManager>(nullptr);
-    m_widget = std::make_unique<pdf::PDFWidget>(m_cmsManager.get(), pdf::RendererEngine::QPainter, nullptr);
+    // Match the editor's default renderer so the production-path regression
+    // exercises the shipped configuration rather than only the sequential
+    // Blend2D variant.
+    m_widget = std::make_unique<pdf::PDFWidget>(m_cmsManager.get(),
+                                                pdf::RendererEngine::Blend2D_MultiThread,
+                                                nullptr);
     m_widget->resize(320, 240);
     m_widget->show();
     QCoreApplication::processEvents();
@@ -453,15 +458,39 @@ void PageSurfaceProbeTest::rendersThroughExistingWidgetsPath()
 
     pdf::PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
     QVERIFY(proxy != nullptr);
+    m_widget->updateCacheLimits(4 * 1024 * 1024, 16384, 128, 128);
+    proxy->setFeatures(proxy->getFeatures() | pdf::PDFRenderer::DisplayTimes);
     QSignalSpy pageSpy(proxy, &pdf::PDFDrawWidgetProxy::pageImageChanged);
-    const QSize size(320, 240);
-    const QImage first = renderWidget(proxy, size);
+    QWidget* canvas = m_widget->getDrawWidget()->getWidget();
+    QVERIFY(canvas != nullptr);
+    const QImage first = canvas->grab().toImage();
     QVERIFY(!first.isNull());
 
     QTRY_VERIFY_WITH_TIMEOUT(pageSpy.count() > 0, 10000);
-    const QImage refined = renderWidget(proxy, size);
+    const QImage refined = canvas->grab().toImage();
     QVERIFY(!refined.isNull());
-    QCOMPARE(refined.size(), size);
+    QCOMPARE(refined.size(), first.size());
+
+    const QImage repeated = canvas->grab().toImage();
+    QCOMPARE(repeated.size(), refined.size());
+
+    QObject* recorderObject = canvas->findChild<QObject*>(QStringLiteral("LoupeInteractionTraceRecorder"));
+    QVERIFY(recorderObject != nullptr);
+    const auto* recorder = static_cast<const pdf::PDFInteractionTraceRecorder*>(recorderObject);
+    const QJsonObject surfaceCache = recorder->summary().value(QStringLiteral("cache")).toObject();
+    QVERIFY(surfaceCache.value(QStringLiteral("surface_misses")).toInt() > 0);
+    QVERIFY(surfaceCache.value(QStringLiteral("surface_hits")).toInt() > 0);
+
+    const int missesBeforeRevision = surfaceCache.value(QStringLiteral("surface_misses")).toInt();
+    proxy->getDocumentContext()->markModified(pdf::PDFModifiedDocument::PageContents);
+    const QImage revised = canvas->grab().toImage();
+    QVERIFY(!revised.isNull());
+    const QJsonObject revisedCache = recorder->summary().value(QStringLiteral("cache")).toObject();
+    QVERIFY(revisedCache.value(QStringLiteral("surface_misses")).toInt() > missesBeforeRevision);
+
+    proxy->zoom(proxy->getZoom() * 1.2, QPointF(canvas->rect().center()));
+    const QImage zoomed = canvas->grab().toImage();
+    QVERIFY(!zoomed.isNull());
 
     const pdf::PDFRevisionIdentity revision = proxy->getDocumentRevision();
     SurfaceProbeCache cache(4 * 1024 * 1024);

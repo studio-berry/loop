@@ -454,6 +454,24 @@ void PDFInteractionTraceRecorder::recordCacheLookup(bool hit)
     }
 }
 
+void PDFInteractionTraceRecorder::recordSurfaceCacheLookup(bool hit)
+{
+    if (!m_enabled)
+    {
+        return;
+    }
+
+    m_hasData = true;
+    if (hit)
+    {
+        ++m_totalSurfaceCacheHits;
+    }
+    else
+    {
+        ++m_totalSurfaceCacheMisses;
+    }
+}
+
 void PDFInteractionTraceRecorder::recordQueueDepth(int queueDepth)
 {
     if (!m_enabled || queueDepth < 0)
@@ -507,6 +525,8 @@ void PDFInteractionTraceRecorder::resetTrace()
     m_lastQueueDepth = -1;
     m_totalCacheHits = 0;
     m_totalCacheMisses = 0;
+    m_totalSurfaceCacheHits = 0;
+    m_totalSurfaceCacheMisses = 0;
     m_lastAcknowledgedInputId = 0;
     m_lastAcknowledgedFrameId = 0;
 }
@@ -833,6 +853,10 @@ void PDFInteractionTraceRecorder::refreshCachedSummary() const
     cache.insert(QStringLiteral("misses"), m_totalCacheMisses);
     const int cacheLookups = m_totalCacheHits + m_totalCacheMisses;
     cache.insert(QStringLiteral("hit_rate"), cacheLookups > 0 ? static_cast<double>(m_totalCacheHits) / cacheLookups : QJsonValue(QJsonValue::Null));
+    cache.insert(QStringLiteral("surface_hits"), m_totalSurfaceCacheHits);
+    cache.insert(QStringLiteral("surface_misses"), m_totalSurfaceCacheMisses);
+    const int surfaceLookups = m_totalSurfaceCacheHits + m_totalSurfaceCacheMisses;
+    cache.insert(QStringLiteral("surface_hit_rate"), surfaceLookups > 0 ? static_cast<double>(m_totalSurfaceCacheHits) / surfaceLookups : QJsonValue(QJsonValue::Null));
     root.insert(QStringLiteral("cache"), cache);
 
     root.insert(QStringLiteral("visible_page_count"), m_lastVisiblePages >= 0 ? QJsonValue(m_lastVisiblePages) : QJsonValue(QJsonValue::Null));

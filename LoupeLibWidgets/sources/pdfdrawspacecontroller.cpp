@@ -39,13 +39,178 @@
 #include <QFontMetrics>
 #include <QScreen>
 #include <QGuiApplication>
+#include <QImage>
 
 #include <array>
+#include <cmath>
+#include <iterator>
+#include <limits>
+#include <map>
+#include <optional>
+#include <tuple>
 
 #include "pdfdbgheap.h"
 
 namespace pdf
 {
+
+namespace
+{
+
+struct PDFPageSurfaceKey
+{
+    PDFRevisionIdentity revision;
+    PDFInteger pageIndex = -1;
+    PageRotation rotation = PageRotation::None;
+    int featureBits = 0;
+    QSize targetPixelSize;
+    int devicePixelRatio1000 = 1000;
+
+    bool operator<(const PDFPageSurfaceKey& other) const
+    {
+        return std::tuple(revision, pageIndex, rotation, featureBits,
+                          targetPixelSize.width(), targetPixelSize.height(), devicePixelRatio1000)
+            < std::tuple(other.revision, other.pageIndex, other.rotation, other.featureBits,
+                         other.targetPixelSize.width(), other.targetPixelSize.height(), other.devicePixelRatio1000);
+    }
+
+    bool compatibleWith(const PDFPageSurfaceKey& desired) const
+    {
+        return revision == desired.revision && pageIndex == desired.pageIndex && rotation == desired.rotation
+            && featureBits == desired.featureBits && devicePixelRatio1000 == desired.devicePixelRatio1000;
+    }
+};
+
+struct PDFPageSurfaceLookup
+{
+    QImage image;
+    bool exact = false;
+};
+
+}   // namespace
+
+class PDFPageSurfaceCache final
+{
+public:
+    explicit PDFPageSurfaceCache(qsizetype byteBudget) : m_byteBudget(byteBudget) { }
+
+    void setByteBudget(qsizetype byteBudget)
+    {
+        m_byteBudget = qMax<qsizetype>(0, byteBudget);
+        trimToBudget();
+    }
+
+    void clear()
+    {
+        m_entries.clear();
+        m_currentBytes = 0;
+        ++m_generation;
+    }
+
+    quint64 beginRequest()
+    {
+        return ++m_generation;
+    }
+
+    std::optional<PDFPageSurfaceLookup> lookup(const PDFPageSurfaceKey& desired)
+    {
+        Entry* best = nullptr;
+        bool exact = false;
+        qint64 bestDistance = std::numeric_limits<qint64>::max();
+
+        for (auto& item : m_entries)
+        {
+            Entry& entry = item.second;
+            if (!entry.key.compatibleWith(desired))
+            {
+                continue;
+            }
+
+            const qint64 widthDistance = qAbs(entry.key.targetPixelSize.width() - desired.targetPixelSize.width());
+            const qint64 heightDistance = qAbs(entry.key.targetPixelSize.height() - desired.targetPixelSize.height());
+            const qint64 distance = widthDistance + heightDistance;
+            const bool itemExact = entry.key.targetPixelSize == desired.targetPixelSize;
+            if (!best || (itemExact && !exact) || (itemExact == exact && distance < bestDistance)
+                || (itemExact == exact && distance == bestDistance && entry.accessSequence < best->accessSequence))
+            {
+                best = &entry;
+                exact = itemExact;
+                bestDistance = distance;
+            }
+        }
+
+        if (!best)
+        {
+            return std::nullopt;
+        }
+
+        best->accessSequence = ++m_accessSequence;
+        return PDFPageSurfaceLookup { best->image, exact };
+    }
+
+    bool insert(const PDFPageSurfaceKey& key, quint64 generation, QImage image)
+    {
+        if (generation != m_generation || image.isNull())
+        {
+            return false;
+        }
+
+        const qsizetype cost = image.sizeInBytes();
+        if (cost <= 0 || cost > m_byteBudget)
+        {
+            return false;
+        }
+
+        if (auto existing = m_entries.find(key); existing != m_entries.end())
+        {
+            m_currentBytes -= existing->second.cost;
+            m_entries.erase(existing);
+        }
+
+        Entry entry;
+        entry.key = key;
+        entry.image = std::move(image);
+        entry.cost = cost;
+        entry.accessSequence = ++m_accessSequence;
+        m_entries.emplace(key, std::move(entry));
+        m_currentBytes += cost;
+        trimToBudget();
+        return m_entries.find(key) != m_entries.end();
+    }
+
+private:
+    struct Entry
+    {
+        PDFPageSurfaceKey key;
+        QImage image;
+        qsizetype cost = 0;
+        quint64 accessSequence = 0;
+    };
+
+    void trimToBudget()
+    {
+        while (m_currentBytes > m_byteBudget && !m_entries.empty())
+        {
+            auto oldest = m_entries.begin();
+            for (auto it = std::next(m_entries.begin()); it != m_entries.end(); ++it)
+            {
+                if (it->second.accessSequence < oldest->second.accessSequence)
+                {
+                    oldest = it;
+                }
+            }
+
+            m_currentBytes -= oldest->second.cost;
+            m_entries.erase(oldest);
+        }
+    }
+
+    qsizetype m_byteBudget = 0;
+    qsizetype m_currentBytes = 0;
+    quint64 m_generation = 0;
+    quint64 m_accessSequence = 0;
+    std::map<PDFPageSurfaceKey, Entry> m_entries;
+};
 
 PDFDrawSpaceController::PDFDrawSpaceController(QObject* parent) :
     QObject(parent),
@@ -484,6 +649,7 @@ PDFDrawWidgetProxy::PDFDrawWidgetProxy(QObject* parent) :
     m_rendererEngine(RendererEngine::Blend2D_MultiThread)
 {
     m_documentContext = std::make_unique<PDFDocumentContext>(static_cast<PDFDocument*>(nullptr), this);
+    m_pageSurfaceCache = std::make_unique<PDFPageSurfaceCache>(128 * 1024 * 1024);
     m_controller = new PDFDrawSpaceController(this);
     connect(m_controller, &PDFDrawSpaceController::drawSpaceChanged, this, &PDFDrawWidgetProxy::update);
     connect(m_controller, &PDFDrawSpaceController::repaintNeeded, this, &PDFDrawWidgetProxy::repaintNeeded);
@@ -514,6 +680,7 @@ void PDFDrawWidgetProxy::setDocument(const PDFModifiedDocument& document, std::v
     if (getDocument() != document || previousRevision != getDocumentRevision())
     {
         m_cacheClearTimer->stop();
+        m_pageSurfaceCache->clear();
         // Revision changes fence all in-flight work. Always clear these
         // revision-bound caches; soft update hints must not allow stale data to
         // survive a context boundary.
@@ -551,6 +718,12 @@ void PDFDrawWidgetProxy::init(PDFWidget* widget)
 
     // We must update the draw space - widget has been set
     update();
+}
+
+void PDFDrawWidgetProxy::setCacheLimit(qsizetype limit)
+{
+    m_compiler->setCacheLimit(limit);
+    m_pageSurfaceCache->setByteBudget(limit);
 }
 
 void PDFDrawWidgetProxy::update()
@@ -842,6 +1015,9 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
     PDFColorConvertor convertor = cms->getColorConvertor();
     PDFRenderer::applyFeaturesToColorConvertor(features, convertor);
 
+    const quint64 requestGeneration = m_pageSurfaceCache->beginRequest();
+    const qreal devicePixelRatio = qMax<qreal>(1.0, painter->device()->devicePixelRatioF());
+
     // Iterate trough pages and display them on the painter device
     for (const LayoutItem& item : m_layout.items)
     {
@@ -864,6 +1040,57 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
             {
                 traceRecorder->recordCacheLookup(compiledPage && compiledPage->isValid());
             }
+            const PDFPage* page = m_controller->getDocument()->getCatalog()->getPage(item.pageIndex);
+            QTransform matrix = QTransform(createPagePointToDevicePointMatrix(page, placedRect)) * baseMatrix;
+
+            bool isPageContentDrawSuppressed = false;
+            for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
+            {
+                isPageContentDrawSuppressed = isPageContentDrawSuppressed || drawInterface->isPageContentDrawSuppressed();
+            }
+
+            bool pageContentDrawn = false;
+            const bool surfaceCacheAllowed = !isPageContentDrawSuppressed
+                && m_rendererEngine != RendererEngine::QPainter
+                && qFuzzyCompare(groupInfo.transparency, 1.0);
+            if (surfaceCacheAllowed)
+            {
+                const QSize targetPixelSize(qMax(1, qCeil(placedRect.width() * devicePixelRatio)),
+                                            qMax(1, qCeil(placedRect.height() * devicePixelRatio)));
+                PDFPageSurfaceKey surfaceKey;
+                surfaceKey.revision = getDocumentRevision();
+                surfaceKey.pageIndex = item.pageIndex;
+                surfaceKey.rotation = m_controller->getPageRotation();
+                surfaceKey.featureBits = static_cast<int>(features);
+                surfaceKey.targetPixelSize = targetPixelSize;
+                surfaceKey.devicePixelRatio1000 = qRound(devicePixelRatio * 1000.0);
+
+                std::optional<PDFPageSurfaceLookup> lookup = m_pageSurfaceCache->lookup(surfaceKey);
+                if (PDFInteractionTraceRecorder* currentTrace = PDFInteractionTraceRecorder::current())
+                {
+                    currentTrace->recordSurfaceCacheLookup(lookup.has_value());
+                }
+
+                QImage surface = lookup.has_value() ? lookup->image : QImage();
+                if ((!lookup.has_value() || !lookup->exact) && compiledPage && compiledPage->isValid())
+                {
+                    QImage rendered = m_rasterizer->render(item.pageIndex, page, compiledPage, targetPixelSize,
+                                                           features, nullptr, cms.data(), m_controller->getPageRotation());
+                    if (!rendered.isNull())
+                    {
+                        rendered.setDevicePixelRatio(devicePixelRatio);
+                        surface = rendered;
+                        m_pageSurfaceCache->insert(surfaceKey, requestGeneration, std::move(rendered));
+                    }
+                }
+
+                if (!surface.isNull())
+                {
+                    painter->drawImage(placedRect, surface);
+                    pageContentDrawn = true;
+                }
+            }
+
             if (compiledPage && compiledPage->isValid())
             {
                 PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
@@ -873,17 +1100,9 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
                 QElapsedTimer timer;
                 timer.start();
 
-                const PDFPage* page = m_controller->getDocument()->getCatalog()->getPage(item.pageIndex);
-                QTransform matrix = QTransform(createPagePointToDevicePointMatrix(page, placedRect)) * baseMatrix;
                 PDFTextLayoutGetter layoutGetter = m_textLayoutCompiler->getTextLayoutLazy(item.pageIndex);
 
-                bool isPageContentDrawSuppressed = false;
-                for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
-                {
-                    isPageContentDrawSuppressed = isPageContentDrawSuppressed || drawInterface->isPageContentDrawSuppressed();
-                }
-
-                if (!isPageContentDrawSuppressed)
+                if (!pageContentDrawn && !isPageContentDrawSuppressed)
                 {
                     compiledPage->draw(painter, page->getCropBox(), matrix, features, groupInfo.transparency);
                 }
@@ -1807,6 +2026,7 @@ void PDFDrawWidgetProxy::updateRenderer(RendererEngine rendererEngine)
 {
     m_rendererEngine = rendererEngine;
     m_rasterizer->reset(m_rendererEngine);
+    m_pageSurfaceCache->clear();
 }
 
 void PDFDrawWidgetProxy::prefetchPages(PDFInteger pageIndex)
@@ -1954,6 +2174,7 @@ void PDFDrawWidgetProxy::setFeatures(PDFRenderer::Features features)
     {
         m_compiler->stop(true);
         m_textLayoutCompiler->stop(true);
+        m_pageSurfaceCache->clear();
         m_features = features;
         m_compiler->start();
         m_textLayoutCompiler->start();
@@ -1966,6 +2187,7 @@ void PDFDrawWidgetProxy::setPreferredMeshResolutionRatio(PDFReal ratio)
     if (m_meshQualitySettings.preferredMeshResolutionRatio != ratio)
     {
         m_compiler->stop(true);
+        m_pageSurfaceCache->clear();
         m_meshQualitySettings.preferredMeshResolutionRatio = ratio;
         m_compiler->start();
         Q_EMIT pageImageChanged(true, { });
@@ -1977,6 +2199,7 @@ void PDFDrawWidgetProxy::setMinimalMeshResolutionRatio(PDFReal ratio)
     if (m_meshQualitySettings.minimalMeshResolutionRatio != ratio)
     {
         m_compiler->stop(true);
+        m_pageSurfaceCache->clear();
         m_meshQualitySettings.minimalMeshResolutionRatio = ratio;
         m_compiler->start();
         Q_EMIT pageImageChanged(true, { });
@@ -1988,6 +2211,7 @@ void PDFDrawWidgetProxy::setColorTolerance(PDFReal colorTolerance)
     if (m_meshQualitySettings.tolerance != colorTolerance)
     {
         m_compiler->stop(true);
+        m_pageSurfaceCache->clear();
         m_meshQualitySettings.tolerance = colorTolerance;
         m_compiler->start();
         Q_EMIT pageImageChanged(true, { });
@@ -1997,6 +2221,7 @@ void PDFDrawWidgetProxy::setColorTolerance(PDFReal colorTolerance)
 void PDFDrawWidgetProxy::onColorManagementSystemChanged()
 {
     m_compiler->reset();
+    m_pageSurfaceCache->clear();
     Q_EMIT pageImageChanged(true, { });
 }
 
@@ -2004,6 +2229,7 @@ void PDFDrawWidgetProxy::onOptionalContentGroupStateChanged()
 {
     m_compiler->reset();
     m_textLayoutCompiler->reset();
+    m_pageSurfaceCache->clear();
     Q_EMIT pageImageChanged(true, { });
 }
 

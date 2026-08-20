@@ -14,8 +14,8 @@ line prefixed with `LOUPE_INTERACTION_TRACE_V1`. The payload contains:
 - frame-time percentiles, FPS, refresh-rate-derived budgets, and late-frame count;
 - exclusive stage timing for interaction, hit testing, page rendering, overlays,
   composition, and unknown/external work;
-- cache hit/miss totals, visible-page count, document-revision ordinal, and
-  pending asynchronous queue depth;
+- compiled-page and rendered-surface cache hit/miss totals, visible-page count,
+  document-revision ordinal, and pending asynchronous queue depth;
 - explicit `available`/`unavailable` markers and an `evidence_state` value.
 
 No document text, pixels, paths, event payloads, or user identifiers are stored

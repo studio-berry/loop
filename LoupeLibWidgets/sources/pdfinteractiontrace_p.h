@@ -171,6 +171,7 @@ public:
     StageScope beginStage(Stage stage);
 
     void recordCacheLookup(bool hit);
+    void recordSurfaceCacheLookup(bool hit);
     void recordQueueDepth(int queueDepth);
 
     /// Returns a compact aggregate summary. Percentiles are nearest-rank.
@@ -272,6 +273,8 @@ private:
     int m_lastQueueDepth = -1;
     int m_totalCacheHits = 0;
     int m_totalCacheMisses = 0;
+    int m_totalSurfaceCacheHits = 0;
+    int m_totalSurfaceCacheMisses = 0;
     quint64 m_lastAcknowledgedInputId = 0;
     quint64 m_lastAcknowledgedFrameId = 0;
 
