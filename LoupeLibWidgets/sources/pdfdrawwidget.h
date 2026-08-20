@@ -33,6 +33,11 @@
 #include <QTimer>
 #include <QElapsedTimer>
 
+#include <memory>
+
+class QDragLeaveEvent;
+class QFocusEvent;
+
 namespace pdf
 {
 class PDFDocument;
@@ -45,6 +50,7 @@ class PDFModifiedDocument;
 class PDFWidgetAnnotationManager;
 class IDrawWidgetInputInterface;
 class PDFPageContentScene;
+class PDFInteractionState;
 
 class IDrawWidget
 {
@@ -159,7 +165,7 @@ private:
 
 public:
     explicit PDFDrawWidget(PDFWidget* widget, QWidget* parent);
-    virtual ~PDFDrawWidget() override = default;
+    virtual ~PDFDrawWidget() override;
 
     /// Enables/disables smooth scrolling animation for mouse wheel input.
     /// \param enabled True to enable smooth wheel scrolling, false for immediate scrolling
@@ -196,9 +202,12 @@ protected:
     virtual void wheelEvent(QWheelEvent* event) override;
     virtual void dragEnterEvent(QDragEnterEvent* event) override;
     virtual void dragMoveEvent(QDragMoveEvent* event) override;
+    virtual void dragLeaveEvent(QDragLeaveEvent* event) override;
     virtual void dropEvent(QDropEvent* event) override;
     virtual void paintEvent(QPaintEvent* event) override;
     virtual void resizeEvent(QResizeEvent* event) override;
+    virtual void focusOutEvent(QFocusEvent* event) override;
+    virtual void leaveEvent(QEvent* event) override;
 
     PDFWidget* getPDFWidget() const { return m_widget; }
 
@@ -206,6 +215,11 @@ private:
     void updateCursor();
     void onAutoScrollTimeout();
     void onWheelScrollTimeout();
+    void ensureInteractionRevisionConnection();
+    void resetInteractionInputs();
+    void cancelTransientInteraction();
+    void finishTransientInteraction();
+    bool isTransientInteractionCurrent() const;
 
     template<typename Event, void(IDrawWidgetInputInterface::* Function)(QWidget*, Event*)>
     bool processEvent(Event* event);
@@ -234,6 +248,9 @@ private:
     bool m_smoothWheelScrolling = true;
     PDFReal m_horizontalWheelScrollSpeed = 1.0;
     PDFReal m_verticalWheelScrollSpeed = 1.0;
+    std::unique_ptr<PDFInteractionState> m_interactionState;
+    QMetaObject::Connection m_interactionRevisionConnection;
+    bool m_interactionRevisionConnected = false;
 };
 
 }   // namespace pdf

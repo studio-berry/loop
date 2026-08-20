@@ -168,6 +168,57 @@ set_target_properties(UnitTestsInteractionTrace PROPERTIES
 
 add_test(UnitTestsInteractionTrace "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionTrace")
 
+add_executable(UnitTestsInteractionState
+    tst_interactionstatetest.cpp
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources/pdfinteractionstate_p.cpp
+)
+
+target_link_libraries(UnitTestsInteractionState PRIVATE
+    LoupeLibCore
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+target_include_directories(UnitTestsInteractionState PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
+)
+
+set_target_properties(UnitTestsInteractionState PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsInteractionState "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionState")
+
+add_executable(UnitTestsInteractionWidget
+    tst_interactionwidgettest.cpp
+)
+
+target_link_libraries(UnitTestsInteractionWidget PRIVATE
+    LoupeLibWidgets
+    LoupeLibCore
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+target_include_directories(UnitTestsInteractionWidget PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
+    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
+)
+
+set_target_properties(UnitTestsInteractionWidget PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsInteractionWidget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionWidget")
+
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
 )
