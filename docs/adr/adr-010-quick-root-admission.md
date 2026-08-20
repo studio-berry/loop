@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** S22 admission contracts
-**Last-verified:** 2026-08-20 @ 6bb1df833c1621b8b9bc32793c7c4449f70c69a2
+**Last-verified:** 2026-08-20 @ 6964a2a3b44b3642eea68212635420bbe6bcda51
 **Superseded-by:** none
 **Supersedes:** the migration-topology and pre-0.1.1 deferral clauses of [ADR-007](adr-007-qt-quick-controls-shell.md)
 **Date:** 2026-08-20

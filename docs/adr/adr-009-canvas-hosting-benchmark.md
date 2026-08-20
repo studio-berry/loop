@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** S21 qualification target
-**Last-verified:** 2026-08-20 @ c58e2679aba02e8e8c13694dac0a57440e80a67b
+**Last-verified:** 2026-08-20 @ 6964a2a3b44b3642eea68212635420bbe6bcda51
 **Superseded-by:** none
 **Date:** 2026-08-20
 **Deciders:** Loupe 0.1.2 execution directive / #247
