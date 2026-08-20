@@ -40,7 +40,7 @@ renderer change was made.
 
 | Evidence | Result | Notes |
 | --- | --- | --- |
-| Dedicated CMake configure | PASS | Qt 6.11.1; `LOUPE_BUILD_CANVAS_BENCHMARK=ON`; ignored `build-session5` artifacts |
+| Dedicated CMake configure | PASS | Qt 6.11.1; `LOUPE_BUILD_CANVAS_BENCHMARK=ON`; generated artifacts retained under ignored `build/` |
 | `CanvasBenchmark` Release build | PASS | MSVC 19.44; local duplicate `Path`/`PATH` environment normalized for MSBuild |
 | Native Windows benchmark | PASS | All four candidates; `QT_QPA_PLATFORM=windows`; D3D11 for Quick candidates; DPI 1.5 |
 | Windows Qt Quick software benchmark | PASS | All four candidates; `QT_QUICK_BACKEND=software`; Quick candidates reported `software`; DPI 1.5 |
@@ -66,12 +66,12 @@ measurements, not release thresholds.
 
    ```powershell
    $qt = 'C:\.dev\repos\frisket\qt\6.11.1\msvc2022_64'
-   $env:PATH = "$qt\bin;build-session5\vcpkg_installed\x64-windows\bin;$env:PATH"
+   $env:PATH = "$qt\bin;build\vcpkg_installed\x64-windows\bin;$env:PATH"
    $env:QT_PLUGIN_PATH = "$qt\plugins"
    $env:QT_QPA_PLATFORM = 'windows'
-   pwsh -NoProfile -File scripts/run-canvas-benchmark.ps1 -BuildDir .\build-session5 -Candidate all
+   pwsh -NoProfile -File scripts/run-canvas-benchmark.ps1 -BuildDir .\build -Candidate all
    $env:QT_QUICK_BACKEND = 'software'
-   pwsh -NoProfile -File scripts/run-canvas-benchmark.ps1 -BuildDir .\build-session5 -Candidate all
+   pwsh -NoProfile -File scripts/run-canvas-benchmark.ps1 -BuildDir .\build -Candidate all
    ```
 
 4. Before product Quick work, close hosted Windows/Linux native/software
