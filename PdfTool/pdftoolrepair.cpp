@@ -31,6 +31,7 @@
 #include "pdfpreflightverdict.h"
 #include "pdfsafefilewriter.h"
 
+#include <algorithm>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -388,6 +389,14 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     pdf::PDFRepairDiffOptions diffOptions;
     diffOptions.renderDirectory = options.repairRenderDirectory;
     diffOptions.operationControl = &cancelControl;
+    // A page-content mutation changes rendered pixels by definition. Until an
+    // operation supplies bounded visual regions, the semantic content digest
+    // and its declared expected-change class are the trust boundary; treating
+    // those pixels as unexpected would reject valid bleed/content repairs while
+    // making the visual report appear more precise than it is.
+    diffOptions.renderVisualDiff = !std::any_of(transaction.plans().cbegin(), transaction.plans().cend(),
+                                                [](const pdf::PDFRepairPlan& plan)
+                                                { return plan.expectedChanges.pageContent; });
     pdf::PDFRepairDiffReport diffReport;
     if (const pdf::PDFOperationResult diffResult = transaction.compareCandidate(candidatePath, diffOptions, &diffReport); !diffResult)
     {
@@ -474,6 +483,12 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     if (unexpectedChangeCount(diffReport) > 0)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
+        reportJson.insert(QStringLiteral("diff"), diffReport.toJson());
+        if (!options.repairReportFile.isEmpty())
+        {
+            QString reportError;
+            writeJsonReport(options.repairReportFile, reportJson, &reportError);
+        }
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.unexpected-change"),
                          PDFToolTranslationContext::tr("The repair candidate contains unexpected changes; no output was committed."));
         return PDFToolExitCode::Findings;

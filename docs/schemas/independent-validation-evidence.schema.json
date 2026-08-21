@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loupe.studio-berry.dev/schemas/independent-validation-evidence.schema.json",
+  "title": "Loupe independent validation evidence",
+  "type": "object",
+  "required": ["schema", "schema_version", "status", "input", "validators", "platform"],
+  "properties": {
+    "schema": { "const": "loupe.independent-validation-evidence" },
+    "schema_version": { "const": 1 },
+    "candidate_sha": { "type": "string", "minLength": 7 },
+    "status": { "enum": ["passed", "rejected", "incomplete"] },
+    "input": {
+      "type": "object",
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "bytes": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "validators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["claim", "program", "status"],
+        "properties": {
+          "claim": { "enum": ["structural", "signature", "standards"] },
+          "program": { "type": "string" },
+          "program_path": { "type": ["string", "null"] },
+          "configured_arguments": { "type": "array", "items": { "type": "string" } },
+          "arguments": { "type": "array", "items": { "type": "string" } },
+          "version": { "type": ["string", "null"] },
+          "status": { "enum": ["passed", "rejected", "incomplete"] },
+          "reason_code": { "type": "string" },
+          "duration_ms": { "type": "integer", "minimum": 0 },
+          "exit_code": { "type": "integer" },
+          "timed_out": { "type": "boolean" },
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "error": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "platform": {
+      "type": "object",
+      "required": ["system", "release", "machine"],
+      "properties": {
+        "system": { "type": "string" },
+        "release": { "type": "string" },
+        "machine": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -43,6 +43,11 @@ nonzero exit is a conversion **error**: no candidate is committed and Loupe
 never self-certifies PASS. Mock always-pass / always-fail / missing-program
 tests cover that fail-closed table without bundling a JRE.
 
+The platform qualification evidence contract for parser, signature, and
+standards validators is documented in
+[`INDEPENDENT_VALIDATION.md`](INDEPENDENT_VALIDATION.md). Missing external
+tools remain `incomplete`, not PASS.
+
 Synthetic conversion fixtures and the already-conformant / convertible /
 unconvertible triad are described in
 [`loupe-preflight/testdata/conversion/README.md`](../loupe-preflight/testdata/conversion/README.md).

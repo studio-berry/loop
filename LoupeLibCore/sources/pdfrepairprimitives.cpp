@@ -127,6 +127,9 @@ public:
         plan->domains = domains();
         plan->expectedChanges.pageBoxes = true;
         plan->expectedChanges.pageContent = true;
+        // Candidate serialization normalizes the document information block;
+        // keep that deterministic rewrite explicit in the trust contract.
+        plan->expectedChanges.metadata = true;
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::NormalPreflight };
 
