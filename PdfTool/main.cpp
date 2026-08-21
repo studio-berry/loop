@@ -156,7 +156,7 @@ int writeInvocationError(const pdftool::PDFToolExecutionContext& context,
 
 void handleTerminationSignal(int)
 {
-    pdftool::cancelRequested().store(true, std::memory_order_release);
+    pdftool::requestCancellation();
 }
 
 }   // namespace
