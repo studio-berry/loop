@@ -799,20 +799,9 @@ void LoupePreflightPlugin::onLoadExampleReportTriggered()
     }
 }
 
-void LoupePreflightPlugin::drawPage(QPainter* painter,
-                                    pdf::PDFInteger pageIndex,
-                                    const pdf::PDFPrecompiledPage* compiledPage,
-                                    pdf::PDFTextLayoutGetter& layoutGetter,
-                                    const QTransform& pagePointToDevicePointMatrix,
-                                    const pdf::PDFColorConvertor& convertor,
-                                    QList<pdf::PDFRenderError>& errors) const
+void LoupePreflightPlugin::drawOverlay(QPainter* painter, const pdf::PDFOverlayContext& context) const
 {
-    Q_UNUSED(compiledPage);
-    Q_UNUSED(layoutGetter);
-    Q_UNUSED(convertor);
-    Q_UNUSED(errors);
-
-    if (!m_reportDockWidget || !m_reportDockWidget->hasReport())
+    if (!context.renderable || !m_reportDockWidget || !m_reportDockWidget->hasReport())
     {
         return;
     }
@@ -831,12 +820,12 @@ void LoupePreflightPlugin::drawPage(QPainter* painter,
     for (int findingIndex = 0; findingIndex < findings.size(); ++findingIndex)
     {
         const PreflightFindingEntry& finding = findings.at(findingIndex);
-        if (!finding.hasVisualOverlay || finding.page <= 0 || finding.page - 1 != pageIndex)
+        if (!finding.hasVisualOverlay || finding.page <= 0 || finding.page - 1 != context.pageIndex)
         {
             continue;
         }
 
-        const QRectF deviceRect = pagePointToDevicePointMatrix.mapRect(finding.bbox).normalized();
+        const QRectF deviceRect = context.pagePointToDevicePointMatrix.mapRect(finding.bbox).normalized();
         if (deviceRect.isEmpty())
         {
             continue;

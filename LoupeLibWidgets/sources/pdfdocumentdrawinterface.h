@@ -27,6 +27,9 @@
 #include "pdfglobal.h"
 #include "pdfexception.h"
 
+#include <QRect>
+#include <QTransform>
+
 #include <optional>
 
 class QPainter;
@@ -37,8 +40,32 @@ class QWheelEvent;
 namespace pdf
 {
 class PDFColorConvertor;
+class PDFPage;
 class PDFPrecompiledPage;
 class PDFTextLayoutGetter;
+
+/// Immutable geometry supplied to an overlay provider for one visible page.
+/// The transform is the same transform used by the page-surface renderer.
+struct LOUPELIBWIDGETSSHARED_EXPORT PDFOverlayContext
+{
+    PDFInteger pageIndex = -1;
+    const PDFPage* page = nullptr;
+    QRect pageRect;
+    QRect viewportRect;
+    QTransform pagePointToDevicePointMatrix;
+    bool renderable = false;
+};
+
+/// Stable overlay ordering used by the Widgets compositor.
+enum class PDFOverlayLayer : int
+{
+    PageChrome = 10,
+    Guides = 20,
+    Findings = 30,
+    Selection = 40,
+    Handles = 50,
+    ToolPreview = 60,
+};
 
 class LOUPELIBWIDGETSSHARED_EXPORT IDocumentDrawInterface
 {
@@ -71,6 +98,22 @@ public:
     /// Returns true if drawing of the page content should be suppressed.
     /// This is used for special purposes, such as rendering edited page content.
     virtual bool isPageContentDrawSuppressed() const;
+};
+
+/// Optional independent overlay provider. Existing document draw providers do
+/// not need to implement this interface; the proxy discovers it when drawing
+/// the dedicated overlay pass.
+class LOUPELIBWIDGETSSHARED_EXPORT IDocumentOverlayInterface
+{
+public:
+    explicit inline IDocumentOverlayInterface() = default;
+    virtual ~IDocumentOverlayInterface() = default;
+
+    virtual PDFOverlayLayer getOverlayLayer() const { return PDFOverlayLayer::Findings; }
+
+    /// Draws transient geometry above page surfaces. The proxy clips the
+    /// painter to the visible page and viewport before invoking the provider.
+    virtual void drawOverlay(QPainter* painter, const PDFOverlayContext& context) const = 0;
 };
 
 /// Input interface for handling events. Implementations should react on these events,

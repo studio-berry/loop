@@ -263,6 +263,9 @@ void PreflightReportModel::appendFindings(const QJsonArray& findings)
         const QJsonObject findingObject = findingValue.toObject();
         PreflightFindingEntry finding;
 
+        finding.id = findingObject.value(QStringLiteral("id")).toString();
+        finding.objectId = findingObject.value(QStringLiteral("object_id")).toString();
+
         if (m_schemaVersion >= 2)
         {
             finding.scope = findingObject.value(QStringLiteral("scope")).toString();
