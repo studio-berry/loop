@@ -169,7 +169,7 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
     QFile status(QStringLiteral("/proc/self/status"));
     if (!status.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        return 0;
+        return -1;
     }
 
     while (!status.atEnd())
@@ -198,7 +198,7 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
         return static_cast<qint64>(counters.PeakWorkingSetSize);
     }
 #endif
-    return 0;
+    return -1;
 }
 
 QJsonObject PDFWorkloadEnvelope::toJson() const

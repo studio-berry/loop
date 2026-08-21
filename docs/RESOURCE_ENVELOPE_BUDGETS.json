@@ -1,0 +1,37 @@
+{
+  "schema_kind": "loupe-resource-envelope-budgets",
+  "schema_version": 1,
+  "policy": "two-tier",
+  "description": "Checked-in safety caps are blocking. Baseline deltas are reported until both platform baselines exist.",
+  "measurement_status": ["complete", "cancelled", "incomplete", "unavailable", "unsupported", "budget-exceeded"],
+  "workloads": {
+    "div2k-image-heavy": {
+      "page_count": 10000,
+      "wall_time_ms": 120000,
+      "rss_high_water_bytes": 805306368,
+      "cancellation_latency_ms": 5000,
+      "recovery_ms": 30000
+    },
+    "pathological-vector": {
+      "page_count": 256,
+      "wall_time_ms": 120000,
+      "rss_high_water_bytes": 805306368,
+      "cancellation_latency_ms": 5000,
+      "recovery_ms": 30000
+    },
+    "lifecycle-trace": {
+      "max_commands": 64,
+      "wall_time_ms": 30000,
+      "cancellation_latency_ms": 5000,
+      "recovery_ms": 30000
+    }
+  },
+  "baseline": {
+    "source": "existing Windows DIV2K qualification run",
+    "elapsed_ms": 48513,
+    "rss_high_water_bytes": 380985344,
+    "margin": 2.0,
+    "linux": "record before final qualification",
+    "windows": "record before final qualification"
+  }
+}
