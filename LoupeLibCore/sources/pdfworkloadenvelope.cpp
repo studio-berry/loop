@@ -29,6 +29,11 @@
 #include <QSysInfo>
 #include <QtGlobal>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <psapi.h>
+#endif
+
 namespace pdf
 {
 
@@ -186,6 +191,12 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
             }
         }
     }
+#elif defined(Q_OS_WIN)
+    PROCESS_MEMORY_COUNTERS counters{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)))
+    {
+        return static_cast<qint64>(counters.PeakWorkingSetSize);
+    }
 #endif
     return 0;
 }
@@ -195,9 +206,16 @@ QJsonObject PDFWorkloadEnvelope::toJson() const
     QJsonObject object;
     object.insert(QStringLiteral("identity"), identity.toJson());
     object.insert(QStringLiteral("family"), family);
+    object.insert(QStringLiteral("status"), status);
+    object.insert(QStringLiteral("incomplete_reason"), incompleteReason);
     object.insert(QStringLiteral("page_count"), pageCount);
+    object.insert(QStringLiteral("open_to_first_view_ms"), openToFirstViewMs);
     object.insert(QStringLiteral("rss_high_water_bytes"), rssHighWaterBytes);
+    object.insert(QStringLiteral("cache_high_water_bytes"), cacheHighWaterBytes);
     object.insert(QStringLiteral("elapsed_ms"), elapsedMs);
+    object.insert(QStringLiteral("cancellation_latency_ms"), cancellationLatencyMs);
+    object.insert(QStringLiteral("recovery_ms"), recoveryMs);
+    object.insert(QStringLiteral("pressure_shed_count"), pressureShedCount);
     object.insert(QStringLiteral("prefetch_shed"), prefetchShed);
     object.insert(QStringLiteral("interaction_slot_held"), interactionSlotHeld);
     return object;

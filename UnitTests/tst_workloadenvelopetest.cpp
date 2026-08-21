@@ -109,14 +109,22 @@ void WorkloadEnvelopeTest::pageHeavyEnvelopeRecordsIdentity()
     envelope.identity = pdf::PDFRunIdentity::capture();
     envelope.identity.fixtureDigest = pdf::PDFRunIdentity::digestBytes(QByteArrayLiteral("page-heavy-24"));
     envelope.family = QStringLiteral("page-heavy");
+    envelope.status = QStringLiteral("complete");
     envelope.pageCount = pageCount;
+    envelope.openToFirstViewMs = 4;
     envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+    envelope.cacheHighWaterBytes = 2048;
     envelope.elapsedMs = timer.elapsed();
+    envelope.pressureShedCount = 1;
     envelope.prefetchShed = session.qualityPrefetchShed();
     envelope.interactionSlotHeld = true;
 
     const QJsonObject json = envelope.toJson();
     QCOMPARE(json.value(QStringLiteral("family")).toString(), QStringLiteral("page-heavy"));
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("complete"));
+    QCOMPARE(json.value(QStringLiteral("open_to_first_view_ms")).toInt(), 4);
+    QCOMPARE(json.value(QStringLiteral("cache_high_water_bytes")).toInt(), 2048);
+    QCOMPARE(json.value(QStringLiteral("pressure_shed_count")).toInt(), 1);
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("commit")));
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("os")));
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("qt")));
