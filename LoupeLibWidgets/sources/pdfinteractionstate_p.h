@@ -121,4 +121,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFINTERACTIONSTATE_P_H
+#endif   // PDFINTERACTIONSTATE_P_H

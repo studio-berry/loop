@@ -280,4 +280,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFINTERACTIONTRACE_P_H
+#endif   // PDFINTERACTIONTRACE_P_H

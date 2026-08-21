@@ -94,17 +94,17 @@ void drawInteractionTraceOverlay(QWidget* widget, const QJsonObject& summary)
     const QJsonObject cache = summary.value(QStringLiteral("cache")).toObject();
     const QJsonObject pending = summary.value(QStringLiteral("pending_async_work")).toObject();
     const QString budget = budgets.value(QStringLiteral("frame_budget_ms")).isNull()
-        ? QStringLiteral("unavailable")
-        : QStringLiteral("%1 ms").arg(budgets.value(QStringLiteral("frame_budget_ms")).toDouble(), 0, 'f', 2);
+                               ? QStringLiteral("unavailable")
+                               : QStringLiteral("%1 ms").arg(budgets.value(QStringLiteral("frame_budget_ms")).toDouble(), 0, 'f', 2);
     const QString fpsText = fps.value(QStringLiteral("available")).toBool()
-        ? QStringLiteral("%1").arg(fps.value(QStringLiteral("p50")).toDouble(), 0, 'f', 1)
-        : QStringLiteral("n/a");
+                                ? QStringLiteral("%1").arg(fps.value(QStringLiteral("p50")).toDouble(), 0, 'f', 1)
+                                : QStringLiteral("n/a");
     const QString cacheText = cache.value(QStringLiteral("hit_rate")).isNull()
-        ? QStringLiteral("n/a")
-        : QStringLiteral("%1%%").arg(cache.value(QStringLiteral("hit_rate")).toDouble() * 100.0, 0, 'f', 0);
+                                  ? QStringLiteral("n/a")
+                                  : QStringLiteral("%1%%").arg(cache.value(QStringLiteral("hit_rate")).toDouble() * 100.0, 0, 'f', 0);
     const QString queueText = pending.value(QStringLiteral("queue_depth")).isNull()
-        ? QStringLiteral("n/a")
-        : QString::number(pending.value(QStringLiteral("queue_depth")).toInt());
+                                  ? QStringLiteral("n/a")
+                                  : QString::number(pending.value(QStringLiteral("queue_depth")).toInt());
 
     const QStringList lines = {
         QStringLiteral("Interaction trace"),
@@ -174,7 +174,6 @@ PDFWidget::PDFWidget(const PDFCMSManager* cmsManager, RendererEngine engine, QWi
 
 PDFWidget::~PDFWidget()
 {
-
 }
 
 bool PDFWidget::focusNextPrevChild(bool next)
@@ -389,8 +388,8 @@ void PDFDrawWidget::ensureInteractionRevisionConnection()
         return;
     }
 
-    m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this,
-                                                       [this](const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current) {
+    m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this, [this](const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current)
+                                                       {
                                                            if (m_interactionState)
                                                            {
                                                                const PDFInteractionState::CancelReason reason = previous.document == current.document
@@ -399,8 +398,7 @@ void PDFDrawWidget::ensureInteractionRevisionConnection()
                                                                m_interactionState->cancel(reason);
                                                            }
                                                            resetInteractionInputs();
-                                                           updateCursor();
-                                                       }, Qt::UniqueConnection);
+                                                           updateCursor(); }, Qt::UniqueConnection);
     m_interactionRevisionConnected = true;
 }
 
@@ -523,11 +521,11 @@ bool PDFDrawWidget::event(QEvent* event)
     {
         PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
         auto inputScope = traceRecorder
-            ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::ShortcutOverride)
-            : PDFInteractionTraceRecorder::InputScope();
+                              ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::ShortcutOverride)
+                              : PDFInteractionTraceRecorder::InputScope();
         auto interactionScope = traceRecorder
-            ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-            : PDFInteractionTraceRecorder::StageScope();
+                                    ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                    : PDFInteractionTraceRecorder::StageScope();
         return processEvent<QKeyEvent, &IDrawWidgetInputInterface::shortcutOverrideEvent>(static_cast<QKeyEvent*>(event));
     }
 
@@ -572,7 +570,7 @@ void PDFDrawWidget::performMouseOperation(QPoint currentMousePosition)
     }
 }
 
-template<typename Event, void (IDrawWidgetInputInterface::* Function)(QWidget*, Event*)>
+template <typename Event, void (IDrawWidgetInputInterface::*Function)(QWidget*, Event*)>
 bool PDFDrawWidget::processEvent(Event* event)
 {
     QString tooltip;
@@ -605,11 +603,11 @@ void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyPress)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyPress)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -632,8 +630,7 @@ void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
     QScrollBar* verticalScrollbar = m_widget->getVerticalScrollbar();
     if (verticalScrollbar->isVisible())
     {
-        constexpr std::pair<QKeySequence::StandardKey, PDFDrawWidgetProxy::Operation> keyToOperations[] =
-        {
+        constexpr std::pair<QKeySequence::StandardKey, PDFDrawWidgetProxy::Operation> keyToOperations[] = {
             { QKeySequence::MoveToStartOfDocument, PDFDrawWidgetProxy::NavigateDocumentStart },
             { QKeySequence::MoveToEndOfDocument, PDFDrawWidgetProxy::NavigateDocumentEnd },
             { QKeySequence::MoveToNextPage, PDFDrawWidgetProxy::NavigateNextPage },
@@ -661,11 +658,11 @@ void PDFDrawWidget::keyReleaseEvent(QKeyEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyRelease)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::KeyRelease)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -683,11 +680,11 @@ void PDFDrawWidget::mousePressEvent(QMouseEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MousePress)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MousePress)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -752,11 +749,11 @@ void PDFDrawWidget::mouseDoubleClickEvent(QMouseEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseDoubleClick)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseDoubleClick)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -772,11 +769,11 @@ void PDFDrawWidget::mouseReleaseEvent(QMouseEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseRelease)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseRelease)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -824,11 +821,11 @@ void PDFDrawWidget::mouseMoveEvent(QMouseEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseMove)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::MouseMove)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -863,11 +860,11 @@ void PDFDrawWidget::dragEnterEvent(QDragEnterEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragEnter)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragEnter)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -896,11 +893,11 @@ void PDFDrawWidget::dragMoveEvent(QDragMoveEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragMove)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::DragMove)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -939,11 +936,11 @@ void PDFDrawWidget::dropEvent(QDropEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Drop)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Drop)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -1155,11 +1152,11 @@ void PDFDrawWidget::wheelEvent(QWheelEvent* event)
 
     PDFInteractionTraceRecorder* traceRecorder = interactionTraceRecorder(this);
     auto inputScope = traceRecorder
-        ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Wheel)
-        : PDFInteractionTraceRecorder::InputScope();
+                          ? traceRecorder->beginInput(PDFInteractionTraceRecorder::InputKind::Wheel)
+                          : PDFInteractionTraceRecorder::InputScope();
     auto interactionScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
-        : PDFInteractionTraceRecorder::StageScope();
+                                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Interaction)
+                                : PDFInteractionTraceRecorder::StageScope();
 
     event->ignore();
 
@@ -1308,8 +1305,8 @@ void PDFDrawWidget::paintEvent(QPaintEvent* event)
     int queueDepth = -1;
     const RendererEngine rendererEngine = proxy->getRendererEngine();
     auto frameScope = traceEnabled
-        ? traceRecorder->beginFrame(visiblePages, queueDepth)
-        : PDFInteractionTraceRecorder::FrameScope();
+                          ? traceRecorder->beginFrame(visiblePages, queueDepth)
+                          : PDFInteractionTraceRecorder::FrameScope();
 
     if (traceEnabled)
     {
@@ -1364,8 +1361,8 @@ void PDFDrawWidget::paintEvent(QPaintEvent* event)
 
             QPainter painter(this);
             auto compositionScope = traceRecorder && traceRecorder->isEnabled()
-                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Composition)
-                : PDFInteractionTraceRecorder::StageScope();
+                                        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Composition)
+                                        : PDFInteractionTraceRecorder::StageScope();
             painter.drawImage(QPoint(0, 0), m_blend2DframeBuffer);
             break;
         }

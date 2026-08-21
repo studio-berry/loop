@@ -57,12 +57,10 @@ PDFDrawSpaceController::PDFDrawSpaceController(QObject* parent) :
     m_pageRotation(PageRotation::None),
     m_fontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT)
 {
-
 }
 
 PDFDrawSpaceController::~PDFDrawSpaceController()
 {
-
 }
 
 void PDFDrawSpaceController::setDocument(const PDFModifiedDocument& document)
@@ -132,7 +130,8 @@ PDFDrawSpaceController::LayoutItem PDFDrawSpaceController::getLayoutItemForPage(
 
     if (!result.isValid())
     {
-        auto it = std::find_if(m_layoutItems.cbegin(), m_layoutItems.cend(), [pageIndex](const LayoutItem& item) { return item.pageIndex == pageIndex; });
+        auto it = std::find_if(m_layoutItems.cbegin(), m_layoutItems.cend(), [pageIndex](const LayoutItem& item)
+                               { return item.pageIndex == pageIndex; });
         if (it != m_layoutItems.cend())
         {
             result = *it;
@@ -496,7 +495,6 @@ PDFDrawWidgetProxy::PDFDrawWidgetProxy(QObject* parent) :
 
 PDFDrawWidgetProxy::~PDFDrawWidgetProxy()
 {
-
 }
 
 void PDFDrawWidgetProxy::setDocument(const PDFModifiedDocument& document, std::vector<PDFSignatureVerificationResult> signatureVerificationResult)
@@ -807,8 +805,8 @@ void PDFDrawWidgetProxy::draw(QPainter* painter, QRect rect)
 
     PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
     auto overlayScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
-        : PDFInteractionTraceRecorder::StageScope();
+                            ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
+                            : PDFInteractionTraceRecorder::StageScope();
     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
     {
         painter->save();
@@ -868,8 +866,8 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
             {
                 PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
                 auto pageRenderScope = traceRecorder
-                    ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::PageRender)
-                    : PDFInteractionTraceRecorder::StageScope();
+                                           ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::PageRender)
+                                           : PDFInteractionTraceRecorder::StageScope();
                 QElapsedTimer timer;
                 timer.start();
 
@@ -943,8 +941,8 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
                 if (!features.testFlag(PDFRenderer::DenyExtraGraphics))
                 {
                     auto overlayScope = traceRecorder
-                        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
-                        : PDFInteractionTraceRecorder::StageScope();
+                                            ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
+                                            : PDFInteractionTraceRecorder::StageScope();
                     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
                     {
                         painter->save();
@@ -974,7 +972,7 @@ void PDFDrawWidgetProxy::drawPages(QPainter* painter, QRect rect, PDFRenderer::F
                     painter->setPen(Qt::red);
                     painter->setFont(font);
                     painter->translate(placedRect.topLeft());
-                    painter->translate(placedRect.width() / 20.0, placedRect.height() / 20.0); // Offset
+                    painter->translate(placedRect.width() / 20.0, placedRect.height() / 20.0);   // Offset
 
                     painter->setBackground(QBrush(Qt::white));
                     painter->setBackgroundMode(Qt::OpaqueMode);
@@ -1088,8 +1086,8 @@ PDFInteger PDFDrawWidgetProxy::getPageUnderPoint(QPoint point, QPointF* pagePoin
 {
     PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
     auto hitTestScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::HitTest)
-        : PDFInteractionTraceRecorder::StageScope();
+                            ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::HitTest)
+                            : PDFInteractionTraceRecorder::StageScope();
 
     // Iterate trough pages, place them and test, if they intersects with rectangle
     for (const LayoutItem& item : m_layout.items)
@@ -1674,8 +1672,7 @@ void PDFDrawWidgetProxy::goToDestination(const PDFDestination& destination)
             {
                 const QWidget* viewport = m_widget->getDrawWidget()->getWidget();
                 const QRect rect = viewport->rect();
-                const std::array<QPoint, 4> probePoints =
-                {
+                const std::array<QPoint, 4> probePoints = {
                     rect.topLeft(),
                     QPoint(rect.center().x(), rect.top()),
                     QPoint(rect.left(), rect.center().y()),
@@ -1957,7 +1954,7 @@ void PDFDrawWidgetProxy::setFeatures(PDFRenderer::Features features)
         m_features = features;
         m_compiler->start();
         m_textLayoutCompiler->start();
-        Q_EMIT pageImageChanged(true, { });
+        Q_EMIT pageImageChanged(true, {});
     }
 }
 
@@ -1968,7 +1965,7 @@ void PDFDrawWidgetProxy::setPreferredMeshResolutionRatio(PDFReal ratio)
         m_compiler->stop(true);
         m_meshQualitySettings.preferredMeshResolutionRatio = ratio;
         m_compiler->start();
-        Q_EMIT pageImageChanged(true, { });
+        Q_EMIT pageImageChanged(true, {});
     }
 }
 
@@ -1979,7 +1976,7 @@ void PDFDrawWidgetProxy::setMinimalMeshResolutionRatio(PDFReal ratio)
         m_compiler->stop(true);
         m_meshQualitySettings.minimalMeshResolutionRatio = ratio;
         m_compiler->start();
-        Q_EMIT pageImageChanged(true, { });
+        Q_EMIT pageImageChanged(true, {});
     }
 }
 
@@ -1990,21 +1987,21 @@ void PDFDrawWidgetProxy::setColorTolerance(PDFReal colorTolerance)
         m_compiler->stop(true);
         m_meshQualitySettings.tolerance = colorTolerance;
         m_compiler->start();
-        Q_EMIT pageImageChanged(true, { });
+        Q_EMIT pageImageChanged(true, {});
     }
 }
 
 void PDFDrawWidgetProxy::onColorManagementSystemChanged()
 {
     m_compiler->reset();
-    Q_EMIT pageImageChanged(true, { });
+    Q_EMIT pageImageChanged(true, {});
 }
 
 void PDFDrawWidgetProxy::onOptionalContentGroupStateChanged()
 {
     m_compiler->reset();
     m_textLayoutCompiler->reset();
-    Q_EMIT pageImageChanged(true, { });
+    Q_EMIT pageImageChanged(true, {});
 }
 
 void IDocumentDrawInterface::drawPage(QPainter* painter,
