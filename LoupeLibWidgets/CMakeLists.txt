@@ -42,6 +42,8 @@ add_library(LoupeLibWidgets SHARED
     sources/pdfinteractionstate_p.h
     sources/pdfinteractiontrace_p.cpp
     sources/pdfinteractiontrace_p.h
+    sources/pdfinteractiontracewidget_p.cpp
+    sources/pdfinteractiontracewidget_p.h
     sources/pdfobjecteditorwidget.h
     sources/pdfobjecteditorwidget_impl.h
     sources/pdfobjecteditorwidget.cpp
