@@ -28,6 +28,8 @@
 #include <QtMath>
 
 #include <algorithm>
+#include "candidate.h"
+
 #include <cstdio>
 #include <memory>
 
@@ -38,12 +40,8 @@ constexpr int kHeight = 240;
 constexpr int kResizeIterations = 12;
 const QColor kExpectedColor(QStringLiteral("#264d73"));
 
-enum class Candidate {
-    Widget,
-    QuickWidget,
-    WindowContainer,
-    QuickItem,
-};
+using canvasbenchmark::Candidate;
+using canvasbenchmark::parseCandidate;
 
 QString candidateName(Candidate candidate)
 {
@@ -81,23 +79,6 @@ QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
         return QStringLiteral("unknown");
     }
     return QStringLiteral("unrecognized");
-}
-
-Candidate parseCandidate(const QString &value)
-{
-    if (value == QStringLiteral("widget-baseline")) {
-        return Candidate::Widget;
-    }
-    if (value == QStringLiteral("qquickwidget")) {
-        return Candidate::QuickWidget;
-    }
-    if (value == QStringLiteral("window-container")) {
-        return Candidate::WindowContainer;
-    }
-    if (value == QStringLiteral("quick-item")) {
-        return Candidate::QuickItem;
-    }
-    return Candidate::Widget;
 }
 
 class WidgetCanvas final : public QWidget {
@@ -459,7 +440,13 @@ int main(int argc, char **argv)
     } else if (requested == QStringLiteral("widget-baseline")) {
         results.append(runWidgetBaseline());
     } else {
-        results.append(runQuickCandidate(parseCandidate(requested)));
+        const std::optional<Candidate> candidate = parseCandidate(requested);
+        if (!candidate.has_value()) {
+            std::fprintf(stderr, "Unknown canvas benchmark candidate: %s\n",
+                         requested.toLocal8Bit().constData());
+            return 64;
+        }
+        results.append(runQuickCandidate(*candidate));
     }
 
     bool complete = true;

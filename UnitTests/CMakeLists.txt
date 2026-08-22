@@ -34,6 +34,23 @@ set_target_properties(UnitTests PROPERTIES
 )
 add_test(UnitTests  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTests")
 
+add_executable(UnitTestsCanvasCandidateParser
+    tst_canvascandidateparsertest.cpp
+)
+
+target_link_libraries(UnitTestsCanvasCandidateParser PRIVATE Qt6::Core Qt6::Test)
+
+set_target_properties(UnitTestsCanvasCandidateParser PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsCanvasCandidateParser
+    "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsCanvasCandidateParser"
+)
+
 add_executable(UnitTestsIncrementalSave
     tst_incrementalsavetest.cpp
 )
