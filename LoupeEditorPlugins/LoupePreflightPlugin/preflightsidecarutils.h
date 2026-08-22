@@ -737,7 +737,14 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         const QJsonArray findings = sectionValue.toArray();
         for (int i = 0; i < findings.size(); ++i)
         {
-            if (!validateFinding(findings.at(i), section, i, schemaVersionValue, errorMessage))
+            // Findings keep the shape (and evidence_ids requirement) of the schema
+            // version the report was actually submitted as, not the migrated
+            // schemaVersionValue: migratePreflightReportV2ToV3() only synthesizes
+            // top-level fields (inspection_complete/checks/verdict) and never adds
+            // evidence_ids to pre-existing findings, so validating a migrated v2
+            // report's findings against v3 rules would wrongly demand evidence_ids
+            // that legacy findings never had.
+            if (!validateFinding(findings.at(i), section, i, int(version.major), errorMessage))
             {
                 return false;
             }

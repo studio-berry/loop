@@ -26,6 +26,7 @@
     "inspection_complete": true,
     "pass": false,
     "profile": "Loupe Test - Thin Strokes",
+    "schema_kind": "preflight-report",
     "schema_version": 3,
     "verdict": {
         "blocking_finding_ids": [
