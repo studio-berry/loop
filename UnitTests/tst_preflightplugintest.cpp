@@ -41,6 +41,7 @@ private slots:
     void isNormalizedReport_requiresTheSidecarContract();
     void isNormalizedReport_acceptsFixupParams();
     void isNormalizedReport_acceptsSchemaV2ScopeFixtures();
+    void isNormalizedReport_acceptsMigratedSchemaV2GraphFindingWithoutEvidenceIds();
     void isNormalizedReport_acceptsSchemaV3InspectionIncompletePass();
     void isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict();
     void isNormalizedReport_rejectsInvalidScopeCombinations();
@@ -185,6 +186,17 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV2ScopeFixtures()
     QVERIFY(pdfplugin::preflight::isNormalizedReport(scopeFixtureReport(documentScopeFinding(), false)));
     QVERIFY(pdfplugin::preflight::isNormalizedReport(scopeFixtureReport(pageScopeFinding(), false)));
     QVERIFY(pdfplugin::preflight::isNormalizedReport(scopeFixtureReport(objectScopeFinding(), true)));
+}
+
+void PreflightPluginTest::isNormalizedReport_acceptsMigratedSchemaV2GraphFindingWithoutEvidenceIds()
+{
+    QJsonObject report = scopeFixtureReport(pageScopeFinding(), false);
+    report.insert(QStringLiteral("schema_kind"), QStringLiteral("preflight-report"));
+
+    // Schema v2 did not require evidence_ids. Validation must use the submitted
+    // version while checking findings, even though normalization migrates the
+    // report envelope to schema v3 before the rest of the contract is checked.
+    QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
 }
 
 void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncompletePass()
