@@ -16,12 +16,7 @@
 
 #include <QtCore/qglobal.h>
 
-namespace pdfinteraction
-{
-
-void ensureCommandCatalogResource()
+void pdfinteraction::ensureCommandCatalogResource()
 {
     Q_INIT_RESOURCE(commandcatalog);
 }
-
-}   // namespace pdfinteraction
