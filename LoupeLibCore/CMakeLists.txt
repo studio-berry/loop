@@ -283,6 +283,10 @@ if(MINGW)
     target_link_libraries(LoupeLibCore PRIVATE Secur32 Mscms Gdi32 User32 crypt32)
 endif()
 
+if(WIN32)
+    target_link_libraries(LoupeLibCore PRIVATE Psapi)
+endif()
+
 target_include_directories(LoupeLibCore INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 target_include_directories(LoupeLibCore PRIVATE ${CMAKE_BINARY_DIR})
 target_include_directories(LoupeLibCore PUBLIC ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})

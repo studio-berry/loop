@@ -1,0 +1,23 @@
+{
+  "schema_kind": "loupe-lifecycle-trace",
+  "schema_version": 1,
+  "seed": 539363361,
+  "initial_artifact_digest": "161a1beb41c008069762349ccae021ac2276deb2314aed2cdcb746a485f4dbcf",
+  "commands": [
+    { "index": 0, "kind": "open", "argument": "fixture" },
+    { "index": 1, "kind": "render-preflight", "argument": "page-0" },
+    { "index": 2, "kind": "cancel", "argument": "job-0" },
+    { "index": 3, "kind": "replace-revision", "argument": 1 },
+    { "index": 4, "kind": "save-reopen", "argument": "incremental" },
+    { "index": 5, "kind": "rollback", "argument": 1 },
+    { "index": 6, "kind": "close", "argument": null }
+  ],
+  "expected_invariants": [
+    "source-immutable",
+    "cancel-is-terminal",
+    "stale-results-rejected",
+    "history-append-only"
+  ],
+  "observed_result": "replayable",
+  "shrink_history": []
+}
