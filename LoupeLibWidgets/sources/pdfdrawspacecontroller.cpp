@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdrawspacecontroller.h"
+#include "pdfoverlaycompositor_p.h"
 #include "pdfpagesurfacecache_p.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
@@ -843,12 +844,15 @@ void PDFDrawWidgetProxy::draw(QPainter* painter, QRect rect)
 {
     drawPages(painter, rect, m_features);
 
-    PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
-    auto overlayScope = traceRecorder
-        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
-        : PDFInteractionTraceRecorder::StageScope();
+    if (!m_features.testFlag(PDFRenderer::DenyExtraGraphics))
+    {
+        PDFInteractionTraceRecorder* traceRecorder = PDFInteractionTraceRecorder::current();
+        auto overlayScope = traceRecorder
+            ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
+            : PDFInteractionTraceRecorder::StageScope();
 
-    drawOverlays(painter, rect);
+        drawOverlays(painter, rect);
+    }
 
     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
     {
@@ -860,37 +864,8 @@ void PDFDrawWidgetProxy::draw(QPainter* painter, QRect rect)
 
 void PDFDrawWidgetProxy::drawOverlays(QPainter* painter, QRect rect)
 {
-    struct OverlayProvider
-    {
-        IDocumentOverlayInterface* provider = nullptr;
-        PDFOverlayLayer layer = PDFOverlayLayer::Findings;
-        quint64 registrationOrder = 0;
-    };
-
-    std::vector<OverlayProvider> providers;
-    providers.reserve(m_drawInterfaces.size());
-    for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
-    {
-        auto* provider = dynamic_cast<IDocumentOverlayInterface*>(drawInterface);
-        if (!provider)
-        {
-            continue;
-        }
-
-        const auto registration = m_drawInterfaceRegistrationOrder.find(drawInterface);
-        providers.push_back({ provider,
-                              provider->getOverlayLayer(),
-                              registration != m_drawInterfaceRegistrationOrder.end() ? registration->second : 0 });
-    }
-
-    std::stable_sort(providers.begin(), providers.end(), [](const OverlayProvider& left, const OverlayProvider& right)
-                     {
-                         if (left.layer != right.layer)
-                         {
-                             return static_cast<int>(left.layer) < static_cast<int>(right.layer);
-                         }
-                         return left.registrationOrder < right.registrationOrder;
-                     });
+    const std::vector<PDFOverlayCompositor::Provider> providers =
+        PDFOverlayCompositor::collect(m_drawInterfaces, m_drawInterfaceRegistrationOrder);
 
     if (providers.empty() || !m_controller->getDocument())
     {
@@ -922,13 +897,7 @@ void PDFDrawWidgetProxy::drawOverlays(QPainter* painter, QRect rect)
         context.pagePointToDevicePointMatrix = QTransform(createPagePointToDevicePointMatrix(page, placedRect)) * baseMatrix;
         context.renderable = true;
 
-        for (const OverlayProvider& provider : providers)
-        {
-            painter->save();
-            painter->setClipRect(clipRect, Qt::IntersectClip);
-            provider.provider->drawOverlay(painter, context);
-            painter->restore();
-        }
+        PDFOverlayCompositor::draw(painter, clipRect, context, providers);
     }
 }
 

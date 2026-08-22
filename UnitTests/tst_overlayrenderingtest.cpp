@@ -134,6 +134,7 @@ private slots:
     void ordersAndTransformsIndependentOverlays();
     void overlayOnlyUpdatePreservesPageSurfaceCache();
     void invalidAndHighCountGeometryRemainBounded();
+    void denyExtraGraphicsSuppressesOverlays();
 
 private:
     void setDocument(int pageCount);
@@ -285,6 +286,24 @@ void OverlayRenderingTest::invalidAndHighCountGeometryRemainBounded()
     const QImage manyMarkers = canvas->grab().toImage();
     QVERIFY(!manyMarkers.isNull());
     QVERIFY(overlay.calls() > overlay.notRenderableGeometry());
+
+    proxy->unregisterDrawInterface(&overlay);
+}
+
+void OverlayRenderingTest::denyExtraGraphicsSuppressesOverlays()
+{
+    setDocument(1);
+
+    RecordingOverlay overlay(QStringLiteral("suppressed"), pdf::PDFOverlayLayer::Findings, nullptr);
+    pdf::PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    proxy->setFeatures(proxy->getFeatures() | pdf::PDFRenderer::DenyExtraGraphics);
+    proxy->registerDrawInterface(&overlay);
+
+    QWidget* canvas = m_widget->getDrawWidget()->getWidget();
+    QVERIFY(canvas != nullptr);
+    const QImage image = canvas->grab().toImage();
+    QVERIFY(!image.isNull());
+    QCOMPARE(overlay.calls(), 0);
 
     proxy->unregisterDrawInterface(&overlay);
 }
