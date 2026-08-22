@@ -49,7 +49,7 @@ class LifecycleTest : public QObject
     Q_OBJECT
 
 private slots:
-    void boundedTraceIsDeterministicAndReplayable();
+    void boundedTraceGenerationIsDeterministic();
     void seededSequencePreservesInvariants();
     void injectedStaleResultIsCaught();
     void injectedOverwriteIsCaught();
@@ -148,9 +148,7 @@ QJsonObject traceToJson(quint64 seed, const QVector<TraceCommand>& trace)
             QStringLiteral("cancel-is-terminal"),
             QStringLiteral("stale-results-rejected"),
             QStringLiteral("history-append-only")
-        } },
-        { QStringLiteral("observed_result"), QStringLiteral("replayable") },
-        { QStringLiteral("shrink_history"), QJsonArray() }
+        } }
     };
 }
 
@@ -258,7 +256,7 @@ bool appendEvent(pdf::PDFOperationHistoryStore& history,
 
 }   // namespace
 
-void LifecycleTest::boundedTraceIsDeterministicAndReplayable()
+void LifecycleTest::boundedTraceGenerationIsDeterministic()
 {
     constexpr quint64 seed = UINT64_C(0x20260821);
     const QVector<TraceCommand> first = generateTrace(seed);
@@ -279,12 +277,12 @@ void LifecycleTest::boundedTraceIsDeterministicAndReplayable()
             case TraceCommandKind::Cancel: cancelled = true; break;
             case TraceCommandKind::ReplaceRevision: QVERIFY(opened); ++revision; break;
             case TraceCommandKind::SaveReopen: QVERIFY(opened); break;
-            case TraceCommandKind::Rollback: QVERIFY(opened); QVERIFY(revision >= 0); break;
+            case TraceCommandKind::Rollback: QVERIFY(opened); break;
             case TraceCommandKind::Close: opened = false; break;
         }
     }
     QVERIFY(cancelled);
-    QVERIFY(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact).contains("shrink_history"));
+    QVERIFY(revision > 0);
 }
 
 void LifecycleTest::seededSequencePreservesInvariants()
@@ -389,8 +387,9 @@ void LifecycleTest::injectedStaleResultIsCaught()
 
     LifecycleState state;
     state.acceptedStale = true;
-    pdf::PDFArtifactStore artifacts(QDir::tempPath());
     QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QVERIFY(history.open());
     QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("stale-result-accepted"));

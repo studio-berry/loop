@@ -198,7 +198,7 @@ void RepairOperationTest::addBleedExpectedChanges_areMeasuredWithoutUnexpectedDi
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     pdf::PDFRepairDiffOptions options;
-    options.renderVisualDiff = false;
+    options.renderVisualDiff = !pdf::repairPlansMutatePageContent(transaction.plans());
     pdf::PDFRepairDiffReport report;
     QVERIFY(transaction.compareCandidate(directory.filePath(QStringLiteral("candidate.pdf")), options, &report));
     QVERIFY(report.status == pdf::PDFRepairDiffStatus::Complete

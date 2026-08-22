@@ -82,8 +82,6 @@ struct LOUPELIBCORESHARED_EXPORT PDFStandardConversionReport
     QVector<PDFStandardConversionChange> changes;
     QStringList blockers;
     QStringList warnings;
-    // Machine-readable evidence for the independent validator invocation.
-    // A result of "incomplete" is never a conformance pass.
     QJsonObject validator;
 
     QJsonObject toJson() const;

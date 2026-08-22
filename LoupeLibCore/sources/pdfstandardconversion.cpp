@@ -28,11 +28,12 @@
 #include "pdfrgbtocmykfixup.h"
 #include "preflightengine.h"
 #include "pdfutils.h"
+#include "pdfworkloadenvelope.h"
 
 #include <QJsonArray>
-#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QProcess>
 #include <QTemporaryDir>
 
@@ -279,15 +280,15 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
         return writeResult;
     }
 
-    QFile candidateFile(inputPath);
-    if (!candidateFile.open(QIODevice::ReadOnly))
+    const QFileInfo candidateInfo(inputPath);
+    const QString candidateDigest = PDFRunIdentity::digestFile(inputPath);
+    if (candidateDigest.isEmpty())
     {
         finish(QStringLiteral("incomplete"), QStringLiteral("validator-candidate-read-failed"));
         return PDFTranslationContext::tr("The independent validator candidate could not be read.");
     }
-    validator.insert(QStringLiteral("input_bytes"), candidateFile.size());
-    validator.insert(QStringLiteral("input_sha256"), QString::fromLatin1(QCryptographicHash::hash(candidateFile.readAll(), QCryptographicHash::Sha256).toHex()));
-    candidateFile.close();
+    validator.insert(QStringLiteral("input_bytes"), candidateInfo.size());
+    validator.insert(QStringLiteral("input_sha256"), candidateDigest);
 
     QStringList arguments;
     for (const QString& argument : settings.independentValidatorArguments)

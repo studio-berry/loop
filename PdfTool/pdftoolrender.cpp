@@ -207,12 +207,13 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
             pdf::PDFWorkloadEnvelope envelope;
             envelope.identity = identity;
             envelope.family = QStringLiteral("benchmark-render");
-            envelope.status = isCancelRequested() ? QStringLiteral("cancelled") : QStringLiteral("complete");
+            const bool cancelled = isCancelRequested();
+            envelope.status = cancelled ? QStringLiteral("cancelled") : QStringLiteral("complete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
             envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
             envelope.elapsedMs = m_wallTime;
-            envelope.cancellationLatencyMs = isCancelRequested() ? cancellationLatencyMs() : -1;
-            envelope.incompleteReason = isCancelRequested() ? QStringLiteral("operation-cancelled") : QString();
+            envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
+            envelope.incompleteReason = cancelled ? QStringLiteral("operation-cancelled") : QString();
             data.insert(QStringLiteral("workload_envelope"), envelope.toJson());
             options.executionContext->setData(data);
         }
