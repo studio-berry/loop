@@ -31,6 +31,7 @@
 #include "pdfworkloadenvelope.h"
 
 #include <QJsonArray>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
