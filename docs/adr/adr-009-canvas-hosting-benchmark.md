@@ -99,12 +99,27 @@ and is retained verbatim only as the historical record of what this ADR
 concluded on 2026-08-20, under the architecture assumptions active at that
 time.
 
+**CI admission scope (2026-08-21):** confirmed by a real CI run
+(`window-container`'s reported `focus_reached: false` under Linux
+`QT_QPA_PLATFORM=offscreen` — its `QWindowContainer` focus proxying does not
+work without a real display/compositor, while `widget-baseline` and
+`quick-item` both pass `status: pass` under the same headless environment;
+`qquickwidget` also passed). Since the corrected outcome above already
+excludes `window-container` and `qquickwidget` from the shipped product
+architecture regardless of their comparison numbers, CI gates on
+`widget-baseline` (comparison baseline) and `quick-item` (the corrected S21
+target) reaching `status: pass`. `qquickwidget` and `window-container` are
+still run and their JSON recorded for diagnostic reference, but a headless
+`window-container` focus limitation does not block S21 admission.
+
 ## Verification contract
 
 The target is opt-in through `LOUPE_BUILD_CANVAS_BENCHMARK=ON`. The runner
-fails unless every requested candidate reports `status: pass`. CI or local
-qualification must record the JSON output together with the platform, Qt
-version, QPA platform, Quick backend variables, and graphics API. Headless
+fails unless every requested candidate reports `status: pass`; the CI
+admission scope above narrows which candidates gate the pipeline without
+changing this underlying per-candidate contract. CI or local qualification
+must record the JSON output together with the platform, Qt version, QPA
+platform, Quick backend variables, and graphics API. Headless
 `QT_QPA_PLATFORM=offscreen` selects a platform; it is not renderer evidence by
 itself.
 

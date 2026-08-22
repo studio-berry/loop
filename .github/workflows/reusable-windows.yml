@@ -182,19 +182,37 @@ jobs:
           QT_QPA_PLATFORM: windows
         run: .\scripts\run-quick-backend-smoke.ps1 -BuildDir .\build -Mode software -ExpectedGraphicsApi software
 
-      - name: Run S21 canvas benchmark (native)
+      # ADR-009's CI admission scope gates on widget-baseline (comparison
+      # baseline) and quick-item (the corrected S21 target); qquickwidget and
+      # window-container are diagnostic-only per the amendment and are run
+      # separately, non-blocking, since window-container's focus proxying is
+      # known not to work under a headless offscreen platform (confirmed on
+      # Linux CI; kept non-blocking here too for a uniform admission gate).
+      - name: Run S21 canvas benchmark (native, required candidates)
         working-directory: loupe
         shell: pwsh
         env:
           QT_QPA_PLATFORM: windows
-        run: .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate all
+        run: |
+          .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate widget-baseline
+          .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate quick-item
 
-      - name: Run S21 canvas benchmark (software)
+      - name: Run S21 canvas benchmark (software, required candidates)
         working-directory: loupe
         shell: pwsh
         env:
           QT_QPA_PLATFORM: windows
           QT_QUICK_BACKEND: software
+        run: |
+          .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate widget-baseline
+          .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate quick-item
+
+      - name: Run S21 canvas benchmark (full diagnostic, non-blocking)
+        continue-on-error: true
+        working-directory: loupe
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
         run: .\scripts\run-canvas-benchmark.ps1 -BuildDir .\build -Candidate all
 
       - name: Run QWidget/Quick focus bridge (native)
