@@ -76,13 +76,33 @@ Qt Quick software backend is represented by `QT_QUICK_BACKEND=software`.
 - [x] Quick-root directive, QWidget/QQuickItem boundary, and hybrid candidate
       rule are recorded.
 - [x] Static security, accessibility, and design-token contracts are named.
-- [ ] Canvas benchmark and admission outcome are accepted on the current
-      candidate lineage.
-- [ ] Windows and Linux native and software smoke evidence is attached.
+- [x] Canvas benchmark and admission outcome are accepted on the current
+      candidate lineage. ADR-009's amended outcome (direct `QQuickItem`
+      admitted; `widget-baseline`/`quick-item` required, `qquickwidget`/
+      `window-container` diagnostic-only) is confirmed by real CI on both
+      Windows and Linux, native and software backends — runs
+      [32562071695](https://github.com/studio-berry/loupe/actions/runs/32562071695)
+      (both platforms green on this evidence), corroborated by
+      [32557415495](https://github.com/studio-berry/loupe/actions/runs/32557415495)
+      and [32559534947](https://github.com/studio-berry/loupe/actions/runs/32559534947).
+- [x] Windows and Linux native and software smoke evidence is attached.
+      `QuickShellSmoke` reported `scene_graph_initialized` with a non-`Unknown`
+      `GraphicsApi` on both OSes and both backends (Windows: `d3d11`/
+      `software`; Linux: `software`/`software` — GitHub-hosted `ubuntu-24.04`
+      runners have no GPU, so the "native"/preferred-backend request degrades
+      to software, matching ADR-007's own documented "unavailable GPU" row).
+      Same run evidence as above.
 - [ ] Final-artifact SBOM, notices, LGPL replacement/relink evidence, and
-      clean-machine package smoke close the packaging gate.
-- [ ] Product Quick accessibility runtime and focus-bridge evidence close the
-      GUI gate.
+      clean-machine package smoke close the packaging gate. **Not closeable
+      yet:** no shipped/installed product Quick module exists at this stage
+      to produce that evidence from; this is a Phase-4-exit gate.
+- [x] Focus-bridge qualification evidence: the QWidget-to-Quick-to-QWidget
+      keyboard focus and accessibility-role probe passed natively and under
+      the software backend on both Windows and Linux (same runs above).
+- [ ] Product Quick accessibility runtime remains open — the focus-bridge
+      probe above is qualification-only infrastructure, not the product
+      accessibility runtime evidence a real Quick shell would require; that
+      remains a Phase-4-exit gate for the same reason as packaging.
 
 ## References
 
