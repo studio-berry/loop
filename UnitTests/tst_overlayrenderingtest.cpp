@@ -132,6 +132,7 @@ private slots:
     void init();
     void cleanup();
     void ordersAndTransformsIndependentOverlays();
+    void denyExtraGraphicsSuppressesOverlays();
     void overlayOnlyUpdatePreservesPageSurfaceCache();
     void invalidAndHighCountGeometryRemainBounded();
 
@@ -217,6 +218,25 @@ void OverlayRenderingTest::ordersAndTransformsIndependentOverlays()
 
     proxy->unregisterDrawInterface(&selection);
     proxy->unregisterDrawInterface(&guides);
+}
+
+void OverlayRenderingTest::denyExtraGraphicsSuppressesOverlays()
+{
+    setDocument(1);
+
+    QVector<QString> callOrder;
+    RecordingOverlay overlay(QStringLiteral("overlay"), pdf::PDFOverlayLayer::Findings, &callOrder);
+    pdf::PDFDrawWidgetProxy* proxy = m_widget->getDrawWidgetProxy();
+    proxy->registerDrawInterface(&overlay);
+    proxy->setFeatures(proxy->getFeatures() | pdf::PDFRenderer::DenyExtraGraphics);
+
+    QWidget* canvas = m_widget->getDrawWidget()->getWidget();
+    QVERIFY(canvas != nullptr);
+    const QImage image = canvas->grab().toImage();
+    QVERIFY(!image.isNull());
+    QCOMPARE(overlay.calls(), 0);
+
+    proxy->unregisterDrawInterface(&overlay);
 }
 
 void OverlayRenderingTest::overlayOnlyUpdatePreservesPageSurfaceCache()
