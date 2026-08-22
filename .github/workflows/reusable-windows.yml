@@ -46,6 +46,11 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: .\scripts\verify-loupe-shell-contract.ps1
+      - name: Verify interaction boundary
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python scripts\verify-interaction-boundary.py
       - name: Verify branch policy
         working-directory: loupe
         shell: pwsh

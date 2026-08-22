@@ -318,6 +318,9 @@ if(LOUPE_INSTALL_INCLUDE)
 endif()
 
 if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    # Host-neutral interaction seam. Depends only on LoupeLibCore and is not
+    # installed; see LoupeLibInteraction/CMakeLists.txt.
+    add_subdirectory(LoupeLibInteraction)
     add_subdirectory(LoupeLibWidgets)
     if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
