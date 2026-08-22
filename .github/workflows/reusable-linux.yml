@@ -47,6 +47,12 @@ jobs:
       - name: Verify interaction boundary
         working-directory: loupe
         run: python3 scripts/verify-interaction-boundary.py
+      - name: Verify Quick shell admission policy
+        working-directory: loupe
+        run: python3 scripts/verify-quick-shell-policy.py
+      - name: Verify Quick runtime/package contract
+        working-directory: loupe
+        run: python3 scripts/verify-quick-runtime-contract.py
       - name: Verify branch policy
         working-directory: loupe
         run: python3 scripts/ci/check_branch_policy.py
@@ -137,11 +143,55 @@ jobs:
       - name: Build project
         working-directory: loupe
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${{ inputs.fast }}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build
           fi
+
+      - name: Smoke Qt Quick preferred backend
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QSG_RHI_BACKEND: opengl
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode native -ExpectedGraphicsApi opengl
+
+      - name: Smoke Qt Quick software backend
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode software -ExpectedGraphicsApi software
+
+      - name: Run S21 canvas benchmark (native)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate all
+
+      - name: Run S21 canvas benchmark (software)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate all
+
+      - name: Run QWidget/Quick focus bridge (native)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode native
+
+      - name: Run QWidget/Quick focus bridge (software)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode software
 
       - name: Prove change with agent-fast
         if: inputs.fast
