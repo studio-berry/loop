@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdrawspacecontroller.h"
+#include "pdfpagesurfacecache_p.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
 #include "pdfcompiler.h"
@@ -45,172 +46,12 @@
 #include <cmath>
 #include <iterator>
 #include <limits>
-#include <map>
 #include <optional>
-#include <tuple>
 
 #include "pdfdbgheap.h"
 
 namespace pdf
 {
-
-namespace
-{
-
-struct PDFPageSurfaceKey
-{
-    PDFRevisionIdentity revision;
-    PDFInteger pageIndex = -1;
-    PageRotation rotation = PageRotation::None;
-    int featureBits = 0;
-    QSize targetPixelSize;
-    int devicePixelRatio1000 = 1000;
-
-    bool operator<(const PDFPageSurfaceKey& other) const
-    {
-        return std::tuple(revision, pageIndex, rotation, featureBits,
-                          targetPixelSize.width(), targetPixelSize.height(), devicePixelRatio1000)
-            < std::tuple(other.revision, other.pageIndex, other.rotation, other.featureBits,
-                         other.targetPixelSize.width(), other.targetPixelSize.height(), other.devicePixelRatio1000);
-    }
-
-    bool compatibleWith(const PDFPageSurfaceKey& desired) const
-    {
-        return revision == desired.revision && pageIndex == desired.pageIndex && rotation == desired.rotation
-            && featureBits == desired.featureBits && devicePixelRatio1000 == desired.devicePixelRatio1000;
-    }
-};
-
-struct PDFPageSurfaceLookup
-{
-    QImage image;
-    bool exact = false;
-};
-
-}   // namespace
-
-class PDFPageSurfaceCache final
-{
-public:
-    explicit PDFPageSurfaceCache(qsizetype byteBudget) : m_byteBudget(byteBudget) { }
-
-    void setByteBudget(qsizetype byteBudget)
-    {
-        m_byteBudget = qMax<qsizetype>(0, byteBudget);
-        trimToBudget();
-    }
-
-    void clear()
-    {
-        m_entries.clear();
-        m_currentBytes = 0;
-        ++m_generation;
-    }
-
-    quint64 beginRequest()
-    {
-        return ++m_generation;
-    }
-
-    std::optional<PDFPageSurfaceLookup> lookup(const PDFPageSurfaceKey& desired)
-    {
-        Entry* best = nullptr;
-        bool exact = false;
-        qint64 bestDistance = std::numeric_limits<qint64>::max();
-
-        for (auto& item : m_entries)
-        {
-            Entry& entry = item.second;
-            if (!entry.key.compatibleWith(desired))
-            {
-                continue;
-            }
-
-            const qint64 widthDistance = qAbs(entry.key.targetPixelSize.width() - desired.targetPixelSize.width());
-            const qint64 heightDistance = qAbs(entry.key.targetPixelSize.height() - desired.targetPixelSize.height());
-            const qint64 distance = widthDistance + heightDistance;
-            const bool itemExact = entry.key.targetPixelSize == desired.targetPixelSize;
-            if (!best || (itemExact && !exact) || (itemExact == exact && distance < bestDistance)
-                || (itemExact == exact && distance == bestDistance && entry.accessSequence < best->accessSequence))
-            {
-                best = &entry;
-                exact = itemExact;
-                bestDistance = distance;
-            }
-        }
-
-        if (!best)
-        {
-            return std::nullopt;
-        }
-
-        best->accessSequence = ++m_accessSequence;
-        return PDFPageSurfaceLookup { best->image, exact };
-    }
-
-    bool insert(const PDFPageSurfaceKey& key, quint64 generation, QImage image)
-    {
-        if (generation != m_generation || image.isNull())
-        {
-            return false;
-        }
-
-        const qsizetype cost = image.sizeInBytes();
-        if (cost <= 0 || cost > m_byteBudget)
-        {
-            return false;
-        }
-
-        if (auto existing = m_entries.find(key); existing != m_entries.end())
-        {
-            m_currentBytes -= existing->second.cost;
-            m_entries.erase(existing);
-        }
-
-        Entry entry;
-        entry.key = key;
-        entry.image = std::move(image);
-        entry.cost = cost;
-        entry.accessSequence = ++m_accessSequence;
-        m_entries.emplace(key, std::move(entry));
-        m_currentBytes += cost;
-        trimToBudget();
-        return m_entries.find(key) != m_entries.end();
-    }
-
-private:
-    struct Entry
-    {
-        PDFPageSurfaceKey key;
-        QImage image;
-        qsizetype cost = 0;
-        quint64 accessSequence = 0;
-    };
-
-    void trimToBudget()
-    {
-        while (m_currentBytes > m_byteBudget && !m_entries.empty())
-        {
-            auto oldest = m_entries.begin();
-            for (auto it = std::next(m_entries.begin()); it != m_entries.end(); ++it)
-            {
-                if (it->second.accessSequence < oldest->second.accessSequence)
-                {
-                    oldest = it;
-                }
-            }
-
-            m_currentBytes -= oldest->second.cost;
-            m_entries.erase(oldest);
-        }
-    }
-
-    qsizetype m_byteBudget = 0;
-    qsizetype m_currentBytes = 0;
-    quint64 m_generation = 0;
-    quint64 m_accessSequence = 0;
-    std::map<PDFPageSurfaceKey, Entry> m_entries;
-};
 
 PDFDrawSpaceController::PDFDrawSpaceController(QObject* parent) :
     QObject(parent),
@@ -722,8 +563,10 @@ void PDFDrawWidgetProxy::init(PDFWidget* widget)
 
 void PDFDrawWidgetProxy::setCacheLimit(qsizetype limit)
 {
-    m_compiler->setCacheLimit(limit);
-    m_pageSurfaceCache->setByteBudget(limit);
+    // The public limit covers both independent caches. Partition it explicitly
+    // so their combined resident cost cannot exceed the configured authority.
+    m_compiler->setCacheLimit(PDFPageCacheBudget::compiledPages(limit));
+    m_pageSurfaceCache->setByteBudget(PDFPageCacheBudget::pageSurfaces(limit));
 }
 
 void PDFDrawWidgetProxy::update()
