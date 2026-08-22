@@ -323,7 +323,7 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
     if (process.exitStatus() != QProcess::NormalExit)
     {
         finish(QStringLiteral("incomplete"), QStringLiteral("validator-crashed"));
-        return PDFTranslationContext::tr("The independent validator rejected the candidate.");
+        return PDFTranslationContext::tr("The independent validator crashed before returning a result.");
     }
     if (process.exitCode() != 0)
     {

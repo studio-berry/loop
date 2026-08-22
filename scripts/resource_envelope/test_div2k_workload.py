@@ -4,14 +4,8 @@ import unittest
 import zlib
 from pathlib import Path
 
-from scripts.resource_envelope.div2k_workload import (
-    Example,
-    _png_pixels,
-    build_pdf,
-    canonical_json,
-    create_manifest,
-    select_examples,
-)
+from scripts.resource_envelope.corpus import Example, canonical_json, create_manifest, select_examples
+from scripts.resource_envelope.pdf_builder import build_pdf, png_pixels as _png_pixels
 
 
 def _png(width: int, height: int, pixels: bytes) -> bytes:

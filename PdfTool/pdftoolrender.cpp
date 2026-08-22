@@ -202,7 +202,6 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
         if (options.executionContext)
         {
             QJsonObject data = formatter.getJsonObject();
-            data.insert(QStringLiteral("identity"), identity.toJson());
 
             pdf::PDFWorkloadEnvelope envelope;
             envelope.identity = identity;

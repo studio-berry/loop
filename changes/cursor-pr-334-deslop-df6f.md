@@ -1,4 +1,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Deslop PR #334 — remove redundant comments, use digestFile for validator hashing, centralize page-content visual-diff policy, fix lifecycle trace test naming and fake replay evidence.
+Summary: Apply PR #334 review fixes — repair report finalization, validator crash messaging, shared unexpectedChangeCount, operator acceptance split, lifecycle golden trace, div2k module decomposition.

@@ -66,20 +66,6 @@ bool readDocumentFromPath(const QString& path,
     return true;
 }
 
-int unexpectedChangeCount(const pdf::PDFRepairDiffReport& report)
-{
-    int count = 0;
-    for (const pdf::PDFRepairStructuralChange& change : report.structuralChanges)
-    {
-        count += change.classification == pdf::PDFRepairChangeClass::Unexpected;
-    }
-    for (const pdf::PDFRepairPageVisualDiff& page : report.pages)
-    {
-        count += page.unexpectedChangedPixelCount > 0;
-    }
-    return count;
-}
-
 } // namespace
 
 static PDFToolRepairDiff s_toolRepairDiffApplication;
@@ -166,7 +152,7 @@ PDFToolExitCode PDFToolRepairDiff::execute(const PDFToolOptions& options)
     {
         return PDFToolExitCode::PartialOutput;
     }
-    if (unexpectedChangeCount(report) > 0)
+    if (pdf::unexpectedChangeCount(report) > 0)
     {
         return PDFToolExitCode::Findings;
     }

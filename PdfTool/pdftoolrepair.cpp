@@ -209,18 +209,13 @@ bool writeJsonReport(const QString& path, const QJsonObject& report, QString* er
     return true;
 }
 
-int unexpectedChangeCount(const pdf::PDFRepairDiffReport& report)
+void writeRepairReportIfRequested(const PDFToolOptions& options, const QJsonObject& reportJson)
 {
-    int count = 0;
-    for (const pdf::PDFRepairStructuralChange& change : report.structuralChanges)
+    if (!options.repairReportFile.isEmpty())
     {
-        count += change.classification == pdf::PDFRepairChangeClass::Unexpected;
+        QString reportError;
+        writeJsonReport(options.repairReportFile, reportJson, &reportError);
     }
-    for (const pdf::PDFRepairPageVisualDiff& page : report.pages)
-    {
-        count += page.unexpectedChangedPixelCount > 0;
-    }
-    return count;
 }
 
 }   // namespace
@@ -430,6 +425,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
             reportJson.insert(QStringLiteral("incomplete_reasons"), QJsonArray{ QStringLiteral("postflight-incomplete") });
             if (!options.repairAllowIncomplete)
             {
+                writeRepairReportIfRequested(options, reportJson);
                 reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-incomplete"),
                                  PDFToolTranslationContext::tr("Postflight did not inspect the complete candidate."));
                 return PDFToolExitCode::PartialOutput;
@@ -438,16 +434,13 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         if (verdict.state == pdf::PreflightVerdictState::Error)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("error"));
+            writeRepairReportIfRequested(options, reportJson);
             return PDFToolExitCode::PreflightError;
         }
         if (verdict.state == pdf::PreflightVerdictState::Fail)
         {
             reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
-            if (!options.repairReportFile.isEmpty())
-            {
-                QString reportError;
-                writeJsonReport(options.repairReportFile, reportJson, &reportError);
-            }
+            writeRepairReportIfRequested(options, reportJson);
             return PDFToolExitCode::Findings;
         }
     }
@@ -457,6 +450,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
                                                             { QStringLiteral("status"), QStringLiteral("not-run") },
                                                             { QStringLiteral("reason"), QStringLiteral("no-profile-supplied") } });
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
+        writeRepairReportIfRequested(options, reportJson);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.postflight-required"),
                          PDFToolTranslationContext::tr("A preflight --profile is required before a repair output can be committed."));
         return PDFToolExitCode::PartialOutput;
@@ -468,19 +462,16 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         reportJson.insert(QStringLiteral("status"), QStringLiteral("incomplete"));
         if (!options.repairAllowIncomplete)
         {
+            writeRepairReportIfRequested(options, reportJson);
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.preview-incomplete"),
                              PDFToolTranslationContext::tr("The repair preview is incomplete; no output was committed."));
             return PDFToolExitCode::PartialOutput;
         }
     }
-    if (unexpectedChangeCount(diffReport) > 0)
+    if (pdf::unexpectedChangeCount(diffReport) > 0)
     {
         reportJson.insert(QStringLiteral("status"), QStringLiteral("failed"));
-        if (!options.repairReportFile.isEmpty())
-        {
-            QString reportError;
-            writeJsonReport(options.repairReportFile, reportJson, &reportError);
-        }
+        writeRepairReportIfRequested(options, reportJson);
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("repair.unexpected-change"),
                          PDFToolTranslationContext::tr("The repair candidate contains unexpected changes; no output was committed."));
         return PDFToolExitCode::Findings;

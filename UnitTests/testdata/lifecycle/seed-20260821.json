@@ -4,20 +4,171 @@
   "seed": 539363361,
   "initial_artifact_digest": "161a1beb41c008069762349ccae021ac2276deb2314aed2cdcb746a485f4dbcf",
   "commands": [
-    { "index": 0, "kind": "open", "argument": "fixture" },
-    { "index": 1, "kind": "render-preflight", "argument": "page-0" },
-    { "index": 2, "kind": "cancel", "argument": "job-0" },
-    { "index": 3, "kind": "replace-revision", "argument": 1 },
-    { "index": 4, "kind": "save-reopen", "argument": "incremental" },
-    { "index": 5, "kind": "rollback", "argument": 1 },
-    { "index": 6, "kind": "close", "argument": null }
+    {
+      "index": 0,
+      "kind": "open",
+      "argument": "9073021129658994722"
+    },
+    {
+      "index": 1,
+      "kind": "render-preflight",
+      "argument": "6627552434952599679"
+    },
+    {
+      "index": 2,
+      "kind": "cancel",
+      "argument": "13413874605752335662"
+    },
+    {
+      "index": 3,
+      "kind": "replace-revision",
+      "argument": "15666845178433162515"
+    },
+    {
+      "index": 4,
+      "kind": "save-reopen",
+      "argument": "5643642477061534660"
+    },
+    {
+      "index": 5,
+      "kind": "rollback",
+      "argument": "1105270678675479373"
+    },
+    {
+      "index": 6,
+      "kind": "save-reopen",
+      "argument": "6832405535443272821"
+    },
+    {
+      "index": 7,
+      "kind": "cancel",
+      "argument": "16761752916376313712"
+    },
+    {
+      "index": 8,
+      "kind": "save-reopen",
+      "argument": "3535054248452844022"
+    },
+    {
+      "index": 9,
+      "kind": "cancel",
+      "argument": "10026018545102983422"
+    },
+    {
+      "index": 10,
+      "kind": "render-preflight",
+      "argument": "6115101236689681342"
+    },
+    {
+      "index": 11,
+      "kind": "open",
+      "argument": "1714696563350074746"
+    },
+    {
+      "index": 12,
+      "kind": "open",
+      "argument": "1506661352798757243"
+    },
+    {
+      "index": 13,
+      "kind": "rollback",
+      "argument": "4872606321110993443"
+    },
+    {
+      "index": 14,
+      "kind": "open",
+      "argument": "8511193689446659140"
+    },
+    {
+      "index": 15,
+      "kind": "save-reopen",
+      "argument": "14923842429937073330"
+    },
+    {
+      "index": 16,
+      "kind": "rollback",
+      "argument": "18431316928742112738"
+    },
+    {
+      "index": 17,
+      "kind": "render-preflight",
+      "argument": "10836438424259270615"
+    },
+    {
+      "index": 18,
+      "kind": "rollback",
+      "argument": "5297529000753819832"
+    },
+    {
+      "index": 19,
+      "kind": "replace-revision",
+      "argument": "6763520185832127791"
+    },
+    {
+      "index": 20,
+      "kind": "rollback",
+      "argument": "12396688419748130082"
+    },
+    {
+      "index": 21,
+      "kind": "cancel",
+      "argument": "12490166162246806687"
+    },
+    {
+      "index": 22,
+      "kind": "replace-revision",
+      "argument": "8037962727535703230"
+    },
+    {
+      "index": 23,
+      "kind": "cancel",
+      "argument": "3457224272875190638"
+    },
+    {
+      "index": 24,
+      "kind": "save-reopen",
+      "argument": "10473223684201532030"
+    },
+    {
+      "index": 25,
+      "kind": "save-reopen",
+      "argument": "14645183195772152095"
+    },
+    {
+      "index": 26,
+      "kind": "save-reopen",
+      "argument": "6562769764930608552"
+    },
+    {
+      "index": 27,
+      "kind": "open",
+      "argument": "584025986419488675"
+    },
+    {
+      "index": 28,
+      "kind": "replace-revision",
+      "argument": "14740329774157277479"
+    },
+    {
+      "index": 29,
+      "kind": "render-preflight",
+      "argument": "4523567564724421827"
+    },
+    {
+      "index": 30,
+      "kind": "rollback",
+      "argument": "208795149566122389"
+    },
+    {
+      "index": 31,
+      "kind": "close",
+      "argument": "14977176080434032300"
+    }
   ],
   "expected_invariants": [
     "source-immutable",
     "cancel-is-terminal",
     "stale-results-rejected",
     "history-append-only"
-  ],
-  "observed_result": "replayable",
-  "shrink_history": []
+  ]
 }

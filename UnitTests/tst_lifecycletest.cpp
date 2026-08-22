@@ -265,6 +265,14 @@ void LifecycleTest::boundedTraceGenerationIsDeterministic()
     QCOMPARE(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact),
              QJsonDocument(traceToJson(seed, second)).toJson(QJsonDocument::Compact));
 
+    QFile goldenFile(QStringLiteral(LOUPE_UNITTEST_SOURCE_DIR "/testdata/lifecycle/seed-20260821.json"));
+    QVERIFY(goldenFile.open(QIODevice::ReadOnly));
+    QJsonParseError parseError;
+    const QJsonDocument goldenDocument = QJsonDocument::fromJson(goldenFile.readAll(), &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QCOMPARE(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact),
+             QJsonDocument(goldenDocument.object()).toJson(QJsonDocument::Compact));
+
     bool opened = false;
     bool cancelled = false;
     quint64 revision = 0;
