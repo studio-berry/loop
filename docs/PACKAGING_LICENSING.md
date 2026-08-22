@@ -107,8 +107,9 @@ Sources: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-ob
 
 ### Qt Quick Controls (Loupe 1.2 foundation)
 
-ADR-007 selects Qt Quick Controls 2 as the future Loupe 1.2 shell foundation,
-but this decision record does not add the modules to a shipped artifact. When
+ADR-007 and ADR-010 select Qt Quick Controls 2 as the future Loupe 1.2 shell
+foundation, but the qualification harness does not add the modules to a
+shipped artifact. When
 the first Quick implementation lands, the release manifest must enumerate the
 actual linked Qt Quick Controls, QML, Quick, and transitive runtime/plugin
 modules resolved by that build. The LGPL route remains the default: dynamic
@@ -116,7 +117,7 @@ linking, replacement/relink evidence, corresponding source or written offer,
 and notices for every shipped module.
 
 The Quick adoption gate also requires clean-machine Windows and Linux package
-smoke tests with the preferred RHI backend and `QSG_RHI_BACKEND=software`.
+smoke tests with the preferred RHI backend and `QT_QUICK_BACKEND=software`.
 `QT_QPA_PLATFORM=offscreen` alone is not sufficient evidence of Quick scene
 graph rendering. Until those artifacts and tests are attached to the release
 record, packaging must not claim Qt Quick support or silently add Quick

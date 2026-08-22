@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "issue": 193,
-  "gui_status": "deferred-until-0.1.1",
+  "gui_status": "gated-by-quick-admission",
   "shell_surface": "LoupeEditor",
   "ui_foundation": {
     "candidate": "Qt Quick Controls",
     "decision_issue": 178,
-    "decision_status": "pending"
+    "decision_status": "accepted-with-admission-gates"
   },
   "workspaces": [
     { "id": "document", "manifest_surface": "loupe-document", "preserves": ["document", "preflight"] },
