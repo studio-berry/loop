@@ -105,6 +105,22 @@ class SyncMilestonesTests(unittest.TestCase):
         self.assertEqual(len(retire), 1)
         self.assertEqual(retire[0].title, "0.1.2")
 
+    @mock.patch.object(module, "gh_api")
+    def test_list_remote_milestones_requests_all_pages(self, gh_api: mock.Mock) -> None:
+        gh_api.return_value = [
+            {"number": 1, "title": "0.1.0", "description": "old", "state": "closed"},
+            {"number": 101, "title": "0.2.0", "description": "new", "state": "open"},
+        ]
+
+        milestones = module.list_remote_milestones()
+
+        gh_api.assert_called_once_with(
+            "GET",
+            "repos/studio-berry/loupe/milestones?state=all&per_page=100",
+            paginate=True,
+        )
+        self.assertEqual([item.number for item in milestones], [1, 101])
+
 
 if __name__ == "__main__":
     unittest.main()
