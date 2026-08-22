@@ -10,11 +10,11 @@ Canonical milestone text for [studio-berry/loupe](https://github.com/studio-berr
 | 0.0.2 | Historical (recovery baseline merged to `stable`) | — |
 | 0.1.0 | Shipped as `0.1.0-alpha` | — |
 | 0.1.1 | Living | 0.0.3 |
-| 0.1.2 | Living | 0.0.4 |
-| 0.1.3 | Living | 0.0.5 |
-| 0.1.4 | Living | 0.0.6 |
+| 0.2.0 | Living | 0.0.4 (supersedes retired `0.1.2` title) |
+| 0.3.0 | Living | 0.0.5 (supersedes retired `0.1.3` title) |
+| 0.4.0 | Living | 0.0.6 (supersedes retired `0.1.4` title) |
 
-See also [`docs/VERSIONING.md`](../VERSIONING.md) for the SemVer remap.
+The living release train is **0.1.1 → 0.2.0 → 0.3.0 → 0.4.0**. Retired `0.1.2`–`0.1.4` GitHub milestone titles are closed by the sync script.
 
 ## Sync
 
@@ -30,4 +30,4 @@ Dry run (default):
 python scripts/github/sync_milestones.py
 ```
 
-The script matches milestones by title and updates description plus optional open/closed state from [`manifest.json`](manifest.json).
+The script matches milestones by title, creates missing canonical milestones, updates description plus optional open/closed state from [`manifest.json`](manifest.json), and closes retired titles listed under `retire`.

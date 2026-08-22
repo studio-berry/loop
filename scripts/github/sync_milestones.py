@@ -25,6 +25,12 @@ class MilestoneSpec:
 
 
 @dataclass(frozen=True)
+class RetireSpec:
+    title: str
+    description: str
+
+
+@dataclass(frozen=True)
 class RemoteMilestone:
     number: int
     title: str
@@ -32,7 +38,7 @@ class RemoteMilestone:
     state: str
 
 
-def load_specs() -> list[MilestoneSpec]:
+def load_manifest() -> tuple[list[MilestoneSpec], list[RetireSpec]]:
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     specs: list[MilestoneSpec] = []
     for entry in manifest["milestones"]:
@@ -44,7 +50,11 @@ def load_specs() -> list[MilestoneSpec]:
                 state=entry.get("state", "open"),
             )
         )
-    return specs
+    retire = [
+        RetireSpec(title=entry["title"], description=entry["description"].strip())
+        for entry in manifest.get("retire", [])
+    ]
+    return specs, retire
 
 
 def gh_api(method: str, path: str, payload: dict | None = None) -> object:
@@ -66,37 +76,70 @@ def gh_api(method: str, path: str, payload: dict | None = None) -> object:
     return json.loads(completed.stdout)
 
 
+def remote_from_payload(item: dict) -> RemoteMilestone:
+    return RemoteMilestone(
+        number=item["number"],
+        title=item["title"],
+        description=item.get("description") or "",
+        state=item["state"],
+    )
+
+
 def list_remote_milestones() -> list[RemoteMilestone]:
     raw = gh_api("GET", f"repos/{REPO}/milestones?state=all&per_page=100")
     if not isinstance(raw, list):
         raise RuntimeError("unexpected milestone list response")
-    return [
-        RemoteMilestone(
-            number=item["number"],
-            title=item["title"],
-            description=item.get("description") or "",
-            state=item["state"],
-        )
-        for item in raw
-    ]
+    return [remote_from_payload(item) for item in raw]
 
 
 def plan_updates(
     specs: list[MilestoneSpec], remote: list[RemoteMilestone]
-) -> list[tuple[MilestoneSpec, RemoteMilestone]]:
+) -> tuple[list[MilestoneSpec], list[tuple[MilestoneSpec, RemoteMilestone]]]:
     by_title = {item.title: item for item in remote}
-    planned: list[tuple[MilestoneSpec, RemoteMilestone]] = []
+    creates: list[MilestoneSpec] = []
+    updates: list[tuple[MilestoneSpec, RemoteMilestone]] = []
     for spec in specs:
         current = by_title.get(spec.title)
         if current is None:
-            raise RuntimeError(f"missing GitHub milestone titled {spec.title!r}")
+            creates.append(spec)
+            continue
         if (
             current.description.strip() == spec.description
             and current.state == spec.state
         ):
             continue
+        updates.append((spec, current))
+    return creates, updates
+
+
+def plan_retirements(
+    retire_specs: list[RetireSpec], remote: list[RemoteMilestone]
+) -> list[tuple[RetireSpec, RemoteMilestone]]:
+    by_title = {item.title: item for item in remote}
+    planned: list[tuple[RetireSpec, RemoteMilestone]] = []
+    for spec in retire_specs:
+        current = by_title.get(spec.title)
+        if current is None:
+            continue
+        if current.state == "closed" and current.description.strip() == spec.description:
+            continue
         planned.append((spec, current))
     return planned
+
+
+def create_milestone(spec: MilestoneSpec) -> RemoteMilestone:
+    payload = gh_api(
+        "POST",
+        f"repos/{REPO}/milestones",
+        {
+            "title": spec.title,
+            "description": spec.description,
+            "state": spec.state,
+        },
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"unexpected create response for {spec.title!r}")
+    return remote_from_payload(payload)
 
 
 def apply_update(spec: MilestoneSpec, current: RemoteMilestone) -> None:
@@ -110,6 +153,17 @@ def apply_update(spec: MilestoneSpec, current: RemoteMilestone) -> None:
     )
 
 
+def apply_retirement(spec: RetireSpec, current: RemoteMilestone) -> None:
+    gh_api(
+        "PATCH",
+        f"repos/{REPO}/milestones/{current.number}",
+        {
+            "description": spec.description,
+            "state": "closed",
+        },
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -119,13 +173,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    specs = load_specs()
+    specs, retire_specs = load_manifest()
     remote = list_remote_milestones()
-    updates = plan_updates(specs, remote)
+    creates, updates = plan_updates(specs, remote)
+    retirements = plan_retirements(retire_specs, remote)
 
-    if not updates:
+    if not creates and not updates and not retirements:
         print("All milestone descriptions already match manifest.")
         return 0
+
+    for spec in creates:
+        print(f"{spec.title}: create milestone ({spec.state})")
 
     for spec, current in updates:
         print(f"{spec.title}: milestone #{current.number}")
@@ -134,13 +192,29 @@ def main() -> int:
         if current.state != spec.state:
             print(f"  state: {current.state} -> {spec.state}")
 
+    for spec, current in retirements:
+        print(f"{spec.title}: retire milestone #{current.number}")
+        if current.description.strip() != spec.description:
+            print("  description: update")
+        if current.state != "closed":
+            print(f"  state: {current.state} -> closed")
+
     if not args.apply:
-        print(f"Dry run only. Re-run with --apply to update {len(updates)} milestone(s).")
+        action_count = len(creates) + len(updates) + len(retirements)
+        print(f"Dry run only. Re-run with --apply to update {action_count} milestone(s).")
         return 0
+
+    for spec in creates:
+        created = create_milestone(spec)
+        print(f"Created {spec.title} (#{created.number}).")
 
     for spec, current in updates:
         apply_update(spec, current)
         print(f"Updated {spec.title} (#{current.number}).")
+
+    for spec, current in retirements:
+        apply_retirement(spec, current)
+        print(f"Retired {spec.title} (#{current.number}).")
 
     return 0
 
