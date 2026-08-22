@@ -154,8 +154,18 @@ jobs:
         working-directory: loupe
         env:
           QT_QPA_PLATFORM: offscreen
+          # Requests OpenGL (the Linux-preferred backend per ADR-007's table),
+          # but GitHub-hosted ubuntu-24.04 runners have no GPU and offscreen
+          # QPA does not create a real GL context, so Qt Quick's RHI falls
+          # back to the software renderer here -- confirmed by an actual CI
+          # run. That is ADR-007's own documented "unavailable GPU" row
+          # ("platform default attempt / software backend selected
+          # explicitly"), not a wiring bug, so no -ExpectedGraphicsApi
+          # assertion is made for this step. QuickShellSmoke itself still
+          # hard-fails (exit 3) if the reported API is Unknown, which is the
+          # actual admission bar this checklist item names.
           QSG_RHI_BACKEND: opengl
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode native -ExpectedGraphicsApi opengl
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode native
 
       - name: Smoke Qt Quick software backend
         if: ${{ !inputs.fast }}
