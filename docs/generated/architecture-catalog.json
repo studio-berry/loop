@@ -161,6 +161,13 @@
         "UnitTestsInteractionBoundary"
       ],
       "title": "The host-neutral interaction layer has no Widgets or QML dependency"
+    },
+    {
+      "id": "I22",
+      "test_targets": [
+        "UnitTestsDocumentFacade"
+      ],
+      "title": "One document lifecycle facade and one command catalog; no second action registry"
     }
   ],
   "branch_policy": {
@@ -340,6 +347,7 @@
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
+    "UnitTestsDocumentFacade",
     "UnitTestsDocumentSession",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",

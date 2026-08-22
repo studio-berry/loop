@@ -51,6 +51,11 @@ jobs:
         shell: pwsh
         run: |
           python scripts\verify-interaction-boundary.py
+      - name: Verify command catalog
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python scripts\verify-command-catalog.py
       - name: Verify Quick shell admission policy
         working-directory: loupe
         shell: pwsh

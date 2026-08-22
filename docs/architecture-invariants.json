@@ -105,6 +105,11 @@
       "id": "I21",
       "title": "The host-neutral interaction layer has no Widgets or QML dependency",
       "test_targets": ["UnitTestsInteractionBoundary"]
+    },
+    {
+      "id": "I22",
+      "title": "One document lifecycle facade and one command catalog; no second action registry",
+      "test_targets": ["UnitTestsDocumentFacade"]
     }
   ]
 }
