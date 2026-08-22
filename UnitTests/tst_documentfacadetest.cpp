@@ -662,7 +662,7 @@ void DocumentFacadeTest::replacementInvalidatesTheAvailabilitySnapshot()
     // the next one, so it does not survive the replacement.
     QCOMPARE(harness.facade->state(), pdfinteraction::DocumentState::Opening);
     QVERIFY(!harness.catalog.isEnabled(pdfinteraction::DocumentFacade::SaveCommandId));
-    QVERIFY(!harness.catalog.isEnabled(pdfinteraction::DocumentFacade::CloseCommandId));
+    QVERIFY(harness.catalog.isEnabled(pdfinteraction::DocumentFacade::CloseCommandId));
 }
 
 void DocumentFacadeTest::closeWithJobInFlightCancelsAndClearsRevision()

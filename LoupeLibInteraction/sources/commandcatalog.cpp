@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "commandcatalog.h"
+#include "commandcatalogresource_p.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -71,6 +72,8 @@ CommandShortcut readShortcut(const QJsonObject& shortcutObject)
 CommandCatalog::CommandCatalog(QObject* parent) :
     QObject(parent)
 {
+    ensureCommandCatalogResource();
+
     QFile file(QString::fromLatin1(ContractResourcePath));
     if (!file.open(QIODevice::ReadOnly))
     {

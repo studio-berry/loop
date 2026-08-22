@@ -38,8 +38,10 @@ namespace pdf
 class PDFWriteObjectVisitor : public PDFAbstractVisitor
 {
 public:
-    explicit PDFWriteObjectVisitor(QIODevice* device) :
-        m_device(device)
+    explicit PDFWriteObjectVisitor(QIODevice* device,
+                                   const PDFOperationControl* operationControl = nullptr) :
+        m_device(device),
+        m_operationControl(operationControl)
     {
 
     }
@@ -56,11 +58,24 @@ public:
     virtual void visitReference(const PDFObjectReference reference) override;
 
     PDFObject getDecryptedObject();
+    bool isCancelled() const noexcept { return m_cancelled; }
 
 private:
+    bool checkpoint() noexcept
+    {
+        if (m_cancelled || PDFOperationControl::isOperationCancelled(m_operationControl))
+        {
+            m_cancelled = true;
+            return true;
+        }
+        return false;
+    }
+
     void writeName(const QByteArray& string);
 
     QIODevice* m_device;
+    const PDFOperationControl* m_operationControl;
+    bool m_cancelled = false;
 };
 
 namespace
@@ -82,11 +97,19 @@ struct IncrementalXrefEntry
 
 void PDFWriteObjectVisitor::visitNull()
 {
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write("null ");
 }
 
 void PDFWriteObjectVisitor::visitBool(bool value)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     if (value)
     {
         m_device->write("true ");
@@ -99,12 +122,20 @@ void PDFWriteObjectVisitor::visitBool(bool value)
 
 void PDFWriteObjectVisitor::visitInt(PDFInteger value)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write(QString::number(value).toLatin1());
     m_device->write(" ");
 }
 
 void PDFWriteObjectVisitor::visitReal(PDFReal value)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     // Jakub Melka: we use 5 digits, because they are specified
     // in PDF 1.7 specification, appendix C, Table C.1, where it is defined,
     // that number of significant digits of precision is 5.
@@ -114,6 +145,10 @@ void PDFWriteObjectVisitor::visitReal(PDFReal value)
 
 void PDFWriteObjectVisitor::visitString(PDFStringRef string)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     QByteArray data = string.getString();
     if (data.indexOf('(') != -1 ||
         data.indexOf(')') != -1 ||
@@ -135,10 +170,19 @@ void PDFWriteObjectVisitor::visitString(PDFStringRef string)
 
 void PDFWriteObjectVisitor::writeName(const QByteArray& string)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write("/");
 
     for (const char character : string)
     {
+        if (checkpoint())
+        {
+            return;
+        }
+
         if (PDFLexicalAnalyzer::isRegular(character))
         {
             m_device->write(&character, 1);
@@ -155,22 +199,42 @@ void PDFWriteObjectVisitor::writeName(const QByteArray& string)
 
 void PDFWriteObjectVisitor::visitName(PDFStringRef name)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     writeName(name.getString());
 }
 
 void PDFWriteObjectVisitor::visitArray(const PDFArray* array)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write("[ ");
     acceptArray(array);
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write("] ");
 }
 
 void PDFWriteObjectVisitor::visitDictionary(const PDFDictionary* dictionary)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     m_device->write("<< ");
 
     for (size_t i = 0, count = dictionary->getCount(); i < count; ++i)
     {
+        if (checkpoint())
+        {
+            return;
+        }
         writeName(dictionary->getKey(i).getString());
         dictionary->getValue(i).accept(this);
     }
@@ -180,11 +244,31 @@ void PDFWriteObjectVisitor::visitDictionary(const PDFDictionary* dictionary)
 
 void PDFWriteObjectVisitor::visitStream(const PDFStream* stream)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     visitDictionary(stream->getDictionary());
+
+    if (checkpoint())
+    {
+        return;
+    }
 
     m_device->write("stream");
     m_device->write("\x0D\x0A");
-    m_device->write(*stream->getContent());
+    const QByteArray& content = *stream->getContent();
+    constexpr qsizetype WriteChunkSize = 1 << 20;
+    for (qsizetype offset = 0; offset < content.size(); offset += WriteChunkSize)
+    {
+        if (checkpoint())
+        {
+            return;
+        }
+
+        m_device->write(content.constData() + offset,
+                        qMin(WriteChunkSize, content.size() - offset));
+    }
     m_device->write("\x0D\x0A");
     m_device->write("endstream");
     m_device->write("\x0D\x0A");
@@ -192,6 +276,10 @@ void PDFWriteObjectVisitor::visitStream(const PDFStream* stream)
 
 void PDFWriteObjectVisitor::visitReference(const PDFObjectReference reference)
 {
+    if (checkpoint())
+    {
+        return;
+    }
     visitInt(reference.objectNumber);
     visitInt(reference.generation);
     m_device->write("R ");
@@ -200,6 +288,11 @@ void PDFWriteObjectVisitor::visitReference(const PDFObjectReference reference)
 PDFOperationResult PDFDocumentWriter::write(const QString& fileName, const PDFDocument* document, bool safeWrite)
 {
     Q_ASSERT(document);
+
+    if (isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
 
     const PDFObjectStorage& storage = document->getStorage();
     if (!storage.getSecurityHandler()->isEncryptionAllowed())
@@ -259,6 +352,16 @@ PDFOperationResult PDFDocumentWriter::write(const QString& fileName, const PDFDo
 
 PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument* document)
 {
+    if (!document)
+    {
+        return tr("Document is null.");
+    }
+
+    if (isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
+
     if (!device->isWritable())
     {
         return tr("Device is not writable.");
@@ -294,6 +397,11 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
     std::vector<PDFInteger> offsets(objectCount, -1);
     for (size_t i = 0; i < objectCount; ++i)
     {
+        if (isOperationCancelled())
+        {
+            return tr("Operation cancelled.");
+        }
+
         const PDFObjectStorage::Entry& entry = objects[i];
         if (entry.object.isNull())
         {
@@ -313,16 +421,24 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
                 objectToWrite = storage.getSecurityHandler()->encryptObject(objectToWrite, reference);
             }
 
-            PDFWriteObjectVisitor visitor(device);
+            PDFWriteObjectVisitor visitor(device, m_operationControl);
             writeObjectHeader(device, reference);
             objectToWrite.accept(&visitor);
+            if (visitor.isCancelled())
+            {
+                return tr("Operation cancelled.");
+            }
             writeObjectFooter(device);
         }
         else
         {
-            PDFWriteObjectVisitor visitor(device);
+            PDFWriteObjectVisitor visitor(device, m_operationControl);
             writeObjectHeader(device, PDFObjectReference(i, entry.generation));
             entry.object.accept(&visitor);
+            if (visitor.isCancelled())
+            {
+                return tr("Operation cancelled.");
+            }
             writeObjectFooter(device);
         }
     }
@@ -336,6 +452,11 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
 
     for (size_t i = 0; i < objectCount; ++i)
     {
+        if (isOperationCancelled())
+        {
+            return tr("Operation cancelled.");
+        }
+
         const PDFObjectStorage::Entry& entry = objects[i];
         PDFInteger generation = entry.generation;
 
@@ -378,8 +499,12 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
 
     device->write("trailer");
     writeCRLF(device);
-    PDFWriteObjectVisitor trailerVisitor(device);
+    PDFWriteObjectVisitor trailerVisitor(device, m_operationControl);
     trailerDictionaryObject.accept(&trailerVisitor);
+    if (trailerVisitor.isCancelled() || isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
     writeCRLF(device);
     device->write("startxref");
     writeCRLF(device);

@@ -43,10 +43,13 @@ add_library(LoupeLibInteraction STATIC
     sources/commanddescriptor.h
     sources/commandcatalog.cpp
     sources/commandcatalog.h
+    sources/commandcatalogresource.cpp
+    sources/commandcatalogresource_p.h
     sources/documentloader.cpp
     sources/documentloader.h
     sources/documentfacade.cpp
     sources/documentfacade.h
+    sources/documentfacadestate.cpp
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)

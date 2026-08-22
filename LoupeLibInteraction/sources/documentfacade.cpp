@@ -41,52 +41,6 @@ constexpr const char* PathParameter = "path";
 
 }   // namespace
 
-const char* getDocumentStateName(DocumentState state)
-{
-    switch (state)
-    {
-        case DocumentState::Empty:
-            return "empty";
-
-        case DocumentState::Opening:
-            return "opening";
-
-        case DocumentState::Ready:
-            return "ready";
-
-        case DocumentState::Closing:
-            return "closing";
-
-        case DocumentState::Error:
-            return "error";
-    }
-
-    return "empty";
-}
-
-const char* getShellDocumentStatusName(ShellDocumentStatus status)
-{
-    switch (status)
-    {
-        case ShellDocumentStatus::NoDocument:
-            return "NO_DOCUMENT";
-
-        case ShellDocumentStatus::Open:
-            return "OPEN";
-
-        case ShellDocumentStatus::Modified:
-            return "MODIFIED";
-
-        case ShellDocumentStatus::OutputPending:
-            return "OUTPUT_PENDING";
-
-        case ShellDocumentStatus::OutputSaved:
-            return "OUTPUT_SAVED";
-    }
-
-    return "NO_DOCUMENT";
-}
-
 DocumentJobRelay::DocumentJobRelay(QObject* parent) :
     QObject(parent)
 {
@@ -136,7 +90,7 @@ DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
     m_revisionSource(&context),
     m_relay(new DocumentJobRelay, [](DocumentJobRelay* relay) { relay->deleteLater(); })
 {
-    registerHandlers();
+    m_handlersRegistered = registerHandlers();
     updateAvailability();
 }
 
@@ -176,8 +130,14 @@ DocumentFacade::~DocumentFacade()
     }
 }
 
-void DocumentFacade::registerHandlers()
+bool DocumentFacade::registerHandlers()
 {
+    if (!m_catalog)
+    {
+        return false;
+    }
+
+    bool registered = true;
     CommandCatalog::Handler open;
     open.invoke = [this](CommandInvocationId invocation, const QVariantMap& parameters)
     {
@@ -186,18 +146,18 @@ void DocumentFacade::registerHandlers()
         beginOpen(invocation, source);
     };
     open.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
-    m_catalog->setHandler(OpenCommandId, std::move(open));
+    registered = m_catalog->setHandler(OpenCommandId, std::move(open)) && registered;
 
     CommandCatalog::Handler close;
     close.invoke = [this](CommandInvocationId invocation, const QVariantMap&)
     { performClose(invocation); };
-    m_catalog->setHandler(CloseCommandId, std::move(close));
+    registered = m_catalog->setHandler(CloseCommandId, std::move(close)) && registered;
 
     CommandCatalog::Handler save;
     save.invoke = [this](CommandInvocationId invocation, const QVariantMap&)
     { beginSave(invocation, m_source); };
     save.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
-    m_catalog->setHandler(SaveCommandId, std::move(save));
+    registered = m_catalog->setHandler(SaveCommandId, std::move(save)) && registered;
 
     CommandCatalog::Handler saveAs;
     saveAs.invoke = [this](CommandInvocationId invocation, const QVariantMap& parameters)
@@ -207,7 +167,17 @@ void DocumentFacade::registerHandlers()
         beginSave(invocation, target);
     };
     saveAs.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
-    m_catalog->setHandler(SaveAsCommandId, std::move(saveAs));
+    registered = m_catalog->setHandler(SaveAsCommandId, std::move(saveAs)) && registered;
+
+    if (!registered)
+    {
+        m_catalog->clearHandler(OpenCommandId);
+        m_catalog->clearHandler(CloseCommandId);
+        m_catalog->clearHandler(SaveCommandId);
+        m_catalog->clearHandler(SaveAsCommandId);
+    }
+
+    return registered;
 }
 
 void DocumentFacade::requestCancellation(CommandInvocationId invocation)
@@ -270,48 +240,6 @@ void DocumentFacade::resolveCancellation(CommandInvocationId invocation,
 
     finishPending(invocation, CommandTerminalState::Cancelled, m_typedError);
     updateAvailability();
-}
-
-ShellDocumentStatus DocumentFacade::shellDocumentStatus() const
-{
-    return projectShellStatus(m_state, m_facets, m_outputState);
-}
-
-ShellDocumentStatus DocumentFacade::projectShellStatus(DocumentState state,
-                                                       DocumentFacets facets,
-                                                       DocumentOutputState outputState)
-{
-    // One truth, one projection. docs/loupe-shell.json names five document
-    // states; the facade's richer model answers in those five terms rather than
-    // letting a host maintain a second state machine that drifts.
-    if (state != DocumentState::Ready)
-    {
-        return ShellDocumentStatus::NoDocument;
-    }
-
-    if (outputState == DocumentOutputState::Pending)
-    {
-        return ShellDocumentStatus::OutputPending;
-    }
-
-    // Unsaved changes outrank a previous successful write: the file on disk is
-    // no longer what the operator is looking at.
-    if (facets.testFlag(DocumentFacet::Dirty))
-    {
-        return ShellDocumentStatus::Modified;
-    }
-
-    if (outputState == DocumentOutputState::Saved)
-    {
-        return ShellDocumentStatus::OutputSaved;
-    }
-
-    return ShellDocumentStatus::Open;
-}
-
-pdf::PDFRevisionIdentity DocumentFacade::currentRevision() const
-{
-    return m_revisionSource.currentRevision();
 }
 
 void DocumentFacade::markModified()
@@ -706,79 +634,6 @@ void DocumentFacade::supersedePending(CommandTerminalState state, QString typedE
     if (m_outputState == DocumentOutputState::Pending)
     {
         setOutputState(DocumentOutputState::None);
-    }
-
-    if (m_catalog)
-    {
-        m_catalog->finishInvocation(invocation, state, std::move(typedError));
-    }
-}
-
-void DocumentFacade::setState(DocumentState state)
-{
-    if (m_state == state)
-    {
-        return;
-    }
-
-    m_state = state;
-    Q_EMIT stateChanged(m_state);
-}
-
-void DocumentFacade::setFacets(DocumentFacets facets)
-{
-    if (m_facets == facets)
-    {
-        return;
-    }
-
-    m_facets = facets;
-    Q_EMIT facetsChanged(m_facets);
-}
-
-void DocumentFacade::setOutputState(DocumentOutputState outputState)
-{
-    m_outputState = outputState;
-}
-
-void DocumentFacade::updateAvailability()
-{
-    if (!m_catalog)
-    {
-        return;
-    }
-
-    const bool busy = m_pendingInvocation != InvalidCommandInvocation;
-    const bool hasDocument = m_state == DocumentState::Ready && context() && context()->getDocument();
-
-    // The rule: commands that abandon or replace the current work stay available;
-    // commands that produce output do not while output is being produced.
-    //
-    // Save and SaveAs therefore follow the Widgets shell's predicates in
-    // PDFProgramController::updateActionsAvailability — a valid document, and no
-    // operation already in flight, so there is never a second concurrent write.
-    //
-    // Open and Close deliberately diverge. The Widgets shell disables its whole
-    // main window while a read runs, so both are unavailable until it finishes.
-    // That would leave an operator with no way out of a slow read except waiting,
-    // and it would make the supersede-and-close paths unreachable rather than
-    // safe. The facade defines those cases instead: the in-flight operation is
-    // superseded, its invocation reaches a terminal state of Cancelled — never
-    // success — and its completion is fenced out by generation at admission.
-    m_catalog->setEnabled(OpenCommandId, true);
-    m_catalog->setEnabled(CloseCommandId, hasDocument);
-    m_catalog->setEnabled(SaveCommandId, hasDocument && !busy && m_source.isValid());
-    m_catalog->setEnabled(SaveAsCommandId, hasDocument && !busy);
-}
-
-void DocumentFacade::finishPending(CommandInvocationId invocation,
-                                   CommandTerminalState state,
-                                   QString typedError)
-{
-    if (m_pendingInvocation == invocation)
-    {
-        m_pendingInvocation = InvalidCommandInvocation;
-        m_pendingWorkStarted.reset();
     }
 
     if (m_catalog)

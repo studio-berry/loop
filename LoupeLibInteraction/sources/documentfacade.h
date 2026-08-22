@@ -202,7 +202,7 @@ signals:
     void documentClosed(quint64 generation);
 
 private:
-    void registerHandlers();
+    bool registerHandlers();
 
     void beginOpen(CommandInvocationId invocation, const DocumentSource& source);
     void beginSave(CommandInvocationId invocation, const DocumentSource& target);
@@ -256,6 +256,8 @@ private:
 
     CommandInvocationId m_pendingInvocation = InvalidCommandInvocation;
     QString m_pendingJobId;
+
+    bool m_handlersRegistered = false;
 
     /// Set by the worker as it starts. A job cancelled while still queued never
     /// runs its work, so nothing would report a terminal state for it; this is

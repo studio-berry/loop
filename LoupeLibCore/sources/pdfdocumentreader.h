@@ -28,6 +28,7 @@
 #include "pdfprogress.h"
 #include "pdfxreftable.h"
 #include "pdfprocessingbudget.h"
+#include "pdfoperationcontrol.h"
 
 #include <QMutex>
 #include <QIODevice>
@@ -53,6 +54,13 @@ public:
 
     void setProcessingLimits(const PDFProcessingLimits& limits);
     const PDFProcessingLimits& getProcessingLimits() const noexcept { return m_processingBudget.limits(); }
+
+    /// Supplies the cancellation fence used by long parsing phases. The
+    /// control is owned by the caller and must outlive the read operation.
+    void setOperationControl(const PDFOperationControl* operationControl) noexcept
+    {
+        m_operationControl = operationControl;
+    }
 
     constexpr inline PDFDocumentReader(const PDFDocumentReader&) = delete;
     constexpr inline PDFDocumentReader(PDFDocumentReader&&) = delete;
@@ -151,6 +159,10 @@ private:
     void progressStart(size_t stepCount, QString text);
     void progressStep();
     void progressFinish();
+    bool isOperationCancelled() const noexcept
+    {
+        return PDFOperationControl::isOperationCancelled(m_operationControl);
+    }
 
     /// Mutex for access to variables of this reader from more threads
     /// (providing thread safety)
@@ -185,6 +197,8 @@ private:
     bool m_authorizeOwnerOnly;
 
     mutable PDFProcessingBudget m_processingBudget;
+
+    const PDFOperationControl* m_operationControl = nullptr;
 
     /// Warnings
     QStringList m_warnings;

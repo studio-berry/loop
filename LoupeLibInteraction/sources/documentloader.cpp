@@ -79,6 +79,7 @@ DocumentLoadResult PDFReaderDocumentLoader::load(const DocumentSource& source,
     }
 
     pdf::PDFDocumentReader reader(nullptr, queryPassword, true, false, m_processingLimits);
+    reader.setOperationControl(context.operationControl());
     pdf::PDFDocument document = reader.readFromFile(source.path);
 
     if (context.isCancellationRequested())
@@ -132,7 +133,15 @@ DocumentWriteResult PDFDocumentFileWriter::write(const DocumentSource& target,
     }
 
     pdf::PDFDocumentWriter writer(nullptr);
+    writer.setOperationControl(context.operationControl());
     const pdf::PDFOperationResult writeResult = writer.write(target.path, document, true);
+
+    if (context.isCancellationRequested())
+    {
+        result.outcome = DocumentWriteOutcome::Cancelled;
+        result.typedError = QStringLiteral("document/cancelled");
+        return result;
+    }
 
     if (writeResult)
     {
@@ -140,8 +149,6 @@ DocumentWriteResult PDFDocumentFileWriter::write(const DocumentSource& target,
         return result;
     }
 
-    // Cancellation observed only after the write finished is still a completed
-    // write; report the write's own outcome rather than relabelling it.
     result.outcome = DocumentWriteOutcome::Failed;
     result.typedError = QStringLiteral("document/write-failed");
     return result;
