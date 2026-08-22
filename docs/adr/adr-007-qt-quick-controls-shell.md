@@ -1,16 +1,16 @@
-# ADR-007: Qt Quick Controls foundation for the Loupe 1.2 shell
+# ADR-007: Qt Quick Controls foundation for the Loupe 0.2.0 Qt Quick shell
 
 **Status:** accepted
 **Implemented-at:** not implemented
 **Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
 **Superseded-by:** [ADR-010: Quick-root admission and shell boundary](adr-010-quick-root-admission.md)
 **Date:** 2026-08-09
-**Deciders:** Loupe #178 / 1.2 shell decision
+**Deciders:** Loupe #178 / 0.2.0 Qt Quick shell decision
 
 ## Context
 
 Loupe's current interactive shell is inherited Qt Widgets code. That shell is
-appropriate for the 0.0.x and 1.1 work already in progress, but the 1.2
+appropriate for the 0.0.x and 0.1.x work already in progress, but the 0.2.0
 product surface is a persistent single-document workspace: inspection,
 findings, evidence, history, production preview, and approval flows share a
 live canvas. It needs layered chrome, anchored inspectors, menus and popovers,
@@ -24,7 +24,7 @@ bridge process, or packaging story.
 ## Decision
 
 Loupe adopts **Qt Quick Controls 2** as the behavioral UI foundation for the
-1.2 application shell. Qt Quick Controls supplies control semantics,
+0.2.0 application shell. Qt Quick Controls supplies control semantics,
 composition, focus handling, menus, dialogs, popups, scrolling, and input
 behavior. It does not select Loupe's visual language: color, typography,
 spacing, icons, animation timing, and custom control styling remain product
@@ -112,10 +112,10 @@ contrast, status announcements, or high-DPI sizing.
 ### Continue with Qt Widgets
 
 Widgets is the safe short-term option and remains the migration host. It was
-not selected as the long-term 1.2 shell because custom layered chrome,
+not selected as the long-term 0.2.0 Qt Quick shell because custom layered chrome,
 anchored popovers, transitions, and a product-specific visual language would
 be implemented against a native-style imperative hierarchy. That cost is
-exactly the shell problem 1.2 introduces. Widgets remains the correct choice
+exactly the shell problem 0.2.0 introduces. Widgets remains the correct choice
 for the current canvas and for any surface that has not passed the bridge
 gates.
 
@@ -123,7 +123,7 @@ gates.
 
 Rejected. These options add a second runtime, bridge/process lifecycle,
 packaging, and accessibility boundary to a Qt application. The earlier web
-proposal is historical and is not the Loupe 1.2 direction.
+proposal is historical and is not the Loupe 0.2.0 direction.
 
 ### Immediate full Quick rewrite
 
@@ -133,9 +133,9 @@ adoption preserves feature delivery while those risks are measured.
 
 ## Consequences
 
-- New 1.2 product components should be designed against the composition
+- New 0.2.0 product components should be designed against the composition
   pattern in [`QUICK_COMPOSITION.md`](../QUICK_COMPOSITION.md).
-- No new UI framework or web runtime is permitted for the 1.2 shell.
+- No new UI framework or web runtime is permitted for the 0.2.0 Qt Quick shell.
 - Quick/Widgets focus transfer and input routing are first-class integration
   behavior, not incidental adapter code.
 - A Quick foundation does not authorize visual redesign or product GUI work
@@ -145,7 +145,7 @@ adoption preserves feature delivery while those risks are measured.
 
 ## Acceptance evidence
 
-- [x] Shell migration question answered: adopt Qt Quick Controls for 1.2 with
+- [x] Shell migration question answered: adopt Qt Quick Controls for 0.2.0 with
       staged mixed-mode migration.
 - [x] Widgets alternative and its tradeoff recorded.
 - [x] Control-behavior versus custom-visual-design boundary recorded.

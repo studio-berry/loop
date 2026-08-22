@@ -19,7 +19,7 @@ a near-white margin fill, and a clipped image. The defaults remain:
 The probe test repeats the same fixture and asserts identical per-edge ink
 counts and verdicts. Tier-2 remains opt-in through `raster_confirm`; the
 default profile never pays the raster cost.
-Scope: Loupe-pdf 0.1.0-alpha. Phase 1 — CLI engine.
+Scope: Loupe-pdf 0.2.0-alpha. Phase 1 — CLI engine.
 Primary API names: **`PDFDocumentSession`** (`pdfdocumentsession.*`), **`PDFBleedMarginProbe`** (`pdfbleedmarginprobe.*`), **`PreflightEngine`** (PdfTool orchestrator).
 Finding types: **`content-bleed`**, **`bleed-margin-empty`**, **`needs-auto-bleed`**.
 Profile params: **`raster_confirm`** (bool), **`raster_confirm_dpi`** (default 150), **`raster_white_threshold`** (default 0.9975) — per-check.

@@ -10,30 +10,32 @@ The declarations below are intentionally machine-readable by that check:
 - Scheme: SemVer 2.0
 - Canonical version: `LOUPE_VERSION` in root `CMakeLists.txt`
 - Format: MAJOR.MINOR.PATCH
-- Current version: 0.1.0
-- Pre-release: none
+- Current version: 0.2.0
+- Pre-release: alpha
 - Git tags: `vMAJOR.MINOR.PATCH` with optional pre-release / build metadata
 - Windows Appx version: MAJOR.MINOR.PATCH.0 (`LOUPE_WINDOWS_VERSION`)
 - Release workflow: `.github/workflows/CreateReleaseDraft.yml`
 
-The current line is **0.1.0**. Display strings, PdfTool's envelope
+The current line is **0.2.0-alpha**. Display strings, PdfTool's envelope
 `version`, and git tags use that identifier. CMake's
-`project(VERSION)` stays `0.1.0` because it only accepts numeric components.
+`project(VERSION)` stays `0.2.0` because it only accepts numeric components.
 
 ## Milestone remap
 
-Earlier 0.0.x planning numbers map onto the 0.1 line as follows:
+Earlier 0.0.x planning numbers map onto the current line as follows:
 
 | Former | Current |
 |--------|---------|
-| 0.1.0 (this line) | current release |
+| 0.1.0 | completed 0.1.x line |
+| 0.1.1 | completed gate |
+| 0.2.0 (this line) | current Qt Quick product line |
 | 0.0.3 | 0.1.1 |
-| 0.0.4 | 0.1.2 |
-| 0.0.5 | 0.1.3 |
-| 0.0.6 | 0.1.4 |
+| 0.0.4 | 0.2.0 |
+| 0.0.5 | 0.2.1 |
+| 0.0.6 | 0.2.2 |
 
-Do not keep using 0.0.3–0.0.6 as living gates. Historical `0.0.1` / `0.0.2`
-tags and issue prefixes stay as completed history.
+Do not keep using 0.0.3–0.0.6 or **0.1.2** as living gates. Historical `0.0.1` /
+`0.0.2` tags and issue prefixes stay as completed history.
 
 ## Public API
 
@@ -64,7 +66,7 @@ Given `MAJOR.MINOR.PATCH`:
 | Backward-compatible bug fix | PATCH |
 
 Set `LOUPE_VERSION_PRERELEASE` in root `CMakeLists.txt` for `-alpha`,
-`-rc.1`, and similar labels. Clear it for a final `0.1.0`. Build metadata
+`-rc.1`, and similar labels. Clear it for a final `0.2.0`. Build metadata
 (`+githash`) belongs on tags only.
 
 ## Source of truth and packaging

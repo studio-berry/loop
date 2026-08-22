@@ -1,6 +1,6 @@
 # Semantic Trust Engine — 0.1.1 exit audit (S18)
 
-Product `LOUPE_VERSION` remains **0.1.0**. This audit does **not** bump
+Product `LOUPE_VERSION` is **0.2.0** (`0.2.0-alpha` display). This audit does **not** bump
 SemVer. Waves A–D land as stacked topic branches; they are not yet
 merged to `origin/dev`. Re-run this checklist on `dev` after that merge
 before tagging `0.1.1`.

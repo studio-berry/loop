@@ -105,9 +105,9 @@ Closed-source apps may use LGPLv3-eligible Qt libraries if all LGPL requirements
 
 Sources: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-obligations), [Qt OSS FAQ](https://www.qt.io/faq/qt-open-source-licensing).
 
-### Qt Quick Controls (Loupe 1.2 foundation)
+### Qt Quick Controls (Loupe 0.2.0 Qt Quick foundation)
 
-ADR-007 and ADR-010 select Qt Quick Controls 2 as the future Loupe 1.2 shell
+ADR-007 and ADR-010 select Qt Quick Controls 2 as the future Loupe 0.2.0 Qt Quick shell
 foundation, but the qualification harness does not add the modules to a
 shipped artifact. When
 the first Quick implementation lands, the release manifest must enumerate the

@@ -25,15 +25,15 @@ class VersionPolicyTests(unittest.TestCase):
         self.assertEqual(policy["scheme"], "semver")
         self.assertEqual(policy["cmake_format"], "MAJOR.MINOR.PATCH")
         self.assertEqual(policy["tag_prefix"], "v")
-        self.assertEqual(policy["current"], "0.1.0")
-        self.assertEqual(policy["prerelease"], "")
+        self.assertEqual(policy["current"], "0.2.0")
+        self.assertEqual(policy["prerelease"], "alpha")
 
     def test_rejects_four_part_cmake_version(self):
         with self.assertRaisesRegex(ValueError, "MAJOR.MINOR.PATCH"):
             parse_cmake_version("set(LOUPE_VERSION 1.6.0.0)\n")
 
     def test_accepts_three_part_cmake_version(self):
-        self.assertEqual(parse_cmake_version("set(LOUPE_VERSION 0.1.0)\n"), "0.1.0")
+        self.assertEqual(parse_cmake_version("set(LOUPE_VERSION 0.2.0)\n"), "0.2.0")
 
     def test_rejects_four_part_release_grep(self):
         workflow = (
@@ -67,7 +67,7 @@ class VersionPolicyTests(unittest.TestCase):
         )
 
     def test_rejects_four_part_agents_version(self):
-        errors = validate_agents_version("| **Version** | `1.6.0.0` |", "0.1.0", "alpha")
+        errors = validate_agents_version("| **Version** | `1.6.0.0` |", "0.2.0", "alpha")
         self.assertTrue(errors)
 
     def test_versioning_doc_requires_semver_scheme(self):

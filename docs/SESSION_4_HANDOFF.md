@@ -1,7 +1,7 @@
 # Session 4 handoff — S22 Quick-root admission
 
 **Status:** complete locally; external release gates remain open
-**Branch:** `0.1.2`
+**Branch:** `0.1.2` (legacy branch name; orchestration milestone **0.2.0**)
 **Implementation commit:** `f857cf25901c6931b8e426ac13c57ea81e3efb6f`
 **Base:** `6bb1df833c1621b8b9bc32793c7c4449f70c69a2`
 **Handoff date:** 2026-08-20
@@ -60,7 +60,7 @@ qualification harness only.
 
 1. Complete the S21 canvas benchmark and record the ADR-009 outcome.
 2. Collect successful Windows and Linux GitHub CI native/software smoke runs
-   from the pushed `0.1.2` branch.
+   from the pushed `0.1.2` branch (milestone **0.2.0**).
 3. Inventory the final linked Qt/QML runtime, generate SBOM/notices, and prove
    clean-machine Windows/Linux package behavior and the Qt LGPL route.
 4. Implement and test the product Quick accessibility and
@@ -69,6 +69,6 @@ qualification harness only.
 
 ## Fresh-eyes closeout
 
-Session 4 is locally complete and pushed, but it is not a 0.1.2 release-ready
+Session 4 is locally complete and pushed, but it is not a 0.2.0 release-ready
 claim. The remaining gates above are intentional NO-GO conditions, not implied
 by the passing qualification harness or focused tests.
