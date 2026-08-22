@@ -6,11 +6,11 @@
 **Superseded-by:** none
 **Supersedes:** the migration-topology and pre-0.1.1 deferral clauses of [ADR-007](adr-007-qt-quick-controls-shell.md)
 **Date:** 2026-08-20
-**Deciders:** Loupe 0.1.2 execution directive / #178
+**Deciders:** Loupe 0.2.0 execution directive / #178
 
 ## Decision
 
-The 0.1.2 shell's eventual product root is Qt Quick. This is an operator
+The 0.2.0 shell's eventual product root is Qt Quick. This is an operator
 directive about the final composition boundary, not evidence that the current
 Widgets shell or PDF canvas has already migrated.
 

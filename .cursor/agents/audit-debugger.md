@@ -44,7 +44,7 @@ Look especially at:
    `master`; pins that can drift; release draft attaching the wrong SHA.
 5. **Preflight / repair** — checks that skip Form XObjects, annotations, or
    alternate boxes; repair `apply()` that mutates before MediaBox expand.
-6. **Current dirty work** — SemVer / `0.1.0-alpha` changes: CMake, Appx, WiX,
+6. **Current dirty work** — SemVer / `0.2.0-alpha` changes: CMake, Appx, WiX,
    CreateReleaseDraft, shell `gui_status`, tests that still hard-code old
    versions.
 

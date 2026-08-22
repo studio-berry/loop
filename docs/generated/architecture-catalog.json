@@ -380,8 +380,8 @@
   ],
   "version_policy": {
     "cmake_format": "MAJOR.MINOR.PATCH",
-    "current": "0.1.0",
-    "prerelease": null,
+    "current": "0.2.0",
+    "prerelease": "alpha",
     "scheme": "semver",
     "tag_prefix": "v"
   },

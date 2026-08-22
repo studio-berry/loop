@@ -66,7 +66,7 @@ QJsonObject validMetadata()
         { QStringLiteral("License"), QStringLiteral("MIT") },
         { QStringLiteral("Description"), QStringLiteral("ABI unit test plugin") },
         { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("read-document"), QStringLiteral("propose-operation") } },
-        { QStringLiteral("BuildId"), QStringLiteral("loupe-0.1.0") }
+        { QStringLiteral("BuildId"), QStringLiteral("loupe-0.2.0") }
     };
 }
 

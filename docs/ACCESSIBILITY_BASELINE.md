@@ -35,9 +35,9 @@ developers; they do not silently change shortcuts or action labels.
 names, action naming, and DPI-aware sizing. Visual/screen-reader verification
 remains an application-level follow-up under the GUI/E2E harness issue.
 
-## Qt Quick extension for 1.2
+## Qt Quick extension for 0.2.0
 
-ADR-007 adopts Qt Quick Controls as the 1.2 shell foundation. It extends this
+ADR-007 adopts Qt Quick Controls as the 0.2.0 shell foundation. It extends this
 baseline; it does not create a second accessibility standard. Quick components
 must expose the same meaningful name, description, role, state, visible focus,
 keyboard reachability, contrast, status text, and DPI-aware sizing expected of

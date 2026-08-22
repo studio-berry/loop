@@ -67,7 +67,7 @@ public:
     void createUndo(pdf::PDFModifiedDocument document, pdf::PDFDocumentPointer oldDocument);
 
     /// Create a named undo action. The name is retained for a future history
-    /// surface; the current 0.1.0-alpha implementation deliberately adds no GUI.
+    /// surface; the current 0.2.0-alpha implementation deliberately adds no GUI.
     void createUndo(pdf::PDFModifiedDocument document,
                      pdf::PDFDocumentPointer oldDocument,
                      const QString& name);
