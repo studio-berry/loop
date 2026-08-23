@@ -27,8 +27,12 @@
 #include "pdfprogress.h"
 #include "pdfsavepolicy.h"
 #include "pdfutils.h"
+#include "pdfoperationcontrol.h"
 
 #include <QIODevice>
+
+#include <functional>
+#include <utility>
 
 namespace pdf
 {
@@ -46,9 +50,18 @@ public:
         Incremental
     };
 
-    explicit inline PDFDocumentWriter(PDFProgress* progress)
+    explicit inline PDFDocumentWriter(PDFProgress* progress,
+                                      const PDFOperationControl* operationControl = nullptr) :
+        m_operationControl(operationControl)
     {
         Q_UNUSED(progress);
+    }
+
+    /// Supplies the cancellation fence used by long serialization phases. The
+    /// control is owned by the caller and must outlive the write operation.
+    void setOperationControl(const PDFOperationControl* operationControl) noexcept
+    {
+        m_operationControl = operationControl;
     }
 
     /// Writes document to the file. If \p safeWrite is true, then document is first
@@ -112,9 +125,16 @@ public:
     static QByteArray getSerializedObject(const PDFObject& object);
 
 private:
+    bool isOperationCancelled() const noexcept
+    {
+        return PDFOperationControl::isOperationCancelled(m_operationControl);
+    }
+
     static void writeCRLF(QIODevice* device);
     static void writeObjectHeader(QIODevice* device, PDFObjectReference reference);
     static void writeObjectFooter(QIODevice* device);
+
+    const PDFOperationControl* m_operationControl = nullptr;
 };
 
 }   // namespace pdf

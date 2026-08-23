@@ -44,6 +44,7 @@ private slots:
     void setRendererFeatures_invalidatesCompileCache();
     void revisionFence_rejectsSupersededResults();
     void concurrentScheduledResults_rejectSupersededRevisions();
+    void setDocument_ownedPointerBindsTheDocument();
 };
 
 void DocumentSessionTest::nullDocument_sessionIsInvalid()
@@ -152,6 +153,37 @@ void DocumentSessionTest::revisionFence_rejectsSupersededResults()
     }
 
     QCOMPARE(revisionSpy.count(), 512);
+}
+
+void DocumentSessionTest::setDocument_ownedPointerBindsTheDocument()
+{
+    // Regression: the owning overload passed document.data() and
+    // std::move(document) as two arguments of one call. Argument evaluation
+    // order is unspecified, so the move could null the pointer before data() was
+    // read, leaving the context owning a document while reporting none — and
+    // therefore with an empty identity and no usable session.
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+
+    pdf::PDFDocumentPointer document(new pdf::PDFDocument(builder.build()));
+    pdf::PDFDocument* expected = document.data();
+    QVERIFY(expected != nullptr);
+
+    pdf::PDFDocumentContext context(nullptr);
+    context.setDocument(document, pdf::PDFModifiedDocument::Reset);
+
+    QCOMPARE(context.getDocument(), expected);
+    QCOMPARE(context.getDocumentPointer().data(), expected);
+    QVERIFY(context.getDocumentIdentity().isValid());
+    QVERIFY(context.getRevision().isValid());
+    QVERIFY(context.getSession() != nullptr);
+    QVERIFY(context.getSession()->isValid());
+
+    // Setting the same document again is a modification, not a replacement.
+    const pdf::PDFRevisionIdentity bound = context.getRevision();
+    context.setDocument(context.getDocumentPointer(), pdf::PDFModifiedDocument::PageContents);
+    QCOMPARE(context.getDocument(), expected);
+    QVERIFY(!context.isCurrent(bound));
 }
 
 void DocumentSessionTest::concurrentScheduledResults_rejectSupersededRevisions()

@@ -73,6 +73,31 @@ eventually enabled.
 implicit success. A correction that changes the bound document revision makes
 the prior preflight result `STALE` until revalidation completes.
 
+### Document status is a projection, not a second state machine
+
+`pdfinteraction::DocumentFacade` owns the presentation-facing document
+lifecycle. Its model is richer than the five status values above: a base state
+(`Empty`, `Opening`, `Ready`, `Closing`, `Error`), independent facets (`Dirty`,
+`Stale`, `Incomplete`, `Cancelled`, `Unsupported`), and a separate output axis
+(`None`, `Pending`, `Saved`) — the document and production axes stay distinct,
+as this contract requires.
+
+The five document status values are a **pure projection** of that model, not a
+parallel one a host maintains for itself:
+
+| Facade state | Shell document status |
+| --- | --- |
+| any state other than `Ready` | `NO_DOCUMENT` |
+| `Ready`, output `Pending` | `OUTPUT_PENDING` |
+| `Ready`, `Dirty` | `MODIFIED` |
+| `Ready`, output `Saved` | `OUTPUT_SAVED` |
+| `Ready`, otherwise | `OPEN` |
+
+The order is the precedence: a write in flight outranks unsaved changes, and
+unsaved changes outrank a previous successful write, because the file on disk is
+no longer what the operator is looking at. `DocumentFacade::projectShellStatus`
+is the only implementation and `UnitTestsDocumentFacade` pins the whole table.
+
 ## Action and plugin policy
 
 Every action declared in the current Editor `.ui` is listed in
@@ -86,6 +111,38 @@ the action does, not by which plugin registers it. The plugin disposition table
 in `loupe-shell.json` routes retained production plugins to Document,
 Preflight, Production, Inspect, or Fix, while advanced and stopped plugins
 remain outside the operator shell.
+
+### The command catalog
+
+Every action in `loupe-shell-actions.json` also carries a `command` object — the
+host-neutral descriptor `pdfinteraction::CommandCatalog` loads. There is one
+registry, not a Quick-side copy: the descriptors live in the same file whose ID
+set is already pinned against the Editor `.ui`, so a command that is not a
+declared Editor action cannot exist.
+
+| Field | Meaning |
+| --- | --- |
+| `label_key` | Translation key, always `command.<id>.label` |
+| `shortcut` | A `QKeySequence::StandardKey` name or a literal sequence, with an optional `windows` override. Resolution into a key sequence is the presentation host's job |
+| `parameters` | Typed parameter specs; unknown or mistyped parameters are refused, never defaulted |
+| `capability` | What the command may touch. `unclassified` is permitted only while the command is `declared` |
+| `cancellable` | Whether the command supports cancellation |
+| `availability` | `implemented` (a handler exists) or `declared` (descriptor only) |
+
+A `declared` command is not a gap in the contract. It has a complete descriptor,
+so menus, shortcuts, and routing are complete, and invoking it returns the typed
+`not-implemented` terminal state while mutating nothing. Promoting one to
+`implemented` requires a real capability and a registered handler; invoking an ID
+that is not in the contract is reported as a routing error rather than ignored.
+
+`scripts/verify-command-catalog.py` checks the block, and checks shortcut parity
+against `PDFActionManager::initActions` so the catalog cannot become a second
+command truth wearing the first one's ID set.
+
+**Phase 5 note:** this file derives its ID set from
+`LoupeLibGui/pdfeditormainwindow.ui`. When Phase 5 deletes that form, the parity
+check in `verify-loupe-shell-contract.ps1` loses its source and this file must
+become self-authoritative.
 
 ## UI foundation gate
 
@@ -117,3 +174,13 @@ This verifies JSON shape, workspace parity with the #192 product-surface
 manifest, plugin disposition targets, and complete Editor action coverage. It
 does not claim GUI behavior, accessibility runtime success, or product Qt Quick
 rendering validation; those remain S21/S22 and later runtime/package gates.
+
+The command descriptors have their own check:
+
+```bash
+python scripts/verify-command-catalog.py
+```
+
+`UnitTestsDocumentFacade` covers the runtime side — catalog loading, invocation
+and cancellation, and the document lifecycle — with no `QWidget` and no QML
+engine.

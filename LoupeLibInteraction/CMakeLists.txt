@@ -39,11 +39,45 @@ add_library(LoupeLibInteraction STATIC
     sources/documentcontextsource.h
     sources/jobsubmitter.cpp
     sources/jobsubmitter.h
+    sources/commanddescriptor.cpp
+    sources/commanddescriptor.h
+    sources/commandcatalog.cpp
+    sources/commandcatalog.h
+    sources/commandcatalogresource.cpp
+    sources/commandcatalogresource_p.h
+    sources/documentloader.cpp
+    sources/documentloader.h
+    sources/documentfacade.cpp
+    sources/documentfacade.h
+    sources/documentfacadestate.cpp
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
 
 target_include_directories(LoupeLibInteraction INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+
+# The command catalog reads docs/loupe-shell-actions.json — the same file the
+# Editor action policy verifier checks against pdfeditormainwindow.ui — so there
+# is one command registry rather than a copy that can drift. It is embedded
+# rather than read from disk: the neutral layer must not need a filesystem
+# service to know what commands exist.
+#
+# qt_add_resources is used rather than listing a .qrc among the sources above.
+# This target is STATIC, where an unreferenced AUTORCC initializer can be dropped
+# by the linker and the catalog would silently load empty; the target-based
+# signature propagates a resource init object to consumers instead.
+# CommandCatalog reports command-catalog/resource-unavailable rather than
+# starting with an empty command set if this ever regresses.
+set(LOUPE_INTERACTION_COMMAND_CONTRACT "${CMAKE_CURRENT_SOURCE_DIR}/../docs/loupe-shell-actions.json")
+
+set_source_files_properties(${LOUPE_INTERACTION_COMMAND_CONTRACT}
+    PROPERTIES QT_RESOURCE_ALIAS "loupe-shell-actions.json"
+)
+
+qt_add_resources(LoupeLibInteraction "commandcatalog"
+    PREFIX "/loupe"
+    FILES ${LOUPE_INTERACTION_COMMAND_CONTRACT}
+)
 
 # LoupeLibQuick is SHARED in P4-S5; a non-PIC static archive cannot be linked
 # into a shared object on Linux.
