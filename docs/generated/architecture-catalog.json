@@ -154,6 +154,13 @@
         "UnitTestsWorkloadEnvelope"
       ],
       "title": "Measured envelopes and benchmarks carry run identity fields"
+    },
+    {
+      "id": "I21",
+      "test_targets": [
+        "UnitTestsInteractionBoundary"
+      ],
+      "title": "The host-neutral interaction layer has no Widgets or QML dependency"
     }
   ],
   "branch_policy": {
@@ -342,6 +349,7 @@
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
+    "UnitTestsInteractionBoundary",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",

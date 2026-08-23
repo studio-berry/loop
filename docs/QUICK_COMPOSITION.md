@@ -1,9 +1,10 @@
 # Qt Quick composition pattern
 
 This document defines how Loupe product components will be composed when the
-Qt Quick foundation is introduced. It is a contract and example, not a QML
-implementation. The repository intentionally remains QML-free until the
-post-0.1.1 Quick slice is approved.
+Qt Quick foundation is introduced. It is a contract and example, not a product
+QML implementation. The repository's optional `QuickShellSmoke` QML is a
+qualification harness only; product QML remains gated until S21 canvas and
+S22 admission evidence are accepted.
 
 ## Ownership boundary
 
@@ -138,11 +139,12 @@ window activation to restore focus.
 The first Quick surface must include:
 
 - a keyboard/focus test covering its dialogs, menus, and popups;
-- a software-backend smoke run with `QSG_RHI_BACKEND=software` on Windows and
+- a software-backend smoke run with `QT_QUICK_BACKEND=software` on Windows and
   Linux, in addition to each platform's preferred backend;
 - package inspection proving the actual Qt Quick/QML runtime modules and
   licenses are present and no web runtime was added; and
 - a bridge test proving a QWidget-to-Quick-to-QWidget focus round trip.
 
 Until those checks exist, this composition pattern remains a design contract;
-it does not authorize adding QML or Qt Quick modules to the shipped artifact.
+the qualification harness does not authorize adding product QML or Qt Quick
+runtime files to the shipped artifact.

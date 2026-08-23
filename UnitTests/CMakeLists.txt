@@ -150,6 +150,25 @@ set_target_properties(UnitTestsJobScheduler PROPERTIES
 
 add_test(UnitTestsJobScheduler "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsJobScheduler")
 
+# Architecture invariant I21. The absent Qt6::Widgets link is load-bearing: Qt
+# scopes its headers per module, so a Widgets or QML include leaking into a
+# public LoupeLibInteraction header breaks this target's compile.
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    add_executable(UnitTestsInteractionBoundary
+        tst_interactionboundarytest.cpp
+    )
+
+    target_link_libraries(UnitTestsInteractionBoundary PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsInteractionBoundary PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsInteractionBoundary "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionBoundary")
+endif()
+
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
 )

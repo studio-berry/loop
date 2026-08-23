@@ -109,6 +109,16 @@
       "targets": ["LoupePageMaster"],
       "tests": ["UnitTestsPageMasterExport"]
     },
+    "interaction": {
+      "paths": [
+        "LoupeLibInteraction/**",
+        "UnitTests/tst_interactionboundarytest.cpp",
+        "docs/interaction-boundary-policy.json",
+        "scripts/verify-interaction-boundary.py"
+      ],
+      "targets": ["LoupeLibInteraction"],
+      "tests": ["UnitTestsInteractionBoundary"]
+    },
     "widgets_gui": {
       "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
       "targets": ["LoupeEditor", "LoupeViewer"],

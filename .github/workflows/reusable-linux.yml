@@ -44,6 +44,15 @@ jobs:
       - name: Verify Loupe shell contract
         working-directory: loupe
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loupe-shell-contract.ps1
+      - name: Verify interaction boundary
+        working-directory: loupe
+        run: python3 scripts/verify-interaction-boundary.py
+      - name: Verify Quick shell admission policy
+        working-directory: loupe
+        run: python3 scripts/verify-quick-shell-policy.py
+      - name: Verify Quick runtime/package contract
+        working-directory: loupe
+        run: python3 scripts/verify-quick-runtime-contract.py
       - name: Verify branch policy
         working-directory: loupe
         run: python3 scripts/ci/check_branch_policy.py
@@ -134,11 +143,82 @@ jobs:
       - name: Build project
         working-directory: loupe
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${{ inputs.fast }}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build
           fi
+
+      - name: Smoke Qt Quick preferred backend
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+          # Requests OpenGL (the Linux-preferred backend per ADR-007's table),
+          # but GitHub-hosted ubuntu-24.04 runners have no GPU and offscreen
+          # QPA does not create a real GL context, so Qt Quick's RHI falls
+          # back to the software renderer here -- confirmed by an actual CI
+          # run. That is ADR-007's own documented "unavailable GPU" row
+          # ("platform default attempt / software backend selected
+          # explicitly"), not a wiring bug, so no -ExpectedGraphicsApi
+          # assertion is made for this step. QuickShellSmoke itself still
+          # hard-fails (exit 3) if the reported API is Unknown, which is the
+          # actual admission bar this checklist item names.
+          QSG_RHI_BACKEND: opengl
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode native
+
+      - name: Smoke Qt Quick software backend
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode software -ExpectedGraphicsApi software
+
+      # ADR-009's CI admission scope gates on widget-baseline (comparison
+      # baseline) and quick-item (the corrected S21 target); qquickwidget and
+      # window-container are diagnostic-only per the amendment and are run
+      # separately, non-blocking, since window-container's focus proxying is
+      # known not to work under a headless offscreen platform.
+      - name: Run S21 canvas benchmark (native, required candidates)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate widget-baseline
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate quick-item
+
+      - name: Run S21 canvas benchmark (software, required candidates)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate widget-baseline
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate quick-item
+
+      - name: Run S21 canvas benchmark (full diagnostic, non-blocking)
+        if: ${{ !inputs.fast }}
+        continue-on-error: true
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate all
+
+      - name: Run QWidget/Quick focus bridge (native)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode native
+
+      - name: Run QWidget/Quick focus bridge (software)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode software
 
       - name: Prove change with agent-fast
         if: inputs.fast

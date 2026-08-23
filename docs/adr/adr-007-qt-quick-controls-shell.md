@@ -3,7 +3,7 @@
 **Status:** accepted
 **Implemented-at:** not implemented
 **Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
-**Superseded-by:** none
+**Superseded-by:** [ADR-010: Quick-root admission and shell boundary](adr-010-quick-root-admission.md)
 **Date:** 2026-08-09
 **Deciders:** Loupe #178 / 1.2 shell decision
 
@@ -30,8 +30,9 @@ behavior. It does not select Loupe's visual language: color, typography,
 spacing, icons, animation timing, and custom control styling remain product
 design decisions.
 
-This ADR records the foundation only. It does not add Qt Quick modules, QML,
-or product UI code. No GUI migration is required before 0.1.1.
+This ADR records the foundation only. It does not add product UI code. The
+0.1.1 release gate has now been satisfied; the admission and evidence rules
+that replace the former release deferral are recorded in ADR-010.
 
 ### Migration strategy
 
@@ -81,9 +82,9 @@ The runtime policy is:
 | Linux x64 | OpenGL RHI | Qt Quick software backend |
 | VM, remote session, or unavailable GPU | platform default attempt | software backend selected explicitly |
 
-The first Quick slice must provide a small offscreen smoke harness that starts
-the same QML imports used by the shell and exits successfully under both the
-preferred backend and `QSG_RHI_BACKEND=software`. The harness must run on the
+The first Quick slice must provide a small smoke harness that starts the same
+QML imports used by the shell and exits successfully under both the preferred
+backend and `QT_QUICK_BACKEND=software`. The harness must run on the
 Windows and Linux CI/package environments and record the selected backend.
 `QT_QPA_PLATFORM=offscreen` is not, by itself, proof that the Quick scene
 graph rendered successfully.
@@ -143,8 +144,8 @@ adoption preserves feature delivery while those risks are measured.
 - No new UI framework or web runtime is permitted for the 1.2 shell.
 - Quick/Widgets focus transfer and input routing are first-class integration
   behavior, not incidental adapter code.
-- A Quick foundation does not authorize visual redesign or GUI work before the
-  0.1.1 gate.
+- A Quick foundation does not authorize visual redesign or product GUI work
+  before the S21 canvas and S22 admission gates.
 - The first Quick implementation must carry the backend, packaging,
   licensing, and accessibility evidence required above.
 
@@ -159,8 +160,9 @@ adoption preserves feature delivery while those risks are measured.
 - [x] Qt licensing consequence recorded against #46 / MIC-140.
 - [x] Accessibility coordination points to the existing baseline.
 - [x] Composition pattern documented separately.
-- [ ] Quick backend smoke evidence on Windows and Linux: deferred until the
-      first Quick implementation adds the harness; this ADR does not claim it.
+- [x] Qualification-only Quick backend smoke harness and static admission
+      contracts are present; cross-platform CI/package results remain release
+      evidence rather than being inferred from source.
 
 ## References
 

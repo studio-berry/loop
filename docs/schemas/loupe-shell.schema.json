@@ -20,7 +20,7 @@
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "issue": { "type": "integer", "const": 193 },
-    "gui_status": { "type": "string", "const": "deferred-until-0.1.1" },
+    "gui_status": { "type": "string", "const": "gated-by-quick-admission" },
     "shell_surface": { "type": "string", "const": "LoupeEditor" },
     "ui_foundation": {
       "type": "object",
@@ -29,7 +29,7 @@
       "properties": {
         "candidate": { "type": "string", "const": "Qt Quick Controls" },
         "decision_issue": { "type": "integer", "const": 178 },
-        "decision_status": { "type": "string", "enum": ["pending", "accepted", "rejected"] }
+        "decision_status": { "type": "string", "enum": ["pending", "accepted", "accepted-with-admission-gates", "rejected"] }
       }
     },
     "workspaces": {

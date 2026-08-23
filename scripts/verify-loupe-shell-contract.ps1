@@ -36,8 +36,8 @@ if ($productSurface.shell_contract -ne "docs/loupe-shell.json") {
 if ($shell.schema_version -ne 1 -or $shell.issue -ne 193) {
     throw "Unsupported shell contract version or issue number."
 }
-if ($shell.gui_status -ne "deferred-until-0.1.1") {
-    throw "GUI deferral gate changed without an explicit scope update: $($shell.gui_status)"
+if ($shell.gui_status -ne "gated-by-quick-admission") {
+    throw "Quick admission gate changed without an explicit scope update: $($shell.gui_status)"
 }
 if ($shell.shell_surface -ne "LoupeEditor") {
     throw "Loupe shell must remain LoupeEditor: $($shell.shell_surface)"
@@ -113,4 +113,4 @@ foreach ($pluginAction in @($shell.plugin_action_policy)) {
     }
 }
 
-Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies; GUI remains deferred until 0.1.1."
+Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies; product GUI remains gated by S21/S22 Quick admission."

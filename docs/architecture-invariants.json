@@ -100,6 +100,11 @@
       "id": "I20",
       "title": "Measured envelopes and benchmarks carry run identity fields",
       "test_targets": ["UnitTestsWorkloadEnvelope"]
+    },
+    {
+      "id": "I21",
+      "title": "The host-neutral interaction layer has no Widgets or QML dependency",
+      "test_targets": ["UnitTestsInteractionBoundary"]
     }
   ]
 }
