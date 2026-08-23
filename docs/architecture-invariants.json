@@ -120,6 +120,11 @@
       "id": "I24",
       "title": "Transient interaction and overlays are revision-fenced; neither mutates the document nor forces a page rerender",
       "test_targets": ["UnitTestsInteractionController", "UnitTestsOverlayFrame"]
+    },
+    {
+      "id": "I25",
+      "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer",
+      "test_targets": ["UnitTestsQuickCanvas"]
     }
   ]
 }

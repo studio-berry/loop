@@ -184,6 +184,13 @@
         "UnitTestsOverlayFrame"
       ],
       "title": "Transient interaction and overlays are revision-fenced; neither mutates the document nor forces a page rerender"
+    },
+    {
+      "id": "I25",
+      "test_targets": [
+        "UnitTestsQuickCanvas"
+      ],
+      "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer"
     }
   ],
   "branch_policy": {
@@ -400,6 +407,7 @@
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
     "UnitTestsProfileIdentity",
+    "UnitTestsQuickCanvas",
     "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",

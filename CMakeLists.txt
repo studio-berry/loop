@@ -59,6 +59,7 @@ option(LOUPE_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
 option(LOUPE_BUILD_TESTS "Build UnitTests" ON)
 option(LOUPE_BUILD_QUICK_SHELL_SMOKE "Build the Qt Quick shell backend smoke harness (S22 qualification-only, non-installed)" OFF)
 option(LOUPE_BUILD_CANVAS_BENCHMARK "Build the Qt Quick canvas-hosting benchmark (S21 qualification-only, non-installed)" OFF)
+option(LOUPE_BUILD_QUICK_CANVAS "Build LoupeLibQuick, the direct QQuickItem canvas adapter (P4-S5, non-installed)" OFF)
 option(LOUPE_ENABLE_SANITIZERS "Build with ASan+UBSan" OFF)
 option(LOUPE_BUILD_FUZZERS "Build libFuzzer harnesses" OFF)
 if(WIN32)
@@ -209,6 +210,16 @@ if(LOUPE_BUILD_QUICK_SHELL_SMOKE OR LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2)
 endif()
 
+# LoupeLibQuick needs Qml and Quick, and deliberately not QuickControls2: it
+# contributes a canvas item, not a control, and not linking Controls is what
+# keeps a control from being reached from inside the canvas.
+if(LOUPE_BUILD_QUICK_CANVAS)
+    if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
+        message(FATAL_ERROR "LoupeLibQuick requires a GUI build")
+    endif()
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick)
+endif()
+
 if(LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
@@ -334,6 +345,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     # Host-neutral interaction seam. Depends only on LoupeLibCore and is not
     # installed; see LoupeLibInteraction/CMakeLists.txt.
     add_subdirectory(LoupeLibInteraction)
+
+    # The Qt Quick presentation host for the canvas. Opt-in for the same reason
+    # the S21/S22 qualification targets are: Qml and Quick are not dependencies
+    # of a default build, and Phase 4 has not reached the exit gate that would
+    # make this a shipped module. CI configures it ON.
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_subdirectory(LoupeLibQuick)
+    endif()
+
     add_subdirectory(LoupeLibWidgets)
     if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
