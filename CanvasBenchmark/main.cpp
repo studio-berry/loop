@@ -31,14 +31,16 @@
 #include <cstdio>
 #include <memory>
 
-namespace {
+namespace
+{
 
 constexpr int kWidth = 320;
 constexpr int kHeight = 240;
 constexpr int kResizeIterations = 12;
 const QColor kExpectedColor(QStringLiteral("#264d73"));
 
-enum class Candidate {
+enum class Candidate
+{
     Widget,
     QuickWidget,
     WindowContainer,
@@ -47,70 +49,77 @@ enum class Candidate {
 
 QString candidateName(Candidate candidate)
 {
-    switch (candidate) {
-    case Candidate::Widget:
-        return QStringLiteral("widget-baseline");
-    case Candidate::QuickWidget:
-        return QStringLiteral("qquickwidget");
-    case Candidate::WindowContainer:
-        return QStringLiteral("window-container");
-    case Candidate::QuickItem:
-        return QStringLiteral("quick-item");
+    switch (candidate)
+    {
+        case Candidate::Widget:
+            return QStringLiteral("widget-baseline");
+        case Candidate::QuickWidget:
+            return QStringLiteral("qquickwidget");
+        case Candidate::WindowContainer:
+            return QStringLiteral("window-container");
+        case Candidate::QuickItem:
+            return QStringLiteral("quick-item");
     }
     return QStringLiteral("unknown");
 }
 
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
-    switch (api) {
-    case QSGRendererInterface::Software:
-        return QStringLiteral("software");
-    case QSGRendererInterface::OpenGL:
-        return QStringLiteral("opengl");
-    case QSGRendererInterface::Direct3D11:
-        return QStringLiteral("d3d11");
-    case QSGRendererInterface::Direct3D12:
-        return QStringLiteral("d3d12");
-    case QSGRendererInterface::Vulkan:
-        return QStringLiteral("vulkan");
-    case QSGRendererInterface::Metal:
-        return QStringLiteral("metal");
-    case QSGRendererInterface::Null:
-        return QStringLiteral("null");
-    case QSGRendererInterface::Unknown:
-        return QStringLiteral("unknown");
+    switch (api)
+    {
+        case QSGRendererInterface::Software:
+            return QStringLiteral("software");
+        case QSGRendererInterface::OpenGL:
+            return QStringLiteral("opengl");
+        case QSGRendererInterface::Direct3D11:
+            return QStringLiteral("d3d11");
+        case QSGRendererInterface::Direct3D12:
+            return QStringLiteral("d3d12");
+        case QSGRendererInterface::Vulkan:
+            return QStringLiteral("vulkan");
+        case QSGRendererInterface::Metal:
+            return QStringLiteral("metal");
+        case QSGRendererInterface::Null:
+            return QStringLiteral("null");
+        case QSGRendererInterface::Unknown:
+            return QStringLiteral("unknown");
     }
     return QStringLiteral("unrecognized");
 }
 
-Candidate parseCandidate(const QString &value)
+Candidate parseCandidate(const QString& value)
 {
-    if (value == QStringLiteral("widget-baseline")) {
+    if (value == QStringLiteral("widget-baseline"))
+    {
         return Candidate::Widget;
     }
-    if (value == QStringLiteral("qquickwidget")) {
+    if (value == QStringLiteral("qquickwidget"))
+    {
         return Candidate::QuickWidget;
     }
-    if (value == QStringLiteral("window-container")) {
+    if (value == QStringLiteral("window-container"))
+    {
         return Candidate::WindowContainer;
     }
-    if (value == QStringLiteral("quick-item")) {
+    if (value == QStringLiteral("quick-item"))
+    {
         return Candidate::QuickItem;
     }
     return Candidate::Widget;
 }
 
-class WidgetCanvas final : public QWidget {
+class WidgetCanvas final : public QWidget
+{
 public:
-    explicit WidgetCanvas(QWidget *parent = nullptr)
-        : QWidget(parent)
+    explicit WidgetCanvas(QWidget* parent = nullptr) :
+        QWidget(parent)
     {
         setObjectName(QStringLiteral("widgetCanvas"));
         setFocusPolicy(Qt::StrongFocus);
     }
 
 protected:
-    void paintEvent(QPaintEvent *) override
+    void paintEvent(QPaintEvent*) override
     {
         QPainter painter(this);
         painter.fillRect(rect(), kExpectedColor);
@@ -120,10 +129,11 @@ protected:
     }
 };
 
-class BenchmarkItem final : public QQuickItem {
+class BenchmarkItem final : public QQuickItem
+{
 public:
-    explicit BenchmarkItem(QQuickItem *parent = nullptr)
-        : QQuickItem(parent)
+    explicit BenchmarkItem(QQuickItem* parent = nullptr) :
+        QQuickItem(parent)
     {
         setFlag(ItemHasContents, true);
         setFlag(ItemIsFocusScope, true);
@@ -133,10 +143,11 @@ public:
     }
 
 protected:
-    QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *) override
+    QSGNode* updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*) override
     {
-        auto *node = static_cast<QSGSimpleRectNode *>(oldNode);
-        if (!node) {
+        auto* node = static_cast<QSGSimpleRectNode*>(oldNode);
+        if (!node)
+        {
             node = new QSGSimpleRectNode;
         }
         node->setRect(boundingRect());
@@ -145,14 +156,16 @@ protected:
     }
 };
 
-class InputProbe final : public QObject {
+class InputProbe final : public QObject
+{
 public:
     bool received = false;
 
 protected:
-    bool eventFilter(QObject *, QEvent *event) override
+    bool eventFilter(QObject*, QEvent* event) override
     {
-        if (event->type() == QEvent::KeyPress) {
+        if (event->type() == QEvent::KeyPress)
+        {
             received = true;
         }
         return false;
@@ -165,9 +178,10 @@ void processEvents()
     QCoreApplication::sendPostedEvents();
 }
 
-void sendTab(QWidget *receiver, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+void sendTab(QWidget* receiver, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
 {
-    if (!receiver) {
+    if (!receiver)
+    {
         return;
     }
 
@@ -178,9 +192,10 @@ void sendTab(QWidget *receiver, Qt::KeyboardModifiers modifiers = Qt::NoModifier
     processEvents();
 }
 
-bool hasExpectedColor(const QImage &image)
+bool hasExpectedColor(const QImage& image)
 {
-    if (image.isNull()) {
+    if (image.isNull())
+    {
         return false;
     }
     const QColor sample = image.pixelColor(8, 8);
@@ -205,7 +220,8 @@ QJsonObject runWidgetBaseline()
 
     QElapsedTimer timer;
     timer.start();
-    for (int index = 0; index < kResizeIterations; ++index) {
+    for (int index = 0; index < kResizeIterations; ++index)
+    {
         canvas.resize(kWidth + index * 7, kHeight + index * 5);
         processEvents();
     }
@@ -219,10 +235,10 @@ QJsonObject runWidgetBaseline()
     result.insert(QStringLiteral("dpi"), canvas.devicePixelRatioF());
     result.insert(QStringLiteral("graphics_api"), QStringLiteral("widgets"));
     result.insert(QStringLiteral("status"), probe.received && canvas.hasFocus() &&
-                       result.value(QStringLiteral("color_match")).toBool() &&
-                       canvas.devicePixelRatioF() > 0.0
-                   ? QStringLiteral("pass")
-                   : QStringLiteral("partial"));
+                                                    result.value(QStringLiteral("color_match")).toBool() &&
+                                                    canvas.devicePixelRatioF() > 0.0
+                                                ? QStringLiteral("pass")
+                                                : QStringLiteral("partial"));
     return result;
 }
 
@@ -231,15 +247,16 @@ QJsonObject runQuickCandidate(Candidate candidate)
     std::unique_ptr<QWidget> widgetHost;
     std::unique_ptr<QQuickWidget> quickWidget;
     std::unique_ptr<QQuickWindow> quickWindow;
-    QQuickItem *focusItem = nullptr;
-    QWidget *focusWidget = nullptr;
-    QObject *inputTarget = nullptr;
-    QQuickWindow *window = nullptr;
+    QQuickItem* focusItem = nullptr;
+    QWidget* focusWidget = nullptr;
+    QObject* inputTarget = nullptr;
+    QQuickWindow* window = nullptr;
     QImage captured;
     qreal dpi = 1.0;
     QString graphicsApi = QStringLiteral("unknown");
 
-    if (candidate == Candidate::QuickWidget) {
+    if (candidate == Candidate::QuickWidget)
+    {
         widgetHost = std::make_unique<QWidget>();
         widgetHost->setObjectName(QStringLiteral("qquickWidgetHost"));
         quickWidget = std::make_unique<QQuickWidget>(widgetHost.get());
@@ -250,74 +267,97 @@ QJsonObject runQuickCandidate(Candidate candidate)
         widgetHost->show();
         focusWidget = quickWidget.get();
         inputTarget = quickWidget.get();
-    } else {
+    }
+    else
+    {
         quickWindow = std::make_unique<QQuickWindow>();
         window = quickWindow.get();
         quickWindow->setColor(Qt::transparent);
-        auto *item = new BenchmarkItem(quickWindow->contentItem());
+        auto* item = new BenchmarkItem(quickWindow->contentItem());
         item->setSize(QSize(kWidth, kHeight));
         focusItem = item;
         inputTarget = quickWindow.get();
 
-        if (candidate == Candidate::WindowContainer) {
+        if (candidate == Candidate::WindowContainer)
+        {
             widgetHost = std::make_unique<QWidget>();
-            auto *container = QWidget::createWindowContainer(quickWindow.get(), widgetHost.get());
+            auto* container = QWidget::createWindowContainer(quickWindow.get(), widgetHost.get());
             container->setFocusPolicy(Qt::StrongFocus);
             container->setGeometry(0, 0, kWidth, kHeight);
             widgetHost->resize(kWidth, kHeight);
             widgetHost->show();
             focusWidget = container;
             quickWindow.release();
-        } else {
+        }
+        else
+        {
             quickWindow->resize(kWidth, kHeight);
             quickWindow->show();
         }
     }
 
     processEvents();
-    if (quickWidget) {
+    if (quickWidget)
+    {
         window = quickWidget->quickWindow();
     }
-    if (window && window->rendererInterface()) {
+    if (window && window->rendererInterface())
+    {
         graphicsApi = graphicsApiName(window->rendererInterface()->graphicsApi());
     }
     dpi = window ? window->devicePixelRatio() : 1.0;
 
     InputProbe probe;
-    if (inputTarget) {
+    if (inputTarget)
+    {
         inputTarget->installEventFilter(&probe);
     }
-    if (focusItem) {
+    if (focusItem)
+    {
         focusItem->forceActiveFocus();
-    } else if (quickWidget) {
+    }
+    else if (quickWidget)
+    {
         quickWidget->setFocus();
-    } else if (focusWidget) {
+    }
+    else if (focusWidget)
+    {
         focusWidget->setFocus();
     }
     QKeyEvent keyEvent(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
-    if (inputTarget) {
+    if (inputTarget)
+    {
         QCoreApplication::sendEvent(inputTarget, &keyEvent);
     }
     processEvents();
 
     QElapsedTimer timer;
     timer.start();
-    for (int index = 0; index < kResizeIterations; ++index) {
+    for (int index = 0; index < kResizeIterations; ++index)
+    {
         const QSize size(kWidth + index * 7, kHeight + index * 5);
-        if (quickWidget) {
+        if (quickWidget)
+        {
             widgetHost->resize(size);
             quickWidget->resize(size);
-        } else if (candidate == Candidate::WindowContainer) {
+        }
+        else if (candidate == Candidate::WindowContainer)
+        {
             widgetHost->resize(size);
-        } else if (window) {
+        }
+        else if (window)
+        {
             window->resize(size);
         }
         processEvents();
     }
 
-    if (quickWidget) {
+    if (quickWidget)
+    {
         captured = quickWidget->grabFramebuffer();
-    } else if (window) {
+    }
+    else if (window)
+    {
         captured = window->grabWindow();
     }
 
@@ -335,9 +375,9 @@ QJsonObject runQuickCandidate(Candidate candidate)
     result.insert(QStringLiteral("dpi"), dpi);
     result.insert(QStringLiteral("graphics_api"), graphicsApi);
     result.insert(QStringLiteral("status"), probe.received && focusReached && colorMatch &&
-                       dpi > 0.0 && graphicsApiKnown
-                       ? QStringLiteral("pass")
-                       : QStringLiteral("partial"));
+                                                    dpi > 0.0 && graphicsApiKnown
+                                                ? QStringLiteral("pass")
+                                                : QStringLiteral("partial"));
     return result;
 }
 
@@ -361,7 +401,7 @@ QJsonObject runFocusBridgeProbe()
     after.setObjectName(QStringLiteral("widgetAfterQuick"));
     after.setAccessibleName(QStringLiteral("Widget after Quick"));
 
-    auto *layout = new QVBoxLayout(&host);
+    auto* layout = new QVBoxLayout(&host);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->addWidget(&before);
     layout->addWidget(&quickWidget);
@@ -374,7 +414,7 @@ QJsonObject runFocusBridgeProbe()
     host.activateWindow();
     processEvents();
 
-    QObject *rootObject = quickWidget.rootObject();
+    QObject* rootObject = quickWidget.rootObject();
     const bool qmlLoaded = quickWidget.status() == QQuickWidget::Ready && rootObject;
     const QString accessibleName = rootObject
                                        ? rootObject->property("bridgeAccessibleName").toString()
@@ -391,9 +431,7 @@ QJsonObject runFocusBridgeProbe()
     const bool initialWidgetFocus = before.hasFocus();
 
     sendTab(&before);
-    const bool widgetToQuick = quickWidget.hasFocus()
-                               && rootObject
-                               && rootObject->property("bridgeProbeActiveFocus").toBool();
+    const bool widgetToQuick = quickWidget.hasFocus() && rootObject && rootObject->property("bridgeProbeActiveFocus").toBool();
 
     sendTab(&quickWidget);
     const bool quickToWidget = after.hasFocus();
@@ -401,19 +439,13 @@ QJsonObject runFocusBridgeProbe()
     after.setFocus(Qt::OtherFocusReason);
     processEvents();
     sendTab(&after, Qt::ShiftModifier);
-    const bool widgetToQuickReverse = quickWidget.hasFocus()
-                                      && rootObject
-                                      && rootObject->property("bridgeProbeActiveFocus").toBool();
+    const bool widgetToQuickReverse = quickWidget.hasFocus() && rootObject && rootObject->property("bridgeProbeActiveFocus").toBool();
 
     sendTab(&quickWidget, Qt::ShiftModifier);
     const bool quickToWidgetReverse = before.hasFocus();
 
-    const bool accessibilityContract = qmlLoaded
-                                       && accessibleName == QStringLiteral("Quick action")
-                                       && accessibleDescription == QStringLiteral("Activate the Quick action.")
-                                       && accessibleRole == static_cast<int>(QAccessible::Button);
-    const bool roundTrip = initialWidgetFocus && widgetToQuick && quickToWidget
-                           && widgetToQuickReverse && quickToWidgetReverse;
+    const bool accessibilityContract = qmlLoaded && accessibleName == QStringLiteral("Quick action") && accessibleDescription == QStringLiteral("Activate the Quick action.") && accessibleRole == static_cast<int>(QAccessible::Button);
+    const bool roundTrip = initialWidgetFocus && widgetToQuick && quickToWidget && widgetToQuickReverse && quickToWidgetReverse;
 
     QJsonObject result;
     result.insert(QStringLiteral("probe"), QStringLiteral("widget-quick-widget-focus-accessibility"));
@@ -428,42 +460,54 @@ QJsonObject runFocusBridgeProbe()
     result.insert(QStringLiteral("accessibility_contract"), accessibilityContract);
     result.insert(QStringLiteral("native_accessibility_backend_active"), QAccessible::isActive());
     result.insert(QStringLiteral("status"), roundTrip && accessibilityContract
-                       ? QStringLiteral("pass")
-                       : QStringLiteral("partial"));
+                                                ? QStringLiteral("pass")
+                                                : QStringLiteral("partial"));
     return result;
 }
 
-} // namespace
+}   // namespace
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
     QString requested = QStringLiteral("all");
-    for (int index = 1; index < argc; ++index) {
+    for (int index = 1; index < argc; ++index)
+    {
         const QString argument = QString::fromLocal8Bit(argv[index]);
-        if (argument == QStringLiteral("--focus-bridge")) {
+        if (argument == QStringLiteral("--focus-bridge"))
+        {
             requested = QStringLiteral("focus-bridge");
-        } else if (argument.startsWith(QStringLiteral("--candidate="))) {
+        }
+        else if (argument.startsWith(QStringLiteral("--candidate=")))
+        {
             requested = argument.sliced(QStringLiteral("--candidate=").size());
         }
     }
 
     QList<QJsonObject> results;
-    if (requested == QStringLiteral("focus-bridge")) {
+    if (requested == QStringLiteral("focus-bridge"))
+    {
         results.append(runFocusBridgeProbe());
-    } else if (requested == QStringLiteral("all")) {
+    }
+    else if (requested == QStringLiteral("all"))
+    {
         results.append(runWidgetBaseline());
         results.append(runQuickCandidate(Candidate::QuickWidget));
         results.append(runQuickCandidate(Candidate::WindowContainer));
         results.append(runQuickCandidate(Candidate::QuickItem));
-    } else if (requested == QStringLiteral("widget-baseline")) {
+    }
+    else if (requested == QStringLiteral("widget-baseline"))
+    {
         results.append(runWidgetBaseline());
-    } else {
+    }
+    else
+    {
         results.append(runQuickCandidate(parseCandidate(requested)));
     }
 
     bool complete = true;
-    for (const QJsonObject &result : results) {
+    for (const QJsonObject& result : results)
+    {
         const QByteArray line = QJsonDocument(result).toJson(QJsonDocument::Compact);
         std::fwrite(line.constData(), 1, static_cast<size_t>(line.size()), stdout);
         std::fwrite("\n", 1, 1, stdout);
