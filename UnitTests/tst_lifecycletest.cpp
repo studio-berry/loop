@@ -26,15 +26,21 @@
 #include "pdfjobscheduler.h"
 #include "pdfoperationhistorystore.h"
 #include "pdfsavepolicy.h"
+#include "pdfworkloadenvelope.h"
 
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
+#include <QVector>
 #include <QtTest>
 
 #include <atomic>
+#include <cstdint>
 #include <optional>
 #include <thread>
 
@@ -43,6 +49,7 @@ class LifecycleTest : public QObject
     Q_OBJECT
 
 private slots:
+    void boundedTraceGenerationIsDeterministic();
     void seededSequencePreservesInvariants();
     void injectedStaleResultIsCaught();
     void injectedOverwriteIsCaught();
@@ -51,6 +58,104 @@ private slots:
 
 namespace
 {
+
+enum class TraceCommandKind
+{
+    Open,
+    RenderPreflight,
+    Cancel,
+    ReplaceRevision,
+    SaveReopen,
+    Rollback,
+    Close,
+};
+
+QString traceCommandName(TraceCommandKind kind)
+{
+    switch (kind)
+    {
+        case TraceCommandKind::Open:
+            return QStringLiteral("open");
+        case TraceCommandKind::RenderPreflight:
+            return QStringLiteral("render-preflight");
+        case TraceCommandKind::Cancel:
+            return QStringLiteral("cancel");
+        case TraceCommandKind::ReplaceRevision:
+            return QStringLiteral("replace-revision");
+        case TraceCommandKind::SaveReopen:
+            return QStringLiteral("save-reopen");
+        case TraceCommandKind::Rollback:
+            return QStringLiteral("rollback");
+        case TraceCommandKind::Close:
+            return QStringLiteral("close");
+    }
+    return QStringLiteral("unknown");
+}
+
+struct TraceCommand
+{
+    TraceCommandKind kind;
+    quint64 argument = 0;
+};
+
+quint64 nextTraceRandom(quint64& state)
+{
+    state += UINT64_C(0x9e3779b97f4a7c15);
+    quint64 value = state;
+    value = (value ^ (value >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    value = (value ^ (value >> 27)) * UINT64_C(0x94d049bb133111eb);
+    return value ^ (value >> 31);
+}
+
+QVector<TraceCommand> generateTrace(quint64 seed)
+{
+    const QVector<TraceCommandKind> activeCoverage = {
+        TraceCommandKind::Open,
+        TraceCommandKind::RenderPreflight,
+        TraceCommandKind::Cancel,
+        TraceCommandKind::ReplaceRevision,
+        TraceCommandKind::SaveReopen,
+        TraceCommandKind::Rollback,
+    };
+    QVector<TraceCommand> trace;
+    trace.reserve(32);
+    quint64 state = seed;
+    for (const TraceCommandKind kind : activeCoverage)
+    {
+        trace.append({ kind, nextTraceRandom(state) });
+    }
+    while (trace.size() < 31)
+    {
+        const auto kind = activeCoverage.at(static_cast<qsizetype>(nextTraceRandom(state) % activeCoverage.size()));
+        trace.append({ kind, nextTraceRandom(state) });
+    }
+    trace.append({ TraceCommandKind::Close, nextTraceRandom(state) });
+    return trace;
+}
+
+QJsonObject traceToJson(quint64 seed, const QVector<TraceCommand>& trace)
+{
+    QJsonArray commands;
+    for (qsizetype index = 0; index < trace.size(); ++index)
+    {
+        commands.append(QJsonObject{
+            { QStringLiteral("index"), static_cast<int>(index) },
+            { QStringLiteral("kind"), traceCommandName(trace.at(index).kind) },
+            { QStringLiteral("argument"), QString::number(trace.at(index).argument) } });
+    }
+    return QJsonObject{
+        { QStringLiteral("schema_kind"), QStringLiteral("loupe-lifecycle-trace") },
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("seed"), static_cast<qint64>(seed) },
+        { QStringLiteral("initial_artifact_digest"), pdf::PDFRunIdentity::digestBytes(QByteArrayLiteral("lifecycle-source-v1")) },
+        { QStringLiteral("commands"), commands },
+        { QStringLiteral("expected_invariants"), QJsonArray{
+                                                     QStringLiteral("source-immutable"),
+                                                     QStringLiteral("cancel-is-terminal"),
+                                                     QStringLiteral("stale-results-rejected"),
+                                                     QStringLiteral("history-append-only") } }
+    };
+}
 
 struct LifecycleState
 {
@@ -156,6 +261,58 @@ bool appendEvent(pdf::PDFOperationHistoryStore& history,
 
 }   // namespace
 
+void LifecycleTest::boundedTraceGenerationIsDeterministic()
+{
+    constexpr quint64 seed = UINT64_C(0x20260821);
+    const QVector<TraceCommand> first = generateTrace(seed);
+    const QVector<TraceCommand> second = generateTrace(seed);
+    QCOMPARE(first.size(), 32);
+    QCOMPARE(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact),
+             QJsonDocument(traceToJson(seed, second)).toJson(QJsonDocument::Compact));
+
+    QFile goldenFile(QStringLiteral(LOUPE_UNITTEST_SOURCE_DIR "/testdata/lifecycle/seed-20260821.json"));
+    QVERIFY(goldenFile.open(QIODevice::ReadOnly));
+    QJsonParseError parseError;
+    const QJsonDocument goldenDocument = QJsonDocument::fromJson(goldenFile.readAll(), &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QCOMPARE(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact),
+             QJsonDocument(goldenDocument.object()).toJson(QJsonDocument::Compact));
+
+    bool opened = false;
+    bool cancelled = false;
+    quint64 revision = 0;
+    for (const TraceCommand& command : first)
+    {
+        switch (command.kind)
+        {
+            case TraceCommandKind::Open:
+                opened = true;
+                break;
+            case TraceCommandKind::RenderPreflight:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Cancel:
+                cancelled = true;
+                break;
+            case TraceCommandKind::ReplaceRevision:
+                QVERIFY(opened);
+                ++revision;
+                break;
+            case TraceCommandKind::SaveReopen:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Rollback:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Close:
+                opened = false;
+                break;
+        }
+    }
+    QVERIFY(cancelled);
+    QVERIFY(revision > 0);
+}
+
 void LifecycleTest::seededSequencePreservesInvariants()
 {
     QTemporaryDir temporary;
@@ -258,8 +415,9 @@ void LifecycleTest::injectedStaleResultIsCaught()
 
     LifecycleState state;
     state.acceptedStale = true;
-    pdf::PDFArtifactStore artifacts(QDir::tempPath());
     QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    pdf::PDFArtifactStore artifacts(temporary.path());
     pdf::PDFOperationHistoryStore history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")));
     QVERIFY(history.open());
     QCOMPARE(invariantFailure(state, artifacts, history), QStringLiteral("stale-result-accepted"));

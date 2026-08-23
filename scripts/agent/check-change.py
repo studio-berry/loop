@@ -295,9 +295,15 @@ def add_format_checks(
         )
 
 
+def clang_tidy_sources(sources: list[str]) -> list[str]:
+    implementation_suffixes = {".c", ".cc", ".cpp", ".cxx"}
+    return [source for source in sources if Path(source).suffix.lower() in implementation_suffixes]
+
+
 def add_clang_tidy_checks(
     evidence: list[Evidence], sources: list[str], build_dir: Path, *, dry_run: bool
 ) -> None:
+    sources = clang_tidy_sources(sources)
     if dry_run:
         for source in sources:
             add_result(

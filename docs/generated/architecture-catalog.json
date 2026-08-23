@@ -369,6 +369,7 @@
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",
     "UnitTestsRepairOperation",
+    "UnitTestsRepairOperatorAcceptance",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",

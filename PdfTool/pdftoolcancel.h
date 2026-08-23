@@ -24,6 +24,9 @@
 #define PDFTOOLCANCEL_H
 
 #include <atomic>
+#include <chrono>
+
+#include <QtGlobal>
 
 namespace pdftool
 {
@@ -34,16 +37,46 @@ inline std::atomic_bool& cancelRequested()
     return flag;
 }
 
+inline std::atomic<qint64>& cancellationRequestedAtMs()
+{
+    static std::atomic<qint64> timestamp{ -1 };
+    return timestamp;
+}
+
+inline qint64 monotonicMilliseconds()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
 inline bool isCancelRequested()
 {
     return cancelRequested().load(std::memory_order_acquire);
 }
 
+inline void requestCancellation()
+{
+    qint64 unset = -1;
+    cancellationRequestedAtMs().compare_exchange_strong(unset,
+                                                        monotonicMilliseconds(),
+                                                        std::memory_order_acq_rel,
+                                                        std::memory_order_acquire);
+    cancelRequested().store(true, std::memory_order_release);
+}
+
+inline qint64 cancellationLatencyMs()
+{
+    const qint64 requestedAt = cancellationRequestedAtMs().load(std::memory_order_acquire);
+    return requestedAt < 0 ? -1 : qMax<qint64>(0, monotonicMilliseconds() - requestedAt);
+}
+
 inline void resetCancelRequested()
 {
+    cancellationRequestedAtMs().store(-1, std::memory_order_release);
     cancelRequested().store(false, std::memory_order_release);
 }
 
-} // namespace pdftool
+}   // namespace pdftool
 
-#endif // PDFTOOLCANCEL_H
+#endif   // PDFTOOLCANCEL_H
