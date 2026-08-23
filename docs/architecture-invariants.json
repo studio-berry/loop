@@ -115,6 +115,11 @@
       "id": "I23",
       "title": "One host-neutral render-request path; a page surface is admitted only under its complete key",
       "test_targets": ["UnitTestsViewportController", "UnitTestsPageSurface"]
+    },
+    {
+      "id": "I24",
+      "title": "Transient interaction and overlays are revision-fenced; neither mutates the document nor forces a page rerender",
+      "test_targets": ["UnitTestsInteractionController", "UnitTestsOverlayFrame"]
     }
   ]
 }

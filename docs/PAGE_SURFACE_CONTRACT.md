@@ -91,7 +91,8 @@ advance the cache generation and make every in-flight key, including its own, st
 - Sub-rectangle rendering. `pageTileBounds` is carried by the key so a tiled canvas will not
   need a key change, but a non-null tile is refused with `page-surface/tiling-unsupported`.
   The backend generalization is issue #54 and stays deferred.
-- Overlays. Page pixels only; the overlay pass and its independent invalidation are P4-S4.
+- Overlays. Page pixels only. The overlay pass and its independent invalidation landed in
+  P4-S4; see [INTERACTION_CONTRACT.md](INTERACTION_CONTRACT.md).
 - A fence for a colour-settings change. `colorOutputIdentity` keeps this cache correct, but
   nothing in Core advances `cacheGeneration` when CMS settings change; that is open work for
   P4-S9's preview authority.
