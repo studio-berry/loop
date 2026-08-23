@@ -188,6 +188,25 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV2ScopeFixtures()
     QVERIFY(pdfplugin::preflight::isNormalizedReport(scopeFixtureReport(objectScopeFinding(), true)));
 }
 
+void PreflightPluginTest::isNormalizedReport_acceptsMigratedSchemaV2GraphFindingWithoutEvidenceIds()
+{
+    QJsonObject finding = objectScopeFinding();
+    QVERIFY(!finding.contains(QStringLiteral("evidence_ids")));
+
+    const QJsonObject v2Report = scopeFixtureReport(finding, false);
+    const pdf::PDFSchemaMigrationResult prepared =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, v2Report);
+    QVERIFY(prepared.migrated);
+    QCOMPARE(prepared.document.value(QStringLiteral("schema_version")).toInt(), 3);
+
+    const QJsonArray errors = prepared.document.value(QStringLiteral("errors")).toArray();
+    QVERIFY(!errors.isEmpty());
+    QVERIFY(!errors.first().toObject().contains(QStringLiteral("evidence_ids")));
+
+    // Findings are validated against the submitted schema major version, not v3.
+    QVERIFY(pdfplugin::preflight::isNormalizedReport(v2Report));
+}
+
 void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncompletePass()
 {
     QJsonObject report;
