@@ -184,6 +184,39 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsDocumentFacade "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDocumentFacade")
+
+    # Architecture invariant I23, viewport half. Same load-bearing link line: the
+    # viewport, its layout and its transforms must be drivable with no QWidget,
+    # no QScreen and no scrollbar, which is half of the P4-S3 exit condition.
+    add_executable(UnitTestsViewportController
+        tst_viewportcontrollertest.cpp
+    )
+
+    target_link_libraries(UnitTestsViewportController PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsViewportController PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsViewportController "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsViewportController")
+
+    # Architecture invariant I23, admission half: one render-request path through
+    # pdf::PDFJobScheduler, and full-key admission on the owner thread.
+    add_executable(UnitTestsPageSurface
+        tst_pagesurfacetest.cpp
+    )
+
+    target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsPageSurface PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsPageSurface "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurface")
 endif()
 
 add_executable(UnitTestsImageOptimizer

@@ -110,6 +110,11 @@
       "id": "I22",
       "title": "One document lifecycle facade and one command catalog; no second action registry",
       "test_targets": ["UnitTestsDocumentFacade"]
+    },
+    {
+      "id": "I23",
+      "title": "One host-neutral render-request path; a page surface is admitted only under its complete key",
+      "test_targets": ["UnitTestsViewportController", "UnitTestsPageSurface"]
     }
   ]
 }

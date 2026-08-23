@@ -41,41 +41,6 @@ constexpr const char* PathParameter = "path";
 
 }   // namespace
 
-DocumentJobRelay::DocumentJobRelay(QObject* parent) :
-    QObject(parent)
-{
-}
-
-DocumentJobRelay::~DocumentJobRelay() = default;
-
-void DocumentJobRelay::detach()
-{
-    m_attached = false;
-}
-
-void DocumentJobRelay::post(std::function<void()> action)
-{
-    if (!action)
-    {
-        return;
-    }
-
-    // Queued on purpose even when the caller is already on this thread: a
-    // synchronous submitter must not deliver a completion while the submitting
-    // call is still on the stack, or admission would run against half-built
-    // state.
-    QMetaObject::invokeMethod(
-        this,
-        [this, action = std::move(action)]()
-        {
-            if (m_attached)
-            {
-                action();
-            }
-        },
-        Qt::QueuedConnection);
-}
-
 DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
                                IJobSubmitter& submitter,
                                IDocumentLoader& loader,
@@ -88,7 +53,8 @@ DocumentFacade::DocumentFacade(pdf::PDFDocumentContext& context,
     m_writer(&writer),
     m_catalog(&catalog),
     m_revisionSource(&context),
-    m_relay(new DocumentJobRelay, [](DocumentJobRelay* relay) { relay->deleteLater(); })
+    m_relay(new JobRelay, [](JobRelay* relay)
+            { relay->deleteLater(); })
 {
     m_handlersRegistered = registerHandlers();
     updateAvailability();
@@ -145,7 +111,8 @@ bool DocumentFacade::registerHandlers()
         source.path = parameters.value(QLatin1String(PathParameter)).toString();
         beginOpen(invocation, source);
     };
-    open.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
+    open.cancel = [this](CommandInvocationId invocation)
+    { requestCancellation(invocation); };
     registered = m_catalog->setHandler(OpenCommandId, std::move(open)) && registered;
 
     CommandCatalog::Handler close;
@@ -156,7 +123,8 @@ bool DocumentFacade::registerHandlers()
     CommandCatalog::Handler save;
     save.invoke = [this](CommandInvocationId invocation, const QVariantMap&)
     { beginSave(invocation, m_source); };
-    save.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
+    save.cancel = [this](CommandInvocationId invocation)
+    { requestCancellation(invocation); };
     registered = m_catalog->setHandler(SaveCommandId, std::move(save)) && registered;
 
     CommandCatalog::Handler saveAs;
@@ -166,7 +134,8 @@ bool DocumentFacade::registerHandlers()
         target.path = parameters.value(QLatin1String(PathParameter)).toString();
         beginSave(invocation, target);
     };
-    saveAs.cancel = [this](CommandInvocationId invocation) { requestCancellation(invocation); };
+    saveAs.cancel = [this](CommandInvocationId invocation)
+    { requestCancellation(invocation); };
     registered = m_catalog->setHandler(SaveAsCommandId, std::move(saveAs)) && registered;
 
     if (!registered)
@@ -339,7 +308,7 @@ void DocumentFacade::beginOpen(CommandInvocationId invocation, const DocumentSou
     m_pendingInvocation = invocation;
 
     const quint64 generation = m_generation;
-    const std::shared_ptr<DocumentJobRelay> relay = m_relay;
+    const std::shared_ptr<JobRelay> relay = m_relay;
     IDocumentLoader* loader = m_loader;
     const DocumentSource captured = source;
 
@@ -392,7 +361,7 @@ void DocumentFacade::beginSave(CommandInvocationId invocation, const DocumentSou
     setOutputState(DocumentOutputState::Pending);
 
     const quint64 generation = m_generation;
-    const std::shared_ptr<DocumentJobRelay> relay = m_relay;
+    const std::shared_ptr<JobRelay> relay = m_relay;
     IDocumentWriter* writer = m_writer;
     const DocumentSource captured = target;
 

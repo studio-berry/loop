@@ -39,6 +39,8 @@ add_library(LoupeLibInteraction STATIC
     sources/documentcontextsource.h
     sources/jobsubmitter.cpp
     sources/jobsubmitter.h
+    sources/jobrelay.cpp
+    sources/jobrelay.h
     sources/commanddescriptor.cpp
     sources/commanddescriptor.h
     sources/commandcatalog.cpp
@@ -50,6 +52,16 @@ add_library(LoupeLibInteraction STATIC
     sources/documentfacade.cpp
     sources/documentfacade.h
     sources/documentfacadestate.cpp
+    sources/pagesurfacekey.cpp
+    sources/pagesurfacekey.h
+    sources/viewportcontroller.cpp
+    sources/viewportcontroller.h
+    sources/pagesurfacerenderer.cpp
+    sources/pagesurfacerenderer.h
+    sources/canvassnapshot.cpp
+    sources/canvassnapshot.h
+    sources/pagesurfacecoordinator.cpp
+    sources/pagesurfacecoordinator.h
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
