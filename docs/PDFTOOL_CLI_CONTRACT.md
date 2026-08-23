@@ -44,7 +44,7 @@ contains only fixups available in the current build.
 {
   "schema_version": 1,
   "command": "preflight",
-  "version": "0.1.0-alpha",
+  "version": "0.2.0-alpha",
   "status": "findings",
   "exit_code": 1,
   "diagnostics": [

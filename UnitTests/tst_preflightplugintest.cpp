@@ -80,7 +80,8 @@ QJsonObject pageScopeFinding()
         { QStringLiteral("type"), QStringLiteral("color-mode") },
         { QStringLiteral("severity"), QStringLiteral("error") },
         { QStringLiteral("message"), QStringLiteral("Disallowed color space(s) found on page 2: DeviceRGB (allowed: CMYK, Grayscale)") },
-        { QStringLiteral("check_id"), QStringLiteral("color-mode") }
+        { QStringLiteral("check_id"), QStringLiteral("color-mode") },
+        { QStringLiteral("evidence_ids"), QJsonArray{ QStringLiteral("color-mode-page-2") } }
     };
 }
 
@@ -94,7 +95,8 @@ QJsonObject objectScopeFinding()
         { QStringLiteral("severity"), QStringLiteral("warning") },
         { QStringLiteral("message"), QStringLiteral("Image effective DPI 180 is below min_dpi 300") },
         { QStringLiteral("bbox"), QJsonArray{ 72.0, 400.0, 540.0, 720.0 } },
-        { QStringLiteral("check_id"), QStringLiteral("image-resolution") }
+        { QStringLiteral("check_id"), QStringLiteral("image-resolution") },
+        { QStringLiteral("evidence_ids"), QJsonArray{ QStringLiteral("image-resolution-object-87") } }
     };
 }
 
@@ -190,11 +192,12 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV2ScopeFixtures()
 
 void PreflightPluginTest::isNormalizedReport_acceptsMigratedSchemaV2GraphFindingWithoutEvidenceIds()
 {
-    // v2 sidecars can carry graph-backed findings without evidence_ids. Migration to v3 must
-    // not retroactively require them; validation uses the submitted schema major version.
-    QJsonObject report = scopeFixtureReport(objectScopeFinding(), false);
+    QJsonObject report = scopeFixtureReport(pageScopeFinding(), false);
     report.insert(QStringLiteral("schema_kind"), QStringLiteral("preflight-report"));
 
+    // Schema v2 did not require evidence_ids. Validation must use the submitted
+    // version while checking findings, even though normalization migrates the
+    // report envelope to schema v3 before the rest of the contract is checked.
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
 }
 

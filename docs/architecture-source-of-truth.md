@@ -33,5 +33,5 @@ The branch policy itself is intentionally a small reviewed input at
 names into the catalog and the documentation workflow checks the committed
 result. Product versioning is the matching input at
 [`docs/version-policy.json`](version-policy.json) (Semantic Versioning 2.0,
-current `0.1.0-alpha`). Ephemeral topic branches are not architecture facts
+current `0.2.0-alpha`). Ephemeral topic branches are not architecture facts
 and are not copied into the catalog.
