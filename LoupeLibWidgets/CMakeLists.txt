@@ -83,6 +83,8 @@ add_library(LoupeLibWidgets SHARED
     sources/pdfdrawspacecontroller.h
     sources/pdfoverlaycompositor_p.cpp
     sources/pdfoverlaycompositor_p.h
+    sources/pdfpagesurfacecache_p.cpp
+    sources/pdfpagesurfacecache_p.h
     sources/pdfcompiler.cpp
     sources/pdfcompiler.h
     sources/pdfdocumentdrawinterface.h

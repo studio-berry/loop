@@ -30,8 +30,9 @@ uploaded.
 ## Cache and queue policy
 
 - The existing `setCacheLimit()` byte limit is the sole byte-budget authority
-  for both compiled pages and rendered surfaces; no second per-document or
-  process-wide policy is added.
+  for both compiled pages and rendered surfaces; the implementation partitions
+  that limit between the two caches so their combined resident cost cannot
+  exceed it. No second per-document or process-wide policy is added.
 - An entry whose checked byte cost exceeds the budget is rejected explicitly.
 - Eviction is deterministic least-recently-used by access sequence.
 - A compatible surface may be transformed immediately while a newer surface is
