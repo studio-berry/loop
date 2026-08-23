@@ -20,8 +20,8 @@
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "issue": { "type": "integer", "const": 193 },
-    "gui_status": { "type": "string", "const": "deferred-until-0.0.3" },
-    "shell_surface": { "type": "string", "const": "Pdf4QtEditor" },
+    "gui_status": { "type": "string", "const": "deferred-until-0.1.1" },
+    "shell_surface": { "type": "string", "const": "LoupeEditor" },
     "ui_foundation": {
       "type": "object",
       "additionalProperties": false,

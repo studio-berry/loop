@@ -2,7 +2,7 @@
 
 Loupe exposes standard conversion as the Core operation `standards-convert`.
 PdfTool's `repair` command and PageMaster's headless export job call this same
-operation; an Editor adapter can be added after the 0.0.3 GUI gate without
+operation; an Editor adapter can be added after the 0.1.1 GUI gate without
 creating a second conversion implementation.
 
 Supported targets are explicit: `PDF/X-1a:2001`, `PDF/X-3:2002`, `PDF/X-4`, and
@@ -36,3 +36,28 @@ PdfTool repair input.pdf --operation standards-convert \
 No validator or Java runtime is bundled by default. Optional veraPDF/Temurin
 packaging and licensing decisions are documented in
 [`PACKAGING_LICENSING.md`](PACKAGING_LICENSING.md).
+
+Independent validation is skip-if-missing in CI (`UnitTestsStandardOracle`
+skips when `verapdf` is not on `PATH`). When a validator is configured, a
+nonzero exit is a conversion **error**: no candidate is committed and Loupe
+never self-certifies PASS. Mock always-pass / always-fail / missing-program
+tests cover that fail-closed table without bundling a JRE.
+
+Synthetic conversion fixtures and the already-conformant / convertible /
+unconvertible triad are described in
+[`loupe-preflight/testdata/conversion/README.md`](../loupe-preflight/testdata/conversion/README.md).
+Renderer differentials for color and overprint live in
+[`RENDERER_DIFFERENTIALS.md`](RENDERER_DIFFERENTIALS.md).
+
+## Fixture triad
+
+`loupe-preflight/testdata/conversion/manifest.json` names three cases:
+
+| Kind | Meaning |
+|------|---------|
+| already-conformant | Structural stand-in; still requires an independent validator |
+| safely-convertible | Metadata Loupe can rewrite when a validator is configured |
+| deliberately-unconvertible | Oracle mismatch must remain ERROR, never PASS |
+
+`UnitTestsConversionOracle` proves a missing oracle cannot self-certify and that
+`/bin/false` (or a failing veraPDF) is ERROR. The veraPDF lane is skip-if-missing.

@@ -679,7 +679,7 @@ void ContentEditorTest::test_image_orientation_replaced_image()
 void ContentEditorTest::test_image_orientation_qt_generated_document()
 {
     // Creates a document using the Qt pdf engine (which is a different
-    // producer than the pdf4qt document builder) and checks, that the image
+    // producer than the loupe document builder) and checks, that the image
     // survives the content stream rewrite without being mirrored.
     QByteArray documentData;
 

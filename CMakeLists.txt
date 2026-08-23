@@ -22,86 +22,102 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-set(PDF4QT_VERSION 1.6.0.0)
+set(LOUPE_VERSION 0.1.0)
+set(LOUPE_VERSION_PRERELEASE)
 message(STATUS "Build type - CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
-project(PDF4QT VERSION ${PDF4QT_VERSION} LANGUAGES CXX)
+project(LOUPE VERSION ${LOUPE_VERSION} LANGUAGES CXX)
+
+# Appx Identity.Version requires four components. MSI accepts SemVer three-part.
+set(LOUPE_WINDOWS_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.0")
+if(LOUPE_VERSION_PRERELEASE)
+    set(LOUPE_PROJECT_VERSION "${LOUPE_VERSION}-${LOUPE_VERSION_PRERELEASE}")
+else()
+    set(LOUPE_PROJECT_VERSION "${LOUPE_VERSION}")
+endif()
 
 message("VCPKG Enabled: " ${VCPKG_TOOLCHAIN})
 
-option(PDF4QT_INSTALL_DEPENDENCIES "Install dependencies" ${VCPKG_TOOLCHAIN})
-option(PDF4QT_INSTALL_QT_DEPENDENCIES "Install Qt dependencies" ${VCPKG_TOOLCHAIN})
-option(PDF4QT_INSTALL_INCLUDE "Install include headers" ON)
-option(PDF4QT_FLATPAK_BUILD "Special flag for Flatpak" OFF)
+option(LOUPE_INSTALL_DEPENDENCIES "Install dependencies" ${VCPKG_TOOLCHAIN})
+option(LOUPE_INSTALL_QT_DEPENDENCIES "Install Qt dependencies" ${VCPKG_TOOLCHAIN})
+option(LOUPE_INSTALL_INCLUDE "Install include headers" ON)
+option(LOUPE_FLATPAK_BUILD "Special flag for Flatpak" OFF)
 
-add_compile_definitions(PDF4QT_PROJECT_VERSION="${PDF4QT_VERSION}")
+add_compile_definitions(LOUPE_PROJECT_VERSION="${LOUPE_PROJECT_VERSION}")
 add_compile_definitions(QT_NO_EMIT)
 
-if(PDF4QT_FLATPAK_BUILD)
-    add_compile_definitions(PDF4QT_FLATPAK_BUILD)
+if(LOUPE_FLATPAK_BUILD)
+    add_compile_definitions(LOUPE_FLATPAK_BUILD)
 endif()
 
 if(WIN32 AND MSVC)
-    option(PDF4QT_INSTALL_MSVC_REDISTRIBUTABLE "Install MSVC redistributable package" ON)
-    option(PDF4QT_INSTALL_PREPARE_WIX_INSTALLER "Prepare Wix installer for Windows" ON)
+    option(LOUPE_INSTALL_MSVC_REDISTRIBUTABLE "Install MSVC redistributable package" ON)
+    option(LOUPE_INSTALL_PREPARE_WIX_INSTALLER "Prepare Wix installer for Windows" ON)
 endif()
 
-option(PDF4QT_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
-option(PDF4QT_BUILD_TESTS "Build UnitTests" ON)
-option(PDF4QT_ENABLE_SANITIZERS "Build with ASan+UBSan" OFF)
-option(PDF4QT_BUILD_FUZZERS "Build libFuzzer harnesses" OFF)
+option(LOUPE_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
+option(LOUPE_BUILD_TESTS "Build UnitTests" ON)
+option(LOUPE_ENABLE_SANITIZERS "Build with ASan+UBSan" OFF)
+option(LOUPE_BUILD_FUZZERS "Build libFuzzer harnesses" OFF)
 if(WIN32)
-    set(_PDF4QT_ENABLE_SENTRY_DEFAULT ON)
+    set(_LOUPE_ENABLE_SENTRY_DEFAULT ON)
 else()
-    set(_PDF4QT_ENABLE_SENTRY_DEFAULT OFF)
+    set(_LOUPE_ENABLE_SENTRY_DEFAULT OFF)
 endif()
-option(PDF4QT_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_PDF4QT_ENABLE_SENTRY_DEFAULT})
-set(PDF4QT_SENTRY_DSN "" CACHE STRING "Optional compile-time Sentry DSN (prefer SENTRY_DSN env at runtime)")
+option(LOUPE_ENABLE_SENTRY "Enable Sentry Native crash reporting (Windows-first)" ${_LOUPE_ENABLE_SENTRY_DEFAULT})
+# Public ingest DSN for berry-studios/loupe-pdf (EU). Runtime SENTRY_DSN overrides;
+# SENTRY_DSN=off disables telemetry. CI jobs set SENTRY_DSN=off so builds do not
+# flood the project. Confidential workflows should also set SENTRY_DSN=off.
+set(_LOUPE_SENTRY_DSN_DEFAULT "https://44f65b76ce476befdfb321ca361921fe@o4511731410337792.ingest.de.sentry.io/4511866328449104")
+set(LOUPE_SENTRY_DSN "${_LOUPE_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)")
+if(LOUPE_SENTRY_DSN STREQUAL "")
+    set(LOUPE_SENTRY_DSN "${_LOUPE_SENTRY_DSN_DEFAULT}" CACHE STRING "Compile-time Sentry DSN (set SENTRY_DSN=off at runtime to disable)" FORCE)
+endif()
 
-if(PDF4QT_ENABLE_SENTRY)
+if(LOUPE_ENABLE_SENTRY)
     find_package(Threads REQUIRED)
     find_package(sentry CONFIG REQUIRED)
-    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Pdf4QtSentry.cmake)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LoupeSentry.cmake)
 endif()
 
 # Loupe release profile: retain the standalone production/developer tools while
 # deferring only explicitly out-of-profile plugins without deleting sources.
-option(PDF4QT_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
+option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 
 # 0.2B keeps compatibility executables in the install tree but presents one
 # desktop product. Full developer packages retain the inherited application
 # registrations for direct testing and upstream comparison.
-if(PDF4QT_LOUPE_DISTRIBUTION)
-    set(PDF4QT_LOUPE_COMPAT_APPLICATIONS "")
+if(LOUPE_LOUPE_DISTRIBUTION)
+    set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
 else()
-    set(PDF4QT_LOUPE_COMPAT_APPLICATIONS [=[
-	<Application Id="Pdf4QtViewer" Executable="Pdf4QtViewer.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="PDF4QT Viewer"
+    set(LOUPE_LOUPE_COMPAT_APPLICATIONS [=[
+	<Application Id="LoupeViewer" Executable="LoupeViewer.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe Viewer"
 						  Description="View and navigate PDF documents."
 						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png">
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeViewer.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeViewer.png">
       </uap:VisualElements>
     </Application>
-	<Application Id="Pdf4QtPageMaster" Executable="Pdf4QtPageMaster.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="PDF4QT PageMaster"
+	<Application Id="LoupePageMaster" Executable="LoupePageMaster.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe PageMaster"
 						  Description="Organize, merge, split, and duplicate PDF pages."
 						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png">
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupePageMaster.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupePageMaster.png">
       </uap:VisualElements>
     </Application>
-	<Application Id="Pdf4QtDiff" Executable="Pdf4QtDiff.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="PDF4QT Diff"
+	<Application Id="LoupeDiff" Executable="LoupeDiff.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe Diff"
 						  Description="Compare PDF documents."
 						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png">
+						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeDiff.png"
+						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeDiff.png">
       </uap:VisualElements>
     </Application>
-	<Application Id="Pdf4QtLaunchPad" Executable="Pdf4QtLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="PDF4QT LaunchPad"
-						  Description="Launch PDF4QT applications."
+	<Application Id="LoupeLaunchPad" Executable="LoupeLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loupe LaunchPad"
+						  Description="Launch Loupe applications."
 						  BackgroundColor="transparent"
 						  Square150x150Logo="assets\logo.png"
 						  Square44x44Logo="assets\logo.png">
@@ -109,59 +125,59 @@ else()
     </Application>]=])
 endif()
 
-if(PDF4QT_LOUPE_DISTRIBUTION)
-    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
-    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
-    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_PDF4QT_BUILD_VIEWER_DEFAULT ON)
-    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_PDF4QT_BUILD_DIFF_DEFAULT ON)
-    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
-    set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT OFF)
-    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
-    set(_PDF4QT_PLUGIN_OCR_DEFAULT OFF)
+if(LOUPE_LOUPE_DISTRIBUTION)
+    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
+    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
+    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
+    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
+    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
+    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
+    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT OFF)
+    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
+    set(_LOUPE_PLUGIN_OCR_DEFAULT OFF)
 else()
-    set(_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT ON)
-    set(_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT ON)
-    set(_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_PDF4QT_BUILD_VIEWER_DEFAULT ON)
-    set(_PDF4QT_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_PDF4QT_BUILD_DIFF_DEFAULT ON)
-    set(_PDF4QT_BUILD_LAUNCHPAD_DEFAULT ON)
-    set(_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT ON)
-    set(_PDF4QT_PLUGIN_SCANNER_DEFAULT ON)
-    set(_PDF4QT_PLUGIN_OCR_DEFAULT ON)
+    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
+    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
+    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
+    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
+    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
+    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
+    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT ON)
+    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
+    set(_LOUPE_PLUGIN_OCR_DEFAULT ON)
 endif()
 
-option(PDF4QT_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_PDF4QT_BUILD_CODE_GENERATOR_DEFAULT})
-option(PDF4QT_BUILD_JBIG2_VIEWER "Build JBIG2_Viewer developer tool" ${_PDF4QT_BUILD_JBIG2_VIEWER_DEFAULT})
-option(PDF4QT_BUILD_EXAMPLE_GENERATOR "Build PdfExampleGenerator developer tool" ${_PDF4QT_BUILD_EXAMPLE_GENERATOR_DEFAULT})
-option(PDF4QT_BUILD_VIEWER "Build Pdf4QtViewer application" ${_PDF4QT_BUILD_VIEWER_DEFAULT})
-option(PDF4QT_BUILD_PAGEMASTER "Build Pdf4QtPageMaster application" ${_PDF4QT_BUILD_PAGEMASTER_DEFAULT})
-option(PDF4QT_BUILD_DIFF "Build Pdf4QtDiff application" ${_PDF4QT_BUILD_DIFF_DEFAULT})
-option(PDF4QT_BUILD_LAUNCHPAD "Build Pdf4QtLaunchPad application" ${_PDF4QT_BUILD_LAUNCHPAD_DEFAULT})
-option(PDF4QT_PLUGIN_AUDIOBOOK "Build AudioBook editor plugin" ${_PDF4QT_PLUGIN_AUDIOBOOK_DEFAULT})
-option(PDF4QT_PLUGIN_SCANNER "Build Scanner editor plugin" ${_PDF4QT_PLUGIN_SCANNER_DEFAULT})
+option(LOUPE_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_LOUPE_BUILD_CODE_GENERATOR_DEFAULT})
+option(LOUPE_BUILD_JBIG2_VIEWER "Build JBIG2_Viewer developer tool" ${_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT})
+option(LOUPE_BUILD_EXAMPLE_GENERATOR "Build PdfExampleGenerator developer tool" ${_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT})
+option(LOUPE_BUILD_VIEWER "Build LoupeViewer application" ${_LOUPE_BUILD_VIEWER_DEFAULT})
+option(LOUPE_BUILD_PAGEMASTER "Build LoupePageMaster application" ${_LOUPE_BUILD_PAGEMASTER_DEFAULT})
+option(LOUPE_BUILD_DIFF "Build LoupeDiff application" ${_LOUPE_BUILD_DIFF_DEFAULT})
+option(LOUPE_BUILD_LAUNCHPAD "Build LoupeLaunchPad application" ${_LOUPE_BUILD_LAUNCHPAD_DEFAULT})
+option(LOUPE_PLUGIN_AUDIOBOOK "Build AudioBook editor plugin" ${_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT})
+option(LOUPE_PLUGIN_SCANNER "Build Scanner editor plugin" ${_LOUPE_PLUGIN_SCANNER_DEFAULT})
 
 # V1 ships OCR as CLI-only (PdfTool ocr) per the 2026-07-25 product decision (MIC-343).
 # The Editor OCR UI plugin is not part of the V1 release surface, but stays buildable
-# for local/developer use. Release packaging workflows pass -DPDF4QT_PLUGIN_OCR=OFF
-# explicitly; PdfTool's OCR subcommand is unaffected. (PDF4QT_BUNDLE_OCR_SERVICE, the
+# for local/developer use. Release packaging workflows pass -DLOUPE_PLUGIN_OCR=OFF
+# explicitly; PdfTool's OCR subcommand is unaffected. (LOUPE_BUNDLE_OCR_SERVICE, the
 # other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
-option(PDF4QT_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_PDF4QT_PLUGIN_OCR_DEFAULT})
+option(LOUPE_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_LOUPE_PLUGIN_OCR_DEFAULT})
 
-if(PDF4QT_LOUPE_DISTRIBUTION AND PDF4QT_PLUGIN_OCR)
+if(LOUPE_LOUPE_DISTRIBUTION AND LOUPE_PLUGIN_OCR)
     message(FATAL_ERROR
-        "PDF4QT_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
+        "LOUPE_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
         "OCR is CLI-only in V1 (see issue #41 and ADR-005).")
 endif()
 
-if(PDF4QT_ENABLE_SANITIZERS OR PDF4QT_BUILD_FUZZERS)
+if(LOUPE_ENABLE_SANITIZERS OR LOUPE_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
 endif()
 
-set(PDF4QT_QT_ROOT "" CACHE PATH "Qt root directory")
+set(LOUPE_QT_ROOT "" CACHE PATH "Qt root directory")
 
 if(VCPKG_TOOLCHAIN AND CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "Installation directory" FORCE)
@@ -174,13 +190,13 @@ include(GNUInstallDirs)
 
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
-if(PDF4QT_BUILD_ONLY_CORE_LIBRARY)
+if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql)
 else()
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
 endif()
 
-if(PDF4QT_BUILD_TESTS)
+if(LOUPE_BUILD_TESTS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)
 endif()
 
@@ -209,7 +225,7 @@ set(CMAKE_AUTORCC_OPTIONS "--threshold;0;--compress;9")
 
 if (MSVC)
     add_compile_options(/bigobj /W4 /wd5054 /wd4127 /wd4702)
-    if(PDF4QT_ENABLE_SENTRY)
+    if(LOUPE_ENABLE_SENTRY)
         # Crashpad minidumps need PDBs to symbolicate. Keep Release optimization.
         add_compile_options("$<$<CONFIG:Release>:/Zi>")
         add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL>"
@@ -227,132 +243,132 @@ if (UNIX AND NOT APPLE AND CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
 if (UNIX AND NOT APPLE)
-    set(PDF4QT_LINUX ON)
+    set(LOUPE_LINUX ON)
 endif()
 
 # Parallel STL (libstdc++/libc++) on Linux needs TBB for both GCC and Clang.
-if(PDF4QT_LINUX)
+if(LOUPE_LINUX)
     find_package(TBB CONFIG REQUIRED)
-    set(PDF4QT_USE_TBB ON)
+    set(LOUPE_USE_TBB ON)
 endif()
 
-if(PDF4QT_ENABLE_SENTRY)
+if(LOUPE_ENABLE_SENTRY)
     find_package(sentry CONFIG REQUIRED)
 endif()
 
-option(PDF4QT_INSTALL_TO_USR "Install to usr directory" ${VCPKG_TOOLCHAIN})
+option(LOUPE_INSTALL_TO_USR "Install to usr directory" ${VCPKG_TOOLCHAIN})
 
-if(PDF4QT_LINUX)
-    set(PDF4QT_INSTALL_LIB_DIR_IMPL ${CMAKE_INSTALL_LIBDIR})
-    set(PDF4QT_INSTALL_BIN_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
+if(LOUPE_LINUX)
+    set(LOUPE_INSTALL_LIB_DIR_IMPL ${CMAKE_INSTALL_LIBDIR})
+    set(LOUPE_INSTALL_BIN_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
 else()
-    set(PDF4QT_INSTALL_LIB_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
-    set(PDF4QT_INSTALL_BIN_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
+    set(LOUPE_INSTALL_LIB_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
+    set(LOUPE_INSTALL_BIN_DIR_IMPL ${CMAKE_INSTALL_BINDIR})
 endif()
 
-if(PDF4QT_INSTALL_TO_USR)
-    set(PDF4QT_INSTALL_LIB_DIR usr/${PDF4QT_INSTALL_LIB_DIR_IMPL})
-    set(PDF4QT_INSTALL_BIN_DIR usr/${PDF4QT_INSTALL_BIN_DIR_IMPL})
-    set(PDF4QT_INSTALL_SHARE_DIR usr/${CMAKE_INSTALL_DATAROOTDIR})
-    set(PDF4QT_INSTALL_INCLUDE_DIR usr/${CMAKE_INSTALL_INCLUDEDIR})
+if(LOUPE_INSTALL_TO_USR)
+    set(LOUPE_INSTALL_LIB_DIR usr/${LOUPE_INSTALL_LIB_DIR_IMPL})
+    set(LOUPE_INSTALL_BIN_DIR usr/${LOUPE_INSTALL_BIN_DIR_IMPL})
+    set(LOUPE_INSTALL_SHARE_DIR usr/${CMAKE_INSTALL_DATAROOTDIR})
+    set(LOUPE_INSTALL_INCLUDE_DIR usr/${CMAKE_INSTALL_INCLUDEDIR})
 else()
-    set(PDF4QT_INSTALL_LIB_DIR ${PDF4QT_INSTALL_LIB_DIR_IMPL})
-    set(PDF4QT_INSTALL_BIN_DIR ${PDF4QT_INSTALL_BIN_DIR_IMPL})
-    set(PDF4QT_INSTALL_SHARE_DIR ${CMAKE_INSTALL_DATAROOTDIR})
-    set(PDF4QT_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR})
+    set(LOUPE_INSTALL_LIB_DIR ${LOUPE_INSTALL_LIB_DIR_IMPL})
+    set(LOUPE_INSTALL_BIN_DIR ${LOUPE_INSTALL_BIN_DIR_IMPL})
+    set(LOUPE_INSTALL_SHARE_DIR ${CMAKE_INSTALL_DATAROOTDIR})
+    set(LOUPE_INSTALL_INCLUDE_DIR ${CMAKE_INSTALL_INCLUDEDIR})
 endif()
 
-if(PDF4QT_LINUX)
-    set(PDF4QT_PLUGINS_DIR ${PDF4QT_INSTALL_LIB_DIR}/pdf4qt)
-    set(PDF4QT_INSTALL_TRANS_DIR ${PDF4QT_INSTALL_SHARE_DIR}/pdf4qt/translations)
+if(LOUPE_LINUX)
+    set(LOUPE_PLUGINS_DIR ${LOUPE_INSTALL_LIB_DIR}/loupe)
+    set(LOUPE_INSTALL_TRANS_DIR ${LOUPE_INSTALL_SHARE_DIR}/loupe/translations)
 else()
-    set(PDF4QT_PLUGINS_DIR ${PDF4QT_INSTALL_LIB_DIR}/pdfplugins)
-    set(PDF4QT_INSTALL_TRANS_DIR ${PDF4QT_INSTALL_BIN_DIR}/translations)
+    set(LOUPE_PLUGINS_DIR ${LOUPE_INSTALL_LIB_DIR}/pdfplugins)
+    set(LOUPE_INSTALL_TRANS_DIR ${LOUPE_INSTALL_BIN_DIR}/translations)
 endif()
 
 # Relative paths are used by the config
-cmake_path(RELATIVE_PATH PDF4QT_PLUGINS_DIR
-           BASE_DIRECTORY "${PDF4QT_INSTALL_BIN_DIR}"
-           OUTPUT_VARIABLE PDF4QT_PLUGINS_RELATIVE_PATH)
-cmake_path(RELATIVE_PATH PDF4QT_INSTALL_TRANS_DIR
-           BASE_DIRECTORY "${PDF4QT_INSTALL_BIN_DIR}"
-           OUTPUT_VARIABLE PDF4QT_TRANSLATIONS_RELATIVE_PATH)
+cmake_path(RELATIVE_PATH LOUPE_PLUGINS_DIR
+           BASE_DIRECTORY "${LOUPE_INSTALL_BIN_DIR}"
+           OUTPUT_VARIABLE LOUPE_PLUGINS_RELATIVE_PATH)
+cmake_path(RELATIVE_PATH LOUPE_INSTALL_TRANS_DIR
+           BASE_DIRECTORY "${LOUPE_INSTALL_BIN_DIR}"
+           OUTPUT_VARIABLE LOUPE_TRANSLATIONS_RELATIVE_PATH)
 configure_file(config.h.cmake config.h)
 
-add_subdirectory(Pdf4QtLibCore)
+add_subdirectory(LoupeLibCore)
 
-if(PDF4QT_INSTALL_INCLUDE)
-    # Install public headers from Pdf4QtLibCore/include
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Pdf4QtLibCore/sources/
-            DESTINATION ${PDF4QT_INSTALL_INCLUDE_DIR}/Pdf4QtLibCore
+if(LOUPE_INSTALL_INCLUDE)
+    # Install public headers from LoupeLibCore/include
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/LoupeLibCore/sources/
+            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibCore
             FILES_MATCHING PATTERN "*.h")
 
     # Install generated export header
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pdf4qtlibcore_export.h
-            DESTINATION ${PDF4QT_INSTALL_INCLUDE_DIR}/Pdf4QtLibCore)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibcore_export.h
+            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibCore)
 
-    # Install public headers from Pdf4QtLibWidgets/include
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Pdf4QtLibWidgets/sources/
-            DESTINATION ${PDF4QT_INSTALL_INCLUDE_DIR}/Pdf4QtLibWidgets
+    # Install public headers from LoupeLibWidgets/include
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/LoupeLibWidgets/sources/
+            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets
             FILES_MATCHING PATTERN "*.h")
 
     # Install generated export header
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pdf4qtlibwidgets_export.h
-            DESTINATION ${PDF4QT_INSTALL_INCLUDE_DIR}/Pdf4QtLibWidgets)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibwidgets_export.h
+            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets)
 endif()
 
-if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
-    add_subdirectory(Pdf4QtLibWidgets)
-    if(PDF4QT_BUILD_CODE_GENERATOR)
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    add_subdirectory(LoupeLibWidgets)
+    if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
     endif()
-    if(PDF4QT_BUILD_JBIG2_VIEWER)
+    if(LOUPE_BUILD_JBIG2_VIEWER)
         add_subdirectory(JBIG2_Viewer)
     endif()
-    if(PDF4QT_BUILD_EXAMPLE_GENERATOR)
+    if(LOUPE_BUILD_EXAMPLE_GENERATOR)
         add_subdirectory(PdfExampleGenerator)
     endif()
     add_subdirectory(PdfTool)
     add_subdirectory(loupe-preflight/tools)
     add_subdirectory(loupe-ocr/tools)
-    add_subdirectory(Pdf4QtLibGui)
-    add_subdirectory(Pdf4QtEditorPlugins)
-    add_subdirectory(Pdf4QtEditor)
-    if(PDF4QT_BUILD_VIEWER)
-        add_subdirectory(Pdf4QtViewer)
+    add_subdirectory(LoupeLibGui)
+    add_subdirectory(LoupeEditorPlugins)
+    add_subdirectory(LoupeEditor)
+    if(LOUPE_BUILD_VIEWER)
+        add_subdirectory(LoupeViewer)
     endif()
-    if(PDF4QT_BUILD_PAGEMASTER)
-        add_subdirectory(Pdf4QtPageMaster)
+    if(LOUPE_BUILD_PAGEMASTER)
+        add_subdirectory(LoupePageMaster)
     endif()
-    if(PDF4QT_BUILD_DIFF)
-        add_subdirectory(Pdf4QtDiff)
+    if(LOUPE_BUILD_DIFF)
+        add_subdirectory(LoupeDiff)
     endif()
-    if(PDF4QT_BUILD_LAUNCHPAD)
-        add_subdirectory(Pdf4QtLaunchPad)
+    if(LOUPE_BUILD_LAUNCHPAD)
+        add_subdirectory(LoupeLaunchPad)
     endif()
     add_subdirectory(WixInstaller)
 endif()
 
-if(PDF4QT_BUILD_TESTS)
+if(LOUPE_BUILD_TESTS)
     enable_testing()
     add_subdirectory(UnitTests)
 endif()
 
-if(PDF4QT_BUILD_FUZZERS)
+if(LOUPE_BUILD_FUZZERS)
     add_subdirectory(Fuzz)
 endif()
 
 qt_collect_translation_source_targets(i18n_targets)
 message("CMAKE_TRANSLATION_TARGETS = " ${i18n_targets})
 
-set(PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/translations)
-set(PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_TRANS_DIR})
+set(LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/translations)
+set(LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_TRANS_DIR})
 
-message("PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY" ${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY})
-message("PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY" ${PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY})
+message("LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY})
+message("LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY})
 
 # Only add translation targets for targets that actually exist in this build.
-foreach(_tgt Pdf4QtEditor Pdf4QtViewer Pdf4QtPageMaster Pdf4QtDiff PdfTool)
+foreach(_tgt LoupeEditor LoupeViewer LoupePageMaster LoupeDiff PdfTool)
     if(TARGET ${_tgt})
         list(APPEND _existing_translation_targets ${_tgt})
     endif()
@@ -362,18 +378,18 @@ if(_existing_translation_targets)
                         SOURCE_TARGETS ${i18n_targets}
                         MERGE_QT_TRANSLATIONS
                         LUPDATE_OPTIONS -no-obsolete
-                        TS_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY}
-                        QM_OUTPUT_DIRECTORY ${PDF4QT_TRANSLATION_QM_OUTPUT_DIRECTORY}
-                        QM_FILES_OUTPUT_VARIABLE PDF4QT_QM_FILES)
+                        TS_OUTPUT_DIRECTORY ${LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY}
+                        QM_OUTPUT_DIRECTORY ${LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY}
+                        QM_FILES_OUTPUT_VARIABLE LOUPE_QM_FILES)
 endif()
 
 if(WIN32)
-    set(PDF4QT_LUPDATE_TARGET "${PROJECT_NAME}_lupdate")
-    if(TARGET ${PDF4QT_LUPDATE_TARGET})
-        add_custom_command(TARGET ${PDF4QT_LUPDATE_TARGET}
+    set(LOUPE_LUPDATE_TARGET "${PROJECT_NAME}_lupdate")
+    if(TARGET ${LOUPE_LUPDATE_TARGET})
+        add_custom_command(TARGET ${LOUPE_LUPDATE_TARGET}
                            POST_BUILD
                            COMMAND ${CMAKE_COMMAND}
-                                   -DTS_OUTPUT_DIRECTORY=${PDF4QT_TRANSLATION_TS_OUTPUT_DIRECTORY}
+                                   -DTS_OUTPUT_DIRECTORY=${LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY}
                                    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/NormalizeTsLineEndings.cmake
                            COMMENT "Normalizing TS files to CRLF")
     endif()
@@ -384,81 +400,81 @@ message("CMAKE_TOOLCHAIN_FILE = " ${CMAKE_TOOLCHAIN_FILE})
 
 configure_file(version.txt.in version.txt)
 
-if(NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
-    install(FILES ${PDF4QT_QM_FILES}
-            DESTINATION ${PDF4QT_INSTALL_TRANS_DIR})
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    install(FILES ${LOUPE_QM_FILES}
+            DESTINATION ${LOUPE_INSTALL_TRANS_DIR})
 
     if(WIN32)
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
-                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/44x44
+                RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR}/assets/44x44
                 FILES_MATCHING
                 PATTERN *.png)
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/150x150/
-                RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets/150x150
+                RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR}/assets/150x150
                 FILES_MATCHING
                 PATTERN *.png)
 
         configure_file(${CMAKE_CURRENT_SOURCE_DIR}/AppxManifest.xml.in ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml)
-        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml DESTINATION ${PDF4QT_INSTALL_BIN_DIR})
-        install(FILES assets/logo.png DESTINATION ${PDF4QT_INSTALL_BIN_DIR}/assets)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/AppxManifest.xml DESTINATION ${LOUPE_INSTALL_BIN_DIR})
+        install(FILES assets/logo.png DESTINATION ${LOUPE_INSTALL_BIN_DIR}/assets)
     else()
         configure_file(make-package.sh.in make-package.sh)
 
-        if(PDF4QT_LOUPE_DISTRIBUTION)
-            set(_PDF4QT_DESKTOP_ENTRIES
+        if(LOUPE_LOUPE_DISTRIBUTION)
+            set(_LOUPE_DESKTOP_ENTRIES
                 Desktop/io.github.mberrys.Loupe-pdf.desktop)
-            set(_PDF4QT_DESKTOP_ICONS
+            set(_LOUPE_DESKTOP_ICONS
                 Desktop/io.github.mberrys.Loupe-pdf.svg)
-            set(_PDF4QT_DESKTOP_PNGS
+            set(_LOUPE_DESKTOP_PNGS
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         else()
-            set(_PDF4QT_DESKTOP_ENTRIES
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.desktop
+            set(_LOUPE_DESKTOP_ENTRIES
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.desktop
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.desktop
                 Desktop/io.github.mberrys.Loupe-pdf.desktop)
-            set(_PDF4QT_DESKTOP_ICONS
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.svg
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.svg
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.svg
-                Desktop/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.svg
+            set(_LOUPE_DESKTOP_ICONS
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.svg
+                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.svg
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.svg
+                Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.svg
                 Desktop/io.github.mberrys.Loupe-pdf.svg)
-            set(_PDF4QT_DESKTOP_PNGS
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtDiff.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtPageMaster.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtViewer.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.Pdf4QtEditor.png
+            set(_LOUPE_DESKTOP_PNGS
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeDiff.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupePageMaster.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeViewer.png
+                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeEditor.png
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         endif()
 
-        install(FILES ${_PDF4QT_DESKTOP_ENTRIES}
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/applications)
-        install(FILES ${_PDF4QT_DESKTOP_ICONS}
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
-        install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/metainfo)
-        install(FILES ${_PDF4QT_DESKTOP_PNGS}
-                      DESTINATION ${PDF4QT_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
+        install(FILES ${_LOUPE_DESKTOP_ENTRIES}
+                      DESTINATION ${LOUPE_INSTALL_SHARE_DIR}/applications)
+        install(FILES ${_LOUPE_DESKTOP_ICONS}
+                      DESTINATION ${LOUPE_INSTALL_SHARE_DIR}/icons/hicolor/scalable/apps)
+        install(FILES Desktop/io.github.mberrys.Loupe-pdf.appdata.xml DESTINATION ${LOUPE_INSTALL_SHARE_DIR}/metainfo)
+        install(FILES ${_LOUPE_DESKTOP_PNGS}
+                      DESTINATION ${LOUPE_INSTALL_SHARE_DIR}/icons/hicolor/128x128/apps)
     endif()
 
 endif()
 
-if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
+if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     install(DIRECTORY ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin/
-        RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/
+        RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
         FILES_MATCHING
         PATTERN "*.dll"
         PATTERN "*.so"
         PATTERN "*.dylib"
     )
 
-    if("${PDF4QT_QT_ROOT}" STREQUAL "")
-        message(WARNING "Set variable PDF4QT_QT_ROOT to Qt6 root directory")
+    if("${LOUPE_QT_ROOT}" STREQUAL "")
+        message(WARNING "Set variable LOUPE_QT_ROOT to Qt6 root directory")
     endif()
 
-    if(PDF4QT_INSTALL_QT_DEPENDENCIES)
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/bin/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/
+    if(LOUPE_INSTALL_QT_DEPENDENCIES)
+        install(DIRECTORY ${LOUPE_QT_ROOT}/bin/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
             REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network)\\..*"
             PATTERN "Debug" EXCLUDE
@@ -468,16 +484,16 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         # ICU is a load-time dependency of Qt6Core on Windows aqt builds; without
         # these DLLs beside PdfTool.exe the MSI-installed binary fails with
         # STATUS_DLL_NOT_FOUND (0xC0000135) even when Qt6*.dll themselves are present.
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/bin/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/bin/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
             PATTERN "icu*.dll"
             PATTERN "Debug" EXCLUDE
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/platforms/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/platforms/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/platforms/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/platforms/
             FILES_MATCHING
             PATTERN "qwindows.dll"
             PATTERN "qoffscreen.dll"
@@ -486,15 +502,15 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/iconengines/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/iconengines/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/iconengines/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/iconengines/
             FILES_MATCHING
             REGEX "qsvgicon\\..*"
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/imageformats/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/imageformats/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/imageformats/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/imageformats/
             FILES_MATCHING
             PATTERN "*.dll"
             PATTERN "*.so"
@@ -503,8 +519,8 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/styles/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/styles/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/styles/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/styles/
             FILES_MATCHING
             PATTERN "*.dll"
             PATTERN "*.so"
@@ -513,8 +529,8 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${PDF4QT_QT_ROOT}/plugins/texttospeech/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/texttospeech/
+        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/texttospeech/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/texttospeech/
             FILES_MATCHING
             PATTERN "*.dll"
             PATTERN "*.so"
@@ -524,7 +540,7 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         )
     endif()
 
-    if(WIN32 AND MSVC AND PDF4QT_INSTALL_MSVC_REDISTRIBUTABLE)
+    if(WIN32 AND MSVC AND LOUPE_INSTALL_MSVC_REDISTRIBUTABLE)
         if(DEFINED ENV{MSVC_REDISTRIBUTABLES_PATH})
             set(MSVC_REDISTRIBUTABLES_PATH $ENV{MSVC_REDISTRIBUTABLES_PATH})
             message(STATUS "Using existing MSVC Redistributable Package Path = ${MSVC_REDISTRIBUTABLES_PATH}")
@@ -534,40 +550,40 @@ if(PDF4QT_INSTALL_DEPENDENCIES AND NOT PDF4QT_BUILD_ONLY_CORE_LIBRARY)
         endif()
 
         install(DIRECTORY ${MSVC_REDISTRIBUTABLES_PATH}/
-            RUNTIME DESTINATION ${PDF4QT_INSTALL_LIB_DIR}/
+            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
             PATTERN "*.dll"
         )
     endif()
 endif()
 
-if(PDF4QT_ENABLE_SENTRY AND TARGET sentry_crashpad::crashpad_handler)
-    get_target_property(_pdf4qt_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION_RELEASE)
-    if(NOT _pdf4qt_sentry_crashpad_handler_install)
-        get_target_property(_pdf4qt_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION)
+if(LOUPE_ENABLE_SENTRY AND TARGET sentry_crashpad::crashpad_handler)
+    get_target_property(_loupe_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION_RELEASE)
+    if(NOT _loupe_sentry_crashpad_handler_install)
+        get_target_property(_loupe_sentry_crashpad_handler_install sentry_crashpad::crashpad_handler IMPORTED_LOCATION)
     endif()
 
-    if(_pdf4qt_sentry_crashpad_handler_install)
+    if(_loupe_sentry_crashpad_handler_install)
         if(WIN32)
-            install(PROGRAMS ${_pdf4qt_sentry_crashpad_handler_install}
-                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}
+            install(PROGRAMS ${_loupe_sentry_crashpad_handler_install}
+                    DESTINATION ${LOUPE_INSTALL_BIN_DIR}
                     RENAME crashpad_handler.exe)
         else()
-            install(PROGRAMS ${_pdf4qt_sentry_crashpad_handler_install}
-                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR}
+            install(PROGRAMS ${_loupe_sentry_crashpad_handler_install}
+                    DESTINATION ${LOUPE_INSTALL_BIN_DIR}
                     RENAME crashpad_handler)
         endif()
     endif()
 
     if(TARGET sentry_crashpad::crashpad_wer)
-        get_target_property(_pdf4qt_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION_RELEASE)
-        if(NOT _pdf4qt_sentry_crashpad_wer_install)
-            get_target_property(_pdf4qt_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION)
+        get_target_property(_loupe_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION_RELEASE)
+        if(NOT _loupe_sentry_crashpad_wer_install)
+            get_target_property(_loupe_sentry_crashpad_wer_install sentry_crashpad::crashpad_wer IMPORTED_LOCATION)
         endif()
 
-        if(_pdf4qt_sentry_crashpad_wer_install)
-            install(FILES ${_pdf4qt_sentry_crashpad_wer_install}
-                    DESTINATION ${PDF4QT_INSTALL_BIN_DIR})
+        if(_loupe_sentry_crashpad_wer_install)
+            install(FILES ${_loupe_sentry_crashpad_wer_install}
+                    DESTINATION ${LOUPE_INSTALL_BIN_DIR})
         endif()
     endif()
 endif()
@@ -582,4 +598,3 @@ endif()
 #endmacro()
 #
 #dump_variables()
-

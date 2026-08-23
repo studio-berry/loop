@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# BSP-002 §5.1 — inject policy brief at session start
+# Canonical agent policy adapter — inject policy brief at session start
 cat .claude/policy-brief.md

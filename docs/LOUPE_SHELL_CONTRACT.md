@@ -1,7 +1,7 @@
 # Loupe shell contract
 
 This is the non-visual foundation for issue #193. Per the product scope gate,
-GUI elements remain deferred until after 0.0.3. This document therefore defines
+GUI elements remain deferred until after 0.1.1. This document therefore defines
 the state, routing, and verification contract without changing the existing Qt
 Widgets shell or adding QML.
 
@@ -11,7 +11,7 @@ Editor action inventory is recorded in [`loupe-shell-actions.json`](loupe-shell-
 
 ## Product shell
 
-`Pdf4QtEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
+`LoupeEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
 CLI. Opening a PDF is the Document workspace and includes inherited Viewer
 behavior. PageMaster, Diff, and Viewer are not new windows in this contract;
 their retained Core/CLI semantics are routed into the product workspaces when
@@ -76,7 +76,7 @@ the prior preflight result `STALE` until revalidation completes.
 Every action declared in the current Editor `.ui` is listed in
 `loupe-shell-actions.json` with a disposition and target group. The verifier
 compares the policy against the 107 action IDs in
-`Pdf4QtLibGui/pdfeditormainwindow.ui`; missing or extra IDs fail the check.
+`LoupeLibGui/pdfeditormainwindow.ui`; missing or extra IDs fail the check.
 This keeps the future shell from silently inventing routes.
 
 Plugin actions follow the same policy. Their target group is determined by what
@@ -90,7 +90,7 @@ remain outside the operator shell.
 Issue #178 proposes Qt Quick Controls for the later application shell, but it is
 still open. The contract records Qt Quick Controls as the candidate and keeps
 the decision pending. No Qt Quick module, QML file, `QQuickWidget`, or shell
-restyle is introduced by this slice. Once the 0.0.3 GUI gate opens, #178 must
+restyle is introduced by this slice. Once the 0.1.1 GUI gate opens, #178 must
 resolve the migration strategy, canvas hosting, rendering fallback, licensing,
 and accessibility baseline before large-scale shell wiring begins.
 
@@ -113,4 +113,4 @@ pwsh ./scripts/verify-loupe-shell-contract.ps1
 This verifies JSON shape, workspace parity with the #192 product-surface
 manifest, plugin disposition targets, and complete Editor action coverage. It
 does not claim GUI behavior, accessibility runtime success, or Qt Quick
-rendering validation; those remain post-0.0.3 gates.
+rendering validation; those remain post-0.1.1 gates.

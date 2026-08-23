@@ -14,17 +14,44 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# Least privilege for GITHUB_TOKEN. `contents: read` is what actions/checkout needs;
-# nothing here writes back to the repository. actions/upload-artifact@v4 uses the job
-# token against the artifact service and needs no additional scope.
 permissions:
   contents: read
 
 jobs:
+  source_integrity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test source integrity checker
+        run: python3 scripts/ci/test_check_source_integrity.py
+      - name: Test workflow contracts
+        run: python3 -m unittest scripts.ci.test_workflow_contracts -v
+      - name: Verify tracked source integrity
+        run: python3 scripts/ci/check_source_integrity.py
+      - name: Verify unmanaged async launch allowlist
+        run: python3 scripts/ci/check_unmanaged_async.py
+      - name: Verify semantic-trust source boundaries
+        run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
+      - name: Verify generated dependency paths are untracked
+        run: python3 scripts/ci/check_generated_dependency_paths.py
+
+  agent-fast:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
+    uses: ./.github/workflows/reusable-linux.yml
+    with:
+      fast: true
+      base_sha: ${{ github.event.pull_request.base.sha || github.event.before }}
+      head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+
   linux:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
     secrets:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

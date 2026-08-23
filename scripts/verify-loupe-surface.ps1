@@ -104,7 +104,7 @@ $knownArtifacts = @($installSurfaces | Where-Object {
 } | ForEach-Object artifact)
 $firstPartyFiles = @($files | Where-Object {
     $_.Extension -in @(".exe", ".dll", ".so", ".dylib") -and
-    $_.BaseName -match "^(lib)?(Pdf4Qt(Editor|Viewer|PageMaster|Diff|LaunchPad)|PdfTool|[A-Za-z]+Plugin)$"
+    $_.BaseName -match "^(lib)?(Loupe(Editor|Viewer|PageMaster|Diff|LaunchPad)|PdfTool|[A-Za-z]+Plugin)$"
 })
 foreach ($file in $firstPartyFiles) {
     $artifactName = $file.BaseName -replace "^lib", ""
@@ -190,7 +190,7 @@ if ($appxManifest.Count -gt 0) {
             throw "AppX manifest exposes application not allowed by $($Profile): $application"
         }
     }
-    $editorApplication = [regex]::Match($appxText, '<Application\s+Id="Pdf4QtEditor".*?</Application>', [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
+    $editorApplication = [regex]::Match($appxText, '<Application\s+Id="LoupeEditor".*?</Application>', [System.Text.RegularExpressions.RegexOptions]::Singleline).Value
     foreach ($association in @($launcher.file_associations)) {
         if ($association -eq "application/pdf" -and $editorApplication -notmatch '<uap:FileType>\.pdf</uap:FileType>') {
             throw "AppX PDF file association is not owned by the Loupe Editor application."

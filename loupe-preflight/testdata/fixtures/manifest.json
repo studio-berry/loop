@@ -34,7 +34,7 @@
   {
     "id": "color-inventory-spot",
     "pdf": "color-inventory-spot.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Named Separation colorant; expected spot-color and separation informational findings."
@@ -42,7 +42,7 @@
   {
     "id": "rich-black",
     "pdf": "rich-black.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process C/M/Y plus K patch; expected page-scoped rich-black informational finding."
@@ -50,7 +50,7 @@
   {
     "id": "black-only",
     "pdf": "black-only.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process black alone; must not emit rich-black."
@@ -58,7 +58,7 @@
   {
     "id": "cmy-rich-no-k",
     "pdf": "cmy-rich-no-k.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process C/M/Y without K; must not emit rich-black."
@@ -334,5 +334,139 @@
     "expect": { "pass": true, "check_ids": ["transparency-risk"] },
     "source": "generated",
     "notes": "A risky transparency group exists only in an annotation appearance stream."
+  },
+  {
+    "id": "malformed-not-pdf",
+    "pdf": "malformed-not-pdf.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "pending": true,
+    "notes": "Non-PDF input for malformed-input operator acceptance; manifest allowlist only."
+  },
+  {
+    "id": "overprint-cmyk-mode0-off",
+    "pdf": "overprint-cmyk-mode0-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode0-on",
+    "pdf": "overprint-cmyk-mode0-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-off",
+    "pdf": "overprint-cmyk-mode1-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-on",
+    "pdf": "overprint-cmyk-mode1-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-off",
+    "pdf": "overprint-group-stroke-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-on",
+    "pdf": "overprint-group-stroke-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-off",
+    "pdf": "overprint-multiply-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-on",
+    "pdf": "overprint-multiply-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-off",
+    "pdf": "overprint-separation-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-on",
+    "pdf": "overprint-separation-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-off",
+    "pdf": "overprint-white-off.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-on",
+    "pdf": "overprint-white-on.pdf",
+    "profile": "profiles/loupe-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "thin-strokes-hairline",
+    "pdf": "thin-strokes-hairline.pdf",
+    "profile": "testdata/profiles/test-thin-strokes.json",
+    "expect": { "pass": false, "check_ids": ["thin-strokes"] },
+    "source": "generated",
+    "notes": "S07 corpus row for thin-strokes hairline stroke detection."
+  },
+  {
+    "id": "thin-parts-fill",
+    "pdf": "thin-parts-fill.pdf",
+    "profile": "testdata/profiles/test-thin-parts.json",
+    "expect": { "pass": false, "check_ids": ["thin-parts"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07 corpus row for thin-parts; generate with LoupeGenerateFixtures."
   }
 ]

@@ -3,8 +3,8 @@
 > **Not a supported V1 feature.** V1 ships OCR as CLI-only, advanced / bring-your-own-sidecar
 > (MIC-343): `PdfTool ocr` is present but inert until a sidecar is supplied via
 > `LOUPE_OCR_SIDECAR` or a dev launcher. Neither the Editor `OcrPlugin` UI nor this bundled
-> `LoupeOcrService` sidecar ship in a V1 release package — `PDF4QT_PLUGIN_OCR` and
-> `PDF4QT_BUNDLE_OCR_SERVICE` are both off in release builds. OCR returns as a marketed,
+> `LoupeOcrService` sidecar ship in a V1 release package — `LOUPE_PLUGIN_OCR` and
+> `LOUPE_BUNDLE_OCR_SERVICE` are both off in release builds. OCR returns as a marketed,
 > supported feature post-V1, after the AI Module. See [MIC-333](https://linear.app/mbx2/issue/MIC-333)
 > for supply-chain guidance if you build and run this sidecar yourself.
 
@@ -55,7 +55,7 @@ pyinstaller tools\pyinstaller.spec --distpath prebuilt --workpath build\pyinstal
 
 Output: `prebuilt/LoupeOcrService/LoupeOcrService.exe`
 
-Enable CMake install with `-DPDF4QT_BUNDLE_OCR_SERVICE=ON` (copies `prebuilt/LoupeOcrService` next to `PdfTool`).
+Enable CMake install with `-DLOUPE_BUNDLE_OCR_SERVICE=ON` (copies `prebuilt/LoupeOcrService` next to `PdfTool`).
 The runtime sidecar uses a language-keyed EasyOCR reader cache and disables
 model downloads. Run `tools/download_models.py` during the build or staging
 step with network access to preload the selected models; production OCR then

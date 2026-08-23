@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 AS builder_pdf4qt
+FROM ubuntu:22.04 AS builder_loupe
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -25,10 +25,10 @@ WORKDIR /opt/vcpkg
 RUN ./bootstrap-vcpkg.sh -disableMetrics
 ENV VCPKG_ROOT=/opt/vcpkg
 
-# Clone PDF4QT
+# Clone LOUPE
 WORKDIR /root
 RUN git clone https://github.com/JakubMelka/PDF4QT.git
-ENV VCPKG_OVERLAY_PORTS=/root/PDF4QT/vcpkg/overlays
+ENV VCPKG_OVERLAY_PORTS=/root/LOUPE/vcpkg/overlays
 
 RUN pip install aqtinstall
 
@@ -40,8 +40,8 @@ RUN aqt install-qt linux desktop 6.11.1 linux_gcc_64 -O /opt/Qt -m qtmultimedia 
 ENV PATH=/opt/Qt/6.11.1/gcc_64/bin:$PATH
 ENV CMAKE_PREFIX_PATH=/opt/Qt/6.11.1/gcc_64/lib/cmake
 ENV VCPKG_ROOT=/opt/vcpkg
-ENV VCPKG_OVERLAY_PORTS=/root/PDF4QT/vcpkg/overlays
-ENV PDF4QT_QT_ROOT=/opt/Qt/6.11.1/gcc_64
+ENV VCPKG_OVERLAY_PORTS=/root/LOUPE/vcpkg/overlays
+ENV LOUPE_QT_ROOT=/opt/Qt/6.11.1/gcc_64
 ENV LD_LIBRARY_PATH=/opt/Qt/6.11.1/gcc_64/lib:$LD_LIBRARY_PATH
 ENV QT_QPA_PLATFORM=offscreen
 
@@ -49,35 +49,35 @@ ENV QT_QPA_PLATFORM=offscreen
 RUN echo 'export PATH=/opt/Qt/6.11.1/gcc_64/bin:$PATH' >> /root/.bashrc && \
     echo 'export CMAKE_PREFIX_PATH=/opt/Qt/6.11.1/gcc_64/lib/cmake' >> /root/.bashrc && \
     echo 'export VCPKG_ROOT=/opt/vcpkg' >> /root/.bashrc && \
-    echo 'export VCPKG_OVERLAY_PORTS=/root/PDF4QT/vcpkg/overlays' >> /root/.bashrc && \
-    echo 'export PDF4QT_QT_ROOT=/opt/Qt/6.11.1/gcc_64' >> /root/.bashrc && \
+    echo 'export VCPKG_OVERLAY_PORTS=/root/LOUPE/vcpkg/overlays' >> /root/.bashrc && \
+    echo 'export LOUPE_QT_ROOT=/opt/Qt/6.11.1/gcc_64' >> /root/.bashrc && \
     echo 'export LD_LIBRARY_PATH=/opt/Qt/6.11.1/gcc_64/lib:$LD_LIBRARY_PATH' >> /root/.bashrc && \
-    echo 'export QT_QPA_PLATFORM=offscreen' >> /root/.bashrc  
+    echo 'export QT_QPA_PLATFORM=offscreen' >> /root/.bashrc
 
 # Reinstall essential tools (redundant but safe)
 RUN apt update && apt install -y build-essential cmake g++ make ninja-build && apt clean
 
 # Final working directory
-WORKDIR /root/PDF4QT
+WORKDIR /root/LOUPE
 
-RUN cmake -B build -S . -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
+RUN cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
           -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_VCPKG_BUILD_TYPE=Release \
           -DVCPKG_OVERLAY_PORTS=vcpkg/overlays \
-          -DPDF4QT_INSTALL_TO_USR=OFF \
+          -DLOUPE_INSTALL_TO_USR=OFF \
           -DCMAKE_INSTALL_PREFIX="/" \
-          -DPDF4QT_QT_ROOT=/opt/Qt/6.11.1/gcc_64
+          -DLOUPE_QT_ROOT=/opt/Qt/6.11.1/gcc_64
 RUN cmake --build build --target all release_translations -j$(nproc)
 RUN cmake --install build --prefix /install
 
 # Delete all static libraries (they are not needed in the final docker image)
 RUN find /opt/Qt/6.11.1/gcc_64/lib -type f -name "*.a" -delete
-    
+
 # Final working directory
 WORKDIR /root
 
-FROM ubuntu:22.04 AS runtime_pdf4qt
+FROM ubuntu:22.04 AS runtime_loupe
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -102,13 +102,13 @@ RUN apt-get update && apt-get install -y \
     libdbus-1-3 \
     && apt clean
 
-COPY --from=builder_pdf4qt /opt/Qt /opt/Qt
-COPY --from=builder_pdf4qt /install /
+COPY --from=builder_loupe /opt/Qt /opt/Qt
+COPY --from=builder_loupe /install /
 
 # Persist env variables to root shell
 RUN echo 'export PATH=/opt/Qt/6.11.1/gcc_64/bin:$PATH' >> /root/.bashrc && \
     echo 'export LD_LIBRARY_PATH=/opt/Qt/6.11.1/gcc_64/lib:$LD_LIBRARY_PATH' >> /root/.bashrc && \
-    echo 'export QT_QPA_PLATFORM=offscreen' >> /root/.bashrc  
+    echo 'export QT_QPA_PLATFORM=offscreen' >> /root/.bashrc
 
 WORKDIR /root
 

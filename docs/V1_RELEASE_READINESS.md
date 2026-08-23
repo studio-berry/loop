@@ -1,7 +1,7 @@
 # V1 release readiness audit
 
 Audit date: **2026-07-23**, revised **2026-07-24**, corrected **2026-07-25**, signing gate struck **2026-08-02**, gates 1–4 evidence pass **2026-08-03**, fuzz evidence returned **2026-08-03**
-Product: **Loupe PDF 1.6.0.0** (Qt6 desktop PDF toolkit)
+Product: **Loupe PDF 0.1.0-alpha** (Qt6 desktop PDF toolkit)
 Scope: operational, security, reliability, data-integrity, compatibility, and release-readiness for first public launch.
 Platforms: **Windows and Linux** (macOS is not a V1 platform — see `docs/PLATFORM_SUPPORT.md`).
 
@@ -38,8 +38,8 @@ the engine emitted `schema_version: 3` while the plugin validator capped at `2`,
 
 That was not true at the time of writing, and is not true now:
 
-- `Pdf4QtLibCore/sources/preflightengine.h:42` → `PREFLIGHT_REPORT_SCHEMA_VERSION = 3`
-- `Pdf4QtEditorPlugins/LoupePreflightPlugin/preflightsidecarutils.h:38` →
+- `LoupeLibCore/sources/preflightengine.h:42` → `PREFLIGHT_REPORT_SCHEMA_VERSION = 3`
+- `LoupeEditorPlugins/LoupePreflightPlugin/preflightsidecarutils.h:38` →
   `LOUPE_PREFLIGHT_SCHEMA_VERSION 3`, with `isSupportedSchemaVersion` accepting 1–3
 - The fix is commit `c515bfa3`, merged to `master` via `ba428f1b` (PR #54) at
   2026-07-24 10:58 PDT
@@ -104,7 +104,7 @@ first *paid* distribution, not this launch. See §5 and `docs/PACKAGING_LICENSIN
 
 | Role | Surface | Notes |
 |------|---------|-------|
-| **Operator** | Pdf4QtEditor + LoupePreflightPlugin | Primary V1 sellable loop |
+| **Operator** | LoupeEditor + LoupePreflightPlugin | Primary V1 sellable loop |
 | **Automation / CI** | PdfTool CLI | `preflight`, `add-bleed`, `ocr` (optional) |
 | **Power user** | PageMaster, Diff, Viewer, LaunchPad | Adjacent; not V1 contract |
 | **Maintainer** | GitHub Actions, packaging scripts | Release engineering |
@@ -128,7 +128,7 @@ There are **no** tenant roles, admin consoles, or hosted user accounts.
 
 | Service | Required? | Opt-in mechanism |
 |---------|-----------|-------------------|
-| **Sentry** crash telemetry | No | `SENTRY_DSN` env; Windows default build flag `PDF4QT_ENABLE_SENTRY` |
+| **Sentry** crash telemetry | Yes (Windows) | Compile-time DSN; `SENTRY_DSN=off` to disable; `LOUPE_ENABLE_SENTRY` |
 | **OCR Python sidecar** | No | `LOUPE_OCR_SIDECAR` / bundled `LoupeOcrService` |
 | **GitHub / Sponsor links** | No | `QDesktopServices::openUrl` from Help menu only |
 
@@ -139,7 +139,7 @@ No payment processors, identity providers, or document cloud APIs.
 | Dependency | SPOF? | Fallback |
 |------------|-------|----------|
 | Qt 6.11.1 runtime | Yes | User must install/bundle Qt (installers do) |
-| Pdf4QtLibCore PDF engine | Yes | None — core product |
+| LoupeLibCore PDF engine | Yes | None — core product |
 | Bundled `PdfTool` + `loupe-default.json` | Yes for Editor preflight | Actionable error if missing from bundle |
 | vcpkg third-party libs (OpenJPEG, zlib, …) | Build-time | Static link in release builds |
 | Tesseract/EasyOCR (OCR only) | Yes for OCR feature | OCR disabled if sidecar missing |
@@ -191,15 +191,15 @@ Logging: PdfTool and Editor both write a rotating, privacy-scrubbed log file via
 | A16 | Authentication / payments | Secure flows | **N/A** | Offline desktop; PDF password only |
 | A17 | CSP / CORS / cookies | Web security headers | **N/A** | No web app |
 | A18 | Browser compatibility | Supported browsers | **N/A** | No embedded browser |
-| A19 | OCR product gate | Required for V1 | **N/A — CLI-only** (decided 2026-07-25) | OCR is merged to `master` but V1 ships **CLI-only**: `PdfTool ocr` present; `OcrPlugin.dll` and the bundled sidecar service excluded. `PdfTool ocr` is inert without a user-supplied sidecar. **Enforced (MIC-343):** `OcrPlugin` is gated behind `-DPDF4QT_PLUGIN_OCR` (default ON for dev builds, explicitly `OFF` in `WindowsInstall.yml`/`LinuxInstall.yml`/the Flatpak manifest); the WIX component that had unconditionally bundled `OcrPlugin.dll` into the MSI is now gated the same way. `PDF4QT_BUNDLE_OCR_SERVICE` defaults `OFF`. `scripts/smoke-test-install.ps1` fails the scan if `OcrPlugin.dll` is found in an installed tree, closing the drift the plugin/service inclusion previously had no assertion against |
+| A19 | OCR product gate | Required for V1 | **N/A — CLI-only** (decided 2026-07-25) | OCR is merged to `master` but V1 ships **CLI-only**: `PdfTool ocr` present; `OcrPlugin.dll` and the bundled sidecar service excluded. `PdfTool ocr` is inert without a user-supplied sidecar. **Enforced (MIC-343):** `OcrPlugin` is gated behind `-DLOUPE_PLUGIN_OCR` (default ON for dev builds, explicitly `OFF` in `WindowsInstall.yml`/`LinuxInstall.yml`/the Flatpak manifest); the WIX component that had unconditionally bundled `OcrPlugin.dll` into the MSI is now gated the same way. `LOUPE_BUNDLE_OCR_SERVICE` defaults `OFF`. `scripts/smoke-test-install.ps1` fails the scan if `OcrPlugin.dll` is found in an installed tree, closing the drift the plugin/service inclusion previously had no assertion against |
 | A20 | Fuzz regression | Weekly fuzz CI | **Pass** (2026-08-04) | `fuzz.yml` fixed (single `permissions:`) and executing. [Run 30803378370](https://github.com/mberrys/Loupe-pdf/actions/runs/30803378370) failed with two real JBIG2 findings (see R-003); both fixed in `pdfjbig2decoder.cpp`, and [run 30937285025](https://github.com/mberrys/Loupe-pdf/actions/runs/30937285025) is green on `master` at the full 600 s/target budget (MIC-326) |
 | A23 | Manifest rollback coverage | Failure path is tested, not just implemented | **Pass** (2026-08-04) | `UnitTests/tst_pagemasterexporttest.cpp` — `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` force a real manifest-persist failure (resume run against a manifest in a write-denied directory) and assert both rollback branches. Skipped, not silently passed, where directory permissions are unenforceable (Windows, root) — MIC-335 |
-| A24 | Logging / support bundle | Rotating log, scrubbed at write time; reproducible support bundle; no PDF content or minidumps in it | **Pass** (2026-08-09) | `pdf::PDFLogSession` / `pdf::PDFLogScrubber` / `pdf::PDFDiagnosticsCollector` (`Pdf4QtLibCore/sources/pdflogger.*`, `pdflogscrubber.*`, `pdfdiagnostics.*`); `PdfTool diagnostics`, Editor Help > Collect Diagnostics; `UnitTests/tst_diagnosticstest.cpp` covers scrubber correctness/idempotence, rotation cap, manifest hash integrity, no-`.pdf`-in-bundle, and the read-only-output-directory failure path (skipped where permissions are unenforceable, same MIC-335 precedent as A23) |
+| A24 | Logging / support bundle | Rotating log, scrubbed at write time; reproducible support bundle; no PDF content or minidumps in it | **Pass** (2026-08-09) | `pdf::PDFLogSession` / `pdf::PDFLogScrubber` / `pdf::PDFDiagnosticsCollector` (`LoupeLibCore/sources/pdflogger.*`, `pdflogscrubber.*`, `pdfdiagnostics.*`); `PdfTool diagnostics`, Editor Help > Collect Diagnostics; `UnitTests/tst_diagnosticstest.cpp` covers scrubber correctness/idempotence, rotation cap, manifest hash integrity, no-`.pdf`-in-bundle, and the read-only-output-directory failure path (skipped where permissions are unenforceable, same MIC-335 precedent as A23) |
 
 ---
 
 OCR is now protected by a release-profile CMake assertion: configuring with
-`PDF4QT_LOUPE_DISTRIBUTION=ON` and `PDF4QT_PLUGIN_OCR=ON` fails explicitly.
+`LOUPE_LOUPE_DISTRIBUTION=ON` and `LOUPE_PLUGIN_OCR=ON` fails explicitly.
 The Windows and Linux artifact verifiers also require `PdfTool capabilities
 --command ocr` to advertise the CLI command and reject `OcrPlugin` and
 `LoupeOcrService` artifacts. This turns the CLI-only OCR decision from a
@@ -220,7 +220,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 
 | ID | Impact | Affected users | Reproduction | Root cause | Fix / mitigation | Verification | Owner |
 |----|--------|----------------|--------------|------------|------------------|--------------|-------|
-| **R-003** | Malicious PDF crash / DoS | Anyone opening untrusted PDFs | `fuzz_images` on the JBIG2 branch of the harness | **Two real defects, found by the first fuzz run that actually executed** (the workflow had been dead since CodeQL autofix `31a4444d` added a second top-level `permissions:` key; A20 reported "Pass" throughout). (1) Signed-integer overflow at `Pdf4QtLibCore/sources/pdfjbig2decoder.cpp:4068` — `PDFJBIG2HuffmanDecoder::readSignedInteger` added a stream-supplied 32-bit range value to a table base value in `int32_t`. (2) Unbounded decode — `SBNUMINSTANCES` (a 32-bit stream value) drives the text-region composition loop, and the halftone grid loop paints one pattern per cell; neither was charged against the existing decode budget, which only accounts for *allocation*. A few input bytes could request billions of composition operations | (1) Arithmetic moved to `int64_t` and range-checked via `checkHuffmanRange`; an out-of-range result is reported as "no value", which callers already handle as out-of-band. (2) The first attempt (`accountCompositionPixels`) charged only composited *pixels*, with a floor of one pixel per item and a 1 GiB budget; the pinned seed `c8a61daa` never reached that code at all, spinning instead in the symbol-dictionary height-class loop (`processSymbolDictionary`), which decodes two arithmetic integers per pass and makes no progress when a height class yields no symbol — invisible to any pixel-based budget because it never touches a bitmap. A second, independent timeout was then found locally while verifying the first fix: `readBitmap` decoding a single legal-size generic-region bitmap took >30 s under ASan/UBSan — bounded in allocation (the existing 512 Mi cap) but not in *time*. Replaced by `accountDecodeWork(items, pixels)`, charging two **independent** budgets: `JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS` (2 Mi items — one per decoded bitmap, symbol instance, halftone grid cell, or symbol-dictionary height class; this is what bounds zero-pixel degenerate loops, regardless of pixel count) and `JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS` (160 Mi decoded/composited pixels — sized from a measured ASan throughput of ~11.2M px/s to keep worst-case decode time to ~15 s, comfortably under the 30 s local verify budget and the 1200 s CI timeout, while still covering pages up to ~600 dpi A3). Splitting pixels from items (rather than one combined "work unit" budget, which was tried and reverted) lets each cap be sized for what it actually bounds — an unavoidable time/size trade-off given a legitimate large scan and a malicious same-size bitmap are indistinguishable until fully decoded. Verified: seed `c8a61daa` now executes in **169 ms** (was >1200 s), the second seed in **46 ms** (was >30 s), the real verify invocation (`-max_total_time=30`) against the regression corpus exits 0 with slowest single input 19 s, and a 15-minute standalone libFuzzer session at `-timeout=20` is clean (13.7M runs, 0 crashes/timeouts) | Fuzz workflow **green** (not merely present); no open critical CVEs — MIC-326 | Security |
+| **R-003** | Malicious PDF crash / DoS | Anyone opening untrusted PDFs | `fuzz_images` on the JBIG2 branch of the harness | **Two real defects, found by the first fuzz run that actually executed** (the workflow had been dead since CodeQL autofix `31a4444d` added a second top-level `permissions:` key; A20 reported "Pass" throughout). (1) Signed-integer overflow at `LoupeLibCore/sources/pdfjbig2decoder.cpp:4068` — `PDFJBIG2HuffmanDecoder::readSignedInteger` added a stream-supplied 32-bit range value to a table base value in `int32_t`. (2) Unbounded decode — `SBNUMINSTANCES` (a 32-bit stream value) drives the text-region composition loop, and the halftone grid loop paints one pattern per cell; neither was charged against the existing decode budget, which only accounts for *allocation*. A few input bytes could request billions of composition operations | (1) Arithmetic moved to `int64_t` and range-checked via `checkHuffmanRange`; an out-of-range result is reported as "no value", which callers already handle as out-of-band. (2) The first attempt (`accountCompositionPixels`) charged only composited *pixels*, with a floor of one pixel per item and a 1 GiB budget; the pinned seed `c8a61daa` never reached that code at all, spinning instead in the symbol-dictionary height-class loop (`processSymbolDictionary`), which decodes two arithmetic integers per pass and makes no progress when a height class yields no symbol — invisible to any pixel-based budget because it never touches a bitmap. A second, independent timeout was then found locally while verifying the first fix: `readBitmap` decoding a single legal-size generic-region bitmap took >30 s under ASan/UBSan — bounded in allocation (the existing 512 Mi cap) but not in *time*. Replaced by `accountDecodeWork(items, pixels)`, charging two **independent** budgets: `JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS` (2 Mi items — one per decoded bitmap, symbol instance, halftone grid cell, or symbol-dictionary height class; this is what bounds zero-pixel degenerate loops, regardless of pixel count) and `JBIG2_MAX_TOTAL_DECODE_WORK_PIXELS` (160 Mi decoded/composited pixels — sized from a measured ASan throughput of ~11.2M px/s to keep worst-case decode time to ~15 s, comfortably under the 30 s local verify budget and the 1200 s CI timeout, while still covering pages up to ~600 dpi A3). Splitting pixels from items (rather than one combined "work unit" budget, which was tried and reverted) lets each cap be sized for what it actually bounds — an unavoidable time/size trade-off given a legitimate large scan and a malicious same-size bitmap are indistinguishable until fully decoded. Verified: seed `c8a61daa` now executes in **169 ms** (was >1200 s), the second seed in **46 ms** (was >30 s), the real verify invocation (`-max_total_time=30`) against the regression corpus exits 0 with slowest single input 19 s, and a 15-minute standalone libFuzzer session at `-timeout=20` is clean (13.7M runs, 0 crashes/timeouts) | Fuzz workflow **green** (not merely present); no open critical CVEs — MIC-326 | Security |
 | **R-004** | Orphan `PdfTool` if Editor killed hard | Operators canceling preflight | Kill Editor from Task Manager during preflight | OS-level process termination | Document: use in-app cancel; plugin kills child on normal close | Manual checklist item 12 in v1-operator-acceptance | Support |
 | **R-005** | Packaging license gaps (Qt LGPL evidence) | Legal/compliance | Audit installer contents | MIC-140 checklist incomplete | Complete `PACKAGING_LICENSING.md` gate before enterprise sales | Checklist sign-off | Legal/Release |
 | **R-006** | Flatpak broad filesystem access | Linux Flatpak users | Install Flatpak; inspect permissions | `--filesystem=host` in manifest | Document risk; consider tightening to `home` post-V1 | Flatpak manifest review | Release |
@@ -230,7 +230,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 | ID | Impact | Affected users | Reproduction | Root cause | Fix / mitigation | Verification | Owner |
 |----|--------|----------------|--------------|------------|------------------|--------------|-------|
 | **R-007** | Resume batch after manifest failure | PageMaster power users | Disk full during manifest write | Was: PDF written, manifest stale | **Fixed:** remove a PDF this run created when manifest persist fails; keep it (and report the inconsistency) when the write had replaced a pre-existing file, since removing it would destroy user data | **Tested (2026-08-04).** Both branches covered by `manifest_persistFailure_removesNewOutput` and `manifest_persistFailure_keepsOverwrittenOutput` in `UnitTests/tst_pagemasterexporttest.cpp` — MIC-335 | Core |
-| **R-008** | Sentry crash minidumps can contain PDF content and file paths | Opt-in telemetry users | Crash with `SENTRY_DSN` set | Crashpad captures thread stacks and referenced heap memory out-of-process. A crash in the parser or content processor therefore has document bytes live in the dump. `before_send` cannot filter this — it applies to events, not the minidump upload | **Disclosure, not enforcement.** `SENTRY_DSN` is unset by default and must stay unset when handling confidential documents. Do not restate "no PDF content by design" — nothing implements it | `PdfTool sentry-verify`; confirm `SENTRY_DSN` unset in shipped configs | Release |
+| **R-008** | Sentry crash minidumps can contain PDF content and file paths | Telemetry users | Crash with Sentry enabled | Crashpad captures thread stacks and referenced heap memory out-of-process. A crash in the parser or content processor therefore has document bytes live in the dump. `before_send` cannot filter this — it applies to events, not the minidump upload | **Disclosure, not enforcement.** Windows builds compile in the Loupe DSN. Set `SENTRY_DSN=off` when handling confidential documents. Do not restate "no PDF content by design" — nothing implements it | `PdfTool sentry-verify`; confirm `SENTRY_DSN=off` in confidential workflows | Release |
 | **R-009** | Theme/scheme requires restart | All GUI users | Change color scheme in settings | Settings read only at startup | Document in release notes | Manual | UX |
 | **R-010** | OCR sidecar supply chain | OCR users | Point `LOUPE_OCR_SIDECAR` at unknown binary | External Python/PyInstaller bundle | Ship only signed/bundled sidecar; document env var | OCR README | Release |
 | ~~R-011~~ | ~~README links upstream releases~~ | — | — | Fork branding drift | **Resolved.** Every install link in `README.md` points at `mberrys/Loupe-pdf/releases`; the only upstream link left is the PDF4QT attribution in the License section, which is correct and stays | README review 2026-08-04 | Docs |
@@ -265,9 +265,9 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 
 | Change | File | Rationale |
 |--------|------|-----------|
-| Range-check Huffman-decoded integers in 64-bit arithmetic | `Pdf4QtLibCore/sources/pdfjbig2decoder.cpp` | UBSan signed-integer overflow at `:4068` — R-003 (1) |
-| Charge symbol-instance and halftone-grid composition against a new budget | `Pdf4QtLibCore/sources/pdfjbig2decoder.cpp` / `.h` | `SBNUMINSTANCES`-driven unbounded decode; libFuzzer timeout >1200 s — R-003 (2) |
-| Charge decoded/composited pixels and per-item counts against two independent decode-work budgets | `Pdf4QtLibCore/sources/pdfjbig2decoder.cpp` / `.h` | Pixel-only composition budget missed the symbol-dictionary height-class loop entirely (zero-pixel spin); a single combined budget then let a legal-size generic-region decode take >47 s once the pixel cap was loosened for large-scan support — R-003 (2) |
+| Range-check Huffman-decoded integers in 64-bit arithmetic | `LoupeLibCore/sources/pdfjbig2decoder.cpp` | UBSan signed-integer overflow at `:4068` — R-003 (1) |
+| Charge symbol-instance and halftone-grid composition against a new budget | `LoupeLibCore/sources/pdfjbig2decoder.cpp` / `.h` | `SBNUMINSTANCES`-driven unbounded decode; libFuzzer timeout >1200 s — R-003 (2) |
+| Charge decoded/composited pixels and per-item counts against two independent decode-work budgets | `LoupeLibCore/sources/pdfjbig2decoder.cpp` / `.h` | Pixel-only composition budget missed the symbol-dictionary height-class loop entirely (zero-pixel spin); a single combined budget then let a legal-size generic-region decode take >47 s once the pixel cap was loosened for large-scan support — R-003 (2) |
 | Add `Fuzz/corpus/regression/` seeds + README for both R-003 (2) timeouts | `Fuzz/corpus/regression/` | Corpus was not committed to any branch; pinning both seeds (including the newly-found symbol-dictionary one) prevents silent regression |
 | Mark installer gates Pass; return fuzz gate to blocking | this file §2, §3 | Executive table was stale on all four in-flight rows |
 
@@ -295,7 +295,7 @@ Sorted by severity. **Owner** defaults to release engineering unless noted.
 
 | Change | File | Rationale |
 |--------|------|-----------|
-| Roll back written PDF when batch manifest persist fails | `Pdf4QtLibCore/sources/pdfpagemasterexport.cpp` | Prevents resume/state inconsistency (R-007) — tested as of 2026-08-04, see A23 |
+| Roll back written PDF when batch manifest persist fails | `LoupeLibCore/sources/pdfpagemasterexport.cpp` | Prevents resume/state inconsistency (R-007) — tested as of 2026-08-04, see A23 |
 | Disable Sentry default PII | `pdfsentry.cpp` / docs | Confirmed desktop 0.15.x has no PII setter (NX-only); default remains off (R-008) |
 | Set preflight `QProcess` working directory to app bundle dir | `loupepreflightplugin.cpp` | Predictable sidecar resolution |
 
@@ -355,4 +355,4 @@ Product owner: review this document and [`docs/PRODUCTION_RUNBOOK.md`](PRODUCTIO
 - [ ] Confirm you accept known limitations in runbook §9 (overprint, unsigned MSI, Flatpak `--filesystem=host`, mirror bleed seams)
 - [ ] Sign off here and in Linear: MIC-301, MIC-326, MIC-327, MIC-330, MIC-342
 
-**After sign-off (step 6, out of scope for this pass):** dispatch `CreateReleaseDraft.yml` on the release SHA, publish `v1.6.0.0`, attach MSI + AppImage + `SHA256SUMS.txt`.
+**After sign-off (step 6, out of scope for this pass):** dispatch `CreateReleaseDraft.yml` on the release SHA, publish `v0.1.0-alpha`, attach MSI + AppImage + `SHA256SUMS.txt`.

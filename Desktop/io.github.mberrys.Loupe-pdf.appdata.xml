@@ -5,7 +5,7 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <name>Loupe</name>
-  <summary>PDF production workspace and CLI (PDF4QT fork)</summary>
+  <summary>PDF production workspace and CLI</summary>
   <description>
     <p>
       Loupe is based on PDF4QT, an open source PDF editor and toolkit. It provides PDF opening and inspection, production workflows, preflight, editing, signing, Production Preview, and the Loupe CLI (the compatible PdfTool command-line interface).
@@ -29,7 +29,7 @@
           <li>Issue #388: Update Windows color management system</li>
           <li>Issue #385: PDFTextLayoutGenerator::isContentKindSuppressed(ContentKind kind) is missing ContentKind::Form</li>
           <li>Issue #384: In the "Optimize Images" dialog, the info on the final image resolution and final DPI does not update</li>
-          <li>Issue #383: UX improvements for PDF4QT PageMaster tool (v1.5.3.1) (ex. DocPage Organizer)</li>
+          <li>Issue #383: UX improvements for Loupe PageMaster tool (v1.5.3.1) (ex. DocPage Organizer)</li>
           <li>Issue #382: Startup Settings</li>
           <li>Issue #381: Separated apps for double-click viewer in Linux</li>
           <li>Issue #380: Ability to run app with custom settings directory - executable parameter with path</li>
@@ -49,18 +49,18 @@
           <li>Issue #349: Add inherit zoom to bookmark zoom options</li>
           <li>Issue #338: Editor toolbox higher than editor window</li>
           <li>Issue #334: Impossible to set French language</li>
-          <li>Issue #326: Checkboxes don't render in PDF4QT</li>
+          <li>Issue #326: Checkboxes don't render in Loupe</li>
           <li>Issue #324: Menu text not rendered with correct color</li>
           <li>Issue #321: Select text in Viewer</li>
           <li>Issue #291: Support for editing XMP metadata or exporting to PDF/UA format</li>
           <li>Issue #282: Editor outline view always zooms to around 50%</li>
-          <li>Issue #256: PDF4QT cannot show some specific fonts correctly</li>
+          <li>Issue #256: Loupe cannot show some specific fonts correctly</li>
           <li>Issue #253: Undo/redo doesn't work in "edit page content" mode</li>
           <li>Issue #250: Snapping</li>
           <li>Issue #242: Full screen</li>
           <li>Issue #234: Setting font, font size and area of text annotations</li>
-          <li>Issue #230: Garbled characters when opening PDF files with PDF4QT</li>
-          <li>Issue #225: PDF4QT cannot open PDF files with embedded files</li>
+          <li>Issue #230: Garbled characters when opening PDF files with Loupe</li>
+          <li>Issue #225: Loupe cannot open PDF files with embedded files</li>
           <li>Issue #224: Option to remove invisible text</li>
           <li>Issue #194: Change page size</li>
           <li>Issue #160: Color | Custom (green/black) does not work</li>
@@ -84,7 +84,7 @@
           <li>Issue #333: ijg-libjpeg obsoleted in vcpkg</li>
           <li>Issue #329: How to remove "External links"</li>
           <li>Issue #269: Nested bookmarks lose children when moving</li>
-          <li>Issue #179: Adding a JPG or PNG signature image crashes PDF4QT</li>
+          <li>Issue #179: Adding a JPG or PNG signature image crashes Loupe</li>
           <li>Issue #146: Incorrect fonts displayed on Linux</li>
           <li>Issue #144: Drag and drop text note annotations</li>
         </ul>
@@ -96,7 +96,7 @@
           <li>Issue #313: Remove history UX improvement</li>
           <li>Issue #310: Docpage organiser uses PDF title rather than filename</li>
           <li>Issue #306: Unable to delete the recent files history.</li>
-          <li>Issue #303: Add Dockerfile for Simplified PDF4QT Setup with Qt 6.9.1 and All Dependencies</li>
+          <li>Issue #303: Add Dockerfile for Simplified Loupe Setup with Qt 6.9.1 and All Dependencies</li>
           <li>Issue #301: Russian Language file</li>
           <li>Issue #296: Redaction annotation support in PdfTool</li>
           <li>Issue #295: Request: Make page layout choice persist between files</li>

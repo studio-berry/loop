@@ -24,13 +24,41 @@ jobs:
         run: python3 scripts/ci/test_check_source_integrity.py
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
+      - name: Verify unmanaged async launch allowlist
+        run: python3 scripts/ci/check_unmanaged_async.py
+      - name: Verify semantic-trust source boundaries
+        run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
 
+  agent_contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+      - name: Verify policy adapters and PR changelog
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          python3 scripts/agent/generate-adapters.py
+          HEAD_SHA="${HEAD_SHA:-$(git rev-parse HEAD)}"
+          BASE_SHA="${BASE_SHA:-$(git rev-parse "$HEAD_SHA^")}"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/agent/check-change.py --base "$BASE_SHA" --head "$HEAD_SHA" --head-branch "$HEAD_BRANCH" --dry-run
+          else
+            python3 scripts/agent/check-change.py --base "$BASE_SHA" --head "$HEAD_SHA" --head-branch "$HEAD_BRANCH" --dry-run --skip-changelog
+          fi
+
   linux:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-linux.yml
 
   windows:
+    needs: [source_integrity]
     uses: ./.github/workflows/reusable-windows.yml
 
   documentation:
@@ -63,11 +91,14 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py'
       - name: Verify branch policy
         run: python3 scripts/ci/check_branch_policy.py --live
+      - name: Verify version policy
+        run: python3 scripts/ci/check_version_policy.py
 
   release_ok:
     if: always()
     needs:
       - source_integrity
+      - agent_contract
       - linux
       - windows
       - documentation

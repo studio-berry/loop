@@ -36,6 +36,8 @@
 // fixtures or an intentional rule change:
 //   LOUPE_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus
 
+#include "processoutputcapture.h"
+
 #include <QtTest>
 #include <QDir>
 #include <QFile>
@@ -159,14 +161,17 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
                     profilePath,
                     QStringLiteral("--console-format"),
                     QStringLiteral("json") });
-    QVERIFY2(process.waitForFinished(30000), "PdfTool preflight timed out");
+    QByteArray stdOut;
+    QByteArray stdErr;
+    QVERIFY2(test_support::waitForFinishedAndCapture(process, 30000, stdOut, stdErr),
+             qPrintable(QStringLiteral("PdfTool preflight timed out: %1\nstderr: %2")
+                            .arg(process.errorString(), QString::fromUtf8(stdErr))));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
-    const QByteArray stdOut = process.readAllStandardOutput();
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
     QVERIFY2(parseError.error == QJsonParseError::NoError,
-             qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(process.readAllStandardError()))));
+             qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(stdErr))));
     QVERIFY2(document.isObject(), "result JSON must be a top-level object");
 
     const QJsonObject envelope = document.object();
@@ -187,6 +192,9 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
     report.remove(QStringLiteral("profile_resolution"));
     report.remove(QStringLiteral("document_revision_digest"));
     report.remove(QStringLiteral("effective_profile_digest"));
+    report.remove(QStringLiteral("profile_identity"));
+    report.remove(QStringLiteral("coverage_scope"));
+    report.remove(QStringLiteral("variable_bindings"));
     report.remove(QStringLiteral("decisions"));
     for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
     {
@@ -195,6 +203,7 @@ QJsonObject PreflightCorpusTest::normalizeReport(QJsonObject report)
         {
             QJsonObject finding = findings.at(index).toObject();
             finding.remove(QStringLiteral("id"));
+            finding.remove(QStringLiteral("evidence_ids"));
             findings.replace(index, finding);
         }
         report.insert(section, findings);

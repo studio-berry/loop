@@ -17,11 +17,11 @@ A desktop PDF toolkit for editing, inspecting, validating, and automating PDF wo
 
 | Tool | Use it for |
 | --- | --- |
-| **Pdf4QtEditor** | The primary interactive workspace for editing, inspection, and editor plugins. |
+| **LoupeEditor** | The primary interactive workspace for editing, inspection, and editor plugins. |
 | **PdfTool** | Scripted and batch workflows in CI or from the command line. Run `PdfTool help` for commands. |
-| **Pdf4QtPageMaster** | Batch page geometry, assembly, and export. |
-| **Pdf4QtViewer** | Quick, read-only viewing. |
-| **Pdf4QtDiff** | Comparing two PDF documents. |
+| **LoupePageMaster** | Batch page geometry, assembly, and export. |
+| **LoupeViewer** | Quick, read-only viewing. |
+| **LoupeDiff** | Comparing two PDF documents. |
 
 ## Known limitations
 
@@ -29,7 +29,7 @@ A desktop PDF toolkit for editing, inspecting, validating, and automating PDF wo
 
 ## Install
 
-Use Loupe’s own release artifacts, not upstream PDF4QT packages.
+Use Loupe’s own release artifacts, not upstream packages.
 
 - **Windows (x64):** download the MSI or portable ZIP from [GitHub releases](https://github.com/mberrys/Loupe-pdf/releases). **V1 installers are unsigned** — Windows SmartScreen will show an “unrecognized app” warning on first install. Choose **More info** → **Run anyway** to proceed. Verify the download against `SHA256SUMS.txt` on the release page before installing.
 - **Linux (x64):** download the AppImage from [GitHub releases](https://github.com/mberrys/Loupe-pdf/releases), `chmod +x` it, and run. Verify the download against `SHA256SUMS.txt` on the release page. Flatpak packaging exists (`LinuxFlatpak.yml`) but isn't yet attached to releases. `ci.yml` also builds a `.deb` on every push to `master`, but **it does not work** — verified by installing it on a clean Ubuntu 22.04 container: `dpkg -i` succeeds, but the binary fails to launch (`libQt6Gui.so.6: cannot open shared object file`) because, unlike the AppImage, it doesn't bundle the Qt runtime, and it also has a glibc version mismatch against 22.04. Do not install the `.deb` until it's fixed.
@@ -50,7 +50,7 @@ git clone https://github.com/Microsoft/vcpkg.git
 export VCPKG_ROOT="$PWD/vcpkg"
 
 cmake -B build -S . \
-  -DPDF4QT_INSTALL_QT_DEPENDENCIES=0 \
+  -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
   -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build
@@ -68,7 +68,7 @@ On Windows, use Visual Studio 2022 or MinGW. For the full set of build options a
 
 ## Contributing
 
-Contributions, testing, feedback, and bug reports are welcome. Please read [AGENTS.md](AGENTS.md) and the [repository map](docs/REPO_MAP.md) before starting work, especially when changing the forked PDF4QT codebase or syncing upstream.
+Contributions, testing, feedback, and bug reports are welcome. Please read [AGENTS.md](AGENTS.md) and the [repository map](docs/REPO_MAP.md) before starting work, especially when changing the forked upstream codebase or syncing upstream.
 
 ## License and acknowledgements
 

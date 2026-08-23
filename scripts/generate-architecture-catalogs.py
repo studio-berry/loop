@@ -20,7 +20,11 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "docs" / "generated" / "architecture-catalog.json"
+PREFLIGHT_CATALOG_PATH = ROOT / "docs" / "generated" / "preflight-check-catalog.json"
+PREFLIGHT_OVERLAY_PATH = ROOT / "docs" / "preflight-check-catalog-overlay.json"
 BRANCH_POLICY_PATH = ROOT / "docs" / "branch-policy.json"
+VERSION_POLICY_PATH = ROOT / "docs" / "version-policy.json"
+INVARIANTS_PATH = ROOT / "docs" / "architecture-invariants.json"
 ADR_DIR = ROOT / "docs" / "adr"
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -72,8 +76,33 @@ def parse_branch_policy() -> dict[str, Any]:
     }
 
 
+def parse_version_policy() -> dict[str, Any]:
+    policy = json.loads(read(VERSION_POLICY_PATH))
+    required = {
+        "scheme",
+        "current",
+        "tag_prefix",
+        "cmake_format",
+    }
+    missing = sorted(required - policy.keys())
+    if missing:
+        raise ValueError(f"version policy is missing: {', '.join(missing)}")
+    if policy["scheme"] != "semver":
+        raise ValueError("version policy scheme must be semver")
+    prerelease = policy.get("prerelease") or ""
+    if not isinstance(prerelease, str):
+        raise ValueError("version policy prerelease must be a string")
+    return {
+        "scheme": policy["scheme"],
+        "current": policy["current"],
+        "prerelease": prerelease or None,
+        "tag_prefix": policy["tag_prefix"],
+        "cmake_format": policy["cmake_format"],
+    }
+
+
 def parse_preflight_checks() -> list[str]:
-    source = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.cpp")
+    source = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.cpp")
     match = re.search(
         r"void\s+PreflightEngine::registerBuiltInChecks\(\)\s*\{(?P<body>.*?)\n\}",
         source,
@@ -88,6 +117,38 @@ def parse_preflight_checks() -> list[str]:
     return checks
 
 
+def build_preflight_check_catalog(registry: list[str]) -> dict[str, Any]:
+    overlay = json.loads(read(PREFLIGHT_OVERLAY_PATH))
+    overlay_ids = unique_sorted(overlay.get("checks", {}).keys())
+    missing = sorted(set(registry) - set(overlay_ids))
+    extra = sorted(set(overlay_ids) - set(registry))
+    if missing or extra:
+        problems = []
+        if missing:
+            problems.append("registered without catalog: " + ", ".join(missing))
+        if extra:
+            problems.append("catalog without registry: " + ", ".join(extra))
+        raise ValueError("; ".join(problems))
+    required = {"measures", "limitations", "coverage"}
+    for check_id, entry in overlay["checks"].items():
+        absent = sorted(required - set(entry))
+        if absent:
+            raise ValueError(f"catalog entry '{check_id}' missing {', '.join(absent)}")
+        if entry["coverage"] not in {"covered", "partial", "not_covered"}:
+            raise ValueError(f"catalog entry '{check_id}' has invalid coverage")
+    return {
+        "format_version": 1,
+        "generated_by": "scripts/generate-architecture-catalogs.py",
+        "claim": overlay["claim"],
+        "matrix_id": overlay["matrix_id"],
+        "gwg_families": overlay["gwg_families"],
+        "pdfx_targets": overlay["pdfx_targets"],
+        "checks": overlay["checks"],
+        "not_covered": overlay["not_covered"],
+        "registry": registry,
+    }
+
+
 def parse_repair_operations() -> list[dict[str, str]]:
     operations: list[dict[str, str]] = []
     pattern = re.compile(
@@ -96,7 +157,7 @@ def parse_repair_operations() -> list[dict[str, str]]:
         r'return\s+QStringLiteral\("([^"]+)"\)',
         re.DOTALL,
     )
-    for path in sorted((ROOT / "Pdf4QtLibCore" / "sources").glob("*.cpp")):
+    for path in sorted((ROOT / "LoupeLibCore" / "sources").glob("*.cpp")):
         for class_name, operation_id in pattern.findall(read(path)):
             operations.append(
                 {"id": operation_id, "implementation": path.relative_to(ROOT).as_posix()}
@@ -136,6 +197,40 @@ def schema_version_values(value: Any) -> list[int]:
     return []
 
 
+def parse_schema_kinds() -> list[str]:
+    source = read(ROOT / "LoupeLibCore" / "sources" / "pdfschemaversion.cpp")
+    match = re.search(
+        r"QString\s+pdfSchemaKindToString\(PDFSchemaKind kind\)\s*\{(?P<body>.*?)\n\}",
+        source,
+        re.DOTALL,
+    )
+    if not match:
+        raise ValueError("could not find pdfSchemaKindToString")
+    kinds = unique_sorted(re.findall(r'return QStringLiteral\("([a-z0-9-]+)"\)', match.group("body")))
+    kinds = [kind for kind in kinds if kind != "unknown"]
+    if len(kinds) < 10:
+        raise ValueError("schema kind catalog is incomplete")
+    return kinds
+
+
+def parse_coverage_matrix() -> dict[str, Any]:
+    checks = parse_preflight_checks()
+    families = {
+        "images": ["image-resolution"],
+        "colorants": ["color-mode", "color-inventory", "output-intent"],
+        "strokes": ["thin-strokes", "thin-parts"],
+        "overprint-transparency": ["white-overprint", "transparency-risk"],
+        "fonts": ["embedded-fonts", "font-integrity"],
+    }
+    covered = {check for members in families.values() for check in members}
+    holes = [check for check in checks if check not in covered]
+    return {
+        "families": families,
+        "coverage_holes": holes,
+        "standards_matrix": "docs/PDFX_POLICY_MATRIX.md",
+    }
+
+
 def parse_schema_versions() -> dict[str, Any]:
     schemas: dict[str, Any] = {}
     schema_dir = ROOT / "loupe-preflight" / "schemas"
@@ -144,13 +239,13 @@ def parse_schema_versions() -> dict[str, Any]:
         versions = unique_sorted(str(value) for value in schema_version_values(document))
         schemas[path.relative_to(ROOT).as_posix()] = [int(value) for value in versions]
 
-    engine_header = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.h")
+    engine_header = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.h")
     report_match = re.search(r"PREFLIGHT_REPORT_SCHEMA_VERSION\s*=\s*(\d+)", engine_header)
-    engine_cpp = read(ROOT / "Pdf4QtLibCore" / "sources" / "preflightengine.cpp")
+    engine_cpp = read(ROOT / "LoupeLibCore" / "sources" / "preflightengine.cpp")
     decision_match = re.search(
         r'preflightDecisionsToJson.*?schema_version"\),\s*(\d+)', engine_cpp, re.DOTALL
     )
-    action_list = read(ROOT / "Pdf4QtLibCore" / "sources" / "pdfactionlist.cpp")
+    action_list = read(ROOT / "LoupeLibCore" / "sources" / "pdfactionlist.cpp")
     action_match = re.search(r'loupe-action-list/(\d+)', action_list)
     if not report_match or not decision_match or not action_match:
         raise ValueError("could not find one or more runtime schema versions")
@@ -171,6 +266,42 @@ def parse_test_targets() -> list[str]:
     if not targets:
         raise ValueError("CMake test target catalog is empty")
     return targets
+
+
+def parse_architecture_invariants(test_targets: list[str] | None = None) -> list[dict[str, Any]]:
+    document = json.loads(read(INVARIANTS_PATH))
+    invariants = document.get("invariants")
+    if not isinstance(invariants, list) or len(invariants) < 20:
+        raise ValueError("architecture invariants must list at least 20 numbered entries")
+    known_targets = set(test_targets if test_targets is not None else parse_test_targets())
+    seen_ids: set[str] = set()
+    parsed: list[dict[str, Any]] = []
+    for entry in invariants:
+        if not isinstance(entry, dict):
+            raise ValueError("architecture invariant entries must be objects")
+        identifier = entry.get("id")
+        title = entry.get("title")
+        mapped = entry.get("test_targets")
+        if not isinstance(identifier, str) or not re.fullmatch(r"I\d{2}", identifier):
+            raise ValueError(f"invalid architecture invariant id: {identifier!r}")
+        if identifier in seen_ids:
+            raise ValueError(f"duplicate architecture invariant id: {identifier}")
+        if not isinstance(title, str) or not title.strip():
+            raise ValueError(f"{identifier} is missing a title")
+        if not isinstance(mapped, list) or not mapped:
+            raise ValueError(f"{identifier} must map to at least one test target")
+        unknown = sorted(target for target in mapped if target not in known_targets)
+        if unknown:
+            raise ValueError(f"{identifier} maps to unknown test targets: {', '.join(unknown)}")
+        seen_ids.add(identifier)
+        parsed.append(
+            {
+                "id": identifier,
+                "title": title.strip(),
+                "test_targets": unique_sorted(str(target) for target in mapped),
+            }
+        )
+    return parsed
 
 
 def parse_workflow_branches() -> dict[str, list[str]]:
@@ -239,24 +370,36 @@ def validate_adrs() -> list[str]:
 
 
 def build_catalog() -> dict[str, Any]:
+    registry = parse_preflight_checks()
+    test_targets = parse_test_targets()
     return {
         "format_version": 1,
         "generated_by": "scripts/generate-architecture-catalogs.py",
+        "architecture_invariants": parse_architecture_invariants(test_targets),
         "branch_policy": parse_branch_policy(),
-        "preflight_checks": parse_preflight_checks(),
+        "version_policy": parse_version_policy(),
+        "preflight_checks": registry,
+        "preflight_check_catalog": "docs/generated/preflight-check-catalog.json",
         "registered_operations": parse_repair_operations(),
         "schema_versions": parse_schema_versions(),
-        "test_targets": parse_test_targets(),
+        "schema_kinds": parse_schema_kinds(),
+        "preflight_coverage": parse_coverage_matrix(),
+        "test_targets": test_targets,
         "workflow_branches": parse_workflow_branches(),
         "sources": [
             "docs/branch-policy.json",
-            "Pdf4QtLibCore/sources/preflightengine.cpp",
-            "Pdf4QtLibCore/sources/preflightengine.h",
-            "Pdf4QtLibCore/sources/pdfactionlist.cpp",
-            "Pdf4QtLibCore/sources/pdfrepairoperation.cpp",
-            "Pdf4QtLibCore/sources/pdfrepairprimitives.cpp",
-            "Pdf4QtLibCore/sources/pdfproductionrepair.cpp",
+            "docs/version-policy.json",
+            "docs/architecture-invariants.json",
+            "LoupeLibCore/sources/preflightengine.cpp",
+            "LoupeLibCore/sources/preflightengine.h",
+            "docs/preflight-check-catalog-overlay.json",
+            "LoupeLibCore/sources/pdfactionlist.cpp",
+            "LoupeLibCore/sources/pdfrepairoperation.cpp",
+            "LoupeLibCore/sources/pdfrepairprimitives.cpp",
+            "LoupeLibCore/sources/pdfproductionrepair.cpp",
             "loupe-preflight/schemas/*.json",
+            "LoupeLibCore/sources/pdfschemaversion.cpp",
+            "docs/PDFX_POLICY_MATRIX.md",
             "UnitTests/CMakeLists.txt",
             ".github/workflows/*.yml",
         ],
@@ -267,21 +410,26 @@ def serialized_catalog() -> str:
     return json.dumps(build_catalog(), indent=2, sort_keys=True) + "\n"
 
 
-def check_catalog(expected: str) -> int:
-    if not CATALOG_PATH.exists():
-        print(f"error: generated catalog is missing: {CATALOG_PATH.relative_to(ROOT)}", file=sys.stderr)
+def serialized_preflight_catalog() -> str:
+    registry = parse_preflight_checks()
+    return json.dumps(build_preflight_check_catalog(registry), indent=2, sort_keys=True) + "\n"
+
+
+def check_generated(path: Path, expected: str, label: str) -> int:
+    if not path.exists():
+        print(f"error: generated {label} is missing: {path.relative_to(ROOT)}", file=sys.stderr)
         return 1
-    actual = read(CATALOG_PATH)
+    actual = read(path)
     if actual == expected:
         return 0
     diff = difflib.unified_diff(
         actual.splitlines(),
         expected.splitlines(),
-        fromfile=str(CATALOG_PATH.relative_to(ROOT)),
+        fromfile=str(path.relative_to(ROOT)),
         tofile="generated output",
         lineterm="",
     )
-    print("generated architecture catalog is stale:", file=sys.stderr)
+    print(f"generated {label} is stale:", file=sys.stderr)
     print("\n".join(diff), file=sys.stderr)
     return 1
 
@@ -301,6 +449,7 @@ def main() -> int:
 
     try:
         expected = serialized_catalog()
+        expected_preflight = serialized_preflight_catalog()
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: cannot generate architecture catalog: {error}", file=sys.stderr)
         return 1
@@ -308,8 +457,11 @@ def main() -> int:
     if args.write:
         CATALOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         CATALOG_PATH.write_text(expected, encoding="utf-8", newline="\n")
+        PREFLIGHT_CATALOG_PATH.write_text(expected_preflight, encoding="utf-8", newline="\n")
         return 0
-    return check_catalog(expected)
+    return check_generated(CATALOG_PATH, expected, "architecture catalog") or check_generated(
+        PREFLIGHT_CATALOG_PATH, expected_preflight, "preflight check catalog"
+    )
 
 
 if __name__ == "__main__":

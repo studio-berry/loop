@@ -33,7 +33,8 @@ class BranchPolicyTests(unittest.TestCase):
         self.assertEqual(required_check, "release_ok")
         self.assertEqual(policy.required_check, "release_ok")
         self.assertEqual(policy.required_check_app.lower(), "github actions")
-        self.assertEqual(policy.protected_branches, ("stable",))
+        self.assertEqual(policy.protected_branches, ("dev", "stable"))
+        self.assertEqual(policy.integration_required_check, "agent-fast / build")
         self.assertEqual(policy.release_gate_workflow, ".github/workflows/release-gate.yml")
         self.assertEqual(policy.release_gate_events, ("pull_request", "merge_group"))
         self.assertEqual(policy.release_gate_pull_request_branches, ("stable",))
@@ -98,6 +99,27 @@ jobs:
         violations = validate_release_gate_workflow(Path("release-gate.yml"), stale, policy)
         self.assertTrue(any("merge_group" in item for item in violations))
 
+    def test_rejects_release_gate_without_merge_group_shas(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        stale = """on:
+  pull_request:
+    branches: [stable]
+  merge_group:
+
+jobs:
+  agent_contract:
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  release_ok:
+    if: always()
+"""
+        violations = validate_release_gate_workflow(Path("release-gate.yml"), stale, policy)
+        self.assertTrue(any("merge_group base SHA" in item for item in violations))
+        self.assertTrue(any("merge_group head SHA" in item for item in violations))
+
     def test_rejects_path_filtered_release_gate(self):
         policy = parse_documented_policy_full(
             (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
@@ -133,6 +155,31 @@ jobs:
         violations = validate_integration_workflow(Path("ci.yml"), stale, policy)
         self.assertTrue(any("ci_ok" in item for item in violations))
 
+    def test_rejects_manual_dispatch_without_full_platform_jobs(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        stale = """on:
+  push:
+    branches: [dev, stable]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  agent-fast:
+    uses: ./.github/workflows/reusable-linux.yml
+  linux:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/reusable-linux.yml
+  windows:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/reusable-windows.yml
+"""
+        violations = validate_integration_workflow(Path("ci.yml"), stale, policy)
+        self.assertTrue(any("linux job must run for workflow_dispatch" in item for item in violations))
+        self.assertTrue(any("windows job must run for workflow_dispatch" in item for item in violations))
+
     def test_live_protection_rejects_ci_ok_and_unbound_app(self):
         policy = parse_documented_policy_full(
             (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
@@ -146,7 +193,11 @@ jobs:
         }
         violations = validate_live_protection(
             stable_protection=stale_stable,
-            dev_protection={},
+            dev_protection={
+                "required_status_checks": {
+                    "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
+                }
+            },
             policy=policy,
         )
         self.assertTrue(any("ci_ok" in item for item in violations))
@@ -162,16 +213,21 @@ jobs:
                 "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
             }
         }
+        dev = {
+            "required_status_checks": {
+                "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
+            }
+        }
         self.assertEqual(
             validate_live_protection(
                 stable_protection=stable,
-                dev_protection={},
+                dev_protection=dev,
                 policy=policy,
             ),
             [],
         )
 
-    def test_live_protection_rejects_required_checks_on_dev(self):
+    def test_live_protection_rejects_mismatched_dev_checks(self):
         policy = parse_documented_policy_full(
             (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
         )
@@ -190,7 +246,7 @@ jobs:
             dev_protection=dev,
             policy=policy,
         )
-        self.assertTrue(any("dev must not require" in item for item in violations))
+        self.assertTrue(any("dev required checks" in item for item in violations))
 
 
 if __name__ == "__main__":

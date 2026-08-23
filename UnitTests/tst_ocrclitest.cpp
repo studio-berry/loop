@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "processoutputcapture.h"
+
 #include <QtTest>
 #include <QCoreApplication>
 #include <QDir>
@@ -109,14 +111,16 @@ bool OcrCliTest::runMockOcr(const QString& mode,
                            QStringLiteral("--sidecar"),
                            mockSidecarPath() });
     process.start();
-    if (!process.waitForFinished(120000))
+    QByteArray stdOut;
+    QByteArray stdErr;
+    if (!test_support::waitForFinishedAndCapture(process, 120000, stdOut, stdErr))
     {
-        error = QStringLiteral("PdfTool did not finish.");
+        error = QStringLiteral("PdfTool did not finish: %1\nstderr: %2")
+                    .arg(process.errorString(), QString::fromUtf8(stdErr));
         return false;
     }
 
     exitCode = process.exitCode();
-    const QByteArray stdOut = process.readAllStandardOutput();
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject())
@@ -147,11 +151,11 @@ void OcrCliTest::pdftoolOcr_withMockSidecar_emitsReport()
                            QStringLiteral("--sidecar"),
                            mockSidecarPath() });
     process.start();
-    QVERIFY(process.waitForFinished(120000));
+    QByteArray stdOut;
+    QByteArray stdErr;
+    QVERIFY(test_support::waitForFinishedAndCapture(process, 120000, stdOut, stdErr));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
-    const QByteArray stdOut = process.readAllStandardOutput();
-    const QByteArray stdErr = process.readAllStandardError();
     QVERIFY2(process.exitCode() == 0 || process.exitCode() == 1,
              qPrintable(QStringLiteral("unexpected exit %1\nstdout: %2\nstderr: %3")
                             .arg(process.exitCode())
@@ -211,11 +215,11 @@ void OcrCliTest::textOnlyFile_neverStartsSidecar()
                            QStringLiteral("--sidecar"),
                            missingSidecarPath() });
     process.start();
-    QVERIFY(process.waitForFinished(120000));
+    QByteArray stdOut;
+    QByteArray stdErr;
+    QVERIFY(test_support::waitForFinishedAndCapture(process, 120000, stdOut, stdErr));
     QCOMPARE(process.exitStatus(), QProcess::NormalExit);
 
-    const QByteArray stdOut = process.readAllStandardOutput();
-    const QByteArray stdErr = process.readAllStandardError();
     QVERIFY2(process.exitCode() == 0,
              qPrintable(QStringLiteral("unexpected exit %1\nstdout: %2\nstderr: %3")
                             .arg(process.exitCode())
@@ -264,8 +268,7 @@ void OcrCliTest::malformedSidecarResponse_becomesPartialFailure()
     QCOMPARE(exitCode, 5);
     QCOMPARE(envelope.value(QStringLiteral("status")).toString(), QStringLiteral("partial-output"));
 
-    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
-                                   .value(QStringLiteral("report")).toObject();
+    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
     QVERIFY(!report.value(QStringLiteral("errors")).toArray().isEmpty());
     bool foundFailedPage = false;
     for (const QJsonValue& pageValue : report.value(QStringLiteral("pages")).toArray())
@@ -286,8 +289,7 @@ void OcrCliTest::sidecarStderrNoise_doesNotCorruptProtocol()
     QVERIFY2(runMockOcr(QStringLiteral("stderr-noise"), envelope, exitCode, error), qPrintable(error));
     QCOMPARE(exitCode, 0);
 
-    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
-                                   .value(QStringLiteral("report")).toObject();
+    const QJsonObject report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
     bool foundOcrPage = false;
     for (const QJsonValue& pageValue : report.value(QStringLiteral("pages")).toArray())
     {

@@ -24,7 +24,7 @@ relations on the issues.
 
 Cycle 1 delivered Loupe V1 (operator loop, MIC-300) and stabilized CI. The four
 High-priority Loupe tickets filed from the Dev Issue Tracker (MIC-306–309) all target
-PageMaster export robustness. The export job in `Pdf4QtPageMaster/mainwindow.cpp:464-584`
+PageMaster export robustness. The export job in `LoupePageMaster/mainwindow.cpp:464-584`
 assembles all outputs into `assembledDocumentStorage` before optimizing and writing any
 (unbounded peak memory), has no cancellation contract (`~MainWindow` blocks on
 `m_exportWatcher->waitForFinished()`), and tracks written files only in memory, so a

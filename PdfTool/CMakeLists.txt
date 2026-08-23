@@ -21,38 +21,38 @@
 # SOFTWARE.
 
 add_executable(PdfTool
-    main.cpp 
-    pdfoutputformatter.cpp 
-    pdftoolabstractapplication.cpp 
+    main.cpp
+    pdfoutputformatter.cpp
+    pdftoolabstractapplication.cpp
     pdftoolcapabilities.cpp
     pdftoolcapabilities.h
-    pdftoolresult.cpp 
-    pdftoolattachments.cpp 
-    pdftoolaudiobook.cpp 
-    pdftoolcertstore.cpp 
-    pdftoolcolorprofiles.cpp 
-    pdftooldecrypt.cpp 
-    pdftooldiff.cpp 
-    pdftoolencrypt.cpp 
-    pdftoolfetchimages.cpp 
-    pdftoolfetchtext.cpp 
-    pdftoolinfo.cpp 
-    pdftoolinfofonts.cpp 
-    pdftoolinfoinks.cpp 
-    pdftoolinfojavascript.cpp 
-    pdftoolinfometadata.cpp 
-    pdftoolinfonameddestinations.cpp 
-    pdftoolinfopageboxes.cpp 
-    pdftoolinfostructuretree.cpp 
-    pdftoolinkcoverage.cpp 
-    pdftooloptimize.cpp 
-    pdftoolrender.cpp 
+    pdftoolresult.cpp
+    pdftoolattachments.cpp
+    pdftoolaudiobook.cpp
+    pdftoolcertstore.cpp
+    pdftoolcolorprofiles.cpp
+    pdftooldecrypt.cpp
+    pdftooldiff.cpp
+    pdftoolencrypt.cpp
+    pdftoolfetchimages.cpp
+    pdftoolfetchtext.cpp
+    pdftoolinfo.cpp
+    pdftoolinfofonts.cpp
+    pdftoolinfoinks.cpp
+    pdftoolinfojavascript.cpp
+    pdftoolinfometadata.cpp
+    pdftoolinfonameddestinations.cpp
+    pdftoolinfopageboxes.cpp
+    pdftoolinfostructuretree.cpp
+    pdftoolinkcoverage.cpp
+    pdftooloptimize.cpp
+    pdftoolrender.cpp
     pdftoolremoveexternallinks.cpp
     pdftoolremoveexternallinks.h
-    pdftoolseparate.cpp 
-    pdftoolstatistics.cpp 
-    pdftoolunite.cpp 
-    pdftoolverifysignatures.cpp 
+    pdftoolseparate.cpp
+    pdftoolstatistics.cpp
+    pdftoolunite.cpp
+    pdftoolverifysignatures.cpp
     pdftoolxml.cpp
     pdftoolredact.cpp
     pdftoolredact.h
@@ -84,7 +84,7 @@ add_executable(PdfTool
     pdftoolactionlist.h
 )
 
-target_link_libraries(PdfTool PRIVATE Pdf4QtLibCore Qt6::Core Qt6::Gui Qt6::Xml)
+target_link_libraries(PdfTool PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Xml)
 
 if(MINGW)
     target_link_libraries(PdfTool PRIVATE ole32 sapi)
@@ -93,23 +93,23 @@ endif()
 set_target_properties(PdfTool PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${PDF4QT_INSTALL_BIN_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 
-install(TARGETS PdfTool RUNTIME DESTINATION ${PDF4QT_INSTALL_BIN_DIR} LIBRARY DESTINATION ${PDF4QT_INSTALL_LIB_DIR})
+install(TARGETS PdfTool RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR})
 
 # Headless corpus/CI sets QT_QPA_PLATFORM=offscreen; windeployqt often only ships qwindows.
 # Copy qoffscreen next to PdfTool so PdfTool help/preflight do not hang on missing plugin.
-if(WIN32 AND DEFINED PDF4QT_QT_ROOT AND EXISTS "${PDF4QT_QT_ROOT}/plugins/platforms/qoffscreen.dll")
+if(WIN32 AND DEFINED LOUPE_QT_ROOT AND EXISTS "${LOUPE_QT_ROOT}/plugins/platforms/qoffscreen.dll")
     add_custom_command(TARGET PdfTool POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PdfTool>/platforms"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${PDF4QT_QT_ROOT}/plugins/platforms/qoffscreen.dll"
+            "${LOUPE_QT_ROOT}/plugins/platforms/qoffscreen.dll"
             "$<TARGET_FILE_DIR:PdfTool>/platforms/qoffscreen.dll"
         COMMENT "Copy qoffscreen.dll for headless PdfTool")
 endif()
 
-if(PDF4QT_ENABLE_SENTRY)
-    pdf4qt_deploy_sentry_crashpad(PdfTool)
+if(LOUPE_ENABLE_SENTRY)
+    loupe_deploy_sentry_crashpad(PdfTool)
 endif()

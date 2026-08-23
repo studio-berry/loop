@@ -1,6 +1,6 @@
 # loupe-preflight
 
-Standalone preflight **engine** for Loupe (sidecar CLI). Lives outside the PDF4QT / Loupe Editor process. The Qt plugin (Phase 2) shells out to this tool and only consumes the normalized report JSON defined here.
+Standalone preflight **engine** for Loupe (sidecar CLI). Lives outside the LOUPE / Loupe Editor process. The Qt plugin (Phase 2) shells out to this tool and only consumes the normalized report JSON defined here.
 
 This directory currently locks the **contract** (MIC-131). The CLI binary itself is MIC-133.
 
@@ -152,7 +152,7 @@ effective-profile digest change marks a decision `stale_document` or
 
 The recorded operator identity is an attribution field, not authentication or
 cryptographic non-repudiation. Editor controls and waived-row presentation are
-deferred until after 0.0.3; the Core/CLI contract is intentionally usable
+deferred until after 0.1.1; the Core/CLI contract is intentionally usable
 without a GUI.
 
 ## Two-tier bleed checking
@@ -289,7 +289,7 @@ The check reports missing dielines, missing required processing-step types,
 and dieline geometry marked printable. Generated wide-format grommet marks
 are represented in the headless PageMaster production manifest using the same
 normalized `positions` processing-step vocabulary; GUI presentation remains
-deferred beyond 0.0.3.
+deferred beyond 0.1.1.
 
 ## Hairline and thin-stroke checking
 

@@ -3,7 +3,7 @@
 This document defines how Loupe product components will be composed when the
 Qt Quick foundation is introduced. It is a contract and example, not a QML
 implementation. The repository intentionally remains QML-free until the
-post-0.0.3 Quick slice is approved.
+post-0.1.1 Quick slice is approved.
 
 ## Ownership boundary
 

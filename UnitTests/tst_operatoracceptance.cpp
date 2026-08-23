@@ -39,6 +39,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSet>
 #include <QSizeF>
 #include <QTemporaryDir>
 #include <QVector>
@@ -193,6 +194,16 @@ QByteArray fileSha256(const QString& path)
     return hash.result();
 }
 
+QByteArray readFileBytes(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    return file.readAll();
+}
+
 bool writeLargeFormatPdf(const QString& path, double widthInches, double heightInches)
 {
     const int widthPt = static_cast<int>(widthInches * 72.0 + 0.5);
@@ -215,15 +226,7 @@ bool writeLargeFormatPdf(const QString& path, double widthInches, double heightI
 
     appendObject(1, "<< /Type /Catalog /Pages 2 0 R >>\n");
     appendObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n");
-    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ")
-                              + QByteArray::number(widthPt)
-                              + ' '
-                              + QByteArray::number(heightPt)
-                              + "] /TrimBox [0 0 "
-                              + QByteArray::number(widthPt)
-                              + ' '
-                              + QByteArray::number(heightPt)
-                              + "] /Resources << >> /Contents 4 0 R >>\n");
+    appendObject(3, QByteArray("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ") + QByteArray::number(widthPt) + ' ' + QByteArray::number(heightPt) + "] /TrimBox [0 0 " + QByteArray::number(widthPt) + ' ' + QByteArray::number(heightPt) + "] /Resources << >> /Contents 4 0 R >>\n");
     appendObject(4, "<< /Length 0 >>\nstream\n\nendstream\n");
 
     const int xrefOffset = pdf.size();
@@ -238,8 +241,7 @@ bool writeLargeFormatPdf(const QString& path, double widthInches, double heightI
     pdf.append("\n%%EOF\n");
 
     QFile file(path);
-    return file.open(QIODevice::WriteOnly | QIODevice::Truncate)
-            && file.write(pdf) == pdf.size();
+    return file.open(QIODevice::WriteOnly | QIODevice::Truncate) && file.write(pdf) == pdf.size();
 }
 
 }   // namespace
@@ -256,6 +258,7 @@ private slots:
 
     void operatorLoop_bleedFixupAndRevalidate();
     void operatorLoop_preservesOriginalBytes();
+    void livePdfToolFlows_writeVerifiableProvenance();
 
     void overwriteExplicit_addBleedRequiresOverwriteFlag();
     void addBleedDryRun_largeFormatPlansWithoutRasterOrOutput();
@@ -268,6 +271,7 @@ private slots:
 
     void reportContract_rejectsUnsupportedSchema();
     void reportContract_classifiesVisualOverlays();
+    void reportContract_allowedPropertiesMatchSchema();
 
     void sidecarCancellation_terminatesCleanly();
 
@@ -418,7 +422,7 @@ bool OperatorAcceptanceTest::runPdfTool(const QStringList& arguments,
     if (process.exitStatus() != QProcess::NormalExit)
     {
         qWarning().noquote() << "PdfTool exited abnormally:" << process.errorString() << arguments
-                              << QString::fromUtf8(capturedStdErr);
+                             << QString::fromUtf8(capturedStdErr);
         return false;
     }
 
@@ -432,7 +436,8 @@ bool OperatorAcceptanceTest::runPreflight(const QString& pdfPath,
                                           qint64* peakChildMemoryKb) const
 {
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath },
+    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath,
+                      QStringLiteral("--console-format"), QStringLiteral("json") },
                     &stdOut,
                     nullptr,
                     exitCode,
@@ -479,9 +484,7 @@ bool OperatorAcceptanceTest::runAddBleed(const QString& inputPath,
                           bleedMm,
                           QStringLiteral("--force"),
                       },
-                      nullptr,
-                      nullptr,
-                      exitCode);
+                      nullptr, nullptr, exitCode);
 }
 
 QString OperatorAcceptanceTest::fixturePath(const QString& pdf) const
@@ -613,6 +616,53 @@ void OperatorAcceptanceTest::operatorLoop_preservesOriginalBytes()
     QVERIFY(fileSha256(outputPath) != beforeHash);
 }
 
+void OperatorAcceptanceTest::livePdfToolFlows_writeVerifiableProvenance()
+{
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    const QString sourcePath = temporaryDirectory.filePath(QStringLiteral("source.pdf"));
+    QVERIFY(QFile::copy(fixturePath(QStringLiteral("bleed-missing.pdf")), sourcePath));
+    const QByteArray sourceHash = fileSha256(sourcePath);
+    QVERIFY(!sourceHash.isEmpty());
+
+    QJsonObject preflightReport;
+    int preflightExitCode = -1;
+    QVERIFY(runPreflight(sourcePath, m_defaultProfilePath, &preflightReport, &preflightExitCode));
+    QCOMPARE(preflightExitCode, 1);
+    QVERIFY(pdfplugin::preflight::validateNormalizedReport(preflightReport));
+
+    const QString preflightDatabasePath = sourcePath + QStringLiteral(".loupe-history/history.sqlite3");
+    QVERIFY(QFileInfo::exists(preflightDatabasePath));
+    const QByteArray preflightHistoryBytes = readFileBytes(preflightDatabasePath);
+    QVERIFY(preflightHistoryBytes.startsWith("SQLite format 3"));
+    QVERIFY(preflightHistoryBytes.contains("PreflightRun"));
+    QVERIFY(preflightHistoryBytes.contains("accepted"));
+    QVERIFY(preflightHistoryBytes.contains(sourceHash.toHex()));
+    QVERIFY(preflightHistoryBytes.contains(
+        preflightReport.value(QStringLiteral("effective_profile_digest")).toString().toLatin1()));
+
+    QString mode;
+    QString bleedMm;
+    QVERIFY(advertisedAddBleedParams(preflightReport, &mode, &bleedMm));
+    const QString outputPath = temporaryDirectory.filePath(QStringLiteral("repaired.pdf"));
+    int repairExitCode = -1;
+    QVERIFY(runAddBleed(sourcePath, outputPath, mode, bleedMm, &repairExitCode));
+    QCOMPARE(repairExitCode, 0);
+    QVERIFY(QFileInfo::exists(outputPath));
+    QCOMPARE(fileSha256(sourcePath), sourceHash);
+
+    const QString repairDatabasePath = outputPath + QStringLiteral(".loupe-history/history.sqlite3");
+    QVERIFY(QFileInfo::exists(repairDatabasePath));
+    const QByteArray repairHistoryBytes = readFileBytes(repairDatabasePath);
+    QVERIFY(repairHistoryBytes.startsWith("SQLite format 3"));
+    QVERIFY(repairHistoryBytes.contains("FixApplied"));
+    QVERIFY(repairHistoryBytes.contains("accepted"));
+    QVERIFY(repairHistoryBytes.contains(sourceHash.toHex()));
+    QVERIFY(repairHistoryBytes.contains(fileSha256(outputPath).toHex()));
+    QVERIFY(repairHistoryBytes.contains("approve"));
+}
+
 void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
 {
     // Overwrite-explicit contract (MIC-310): a second add-bleed run writing to an
@@ -638,7 +688,7 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     QByteArray refusedError;
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
                          QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5") },
-                        nullptr, &refusedError, &refusedExitCode));
+                       nullptr, &refusedError, &refusedExitCode));
     QVERIFY2(refusedExitCode != 0, "add-bleed must not overwrite the existing output without --overwrite.");
     QVERIFY(!refusedError.trimmed().isEmpty());
     QCOMPARE(fileSha256(outputPath), firstHash);
@@ -647,7 +697,7 @@ void OperatorAcceptanceTest::overwriteExplicit_addBleedRequiresOverwriteFlag()
     QVERIFY(runPdfTool({ QStringLiteral("add-bleed"), pdfPath, QStringLiteral("--output"), outputPath,
                          QStringLiteral("--mode"), QStringLiteral("mirror"), QStringLiteral("--bleed-mm"), QStringLiteral("5"),
                          QStringLiteral("--overwrite") },
-                        nullptr, nullptr, &overwriteExitCode));
+                       nullptr, nullptr, &overwriteExitCode));
     QCOMPARE(overwriteExitCode, 0);
     QVERIFY(QFile::exists(outputPath));
     // add-bleed is deterministic, so a re-run of the same input legitimately
@@ -665,9 +715,9 @@ void OperatorAcceptanceTest::addBleedDryRun_largeFormatPlansWithoutRasterOrOutpu
     for (const auto& size : { QSizeF(48.0, 96.0), QSizeF(240.0, 60.0) })
     {
         const QString inputPath = temporaryDirectory.filePath(
-                QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
+            QStringLiteral("large-%1x%2.pdf").arg(size.width()).arg(size.height()));
         const QString outputPath = temporaryDirectory.filePath(
-                QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
+            QStringLiteral("should-not-be-written-%1x%2.pdf").arg(size.width()).arg(size.height()));
         QVERIFY(writeLargeFormatPdf(inputPath, size.width(), size.height()));
 
         QByteArray stdOut;
@@ -862,6 +912,78 @@ void OperatorAcceptanceTest::reportContract_rejectsUnsupportedSchema()
     validationError.clear();
     QVERIFY(!pdfplugin::preflight::validateNormalizedReport(report, &validationError));
     QVERIFY(validationError.contains(QStringLiteral("page")));
+}
+
+void OperatorAcceptanceTest::reportContract_allowedPropertiesMatchSchema()
+{
+    // Guards against producer/validator drift: PreflightResult::toJson() /
+    // findingToJson() and the validator allow-lists in preflightsidecarutils.h
+    // must agree with the shipped JSON schema's property lists, or a real engine
+    // run can start emitting a key the validator silently rejects. This happened
+    // twice: coverage_scope/profile_identity/variable_bindings/error at the report
+    // level, and evidence_ids on findings emitted by evidence-graph-based checks.
+    const QString schemaPath = QDir(sourceDir()).filePath(QStringLiteral("schemas/report.schema.json"));
+    QFile schemaFile(schemaPath);
+    QVERIFY2(schemaFile.open(QIODevice::ReadOnly), qPrintable(QStringLiteral("Missing report schema at %1").arg(schemaPath)));
+
+    QJsonParseError parseError;
+    const QJsonDocument schemaDoc = QJsonDocument::fromJson(schemaFile.readAll(), &parseError);
+    QVERIFY2(parseError.error == QJsonParseError::NoError, qPrintable(parseError.errorString()));
+
+    const auto schemaPropertyKeys = [](const QJsonObject& schemaObject) -> QSet<QString>
+    {
+        const QJsonObject properties = schemaObject.value(QStringLiteral("properties")).toObject();
+        QSet<QString> keys;
+        for (auto it = properties.constBegin(); it != properties.constEnd(); ++it)
+        {
+            keys.insert(it.key());
+        }
+        return keys;
+    };
+
+    // Returns a diagnostic message describing any mismatch, or an empty string when
+    // the schema and validator allow-lists agree. QVERIFY2 must run at the top level
+    // of the test slot (not inside this helper) so a failure actually aborts the test.
+    const auto mismatchMessage = [](const QString& label, const QSet<QString>& schemaKeys, const QSet<QString>& validatorKeys) -> QString
+    {
+        if (schemaKeys.isEmpty())
+        {
+            return QStringLiteral("%1: schema definition was empty or missing").arg(label);
+        }
+        const QSet<QString> missingFromValidator = schemaKeys - validatorKeys;
+        const QSet<QString> extraInValidator = validatorKeys - schemaKeys;
+        if (missingFromValidator.isEmpty() && extraInValidator.isEmpty())
+        {
+            return QString();
+        }
+        QStringList parts;
+        if (!missingFromValidator.isEmpty())
+        {
+            parts << QStringLiteral("missing from allow-list: %1").arg(QStringList(missingFromValidator.values()).join(QStringLiteral(", ")));
+        }
+        if (!extraInValidator.isEmpty())
+        {
+            parts << QStringLiteral("extra in allow-list: %1").arg(QStringList(extraInValidator.values()).join(QStringLiteral(", ")));
+        }
+        return QStringLiteral("%1: %2").arg(label, parts.join(QStringLiteral("; ")));
+    };
+
+    const QJsonObject defs = schemaDoc.object().value(QStringLiteral("$defs")).toObject();
+
+    const QString reportMismatch = mismatchMessage(QStringLiteral("validateNormalizedReport"),
+                                                   schemaPropertyKeys(schemaDoc.object()),
+                                                   pdfplugin::preflight::normalizedReportAllowedProperties());
+    QVERIFY2(reportMismatch.isEmpty(), qPrintable(reportMismatch));
+
+    const QString findingV1Mismatch = mismatchMessage(QStringLiteral("validateFindingV1"),
+                                                      schemaPropertyKeys(defs.value(QStringLiteral("finding_v1")).toObject()),
+                                                      pdfplugin::preflight::findingV1AllowedProperties());
+    QVERIFY2(findingV1Mismatch.isEmpty(), qPrintable(findingV1Mismatch));
+
+    const QString findingV2Mismatch = mismatchMessage(QStringLiteral("validateFindingV2"),
+                                                      schemaPropertyKeys(defs.value(QStringLiteral("finding_v2")).toObject()),
+                                                      pdfplugin::preflight::findingV2AllowedProperties());
+    QVERIFY2(findingV2Mismatch.isEmpty(), qPrintable(findingV2Mismatch));
 }
 
 void OperatorAcceptanceTest::reportContract_classifiesVisualOverlays()

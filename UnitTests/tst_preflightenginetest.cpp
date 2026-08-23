@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
+#include "pdfpreflightverdict.h"
 #include "pdfcolorinventory.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
@@ -29,6 +31,7 @@
 #include "pdfinkcoverageprobe.h"
 #include "pdffixupregistry.h"
 #include "pdfrepairoperation.h"
+#include "pdfobject.h"
 #include "pdfthinpartprobe.h"
 
 #include <QtTest>
@@ -69,6 +72,10 @@ private slots:
     void run_unknownCheckIdIsIgnored();
     void run_thinStrokes_detectsPaintedThinStroke();
     void run_thinParts_detectsPaintedThinFill();
+    void run_thinParts_routesSeverityByClass();
+    void run_thinParts_detectsThinAnnotation();
+    void run_thinParts_reportsIncompleteNearThreshold();
+    void run_thinParts_detectsThinClippedPart();
     void thinPartProbe_reportsBoundedWidthAndPrecision();
     void fontIntegrity_checkIsRegistered();
     void run_fontIntegrity_keepsValidEmbeddedFixtureClean();
@@ -94,6 +101,7 @@ private slots:
     void run_inkCoverage_budgetAbortIsIncomplete();
     void inkCoverageProbe_usesAnalysisBoxAndReportsBudget();
     void run_downsampleFixupAdvertisedForHighDpiImage();
+    void run_imageResolutionBBoxMatchesCtmPlacement();
     void run_downsampleFixupHiddenWhenNoCandidateExists();
     void run_downsampleFixupCarriesTargetDpi();
     void run_colorRgbFixtureFailsColorMode();
@@ -110,10 +118,43 @@ private slots:
     void run_outputIntent_optionalEmbeddedProfileCanBeAbsent();
     void run_outputIntent_malformedArrayEntryEmitsFinding();
     void run_outputIntent_severityWarningRoutesToWarnings();
+    void parseProfile_readsIdentityFields();
+    void run_emptyRestrictionScopeIsIncomplete();
+    void run_unresolvedVariableIsIncomplete();
 };
 
 namespace
 {
+
+const pdf::PreflightFinding* findThinPartFinding(const QList<pdf::PreflightFinding>& findings,
+                                                 const QString& classification)
+{
+    for (const pdf::PreflightFinding& finding : findings)
+    {
+        if (finding.checkId != QStringLiteral("thin-parts") || finding.type == QStringLiteral("check-incomplete"))
+        {
+            continue;
+        }
+
+        const QString evidenceClass = finding.evidence.value(QStringLiteral("class")).toString();
+        if (finding.type == classification || evidenceClass == classification)
+        {
+            return &finding;
+        }
+    }
+
+    return nullptr;
+}
+
+void assertNormalizedThinPartFinding(const pdf::PreflightFinding& finding,
+                                     const QString& classification)
+{
+    QCOMPARE(finding.checkId, QStringLiteral("thin-parts"));
+    QCOMPARE(finding.evidence.value(QStringLiteral("class")).toString(), classification);
+    QVERIFY(finding.evidence.contains(QStringLiteral("measuredWidthPt")));
+    QVERIFY(finding.evidence.contains(QStringLiteral("measurementPrecisionPt")));
+    QVERIFY(finding.evidence.contains(QStringLiteral("thresholdPt")));
+}
 
 struct OutputIntentSpec
 {
@@ -214,6 +255,57 @@ pdf::PDFDocument buildTieredBleedGapPage()
         painter->fillRect(QRectF(10, 10, 200, 200), Qt::black);
         pageContentStreamBuilder.end(painter);
     }
+
+    return builder.build();
+}
+
+pdf::PDFDocument buildPageWithThinAnnotationAppearance()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+
+    const QByteArray formContent = QByteArrayLiteral("0 0 0 RG 0.1 w 10 10 m 150 10 l S");
+    pdf::PDFArray bbox;
+    bbox.appendItem(pdf::PDFObject::createReal(0.0));
+    bbox.appendItem(pdf::PDFObject::createReal(0.0));
+    bbox.appendItem(pdf::PDFObject::createReal(160.0));
+    bbox.appendItem(pdf::PDFObject::createReal(20.0));
+
+    pdf::PDFDictionary formDictionary;
+    formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("XObject"));
+    formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Form"));
+    formDictionary.setEntry(pdf::PDFInplaceOrMemoryString("BBox"),
+                            pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(bbox))));
+    formDictionary.setEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                            pdf::PDFObject::createInteger(formContent.size()));
+
+    const pdf::PDFObjectReference formReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(formDictionary), QByteArray(formContent))));
+
+    pdf::PDFDictionary appearance;
+    appearance.addEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createReference(formReference));
+
+    pdf::PDFDictionary annotation;
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Annot"));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Subtype"), pdf::PDFObject::createName("Stamp"));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("Rect"),
+                        pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                            pdf::PDFObject::createReal(20.0),
+                            pdf::PDFObject::createReal(60.0),
+                            pdf::PDFObject::createReal(180.0),
+                            pdf::PDFObject::createReal(80.0) })));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("P"), pdf::PDFObject::createReference(page));
+    annotation.addEntry(pdf::PDFInplaceOrMemoryString("AP"),
+                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(appearance))));
+
+    const pdf::PDFObjectReference annotationReference = builder.addObject(
+        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(annotation))));
+
+    pdf::PDFDictionary pageAnnotations;
+    pageAnnotations.addEntry(pdf::PDFInplaceOrMemoryString("Annots"),
+                             pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::vector<pdf::PDFObject>{
+                                 pdf::PDFObject::createReference(annotationReference) })));
+    builder.appendTo(page, pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(pageAnnotations))));
 
     return builder.build();
 }
@@ -590,6 +682,166 @@ void PreflightEngineTest::run_thinParts_detectsPaintedThinFill()
     QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measuredWidthPt")));
     QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("measurementPrecisionPt")));
     QVERIFY(result.warnings.first().evidence.contains(QStringLiteral("thresholdPt")));
+}
+
+void PreflightEngineTest::run_thinParts_routesSeverityByClass()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    QPen thinPen(Qt::black);
+    thinPen.setWidthF(0.1);
+    painter->setPen(thinPen);
+    painter->drawLine(QPointF(20, 20), QPointF(180, 20));
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->drawRect(QRectF(20, 40, 120, 0.1));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.5 },
+                                            { QStringLiteral("probe_dpi"), 1200 },
+                                            { QStringLiteral("classes"), QJsonArray{
+                                                                             QStringLiteral("thin-stroke"),
+                                                                             QStringLiteral("thin-fill") } },
+                                            { QStringLiteral("severity_by_class"), QJsonObject{ { QStringLiteral("thin-stroke"), QStringLiteral("error") }, { QStringLiteral("thin-fill"), QStringLiteral("warning") } } } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 1);
+    QCOMPARE(result.warnings.size(), 1);
+
+    const pdf::PreflightFinding* strokeFinding = findThinPartFinding(result.errors, QStringLiteral("thin-stroke"));
+    QVERIFY(strokeFinding != nullptr);
+    assertNormalizedThinPartFinding(*strokeFinding, QStringLiteral("thin-stroke"));
+
+    const pdf::PreflightFinding* fillFinding = findThinPartFinding(result.warnings, QStringLiteral("thin-fill"));
+    QVERIFY(fillFinding != nullptr);
+    assertNormalizedThinPartFinding(*fillFinding, QStringLiteral("thin-fill"));
+}
+
+void PreflightEngineTest::run_thinParts_detectsThinAnnotation()
+{
+    pdf::PDFDocument document = buildPageWithThinAnnotationAppearance();
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    QCOMPARE(page->getAnnotations().size(), size_t(1));
+
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.5 },
+                                            { QStringLiteral("probe_dpi"), 600 },
+                                            { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-annotation") } } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const pdf::PreflightFinding* annotationFinding = findThinPartFinding(result.errors, QStringLiteral("thin-annotation"));
+    if (annotationFinding == nullptr)
+    {
+        annotationFinding = findThinPartFinding(result.warnings, QStringLiteral("thin-annotation"));
+    }
+    QVERIFY(annotationFinding != nullptr);
+    assertNormalizedThinPartFinding(*annotationFinding, QStringLiteral("thin-annotation"));
+}
+
+void PreflightEngineTest::run_thinParts_reportsIncompleteNearThreshold()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->drawRect(QRectF(20, 20, 120, 0.95));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                                            { QStringLiteral("severity"), QStringLiteral("error") },
+                                            { QStringLiteral("min_effective_width_pt"), 1.0 },
+                                            { QStringLiteral("probe_dpi"), 600 },
+                                            { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-fill") } } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QCOMPARE(result.errors.size(), 0);
+    QCOMPARE(result.warnings.size(), 1);
+    QCOMPARE(result.warnings.first().type, QStringLiteral("check-incomplete"));
+    QCOMPARE(result.warnings.first().severity, QStringLiteral("info"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("reason")).toString(),
+             QStringLiteral("measurement-near-threshold"));
+    QCOMPARE(result.warnings.first().evidence.value(QStringLiteral("class")).toString(),
+             QStringLiteral("thin-fill"));
+    QVERIFY(findThinPartFinding(result.errors, QStringLiteral("thin-fill")) == nullptr);
+    QVERIFY(findThinPartFinding(result.warnings, QStringLiteral("thin-fill")) == nullptr);
+}
+
+void PreflightEngineTest::run_thinParts_detectsThinClippedPart()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    QPainter* painter = contentBuilder.begin(page);
+    QVERIFY(painter != nullptr);
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(Qt::black);
+    painter->setClipRect(QRectF(10, 95, 180, 0.1));
+    painter->drawRect(QRectF(10, 20, 180, 160));
+    contentBuilder.end(painter);
+
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Thin parts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("thin-parts") },
+                                            { QStringLiteral("min_effective_width_pt"), 0.5 },
+                                            { QStringLiteral("probe_dpi"), 1200 },
+                                            { QStringLiteral("classes"), QJsonArray{ QStringLiteral("thin-clipped-part") } } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    const pdf::PreflightFinding* clippedFinding = findThinPartFinding(result.errors, QStringLiteral("thin-clipped-part"));
+    if (clippedFinding == nullptr)
+    {
+        clippedFinding = findThinPartFinding(result.warnings, QStringLiteral("thin-clipped-part"));
+    }
+    QVERIFY(clippedFinding != nullptr);
+    assertNormalizedThinPartFinding(*clippedFinding, QStringLiteral("thin-clipped-part"));
 }
 
 void PreflightEngineTest::fontIntegrity_checkIsRegistered()
@@ -1401,6 +1653,30 @@ void PreflightEngineTest::inkCoverageProbe_usesAnalysisBoxAndReportsBudget()
     QVERIFY(mediaResult.budgetExceeded);
 }
 
+void PreflightEngineTest::run_imageResolutionBBoxMatchesCtmPlacement()
+{
+    pdf::PDFDocument document = buildHighDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Image bbox geometry") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                                     { QStringLiteral("min_dpi"), 1000 } } } }
+    };
+
+    const pdf::PreflightResult result = engine.run(profile);
+    const QList<pdf::PreflightFinding> findings = result.errors + result.warnings;
+    const auto imageFinding = std::find_if(findings.cbegin(), findings.cend(), [](const pdf::PreflightFinding& finding)
+                                           { return finding.type == QStringLiteral("image-resolution"); });
+    QVERIFY(imageFinding != findings.cend());
+    QVERIFY(imageFinding->bbox.width() < 200.0);
+    QVERIFY(imageFinding->bbox.height() < 200.0);
+    QCOMPARE(qRound(imageFinding->bbox.width()), 144);
+    QCOMPARE(qRound(imageFinding->bbox.height()), 144);
+}
+
 void PreflightEngineTest::run_downsampleFixupAdvertisedForHighDpiImage()
 {
     pdf::PDFDocument document = buildHighDpiImagePage();
@@ -1799,6 +2075,66 @@ void PreflightEngineTest::run_outputIntent_severityWarningRoutesToWarnings()
     QVERIFY(result.errors.isEmpty());
     QCOMPARE(result.warnings.size(), 1);
     QCOMPARE(result.warnings.first().type, QStringLiteral("output-intent-missing"));
+}
+
+void PreflightEngineTest::parseProfile_readsIdentityFields()
+{
+    pdf::PreflightProfileData profile;
+    QString errorMessage;
+    const QJsonObject object{
+        { QStringLiteral("name"), QStringLiteral("Identity") },
+        { QStringLiteral("id"), QStringLiteral("loupe.test.identity") },
+        { QStringLiteral("version"), QStringLiteral("1.2.3") },
+        { QStringLiteral("authored"), QJsonObject{ { QStringLiteral("by"), QStringLiteral("qa") } } },
+        { QStringLiteral("derived_from"), QJsonObject{ { QStringLiteral("id"), QStringLiteral("loupe.test.parent") } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    QVERIFY(pdf::PreflightEngine::parseProfile(object, profile, errorMessage));
+    QCOMPARE(profile.id, QStringLiteral("loupe.test.identity"));
+    QCOMPARE(profile.version, QStringLiteral("1.2.3"));
+
+    const pdf::PreflightProfileIdentity identity = pdf::identifyPreflightProfile(object);
+    QCOMPARE(identity.authored.value(QStringLiteral("by")).toString(), QStringLiteral("qa"));
+    QCOMPARE(identity.derivedFrom.value(QStringLiteral("id")).toString(), QStringLiteral("loupe.test.parent"));
+}
+
+void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Restricted") },
+        { QStringLiteral("restrictions"), QJsonObject{ { QStringLiteral("scope"), QString() } } },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unsupported-scope"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightEngineTest::run_unresolvedVariableIsIncomplete()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDocument document = builder.build();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile{
+        { QStringLiteral("name"), QStringLiteral("Variables") },
+        { QStringLiteral("checks"), QJsonArray{ QJsonObject{
+                                        { QStringLiteral("id"), QStringLiteral("bleed") },
+                                        { QStringLiteral("amount_pt"), QStringLiteral("${stock}") } } } }
+    };
+    const pdf::PreflightResult result = engine.run(profile);
+    QVERIFY(!result.pass);
+    QVERIFY(!result.inspectionComplete);
+    QCOMPARE(result.errorCode, QStringLiteral("unresolved-variable"));
+    QCOMPARE(pdf::reducePreflightVerdict(result).state, pdf::PreflightVerdictState::Incomplete);
 }
 
 QTEST_GUILESS_MAIN(PreflightEngineTest)

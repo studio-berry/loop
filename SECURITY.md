@@ -6,7 +6,7 @@ Loupe-PDF is released from the `master` branch of [mberrys/Loupe-pdf](https://gi
 
 | Version | Supported |
 | ------- | --------- |
-| 1.6.x (current `PDF4QT_VERSION`) | Yes — security fixes land here |
+| 0.1.x (current `LOUPE_VERSION`) | Yes — security fixes land here |
 | Older fork tags / unreleased branches | Best effort only |
 
 Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Loupe-specific.
@@ -33,12 +33,12 @@ Please do **not** open a public GitHub issue for unfixed vulnerabilities.
 
 Highest-risk surfaces for this project:
 
-- PDF parsers and stream filters (`Pdf4QtLibCore`)
+- PDF parsers and stream filters (`LoupeLibCore`)
 - Image codecs (JBIG2, CCITT, DCT)
 - Attachment / launch / URI handlers
 - Atomic write / export paths (PageMaster, PdfTool)
 
-Fuzz harnesses live under `Fuzz/` and `.github/workflows/fuzz.yml`. Crash reporting may be sent via Sentry when `SENTRY_DSN` / `PDF4QT_ENABLE_SENTRY` is configured — treat that as operational telemetry, not a substitute for private disclosure. Sentry is configured with `send_default_pii` disabled; see `docs/PRODUCTION_RUNBOOK.md` for opt-in guidance.
+Fuzz harnesses live under `Fuzz/` and `.github/workflows/fuzz.yml`. Crash reporting may be sent via Sentry when `SENTRY_DSN` / `LOUPE_ENABLE_SENTRY` is configured — treat that as operational telemetry, not a substitute for private disclosure. Sentry is configured with `send_default_pii` disabled; see `docs/PRODUCTION_RUNBOOK.md` for opt-in guidance.
 
 ## Logging and diagnostics bundles
 

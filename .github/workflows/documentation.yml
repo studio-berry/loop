@@ -23,3 +23,7 @@ jobs:
 
       - name: Verify ADR metadata and generated catalogs
         run: python3 scripts/generate-architecture-catalogs.py --check
+      - name: Verify generated agent policy adapters
+        run: python3 scripts/agent/generate-adapters.py
+      - name: Test agent policy helpers
+        run: python3 -m unittest discover -s scripts/agent -p 'test_*.py'

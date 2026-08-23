@@ -1,0 +1,9 @@
+{
+  "schema_kind": "preflight-report",
+  "schema_version": 2,
+  "pass": true,
+  "profile": "golden",
+  "errors": [],
+  "warnings": [],
+  "fixups_available": []
+}

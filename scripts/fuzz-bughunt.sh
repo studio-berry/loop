@@ -2,7 +2,7 @@
 # Run MIC-304 libFuzzer harnesses locally with ASan/UBSan.
 #
 # Prerequisites:
-#   - Clang with libFuzzer (PDF4QT_BUILD_FUZZERS=ON)
+#   - Clang with libFuzzer (LOUPE_BUILD_FUZZERS=ON)
 #   - Qt + vcpkg deps (see scripts/setup-dev-env.sh)
 #
 # Usage:
@@ -19,24 +19,15 @@ shift || true
 if [[ $# -gt 0 ]]; then
     TARGETS=("$@")
 else
-    TARGETS=(fuzz_pdf_parser fuzz_stream_filters fuzz_content_stream fuzz_images)
+    TARGETS=()
 fi
 
-SEED_DIR="${REPO_ROOT}/loupe-preflight/testdata/fixtures"
-FUZZ_ARGS=(-max_total_time="${SECONDS_PER_TARGET}" -print_final_stats=1)
-if [[ -d "${SEED_DIR}" ]]; then
-    FUZZ_ARGS+=("${SEED_DIR}")
+export LD_LIBRARY_PATH="${LOUPE_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
+
+python3 "${REPO_ROOT}/scripts/ci/check_fuzz_corpus.py"
+
+if [[ ${#TARGETS[@]} -gt 0 ]]; then
+    "${REPO_ROOT}/scripts/fuzz-run-targets.sh" "${BUILD_DIR}" "${SECONDS_PER_TARGET}" "${TARGETS[@]}"
+else
+    "${REPO_ROOT}/scripts/fuzz-run-targets.sh" "${BUILD_DIR}" "${SECONDS_PER_TARGET}"
 fi
-
-export LD_LIBRARY_PATH="${PDF4QT_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
-
-for target in "${TARGETS[@]}"; do
-    bin="${BUILD_DIR}/usr/bin/${target}"
-    if [[ ! -x "${bin}" ]]; then
-        echo "Missing fuzz binary: ${bin}" >&2
-        echo "Configure with -DPDF4QT_BUILD_FUZZERS=ON -DPDF4QT_ENABLE_SANITIZERS=ON and build the target." >&2
-        exit 1
-    fi
-    echo "======== ${target} (${SECONDS_PER_TARGET}s) ========"
-    "${bin}" "${FUZZ_ARGS[@]}"
-done
