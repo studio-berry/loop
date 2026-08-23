@@ -446,6 +446,8 @@ add_executable(UnitTestsLifecycle
     tst_lifecycletest.cpp
 )
 target_link_libraries(UnitTestsLifecycle PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test)
+target_compile_definitions(UnitTestsLifecycle PRIVATE
+    LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(UnitTestsLifecycle PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
@@ -863,6 +865,28 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsOperatorAcceptance  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOperatorAcceptance")
+
+    add_executable(UnitTestsRepairOperatorAcceptance
+        tst_repairoperatoracceptance.cpp
+    )
+
+    target_link_libraries(UnitTestsRepairOperatorAcceptance PRIVATE LoupeLibCore Qt6::Core Qt6::Test)
+    add_dependencies(UnitTestsRepairOperatorAcceptance PdfTool)
+    target_compile_definitions(UnitTestsRepairOperatorAcceptance PRIVATE
+        PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+    )
+    target_include_directories(UnitTestsRepairOperatorAcceptance PRIVATE
+        ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
+
+    set_target_properties(UnitTestsRepairOperatorAcceptance PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsRepairOperatorAcceptance  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRepairOperatorAcceptance")
 endif()
 
 # Compiles both identity headers into one TU so the pdf::PDFArtifactIdentity
