@@ -41,6 +41,7 @@ private slots:
     void isNormalizedReport_requiresTheSidecarContract();
     void isNormalizedReport_acceptsFixupParams();
     void isNormalizedReport_acceptsSchemaV2ScopeFixtures();
+    void isNormalizedReport_acceptsMigratedSchemaV2GraphFindingWithoutEvidenceIds();
     void isNormalizedReport_acceptsSchemaV3InspectionIncompletePass();
     void isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict();
     void isNormalizedReport_rejectsInvalidScopeCombinations();

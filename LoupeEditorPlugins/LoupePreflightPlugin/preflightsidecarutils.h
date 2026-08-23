@@ -737,7 +737,9 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
         const QJsonArray findings = sectionValue.toArray();
         for (int i = 0; i < findings.size(); ++i)
         {
-            if (!validateFinding(findings.at(i), section, i, schemaVersionValue, errorMessage))
+            // Validate findings against the submitted schema major version, not the
+            // post-migration top-level schema_version (v2→v3 migration does not add evidence_ids).
+            if (!validateFinding(findings.at(i), section, i, int(version.major), errorMessage))
             {
                 return false;
             }
