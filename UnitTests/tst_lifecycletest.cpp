@@ -74,13 +74,20 @@ QString traceCommandName(TraceCommandKind kind)
 {
     switch (kind)
     {
-        case TraceCommandKind::Open: return QStringLiteral("open");
-        case TraceCommandKind::RenderPreflight: return QStringLiteral("render-preflight");
-        case TraceCommandKind::Cancel: return QStringLiteral("cancel");
-        case TraceCommandKind::ReplaceRevision: return QStringLiteral("replace-revision");
-        case TraceCommandKind::SaveReopen: return QStringLiteral("save-reopen");
-        case TraceCommandKind::Rollback: return QStringLiteral("rollback");
-        case TraceCommandKind::Close: return QStringLiteral("close");
+        case TraceCommandKind::Open:
+            return QStringLiteral("open");
+        case TraceCommandKind::RenderPreflight:
+            return QStringLiteral("render-preflight");
+        case TraceCommandKind::Cancel:
+            return QStringLiteral("cancel");
+        case TraceCommandKind::ReplaceRevision:
+            return QStringLiteral("replace-revision");
+        case TraceCommandKind::SaveReopen:
+            return QStringLiteral("save-reopen");
+        case TraceCommandKind::Rollback:
+            return QStringLiteral("rollback");
+        case TraceCommandKind::Close:
+            return QStringLiteral("close");
     }
     return QStringLiteral("unknown");
 }
@@ -134,8 +141,7 @@ QJsonObject traceToJson(quint64 seed, const QVector<TraceCommand>& trace)
         commands.append(QJsonObject{
             { QStringLiteral("index"), static_cast<int>(index) },
             { QStringLiteral("kind"), traceCommandName(trace.at(index).kind) },
-            { QStringLiteral("argument"), QString::number(trace.at(index).argument) }
-        });
+            { QStringLiteral("argument"), QString::number(trace.at(index).argument) } });
     }
     return QJsonObject{
         { QStringLiteral("schema_kind"), QStringLiteral("loupe-lifecycle-trace") },
@@ -144,11 +150,10 @@ QJsonObject traceToJson(quint64 seed, const QVector<TraceCommand>& trace)
         { QStringLiteral("initial_artifact_digest"), pdf::PDFRunIdentity::digestBytes(QByteArrayLiteral("lifecycle-source-v1")) },
         { QStringLiteral("commands"), commands },
         { QStringLiteral("expected_invariants"), QJsonArray{
-            QStringLiteral("source-immutable"),
-            QStringLiteral("cancel-is-terminal"),
-            QStringLiteral("stale-results-rejected"),
-            QStringLiteral("history-append-only")
-        } }
+                                                     QStringLiteral("source-immutable"),
+                                                     QStringLiteral("cancel-is-terminal"),
+                                                     QStringLiteral("stale-results-rejected"),
+                                                     QStringLiteral("history-append-only") } }
     };
 }
 
@@ -280,13 +285,28 @@ void LifecycleTest::boundedTraceGenerationIsDeterministic()
     {
         switch (command.kind)
         {
-            case TraceCommandKind::Open: opened = true; break;
-            case TraceCommandKind::RenderPreflight: QVERIFY(opened); break;
-            case TraceCommandKind::Cancel: cancelled = true; break;
-            case TraceCommandKind::ReplaceRevision: QVERIFY(opened); ++revision; break;
-            case TraceCommandKind::SaveReopen: QVERIFY(opened); break;
-            case TraceCommandKind::Rollback: QVERIFY(opened); break;
-            case TraceCommandKind::Close: opened = false; break;
+            case TraceCommandKind::Open:
+                opened = true;
+                break;
+            case TraceCommandKind::RenderPreflight:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Cancel:
+                cancelled = true;
+                break;
+            case TraceCommandKind::ReplaceRevision:
+                QVERIFY(opened);
+                ++revision;
+                break;
+            case TraceCommandKind::SaveReopen:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Rollback:
+                QVERIFY(opened);
+                break;
+            case TraceCommandKind::Close:
+                opened = false;
+                break;
         }
     }
     QVERIFY(cancelled);

@@ -77,6 +77,6 @@ inline void resetCancelRequested()
     cancelRequested().store(false, std::memory_order_release);
 }
 
-} // namespace pdftool
+}   // namespace pdftool
 
-#endif // PDFTOOLCANCEL_H
+#endif   // PDFTOOLCANCEL_H

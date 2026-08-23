@@ -87,12 +87,13 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     const QJsonObject report = reportDocument.object();
     QCOMPARE(report.value(QStringLiteral("schema")).toString(), QStringLiteral("loupe.repair-operation"));
     QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
-    QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject()
-                 .value(QStringLiteral("unexpected_structural_changes")).toInt(),
+    QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);
     QVERIFY(!report.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(RepairOperatorAcceptanceTest)
 
+#if __has_include("tst_repairoperatoracceptance.moc")
 #include "tst_repairoperatoracceptance.moc"
+#endif
