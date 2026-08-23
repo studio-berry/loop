@@ -93,7 +93,6 @@ PDFWidget::PDFWidget(const PDFCMSManager* cmsManager, RendererEngine engine, QWi
 
 PDFWidget::~PDFWidget()
 {
-
 }
 
 bool PDFWidget::focusNextPrevChild(bool next)
@@ -308,8 +307,8 @@ void PDFDrawWidget::ensureInteractionRevisionConnection()
         return;
     }
 
-    m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this,
-                                                       [this](const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current) {
+    m_interactionRevisionConnection = QObject::connect(context, &PDFDocumentContext::revisionChanged, this, [this](const PDFRevisionIdentity& previous, const PDFRevisionIdentity& current)
+                                                       {
                                                            if (m_interactionState)
                                                            {
                                                                const PDFInteractionState::CancelReason reason = previous.document == current.document
@@ -318,8 +317,7 @@ void PDFDrawWidget::ensureInteractionRevisionConnection()
                                                                m_interactionState->cancel(reason);
                                                            }
                                                            resetInteractionInputs();
-                                                           updateCursor();
-                                                       }, Qt::UniqueConnection);
+                                                           updateCursor(); }, Qt::UniqueConnection);
     m_interactionRevisionConnected = true;
 }
 
@@ -485,7 +483,7 @@ void PDFDrawWidget::performMouseOperation(QPoint currentMousePosition)
     }
 }
 
-template<typename Event, void (IDrawWidgetInputInterface::* Function)(QWidget*, Event*)>
+template <typename Event, void (IDrawWidgetInputInterface::*Function)(QWidget*, Event*)>
 bool PDFDrawWidget::processEvent(Event* event)
 {
     QString tooltip;
@@ -539,8 +537,7 @@ void PDFDrawWidget::keyPressEvent(QKeyEvent* event)
     QScrollBar* verticalScrollbar = m_widget->getVerticalScrollbar();
     if (verticalScrollbar->isVisible())
     {
-        constexpr std::pair<QKeySequence::StandardKey, PDFDrawWidgetProxy::Operation> keyToOperations[] =
-        {
+        constexpr std::pair<QKeySequence::StandardKey, PDFDrawWidgetProxy::Operation> keyToOperations[] = {
             { QKeySequence::MoveToStartOfDocument, PDFDrawWidgetProxy::NavigateDocumentStart },
             { QKeySequence::MoveToEndOfDocument, PDFDrawWidgetProxy::NavigateDocumentEnd },
             { QKeySequence::MoveToNextPage, PDFDrawWidgetProxy::NavigateNextPage },
@@ -1161,8 +1158,8 @@ void PDFDrawWidget::paintEvent(QPaintEvent* event)
     int queueDepth = -1;
     const RendererEngine rendererEngine = proxy->getRendererEngine();
     auto frameScope = traceEnabled
-        ? traceRecorder->beginFrame(visiblePages, queueDepth)
-        : PDFInteractionTraceRecorder::FrameScope();
+                          ? traceRecorder->beginFrame(visiblePages, queueDepth)
+                          : PDFInteractionTraceRecorder::FrameScope();
 
     if (traceEnabled)
     {
@@ -1217,8 +1214,8 @@ void PDFDrawWidget::paintEvent(QPaintEvent* event)
 
             QPainter painter(this);
             auto compositionScope = traceRecorder && traceRecorder->isEnabled()
-                ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Composition)
-                : PDFInteractionTraceRecorder::StageScope();
+                                        ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Composition)
+                                        : PDFInteractionTraceRecorder::StageScope();
             painter.drawImage(QPoint(0, 0), m_blend2DframeBuffer);
             break;
         }

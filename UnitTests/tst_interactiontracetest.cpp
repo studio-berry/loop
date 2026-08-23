@@ -42,7 +42,8 @@ private slots:
 void InteractionTraceTest::recordsInputToFrameAndPercentiles()
 {
     qint64 nowNs = 0;
-    pdf::PDFInteractionTraceRecorder recorder([&nowNs]() { return nowNs; });
+    pdf::PDFInteractionTraceRecorder recorder([&nowNs]()
+                                              { return nowNs; });
     pdf::PDFInteractionTraceRecorder::Config config;
     config.maxSamples = 8;
     config.refreshRateHz = 60.0;
@@ -73,7 +74,8 @@ void InteractionTraceTest::recordsInputToFrameAndPercentiles()
 void InteractionTraceTest::reportsKnownAndUnknownBudgets()
 {
     qint64 nowNs = 0;
-    pdf::PDFInteractionTraceRecorder recorder([&nowNs]() { return nowNs; });
+    pdf::PDFInteractionTraceRecorder recorder([&nowNs]()
+                                              { return nowNs; });
     recorder.setEnabled(true);
 
     {
@@ -98,7 +100,8 @@ void InteractionTraceTest::reportsKnownAndUnknownBudgets()
 void InteractionTraceTest::attributesSlowFramesAndExclusiveStages()
 {
     qint64 nowNs = 0;
-    pdf::PDFInteractionTraceRecorder recorder([&nowNs]() { return nowNs; });
+    pdf::PDFInteractionTraceRecorder recorder([&nowNs]()
+                                              { return nowNs; });
     pdf::PDFInteractionTraceRecorder::Config config;
     config.refreshRateHz = 60.0;
     recorder.setConfig(config);
@@ -129,7 +132,8 @@ void InteractionTraceTest::attributesSlowFramesAndExclusiveStages()
 void InteractionTraceTest::boundsSamplingAndKeepsPayloadPrivate()
 {
     qint64 nowNs = 0;
-    pdf::PDFInteractionTraceRecorder recorder([&nowNs]() { return nowNs; });
+    pdf::PDFInteractionTraceRecorder recorder([&nowNs]()
+                                              { return nowNs; });
     pdf::PDFInteractionTraceRecorder::Config config;
     config.maxSamples = 2;
     config.sampleEvery = 2;

@@ -46,7 +46,7 @@ constexpr double Reference60HzBudgetMs = 1000.0 / 60.0;
 constexpr double Reference120HzBudgetMs = 1000.0 / 120.0;
 constexpr qint64 SummaryRefreshPeriodNs = 250000000;
 
-template<typename T>
+template <typename T>
 T clampValue(T value, T minimum, T maximum)
 {
     return std::max(minimum, std::min(value, maximum));
@@ -659,12 +659,18 @@ QString PDFInteractionTraceRecorder::stageName(Stage stage)
 {
     switch (stage)
     {
-        case Stage::Interaction: return QStringLiteral("interaction_logic");
-        case Stage::HitTest: return QStringLiteral("hit_testing");
-        case Stage::PageRender: return QStringLiteral("page_rendering");
-        case Stage::Overlay: return QStringLiteral("overlays");
-        case Stage::Composition: return QStringLiteral("composition");
-        case Stage::ExternalUnknown: return QStringLiteral("external_unknown");
+        case Stage::Interaction:
+            return QStringLiteral("interaction_logic");
+        case Stage::HitTest:
+            return QStringLiteral("hit_testing");
+        case Stage::PageRender:
+            return QStringLiteral("page_rendering");
+        case Stage::Overlay:
+            return QStringLiteral("overlays");
+        case Stage::Composition:
+            return QStringLiteral("composition");
+        case Stage::ExternalUnknown:
+            return QStringLiteral("external_unknown");
     }
     return QStringLiteral("external_unknown");
 }
@@ -673,9 +679,12 @@ QString PDFInteractionTraceRecorder::evidenceName(EvidenceState state)
 {
     switch (state)
     {
-        case EvidenceState::Verified: return QStringLiteral("verified");
-        case EvidenceState::StaticOnly: return QStringLiteral("static-only");
-        case EvidenceState::InfrastructureBlocked: return QStringLiteral("infrastructure-blocked");
+        case EvidenceState::Verified:
+            return QStringLiteral("verified");
+        case EvidenceState::StaticOnly:
+            return QStringLiteral("static-only");
+        case EvidenceState::InfrastructureBlocked:
+            return QStringLiteral("infrastructure-blocked");
     }
     return QStringLiteral("static-only");
 }
@@ -736,10 +745,7 @@ QJsonObject PDFInteractionTraceRecorder::budgetObject(double refreshRateHz)
 void PDFInteractionTraceRecorder::refreshCachedSummary() const
 {
     const qint64 now = nowNs();
-    if (!m_cachedSummary.isEmpty()
-        && m_lastSummaryNs != std::numeric_limits<qint64>::min()
-        && now >= m_lastSummaryNs
-        && now - m_lastSummaryNs < SummaryRefreshPeriodNs)
+    if (!m_cachedSummary.isEmpty() && m_lastSummaryNs != std::numeric_limits<qint64>::min() && now >= m_lastSummaryNs && now - m_lastSummaryNs < SummaryRefreshPeriodNs)
     {
         return;
     }
@@ -863,7 +869,7 @@ void PDFInteractionTraceRecorder::emitSummary() const
 {
     const QJsonDocument document(summary());
     const QString line = QStringLiteral("LOUPE_INTERACTION_TRACE_V1 %1")
-        .arg(QString::fromUtf8(document.toJson(QJsonDocument::Compact)));
+                             .arg(QString::fromUtf8(document.toJson(QJsonDocument::Compact)));
     qInfo().noquote() << line;
 }
 

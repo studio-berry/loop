@@ -73,17 +73,17 @@ void drawInteractionTraceOverlay(QWidget* widget, const QJsonObject& summary)
     const QJsonObject cache = summary.value(QStringLiteral("cache")).toObject();
     const QJsonObject pending = summary.value(QStringLiteral("pending_async_work")).toObject();
     const QString budget = budgets.value(QStringLiteral("frame_budget_ms")).isNull()
-        ? QStringLiteral("unavailable")
-        : QStringLiteral("%1 ms").arg(budgets.value(QStringLiteral("frame_budget_ms")).toDouble(), 0, 'f', 2);
+                               ? QStringLiteral("unavailable")
+                               : QStringLiteral("%1 ms").arg(budgets.value(QStringLiteral("frame_budget_ms")).toDouble(), 0, 'f', 2);
     const QString fpsText = fps.value(QStringLiteral("available")).toBool()
-        ? QStringLiteral("%1").arg(fps.value(QStringLiteral("p50")).toDouble(), 0, 'f', 1)
-        : QStringLiteral("n/a");
+                                ? QStringLiteral("%1").arg(fps.value(QStringLiteral("p50")).toDouble(), 0, 'f', 1)
+                                : QStringLiteral("n/a");
     const QString cacheText = cache.value(QStringLiteral("hit_rate")).isNull()
-        ? QStringLiteral("n/a")
-        : QStringLiteral("%1%%").arg(cache.value(QStringLiteral("hit_rate")).toDouble() * 100.0, 0, 'f', 0);
+                                  ? QStringLiteral("n/a")
+                                  : QStringLiteral("%1%%").arg(cache.value(QStringLiteral("hit_rate")).toDouble() * 100.0, 0, 'f', 0);
     const QString queueText = pending.value(QStringLiteral("queue_depth")).isNull()
-        ? QStringLiteral("n/a")
-        : QString::number(pending.value(QStringLiteral("queue_depth")).toInt());
+                                  ? QStringLiteral("n/a")
+                                  : QString::number(pending.value(QStringLiteral("queue_depth")).toInt());
 
     const QJsonObject stageTimes = summary.value(QStringLiteral("stage_time_ms")).toObject();
     const QStringList lines = {
