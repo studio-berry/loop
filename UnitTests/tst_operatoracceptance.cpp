@@ -797,7 +797,7 @@ void OperatorAcceptanceTest::reportContract_allowedPropertiesMatchSchema()
     // run can start emitting a key the validator silently rejects. This happened
     // twice: coverage_scope/profile_identity/variable_bindings/error at the report
     // level, and evidence_ids on findings emitted by evidence-graph-based checks.
-    const QString schemaPath = QDir(sourceDir()).filePath(QStringLiteral("schemas/report.schema.json"));
+    const QString schemaPath = QDir(operatoracceptance::sourceDir()).filePath(QStringLiteral("schemas/report.schema.json"));
     QFile schemaFile(schemaPath);
     QVERIFY2(schemaFile.open(QIODevice::ReadOnly), qPrintable(QStringLiteral("Missing report schema at %1").arg(schemaPath)));
 
