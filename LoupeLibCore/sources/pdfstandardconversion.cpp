@@ -28,9 +28,13 @@
 #include "pdfrgbtocmykfixup.h"
 #include "preflightengine.h"
 #include "pdfutils.h"
+#include "pdfworkloadenvelope.h"
 
 #include <QJsonArray>
 #include <QCryptographicHash>
+#include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
 #include <QProcess>
 #include <QTemporaryDir>
 
@@ -231,20 +235,41 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
                                            const PDFStandardConversionSettings& settings,
                                            PDFStandardConversionReport* report)
 {
+    QElapsedTimer timer;
+    timer.start();
+    QJsonObject validator{
+        { QStringLiteral("program"), settings.independentValidatorProgram },
+        { QStringLiteral("configured_arguments"), QJsonArray::fromStringList(settings.independentValidatorArguments) },
+        { QStringLiteral("result"), QStringLiteral("incomplete") }
+    };
+    const auto finish = [&validator, report, &timer](const QString& result, const QString& reason = QString())
+    {
+        validator.insert(QStringLiteral("result"), result);
+        validator.insert(QStringLiteral("duration_ms"), timer.elapsed());
+        if (!reason.isEmpty())
+        {
+            validator.insert(QStringLiteral("reason_code"), reason);
+        }
+        report->validator = validator;
+    };
+
     if (settings.independentValidatorProgram.isEmpty())
     {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-not-configured"));
         return PDFTranslationContext::tr("An independent validator is required; no output was committed.");
     }
     if (!std::any_of(settings.independentValidatorArguments.cbegin(), settings.independentValidatorArguments.cend(),
                      [](const QString& argument)
                      { return argument.contains(QStringLiteral("{input}")); }))
     {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-input-placeholder-missing"));
         return PDFTranslationContext::tr("Independent validator arguments must contain the {input} placeholder.");
     }
 
     QTemporaryDir temporaryDirectory;
     if (!temporaryDirectory.isValid())
     {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-temp-directory-failed"));
         return PDFTranslationContext::tr("Could not create a temporary directory for independent validation.");
     }
     const QString inputPath = temporaryDirectory.filePath(QStringLiteral("candidate.pdf"));
@@ -252,8 +277,19 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
     const PDFOperationResult writeResult = writer.write(inputPath, &document, false);
     if (!writeResult)
     {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-candidate-write-failed"));
         return writeResult;
     }
+
+    const QFileInfo candidateInfo(inputPath);
+    const QString candidateDigest = PDFRunIdentity::digestFile(inputPath);
+    if (candidateDigest.isEmpty())
+    {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-candidate-read-failed"));
+        return PDFTranslationContext::tr("The independent validator candidate could not be read.");
+    }
+    validator.insert(QStringLiteral("input_bytes"), candidateInfo.size());
+    validator.insert(QStringLiteral("input_sha256"), candidateDigest);
 
     QStringList arguments;
     for (const QString& argument : settings.independentValidatorArguments)
@@ -267,27 +303,35 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
     process.start();
     if (!process.waitForStarted(5000))
     {
+        validator.insert(QStringLiteral("error"), process.errorString());
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-start-failed"));
         return PDFTranslationContext::tr("The independent validator could not be started: %1").arg(process.errorString());
     }
     const bool finished = process.waitForFinished(settings.independentValidatorTimeoutMs);
-    report->validator = QJsonObject{
-        { QStringLiteral("program"), settings.independentValidatorProgram },
-        { QStringLiteral("arguments"), QJsonArray::fromStringList(arguments) },
-        { QStringLiteral("exit_code"), process.exitCode() },
-        { QStringLiteral("timed_out"), !finished },
-        { QStringLiteral("stdout"), QString::fromUtf8(process.readAllStandardOutput()).left(4096) },
-        { QStringLiteral("stderr"), QString::fromUtf8(process.readAllStandardError()).left(4096) }
-    };
+    validator.insert(QStringLiteral("arguments"), QJsonArray::fromStringList(arguments));
+    validator.insert(QStringLiteral("exit_code"), process.exitCode());
+    validator.insert(QStringLiteral("exit_status"), process.exitStatus() == QProcess::NormalExit ? QStringLiteral("normal") : QStringLiteral("crashed"));
+    validator.insert(QStringLiteral("timed_out"), !finished);
+    validator.insert(QStringLiteral("stdout"), QString::fromUtf8(process.readAllStandardOutput()).left(4096));
+    validator.insert(QStringLiteral("stderr"), QString::fromUtf8(process.readAllStandardError()).left(4096));
     if (!finished)
     {
         process.kill();
         process.waitForFinished(1000);
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-timeout"));
         return PDFTranslationContext::tr("The independent validator timed out.");
     }
-    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0)
+    if (process.exitStatus() != QProcess::NormalExit)
     {
+        finish(QStringLiteral("incomplete"), QStringLiteral("validator-crashed"));
+        return PDFTranslationContext::tr("The independent validator crashed before returning a result.");
+    }
+    if (process.exitCode() != 0)
+    {
+        finish(QStringLiteral("rejected"), QStringLiteral("validator-rejected"));
         return PDFTranslationContext::tr("The independent validator rejected the candidate.");
     }
+    finish(QStringLiteral("passed"));
     report->independentValidationPassed = true;
     return true;
 }
