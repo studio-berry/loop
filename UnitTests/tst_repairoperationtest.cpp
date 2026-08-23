@@ -25,6 +25,7 @@
 #include "pdfstandardconversion.h"
 
 #include <QJsonDocument>
+#include <QTemporaryDir>
 #include <QJsonValue>
 #include <QtTest>
 
@@ -63,6 +64,7 @@ private slots:
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
+    void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
 };
 
@@ -172,6 +174,40 @@ void RepairOperationTest::failedOperation_discardsCandidate()
     QVERIFY(!transaction.apply());
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Failed);
     QVERIFY(transaction.candidate() == nullptr);
+    QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
+
+void RepairOperationTest::addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), QJsonObject{
+        { QStringLiteral("bleed_mm"), 3.0 },
+        { QStringLiteral("mode"), QStringLiteral("mirror") },
+        { QStringLiteral("force"), true }
+    }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.plans().first().expectedChanges.metadata);
+    QVERIFY(transaction.plans().first().expectedChanges.pageBoxes);
+    QVERIFY(transaction.plans().first().expectedChanges.pageContent);
+    QVERIFY(transaction.apply());
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    pdf::PDFRepairDiffOptions options;
+    options.renderVisualDiff = !pdf::repairPlansMutatePageContent(transaction.plans());
+    pdf::PDFRepairDiffReport report;
+    QVERIFY(transaction.compareCandidate(directory.filePath(QStringLiteral("candidate.pdf")), options, &report));
+    QVERIFY(report.status == pdf::PDFRepairDiffStatus::Complete
+            || report.status == pdf::PDFRepairDiffStatus::CompleteWithWarnings);
+    for (const pdf::PDFRepairStructuralChange& change : report.structuralChanges)
+    {
+        QVERIFY2(change.classification != pdf::PDFRepairChangeClass::Unexpected,
+                 qPrintable(QStringLiteral("unexpected change: %1").arg(change.path)));
+    }
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
 }
 

@@ -43,6 +43,7 @@
 #include <QVector>
 
 #include <map>
+#include <algorithm>
 #include <memory>
 
 namespace pdf
@@ -126,6 +127,12 @@ struct LOUPELIBCORESHARED_EXPORT PDFRepairPlan
 
     QJsonObject toJson() const;
 };
+
+inline bool repairPlansMutatePageContent(const QList<PDFRepairPlan>& plans)
+{
+    return std::any_of(plans.cbegin(), plans.cend(),
+                       [](const PDFRepairPlan& plan) { return plan.expectedChanges.pageContent; });
+}
 
 struct LOUPELIBCORESHARED_EXPORT PDFRepairChange
 {
