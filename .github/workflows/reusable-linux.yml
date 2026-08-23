@@ -146,7 +146,7 @@ jobs:
       - name: Build project
         working-directory: loupe
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${{ inputs.fast }}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build

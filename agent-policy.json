@@ -125,6 +125,11 @@
       "targets": ["LoupeLibInteraction"],
       "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame"]
     },
+    "quick": {
+      "paths": ["LoupeLibQuick/**", "UnitTests/tst_quickcanvastest.cpp"],
+      "targets": ["LoupeLibQuick"],
+      "tests": ["UnitTestsQuickCanvas"]
+    },
     "widgets_gui": {
       "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
       "targets": ["LoupeEditor", "LoupeViewer"],

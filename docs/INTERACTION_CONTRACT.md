@@ -193,7 +193,10 @@ so replaying into a recording controller does not append the trace to itself.
 ## Not in this session
 
 - The developer-facing trace overlay and GPU/present timing from issue #140. Neither can exist
-  in a layer that links no QML and no scene graph; both are P4-S5/S6.
+  in a layer that links no QML and no scene graph. **Delivered in P4-S5** by `LoupeLibQuick`:
+  `CanvasTraceOverlay` renders the recorder's privacy-safe summary, and `CanvasPresentMetrics`
+  measures the scene graph's render pass and swap and charges them to `TraceStage::External`.
+  See [QUICK_CANVAS_CONTRACT.md](QUICK_CANVAS_CONTRACT.md).
 - Text and annotation hit-test sources. `IHitTestSource` is the seam they will implement.
 - Marquee and tool gestures beyond the state they occupy in `InteractionKind`. P4-S9 and
   P4-S11 decide which tools survive into the Quick product.
