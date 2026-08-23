@@ -146,6 +146,20 @@ struct LOUPELIBCORESHARED_EXPORT PDFRepairDiffReport
     QJsonObject toJson() const;
 };
 
+inline int unexpectedChangeCount(const PDFRepairDiffReport& report)
+{
+    int count = 0;
+    for (const PDFRepairStructuralChange& change : report.structuralChanges)
+    {
+        count += change.classification == PDFRepairChangeClass::Unexpected;
+    }
+    for (const PDFRepairPageVisualDiff& page : report.pages)
+    {
+        count += page.unexpectedChangedPixelCount > 0;
+    }
+    return count;
+}
+
 /// Compares two documents without relying on indirect object numbers or xref
 /// offsets. The comparison is deterministic and safe to persist as a report.
 class LOUPELIBCORESHARED_EXPORT PDFRepairDiffEngine

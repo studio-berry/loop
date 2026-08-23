@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/studio-berry/loupe/schema/workload-envelope-v1.json",
+  "title": "Loupe measured workload envelope",
+  "type": "object",
+  "required": [
+    "identity",
+    "family",
+    "status",
+    "page_count",
+    "rss_high_water_bytes",
+    "elapsed_ms",
+    "prefetch_shed",
+    "interaction_slot_held"
+  ],
+  "properties": {
+    "identity": { "type": "object" },
+    "family": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["complete", "cancelled", "incomplete", "unavailable", "unsupported", "budget-exceeded"]
+    },
+    "incomplete_reason": { "type": "string" },
+    "page_count": { "type": "integer", "minimum": 0 },
+    "open_to_first_view_ms": { "type": "integer", "minimum": -1 },
+    "rss_high_water_bytes": { "type": "integer", "minimum": -1 },
+    "cache_high_water_bytes": { "type": "integer", "minimum": -1 },
+    "elapsed_ms": { "type": "integer", "minimum": 0 },
+    "cancellation_latency_ms": { "type": "integer", "minimum": -1 },
+    "recovery_ms": { "type": "integer", "minimum": -1 },
+    "pressure_shed_count": { "type": "integer", "minimum": 0 },
+    "prefetch_shed": { "type": "boolean" },
+    "interaction_slot_held": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

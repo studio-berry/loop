@@ -58,9 +58,18 @@ struct LOUPELIBCORESHARED_EXPORT PDFWorkloadEnvelope
 {
     PDFRunIdentity identity;
     QString family;
+    QString status = QStringLiteral("complete");
+    QString incompleteReason;
     qint64 pageCount = 0;
-    qint64 rssHighWaterBytes = 0;
+    qint64 openToFirstViewMs = -1;
+    // -1 means that the platform could not provide this measurement. It is
+    // intentionally distinct from zero so unavailable evidence cannot pass.
+    qint64 rssHighWaterBytes = -1;
+    qint64 cacheHighWaterBytes = -1;
     qint64 elapsedMs = 0;
+    qint64 cancellationLatencyMs = -1;
+    qint64 recoveryMs = -1;
+    qint64 pressureShedCount = 0;
     bool prefetchShed = false;
     bool interactionSlotHeld = false;
 

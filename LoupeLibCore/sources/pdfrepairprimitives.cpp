@@ -136,6 +136,7 @@ public:
         plan->domains = domains();
         plan->expectedChanges.pageBoxes = true;
         plan->expectedChanges.pageContent = true;
+        plan->expectedChanges.metadata = true;
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::NormalPreflight };
 
