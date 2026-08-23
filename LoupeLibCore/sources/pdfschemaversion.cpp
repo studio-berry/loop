@@ -26,6 +26,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <utility>
+
+#include <cmath>
+#include <limits>
 
 namespace pdf
 {
@@ -42,18 +46,9 @@ QJsonObject loadCompatibilityMatrix()
         return cached;
     }
 
-    const QStringList candidates = {
-        QStringLiteral("docs/schema-compatibility.json"),
-        QStringLiteral("../docs/schema-compatibility.json"),
-        QStringLiteral("../../docs/schema-compatibility.json")
-    };
-    for (const QString& candidate : candidates)
+    QFile file(QStringLiteral(":/loupe/schema-compatibility.json"));
+    if (file.open(QIODevice::ReadOnly))
     {
-        QFile file(candidate);
-        if (!file.open(QIODevice::ReadOnly))
-        {
-            continue;
-        }
         QJsonParseError error;
         const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
         if (error.error == QJsonParseError::NoError && document.isObject())
@@ -65,6 +60,95 @@ QJsonObject loadCompatibilityMatrix()
     }
     loaded = true;
     return cached;
+}
+
+PDFSchemaVersion parseCurrentVersion(const QJsonObject& entry)
+{
+    bool ok = false;
+    PDFSchemaVersion version = PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("current")), &ok);
+    if (!ok)
+    {
+        const int major = entry.value(QStringLiteral("supported_majors")).toArray().last().toInt(1);
+        version.major = static_cast<quint16>(major);
+        version.minor = 0;
+    }
+    return version;
+}
+
+QJsonObject migratePreflightReportV2ToV3(QJsonObject document)
+{
+    if (!document.contains(QStringLiteral("schema_kind")))
+    {
+        document.insert(QStringLiteral("schema_kind"), pdfSchemaKindToString(PDFSchemaKind::PreflightReport));
+    }
+
+    if (!document.contains(QStringLiteral("inspection_complete")))
+    {
+        const bool pass = document.value(QStringLiteral("pass")).toBool(false);
+        const QJsonArray errors = document.value(QStringLiteral("errors")).toArray();
+        document.insert(QStringLiteral("inspection_complete"), pass || !errors.isEmpty());
+    }
+
+    if (!document.contains(QStringLiteral("checks")))
+    {
+        document.insert(QStringLiteral("checks"), QJsonArray{});
+    }
+
+    if (!document.contains(QStringLiteral("verdict")))
+    {
+        const bool pass = document.value(QStringLiteral("pass")).toBool(false);
+        const QJsonArray errors = document.value(QStringLiteral("errors")).toArray();
+        QString state;
+        QString reasonCode;
+        QString reason;
+        QJsonArray blockingFindingIds;
+        if (pass)
+        {
+            state = QStringLiteral("pass");
+            reasonCode = QStringLiteral("no-blocking-findings");
+            reason = QStringLiteral("ok");
+        }
+        else if (!errors.isEmpty())
+        {
+            state = QStringLiteral("fail");
+            reasonCode = QStringLiteral("blocking-findings");
+            reason = QStringLiteral("Blocking findings were recorded.");
+            for (const QJsonValue& item : errors)
+            {
+                const QString findingId = item.toObject().value(QStringLiteral("id")).toString();
+                if (!findingId.isEmpty())
+                {
+                    blockingFindingIds.append(findingId);
+                }
+            }
+        }
+        else
+        {
+            state = QStringLiteral("incomplete");
+            reasonCode = QStringLiteral("inspection-incomplete");
+            reason = QStringLiteral("Required inspection evidence was not collected.");
+        }
+        document.insert(QStringLiteral("verdict"),
+                        QJsonObject{
+                            { QStringLiteral("state"), state },
+                            { QStringLiteral("reason_code"), reasonCode },
+                            { QStringLiteral("reason"), reason },
+                            { QStringLiteral("blocking_finding_ids"), blockingFindingIds },
+                            { QStringLiteral("waived_finding_ids"), QJsonArray{} } });
+    }
+
+    document.insert(QStringLiteral("schema_version"), 3);
+    return document;
+}
+
+QJsonObject migratePreflightReportV1ToV2(QJsonObject document)
+{
+    if (!document.contains(QStringLiteral("schema_kind")))
+    {
+        document.insert(QStringLiteral("schema_kind"), pdfSchemaKindToString(PDFSchemaKind::PreflightReport));
+    }
+    document.insert(QStringLiteral("schema_version"), 2);
+    return document;
 }
 
 }   // namespace
@@ -80,8 +164,8 @@ PDFSchemaVersion PDFSchemaVersion::fromJsonValue(const QJsonValue& value, bool* 
     bool parsed = false;
     if (value.isDouble())
     {
-        const int major = value.toInt();
-        if (major > 0)
+        const double major = value.toDouble();
+        if (std::isfinite(major) && std::floor(major) == major && major >= 1.0 && major <= double(std::numeric_limits<quint16>::max()))
         {
             version.major = static_cast<quint16>(major);
             version.minor = 0;
@@ -92,15 +176,40 @@ PDFSchemaVersion PDFSchemaVersion::fromJsonValue(const QJsonValue& value, bool* 
     {
         const QString text = value.toString().trimmed();
         const QStringList parts = text.split(QLatin1Char('.'));
-        bool majorOk = false;
-        const int major = parts.value(0).toInt(&majorOk);
-        bool minorOk = true;
-        const int minor = parts.size() > 1 ? parts.value(1).toInt(&minorOk) : 0;
-        if (majorOk && minorOk && major > 0 && minor >= 0)
+        auto parseComponent = [](const QString& component, bool allowZero, quint16* result)
         {
-            version.major = static_cast<quint16>(major);
-            version.minor = static_cast<quint16>(minor);
-            parsed = true;
+            if (component.isEmpty())
+            {
+                return false;
+            }
+            for (const QChar character : component)
+            {
+                if (!character.isDigit())
+                {
+                    return false;
+                }
+            }
+            bool converted = false;
+            const quint64 value = component.toULongLong(&converted);
+            if (!converted || value > std::numeric_limits<quint16>::max() || (!allowZero && value == 0))
+            {
+                return false;
+            }
+            *result = static_cast<quint16>(value);
+            return true;
+        };
+
+        if (parts.size() == 1 || parts.size() == 2)
+        {
+            quint16 major = 0;
+            quint16 minor = 0;
+            if (parseComponent(parts.at(0), false, &major) &&
+                (parts.size() == 1 || parseComponent(parts.at(1), true, &minor)))
+            {
+                version.major = major;
+                version.minor = minor;
+                parsed = true;
+            }
         }
     }
     if (ok)
@@ -195,46 +304,20 @@ PDFSchemaKind pdfSchemaKindFromString(const QString& value)
     return PDFSchemaKind::Unknown;
 }
 
-PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version)
+PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
+                                                          PDFSchemaVersion version,
+                                                          const QJsonObject& matrix)
 {
     if (kind == PDFSchemaKind::Unknown || !version.isValid())
     {
         return PDFSchemaCompatibility::UnknownKind;
     }
 
-    const QJsonObject matrix = loadCompatibilityMatrix();
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
     QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
     if (entry.isEmpty())
     {
-        switch (kind)
-        {
-            case PDFSchemaKind::PreflightReport:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1, 2, 3 } } };
-                break;
-            case PDFSchemaKind::PreflightProfile:
-            case PDFSchemaKind::PdfToolEnvelope:
-            case PDFSchemaKind::PreflightDecisions:
-            case PDFSchemaKind::OcrReport:
-            case PDFSchemaKind::CapabilityDiscovery:
-            case PDFSchemaKind::EvidenceGraph:
-            case PDFSchemaKind::OperationPlan:
-            case PDFSchemaKind::OperationResult:
-            case PDFSchemaKind::ProvenanceEvent:
-            case PDFSchemaKind::Certificate:
-            case PDFSchemaKind::PackageManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
-                break;
-            case PDFSchemaKind::ActionList:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1 } } };
-                break;
-            case PDFSchemaKind::HistoryDb:
-            case PDFSchemaKind::PageMasterManifest:
-                entry = QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 2, 3 } } };
-                break;
-            case PDFSchemaKind::Unknown:
-                return PDFSchemaCompatibility::UnknownKind;
-        }
+        return PDFSchemaCompatibility::UnsupportedMajor;
     }
 
     const QJsonArray supported = entry.value(QStringLiteral("supported_majors")).toArray();
@@ -254,11 +337,109 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
     return PDFSchemaCompatibility::Compatible;
 }
 
+PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version)
+{
+    return checkSchemaCompatibilityWithMatrix(kind, version, loadCompatibilityMatrix());
+}
+
+PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind)
+{
+    const QJsonObject matrix = loadCompatibilityMatrix();
+    const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
+    const QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
+    if (!entry.isEmpty())
+    {
+        return parseCurrentVersion(entry);
+    }
+
+    switch (kind)
+    {
+        case PDFSchemaKind::PreflightReport:
+            return { 3, 0 };
+        case PDFSchemaKind::HistoryDb:
+        case PDFSchemaKind::PageMasterManifest:
+            return { 3, 0 };
+        default:
+            return { 1, 0 };
+        case PDFSchemaKind::Unknown:
+            break;
+    }
+    return {};
+}
+
 QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document)
 {
-    Q_UNUSED(kind);
+    if (kind == PDFSchemaKind::PreflightReport)
+    {
+        if (from.major == 1)
+        {
+            document = migratePreflightReportV1ToV2(std::move(document));
+            from = { 2, 0 };
+        }
+        if (from.major == 2)
+        {
+            document = migratePreflightReportV2ToV3(std::move(document));
+        }
+        return document;
+    }
+
     Q_UNUSED(from);
     return document;
+}
+
+PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject document)
+{
+    PDFSchemaMigrationResult result;
+    result.document = std::move(document);
+
+    PDFSchemaEnvelope envelope = readSchemaEnvelope(result.document);
+    if (envelope.kind == PDFSchemaKind::Unknown && kind != PDFSchemaKind::Unknown)
+    {
+        envelope.kind = kind;
+    }
+    if (envelope.kind == PDFSchemaKind::Unknown)
+    {
+        envelope.kind = PDFSchemaKind::PreflightReport;
+    }
+
+    if (!envelope.version.isValid())
+    {
+        bool ok = false;
+        envelope.version = PDFSchemaVersion::fromJsonValue(result.document.value(QStringLiteral("schema_version")), &ok);
+        if (!ok)
+        {
+            return result;
+        }
+    }
+
+    if (checkSchemaCompatibility(envelope.kind, envelope.version) != PDFSchemaCompatibility::Compatible)
+    {
+        result.document = {};
+        return result;
+    }
+
+    const PDFSchemaVersion target = currentSchemaVersion(envelope.kind);
+    result.fromVersion = envelope.version;
+    result.toVersion = target;
+
+    while (envelope.version.major < target.major)
+    {
+        result.document = migrateSchemaDocument(envelope.kind, envelope.version, result.document);
+        envelope = readSchemaEnvelope(result.document);
+        if (!envelope.version.isValid())
+        {
+            envelope.version = PDFSchemaVersion::fromJsonValue(result.document.value(QStringLiteral("schema_version")));
+        }
+        result.migrated = true;
+    }
+
+    if (result.migrated)
+    {
+        writeSchemaEnvelope(result.document, envelope.kind, target);
+        result.toVersion = target;
+    }
+
+    return result;
 }
 
 PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document)

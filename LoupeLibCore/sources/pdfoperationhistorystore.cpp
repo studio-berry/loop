@@ -22,6 +22,7 @@
 
 #include "pdfoperationhistorystore.h"
 #include "pdfartifactstore.h"
+#include "pdfschemaversion.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -490,6 +491,35 @@ PDFOperationResult PDFOperationHistoryStore::appendEvent(PDFOperationHistoryEven
     if (sequence)
         *sequence = event.sequence;
     return true;
+}
+
+PDFOperationResult PDFOperationHistoryStore::appendSchemaMigratedEvent(const PDFArtifactIdentity& artifact,
+                                                                       PDFSchemaKind kind,
+                                                                       PDFSchemaVersion fromVersion,
+                                                                       PDFSchemaVersion toVersion,
+                                                                       const QString& documentRevisionDigest)
+{
+    PDFOperationHistoryExecution execution;
+    execution.operationId = QStringLiteral("schema.migrate");
+    execution.input = artifact;
+    QUuid executionId;
+    if (const PDFOperationResult began = beginExecution(execution, &executionId); !began)
+    {
+        return began;
+    }
+
+    PDFOperationHistoryEvent event;
+    event.executionId = executionId;
+    event.kind = PDFOperationHistoryEventKind::SchemaMigrated;
+    event.status = PDFOperationHistoryStatus::Cancelled;
+    event.operatorIdentity = QStringLiteral("system:schema");
+    event.documentRevisionDigest = documentRevisionDigest;
+    event.resultSummary = QJsonObject{
+        { QStringLiteral("schema_kind"), pdfSchemaKindToString(kind) },
+        { QStringLiteral("from_version"), fromVersion.toString() },
+        { QStringLiteral("to_version"), toVersion.toString() }
+    };
+    return appendEvent(event);
 }
 
 QList<PDFOperationHistoryEvent> PDFOperationHistoryStore::events(QString* errorMessage) const

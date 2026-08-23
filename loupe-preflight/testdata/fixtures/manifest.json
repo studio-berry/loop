@@ -34,7 +34,7 @@
   {
     "id": "color-inventory-spot",
     "pdf": "color-inventory-spot.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Named Separation colorant; expected spot-color and separation informational findings."
@@ -42,7 +42,7 @@
   {
     "id": "rich-black",
     "pdf": "rich-black.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process C/M/Y plus K patch; expected page-scoped rich-black informational finding."
@@ -50,7 +50,7 @@
   {
     "id": "black-only",
     "pdf": "black-only.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process black alone; must not emit rich-black."
@@ -58,7 +58,7 @@
   {
     "id": "cmy-rich-no-k",
     "pdf": "cmy-rich-no-k.pdf",
-    "profile": "profiles/test-color-inventory.json",
+    "profile": "testdata/profiles/test-color-inventory.json",
     "expect": { "pass": true, "check_ids": ["color-inventory"] },
     "source": "generated",
     "notes": "Process C/M/Y without K; must not emit rich-black."
@@ -458,8 +458,7 @@
     "profile": "testdata/profiles/test-thin-strokes.json",
     "expect": { "pass": false, "check_ids": ["thin-strokes"] },
     "source": "generated",
-    "pending": true,
-    "notes": "S07 corpus row for thin-strokes; generate with LoupeGenerateFixtures."
+    "notes": "S07 corpus row for thin-strokes hairline stroke detection."
   },
   {
     "id": "thin-parts-fill",
