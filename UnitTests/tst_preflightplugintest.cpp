@@ -80,7 +80,8 @@ QJsonObject pageScopeFinding()
         { QStringLiteral("type"), QStringLiteral("color-mode") },
         { QStringLiteral("severity"), QStringLiteral("error") },
         { QStringLiteral("message"), QStringLiteral("Disallowed color space(s) found on page 2: DeviceRGB (allowed: CMYK, Grayscale)") },
-        { QStringLiteral("check_id"), QStringLiteral("color-mode") }
+        { QStringLiteral("check_id"), QStringLiteral("color-mode") },
+        { QStringLiteral("evidence_ids"), QJsonArray{ QStringLiteral("color-mode-page-2") } }
     };
 }
 
@@ -94,7 +95,8 @@ QJsonObject objectScopeFinding()
         { QStringLiteral("severity"), QStringLiteral("warning") },
         { QStringLiteral("message"), QStringLiteral("Image effective DPI 180 is below min_dpi 300") },
         { QStringLiteral("bbox"), QJsonArray{ 72.0, 400.0, 540.0, 720.0 } },
-        { QStringLiteral("check_id"), QStringLiteral("image-resolution") }
+        { QStringLiteral("check_id"), QStringLiteral("image-resolution") },
+        { QStringLiteral("evidence_ids"), QJsonArray{ QStringLiteral("image-resolution-object-87") } }
     };
 }
 
