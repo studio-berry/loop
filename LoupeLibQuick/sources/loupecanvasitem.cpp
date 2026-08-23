@@ -143,10 +143,10 @@ void LoupeCanvasItem::bind(ViewportController* viewport, InteractionController* 
     publishViewportGeometry();
     requestFrame();
 
-    emit zoomChanged();
-    emit currentPageChanged();
-    emit blockCountChanged();
-    emit activeToolChanged();
+    Q_EMIT zoomChanged();
+    Q_EMIT currentPageChanged();
+    Q_EMIT blockCountChanged();
+    Q_EMIT activeToolChanged();
 }
 
 void LoupeCanvasItem::setTraceRecorder(pdfinteraction::InteractionTraceRecorder* recorder)
@@ -179,7 +179,7 @@ void LoupeCanvasItem::setZoom(qreal zoom)
     // Anchored on the item's centre, which is what a zoom control means. A
     // pointer-anchored zoom comes from the wheel path, inside the controller.
     m_viewport->setZoom(zoom, QPointF(width() / 2.0, height() / 2.0) * (window() ? window()->effectiveDevicePixelRatio() : 1.0));
-    emit zoomChanged();
+    Q_EMIT zoomChanged();
 }
 
 int LoupeCanvasItem::currentPage() const
@@ -207,7 +207,7 @@ void LoupeCanvasItem::setActiveTool(const QString& toolId)
     // Changing the tool cancels an active drag inside the controller (#141 AC3).
     // That is the controller's rule, not a courtesy this item performs first.
     m_interaction->setActiveTool(toolId);
-    emit activeToolChanged();
+    Q_EMIT activeToolChanged();
 }
 
 void LoupeCanvasItem::setTraceOverlayVisible(bool visible)
@@ -218,7 +218,7 @@ void LoupeCanvasItem::setTraceOverlayVisible(bool visible)
     }
 
     m_traceOverlayVisible = visible;
-    emit traceOverlayVisibleChanged();
+    Q_EMIT traceOverlayVisibleChanged();
     requestFrame();
 }
 
@@ -231,7 +231,7 @@ void LoupeCanvasItem::setHighContrast(bool highContrast)
 
     m_highContrast = highContrast;
     m_paletteDirty = true;
-    emit highContrastChanged();
+    Q_EMIT highContrastChanged();
     requestFrame();
 }
 
@@ -328,9 +328,9 @@ void LoupeCanvasItem::onViewportChanged()
     m_overlaysDirty = true;
     requestFrame();
 
-    emit zoomChanged();
-    emit currentPageChanged();
-    emit blockCountChanged();
+    Q_EMIT zoomChanged();
+    Q_EMIT currentPageChanged();
+    Q_EMIT blockCountChanged();
 }
 
 void LoupeCanvasItem::onSnapshotChanged()

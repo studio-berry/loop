@@ -198,7 +198,7 @@ void CanvasPresentMetrics::onFramePresented(qint64 gpuNs, qint64 presentNs, qint
         m_recorder->endFrame();
     }
 
-    emit framePresented(gpuNs, presentNs);
+    Q_EMIT framePresented(gpuNs, presentNs);
 }
 
 QJsonObject CanvasPresentMetrics::summary() const
