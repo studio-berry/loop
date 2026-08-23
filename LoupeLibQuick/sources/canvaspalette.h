@@ -101,7 +101,7 @@ public:
 
     QColor hudText() const noexcept { return m_text; }
     QColor hudMutedText() const noexcept { return m_mutedText; }
-    QColor hudBackground() const noexcept;
+    QColor hudBackground() const;
 
     /// Severity colour, exposed so the trace overlay can label a count in the
     /// same hue the primitives use.
