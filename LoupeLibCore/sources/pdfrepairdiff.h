@@ -183,6 +183,6 @@ public:
 LOUPELIBCORESHARED_EXPORT QString pdfRepairDiffStatusName(PDFRepairDiffStatus status);
 LOUPELIBCORESHARED_EXPORT QString pdfRepairChangeClassName(PDFRepairChangeClass changeClass);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFREPAIRDIFF_H
+#endif   // PDFREPAIRDIFF_H

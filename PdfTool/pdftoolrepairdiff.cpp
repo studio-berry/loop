@@ -46,14 +46,12 @@ public:
 };
 
 bool readDocumentFromPath(const QString& path,
-                  const PDFToolOptions& options,
-                  pdf::PDFDocument* document,
-                  QString* error)
+                          const PDFToolOptions& options,
+                          pdf::PDFDocument* document,
+                          QString* error)
 {
-    pdf::PDFDocumentReader reader(nullptr,
-                                  [&options](bool*) { return options.password; },
-                                  options.permissiveReading,
-                                  false);
+    pdf::PDFDocumentReader reader(nullptr, [&options](bool*)
+                                  { return options.password; }, options.permissiveReading, false);
     *document = reader.readFromFile(path);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
     {
@@ -66,7 +64,7 @@ bool readDocumentFromPath(const QString& path,
     return true;
 }
 
-} // namespace
+}   // namespace
 
 static PDFToolRepairDiff s_toolRepairDiffApplication;
 
@@ -101,13 +99,13 @@ PDFToolExitCode PDFToolRepairDiff::execute(const PDFToolOptions& options)
     if (!readDocumentFromPath(options.repairDiffFiles.at(0), options, &before, &error))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.before-unreadable"), error,
-                         QJsonObject{{QStringLiteral("path"), options.repairDiffFiles.at(0)}});
+                         QJsonObject{ { QStringLiteral("path"), options.repairDiffFiles.at(0) } });
         return PDFToolExitCode::InputError;
     }
     if (!readDocumentFromPath(options.repairDiffFiles.at(1), options, &after, &error))
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.after-unreadable"), error,
-                         QJsonObject{{QStringLiteral("path"), options.repairDiffFiles.at(1)}});
+                         QJsonObject{ { QStringLiteral("path"), options.repairDiffFiles.at(1) } });
         return PDFToolExitCode::InputError;
     }
 
@@ -118,7 +116,7 @@ PDFToolExitCode PDFToolRepairDiff::execute(const PDFToolOptions& options)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.artifact-directory-failed"),
                          PDFToolTranslationContext::tr("Unable to create repair-diff artifact directory."),
-                         QJsonObject{{QStringLiteral("path"), diffOptions.renderDirectory}});
+                         QJsonObject{ { QStringLiteral("path"), diffOptions.renderDirectory } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
@@ -136,8 +134,7 @@ PDFToolExitCode PDFToolRepairDiff::execute(const PDFToolOptions& options)
         options.executionContext->setData(QJsonObject{
             { QStringLiteral("ok"), report.status != pdf::PDFRepairDiffStatus::Failed },
             { QStringLiteral("command"), QStringLiteral("repair-diff") },
-            { QStringLiteral("report"), reportJson }
-        });
+            { QStringLiteral("report"), reportJson } });
         if (!diffOptions.renderDirectory.isEmpty())
         {
             options.executionContext->addOutput({ QStringLiteral("directory"), QStringLiteral("artifacts"), diffOptions.renderDirectory, QStringLiteral("written") });
@@ -164,4 +161,4 @@ PDFToolAbstractApplication::Options PDFToolRepairDiff::getOptionsFlags() const
     return ConsoleFormat | RepairDiff;
 }
 
-} // namespace pdftool
+}   // namespace pdftool
