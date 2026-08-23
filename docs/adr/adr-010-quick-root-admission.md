@@ -45,30 +45,23 @@ and accessibility intent. This ADR supersedes its assumption that the final
 shell may be admitted through a generic mixed-mode root and its wording that
 GUI work is deferred specifically until a historical 0.1.1 release gate.
 
-## S22 admission contracts
+## Admission contracts
 
-The qualification surface is deliberately not product UI or product
-completion. It must include:
+The qualification surface is not product completion. It must include:
 
 - a QML import and boundary policy checked by
   `scripts/verify-quick-shell-policy.py`;
-- provisional typography, spacing, focus, motion, state, contrast, and
-  high-contrast tokens checked from `docs/quick-design-tokens.json`;
-- a scene-graph smoke executable that uses the shell's imports and records the
-  selected `GraphicsApi` under native and `QT_QUICK_BACKEND=software` modes;
-- an explicit accessibility contract that preserves the Widgets baseline and
-  requires a later Quick/Widgets focus-bridge test; and
-- a threat model in
-  [`QUICK_SHELL_THREAT_MODEL.md`](../QUICK_SHELL_THREAT_MODEL.md) that denies
-  network, filesystem, process, remote-import, and customer-payload paths
-  from QML.
+- design, focus, motion, contrast, and high-contrast token checks;
+- a scene-graph smoke executable that records the selected graphics API under
+  native and `QT_QUICK_BACKEND=software` modes;
+- an accessibility contract preserving the existing baseline;
+- a threat model denying network, filesystem, process, remote-import, and
+  customer-payload paths from QML.
 
 `QT_QPA_PLATFORM=offscreen` is only a headless platform selection. A
-successful smoke result must include scene-graph initialization
-(`scene_graph_initialized`) and a non-`Unknown` graphics API. On Windows,
-WARP preference is represented by `QSG_RHI_PREFER_SOFTWARE_RENDERER=1`; the
-Qt Quick software backend is represented by `QT_QUICK_BACKEND=software`.
-`QSG_RHI_BACKEND=software` is **not** the software-backend contract.
+successful smoke result must include scene-graph initialization and a
+non-unknown graphics API. `QSG_RHI_BACKEND=software` is not the software
+backend contract.
 
 ## Acceptance evidence
 
@@ -76,37 +69,10 @@ Qt Quick software backend is represented by `QT_QUICK_BACKEND=software`.
 - [x] Quick-root directive, QWidget/QQuickItem boundary, and hybrid candidate
       rule are recorded.
 - [x] Static security, accessibility, and design-token contracts are named.
-- [x] Canvas benchmark and admission outcome are accepted on the current
-      candidate lineage. ADR-009's amended outcome (direct `QQuickItem`
-      admitted; `widget-baseline`/`quick-item` required, `qquickwidget`/
-      `window-container` diagnostic-only) is confirmed by real CI on both
-      Windows and Linux, native and software backends — runs
-      [32562071695](https://github.com/studio-berry/loupe/actions/runs/32562071695)
-      (both platforms green on this evidence), corroborated by
-      [32557415495](https://github.com/studio-berry/loupe/actions/runs/32557415495)
-      and [32559534947](https://github.com/studio-berry/loupe/actions/runs/32559534947).
-- [x] Windows and Linux native and software smoke evidence is attached.
-      `QuickShellSmoke` reported `scene_graph_initialized` with a non-`Unknown`
-      `GraphicsApi` on both OSes and both backends (Windows: `d3d11`/
-      `software`; Linux: `software`/`software` — GitHub-hosted `ubuntu-24.04`
-      runners have no GPU, so the "native"/preferred-backend request degrades
-      to software, matching ADR-007's own documented "unavailable GPU" row).
-      Same run evidence as above.
+- [ ] Canvas benchmark and admission outcome are accepted on the current
+      candidate lineage.
+- [ ] Windows and Linux native and software smoke evidence is attached.
 - [ ] Final-artifact SBOM, notices, LGPL replacement/relink evidence, and
-      clean-machine package smoke close the packaging gate. **Not closeable
-      yet:** no shipped/installed product Quick module exists at this stage
-      to produce that evidence from; this is a Phase-4-exit gate.
-- [x] Focus-bridge qualification evidence: the QWidget-to-Quick-to-QWidget
-      keyboard focus and accessibility-role probe passed natively and under
-      the software backend on both Windows and Linux (same runs above).
-- [ ] Product Quick accessibility runtime remains open — the focus-bridge
-      probe above is qualification-only infrastructure, not the product
-      accessibility runtime evidence a real Quick shell would require; that
-      remains a Phase-4-exit gate for the same reason as packaging.
-
-## References
-
-- [Qt Quick Controls](https://doc.qt.io/qt-6/qtquickcontrols-index.html)
-- [QQuickWindow scene-graph backend selection](https://doc.qt.io/qt-6/qquickwindow.html)
-- [Qt Quick shell composition contract](../QUICK_COMPOSITION.md)
-- [Quick shell threat model](../QUICK_SHELL_THREAT_MODEL.md)
+      clean-machine package smoke close the packaging gate.
+- [ ] Product Quick accessibility runtime and focus-bridge evidence close the
+      GUI gate.
