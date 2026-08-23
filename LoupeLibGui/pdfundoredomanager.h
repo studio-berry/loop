@@ -69,8 +69,8 @@ public:
     /// Create a named undo action. The name is retained for a future history
     /// surface; the current 0.2.0-alpha implementation deliberately adds no GUI.
     void createUndo(pdf::PDFModifiedDocument document,
-                     pdf::PDFDocumentPointer oldDocument,
-                     const QString& name);
+                    pdf::PDFDocumentPointer oldDocument,
+                    const QString& name);
 
     /// Sets maximum steps for undo/redo
     /// \param undoLimit Maximum undo steps
@@ -128,7 +128,6 @@ private:
             name(qMove(name)),
             estimatedBytes(estimatedBytes)
         {
-
         }
 
         pdf::PDFDocumentPointer oldDocument;
@@ -153,4 +152,4 @@ private:
 
 }   // namespace pdfviewer
 
-#endif // PDFUNDOREDOMANAGER_H
+#endif   // PDFUNDOREDOMANAGER_H

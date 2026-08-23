@@ -8,41 +8,43 @@
 
 #include <cstdio>
 
-namespace {
+namespace
+{
 
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
-    switch (api) {
-    case QSGRendererInterface::Software:
-        return QStringLiteral("software");
-    case QSGRendererInterface::OpenGL:
-        return QStringLiteral("opengl");
-    case QSGRendererInterface::Direct3D11:
-        return QStringLiteral("d3d11");
-    case QSGRendererInterface::Direct3D12:
-        return QStringLiteral("d3d12");
-    case QSGRendererInterface::Vulkan:
-        return QStringLiteral("vulkan");
-    case QSGRendererInterface::Metal:
-        return QStringLiteral("metal");
-    case QSGRendererInterface::Null:
-        return QStringLiteral("null");
-    case QSGRendererInterface::Unknown:
-        return QStringLiteral("unknown");
+    switch (api)
+    {
+        case QSGRendererInterface::Software:
+            return QStringLiteral("software");
+        case QSGRendererInterface::OpenGL:
+            return QStringLiteral("opengl");
+        case QSGRendererInterface::Direct3D11:
+            return QStringLiteral("d3d11");
+        case QSGRendererInterface::Direct3D12:
+            return QStringLiteral("d3d12");
+        case QSGRendererInterface::Vulkan:
+            return QStringLiteral("vulkan");
+        case QSGRendererInterface::Metal:
+            return QStringLiteral("metal");
+        case QSGRendererInterface::Null:
+            return QStringLiteral("null");
+        case QSGRendererInterface::Unknown:
+            return QStringLiteral("unknown");
     }
 
     return QStringLiteral("unrecognized");
 }
 
-QString environmentValue(const char *name)
+QString environmentValue(const char* name)
 {
     const QByteArray value = qgetenv(name);
     return value.isEmpty() ? QStringLiteral("<unset>") : QString::fromLocal8Bit(value);
 }
 
-} // namespace
+}   // namespace
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);
     QQmlApplicationEngine engine;
@@ -50,8 +52,10 @@ int main(int argc, char **argv)
     const QUrl qmlUrl(QStringLiteral("qrc:/qt/qml/Loupe/QuickShellSmoke/QuickShellSmoke.qml"));
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app,
-                     [&app](QObject *object, const QUrl &url) {
-                         if (object) {
+                     [&app](QObject* object, const QUrl& url)
+                     {
+                         if (object)
+                         {
                              return;
                          }
 
@@ -63,19 +67,22 @@ int main(int argc, char **argv)
                      });
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app,
-                     [&app](QObject *object, const QUrl &) {
-                         auto *window = qobject_cast<QQuickWindow *>(object);
-                         if (!window) {
+                     [&app](QObject* object, const QUrl&)
+                     {
+                         auto* window = qobject_cast<QQuickWindow*>(object);
+                         if (!window)
+                         {
                              return;
                          }
 
                          QObject::connect(
                              window, &QQuickWindow::sceneGraphInitialized, &app,
-                             [window, &app]() {
-                                 const auto *renderer = window->rendererInterface();
+                             [window, &app]()
+                             {
+                                 const auto* renderer = window->rendererInterface();
                                  const auto api = renderer
-                                                       ? renderer->graphicsApi()
-                                                       : QSGRendererInterface::Unknown;
+                                                      ? renderer->graphicsApi()
+                                                      : QSGRendererInterface::Unknown;
                                  const QByteArray apiText = graphicsApiName(api).toLocal8Bit();
                                  const QByteArray quickBackend =
                                      environmentValue("QT_QUICK_BACKEND").toLocal8Bit();
@@ -103,30 +110,34 @@ int main(int argc, char **argv)
                                      << environmentValue("QSG_RHI_PREFER_SOFTWARE_RENDERER")
                                      << "QT_QPA_PLATFORM=" << environmentValue("QT_QPA_PLATFORM");
 
-                                 if (api == QSGRendererInterface::Unknown) {
+                                 if (api == QSGRendererInterface::Unknown)
+                                 {
                                      qCritical() << "quick-shell-smoke scene graph has no selected renderer";
                                      QMetaObject::invokeMethod(
-                                         &app, [&app]() { app.exit(3); }, Qt::QueuedConnection);
+                                         &app, [&app]()
+                                         { app.exit(3); }, Qt::QueuedConnection);
                                      return;
                                  }
 
                                  QMetaObject::invokeMethod(
-                                     &app, [&app]() { app.exit(0); }, Qt::QueuedConnection);
+                                     &app, [&app]()
+                                     { app.exit(0); }, Qt::QueuedConnection);
                              },
                              Qt::DirectConnection);
                      });
 
     engine.load(qmlUrl);
 
-    if (engine.rootObjects().isEmpty()) {
+    if (engine.rootObjects().isEmpty())
+    {
         qCritical() << "quick-shell-smoke has no QML root object";
         return 2;
     }
 
-    QTimer::singleShot(10000, &app, [&app]() {
+    QTimer::singleShot(10000, &app, [&app]()
+                       {
         qCritical() << "quick-shell-smoke timed out before scene graph initialization";
-        app.exit(4);
-    });
+        app.exit(4); });
 
     return app.exec();
 }
