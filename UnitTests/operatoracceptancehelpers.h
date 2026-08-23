@@ -181,4 +181,4 @@ inline bool runPdfTool(const QString& pdfToolPath,
 
 }   // namespace operatoracceptance
 
-#endif // OPERATORACCEPTANCEHELPERS_H
+#endif   // OPERATORACCEPTANCEHELPERS_H
