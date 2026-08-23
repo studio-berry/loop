@@ -373,8 +373,8 @@ public:
     static constexpr PDFReal getMinZoom() { return MIN_ZOOM; }
     static constexpr PDFReal getMaxZoom() { return MAX_ZOOM; }
 
-    void registerDrawInterface(IDocumentDrawInterface* drawInterface) { m_drawInterfaces.insert(drawInterface); }
-    void unregisterDrawInterface(IDocumentDrawInterface* drawInterface) { m_drawInterfaces.erase(drawInterface); }
+    void registerDrawInterface(IDocumentDrawInterface* drawInterface);
+    void unregisterDrawInterface(IDocumentDrawInterface* drawInterface);
 
     /// Returns current paper color
     QColor getPaperColor();
@@ -472,6 +472,8 @@ private:
     void fitToDestinationRectangle(PDFInteger pageIndex, const QRectF& rectangle);
 
     void performPageCacheClear();
+
+    void drawOverlays(QPainter* painter, QRect rect);
 
     void onTextLayoutChanged();
     void onOptionalContentGroupStateChanged();
@@ -577,6 +579,8 @@ private:
 
     /// Additional drawing interfaces
     std::set<IDocumentDrawInterface*> m_drawInterfaces;
+    std::map<IDocumentDrawInterface*, quint64> m_drawInterfaceRegistrationOrder;
+    quint64 m_nextDrawInterfaceRegistrationOrder = 0;
 
     /// Renderer engine
     RendererEngine m_rendererEngine;

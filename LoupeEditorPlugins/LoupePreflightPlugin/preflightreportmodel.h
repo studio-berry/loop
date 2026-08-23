@@ -44,6 +44,8 @@ struct PreflightFixupEntry
 
 struct PreflightFindingEntry
 {
+    QString id;
+    QString objectId;
     QString scope;
     int page = 0;
     QString severity;

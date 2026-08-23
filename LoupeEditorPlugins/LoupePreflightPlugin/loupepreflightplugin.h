@@ -40,7 +40,9 @@ namespace pdfplugin
 
 class PreflightReportDockWidget;
 
-class LoupePreflightPlugin : public pdf::PDFPlugin, public pdf::IDocumentDrawInterface
+class LoupePreflightPlugin : public pdf::PDFPlugin,
+                             public pdf::IDocumentDrawInterface,
+                             public pdf::IDocumentOverlayInterface
 {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "LOUPE.LoupePreflightPlugin" FILE "LoupePreflightPlugin.json")
@@ -57,13 +59,8 @@ public:
     virtual std::vector<QAction*> getActions() const override;
     virtual QString getPluginMenuName() const override;
 
-    virtual void drawPage(QPainter* painter,
-                          pdf::PDFInteger pageIndex,
-                          const pdf::PDFPrecompiledPage* compiledPage,
-                          pdf::PDFTextLayoutGetter& layoutGetter,
-                          const QTransform& pagePointToDevicePointMatrix,
-                          const pdf::PDFColorConvertor& convertor,
-                          QList<pdf::PDFRenderError>& errors) const override;
+    virtual pdf::PDFOverlayLayer getOverlayLayer() const override { return pdf::PDFOverlayLayer::Findings; }
+    virtual void drawOverlay(QPainter* painter, const pdf::PDFOverlayContext& context) const override;
 
 private:
     void updateOverlayGraphics();

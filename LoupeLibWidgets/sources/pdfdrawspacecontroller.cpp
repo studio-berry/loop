@@ -34,6 +34,7 @@
 #include "pdfwidgetutils.h"
 #include "pdfuitheme.h"
 #include "pdfinteractiontrace_p.h"
+#include "pdfoverlaycompositor_p.h"
 
 #include <QTimer>
 #include <QPainter>
@@ -43,6 +44,7 @@
 #include <QImage>
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <limits>
@@ -506,6 +508,27 @@ PDFDrawWidgetProxy::~PDFDrawWidgetProxy()
 
 }
 
+void PDFDrawWidgetProxy::registerDrawInterface(IDocumentDrawInterface* drawInterface)
+{
+    if (!drawInterface)
+    {
+        return;
+    }
+
+    const auto [it, inserted] = m_drawInterfaces.insert(drawInterface);
+    Q_UNUSED(it);
+    if (inserted)
+    {
+        m_drawInterfaceRegistrationOrder.emplace(drawInterface, ++m_nextDrawInterfaceRegistrationOrder);
+    }
+}
+
+void PDFDrawWidgetProxy::unregisterDrawInterface(IDocumentDrawInterface* drawInterface)
+{
+    m_drawInterfaces.erase(drawInterface);
+    m_drawInterfaceRegistrationOrder.erase(drawInterface);
+}
+
 void PDFDrawWidgetProxy::setDocument(const PDFModifiedDocument& document, std::vector<PDFSignatureVerificationResult> signatureVerificationResult)
 {
     const PDFRevisionIdentity previousRevision = getDocumentRevision();
@@ -825,11 +848,56 @@ void PDFDrawWidgetProxy::draw(QPainter* painter, QRect rect)
     auto overlayScope = traceRecorder
         ? traceRecorder->beginStage(PDFInteractionTraceRecorder::Stage::Overlay)
         : PDFInteractionTraceRecorder::StageScope();
+
+    if (!m_features.testFlag(PDFRenderer::DenyExtraGraphics))
+    {
+        drawOverlays(painter, rect);
+    }
+
     for (IDocumentDrawInterface* drawInterface : m_drawInterfaces)
     {
         painter->save();
         drawInterface->drawPostRendering(painter, rect);
         painter->restore();
+    }
+}
+
+void PDFDrawWidgetProxy::drawOverlays(QPainter* painter, QRect rect)
+{
+    const std::vector<PDFOverlayCompositor::Provider> providers =
+        PDFOverlayCompositor::collect(m_drawInterfaces, m_drawInterfaceRegistrationOrder);
+
+    if (providers.empty() || !m_controller->getDocument())
+    {
+        return;
+    }
+
+    const QTransform baseMatrix = painter->worldTransform();
+    for (const LayoutItem& item : m_layout.items)
+    {
+        const QRect placedRect = item.pageRect.translated(m_horizontalOffset - m_layout.blockRect.left(),
+                                                            m_verticalOffset - m_layout.blockRect.top());
+        const QRect clipRect = placedRect.intersected(rect);
+        if (clipRect.isEmpty())
+        {
+            continue;
+        }
+
+        const PDFPage* page = m_controller->getDocument()->getCatalog()->getPage(item.pageIndex);
+        if (!page)
+        {
+            continue;
+        }
+
+        PDFOverlayContext context;
+        context.pageIndex = item.pageIndex;
+        context.page = page;
+        context.pageRect = placedRect;
+        context.viewportRect = rect;
+        context.pagePointToDevicePointMatrix = QTransform(createPagePointToDevicePointMatrix(page, placedRect)) * baseMatrix;
+        context.renderable = true;
+
+        PDFOverlayCompositor::draw(painter, clipRect, context, providers);
     }
 }
 
