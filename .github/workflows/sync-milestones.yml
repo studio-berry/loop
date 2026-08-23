@@ -1,0 +1,23 @@
+name: Sync GitHub milestones
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Verify supply-chain policy
+        run: python3 scripts/ci/check_supply_chain_pins.py
+
+      - name: Sync milestone descriptions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/github/sync_milestones.py --apply
