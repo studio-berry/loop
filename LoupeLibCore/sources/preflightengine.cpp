@@ -23,6 +23,7 @@
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
 #include "pdfoperationcontrol.h"
+#include "pdfschemaversion.h"
 
 #include "pdfbleedmarginprobe.h"
 #include "pdfblendfunction.h"
@@ -1564,7 +1565,8 @@ void evaluateColorModeFromGraph(const PreflightCheckConfig& check,
         finding.severity = check.severity;
         finding.checkId = check.id;
         finding.bbox = QRectF();
-        finding.evidenceIds = evidenceByPage.value(pageNumber);
+        const QStringList pageEvidenceIds = evidenceByPage.value(pageNumber);
+        finding.evidenceIds = pageEvidenceIds;
         finding.message = PDFTranslationContext::tr(
                               "Disallowed color space(s) found on page %1: %2 (allowed: %3)")
                               .arg(pageNumber)
@@ -5431,7 +5433,7 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
     }
 
     QJsonObject root;
-    root.insert(QStringLiteral("schema_version"), PREFLIGHT_REPORT_SCHEMA_VERSION);
+    writeSchemaEnvelope(root, PDFSchemaKind::PreflightReport, PDFSchemaVersion{ static_cast<quint16>(PREFLIGHT_REPORT_SCHEMA_VERSION), 0 });
     root.insert(QStringLiteral("inspection_complete"), inspectionComplete);
     const PreflightVerdict verdict = reducePreflightVerdict(*this);
     root.insert(QStringLiteral("pass"), verdict.isPass());

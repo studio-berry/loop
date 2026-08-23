@@ -25,6 +25,7 @@
 
 #include "pdfoperationhistory.h"
 #include "pdfutils.h"
+#include "pdfschemaversion.h"
 
 #include <QString>
 
@@ -71,12 +72,18 @@ public:
     /// Begins an execution. If executionId is null, a fresh UUID is assigned.
     /// Parameters are redacted and canonically serialized before persistence.
     PDFOperationResult beginExecution(PDFOperationHistoryExecution execution,
-                                       QUuid* executionId = nullptr);
+                                      QUuid* executionId = nullptr);
 
     /// The only write API for history_events. There is deliberately no update or
     /// delete API; corrections and rollback are new events.
     PDFOperationResult appendEvent(PDFOperationHistoryEvent event,
                                    qint64* sequence = nullptr);
+
+    PDFOperationResult appendSchemaMigratedEvent(const PDFArtifactIdentity& artifact,
+                                                 PDFSchemaKind kind,
+                                                 PDFSchemaVersion fromVersion,
+                                                 PDFSchemaVersion toVersion,
+                                                 const QString& documentRevisionDigest = QString());
 
     QList<PDFOperationHistoryEvent> events(QString* errorMessage = nullptr) const;
     PDFOperationHistoryVerification verify() const;
@@ -106,6 +113,6 @@ private:
     PDFOperationHistoryStoreOptions m_options;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFOPERATIONHISTORYSTORE_H
+#endif   // PDFOPERATIONHISTORYSTORE_H

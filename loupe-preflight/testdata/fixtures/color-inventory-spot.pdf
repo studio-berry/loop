@@ -1,0 +1,40 @@
+%PDF-1.7
+% PDF producer: LOUPE 0.1.0
+
+
+1 0 obj
+<< /Type /Pages /Kids [ 4 0 R ] /Count 1 >> endobj
+2 0 obj
+<< /Type /Catalog /Pages 1 0 R >> endobj
+3 0 obj
+<< /Producer (LOUPE 0.1.0) /CreationDate (D:20260101000000) /ModDate (D:20260101000000) /Title (Loupe fixture - color inventory spot) /Creator (LoupeGenerateFixtures) /Subject (loupe-preflight golden corpus: named separation colorant) >> endobj
+4 0 obj
+<< /Type /Page /Parent 1 0 R /MediaBox [ 0.00000 0.00000 400.00000 400.00000 ] /TrimBox [ 20.00000 20.00000 380.00000 380.00000 ] /BleedBox [ 0.00000 0.00000 400.00000 400.00000 ] /Resources << /ColorSpace << /CS1 6 0 R >> >> /Contents 7 0 R >> endobj
+5 0 obj
+<< /FunctionType 2 /Domain [ 0.00000 1.00000 ] /C0 [ 0.00000 0.00000 0.00000 0.00000 ] /C1 [ 0.00000 0.91000 0.76000 0.00000 ] /N 1.00000 >> endobj
+6 0 obj
+[ /Separation /PANTONE#20185#20C /DeviceCMYK 5 0 R ] endobj
+7 0 obj
+<< /Length 35 >> stream
+/CS1 cs
+0.8 scn
+50 50 300 300 re
+f
+
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f
+0000000043 00000 n
+0000000104 00000 n
+0000000155 00000 n
+0000000410 00000 n
+0000000672 00000 n
+0000000830 00000 n
+0000000900 00000 n
+trailer
+<< /Size 8 /Root 2 0 R /Info 3 0 R >> 
+startxref
+990
+%%EOF

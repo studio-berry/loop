@@ -171,6 +171,11 @@ jobs:
             python3 scripts/agent/check-change.py --base "$BASE_SHA" --head "$HEAD_SHA" --report agent-fast-evidence.json --skip-changelog
           fi
 
+      - name: Test agent policy checker
+        if: inputs.fast
+        working-directory: loupe
+        run: python3 -m unittest scripts.agent.test_check_change -v
+
       - name: Upload agent-fast evidence
         if: inputs.fast
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
