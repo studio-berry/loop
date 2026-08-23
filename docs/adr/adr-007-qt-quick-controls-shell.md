@@ -36,6 +36,12 @@ that replace the former release deferral are recorded in ADR-010.
 
 ### Migration strategy
 
+> **Current 0.2.0 authority:** The staged mixed-mode sequence below is
+> historical migration context, not a supported product outcome. ADR-010
+> supersedes its final-shell admission rules: the 0.2.0 product must converge
+> on a Quick root and a direct `QQuickItem` canvas, and a failed Quick gate
+> blocks or extends the milestone rather than restoring Widgets as fallback.
+
 Migration is staged and mixed-mode first:
 
 1. Keep the existing Widgets shell and `PDFDrawWidget` authoritative while the
