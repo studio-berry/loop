@@ -131,7 +131,8 @@ struct LOUPELIBCORESHARED_EXPORT PDFRepairPlan
 inline bool repairPlansMutatePageContent(const QList<PDFRepairPlan>& plans)
 {
     return std::any_of(plans.cbegin(), plans.cend(),
-                       [](const PDFRepairPlan& plan) { return plan.expectedChanges.pageContent; });
+                       [](const PDFRepairPlan& plan)
+                       { return plan.expectedChanges.pageContent; });
 }
 
 struct LOUPELIBCORESHARED_EXPORT PDFRepairChange
