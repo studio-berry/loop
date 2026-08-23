@@ -224,4 +224,6 @@ void RepairOperationTest::standardTargets_areExplicitAndStable()
 
 QTEST_GUILESS_MAIN(RepairOperationTest)
 
+#if __has_include("tst_repairoperationtest.moc")
 #include "tst_repairoperationtest.moc"
+#endif
