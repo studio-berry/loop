@@ -168,6 +168,14 @@
         "UnitTestsDocumentFacade"
       ],
       "title": "One document lifecycle facade and one command catalog; no second action registry"
+    },
+    {
+      "id": "I23",
+      "test_targets": [
+        "UnitTestsPageSurface",
+        "UnitTestsViewportController"
+      ],
+      "title": "One host-neutral render-request path; a page surface is admitted only under its complete key"
     }
   ],
   "branch_policy": {
@@ -370,6 +378,7 @@
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
     "UnitTestsPageMasterExport",
+    "UnitTestsPageSurface",
     "UnitTestsPdfToolContract",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
@@ -393,6 +402,7 @@
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager",
+    "UnitTestsViewportController",
     "UnitTestsWorkloadEnvelope"
   ],
   "version_policy": {

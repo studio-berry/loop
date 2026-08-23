@@ -26,6 +26,7 @@
 #include "commandcatalog.h"
 #include "documentcontextsource.h"
 #include "documentloader.h"
+#include "jobrelay.h"
 #include "jobsubmitter.h"
 
 #include <QFlags>
@@ -54,11 +55,11 @@ enum class DocumentState
 /// each other or with the base state.
 enum class DocumentFacet
 {
-    Dirty = 0x01,          ///< Has unsaved changes.
-    Stale = 0x02,          ///< Bound results were computed against an older revision.
-    Incomplete = 0x04,     ///< Loaded, but not everything in the source was honoured.
-    Cancelled = 0x08,      ///< The last lifecycle operation was cancelled by request.
-    Unsupported = 0x10     ///< The source needs something this build does not support.
+    Dirty = 0x01,   ///< Has unsaved changes.
+    Stale = 0x02,   ///< Bound results were computed against an older revision.
+    Incomplete = 0x04,   ///< Loaded, but not everything in the source was honoured.
+    Cancelled = 0x08,   ///< The last lifecycle operation was cancelled by request.
+    Unsupported = 0x10   ///< The source needs something this build does not support.
 };
 
 Q_DECLARE_FLAGS(DocumentFacets, DocumentFacet)
@@ -86,32 +87,6 @@ enum class ShellDocumentStatus
 
 const char* getDocumentStateName(DocumentState state);
 const char* getShellDocumentStatusName(ShellDocumentStatus status);
-
-/// Marshals a worker-thread job completion back onto the thread that submitted
-/// it, without letting a worker touch a facade that may be gone.
-///
-/// A worker lambda holds a shared_ptr to the relay, so the relay always outlives
-/// the job. The facade detaches the relay in its own destructor, on its own
-/// thread, so a queued action that arrives afterwards finds the relay detached
-/// and does nothing. Both the detach and the queued action run on the facade's
-/// thread, so there is no window in which a completion can reach a destroyed
-/// facade.
-class DocumentJobRelay final : public QObject
-{
-public:
-    explicit DocumentJobRelay(QObject* parent = nullptr);
-    ~DocumentJobRelay() override;
-
-    /// Facade thread only.
-    void detach();
-
-    /// Callable from any thread. The action runs on the relay's thread, and only
-    /// while the relay is still attached.
-    void post(std::function<void()> action);
-
-private:
-    bool m_attached = true;
-};
 
 /// One presentation-facing document lifecycle.
 ///
@@ -238,7 +213,7 @@ private:
     QPointer<CommandCatalog> m_catalog;
 
     PDFDocumentContextSource m_revisionSource;
-    std::shared_ptr<DocumentJobRelay> m_relay;
+    std::shared_ptr<JobRelay> m_relay;
 
     DocumentState m_state = DocumentState::Empty;
     DocumentFacets m_facets;

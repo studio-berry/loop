@@ -114,12 +114,14 @@
         "LoupeLibInteraction/**",
         "UnitTests/tst_interactionboundarytest.cpp",
         "UnitTests/tst_documentfacadetest.cpp",
+        "UnitTests/tst_viewportcontrollertest.cpp",
+        "UnitTests/tst_pagesurfacetest.cpp",
         "docs/interaction-boundary-policy.json",
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoupeLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade"]
+      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsPageSurface"]
     },
     "widgets_gui": {
       "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
