@@ -62,6 +62,22 @@ add_library(LoupeLibInteraction STATIC
     sources/canvassnapshot.h
     sources/pagesurfacecoordinator.cpp
     sources/pagesurfacecoordinator.h
+    sources/inputintent.cpp
+    sources/inputintent.h
+    sources/interactiontarget.cpp
+    sources/interactiontarget.h
+    sources/interactionstate.cpp
+    sources/interactionstate.h
+    sources/hittestsource.cpp
+    sources/hittestsource.h
+    sources/overlayframe.cpp
+    sources/overlayframe.h
+    sources/overlaybuilder.cpp
+    sources/overlaybuilder.h
+    sources/interactiontrace.cpp
+    sources/interactiontrace.h
+    sources/interactioncontroller.cpp
+    sources/interactioncontroller.h
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
