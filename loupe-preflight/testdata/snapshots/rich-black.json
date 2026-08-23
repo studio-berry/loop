@@ -12,6 +12,7 @@
     "inspection_complete": true,
     "pass": true,
     "profile": "Color Inventory Test",
+    "schema_kind": "preflight-report",
     "schema_version": 3,
     "verdict": {
         "blocking_finding_ids": [

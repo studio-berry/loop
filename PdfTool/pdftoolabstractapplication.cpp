@@ -358,6 +358,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("stock"), { QStringLiteral("--stock") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("finishing"), { QStringLiteral("--finishing") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
+        add(QStringLiteral("checks"), { QStringLiteral("--checks") }, QStringLiteral("ids"), PDFToolValueType::Csv);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
