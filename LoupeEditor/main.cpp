@@ -20,41 +20,155 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "pdfeditormainwindow.h"
-#include "pdfconstants.h"
-#include "pdfsecurityhandler.h"
-#include "pdfwidgetutils.h"
+#include "editorhost.h"
+
 #include "pdfapplicationtranslator.h"
-#include "pdfsettings.h"
+#include "pdfconstants.h"
 #include "pdflogger.h"
 #include "pdfsentry.h"
+#include "pdfsecurityhandler.h"
+#include "pdfsettings.h"
 
-#include <QApplication>
 #include <QCommandLineParser>
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQuickStyle>
+#include <QQuickWindow>
+#include <QSGRendererInterface>
+#include <QStyleHints>
+#include <QTimer>
+#include <QUrl>
 
-#include "pdfdbgheap.h"
+#include <cstdio>
+
+namespace
+{
+
+QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
+{
+    switch (api)
+    {
+        case QSGRendererInterface::Software:
+            return QStringLiteral("software");
+        case QSGRendererInterface::OpenGL:
+            return QStringLiteral("opengl");
+        case QSGRendererInterface::Direct3D11:
+            return QStringLiteral("d3d11");
+        case QSGRendererInterface::Direct3D12:
+            return QStringLiteral("d3d12");
+        case QSGRendererInterface::Vulkan:
+            return QStringLiteral("vulkan");
+        case QSGRendererInterface::Metal:
+            return QStringLiteral("metal");
+        case QSGRendererInterface::Null:
+            return QStringLiteral("null");
+        case QSGRendererInterface::Unknown:
+            return QStringLiteral("unknown");
+    }
+
+    return QStringLiteral("unrecognized");
+}
+
+void applyColorScheme(bool lightTheme, bool darkTheme)
+{
+    if (!QGuiApplication::styleHints())
+    {
+        return;
+    }
+
+    if (lightTheme)
+    {
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
+    }
+    else if (darkTheme)
+    {
+        QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+    }
+}
+
+int runQuickSmoke(QGuiApplication& application, EditorHost& host)
+{
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
+                     [&application](QObject* object, const QUrl& url)
+                     {
+                         if (object)
+                         {
+                             return;
+                         }
+
+                         fprintf(stderr, "loupe-editor qml_load_failed url=%s\n", url.toString().toLocal8Bit().constData());
+                         application.exit(2);
+                     });
+
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
+                     [&application](QObject* object, const QUrl&)
+                     {
+                         auto* window = qobject_cast<QQuickWindow*>(object);
+                         if (!window)
+                         {
+                             return;
+                         }
+
+                         QObject::connect(
+                             window, &QQuickWindow::sceneGraphInitialized, &application,
+                             [window, &application]()
+                             {
+                                 const auto* renderer = window->rendererInterface();
+                                 const auto api = renderer ? renderer->graphicsApi() : QSGRendererInterface::Unknown;
+                                 const QByteArray apiText = graphicsApiName(api).toLocal8Bit();
+                                 fprintf(stdout,
+                                         "loupe-editor scene_graph_initialized graphics_api=%s graphics_api_value=%d\n",
+                                         apiText.constData(), static_cast<int>(api));
+                                 fflush(stdout);
+
+                                 if (api == QSGRendererInterface::Unknown)
+                                 {
+                                     application.exit(3);
+                                     return;
+                                 }
+
+                                 QMetaObject::invokeMethod(&application, [&application]()
+                                                           { application.exit(0); }, Qt::QueuedConnection);
+                             },
+                             Qt::DirectConnection);
+                     });
+
+    engine.loadFromModule(QStringLiteral("Loupe.Quick"), QStringLiteral("Main"));
+
+    if (engine.rootObjects().isEmpty())
+    {
+        return 2;
+    }
+
+    QTimer::singleShot(10000, &application, [&application]()
+                       { application.exit(4); });
+
+    return application.exec();
+}
+
+}   // namespace
 
 int main(int argc, char* argv[])
 {
-#if defined(LOUPE_USE_DBG_HEAP)
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif
+    QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
+    QGuiApplication application(argc, argv);
 
-    QApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
-    QApplication application(argc, argv);
-
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("Loupe");
+    QCoreApplication::setOrganizationName(QStringLiteral("MelkaJ"));
+    QCoreApplication::setApplicationName(QStringLiteral("Loupe"));
     QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
-    QApplication::setApplicationDisplayName(QApplication::translate("Application", "Loupe"));
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
     const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("editor.session"), "ui.session");
 
-    QCommandLineOption noDrm("no-drm", "Disable DRM settings of documents.");
-    QCommandLineOption lightGui("theme-light", "Use a light theme for the GUI.");
-    QCommandLineOption darkGui("theme-dark", "Use a dark theme for the GUI.");
+    QCommandLineOption noDrm(QStringLiteral("no-drm"), QStringLiteral("Disable DRM settings of documents."));
+    QCommandLineOption lightGui(QStringLiteral("theme-light"), QStringLiteral("Use a light theme for the GUI."));
+    QCommandLineOption darkGui(QStringLiteral("theme-dark"), QStringLiteral("Use a dark theme for the GUI."));
+    QCommandLineOption quickSmoke(QStringLiteral("quick-smoke"),
+                                  QStringLiteral("Load the packaged Quick shell and exit after scene-graph initialization."));
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
 
     QCommandLineParser parser;
@@ -62,16 +176,14 @@ int main(int argc, char* argv[])
     parser.addOption(noDrm);
     parser.addOption(lightGui);
     parser.addOption(darkGui);
+    parser.addOption(quickSmoke);
     parser.addOption(configPath);
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument("file", "The PDF file to open.");
+    parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The PDF file to open."));
     parser.process(application);
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
 
-    // Constructed after the settings path is applied (unlike PDFSentrySession
-    // above, which does not support --config) so a portable/--config install
-    // gets its log directory under <settingsPath>/logs rather than %APPDATA%.
     const pdf::PDFLogSession logSession(QStringLiteral("editor"));
 
     if (parser.isSet(noDrm))
@@ -83,22 +195,42 @@ int main(int argc, char* argv[])
     translator.loadSettings();
     translator.installTranslator();
 
-    pdf::PDFWidgetUtils::initApplicationColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
+    applyColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
+    QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
-    QIcon appIcon(":/app-icon.svg");
-    QApplication::setWindowIcon(appIcon);
+    EditorHost host;
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
 
-    pdfviewer::PDFEditorMainWindow mainWindow;
-    mainWindow.show();
-
-    QStringList arguments = parser.positionalArguments();
-    if (arguments.isEmpty())
+    if (parser.isSet(quickSmoke))
     {
-        mainWindow.showRecoveryCandidates();
+        return runQuickSmoke(application, host);
     }
-    else
+
+    QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
+                     [&application](QObject* object, const QUrl& url)
+                     {
+                         if (object)
+                         {
+                             return;
+                         }
+
+                         fprintf(stderr, "loupe-editor qml_load_failed url=%s\n", url.toString().toLocal8Bit().constData());
+                         application.exit(2);
+                     });
+
+    engine.loadFromModule(QStringLiteral("Loupe.Quick"), QStringLiteral("Main"));
+
+    if (engine.rootObjects().isEmpty())
     {
-        mainWindow.getProgramController()->openDocument(arguments.front());
+        return 2;
+    }
+
+    const QStringList arguments = parser.positionalArguments();
+    if (!arguments.isEmpty())
+    {
+        QMetaObject::invokeMethod(&host, [path = arguments.front(), &host]()
+                                  { host.openInitialPath(path); }, Qt::QueuedConnection);
     }
 
     return application.exec();

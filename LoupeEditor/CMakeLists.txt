@@ -20,13 +20,59 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-add_executable(LoupeEditor
+qt_policy(SET QTP0001 NEW)
+
+add_library(LoupeEditorQuick STATIC
+    editorhost.cpp
+    editorhost.h
+)
+
+qt_add_qml_module(LoupeEditorQuick
+    URI Loupe.Quick
+    VERSION 1.0
+    QML_FILES
+        qml/Main.qml
+        qml/Workspace.qml
+        qml/CanvasPane.qml
+)
+
+target_link_libraries(LoupeEditorQuick
+    PUBLIC
+        LoupeLibQuick
+        LoupeLibInteraction
+        LoupeLibCore
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::QuickDialogs2
+)
+
+set_target_properties(LoupeEditorQuick PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_include_directories(LoupeEditorQuick PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+qt_add_executable(LoupeEditor
     main.cpp
     icon.rc
     app.qrc
 )
 
-target_link_libraries(LoupeEditor PRIVATE LoupeLibCore LoupeLibWidgets LoupeLibGui Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(LoupeEditor
+    PRIVATE
+        LoupeEditorQuick
+        LoupeEditorQuickplugin
+        LoupeEditorQuickplugin_init
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::QuickDialogs2
+)
+
+qt_import_qml_plugins(LoupeEditor)
 
 set_target_properties(LoupeEditor PROPERTIES
     WIN32_EXECUTABLE ON
@@ -35,8 +81,40 @@ set_target_properties(LoupeEditor PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 
-install(TARGETS LoupeEditor RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR})
+install(TARGETS LoupeEditor LoupeEditorQuick
+    RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR}
+    LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+    ARCHIVE DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+)
 
 if(LOUPE_ENABLE_SENTRY)
     loupe_deploy_sentry_crashpad(LoupeEditor)
+endif()
+
+option(LOUPE_BUILD_EDITOR_WIDGETS_ORACLE "Build the non-installed Widgets editor oracle" ON)
+
+if(LOUPE_BUILD_EDITOR_WIDGETS_ORACLE)
+    add_executable(LoupeEditorWidgetsOracle
+        widgets_oracle_main.cpp
+        icon.rc
+        app.qrc
+    )
+
+    target_link_libraries(LoupeEditorWidgetsOracle
+        PRIVATE
+            LoupeLibCore
+            LoupeLibWidgets
+            LoupeLibGui
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Widgets
+    )
+
+    set_target_properties(LoupeEditorWidgetsOracle PROPERTIES
+        WIN32_EXECUTABLE ON
+        MACOSX_BUNDLE ON
+        EXCLUDE_FROM_ALL OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
 endif()
