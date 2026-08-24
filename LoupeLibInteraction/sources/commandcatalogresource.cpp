@@ -14,9 +14,14 @@
 
 #include "commandcatalogresource_p.h"
 
-#include <QtCore/qglobal.h>
+int qInitResources_commandcatalog();
 
-void pdfinteraction::ensureCommandCatalogResource()
+namespace pdfinteraction
 {
-    Q_INIT_RESOURCE(commandcatalog);
+
+void ensureCommandCatalogResource()
+{
+    qInitResources_commandcatalog();
 }
+
+}   // namespace pdfinteraction
