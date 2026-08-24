@@ -115,6 +115,7 @@
         "UnitTests/tst_interactionboundarytest.cpp",
         "UnitTests/tst_documentfacadetest.cpp",
         "UnitTests/tst_viewportcontrollertest.cpp",
+        "UnitTests/tst_viewportcommandbridgetest.cpp",
         "UnitTests/tst_pagesurfacetest.cpp",
         "UnitTests/tst_interactioncontrollertest.cpp",
         "UnitTests/tst_overlayframetest.cpp",
@@ -123,16 +124,29 @@
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoupeLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame"]
+      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame"]
     },
     "quick": {
-      "paths": ["LoupeLibQuick/**", "UnitTests/tst_quickcanvastest.cpp"],
-      "targets": ["LoupeLibQuick"],
-      "tests": ["UnitTestsQuickCanvas"]
+      "paths": [
+        "LoupeLibQuick/**",
+        "LoupeEditor/editorhost.cpp",
+        "LoupeEditor/editorhost.h",
+        "LoupeEditor/main.cpp",
+        "LoupeEditor/qml/**",
+        "UnitTests/tst_quickcanvastest.cpp",
+        "UnitTests/tst_editorhosttest.cpp"
+      ],
+      "targets": ["LoupeLibQuick", "LoupeEditor", "LoupeEditorQuick"],
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsEditorHost"]
     },
     "widgets_gui": {
-      "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],
-      "targets": ["LoupeEditor", "LoupeViewer"],
+      "paths": [
+        "LoupeLibWidgets/**",
+        "LoupeLibGui/**",
+        "LoupeEditor/widgets_oracle_main.cpp",
+        "LoupeViewer/**"
+      ],
+      "targets": ["LoupeEditorWidgetsOracle", "LoupeViewer"],
       "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
     },
     "plugins": {
