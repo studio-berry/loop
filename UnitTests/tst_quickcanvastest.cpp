@@ -643,13 +643,21 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
 
     const QRect placed = m_viewport->placedPageRect(0);
     const QPointF start(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    const QPointF dragged = start + QPointF(40.0, 0.0);
 
     QMouseEvent press(QEvent::MouseButtonPress, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mousePressEvent(&press);
 
-    const QPointF dragged = start + QPointF(40.0, 40.0);
+    QMouseEvent release(QEvent::MouseButtonRelease, start, start, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    m_item->mouseReleaseEvent(&release);
+
+    QMouseEvent secondPress(QEvent::MouseButtonPress, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    m_item->mousePressEvent(&secondPress);
+
     QMouseEvent move(QEvent::MouseMove, dragged, dragged, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mouseMoveEvent(&move);
+
+    QVERIFY(m_controller->state().drag().has_value());
 
     QFocusEvent focusOut(QEvent::FocusOut, Qt::OtherFocusReason);
     m_item->focusOutEvent(&focusOut);

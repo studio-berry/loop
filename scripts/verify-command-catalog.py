@@ -29,10 +29,28 @@ POLICY_PATH = ROOT / "docs" / "loupe-shell-actions.json"
 MAIN_WINDOW_PATH = ROOT / "LoupeLibGui" / "pdfeditormainwindow.cpp"
 CONTROLLER_PATH = ROOT / "LoupeLibGui" / "pdfprogramcontroller.cpp"
 
-# The commands P4-S2 implements. A command may only leave this set by being
-# implemented somewhere else, never by being quietly downgraded.
+# Commands that have a handler in LoupeLibInteraction (DocumentFacade for
+# document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
+# may only leave this set by being implemented somewhere else, never by being
+# quietly downgraded.
 IMPLEMENTED_COMMANDS = frozenset(
-    {"actionOpen", "actionClose", "actionSave", "actionSave_As"}
+    {
+        "actionOpen",
+        "actionClose",
+        "actionSave",
+        "actionSave_As",
+        "actionGoToNextPage",
+        "actionGoToPreviousPage",
+        "actionGoToDocumentStart",
+        "actionGoToDocumentEnd",
+        "actionZoom_In",
+        "actionZoom_Out",
+        "actionFitPage",
+        "actionFitWidth",
+        "actionFitHeight",
+        "actionRotateLeft",
+        "actionRotateRight",
+    }
 )
 
 REQUIRED_COMMAND_KEYS = frozenset(
@@ -300,7 +318,7 @@ def check_implemented_set(policy: dict) -> list[str]:
     if unexpected:
         errors.append(
             "commands marked implemented without a handler in "
-            f"pdfinteraction::DocumentFacade: {', '.join(unexpected)}"
+            f"LoupeLibInteraction: {', '.join(unexpected)}"
         )
     missing = sorted(IMPLEMENTED_COMMANDS - implemented)
     if missing:

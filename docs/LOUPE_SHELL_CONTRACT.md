@@ -13,11 +13,15 @@ Editor action inventory is recorded in [`loupe-shell-actions.json`](loupe-shell-
 
 ## Product shell
 
-`LoupeEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
-CLI. Opening a PDF is the Document workspace and includes inherited Viewer
-behavior. PageMaster, Diff, and Viewer are not new windows in this contract;
-their retained Core/CLI semantics are routed into the product workspaces when
-the GUI gate opens.
+`LoupeEditor` is the installed interactive Loupe shell on the P4-S7 navigable
+product root: a packaged `Loupe.Quick` `ApplicationWindow` that opens, closes,
+reopens, and navigates a PDF through the host-neutral Interaction/Canvas stack.
+The Widgets editor remains available as the non-installed `LoupeEditorWidgetsOracle`
+parity target until Phase 5. This is a navigable slice, not the Phase 4 operator
+loop or GUI exit gate.
+
+The repository may contain qualification-only Quick harnesses (`QuickShellSmoke`,
+`CanvasBenchmark`); they are not product UI.
 
 The eventual shell has these workspace IDs:
 

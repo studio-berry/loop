@@ -195,6 +195,9 @@ public:
     /// First visible page, or -1.
     int currentPage() const;
 
+    /// Pages reported by the geometry source, or 0 when none is bound.
+    int pageCount() const;
+
     QTransform pagePointToViewportMatrix(int pageIndex) const;
     std::optional<QPointF> viewportToPagePoint(QPoint viewportPoint, int pageIndex) const;
 

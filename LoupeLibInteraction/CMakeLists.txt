@@ -56,6 +56,8 @@ add_library(LoupeLibInteraction STATIC
     sources/pagesurfacekey.h
     sources/viewportcontroller.cpp
     sources/viewportcontroller.h
+    sources/viewportcommandbridge.cpp
+    sources/viewportcommandbridge.h
     sources/pagesurfacerenderer.cpp
     sources/pagesurfacerenderer.h
     sources/canvassnapshot.cpp
@@ -106,6 +108,10 @@ qt_add_resources(LoupeLibInteraction "commandcatalog"
     PREFIX "/loupe"
     FILES ${LOUPE_INTERACTION_COMMAND_CONTRACT}
 )
+
+if(TARGET LoupeLibInteraction_resources_1)
+    target_sources(LoupeLibInteraction PRIVATE $<TARGET_OBJECTS:LoupeLibInteraction_resources_1>)
+endif()
 
 # LoupeLibQuick is SHARED in P4-S5; a non-PIC static archive cannot be linked
 # into a shared object on Linux.

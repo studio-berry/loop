@@ -54,10 +54,10 @@ takes the three neutral objects by pointer; none of them is a property, a contex
 or constructible from QML. `SurfaceBuffer` crosses C++ ownership boundaries and nothing
 else — never a QML property, JS value, `QByteArray` context property, or URL.
 
-The module registers `LoupeCanvas` from C++ with `QML_NAMED_ELEMENT` and ships no `.qml`
-of its own. `scripts/verify-quick-shell-policy.py` checks every `.qml` in the repository
-against a fixed import allowlist, and a first-party `.qml` importing `Loupe.Canvas` would
-have to widen that allowlist to admit itself.
+`LoupeLibQuick` installs with `LoupeEditor` and registers `Loupe.Canvas` from
+C++ with `QML_NAMED_ELEMENT` and ships no `.qml` of its own. The packaged
+`Loupe.Quick` module (P4-S7) hosts `LoupeCanvas` in `CanvasPane.qml`; wiring
+remains C++ `bind()` only.
 
 ## Admitted hosting
 
