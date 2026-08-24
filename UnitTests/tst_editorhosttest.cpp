@@ -58,8 +58,7 @@ void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
         {
             sawOpen = true;
             QVERIFY(entry.value(QStringLiteral("implemented")).toBool());
-            QVERIFY(!host.shortcutForCommand(QStringLiteral("actionOpen")).isEmpty()
-                    || entry.contains(QStringLiteral("shortcut")));
+            QVERIFY(!host.shortcutForCommand(QStringLiteral("actionOpen")).isEmpty() || entry.contains(QStringLiteral("shortcut")));
         }
     }
     QVERIFY(sawOpen);

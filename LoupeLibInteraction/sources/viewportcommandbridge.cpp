@@ -111,17 +111,39 @@ bool ViewportCommandBridge::registerHandlers()
     };
 
     bool registered = true;
-    registered = bindAction(GoToNextPageCommandId, [this]() { goToPage(resolvedPageIndex() + 1); }) && registered;
-    registered = bindAction(GoToPreviousPageCommandId, [this]() { goToPage(resolvedPageIndex() - 1); }) && registered;
-    registered = bindAction(GoToDocumentStartCommandId, [this]() { goToPage(0); }) && registered;
-    registered = bindAction(GoToDocumentEndCommandId, [this]() { goToPage(lastPageIndex()); }) && registered;
-    registered = bindAction(ZoomInCommandId, [this]() { zoomByStep(ViewportController::ZoomStep); }) && registered;
-    registered = bindAction(ZoomOutCommandId, [this]() { zoomByStep(1.0 / ViewportController::ZoomStep); }) && registered;
-    registered = bindAction(FitPageCommandId, [this]() { applyZoomHint(ZoomHint::Fit); }) && registered;
-    registered = bindAction(FitWidthCommandId, [this]() { applyZoomHint(ZoomHint::FitWidth); }) && registered;
-    registered = bindAction(FitHeightCommandId, [this]() { applyZoomHint(ZoomHint::FitHeight); }) && registered;
-    registered = bindAction(RotateLeftCommandId, [this]() { rotateBy(-1); }) && registered;
-    registered = bindAction(RotateRightCommandId, [this]() { rotateBy(1); }) && registered;
+    registered = bindAction(GoToNextPageCommandId, [this]()
+                            { goToPage(resolvedPageIndex() + 1); }) &&
+                 registered;
+    registered = bindAction(GoToPreviousPageCommandId, [this]()
+                            { goToPage(resolvedPageIndex() - 1); }) &&
+                 registered;
+    registered = bindAction(GoToDocumentStartCommandId, [this]()
+                            { goToPage(0); }) &&
+                 registered;
+    registered = bindAction(GoToDocumentEndCommandId, [this]()
+                            { goToPage(lastPageIndex()); }) &&
+                 registered;
+    registered = bindAction(ZoomInCommandId, [this]()
+                            { zoomByStep(ViewportController::ZoomStep); }) &&
+                 registered;
+    registered = bindAction(ZoomOutCommandId, [this]()
+                            { zoomByStep(1.0 / ViewportController::ZoomStep); }) &&
+                 registered;
+    registered = bindAction(FitPageCommandId, [this]()
+                            { applyZoomHint(ZoomHint::Fit); }) &&
+                 registered;
+    registered = bindAction(FitWidthCommandId, [this]()
+                            { applyZoomHint(ZoomHint::FitWidth); }) &&
+                 registered;
+    registered = bindAction(FitHeightCommandId, [this]()
+                            { applyZoomHint(ZoomHint::FitHeight); }) &&
+                 registered;
+    registered = bindAction(RotateLeftCommandId, [this]()
+                            { rotateBy(-1); }) &&
+                 registered;
+    registered = bindAction(RotateRightCommandId, [this]()
+                            { rotateBy(1); }) &&
+                 registered;
 
     if (!registered)
     {
