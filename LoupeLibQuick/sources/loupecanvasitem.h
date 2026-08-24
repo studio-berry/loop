@@ -78,7 +78,7 @@ namespace pdfquick
 /// pointer. They are not properties, not context properties, and not
 /// constructible from QML, because a QML-constructible document handle is the
 /// exact thing ADR-010 forbids. QML instantiates the item; C++ connects it.
-class LOUPELIBQUICK_EXPORT LoupeCanvasItem final : public QQuickItem
+class LOUPELIBQUICK_EXPORT LoupeCanvasItem : public QQuickItem
 {
     Q_OBJECT
     QML_NAMED_ELEMENT(LoupeCanvas)
