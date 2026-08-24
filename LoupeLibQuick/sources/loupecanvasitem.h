@@ -99,6 +99,7 @@ class LOUPELIBQUICK_EXPORT LoupeCanvasItem : public QQuickItem
     Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
     Q_PROPERTY(bool traceOverlayVisible READ isTraceOverlayVisible WRITE setTraceOverlayVisible NOTIFY traceOverlayVisibleChanged)
     Q_PROPERTY(bool highContrast READ isHighContrast WRITE setHighContrast NOTIFY highContrastChanged)
+    Q_PROPERTY(QString accessibleDocumentSummary READ accessibleDocumentSummary WRITE setAccessibleDocumentSummary NOTIFY accessibleDocumentSummaryChanged)
 
 public:
     explicit LoupeCanvasItem(QQuickItem* parent = nullptr);
@@ -139,6 +140,10 @@ public:
     bool isHighContrast() const noexcept { return m_highContrast; }
     void setHighContrast(bool highContrast);
 
+    QString accessibleDocumentSummary() const;
+    void setAccessibleDocumentSummary(const QString& summary);
+    void notifyAccessibilityUpdate();
+
     /// The stats the developer overlay reports. Updated in updatePaintNode, so
     /// they describe the last frame actually built.
     CanvasFrameStats frameStats() const;
@@ -150,6 +155,7 @@ signals:
     void activeToolChanged();
     void traceOverlayVisibleChanged();
     void highContrastChanged();
+    void accessibleDocumentSummaryChanged();
 
 protected:
     QSGNode* updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData* data) override;
@@ -232,6 +238,7 @@ private:
 
     bool m_traceOverlayVisible = false;
     bool m_highContrast = false;
+    QString m_accessibleDocumentSummary;
 
     /// Set when the snapshot or the frame changed and the scene graph has not
     /// caught up yet. Both are read in updatePaintNode straight from the

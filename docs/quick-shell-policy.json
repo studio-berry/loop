@@ -58,6 +58,7 @@
     "static_policy_check": "scripts/verify-quick-shell-policy.py",
     "static_policy_test": "scripts/ci/test_quick_shell_contract.py",
     "scene_graph_smoke": "scripts/run-quick-backend-smoke.ps1",
+    "product_accessibility_smoke": "scripts/run-product-quick-a11y-smoke.ps1",
     "preferred_rhi_variable": "QSG_RHI_BACKEND",
     "software_backend_variable": "QT_QUICK_BACKEND=software",
     "warp_preference_variable": "QSG_RHI_PREFER_SOFTWARE_RENDERER=1",

@@ -8,45 +8,84 @@ Item {
     id: root
 
     property var host: editorHost
+    readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
         Pane {
-            Layout.preferredWidth: 48
+            id: workspaceRail
+            Layout.preferredWidth: 120
             Layout.fillHeight: true
             padding: 8
+
+            focus: true
+            Accessible.role: Accessible.Grouping
+            Accessible.name: qsTr("Workspace rail")
 
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 8
 
                 ToolButton {
+                    id: documentButton
                     Layout.fillWidth: true
                     text: qsTr("Document")
-                    enabled: false
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Workspace rail stub (P4-S8+)")
+                    checkable: true
+                    checked: workspaceStack.currentIndex === 0
+                    onClicked: workspaceStack.currentIndex = 0
+                    Accessible.name: qsTr("Document workspace")
+                    Accessible.role: Accessible.Button
                 }
 
                 ToolButton {
+                    id: preflightButton
                     Layout.fillWidth: true
                     text: qsTr("Preflight")
-                    enabled: false
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Preflight workspace is not part of the P4-S7 slice")
+                    checkable: true
+                    checked: workspaceStack.currentIndex === 1
+                    onClicked: workspaceStack.currentIndex = 1
+                    Accessible.name: qsTr("Preflight workspace")
+                    Accessible.role: Accessible.Button
+                }
+
+                ToolButton {
+                    id: inspectorButton
+                    Layout.fillWidth: true
+                    text: qsTr("Inspector")
+                    checkable: true
+                    checked: workspaceStack.currentIndex === 2
+                    onClicked: workspaceStack.currentIndex = 2
+                    Accessible.name: qsTr("Inspector workspace")
+                    Accessible.role: Accessible.Button
                 }
 
                 Item { Layout.fillHeight: true }
             }
         }
 
-        CanvasPane {
-            id: canvasPane
+        StackLayout {
+            id: workspaceStack
             Layout.fillWidth: true
             Layout.fillHeight: true
-            host: root.host
+            currentIndex: 0
+
+            CanvasPane {
+                id: canvasPane
+                host: root.host
+                Accessible.name: qsTr("Document canvas pane")
+            }
+
+            PreflightPane {
+                host: root.host
+            }
+
+            InspectorPane {
+                host: root.host
+            }
         }
     }
+
+    KeyNavigation.tab: canvasPane
 }

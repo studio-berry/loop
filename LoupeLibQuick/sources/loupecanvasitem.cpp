@@ -23,10 +23,12 @@
 
 #include "loupecanvasitem.h"
 
+#include "loupecanvasaccessible.h"
 #include "interactioncontroller.h"
 #include "pagesurfacecoordinator.h"
 #include "viewportcontroller.h"
 
+#include <QAccessible>
 #include <QFocusEvent>
 #include <QHoverEvent>
 #include <QKeyEvent>
@@ -91,6 +93,9 @@ LoupeCanvasItem::LoupeCanvasItem(QQuickItem* parent) :
 
     connect(&m_present, &CanvasPresentMetrics::framePresented, this, [this]()
             { m_framePending = false; });
+
+    installLoupeCanvasAccessibility();
+    setAccessibleDocumentSummary(tr("No document is currently open."));
 }
 
 LoupeCanvasItem::~LoupeCanvasItem()
@@ -243,6 +248,29 @@ void LoupeCanvasItem::setHighContrast(bool highContrast)
     m_paletteDirty = true;
     Q_EMIT highContrastChanged();
     requestFrame();
+}
+
+QString LoupeCanvasItem::accessibleDocumentSummary() const
+{
+    return m_accessibleDocumentSummary;
+}
+
+void LoupeCanvasItem::setAccessibleDocumentSummary(const QString& summary)
+{
+    if (m_accessibleDocumentSummary == summary)
+    {
+        return;
+    }
+
+    m_accessibleDocumentSummary = summary;
+    Q_EMIT accessibleDocumentSummaryChanged();
+    notifyAccessibilityUpdate();
+}
+
+void LoupeCanvasItem::notifyAccessibilityUpdate()
+{
+    QAccessibleValueChangeEvent event(this, m_accessibleDocumentSummary);
+    QAccessible::updateAccessibility(&event);
 }
 
 void LoupeCanvasItem::refreshPalette()

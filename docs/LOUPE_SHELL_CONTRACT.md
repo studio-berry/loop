@@ -164,7 +164,9 @@ When the GUI gate opens, workspace switching and rail/canvas/inspector traversal
 must be keyboard reachable, every panel must expose a screen-reader name and
 role, focus must survive workspace changes, and 100/150/200% high-DPI layouts
 must remain usable. Contrast and severity colors follow #25 and #194; this
-contract does not create a second accessibility baseline.
+contract does not create a second accessibility baseline. P4-S10 evidence lives
+in [QUICK_ACCESSIBILITY_CONTRACT.md](QUICK_ACCESSIBILITY_CONTRACT.md) and
+`scripts/run-product-quick-a11y-smoke.ps1`.
 
 ## Verification
 

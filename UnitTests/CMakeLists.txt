@@ -284,6 +284,65 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsOverlayFrame "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOverlayFrame")
 
+    add_executable(UnitTestsPreflightInteraction
+        tst_preflightinteraction.cpp
+    )
+
+    target_link_libraries(UnitTestsPreflightInteraction PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsPreflightInteraction PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
+
+    add_executable(UnitTestsP4S9Interaction
+        tst_p4s9interaction.cpp
+    )
+
+    target_link_libraries(UnitTestsP4S9Interaction PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsP4S9Interaction PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
+
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_executable(UnitTestsQuickAccessibility
+            tst_quickaccessibilitytest.cpp
+        )
+
+        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore LoupeEditorQuick LoupeEditorQuickplugin LoupeEditorQuickplugin_init Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        set_target_properties(UnitTestsQuickAccessibility PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsQuickAccessibility "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsQuickAccessibility")
+        set_tests_properties(UnitTestsQuickAccessibility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        add_executable(UnitTestsShellKeyboard
+            tst_shellkeyboardtest.cpp
+        )
+
+        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+
+        set_target_properties(UnitTestsShellKeyboard PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsShellKeyboard "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsShellKeyboard")
+    endif()
+
     # Architecture invariant I25. The inverse of the five targets above: this one
     # links LoupeLibQuick and therefore Qt6::Quick, because it is the admitted
     # presentation host and has to be able to name a QQuickItem. What it pins is

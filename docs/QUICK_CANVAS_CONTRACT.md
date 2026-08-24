@@ -1,9 +1,9 @@
 # Qt Quick canvas contract
 
 Status: P4-S6 (0.2.0 Phase 4). Types live in `LoupeLibQuick/sources/loupecanvasitem.h`,
-`canvasnodebuilder.h`, `canvaspalette.h`, `canvaspresentmetrics.h`, and
-`canvastraceoverlay.h`. Architecture invariants **I25** and **I26**; test targets
-`UnitTestsQuickCanvas` and `UnitTestsCanvasParity`.
+`canvasnodebuilder.h`, `canvaspalette.h`, `canvaspresentmetrics.h`, `canvastraceoverlay.h`,
+and `loupecanvasaccessible.h`. Architecture invariants **I25**, **I26**, and **I27**; test
+targets `UnitTestsQuickCanvas`, `UnitTestsCanvasParity`, and `UnitTestsQuickAccessibility`.
 Companion to [INTERACTION_CONTRACT.md](INTERACTION_CONTRACT.md), which owns the
 host-neutral half, and [PAGE_SURFACE_CONTRACT.md](PAGE_SURFACE_CONTRACT.md), which owns
 page pixels.
