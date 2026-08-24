@@ -54,8 +54,6 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvaspresentmetrics.h
     sources/canvastraceoverlay.cpp
     sources/canvastraceoverlay.h
-    sources/loupecanvasitem.cpp
-    sources/loupecanvasitem.h
 )
 
 # No QML_FILES. LoupeCanvasItem is registered from C++ with QML_NAMED_ELEMENT,
@@ -66,6 +64,10 @@ qt_add_library(LoupeLibQuick SHARED
 qt_add_qml_module(LoupeLibQuick
     URI Loupe.Canvas
     VERSION 1.0
+    DEPENDENCIES QtQuick
+    SOURCES
+        sources/loupecanvasitem.cpp
+        sources/loupecanvasitem.h
 )
 
 include(GenerateExportHeader)
