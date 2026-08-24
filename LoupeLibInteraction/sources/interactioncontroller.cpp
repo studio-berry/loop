@@ -163,7 +163,7 @@ void InteractionController::cancelActive(InteractionCancelReason reason)
     }
 
     m_state.cancel(reason);
-    emit interactionCancelled(reason);
+    Q_EMIT interactionCancelled(reason);
 }
 
 void InteractionController::publishOverlay()
@@ -172,7 +172,7 @@ void InteractionController::publishOverlay()
 
     m_hitTest->setSelection(m_state.selected());
     m_overlay = m_overlays->build(m_state, token());
-    emit overlayFrameChanged();
+    Q_EMIT overlayFrameChanged();
 }
 
 void InteractionController::refreshOverlay()
@@ -216,7 +216,7 @@ void InteractionController::handlePointer(const PointerIntent& intent)
             // every time someone drags something to the border.
             if (m_state.clearHover())
             {
-                emit hoverChanged(InteractionTarget());
+                Q_EMIT hoverChanged(InteractionTarget());
                 publishOverlay();
             }
             break;
@@ -251,7 +251,7 @@ void InteractionController::handlePointerPress(const PointerIntent& intent)
     const bool selectionDidChange = m_state.setSelected(target);
     if (selectionDidChange)
     {
-        emit selectionChanged(target);
+        Q_EMIT selectionChanged(target);
     }
 
     // Only a handle or the already-selected object starts a drag. Pressing on an
@@ -284,7 +284,7 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
         // each pointer delta is exactly what issue #142 forbids.
         if (!delta.isNull() && !m_viewport->scrollByPixels(delta).isNull())
         {
-            emit viewportChanged();
+            Q_EMIT viewportChanged();
         }
 
         m_state.setPointerPosition(intent.positionPx, -1, std::nullopt);
@@ -325,7 +325,7 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
         return;
     }
 
-    emit hoverChanged(target);
+    Q_EMIT hoverChanged(target);
     publishOverlay();
 }
 
@@ -348,7 +348,7 @@ void InteractionController::handlePointerRelease(const PointerIntent& intent)
         // One semantic operation per completed drag, and the controller does not
         // apply it: the owner routes this through the command catalog, which
         // stays the only mutation path (issue #141 AC2).
-        emit dragCompleted(*session);
+        Q_EMIT dragCompleted(*session);
     }
 
     publishOverlay();
@@ -379,14 +379,14 @@ void InteractionController::handleWheel(const WheelIntent& intent)
         // does advance the viewport's request generation: a zoom changes what a
         // wanted page should look like, not merely which pages are wanted.
         m_viewport->setZoom(zoom, QPointF(intent.positionPx));
-        emit viewportChanged();
+        Q_EMIT viewportChanged();
         return;
     }
 
     const QPoint pixelDelta = !intent.pixelDelta.isNull() ? intent.pixelDelta : intent.angleDelta * m_keyScrollStepPx / WheelDeltasPerStep;
     if (!pixelDelta.isNull() && !m_viewport->scrollByPixels(pixelDelta).isNull())
     {
-        emit viewportChanged();
+        Q_EMIT viewportChanged();
     }
 }
 
@@ -431,7 +431,7 @@ void InteractionController::handleKey(const KeyIntent& intent)
 
             if (!m_viewport->scrollByPixels(step).isNull())
             {
-                emit viewportChanged();
+                Q_EMIT viewportChanged();
             }
 
             return;
@@ -448,14 +448,14 @@ void InteractionController::handleKey(const KeyIntent& intent)
             if (m_viewport->isBlockMode())
             {
                 m_viewport->setBlockIndex(m_viewport->blockIndex() + blockDirection);
-                emit viewportChanged();
+                Q_EMIT viewportChanged();
                 return;
             }
 
             const int step = qMax(1, m_viewport->viewportSizePx().height()) * -blockDirection;
             if (!m_viewport->scrollByPixels(QPoint(0, step)).isNull())
             {
-                emit viewportChanged();
+                Q_EMIT viewportChanged();
             }
 
             return;
@@ -487,7 +487,7 @@ void InteractionController::handleHostNotification(HostNotification notification
     const bool hoverCleared = m_state.clearHover();
     if (hoverCleared)
     {
-        emit hoverChanged(InteractionTarget());
+        Q_EMIT hoverChanged(InteractionTarget());
     }
 
     if (wasActive || hoverCleared)
@@ -503,7 +503,7 @@ void InteractionController::selectTarget(const InteractionTarget& target)
         return;
     }
 
-    emit selectionChanged(target);
+    Q_EMIT selectionChanged(target);
     publishOverlay();
 }
 
