@@ -126,9 +126,6 @@ foreach ($pluginAction in @($shell.plugin_action_policy)) {
 }
 
 $legacyLedger = @($shell.legacy_surface_disposition)
-if ($legacyLedger.Count -ne 48) {
-    throw "legacy_surface_disposition must contain exactly 48 tracked .ui forms, found $($legacyLedger.Count)"
-}
 $legacyPaths = @()
 $legacyFields = @("path", "disposition", "owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition", "rationale")
 foreach ($entry in $legacyLedger) {
@@ -147,10 +144,14 @@ foreach ($entry in $legacyLedger) {
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
         throw "Legacy surface ledger references missing file: $($entry.path)"
     }
-  if ($legacyPaths -contains $entry.path) {
+    if ($legacyPaths -contains $entry.path) {
         throw "Duplicate legacy surface ledger entry: $($entry.path)"
     }
     $legacyPaths += $entry.path
+}
+
+if ($legacyLedger.Count -ne 48) {
+    throw "legacy_surface_disposition must contain exactly 48 tracked .ui forms, found $($legacyLedger.Count)"
 }
 
 $repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | ForEach-Object {

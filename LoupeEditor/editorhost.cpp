@@ -117,10 +117,10 @@ EditorHost::EditorHost(QObject* parent) :
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport);
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
-                                                                          m_viewport,
-                                                                          *m_hitTest,
-                                                                          *m_overlays,
-                                                                          this);
+                                                                            m_viewport,
+                                                                            *m_hitTest,
+                                                                            *m_overlays,
+                                                                            this);
     m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
                                                                           m_submitter,
                                                                           m_renderer,
@@ -464,8 +464,7 @@ void EditorHost::connectFacade()
                 }
 
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 
     connect(&m_facade, &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             { bumpPresentation(); });
@@ -475,15 +474,13 @@ void EditorHost::connectFacade()
                 onDocumentGone();
                 onDocumentReady();
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 
     connect(&m_facade, &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
             {
                 onDocumentGone();
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 }
 
 void EditorHost::connectViewport()
@@ -495,8 +492,7 @@ void EditorHost::connectViewport()
                 {
                     m_surfaces->requestSurfaces();
                 }
-                bumpPresentation();
-            });
+                bumpPresentation(); });
 }
 
 void EditorHost::connectCatalog()

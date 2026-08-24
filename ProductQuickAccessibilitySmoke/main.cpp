@@ -20,14 +20,22 @@ QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
     switch (api)
     {
-        case QSGRendererInterface::Software: return QStringLiteral("software");
-        case QSGRendererInterface::OpenGL: return QStringLiteral("opengl");
-        case QSGRendererInterface::Direct3D11: return QStringLiteral("d3d11");
-        case QSGRendererInterface::Direct3D12: return QStringLiteral("d3d12");
-        case QSGRendererInterface::Vulkan: return QStringLiteral("vulkan");
-        case QSGRendererInterface::Metal: return QStringLiteral("metal");
-        case QSGRendererInterface::Null: return QStringLiteral("null");
-        case QSGRendererInterface::Unknown: return QStringLiteral("unknown");
+        case QSGRendererInterface::Software:
+            return QStringLiteral("software");
+        case QSGRendererInterface::OpenGL:
+            return QStringLiteral("opengl");
+        case QSGRendererInterface::Direct3D11:
+            return QStringLiteral("d3d11");
+        case QSGRendererInterface::Direct3D12:
+            return QStringLiteral("d3d12");
+        case QSGRendererInterface::Vulkan:
+            return QStringLiteral("vulkan");
+        case QSGRendererInterface::Metal:
+            return QStringLiteral("metal");
+        case QSGRendererInterface::Null:
+            return QStringLiteral("null");
+        case QSGRendererInterface::Unknown:
+            return QStringLiteral("unknown");
     }
     return QStringLiteral("unrecognized");
 }

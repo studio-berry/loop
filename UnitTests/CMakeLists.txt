@@ -240,6 +240,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
 
         target_compile_definitions(UnitTestsProductOperatorLoop PRIVATE
             LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+            LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
         )
 
         set_target_properties(UnitTestsProductOperatorLoop PROPERTIES

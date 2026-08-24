@@ -8,7 +8,8 @@
 namespace pdfinteraction
 {
 
-PagesModel::PagesModel(QObject* parent) : QAbstractListModel(parent)
+PagesModel::PagesModel(QObject* parent) :
+    QAbstractListModel(parent)
 {
 }
 
@@ -28,15 +29,24 @@ QVariant PagesModel::data(const QModelIndex& index, int role) const
     switch (role)
     {
         case Qt::DisplayRole:
-        case LabelRole: return page.label;
-        case PageIdRole: return page.id;
-        case SourceRole: return page.source;
-        case PageNumberRole: return page.pageNumber;
-        case SizeRole: return page.sizePt;
-        case RotationRole: return page.rotation;
-        case ModifiedRole: return page.modified;
-        case SelectedRole: return page.selected;
-        default: return {};
+        case LabelRole:
+            return page.label;
+        case PageIdRole:
+            return page.id;
+        case SourceRole:
+            return page.source;
+        case PageNumberRole:
+            return page.pageNumber;
+        case SizeRole:
+            return page.sizePt;
+        case RotationRole:
+            return page.rotation;
+        case ModifiedRole:
+            return page.modified;
+        case SelectedRole:
+            return page.selected;
+        default:
+            return {};
     }
 }
 
@@ -168,4 +178,4 @@ const PageView* PagesModel::page(const QString& pageId) const
     return nullptr;
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

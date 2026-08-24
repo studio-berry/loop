@@ -36,7 +36,7 @@ pdf::PreflightResult resultWith(const QList<pdf::PreflightFinding>& errors,
     return result;
 }
 
-} // namespace
+}   // namespace
 
 class PreflightInteractionTest final : public QObject
 {

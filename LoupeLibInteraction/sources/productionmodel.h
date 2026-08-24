@@ -88,8 +88,8 @@ private:
     State m_state = State::NotReady;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
 Q_DECLARE_METATYPE(pdfinteraction::ProductionModel::State)
 
-#endif // PRODUCTIONMODEL_H
+#endif   // PRODUCTIONMODEL_H

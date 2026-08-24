@@ -81,9 +81,9 @@ private:
     Status m_status = Status::Unavailable;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
 Q_DECLARE_METATYPE(pdfinteraction::PreviewStateModel::Authority)
 Q_DECLARE_METATYPE(pdfinteraction::PreviewStateModel::Status)
 
-#endif // PREVIEWSTATEMODEL_H
+#endif   // PREVIEWSTATEMODEL_H

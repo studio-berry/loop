@@ -1,7 +1,7 @@
 # Phase 5 Widgets deletion handoff
 
-**Status:** prepared by P4-S12 product cutover  
-**Owner:** 0.2.0 Phase 5  
+**Status:** prepared by P4-S12 product cutover
+**Owner:** 0.2.0 Phase 5
 **Updated:** 2026-08-24
 
 Phase 4 closes with an installed Qt Quick `LoupeEditor` product shell. Phase 5 owns

@@ -4,10 +4,10 @@
 
 #include "editorhost.h"
 #include "inspectormodel.h"
+#include "operatoracceptancehelpers.h"
 #include "preflightcontroller.h"
 #include "previewstatemodel.h"
 
-#include <QFileInfo>
 #include <QtTest>
 
 using pdfinteraction::InspectorModel;
@@ -16,13 +16,6 @@ using pdfinteraction::PreviewStateModel;
 
 namespace
 {
-
-QString fixturePdfPath()
-{
-    return QFileInfo(QStringLiteral("%1/../loupe-preflight/testdata/fixtures/bleed-missing.pdf")
-                         .arg(QT_STRINGIFY(LOUPE_UNITTEST_SOURCE_DIR)))
-        .canonicalFilePath();
-}
 
 pdf::PreflightFinding makeFinding()
 {
@@ -38,7 +31,7 @@ pdf::PreflightFinding makeFinding()
     return finding;
 }
 
-} // namespace
+}   // namespace
 
 class ProductOperatorLoopTest final : public QObject
 {
@@ -50,7 +43,7 @@ private slots:
 
 void ProductOperatorLoopTest::openDetectPinpointInspectUnderstandState()
 {
-    const QString pdfPath = fixturePdfPath();
+    const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
     QVERIFY2(QFileInfo::exists(pdfPath), pdfPath.toUtf8().constData());
 
     EditorHost host;
