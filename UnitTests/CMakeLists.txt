@@ -360,6 +360,17 @@ set_target_properties(UnitTestsPreflightInteraction PROPERTIES
 )
 add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
 
+add_executable(UnitTestsP4S9Interaction
+    tst_p4s9interaction.cpp
+)
+target_link_libraries(UnitTestsP4S9Interaction PRIVATE
+    LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test
+)
+set_target_properties(UnitTestsP4S9Interaction PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}"
+)
+add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
+
 add_executable(UnitTestsPreflightVerdict
     tst_preflightverdicttest.cpp
 )

@@ -1,8 +1,16 @@
 add_library(LoupeLibInteraction STATIC
+    sources/inspectormodel.cpp
+    sources/inspectormodel.h
+    sources/pagesmodel.cpp
+    sources/pagesmodel.h
     sources/preflightfindingsmodel.cpp
     sources/preflightfindingsmodel.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
+    sources/previewstatemodel.cpp
+    sources/previewstatemodel.h
+    sources/productionmodel.cpp
+    sources/productionmodel.h
 )
 
 target_link_libraries(LoupeLibInteraction

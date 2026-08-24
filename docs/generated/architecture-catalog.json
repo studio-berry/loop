@@ -353,6 +353,7 @@
     "UnitTestsOperatorAcceptance",
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
+    "UnitTestsP4S9Interaction",
     "UnitTestsPageMasterExport",
     "UnitTestsPdfToolContract",
     "UnitTestsPluginAbi",
