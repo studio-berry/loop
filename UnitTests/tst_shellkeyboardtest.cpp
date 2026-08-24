@@ -10,6 +10,7 @@ class ShellKeyboardTest : public QObject
 private Q_SLOTS:
     void hostExposesAccessibilityHelpers();
     void selectFindingRequiresDocument();
+    void preferReducedMotionReadsEnvironment();
 };
 
 void ShellKeyboardTest::hostExposesAccessibilityHelpers()
@@ -27,6 +28,17 @@ void ShellKeyboardTest::selectFindingRequiresDocument()
     EditorHost host;
     host.selectFinding(QStringLiteral("missing"));
     QCOMPARE(host.inspectorTitle(), QString());
+}
+
+void ShellKeyboardTest::preferReducedMotionReadsEnvironment()
+{
+    const QByteArray previous = qgetenv("QT_ACCESSIBILITY_REDUCE_MOTION");
+    qputenv("QT_ACCESSIBILITY_REDUCE_MOTION", "1");
+
+    EditorHost host;
+    QVERIFY(host.preferReducedMotion());
+
+    qputenv("QT_ACCESSIBILITY_REDUCE_MOTION", previous);
 }
 
 QTEST_MAIN(ShellKeyboardTest)

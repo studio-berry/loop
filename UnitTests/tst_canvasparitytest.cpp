@@ -218,8 +218,10 @@ struct ParityFixture
         item->bind(&viewport, controller.get(), surfaces.get());
 
         window->show();
+        QVERIFY(QTest::qWaitForWindowExposed(window.get()));
 
         surfaces->requestSurfaces();
+        QCoreApplication::processEvents();
     }
 
     ~ParityFixture()

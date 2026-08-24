@@ -790,11 +790,14 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
     // OverlayFrame's own header states the contract -- a frame whose token no
     // longer matches is refused rather than drawn -- and this is the host's half
     // of it.
-    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || m_interaction->overlayFrame().token.revision == currentRevision;
+    const OverlayFrame& liveOverlay = m_interaction ? m_interaction->overlayFrame() : OverlayFrame();
+    const bool overlayWasPublished = liveOverlay.token.isValid();
+    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished
+        || liveOverlay.token.revision == currentRevision;
 
     if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
     {
-        const OverlayFrame& live = m_interaction->overlayFrame();
+        const OverlayFrame& live = liveOverlay;
         const OverlayFrame empty;
         const OverlayFrame& frame = overlayIsCurrent ? live : empty;
 

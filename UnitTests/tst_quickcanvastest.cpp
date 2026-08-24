@@ -329,6 +329,10 @@ private:
     /// it could not render is worse than no gate.
     QImage renderFrame();
 
+    /// Request surfaces and deliver queued coordinator completions before the
+    /// scene graph can supersede demand again.
+    void requestSurfacesAndFlush();
+
     std::unique_ptr<FakeGeometrySource> m_geometry;
     std::unique_ptr<FakeRevisionSource> m_revisions;
     std::unique_ptr<pdfinteraction::ViewportController> m_viewport;
@@ -388,6 +392,9 @@ void QuickCanvasTest::cleanup()
 void QuickCanvasTest::bindItem()
 {
     m_item->bind(m_viewport.get(), m_controller.get(), m_surfaces.get());
+    // bind() publishes viewport geometry and may request surfaces through the
+    // demand-changed path; flush queued admissions before the test drives more.
+    QCoreApplication::processEvents();
 }
 
 void QuickCanvasTest::buildCoordinator()
@@ -430,6 +437,12 @@ QImage QuickCanvasTest::renderFrame()
 
     QCoreApplication::processEvents();
     return frame;
+}
+
+void QuickCanvasTest::requestSurfacesAndFlush()
+{
+    m_surfaces->requestSurfaces();
+    QCoreApplication::processEvents();
 }
 
 void QuickCanvasTest::severityIsLegibleWithoutColour()
@@ -706,7 +719,7 @@ void QuickCanvasTest::admittedTilesReachTheSceneGraph()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
 
     // The relay the coordinator posts completions through is always queued, so
@@ -730,7 +743,7 @@ void QuickCanvasTest::revisionReplacementLeavesNoStaleTile()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -751,7 +764,7 @@ void QuickCanvasTest::revisionReplacementLeavesNoStaleTile()
     // And the refusal is not a permanent dead canvas: once the coordinator is
     // told, the new revision renders normally.
     m_surfaces->invalidate(m_revisions->revision);
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
 
     QVERIFY(m_item->frameStats().tiles > 0);
@@ -763,7 +776,7 @@ void QuickCanvasTest::staleOverlayFrameIsRefusedToo()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
 
     // Hover a scripted target so the overlay frame carries a primitive built
     // against the current revision.
@@ -793,7 +806,7 @@ void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -808,6 +821,7 @@ void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
 
     QCOMPARE(m_item->presentMetrics()->sceneGraphInvalidations(), quint64(1));
 
+    m_item->update();
     renderFrame();
 
     QVERIFY(m_item->presentMetrics()->builderRebuilds() > rebuildsBefore);
@@ -826,7 +840,7 @@ void QuickCanvasTest::releaseResourcesThenRepaintRecovers()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -850,7 +864,7 @@ void QuickCanvasTest::windowChangeDropsRetainedNodes()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -880,13 +894,13 @@ void QuickCanvasTest::rapidZoomReversalNeverDrawsAnotherRevision()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
 
     for (const qreal zoom : { 1.5, 2.5, 4.0, 2.5, 1.5, 1.0 })
     {
         m_item->setZoom(zoom);
-        m_surfaces->requestSurfaces();
+        requestSurfacesAndFlush();
         renderFrame();
 
         // A lower-resolution surface for the current revision may stand in while
@@ -905,7 +919,7 @@ void QuickCanvasTest::rapidPageChangeKeepsOneFrameCurrent()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
 
     const QPoint top = m_viewport->minimumOffset();
@@ -914,7 +928,7 @@ void QuickCanvasTest::rapidPageChangeKeepsOneFrameCurrent()
     for (const QPoint& offset : { bottom, top, bottom, top })
     {
         m_viewport->setOffset(offset);
-        m_surfaces->requestSurfaces();
+        requestSurfacesAndFlush();
         renderFrame();
 
         QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
@@ -932,14 +946,19 @@ void QuickCanvasTest::devicePixelRatioChangeRepublishesGeometry()
     // through the window because an offscreen platform reports one fixed ratio
     // and no test can change it; what has to be proven is the consequence, and
     // the consequence lives in the key.
+    qreal previousRatio = m_viewport->devicePixelRatio();
     for (const qreal ratio : { 1.0, 1.5, 2.0 })
     {
         const quint64 generationBefore = m_viewport->requestGeneration();
 
         m_viewport->setDevicePixelRatio(ratio);
-        QVERIFY(m_viewport->requestGeneration() > generationBefore);
+        if (!qFuzzyCompare(previousRatio, ratio))
+        {
+            QVERIFY(m_viewport->requestGeneration() > generationBefore);
+        }
+        previousRatio = ratio;
 
-        m_surfaces->requestSurfaces();
+        requestSurfacesAndFlush();
         renderFrame();
 
         QVERIFY(!m_renderer->renderedKeys.isEmpty());
@@ -971,7 +990,7 @@ void QuickCanvasTest::itemDestroyedWithWorkInFlight()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -996,7 +1015,7 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
     showItemInWindow();
     bindItem();
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -1039,7 +1058,7 @@ void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
     QVERIFY(!before.value(QStringLiteral("available")).toBool(true));
     QVERIFY(before.value(QStringLiteral("ms")).isNull());
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndFlush();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 

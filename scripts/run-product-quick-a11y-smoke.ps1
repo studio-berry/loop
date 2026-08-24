@@ -7,7 +7,11 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $binaryName = if ($IsWindows -or $env:OS -match "Windows") { "ProductQuickAccessibilitySmoke.exe" } else { "ProductQuickAccessibilitySmoke" }
-$binaryPath = Join-Path $repoRoot "build/bin/$binaryName"
+$binaryPath = Join-Path $repoRoot "build/usr/bin/$binaryName"
+
+if (-not (Test-Path $binaryPath)) {
+    $binaryPath = Join-Path $repoRoot "build/bin/$binaryName"
+}
 
 if (-not (Test-Path $binaryPath)) {
     $binaryPath = Join-Path $repoRoot "build/$binaryName"
