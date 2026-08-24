@@ -56,6 +56,8 @@ add_library(LoupeLibInteraction STATIC
     sources/pagesurfacekey.h
     sources/viewportcontroller.cpp
     sources/viewportcontroller.h
+    sources/viewportcommandbridge.cpp
+    sources/viewportcommandbridge.h
     sources/pagesurfacerenderer.cpp
     sources/pagesurfacerenderer.h
     sources/canvassnapshot.cpp
