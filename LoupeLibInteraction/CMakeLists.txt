@@ -78,6 +78,12 @@ add_library(LoupeLibInteraction STATIC
     sources/interactiontrace.h
     sources/interactioncontroller.cpp
     sources/interactioncontroller.h
+    sources/preflightcontroller.cpp
+    sources/preflightcontroller.h
+    sources/preflightfindingsmodel.cpp
+    sources/preflightfindingsmodel.h
+    sources/preflightoverlaybridge.cpp
+    sources/preflightoverlaybridge.h
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)

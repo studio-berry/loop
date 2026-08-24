@@ -44,6 +44,8 @@ struct PreflightFixupEntry
 
 struct PreflightFindingEntry
 {
+    QString id;
+    QString objectId;
     QString scope;
     int page = 0;
     QString severity;
@@ -101,6 +103,9 @@ public:
     /// overprint in general is undetected by the engine; this flag only controls the
     /// additional, more specific warning about the unsafe white/near-white case.
     bool hasWhiteOverprintFinding() const;
+
+    QString stableFindingId(const PreflightFindingEntry& entry) const;
+    QString stableFindingIdAtRow(int row) const;
 
 private:
     void appendFindings(const QJsonArray& findings);
