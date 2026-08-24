@@ -55,10 +55,17 @@
 #include "hittestsource.h"
 #include "interactioncontroller.h"
 #include "interactiontrace.h"
+#include "jobsubmitter.h"
 #include "overlaybuilder.h"
+#include "pagesurfacecoordinator.h"
+#include "pagesurfacerenderer.h"
 #include "viewportcontroller.h"
 
 #include "pdfdocumentcontext.h"
+#include "pdfjobscheduler.h"
+#include "pdfprocessingbudget.h"
+
+#include <atomic>
 
 namespace
 {
@@ -166,6 +173,95 @@ pdfinteraction::InteractionTarget makeTarget(const QString& id, QRectF bounds)
     return target;
 }
 
+class FakeJobSubmitter final : public pdfinteraction::IJobSubmitter
+{
+public:
+    QString submit(pdf::PDFJobSpec spec, pdf::PDFJobWork work) override
+    {
+        const QString jobId = spec.jobId.isEmpty() ? QStringLiteral("job-%1").arg(++m_sequence) : spec.jobId;
+        submittedSpecs.append(spec);
+        m_status.insert(jobId, pdf::PDFJobStatus::Queued);
+
+        if (runInline)
+        {
+            runJob(jobId, std::move(work));
+        }
+
+        return jobId;
+    }
+
+    bool cancel(const QString& jobId) override
+    {
+        cancelledJobs.append(jobId);
+        if (m_status.value(jobId, pdf::PDFJobStatus::Succeeded) != pdf::PDFJobStatus::Queued)
+        {
+            return false;
+        }
+
+        m_status.insert(jobId, pdf::PDFJobStatus::Cancelled);
+        return true;
+    }
+
+    pdf::PDFJobSnapshot snapshot(const QString& jobId) const override
+    {
+        pdf::PDFJobSnapshot result;
+        result.jobId = jobId;
+        result.status = m_status.value(jobId, pdf::PDFJobStatus::Succeeded);
+        return result;
+    }
+
+    void publishCurrentRevision(const QString& documentKey, const pdf::PDFRevisionIdentity& revision) override
+    {
+        publishedRevisions.insert(documentKey, revision);
+    }
+
+    void clearCurrentRevision(const QString& documentKey) override { publishedRevisions.remove(documentKey); }
+
+    bool runInline = true;
+    QList<pdf::PDFJobSpec> submittedSpecs;
+    QStringList cancelledJobs;
+    QHash<QString, pdf::PDFRevisionIdentity> publishedRevisions;
+
+private:
+    void runJob(const QString& jobId, pdf::PDFJobWork work)
+    {
+        m_status.insert(jobId, pdf::PDFJobStatus::Running);
+
+        auto token = std::make_shared<pdf::PDFJobCancellationToken>();
+        pdf::PDFJobContext context(token, pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
+        work(context);
+        m_status.insert(jobId, pdf::PDFJobStatus::Succeeded);
+    }
+
+    int m_sequence = 0;
+    QHash<QString, pdf::PDFJobStatus> m_status;
+};
+
+class FakePageSurfaceRenderer final : public pdfinteraction::IPageSurfaceRenderer
+{
+public:
+    pdfinteraction::PageSurfaceResult render(const pdfinteraction::PageSurfaceRequest& request, pdf::PDFJobContext& jobContext) override
+    {
+        Q_UNUSED(jobContext);
+
+        ++renderCount;
+
+        pdfinteraction::PageSurfaceResult result;
+        result.key = request.key;
+        result.token = request.token;
+        result.state = pdfinteraction::SurfaceTerminalState::Complete;
+
+        QImage image(request.key.targetPixelSize, QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        result.pixels = pdfinteraction::makeSurfaceBuffer(std::move(image));
+        result.pixelSize = request.key.targetPixelSize;
+        result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+        return result;
+    }
+
+    int renderCount = 0;
+};
+
 }   // namespace
 
 class QuickCanvasTest : public QObject
@@ -189,8 +285,12 @@ private Q_SLOTS:
     void focusLossCancelsTheDrag();
     void unboundItemIgnoresInput();
 
+    void overlayOnlyHoverPreservesSurfaceDemand();
+    void zoomReissuesSurfaceDemand();
+
 private:
     void bindItem();
+    void bindItemWithSurfaces();
 
     std::unique_ptr<FakeGeometrySource> m_geometry;
     std::unique_ptr<FakeRevisionSource> m_revisions;
@@ -199,6 +299,9 @@ private:
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
+    std::unique_ptr<FakeJobSubmitter> m_submitter;
+    std::unique_ptr<FakePageSurfaceRenderer> m_surfaceRenderer;
+    std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> m_surfaces;
     std::unique_ptr<ExposedCanvasItem> m_item;
 };
 
@@ -223,6 +326,10 @@ void QuickCanvasTest::init()
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
+    m_submitter = std::make_unique<FakeJobSubmitter>();
+    m_surfaceRenderer = std::make_unique<FakePageSurfaceRenderer>();
+    m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisions, *m_submitter, *m_surfaceRenderer, *m_viewport);
+
     m_item = std::make_unique<ExposedCanvasItem>();
     m_item->setSize(QSizeF(400.0, 400.0));
 }
@@ -230,6 +337,9 @@ void QuickCanvasTest::init()
 void QuickCanvasTest::cleanup()
 {
     m_item.reset();
+    m_surfaces.reset();
+    m_surfaceRenderer.reset();
+    m_submitter.reset();
     m_controller.reset();
     m_overlays.reset();
     m_hitTest.reset();
@@ -242,6 +352,11 @@ void QuickCanvasTest::cleanup()
 void QuickCanvasTest::bindItem()
 {
     m_item->bind(m_viewport.get(), m_controller.get(), nullptr);
+}
+
+void QuickCanvasTest::bindItemWithSurfaces()
+{
+    m_item->bind(m_viewport.get(), m_controller.get(), m_surfaces.get());
 }
 
 void QuickCanvasTest::severityIsLegibleWithoutColour()
@@ -491,6 +606,48 @@ void QuickCanvasTest::unboundItemIgnoresInput()
     QCOMPARE(item.currentPage(), -1);
     QCOMPARE(item.blockCount(), 0);
     QVERIFY(item.activeTool().isEmpty());
+}
+
+void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    QSignalSpy overlaySpy(m_controller.get(), &pdfinteraction::InteractionController::overlayFrameChanged);
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QMouseEvent move(QEvent::MouseMove, inside, inside, Qt::NoButton, Qt::NoModifier);
+    m_item->mouseMoveEvent(&move);
+
+    // A hover through the admitted host must rebuild overlays only. Issue #143 and
+    // gh-143 overlayOnlyUpdatePreservesPageSurfaceCache are the oracle here.
+    QVERIFY(overlaySpy.size() >= 1);
+    QCOMPARE(m_submitter->submittedSpecs.size(), submissionsBefore);
+    QCOMPARE(m_viewport->requestGeneration(), generationBefore);
+}
+
+void QuickCanvasTest::zoomReissuesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    const QPointF anchor(100.0, 100.0);
+    const int notch = pdfinteraction::InteractionController::WheelDeltasPerStep;
+
+    QWheelEvent zoomIn(anchor, anchor, QPoint(0, 0), QPoint(0, notch), Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+    m_item->wheelEvent(&zoomIn);
+
+    QVERIFY(m_viewport->requestGeneration() > generationBefore);
+    QVERIFY(m_submitter->submittedSpecs.size() >= submissionsBefore);
 }
 
 QTEST_MAIN(QuickCanvasTest)
