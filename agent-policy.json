@@ -126,9 +126,9 @@
       "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame"]
     },
     "quick": {
-      "paths": ["LoupeLibQuick/**", "UnitTests/tst_quickcanvastest.cpp"],
+      "paths": ["LoupeLibQuick/**", "UnitTests/tst_quickcanvastest.cpp", "UnitTests/tst_canvasparitytest.cpp", "UnitTests/testdata/canvas-parity/**"],
       "targets": ["LoupeLibQuick"],
-      "tests": ["UnitTestsQuickCanvas"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity"]
     },
     "widgets_gui": {
       "paths": ["LoupeLibWidgets/**", "LoupeLibGui/**", "LoupeEditor/**", "LoupeViewer/**"],

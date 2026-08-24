@@ -165,6 +165,15 @@ public:
     const CanvasSnapshot& snapshot() const noexcept { return m_snapshot; }
     const PageSurfaceCounters& counters() const noexcept { return m_counters; }
 
+    /// The revision the fence is currently against, read from the one
+    /// IDocumentRevisionSource this class already holds.
+    ///
+    /// It exists so a presentation host can refuse to draw a snapshot or an
+    /// overlay frame from a superseded document without inventing a second
+    /// revision truth of its own. The host is not the fence -- admit() is -- but
+    /// a host that has retained scene-graph nodes needs to be able to check.
+    pdf::PDFRevisionIdentity currentRevision() const;
+
 signals:
     void snapshotChanged(quint64 requestGeneration);
     void surfaceTerminal(pdfinteraction::PageSurfaceKey key, pdfinteraction::SurfaceTerminalState state);

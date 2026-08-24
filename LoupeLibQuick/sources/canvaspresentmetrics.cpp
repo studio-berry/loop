@@ -24,6 +24,7 @@
 #include "canvaspresentmetrics.h"
 
 #include <QElapsedTimer>
+#include <QJsonValue>
 #include <QQuickWindow>
 #include <QScreen>
 
@@ -152,6 +153,38 @@ void CanvasPresentMetrics::frameRequested()
     }
 }
 
+void CanvasPresentMetrics::markViewRequested()
+{
+    m_viewRequestedNs = clockNow();
+    m_firstViewNs = -1;
+}
+
+void CanvasPresentMetrics::markFirstView()
+{
+    if (m_firstViewNs >= 0 || m_viewRequestedNs < 0)
+    {
+        return;
+    }
+
+    m_firstViewNs = qMax(qint64(0), clockNow() - m_viewRequestedNs);
+}
+
+void CanvasPresentMetrics::noteSceneGraphInvalidated()
+{
+    m_sceneGraphInvalidations.fetch_add(1);
+}
+
+void CanvasPresentMetrics::noteBuilderRebuilt()
+{
+    m_builderRebuilds.fetch_add(1);
+}
+
+void CanvasPresentMetrics::noteTileBytes(qint64 bytes, qint64 highWater)
+{
+    m_tileBytes.store(bytes);
+    m_tileBytesHighWater.store(highWater);
+}
+
 void CanvasPresentMetrics::appendSample(QList<qint64>& samples, qint64 value)
 {
     samples.append(value);
@@ -216,8 +249,24 @@ QJsonObject CanvasPresentMetrics::summary() const
     present[QStringLiteral("present_ms")] = InteractionTraceRecorder::percentileObject(m_presentNs);
     present[QStringLiteral("frame_interval_ms")] = InteractionTraceRecorder::percentileObject(m_frameIntervalNs);
 
+    // The same rule the percentile helper follows: a milestone that has not
+    // happened is reported unavailable with a null value. Reporting 0 ms would
+    // claim the fastest possible first view for a canvas that has never shown a
+    // page.
+    QJsonObject firstView;
+    firstView[QStringLiteral("available")] = m_firstViewNs >= 0;
+    firstView[QStringLiteral("ms")] = m_firstViewNs >= 0 ? QJsonValue(double(m_firstViewNs) / 1000000.0) : QJsonValue();
+    present[QStringLiteral("first_view_ms")] = firstView;
+
+    QJsonObject lifecycle;
+    lifecycle[QStringLiteral("scene_graph_invalidations")] = qint64(m_sceneGraphInvalidations.load());
+    lifecycle[QStringLiteral("builder_rebuilds")] = qint64(m_builderRebuilds.load());
+    lifecycle[QStringLiteral("tile_bytes")] = m_tileBytes.load();
+    lifecycle[QStringLiteral("tile_bytes_high_water")] = m_tileBytesHighWater.load();
+
     QJsonObject root;
     root[QStringLiteral("present")] = present;
+    root[QStringLiteral("lifecycle")] = lifecycle;
     return root;
 }
 
@@ -231,6 +280,12 @@ void CanvasPresentMetrics::reset()
     m_framesWithoutRenderStamp = 0;
     m_renderStartNs.store(0);
     m_renderEndNs.store(0);
+    m_viewRequestedNs = -1;
+    m_firstViewNs = -1;
+    m_sceneGraphInvalidations.store(0);
+    m_builderRebuilds.store(0);
+    m_tileBytes.store(0);
+    m_tileBytesHighWater.store(0);
 }
 
 }   // namespace pdfquick

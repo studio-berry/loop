@@ -550,6 +550,11 @@ void PageSurfaceCoordinator::cancelInFlight()
     }
 }
 
+pdf::PDFRevisionIdentity PageSurfaceCoordinator::currentRevision() const
+{
+    return m_revisions->currentRevision();
+}
+
 void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
 {
     cancelInFlight();

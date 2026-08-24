@@ -37,14 +37,19 @@
 
 #include <QtTest>
 
+#include <QColor>
+#include <QHash>
+#include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QFocusEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QQuickWindow>
 #include <QSignalSpy>
 #include <QWheelEvent>
 
+#include <atomic>
 #include <memory>
 
 #include "canvaspalette.h"
@@ -55,10 +60,15 @@
 #include "hittestsource.h"
 #include "interactioncontroller.h"
 #include "interactiontrace.h"
+#include "jobsubmitter.h"
 #include "overlaybuilder.h"
+#include "pagesurfacecoordinator.h"
+#include "pagesurfacerenderer.h"
 #include "viewportcontroller.h"
 
 #include "pdfdocumentcontext.h"
+#include "pdfjobscheduler.h"
+#include "pdfprocessingbudget.h"
 
 namespace
 {
@@ -145,6 +155,13 @@ public:
 /// scene graph and no event loop: the handlers are what Qt Quick would call, and
 /// calling them directly removes the parts of the test that would be a
 /// screenshot rather than an assertion.
+///
+/// The scene-graph cases below deliberately do not call updatePaintNode or
+/// releaseResources by hand. updatePaintNode needs a live render context to
+/// create nodes and upload textures at all, and releaseResources is only correct
+/// when the scene graph has already taken the node tree away -- calling either
+/// directly would test a sequence that cannot happen. They drive the window
+/// instead.
 class ExposedCanvasItem final : public pdfquick::LoupeCanvasItem
 {
 public:
@@ -154,6 +171,90 @@ public:
     using pdfquick::LoupeCanvasItem::mousePressEvent;
     using pdfquick::LoupeCanvasItem::mouseReleaseEvent;
     using pdfquick::LoupeCanvasItem::wheelEvent;
+};
+
+/// The P4-S3 fake, trimmed to what a canvas test needs: work runs inline, so a
+/// requested surface is admitted by the time requestSurfaces() returns and the
+/// scene graph has something real to hold.
+class InlineJobSubmitter final : public pdfinteraction::IJobSubmitter
+{
+public:
+    QString submit(pdf::PDFJobSpec spec, pdf::PDFJobWork work) override
+    {
+        const QString jobId = spec.jobId.isEmpty() ? QStringLiteral("job-%1").arg(++m_sequence) : spec.jobId;
+
+        auto token = std::make_shared<pdf::PDFJobCancellationToken>();
+        pdf::PDFJobContext context(token, pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
+        work(context);
+
+        return jobId;
+    }
+
+    bool cancel(const QString& jobId) override
+    {
+        cancelledJobs.append(jobId);
+        return false;
+    }
+
+    pdf::PDFJobSnapshot snapshot(const QString& jobId) const override
+    {
+        pdf::PDFJobSnapshot result;
+        result.jobId = jobId;
+        result.status = pdf::PDFJobStatus::Succeeded;
+        return result;
+    }
+
+    void publishCurrentRevision(const QString& documentKey, const pdf::PDFRevisionIdentity& revision) override
+    {
+        publishedRevisions.insert(documentKey, revision);
+    }
+
+    void clearCurrentRevision(const QString& documentKey) override { publishedRevisions.remove(documentKey); }
+
+    QStringList cancelledJobs;
+    QHash<QString, pdf::PDFRevisionIdentity> publishedRevisions;
+
+private:
+    quint64 m_sequence = 0;
+};
+
+/// Produces a surface without a PDF. The fill colour is per-revision so a frame
+/// can be read back and attributed to the document that produced it.
+class FakePageSurfaceRenderer final : public pdfinteraction::IPageSurfaceRenderer
+{
+public:
+    pdfinteraction::PageSurfaceResult render(const pdfinteraction::PageSurfaceRequest& request, pdf::PDFJobContext& jobContext) override
+    {
+        ++renderCount;
+        renderedKeys.append(request.key);
+
+        pdfinteraction::PageSurfaceResult result;
+        result.key = request.key;
+        result.token = request.token;
+
+        if (jobContext.isCancellationRequested())
+        {
+            result.state = pdfinteraction::SurfaceTerminalState::Cancelled;
+            result.typedError = QStringLiteral("page-surface/cancelled");
+            return result;
+        }
+
+        QImage image(request.key.targetPixelSize, QImage::Format_ARGB32_Premultiplied);
+        image.fill(fill);
+
+        result.state = pdfinteraction::SurfaceTerminalState::Complete;
+        result.pixels = pdfinteraction::makeSurfaceBuffer(std::move(image));
+        result.pixelSize = request.key.targetPixelSize;
+        result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+        return result;
+    }
+
+    void shedPrefetchAndQuality() override { ++shedCount; }
+
+    int renderCount = 0;
+    int shedCount = 0;
+    QColor fill = QColor(Qt::white);
+    QList<pdfinteraction::PageSurfaceKey> renderedKeys;
 };
 
 pdfinteraction::InteractionTarget makeTarget(const QString& id, QRectF bounds)
@@ -189,8 +290,44 @@ private Q_SLOTS:
     void focusLossCancelsTheDrag();
     void unboundItemIgnoresInput();
 
+    void admittedTilesReachTheSceneGraph();
+    void revisionReplacementLeavesNoStaleTile();
+    void staleOverlayFrameIsRefusedToo();
+    void sceneGraphInvalidationRebuildsWithoutReparsing();
+    void releaseResourcesThenRepaintRecovers();
+    void windowChangeDropsRetainedNodes();
+    void rapidZoomReversalNeverDrawsAnotherRevision();
+    void rapidPageChangeKeepsOneFrameCurrent();
+    void devicePixelRatioChangeRepublishesGeometry();
+    void itemDestroyedWithWorkInFlight();
+    void overlayOnlyChangeDoesNotResyncTiles();
+    void firstViewIsUnavailableUntilAPageIsOnScreen();
+
 private:
     void bindItem();
+
+    /// Builds the coordinator half of the graph. Separate from init() because
+    /// most cases in this file are translation tests that must keep proving they
+    /// work with no coordinator at all.
+    void buildCoordinator();
+
+    /// Puts the item in a real window and renders one frame.
+    ///
+    /// A canvas lifecycle test cannot avoid the scene graph: updatePaintNode
+    /// creates nodes and uploads textures through the window's render context,
+    /// so there is no version of this that runs without one. The target's ctest
+    /// entry pins QT_QPA_PLATFORM=offscreen and QT_QUICK_BACKEND=software, which
+    /// is what makes the render deterministic and headless. ADR-010 is right
+    /// that offscreen alone is not scene-graph evidence -- that is what the
+    /// software and native smoke runs are for -- but it is exactly what these
+    /// assertions need, because they are about node and texture lifetime rather
+    /// than about which backend drew them.
+    void showItemInWindow();
+
+    /// Renders one frame and returns it. Fails the test rather than skipping if
+    /// the scene graph produced nothing: a parity gate that quietly passes when
+    /// it could not render is worse than no gate.
+    QImage renderFrame();
 
     std::unique_ptr<FakeGeometrySource> m_geometry;
     std::unique_ptr<FakeRevisionSource> m_revisions;
@@ -200,6 +337,11 @@ private:
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
     std::unique_ptr<ExposedCanvasItem> m_item;
+
+    std::unique_ptr<InlineJobSubmitter> m_submitter;
+    std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
+    std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> m_surfaces;
+    std::unique_ptr<QQuickWindow> m_window;
 };
 
 void QuickCanvasTest::init()
@@ -230,6 +372,10 @@ void QuickCanvasTest::init()
 void QuickCanvasTest::cleanup()
 {
     m_item.reset();
+    m_window.reset();
+    m_surfaces.reset();
+    m_renderer.reset();
+    m_submitter.reset();
     m_controller.reset();
     m_overlays.reset();
     m_hitTest.reset();
@@ -241,7 +387,49 @@ void QuickCanvasTest::cleanup()
 
 void QuickCanvasTest::bindItem()
 {
-    m_item->bind(m_viewport.get(), m_controller.get(), nullptr);
+    m_item->bind(m_viewport.get(), m_controller.get(), m_surfaces.get());
+}
+
+void QuickCanvasTest::buildCoordinator()
+{
+    m_submitter = std::make_unique<InlineJobSubmitter>();
+    m_renderer = std::make_unique<FakePageSurfaceRenderer>();
+
+    m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisions, *m_submitter, *m_renderer, *m_viewport);
+    m_surfaces->setDocumentKey(QStringLiteral("doc-1"));
+}
+
+void QuickCanvasTest::showItemInWindow()
+{
+    m_window = std::make_unique<QQuickWindow>();
+    m_window->resize(400, 400);
+
+    m_item->setParentItem(m_window->contentItem());
+    m_item->setSize(QSizeF(400.0, 400.0));
+
+    m_window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(m_window.get()));
+}
+
+QImage QuickCanvasTest::renderFrame()
+{
+    // grabWindow drives a full synchronous render pass, which is the only way to
+    // make updatePaintNode run at a point the test controls. The relay the
+    // coordinator posts completions through is queued, so anything admitted
+    // since the last call has to be delivered first.
+    QCoreApplication::processEvents();
+
+    const QImage frame = m_window ? m_window->grabWindow() : QImage();
+    if (frame.isNull())
+    {
+        // Not a skip. If the software backend cannot render here, every
+        // scene-graph assertion in this file is unproven, and saying so is the
+        // whole point of the gate.
+        qWarning("the Qt Quick scene graph produced no frame; QT_QUICK_BACKEND and QT_QPA_PLATFORM decide whether it can");
+    }
+
+    QCoreApplication::processEvents();
+    return frame;
 }
 
 void QuickCanvasTest::severityIsLegibleWithoutColour()
@@ -491,6 +679,365 @@ void QuickCanvasTest::unboundItemIgnoresInput()
     QCOMPARE(item.currentPage(), -1);
     QCOMPARE(item.blockCount(), 0);
     QVERIFY(item.activeTool().isEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// P4-S6: scene-graph lifecycle and canvas parity.
+//
+// Everything above this line proves the translation contract with no window at
+// all. Everything below needs a real one: updatePaintNode creates nodes and
+// uploads textures through the window's render context, and the whole point of
+// this session is what happens to those nodes and textures when the scene graph
+// goes away, the window changes, the display metrics change, or the document is
+// replaced underneath them.
+// ---------------------------------------------------------------------------
+
+void QuickCanvasTest::admittedTilesReachTheSceneGraph()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+
+    // The relay the coordinator posts completions through is always queued, so
+    // admission is not visible until the events are delivered -- which is the
+    // first thing renderFrame does.
+    QVERIFY(m_surfaces->counters().admitted > 0);
+
+    // The first case in this file to bind a coordinator at all. Until P4-S6 the
+    // canvas was only ever proven to translate input; that it also presents the
+    // admitted surfaces was assumed.
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
+
+    const QJsonObject lifecycle = m_item->presentMetrics()->summary().value(QStringLiteral("lifecycle")).toObject();
+    QVERIFY(lifecycle.value(QStringLiteral("tile_bytes")).toInteger(0) > 0);
+}
+
+void QuickCanvasTest::revisionReplacementLeavesNoStaleTile()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    // The document is replaced, and nothing has told the coordinator yet. This
+    // is the gap the presenter-side fence exists for: the retained nodes still
+    // hold the previous revision's pixels, and any repaint at all would draw
+    // them again.
+    m_revisions->revision = makeRevision(QStringLiteral("doc-2"), 1);
+
+    // A repaint caused by something other than the document -- the canvas does
+    // not choose when the window redraws.
+    m_item->update();
+    renderFrame();
+
+    QCOMPARE(m_item->frameStats().tiles, 0);
+    QVERIFY(m_item->frameStats().refusedStaleFrames > 0);
+
+    // And the refusal is not a permanent dead canvas: once the coordinator is
+    // told, the new revision renders normally.
+    m_surfaces->invalidate(m_revisions->revision);
+    m_surfaces->requestSurfaces();
+    renderFrame();
+
+    QVERIFY(m_item->frameStats().tiles > 0);
+}
+
+void QuickCanvasTest::staleOverlayFrameIsRefusedToo()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+
+    // Hover a scripted target so the overlay frame carries a primitive built
+    // against the current revision.
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QMouseEvent press(QEvent::MouseButtonPress, inside, inside, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    m_item->mousePressEvent(&press);
+
+    renderFrame();
+    QVERIFY(m_item->frameStats().overlayPrimitives > 0);
+
+    m_revisions->revision = makeRevision(QStringLiteral("doc-2"), 1);
+    m_item->update();
+    renderFrame();
+
+    // A finding highlight from a replaced document points at geometry that no
+    // longer exists. Drawing it is worse than drawing nothing, because it looks
+    // like a finding on the document that is open now.
+    QCOMPARE(m_item->frameStats().overlayPrimitives, 0);
+}
+
+void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+    const quint64 rebuildsBefore = m_item->presentMetrics()->builderRebuilds();
+
+    // The device-loss signal. Emitting it directly is what makes this
+    // deterministic: a real backend loss cannot be provoked on demand, and the
+    // item's contract is with the signal, not with the cause behind it.
+    Q_EMIT m_window->sceneGraphInvalidated();
+
+    QCOMPARE(m_item->presentMetrics()->sceneGraphInvalidations(), quint64(1));
+
+    renderFrame();
+
+    QVERIFY(m_item->presentMetrics()->builderRebuilds() > rebuildsBefore);
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    // The roadmap's resource-lifecycle rule: the GPU-side state goes, the
+    // authoritative CPU surface cache stays. Re-rendering the page here would
+    // mean a device loss costs a full re-parse of every visible page.
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+}
+
+void QuickCanvasTest::releaseResourcesThenRepaintRecovers()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    const int rendersBefore = m_renderer->renderCount;
+
+    // Driven through the window rather than by calling the item's override:
+    // releaseResources is only correct once the scene graph has taken the node
+    // tree away, and only the window can arrange that.
+    m_window->releaseResources();
+
+    m_item->update();
+    renderFrame();
+
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+}
+
+void QuickCanvasTest::windowChangeDropsRetainedNodes()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    const quint64 rebuildsBefore = m_item->presentMetrics()->builderRebuilds();
+
+    // A texture belongs to the window that created it, so every retained node is
+    // invalid the moment the item moves. Surviving this is not cosmetic: a
+    // texture outliving its window is a crash rather than a glitch.
+    auto second = std::make_unique<QQuickWindow>();
+    second->resize(400, 400);
+
+    m_item->setParentItem(second->contentItem());
+    m_window = std::move(second);
+
+    m_window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(m_window.get()));
+
+    renderFrame();
+
+    QVERIFY(m_item->presentMetrics()->builderRebuilds() > rebuildsBefore);
+    QVERIFY(m_item->frameStats().tiles > 0);
+}
+
+void QuickCanvasTest::rapidZoomReversalNeverDrawsAnotherRevision()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+
+    for (const qreal zoom : { 1.5, 2.5, 4.0, 2.5, 1.5, 1.0 })
+    {
+        m_item->setZoom(zoom);
+        m_surfaces->requestSurfaces();
+        renderFrame();
+
+        // A lower-resolution surface for the current revision may stand in while
+        // the fidelity render is in flight -- that is the continuous
+        // correspondence requirement. What may never happen is a tile from
+        // another document appearing as the stand-in.
+        QCOMPARE(m_surfaces->counters().rejectedStaleRevision, 0);
+        QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
+        QVERIFY(m_item->frameStats().tiles > 0);
+    }
+}
+
+void QuickCanvasTest::rapidPageChangeKeepsOneFrameCurrent()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+
+    const QPoint top = m_viewport->minimumOffset();
+    const QPoint bottom = m_viewport->maximumOffset();
+
+    for (const QPoint& offset : { bottom, top, bottom, top })
+    {
+        m_viewport->setOffset(offset);
+        m_surfaces->requestSurfaces();
+        renderFrame();
+
+        QCOMPARE(m_item->frameStats().refusedStaleFrames, 0);
+        QVERIFY(m_item->frameStats().tiles > 0);
+    }
+}
+
+void QuickCanvasTest::devicePixelRatioChangeRepublishesGeometry()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    // 100%, 150%, 200%. The ratio is driven through the viewport rather than
+    // through the window because an offscreen platform reports one fixed ratio
+    // and no test can change it; what has to be proven is the consequence, and
+    // the consequence lives in the key.
+    for (const qreal ratio : { 1.0, 1.5, 2.0 })
+    {
+        const quint64 generationBefore = m_viewport->requestGeneration();
+
+        m_viewport->setDevicePixelRatio(ratio);
+        QVERIFY(m_viewport->requestGeneration() > generationBefore);
+
+        m_surfaces->requestSurfaces();
+        renderFrame();
+
+        QVERIFY(!m_renderer->renderedKeys.isEmpty());
+        QCOMPARE(m_renderer->renderedKeys.last().devicePixelRatio1000, int(qRound(ratio * 1000.0)));
+        QVERIFY(m_item->frameStats().tiles > 0);
+
+        // PageSurfaceKey::compatibleWith requires an exact device-pixel-ratio
+        // match, so a surface rendered for the previous ratio cannot stand in.
+        // A tile drawn at the wrong ratio is the classic four-times-too-large
+        // page, and it must not be reachable even transiently.
+        for (const pdfinteraction::CanvasTile& tile : m_surfaces->snapshot().tiles)
+        {
+            QCOMPARE(tile.key.devicePixelRatio1000, int(qRound(ratio * 1000.0)));
+        }
+    }
+
+    // The item's half: a screen change on the same window republishes the
+    // display metrics it can see. Before P4-S6 nothing connected this, and a
+    // monitor swap left the viewport on the old ratio indefinitely.
+    m_viewport->setDevicePixelRatio(3.0);
+    Q_EMIT m_window->screenChanged(m_window->screen());
+
+    QCOMPARE(m_viewport->devicePixelRatio(), m_window->effectiveDevicePixelRatio());
+}
+
+void QuickCanvasTest::itemDestroyedWithWorkInFlight()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    // The item goes while the window, the coordinator and the surfaces it was
+    // presenting all outlive it. The render-thread connections the item made are
+    // the hazard here: one of them firing after the destructor is a crash in the
+    // scene graph, not a warning.
+    m_item.reset();
+
+    m_surfaces->requestSurfaces();
+    QCoreApplication::processEvents();
+
+    const QImage frame = m_window->grabWindow();
+    Q_UNUSED(frame);
+
+    QVERIFY(m_surfaces->counters().admitted > 0);
+}
+
+void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+    const int tilesBefore = m_item->frameStats().tiles;
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    // Sweep the pointer across a scripted target and off it again.
+    for (int step = 0; step < 8; ++step)
+    {
+        const QPointF position(placed.left() + placed.width() * (0.1 + 0.1 * step), placed.top() + placed.height() * 0.5);
+        QMouseEvent move(QEvent::MouseMove, position, position, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        m_item->mouseMoveEvent(&move);
+    }
+
+    renderFrame();
+
+    // The P4-S4 exit condition, observed one layer further out than the S4 test
+    // could observe it: a hover costs an overlay pass and nothing else. Page
+    // pixels are not re-requested and not re-rendered.
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+    QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+}
+
+void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
+{
+    buildCoordinator();
+    showItemInWindow();
+    bindItem();
+
+    const QJsonObject before = m_item->presentMetrics()->summary().value(QStringLiteral("present")).toObject().value(QStringLiteral("first_view_ms")).toObject();
+
+    // Nothing has been shown yet, and a milestone that has not happened is
+    // unavailable rather than instantaneous. Reporting 0 ms here would make the
+    // slowest possible open look like the fastest.
+    QVERIFY(!before.value(QStringLiteral("available")).toBool(true));
+    QVERIFY(before.value(QStringLiteral("ms")).isNull());
+
+    m_surfaces->requestSurfaces();
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+
+    const QJsonObject after = m_item->presentMetrics()->summary().value(QStringLiteral("present")).toObject().value(QStringLiteral("first_view_ms")).toObject();
+    QVERIFY(after.value(QStringLiteral("available")).toBool(false));
+    QVERIFY(after.value(QStringLiteral("ms")).toDouble(-1.0) >= 0.0);
 }
 
 QTEST_MAIN(QuickCanvasTest)

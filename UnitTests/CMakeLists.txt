@@ -280,7 +280,47 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
 
         # The test constructs QQuickItems and needs a QGuiApplication, but never a
         # visible window. GitHub's Linux runners have no display at all.
-        set_tests_properties(UnitTestsQuickCanvas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+        #
+        # QT_QUICK_BACKEND=software joined it in P4-S6, when the scene-graph
+        # lifecycle cases arrived. Those cases need a scene graph that actually
+        # renders -- releaseResources, scene-graph invalidation and texture
+        # retention have no observable behaviour without one -- and the software
+        # backend is the one that renders the same way on a GPU-less runner as on
+        # a developer machine. ADR-010 is right that offscreen is not by itself
+        # scene-graph evidence; the native and software smoke runs are that. This
+        # is what makes node and texture lifetime deterministic.
+        set_tests_properties(UnitTestsQuickCanvas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
+
+        # Architecture invariant I26, and the only target in the tree that links
+        # both canvases.
+        #
+        # The Widgets link is the Phase 4 migration oracle the 0.2.0 plan of
+        # record authorises, and it is narrow on purpose: the only thing this
+        # target calls is pdf::PDFDrawSpaceLayoutProbe, which hands back page
+        # rectangles in millimetres. No QWidget is constructed and
+        # PDFDrawWidgetProxy, QQuickWidget and WindowContainer are unreachable.
+        # ADR-009's prohibition is intact -- UnitTestsQuickCanvas above is still
+        # Widgets-free and is still what pins I25. This target is not installed
+        # and Phase 5 deletes it with the library it compares against.
+        add_executable(UnitTestsCanvasParity
+            tst_canvasparitytest.cpp
+        )
+
+        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibWidgets LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_compile_definitions(UnitTestsCanvasParity PRIVATE
+            LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+
+        set_target_properties(UnitTestsCanvasParity PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsCanvasParity "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsCanvasParity")
+
+        set_tests_properties(UnitTestsCanvasParity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
     endif()
 endif()
 

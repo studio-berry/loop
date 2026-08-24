@@ -191,6 +191,14 @@
         "UnitTestsQuickCanvas"
       ],
       "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer"
+    },
+    {
+      "id": "I26",
+      "test_targets": [
+        "UnitTestsCanvasParity",
+        "UnitTestsQuickCanvas"
+      ],
+      "title": "The Qt Quick canvas releases and rebuilds its scene-graph state, follows the display metrics, and never presents another revision's pixels"
     }
   ],
   "branch_policy": {
@@ -366,6 +374,7 @@
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
     "UnitTestsBudgetExhaustion",
+    "UnitTestsCanvasParity",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
