@@ -8,7 +8,8 @@
 namespace pdfinteraction
 {
 
-ProductionModel::ProductionModel(QObject* parent) : QAbstractListModel(parent)
+ProductionModel::ProductionModel(QObject* parent) :
+    QAbstractListModel(parent)
 {
     qRegisterMetaType<State>();
 }
@@ -29,13 +30,20 @@ QVariant ProductionModel::data(const QModelIndex& index, int role) const
     switch (role)
     {
         case Qt::DisplayRole:
-        case DisplayNameRole: return step.displayName;
-        case StepIdRole: return step.id;
-        case KindRole: return step.kind;
-        case TypeRole: return step.type;
-        case SpotColorNameRole: return step.spotColorName;
-        case ShouldPrintRole: return step.shouldPrint;
-        case OverprintRole: return step.overprint;
+        case DisplayNameRole:
+            return step.displayName;
+        case StepIdRole:
+            return step.id;
+        case KindRole:
+            return step.kind;
+        case TypeRole:
+            return step.type;
+        case SpotColorNameRole:
+            return step.spotColorName;
+        case ShouldPrintRole:
+            return step.shouldPrint;
+        case OverprintRole:
+            return step.overprint;
         case PageIndicesRole:
         {
             QVariantList pages;
@@ -45,7 +53,8 @@ QVariant ProductionModel::data(const QModelIndex& index, int role) const
             }
             return pages;
         }
-        default: return {};
+        default:
+            return {};
     }
 }
 
@@ -64,8 +73,8 @@ QHash<int, QByteArray> ProductionModel::roleNames() const
 }
 
 bool ProductionModel::replace(QString documentKey,
-                               QString documentRevision,
-                               const QVector<pdf::PDFProcessingStep>& processingSteps)
+                              QString documentRevision,
+                              const QVector<pdf::PDFProcessingStep>& processingSteps)
 {
     if ((documentKey.isEmpty() || documentRevision.isEmpty()) && !processingSteps.isEmpty())
     {
@@ -186,13 +195,18 @@ QString ProductionModel::stateName(State state)
 {
     switch (state)
     {
-        case State::NotReady: return QStringLiteral("NOT_READY");
-        case State::Ready: return QStringLiteral("READY");
-        case State::OperationPending: return QStringLiteral("OPERATION_PENDING");
-        case State::ApprovalRequired: return QStringLiteral("APPROVAL_REQUIRED");
-        case State::OutputWritten: return QStringLiteral("OUTPUT_WRITTEN");
+        case State::NotReady:
+            return QStringLiteral("NOT_READY");
+        case State::Ready:
+            return QStringLiteral("READY");
+        case State::OperationPending:
+            return QStringLiteral("OPERATION_PENDING");
+        case State::ApprovalRequired:
+            return QStringLiteral("APPROVAL_REQUIRED");
+        case State::OutputWritten:
+            return QStringLiteral("OUTPUT_WRITTEN");
     }
     return QStringLiteral("NOT_READY");
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

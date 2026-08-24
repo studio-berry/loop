@@ -28,7 +28,7 @@ pdf::PreflightFinding makeFinding()
     return finding;
 }
 
-} // namespace
+}   // namespace
 
 class P4S9InteractionTest final : public QObject
 {

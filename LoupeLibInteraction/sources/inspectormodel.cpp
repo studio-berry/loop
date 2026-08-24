@@ -16,9 +16,10 @@ QString rectText(const QRectF& rect)
         .arg(QString::number(rect.x()), QString::number(rect.y()), QString::number(rect.width()), QString::number(rect.height()));
 }
 
-} // namespace
+}   // namespace
 
-InspectorModel::InspectorModel(QObject* parent) : QAbstractListModel(parent)
+InspectorModel::InspectorModel(QObject* parent) :
+    QAbstractListModel(parent)
 {
     qRegisterMetaType<SelectionKind>();
 }
@@ -39,10 +40,14 @@ QVariant InspectorModel::data(const QModelIndex& index, int role) const
     switch (role)
     {
         case Qt::DisplayRole:
-        case ValueRole: return property.value;
-        case PropertyIdRole: return property.id;
-        case LabelRole: return property.label;
-        default: return {};
+        case ValueRole:
+            return property.value;
+        case PropertyIdRole:
+            return property.id;
+        case LabelRole:
+            return property.label;
+        default:
+            return {};
     }
 }
 
@@ -152,13 +157,18 @@ QString InspectorModel::selectionKindName(SelectionKind kind)
 {
     switch (kind)
     {
-        case SelectionKind::EmptyCanvas: return QStringLiteral("empty-canvas");
-        case SelectionKind::Page: return QStringLiteral("page");
-        case SelectionKind::Image: return QStringLiteral("image");
-        case SelectionKind::Finding: return QStringLiteral("finding");
-        case SelectionKind::Separation: return QStringLiteral("separation");
+        case SelectionKind::EmptyCanvas:
+            return QStringLiteral("empty-canvas");
+        case SelectionKind::Page:
+            return QStringLiteral("page");
+        case SelectionKind::Image:
+            return QStringLiteral("image");
+        case SelectionKind::Finding:
+            return QStringLiteral("finding");
+        case SelectionKind::Separation:
+            return QStringLiteral("separation");
     }
     Q_UNREACHABLE_RETURN(QStringLiteral("empty-canvas"));
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

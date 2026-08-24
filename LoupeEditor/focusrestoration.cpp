@@ -24,7 +24,8 @@
 
 #include <QQuickItem>
 
-FocusRestoration::FocusRestoration(QObject* parent) : QObject(parent)
+FocusRestoration::FocusRestoration(QObject* parent) :
+    QObject(parent)
 {
 }
 

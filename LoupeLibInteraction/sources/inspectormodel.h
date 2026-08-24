@@ -90,8 +90,8 @@ private:
     SelectionKind m_selectionKind = SelectionKind::EmptyCanvas;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
 Q_DECLARE_METATYPE(pdfinteraction::InspectorModel::SelectionKind)
 
-#endif // INSPECTORMODEL_H
+#endif   // INSPECTORMODEL_H

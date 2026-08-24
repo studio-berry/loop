@@ -137,4 +137,4 @@ QVector<FindingOverlay> PreflightController::overlaysForPage(int page) const
     return m_findings.overlays(m_documentRevision, page);
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

@@ -792,8 +792,7 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
     // of it.
     const OverlayFrame& liveOverlay = m_interaction ? m_interaction->overlayFrame() : OverlayFrame();
     const bool overlayWasPublished = liveOverlay.token.isValid();
-    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished
-        || liveOverlay.token.revision == currentRevision;
+    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished || liveOverlay.token.revision == currentRevision;
 
     if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
     {

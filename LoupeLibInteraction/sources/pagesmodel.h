@@ -73,6 +73,6 @@ private:
     QString m_selectedPageId;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
-#endif // PAGESMODEL_H
+#endif   // PAGESMODEL_H

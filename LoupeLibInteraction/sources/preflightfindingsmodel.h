@@ -94,8 +94,8 @@ private:
     QString m_selectedFindingId;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
 Q_DECLARE_METATYPE(pdfinteraction::FindingOverlay)
 
-#endif // PREFLIGHTFINDINGSMODEL_H
+#endif   // PREFLIGHTFINDINGSMODEL_H

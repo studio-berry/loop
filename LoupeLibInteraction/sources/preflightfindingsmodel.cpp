@@ -5,7 +5,8 @@
 namespace pdfinteraction
 {
 
-PreflightFindingsModel::PreflightFindingsModel(QObject* parent) : QAbstractListModel(parent)
+PreflightFindingsModel::PreflightFindingsModel(QObject* parent) :
+    QAbstractListModel(parent)
 {
 }
 
@@ -25,19 +26,32 @@ QVariant PreflightFindingsModel::data(const QModelIndex& index, int role) const
     switch (role)
     {
         case Qt::DisplayRole:
-        case MessageRole: return finding.message;
-        case FindingIdRole: return finding.id;
-        case DocumentKeyRole: return finding.documentKey;
-        case DocumentRevisionRole: return finding.documentRevision;
-        case ScopeRole: return finding.scope;
-        case PageRole: return finding.page;
-        case ObjectIdRole: return finding.objectId;
-        case SeverityRole: return finding.severity;
-        case TypeRole: return finding.type;
-        case CheckIdRole: return finding.checkId;
-        case BoundingBoxRole: return finding.bbox;
-        case EvidenceIdsRole: return finding.evidenceIds;
-        case SelectedRole: return finding.selected;
+        case MessageRole:
+            return finding.message;
+        case FindingIdRole:
+            return finding.id;
+        case DocumentKeyRole:
+            return finding.documentKey;
+        case DocumentRevisionRole:
+            return finding.documentRevision;
+        case ScopeRole:
+            return finding.scope;
+        case PageRole:
+            return finding.page;
+        case ObjectIdRole:
+            return finding.objectId;
+        case SeverityRole:
+            return finding.severity;
+        case TypeRole:
+            return finding.type;
+        case CheckIdRole:
+            return finding.checkId;
+        case BoundingBoxRole:
+            return finding.bbox;
+        case EvidenceIdsRole:
+            return finding.evidenceIds;
+        case SelectedRole:
+            return finding.selected;
     }
     return {};
 }
@@ -200,4 +214,4 @@ QHash<QString, int> PreflightFindingsModel::groupCounts(QString severity) const
     return result;
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

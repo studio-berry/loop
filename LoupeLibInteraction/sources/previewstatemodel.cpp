@@ -5,7 +5,8 @@
 namespace pdfinteraction
 {
 
-PreviewStateModel::PreviewStateModel(QObject* parent) : QObject(parent)
+PreviewStateModel::PreviewStateModel(QObject* parent) :
+    QObject(parent)
 {
     qRegisterMetaType<Authority>();
     qRegisterMetaType<Status>();
@@ -110,10 +111,14 @@ QString PreviewStateModel::authorityName(Authority authority)
 {
     switch (authority)
     {
-        case Authority::None: return QStringLiteral("none");
-        case Authority::Approximate: return QStringLiteral("approximate");
-        case Authority::Simulated: return QStringLiteral("simulated");
-        case Authority::Authoritative: return QStringLiteral("authoritative");
+        case Authority::None:
+            return QStringLiteral("none");
+        case Authority::Approximate:
+            return QStringLiteral("approximate");
+        case Authority::Simulated:
+            return QStringLiteral("simulated");
+        case Authority::Authoritative:
+            return QStringLiteral("authoritative");
     }
     return QStringLiteral("none");
 }
@@ -122,10 +127,14 @@ QString PreviewStateModel::statusName(Status status)
 {
     switch (status)
     {
-        case Status::Unavailable: return QStringLiteral("unavailable");
-        case Status::Ready: return QStringLiteral("ready");
-        case Status::Stale: return QStringLiteral("stale");
-        case Status::Incomplete: return QStringLiteral("incomplete");
+        case Status::Unavailable:
+            return QStringLiteral("unavailable");
+        case Status::Ready:
+            return QStringLiteral("ready");
+        case Status::Stale:
+            return QStringLiteral("stale");
+        case Status::Incomplete:
+            return QStringLiteral("incomplete");
     }
     return QStringLiteral("unavailable");
 }
@@ -140,4 +149,4 @@ void PreviewStateModel::setStatus(Status status)
     }
 }
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction

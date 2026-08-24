@@ -75,9 +75,9 @@ private:
     pdf::PDFJobScheduler* m_scheduler = nullptr;
 };
 
-} // namespace pdfinteraction
+}   // namespace pdfinteraction
 
 Q_DECLARE_METATYPE(pdfinteraction::PreflightController::State)
 Q_DECLARE_METATYPE(pdfinteraction::PreflightController::EvidenceNavigationRequest)
 
-#endif // PREFLIGHTCONTROLLER_H
+#endif   // PREFLIGHTCONTROLLER_H
