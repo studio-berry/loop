@@ -15,7 +15,8 @@
     "state_invariants",
     "status_contract",
     "action_policy",
-    "plugin_action_policy"
+    "plugin_action_policy",
+    "legacy_surface_disposition"
   ],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
@@ -68,11 +69,34 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["plugin", "disposition", "target"],
+        "required": ["plugin", "disposition", "target", "owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition"],
         "properties": {
           "plugin": { "type": "string", "minLength": 1 },
           "disposition": { "enum": ["KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"] },
-          "target": { "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"] }
+          "target": { "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"] },
+          "owner": { "type": "string", "minLength": 1 },
+          "replacement_target": { "type": ["string", "null"] },
+          "required_test": { "type": "string", "minLength": 1 },
+          "evidence_artifact": { "type": "string", "minLength": 1 },
+          "deletion_condition": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "legacy_surface_disposition": {
+      "type": "array",
+      "minItems": 48,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "classification", "owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition"],
+        "properties": {
+          "path": { "type": "string", "pattern": "^.+\\.ui$" },
+          "classification": { "enum": ["MIGRATE", "CONSOLIDATE", "HEADLESS", "RETIRE"] },
+          "owner": { "type": "string", "minLength": 1 },
+          "replacement_target": { "type": ["string", "null"] },
+          "required_test": { "type": "string", "minLength": 1 },
+          "evidence_artifact": { "type": "string", "minLength": 1 },
+          "deletion_condition": { "type": "string", "minLength": 1 }
         }
       }
     }

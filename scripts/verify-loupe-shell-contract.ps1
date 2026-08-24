@@ -13,13 +13,14 @@ param(
     [string]$ProductSurfacePath = (Join-Path $PSScriptRoot "..\docs\product-surface.json"),
     [string]$ShellContractPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell.json"),
     [string]$ActionPolicyPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell-actions.json"),
+    [string]$ShellSchemaPath = (Join-Path $PSScriptRoot "..\docs\schemas\loupe-shell.schema.json"),
     [string]$EditorUiPath = (Join-Path $PSScriptRoot "..\LoupeLibGui\pdfeditormainwindow.ui")
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, $EditorUiPath)) {
+foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, $ShellSchemaPath, $EditorUiPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required shell contract input is missing: $path"
     }
@@ -65,6 +66,7 @@ if (($shellWorkspaceIds -join ",") -ne (($expectedWorkspaceIds | Sort-Object) -j
 }
 $validDispositions = @("KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING")
 $validTargets = @("Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced")
+$validLegacyClassifications = @("MIGRATE", "CONSOLIDATE", "HEADLESS", "RETIRE")
 $policyActions = @($actionPolicy.actions)
 if ($actionPolicy.schema_version -ne 1 -or $actionPolicy.issue -ne 193) {
     throw "Unsupported Editor action policy version or issue number."
@@ -111,6 +113,48 @@ foreach ($pluginAction in @($shell.plugin_action_policy)) {
     if ($pluginAction.disposition -ne $expectedShellDisposition) {
         throw "Plugin shell disposition diverges from product-surface manifest for $($pluginAction.plugin): expected $expectedShellDisposition, found $($pluginAction.disposition)"
     }
+    foreach ($field in @("owner", "required_test", "evidence_artifact", "deletion_condition")) {
+        if ([string]::IsNullOrWhiteSpace([string]$pluginAction.$field)) {
+            throw "Plugin policy is missing $field for $($pluginAction.plugin)"
+        }
+    }
+    if ($null -eq $pluginAction.replacement_target) {
+        if ($pluginSurface[0].replacement_surface -ne $null) {
+            throw "Plugin replacement target is missing for $($pluginAction.plugin)"
+        }
+    } elseif ([string]$pluginAction.replacement_target -ne [string]$pluginSurface[0].replacement_surface) {
+        throw "Plugin replacement target diverges from product-surface manifest for $($pluginAction.plugin)"
+    }
 }
 
-Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies; GUI remains deferred until 0.1.1."
+$pluginArtifacts = @($productSurface.surfaces | Where-Object { $_.kind -eq "plugin" } | ForEach-Object artifact | Sort-Object)
+$policyPluginArtifacts = @($shell.plugin_action_policy | ForEach-Object plugin | Sort-Object)
+if (($pluginArtifacts -join ",") -ne ($policyPluginArtifacts -join ",")) {
+    throw "Plugin disposition coverage mismatch. Product surface: $($pluginArtifacts -join ', '); shell policy: $($policyPluginArtifacts -join ', ')"
+}
+
+$legacyEntries = @($shell.legacy_surface_disposition)
+if ($legacyEntries.Count -ne 48) {
+    throw "Legacy UI disposition must contain exactly 48 entries; found $($legacyEntries.Count)"
+}
+$repoUiPaths = @(git -C $RepoRoot ls-files "*.ui" | ForEach-Object { $_.Trim() } | Sort-Object)
+$ledgerUiPaths = @($legacyEntries | ForEach-Object path | Sort-Object)
+if (($repoUiPaths -join ",") -ne ($ledgerUiPaths -join ",")) {
+    throw "Legacy UI disposition does not exactly cover repository inventory. Repository=$($repoUiPaths.Count), ledger=$($ledgerUiPaths.Count)"
+}
+$duplicateLegacyPaths = @($ledgerUiPaths | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+if ($duplicateLegacyPaths.Count -gt 0) {
+    throw "Duplicate legacy UI disposition paths: $($duplicateLegacyPaths -join ', ')"
+}
+foreach ($entry in $legacyEntries) {
+    if ($validLegacyClassifications -notcontains $entry.classification) {
+        throw "Invalid legacy UI classification for $($entry.path): $($entry.classification)"
+    }
+    foreach ($field in @("owner", "required_test", "evidence_artifact", "deletion_condition")) {
+        if ([string]::IsNullOrWhiteSpace([string]$entry.$field)) {
+            throw "Legacy UI disposition is missing $field for $($entry.path)"
+        }
+    }
+}
+
+Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies, $($legacyEntries.Count) legacy UI dispositions."
