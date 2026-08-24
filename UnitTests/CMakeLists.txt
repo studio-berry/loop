@@ -349,6 +349,17 @@ set_target_properties(UnitTestsPreflightEngine PROPERTIES
 )
 add_test(UnitTestsPreflightEngine "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightEngine")
 
+add_executable(UnitTestsPreflightInteraction
+    tst_preflightinteraction.cpp
+)
+target_link_libraries(UnitTestsPreflightInteraction PRIVATE
+    LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test
+)
+set_target_properties(UnitTestsPreflightInteraction PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}"
+)
+add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
+
 add_executable(UnitTestsPreflightVerdict
     tst_preflightverdicttest.cpp
 )

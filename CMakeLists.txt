@@ -296,6 +296,7 @@ cmake_path(RELATIVE_PATH LOUPE_INSTALL_TRANS_DIR
 configure_file(config.h.cmake config.h)
 
 add_subdirectory(LoupeLibCore)
+add_subdirectory(LoupeLibInteraction)
 
 if(LOUPE_INSTALL_INCLUDE)
     # Install public headers from LoupeLibCore/include
