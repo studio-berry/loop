@@ -114,8 +114,8 @@ def validate_manifest(manifest: dict) -> tuple[list[dict], dict | None]:
     status = manifest.get("status")
     product_shipped = manifest.get("product_qml_shipped")
     if product_shipped is True:
-        if status not in {"product-navigable", "product-qml-shipped"}:
-            raise ContractError("product_qml_shipped requires a product-navigable manifest status")
+        if status not in {"product-navigable", "product-qml-shipped", "product-complete"}:
+            raise ContractError("product_qml_shipped requires a product manifest status")
     elif product_shipped is not False:
         raise ContractError("product_qml_shipped must be a boolean")
 

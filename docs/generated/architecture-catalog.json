@@ -425,6 +425,7 @@
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
+    "UnitTestsProductOperatorLoop",
     "UnitTestsProfileIdentity",
     "UnitTestsQuickAccessibility",
     "UnitTestsQuickCanvas",

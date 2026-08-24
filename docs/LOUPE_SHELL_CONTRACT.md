@@ -150,13 +150,11 @@ become self-authoritative.
 
 ## UI foundation gate
 
-Issue #178 selects Qt Quick Controls for the later application shell. The
-decision is accepted with admission gates. No product Qt Quick module, product
-QML file, `QQuickWidget`, or shell restyle is introduced by this slice; the
-optional `QuickShellSmoke` target is qualification-only. ADR-010 and the
-Quick policy contracts resolve the migration strategy, canvas hosting,
-rendering fallback, licensing, and accessibility evidence required before
-large-scale shell wiring begins.
+Issue #178 selects Qt Quick Controls for the application shell. The installed
+`LoupeEditor` product root is now Qt Quick (`gui_status: quick-admitted` in
+`loupe-shell.json`). The non-installed `LoupeEditorWidgetsOracle` remains the
+Widgets migration oracle until Phase 5 deletes it per
+`docs/PHASE5_WIDGETS_DELETION_HANDOFF.md`.
 
 ## Accessibility gate
 

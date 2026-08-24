@@ -46,6 +46,10 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: .\scripts\verify-loupe-shell-contract.ps1
+      - name: Verify installed product graph
+        working-directory: loupe
+        shell: pwsh
+        run: python scripts/verify-installed-product-graph.py
       - name: Verify interaction boundary
         working-directory: loupe
         shell: pwsh

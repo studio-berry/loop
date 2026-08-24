@@ -137,12 +137,13 @@
         "UnitTests/tst_canvasparitytest.cpp",
         "UnitTests/testdata/canvas-parity/**",
         "UnitTests/tst_editorhosttest.cpp",
+        "UnitTests/tst_productoperatorloop.cpp",
         "UnitTests/tst_quickaccessibilitytest.cpp",
         "UnitTests/tst_shellkeyboardtest.cpp",
         "ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoupeLibQuick", "LoupeEditor", "LoupeEditorQuick", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsPreflightInteraction", "UnitTestsP4S9Interaction"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsPreflightInteraction", "UnitTestsP4S9Interaction"]
     },
     "widgets_gui": {
       "paths": [
