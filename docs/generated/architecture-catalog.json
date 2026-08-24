@@ -381,6 +381,7 @@
     "UnitTestsDiagnostics",
     "UnitTestsDocumentFacade",
     "UnitTestsDocumentSession",
+    "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
@@ -430,6 +431,7 @@
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager",
+    "UnitTestsViewportCommands",
     "UnitTestsViewportController",
     "UnitTestsWorkloadEnvelope"
   ],

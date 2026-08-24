@@ -8,7 +8,10 @@
       "QtQuick",
       "QtQuick.Controls",
       "QtQuick.Layouts",
-      "QtQuick.Window"
+      "QtQuick.Window",
+      "QtQuick.Dialogs",
+      "Loupe.Canvas",
+      "Loupe.Quick"
     ],
     "forbidden": [
       "remote URLs",
