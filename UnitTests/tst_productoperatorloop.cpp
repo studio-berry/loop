@@ -50,6 +50,8 @@ void ProductOperatorLoopTest::openDetectPinpointInspectUnderstandState()
     host.openFileUrl(QUrl::fromLocalFile(pdfPath));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
     QCOMPARE(host.pageCount(), 1);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+    QCOMPARE(host.currentPage(), 0);
 
     auto* preflight = qobject_cast<PreflightController*>(host.preflight());
     QVERIFY(preflight);
