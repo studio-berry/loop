@@ -33,10 +33,8 @@
 # is compiled POSITION_INDEPENDENT_CODE for exactly this link edge: a non-PIC
 # static archive cannot be linked into a shared object on Linux.
 #
-# Deliberately not installed. ADR-010's packaging and accessibility gates are
-# Phase-4-exit gates and there is no shipped product Quick module yet; an
-# install rule here would claim one exists. The rule arrives with that gate,
-# together with LoupeLibInteraction's.
+# Deliberately not installed until P4-S7 shipped the product Quick shell.
+# LoupeLibQuick now installs with LoupeEditor; see LoupeEditor/CMakeLists.txt.
 #
 # ADR-009 as amended admits the direct QQuickItem and prohibits QQuickPaintedItem,
 # QQuickWidget and WindowContainer as shipped product architecture. There is no
@@ -99,7 +97,7 @@ target_link_libraries(LoupeLibQuick
         Qt6::Quick
 )
 
-target_include_directories(LoupeLibQuick INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+target_include_directories(LoupeLibQuick PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 target_include_directories(LoupeLibQuick PUBLIC ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
 set_target_properties(LoupeLibQuick PROPERTIES
@@ -107,3 +105,9 @@ set_target_properties(LoupeLibQuick PROPERTIES
                       SOVERSION ${LOUPE_VERSION}
                       LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR})
+
+install(TARGETS LoupeLibQuick
+    RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR}
+    LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+    ARCHIVE DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+)

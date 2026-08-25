@@ -590,9 +590,9 @@
       "command": {
         "label_key": "command.actionFitHeight.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -602,9 +602,9 @@
       "command": {
         "label_key": "command.actionFitPage.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -614,9 +614,9 @@
       "command": {
         "label_key": "command.actionFitWidth.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -656,9 +656,9 @@
           "standard_key": "MoveToEndOfDocument"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -671,9 +671,9 @@
           "standard_key": "MoveToStartOfDocument"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -716,9 +716,9 @@
           "standard_key": "MoveToNextPage"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -761,9 +761,9 @@
           "standard_key": "MoveToPreviousPage"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -1112,9 +1112,9 @@
           "sequence": "Ctrl+Shift+-"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -1127,9 +1127,9 @@
           "sequence": "Ctrl+Shift++"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -1376,9 +1376,9 @@
           "standard_key": "ZoomIn"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -1391,9 +1391,9 @@
           "standard_key": "ZoomOut"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     }
   ]

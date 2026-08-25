@@ -452,6 +452,11 @@ int ViewportController::currentPage() const
     return pages.isEmpty() ? -1 : pages.front();
 }
 
+int ViewportController::pageCount() const
+{
+    return m_geometry ? m_geometry->pageCount() : 0;
+}
+
 QTransform ViewportController::pagePointToViewportMatrix(int pageIndex) const
 {
     const QRect placedRect = placedPageRect(pageIndex);

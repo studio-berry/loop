@@ -1,10 +1,10 @@
 # Qt Quick composition pattern
 
-This document defines how Loupe product components will be composed when the
-Qt Quick foundation is introduced. It is a contract and example, not a product
-QML implementation. The repository's optional `QuickShellSmoke` QML is a
-qualification harness only; product QML remains gated until S21 canvas and
-S22 admission evidence are accepted.
+This document defines how Loupe product components are composed in the Qt Quick
+shell shipped with `LoupeEditor` (P4-S7 navigable slice). Qualification-only
+harnesses such as `QuickShellSmoke` remain non-product references; they do not
+define the installed operator loop, which is still incomplete until later
+Phase 4 sessions.
 
 ## Ownership boundary
 
