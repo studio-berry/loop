@@ -43,6 +43,7 @@ add_executable(PdfTool
     pdftoolinfometadata.cpp
     pdftoolinfonameddestinations.cpp
     pdftoolinfopageboxes.cpp
+    pdftooldumpgeometry.cpp
     pdftoolinfostructuretree.cpp
     pdftoolinkcoverage.cpp
     pdftooloptimize.cpp
