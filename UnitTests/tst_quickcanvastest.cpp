@@ -892,7 +892,7 @@ void QuickCanvasTest::windowChangeDropsRetainedNodes()
     // A texture belongs to the window that created it, so every retained node is
     // invalid the moment the item moves. Surviving this is not cosmetic: a
     // texture outliving its window is a crash rather than a glitch.
-    auto second = std::make_unique<QQuickWindow>();
+    auto second = std::make_unique<TestQuickWindow>();
     second->resize(400, 400);
 
     m_item->setParentItem(second->contentItem());
