@@ -91,7 +91,7 @@ target_link_libraries(LoupeLibQuick
         Qt6::Quick
 )
 
-target_include_directories(LoupeLibQuick INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+target_include_directories(LoupeLibQuick PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 target_include_directories(LoupeLibQuick PUBLIC ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
 set_target_properties(LoupeLibQuick PROPERTIES
