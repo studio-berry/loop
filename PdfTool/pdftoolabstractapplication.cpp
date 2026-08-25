@@ -670,6 +670,14 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("no-permissive-reading"), QStringLiteral("Do not attempt to fix damaged documents."));
     }
 
+    if (getStandardString(Command) == QStringLiteral("render-page"))
+    {
+        parser->addOption(QCommandLineOption("page-index", "Zero-based page index to render.", "index"));
+        parser->addOption(QCommandLineOption("dpi", "Rasterization resolution in DPI.", "dpi", "300"));
+        parser->addOption(QCommandLineOption("max-raster-pixels", "Maximum pixels permitted for the render.", "pixels", "250000000"));
+        parser->addOption(QCommandLineOption("output", "Output PNG file.", "file"));
+    }
+
     if (optionFlags.testFlag(Separate))
     {
         parser->addPositionalArgument("pattern", "Page pattern, must contain '%' character if multiple pages are selected.");
@@ -1105,6 +1113,27 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.document = positionalArguments.isEmpty() ? QString() : positionalArguments.front();
         options.password = parser->isSet("pswd") ? parser->value("pswd") : QString();
         options.permissiveReading = !parser->isSet("no-permissive-reading");
+    }
+
+    if (getStandardString(Command) == QStringLiteral("render-page"))
+    {
+        bool ok = false;
+        options.renderPageIndex = parser->value("page-index").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageIndex = -1;
+        }
+        options.renderPageDpi = parser->value("dpi").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageDpi = 300;
+        }
+        options.renderPageMaxRasterPixels = parser->value("max-raster-pixels").toLongLong(&ok);
+        if (!ok)
+        {
+            options.renderPageMaxRasterPixels = 250000000;
+        }
+        options.renderPageOutput = parser->value("output");
     }
 
     if (optionFlags.testFlag(Redact))

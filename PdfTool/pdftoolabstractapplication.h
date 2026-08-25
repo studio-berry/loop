@@ -199,6 +199,12 @@ struct PDFToolOptions
     int renderMSAAsamples = 4;
     int renderRasterizerCount = pdf::PDFRasterizerPool::getDefaultRasterizerCount();
 
+    // For the versioned STCH render-page contract
+    int renderPageIndex = -1;
+    int renderPageDpi = 300;
+    qint64 renderPageMaxRasterPixels = 250000000;
+    QString renderPageOutput;
+
     // For option 'Separate'
     QString separatePagePattern;
 
