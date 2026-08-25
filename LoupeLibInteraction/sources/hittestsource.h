@@ -30,6 +30,7 @@
 #include "pdfevidencegraph.h"
 
 #include <QList>
+#include <QHash>
 #include <QPointF>
 #include <QPointer>
 
@@ -136,6 +137,8 @@ public:
 private:
     QPointer<pdf::PDFDocumentContext> m_context;
     qreal m_edgeTolerance = 1.0;
+    mutable pdf::PDFRevisionIdentity m_cachedRevision;
+    mutable QHash<int, QList<InteractionTarget>> m_pageTargets;
 };
 
 /// Ranks candidates from every source into one answer.

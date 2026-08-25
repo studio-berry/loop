@@ -1,4 +1,4 @@
 Category: fixed
 Audience: developers
 Breaking-Change: no
-Summary: Address PR #356 review findings by unifying Quick canvas viewport geometry, wiring preflight overlays and hit-testing in EditorHost, fixing document lifecycle and scene-graph teardown, restoring saved theme preferences, and correcting viewport block navigation for TwoPagesRight layouts.
+Summary: Address PR #356 review findings and complete the Quick shell structural cleanup by extracting DocumentViewSession, table-driving viewport commands, caching page-box geometry per revision, indexing the page-surface cache, and binding QML menu state to catalog descriptors.

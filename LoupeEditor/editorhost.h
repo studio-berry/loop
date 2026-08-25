@@ -39,6 +39,7 @@
 #include "viewportcontroller.h"
 
 #include "focusrestoration.h"
+#include "documentviewsession.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
@@ -55,9 +56,6 @@ namespace pdfinteraction
 class HitTestDispatcher;
 class InteractionController;
 class OverlayBuilder;
-class PageSurfaceCoordinator;
-class PDFDocumentContextSource;
-class PDFDocumentPageGeometrySource;
 }   // namespace pdfinteraction
 
 namespace pdfquick
@@ -176,28 +174,12 @@ private:
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
     void onDragCompleted(pdfinteraction::DragSession session);
 
-    pdf::PDFJobScheduler m_scheduler;
-    pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
-    pdfinteraction::CommandCatalog m_catalog;
-    pdf::PDFDocumentContext m_context;
-    pdfinteraction::PDFReaderDocumentLoader m_loader;
-    pdfinteraction::PDFDocumentFileWriter m_writer;
-    pdfinteraction::DocumentFacade m_facade;
-    std::unique_ptr<pdfinteraction::PDFDocumentContextSource> m_revisionSource;
-    pdfinteraction::ViewportController m_viewport;
-    std::unique_ptr<pdfinteraction::PDFDocumentPageGeometrySource> m_geometry;
-    pdfinteraction::PDFSessionPageSurfaceRenderer m_renderer;
-    std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> m_surfaces;
-    std::unique_ptr<pdfinteraction::HitTestDispatcher> m_hitTest;
-    std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
-    std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
-    pdfinteraction::ViewportCommandBridge m_commandBridge;
+    std::unique_ptr<DocumentViewSession> m_session;
     pdfinteraction::PreflightController m_preflight;
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
     FocusRestoration m_focusRestoration;
-    pdfinteraction::PageBoxHitTestSource m_pageBoxSource;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
 
     QPointer<pdfquick::LoupeCanvasItem> m_canvas;

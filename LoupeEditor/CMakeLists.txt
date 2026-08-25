@@ -23,6 +23,8 @@
 qt_policy(SET QTP0001 NEW)
 
 add_library(LoupeEditorQuick STATIC
+    documentviewsession.cpp
+    documentviewsession.h
     editorhost.cpp
     editorhost.h
     focusrestoration.cpp

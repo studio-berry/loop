@@ -173,9 +173,11 @@ void PageSurfaceCoordinator::requestSurfaces()
 
     for (const Demand& item : demand)
     {
-        if (m_cache.find(item.key) != m_cache.end())
+        const auto cacheHit = m_cache.find(item.key);
+        if (cacheHit != m_cache.end())
         {
             ++m_counters.cacheHitsExact;
+            m_lru.splice(m_lru.begin(), m_lru, cacheHit->second.lru);
             snapshotDirty = true;
             continue;
         }
@@ -504,6 +506,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     if (existing != m_cache.end())
     {
         m_counters.admittedBytes -= existing->second.cost;
+        m_lru.erase(existing->second.lru);
         m_cache.erase(existing);
     }
 
@@ -513,6 +516,8 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     entry.accessSequence = ++m_accessSequence;
 
     m_counters.admittedBytes += entry.cost;
+    m_lru.push_front(key);
+    entry.lru = m_lru.begin();
     m_cache.emplace(key, std::move(entry));
 
     trimCacheToBudget();
@@ -526,17 +531,17 @@ void PageSurfaceCoordinator::trimCacheToBudget()
 {
     while (m_counters.admittedBytes > m_bounds.maxAdmittedBytes && !m_cache.empty())
     {
-        auto oldest = m_cache.begin();
-        for (auto it = m_cache.begin(); it != m_cache.end(); ++it)
+        const PageSurfaceKey oldestKey = m_lru.back();
+        const auto oldest = m_cache.find(oldestKey);
+        if (oldest == m_cache.end())
         {
-            if (it->second.accessSequence < oldest->second.accessSequence)
-            {
-                oldest = it;
-            }
+            m_lru.pop_back();
+            continue;
         }
 
         m_counters.admittedBytes -= oldest->second.cost;
         m_cache.erase(oldest);
+        m_lru.pop_back();
         ++m_counters.evictions;
     }
 }
@@ -594,6 +599,7 @@ void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
         if (!(it->first.revision == current))
         {
             m_counters.admittedBytes -= it->second.cost;
+            m_lru.erase(it->second.lru);
             it = m_cache.erase(it);
         }
         else

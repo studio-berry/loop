@@ -183,14 +183,27 @@ QList<InteractionTarget> PageBoxHitTestSource::hitTest(int pageIndex, QPointF pa
 
 QList<InteractionTarget> PageBoxHitTestSource::targetsForPage(int pageIndex) const
 {
-    QList<InteractionTarget> targets;
-
     const pdf::PDFDocumentContext* context = m_context.data();
     const pdf::PDFDocument* document = context ? context->getDocument() : nullptr;
     if (!document || pageIndex < 0)
     {
-        return targets;
+        return {};
     }
+
+    const pdf::PDFRevisionIdentity revision = context->getRevision();
+    if (!(revision == m_cachedRevision))
+    {
+        m_pageTargets.clear();
+        m_cachedRevision = revision;
+    }
+
+    const auto cached = m_pageTargets.constFind(pageIndex);
+    if (cached != m_pageTargets.constEnd())
+    {
+        return cached.value();
+    }
+
+    QList<InteractionTarget> targets;
 
     const pdf::PDFCatalog* catalog = document->getCatalog();
     if (!catalog || size_t(pageIndex) >= catalog->getPageCount())
@@ -215,6 +228,7 @@ QList<InteractionTarget> PageBoxHitTestSource::targetsForPage(int pageIndex) con
 
     targets.removeIf([](const InteractionTarget& target)
                      { return target.pageBounds.isNull() || target.pageBounds.isEmpty(); });
+    m_pageTargets.insert(pageIndex, targets);
     return targets;
 }
 
