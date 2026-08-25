@@ -46,7 +46,7 @@
 namespace
 {
 
-constexpr auto QuitCommandId = QStringLiteral("actionQuit");
+const QString QuitCommandId = QStringLiteral("actionQuit");
 
 int rotationToDegrees(pdf::PageRotation rotation)
 {
@@ -100,7 +100,7 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     shortcut.insert(QStringLiteral("sequence"), descriptor.shortcut.sequence);
     entry.insert(QStringLiteral("shortcut"), shortcut);
     entry.insert(QStringLiteral("shortcutText"),
-                descriptor.shortcut.sequence.isEmpty() ? descriptor.shortcut.standardKey : descriptor.shortcut.sequence);
+                 descriptor.shortcut.sequence.isEmpty() ? descriptor.shortcut.standardKey : descriptor.shortcut.sequence);
     return entry;
 }
 
@@ -444,8 +444,7 @@ void EditorHost::connectFacade()
                 }
 
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             { bumpPresentation(); });
@@ -455,15 +454,13 @@ void EditorHost::connectFacade()
                 onDocumentGone();
                 onDocumentReady();
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
             {
                 onDocumentGone();
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 }
 
 void EditorHost::connectViewport()

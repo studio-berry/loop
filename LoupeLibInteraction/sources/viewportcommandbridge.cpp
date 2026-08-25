@@ -127,17 +127,39 @@ bool ViewportCommandBridge::registerHandlers()
         {
             switch (spec.operation)
             {
-                case Operation::Next: goToPage(resolvedPageIndex() + 1); break;
-                case Operation::Previous: goToPage(resolvedPageIndex() - 1); break;
-                case Operation::Start: goToPage(0); break;
-                case Operation::End: goToPage(lastPageIndex()); break;
-                case Operation::ZoomIn: zoomByStep(ViewportController::ZoomStep); break;
-                case Operation::ZoomOut: zoomByStep(1.0 / ViewportController::ZoomStep); break;
-                case Operation::FitPage: applyZoomHint(ZoomHint::Fit); break;
-                case Operation::FitWidth: applyZoomHint(ZoomHint::FitWidth); break;
-                case Operation::FitHeight: applyZoomHint(ZoomHint::FitHeight); break;
-                case Operation::RotateLeft: rotateBy(-1); break;
-                case Operation::RotateRight: rotateBy(1); break;
+                case Operation::Next:
+                    goToPage(resolvedPageIndex() + 1);
+                    break;
+                case Operation::Previous:
+                    goToPage(resolvedPageIndex() - 1);
+                    break;
+                case Operation::Start:
+                    goToPage(0);
+                    break;
+                case Operation::End:
+                    goToPage(lastPageIndex());
+                    break;
+                case Operation::ZoomIn:
+                    zoomByStep(ViewportController::ZoomStep);
+                    break;
+                case Operation::ZoomOut:
+                    zoomByStep(1.0 / ViewportController::ZoomStep);
+                    break;
+                case Operation::FitPage:
+                    applyZoomHint(ZoomHint::Fit);
+                    break;
+                case Operation::FitWidth:
+                    applyZoomHint(ZoomHint::FitWidth);
+                    break;
+                case Operation::FitHeight:
+                    applyZoomHint(ZoomHint::FitHeight);
+                    break;
+                case Operation::RotateLeft:
+                    rotateBy(-1);
+                    break;
+                case Operation::RotateRight:
+                    rotateBy(1);
+                    break;
             }
             finish(invocation);
         };
@@ -201,17 +223,31 @@ void ViewportCommandBridge::refreshAvailability()
         bool enabled = false;
         switch (spec.operation)
         {
-            case Operation::Next: enabled = hasPages && page >= 0 && page < count - 1; break;
-            case Operation::Previous: enabled = hasPages && page > 0; break;
-            case Operation::Start: enabled = hasPages && page > 0; break;
-            case Operation::End: enabled = hasPages && page >= 0 && page < count - 1; break;
-            case Operation::ZoomIn: enabled = hasPages && zoom < ViewportController::MaximumZoom - 1e-9; break;
-            case Operation::ZoomOut: enabled = hasPages && zoom > ViewportController::MinimumZoom + 1e-9; break;
+            case Operation::Next:
+                enabled = hasPages && page >= 0 && page < count - 1;
+                break;
+            case Operation::Previous:
+                enabled = hasPages && page > 0;
+                break;
+            case Operation::Start:
+                enabled = hasPages && page > 0;
+                break;
+            case Operation::End:
+                enabled = hasPages && page >= 0 && page < count - 1;
+                break;
+            case Operation::ZoomIn:
+                enabled = hasPages && zoom < ViewportController::MaximumZoom - 1e-9;
+                break;
+            case Operation::ZoomOut:
+                enabled = hasPages && zoom > ViewportController::MinimumZoom + 1e-9;
+                break;
             case Operation::FitPage:
             case Operation::FitWidth:
             case Operation::FitHeight:
             case Operation::RotateLeft:
-            case Operation::RotateRight: enabled = hasPages; break;
+            case Operation::RotateRight:
+                enabled = hasPages;
+                break;
         }
         m_catalog->setEnabled(spec.id, enabled);
     }
