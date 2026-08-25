@@ -14,7 +14,6 @@
       "installed": false,
       "allowed_link_targets": [
         "LoupeLibCore",
-        "LoupeLibInteraction_resources_1",
         "Qt6::Core",
         "Qt6::Gui"
       ]
