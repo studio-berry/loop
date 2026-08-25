@@ -14,11 +14,9 @@
 
 #include "commandcatalogresource_p.h"
 
+extern int qInitResources_commandcatalog();
+
 void pdfinteraction::ensureCommandCatalogResource()
 {
-    // RCC emits qInitResources_* at global scope. Namespace members and local
-    // scopes still resolve unqualified names inside pdfinteraction, so call the
-    // global initializer explicitly.
-    extern int qInitResources_commandcatalog();
-    (void)qInitResources_commandcatalog();
+    (void)::qInitResources_commandcatalog();
 }
