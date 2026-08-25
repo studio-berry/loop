@@ -215,6 +215,7 @@ private:
     /// The scene graph came back after an invalidation. Rebuilds from the CPU
     /// surface cache, which was deliberately not dropped.
     void onSceneGraphInitialized();
+    void onSceneGraphInvalidated();
 
     void requestFrame();
 

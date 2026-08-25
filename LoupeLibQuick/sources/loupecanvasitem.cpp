@@ -334,17 +334,7 @@ void LoupeCanvasItem::attachWindow(QQuickWindow* hostWindow)
         {
             m_builderResetPending.store(true);
             m_present.noteSceneGraphInvalidated();
-
-            // The invalidation may arrive on the render thread. Rebuild the node
-            // tree on the next frame rather than assuming something else will
-            // schedule a repaint.
-            QMetaObject::invokeMethod(
-                this, [this]()
-                {
-                    m_tilesDirty = true;
-                    m_overlaysDirty = true;
-                    requestFrame();
-                }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection);
         },
         Qt::DirectConnection));
 
@@ -409,6 +399,13 @@ void LoupeCanvasItem::onDisplayMetricsChanged()
 }
 
 void LoupeCanvasItem::onSceneGraphInitialized()
+{
+    m_tilesDirty = true;
+    m_overlaysDirty = true;
+    requestFrame();
+}
+
+void LoupeCanvasItem::onSceneGraphInvalidated()
 {
     m_tilesDirty = true;
     m_overlaysDirty = true;

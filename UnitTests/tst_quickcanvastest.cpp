@@ -198,7 +198,6 @@ bool sendFocusOut(QQuickItem* item, Qt::FocusReason reason = Qt::OtherFocusReaso
 class TestCanvasItem final : public pdfquick::LoupeCanvasItem
 {
 public:
-    using pdfquick::LoupeCanvasItem::LoupeCanvasItem;
     using pdfquick::LoupeCanvasItem::focusOutEvent;
 };
 
@@ -457,12 +456,12 @@ void QuickCanvasTest::requestSurfacesAndDrain()
     QVERIFY(m_surfaces);
     m_surfaces->requestSurfaces();
 
-    QVERIFY2(QTest::qWaitFor([this]()
-                             {
-                                 QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-                                 return m_surfaces->counters().admitted > 0;
-                             },
-                             5000),
+    for (int attempt = 0; attempt < 250 && m_surfaces->counters().admitted == 0; ++attempt)
+    {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+
+    QVERIFY2(m_surfaces->counters().admitted > 0,
              qPrintable(QStringLiteral("admitted=%1 requested=%2 rejected-superseded=%3 rejected-demand=%4 failed=%5")
                             .arg(m_surfaces->counters().admitted)
                             .arg(m_surfaces->counters().requested)
