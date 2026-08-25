@@ -13,6 +13,6 @@ QString formatStructuredObject(const QJsonObject& object,
                                PDFOutputFormatter::Style style,
                                const QString& rootName);
 
-} // namespace pdftool
+}   // namespace pdftool
 
-#endif // PDFTOOLSTRUCTUREDOUTPUT_H
+#endif   // PDFTOOLSTRUCTUREDOUTPUT_H

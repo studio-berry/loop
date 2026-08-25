@@ -286,7 +286,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("pswd"), { QStringLiteral("--pswd") }, QStringLiteral("password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("no-permissive-reading"), { QStringLiteral("--no-permissive-reading") }, {}, PDFToolValueType::Boolean);
     }
-    if (getStandardString(Command) == QStringLiteral("render-page"))
+    if (optionFlags.testFlag(RenderPage))
     {
         add(QStringLiteral("page-index"), { QStringLiteral("--page-index") }, QStringLiteral("index"), PDFToolValueType::Integer, {}, {}, true);
         add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
@@ -677,7 +677,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("no-permissive-reading"), QStringLiteral("Do not attempt to fix damaged documents."));
     }
 
-    if (getStandardString(Command) == QStringLiteral("render-page"))
+    if (optionFlags.testFlag(RenderPage))
     {
         addDescribedOption(parser, optionDescriptors, QStringLiteral("page-index"), QStringLiteral("Zero-based page index to render."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization resolution in DPI."));
@@ -1122,7 +1122,7 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.permissiveReading = !parser->isSet("no-permissive-reading");
     }
 
-    if (getStandardString(Command) == QStringLiteral("render-page"))
+    if (optionFlags.testFlag(RenderPage))
     {
         bool ok = false;
         options.renderPageIndex = parser->value("page-index").toInt(&ok);

@@ -398,6 +398,7 @@ public:
         RepairDiff = 0x400000000ULL,   ///< Deterministic before/after repair comparison
         Repair = 0x800000000ULL,   ///< Transactional prepress-safe repair operation
         ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
+        RenderPage = 0x4000000000ULL,   ///< Settings for render-page STCH contract
     };
     Q_DECLARE_FLAGS(Options, Option)
 

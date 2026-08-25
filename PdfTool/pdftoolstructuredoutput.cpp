@@ -33,7 +33,7 @@ void appendValue(PDFOutputFormatter& formatter, const QString& name, const QJson
     {
         formatter.beginHeader(name, name);
         const QJsonObject object = value.toObject();
-        for (auto it = object.cbegin(); it != object.cend(); ++it)
+        for (auto it = object.begin(); it != object.end(); ++it)
         {
             appendValue(formatter, it.key(), it.value());
         }
@@ -55,7 +55,7 @@ void appendValue(PDFOutputFormatter& formatter, const QString& name, const QJson
     formatter.writeText(name, scalarText(value));
 }
 
-} // namespace
+}   // namespace
 
 QString formatStructuredObject(const QJsonObject& object,
                                PDFOutputFormatter::Style style,
@@ -68,7 +68,7 @@ QString formatStructuredObject(const QJsonObject& object,
 
     PDFOutputFormatter formatter(style);
     formatter.beginDocument(rootName, rootName);
-    for (auto it = object.cbegin(); it != object.cend(); ++it)
+    for (auto it = object.begin(); it != object.end(); ++it)
     {
         appendValue(formatter, it.key(), it.value());
     }
@@ -76,4 +76,4 @@ QString formatStructuredObject(const QJsonObject& object,
     return formatter.getString();
 }
 
-} // namespace pdftool
+}   // namespace pdftool

@@ -55,7 +55,7 @@ QString PDFToolRenderPageApplication::getStandardString(StandardString standardS
 
 PDFToolAbstractApplication::Options PDFToolRenderPageApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | DestructiveWrite;
+    return ConsoleFormat | OpenDocument | DestructiveWrite | RenderPage;
 }
 
 PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& options)
@@ -158,17 +158,17 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
     if (!options.destructiveDryRun)
     {
         const pdf::PDFSafeFileWriter::OverwritePolicy overwritePolicy = options.destructiveOverwrite
-                                                                              ? pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite
-                                                                              : pdf::PDFSafeFileWriter::OverwritePolicy::Fail;
-        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device) {
+                                                                            ? pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite
+                                                                            : pdf::PDFSafeFileWriter::OverwritePolicy::Fail;
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device)
+                                                                                        {
             QImageWriter writer(device, QByteArray("png"));
             if (!writer.write(outputImage))
             {
                 writeError = writer.errorString();
                 return false;
             }
-            return true;
-        }, overwritePolicy);
+            return true; }, overwritePolicy);
         if (!writeResult)
         {
             reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("render.output-error"), writeError.isEmpty() ? writeResult.getErrorMessage() : writeError);
