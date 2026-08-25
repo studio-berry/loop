@@ -688,11 +688,14 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
     QSignalSpy dragSpy(m_controller.get(), &pdfinteraction::InteractionController::dragCompleted);
 
     const QRect placed = m_viewport->placedPageRect(0);
-    const QPointF start(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
 
-    QVERIFY(sendMousePress(m_item.get(), start));
+    // First press selects the scripted target; the second can drag it.
+    QVERIFY(sendMousePress(m_item.get(), inside));
+    QVERIFY(sendMouseRelease(m_item.get(), inside));
+    QVERIFY(sendMousePress(m_item.get(), inside));
 
-    const QPointF dragged = start + QPointF(40.0, 40.0);
+    const QPointF dragged = inside + QPointF(40.0, 40.0);
     QVERIFY(sendMouseMove(m_item.get(), dragged));
 
     QCoreApplication::processEvents();
