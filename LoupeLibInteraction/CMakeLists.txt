@@ -113,12 +113,10 @@ qt_add_resources(LoupeLibInteraction "commandcatalog"
     FILES ${LOUPE_INTERACTION_COMMAND_CONTRACT}
 )
 
-# Fold the AUTORCC initializer into the STATIC archive so executables that link
-# only libLoupeLibInteraction.a resolve qInitResources_commandcatalog().
+# qt_add_resources emits a companion object library for STATIC consumers. Link it
+# through the archive interface so executables resolve qInitResources_commandcatalog().
 if(TARGET LoupeLibInteraction_resources_1)
-    target_sources(LoupeLibInteraction PRIVATE
-        $<TARGET_OBJECTS:LoupeLibInteraction_resources_1>
-    )
+    target_link_libraries(LoupeLibInteraction PUBLIC LoupeLibInteraction_resources_1)
 endif()
 
 # LoupeLibQuick is SHARED in P4-S5; a non-PIC static archive cannot be linked
