@@ -339,14 +339,12 @@ void LoupeCanvasItem::attachWindow(QQuickWindow* hostWindow)
             // tree on the next frame rather than assuming something else will
             // schedule a repaint.
             QMetaObject::invokeMethod(
-                this,
-                [this]()
+                this, [this]()
                 {
                     m_tilesDirty = true;
                     m_overlaysDirty = true;
                     requestFrame();
-                },
-                Qt::QueuedConnection);
+                }, Qt::QueuedConnection);
         },
         Qt::DirectConnection));
 
