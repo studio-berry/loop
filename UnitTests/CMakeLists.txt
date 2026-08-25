@@ -158,7 +158,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_interactionboundarytest.cpp
     )
 
-    target_link_libraries(UnitTestsInteractionBoundary PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsInteractionBoundary PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsInteractionBoundary PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -175,7 +175,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_documentfacadetest.cpp
     )
 
-    target_link_libraries(UnitTestsDocumentFacade PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsDocumentFacade PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsDocumentFacade PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -192,7 +192,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_viewportcontrollertest.cpp
     )
 
-    target_link_libraries(UnitTestsViewportController PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsViewportController PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsViewportController PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -208,7 +208,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_pagesurfacetest.cpp
     )
 
-    target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsPageSurface PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -226,7 +226,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_interactioncontrollertest.cpp
     )
 
-    target_link_libraries(UnitTestsInteractionController PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsInteractionController PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsInteractionController PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -243,7 +243,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_overlayframetest.cpp
     )
 
-    target_link_libraries(UnitTestsOverlayFrame PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsOverlayFrame PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsOverlayFrame PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -258,7 +258,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
     )
 
-    target_link_libraries(UnitTestsPreflightInteraction PRIVATE LoupeLibInteraction LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsPreflightInteraction PRIVATE LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Test)
     target_include_directories(UnitTestsPreflightInteraction PRIVATE
         ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
         ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
@@ -289,7 +289,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
             tst_quickcanvastest.cpp
         )
 
-        target_link_libraries(UnitTestsQuickCanvas PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsQuickCanvas PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibInteraction_resources_1 LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         set_target_properties(UnitTestsQuickCanvas PROPERTIES
             WIN32_EXECUTABLE OFF
