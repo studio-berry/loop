@@ -86,6 +86,14 @@ add_library(LoupeLibInteraction STATIC
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
     sources/preflightoverlaybridge.h
+    sources/inspectormodel.cpp
+    sources/inspectormodel.h
+    sources/previewstatemodel.cpp
+    sources/previewstatemodel.h
+    sources/pagesmodel.cpp
+    sources/pagesmodel.h
+    sources/productionmodel.cpp
+    sources/productionmodel.h
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
