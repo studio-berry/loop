@@ -286,6 +286,13 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("pswd"), { QStringLiteral("--pswd") }, QStringLiteral("password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("no-permissive-reading"), { QStringLiteral("--no-permissive-reading") }, {}, PDFToolValueType::Boolean);
     }
+    if (getStandardString(Command) == QStringLiteral("render-page"))
+    {
+        add(QStringLiteral("page-index"), { QStringLiteral("--page-index") }, QStringLiteral("index"), PDFToolValueType::Integer, {}, {}, true);
+        add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("max-raster-pixels"), { QStringLiteral("--max-raster-pixels") }, QStringLiteral("pixels"), PDFToolValueType::Integer, {}, QStringLiteral("250000000"));
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+    }
     if (optionFlags.testFlag(Redact))
     {
         add(QStringLiteral("redact-copy-title"), { QStringLiteral("--redact-copy-title") }, {}, PDFToolValueType::Boolean);
@@ -672,10 +679,10 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (getStandardString(Command) == QStringLiteral("render-page"))
     {
-        parser->addOption(QCommandLineOption("page-index", "Zero-based page index to render.", "index"));
-        parser->addOption(QCommandLineOption("dpi", "Rasterization resolution in DPI.", "dpi", "300"));
-        parser->addOption(QCommandLineOption("max-raster-pixels", "Maximum pixels permitted for the render.", "pixels", "250000000"));
-        parser->addOption(QCommandLineOption("output", "Output PNG file.", "file"));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("page-index"), QStringLiteral("Zero-based page index to render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization resolution in DPI."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("max-raster-pixels"), QStringLiteral("Maximum pixels permitted for the render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output PNG file."));
     }
 
     if (optionFlags.testFlag(Separate))
@@ -2505,7 +2512,7 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
         return PDFToolExitCode::InvalidInvocation;
     }
 
-    if (outputInfo.exists() && !options.destructiveOverwrite)
+    if (outputInfo.exists() && !options.destructiveOverwrite && !options.destructiveDryRun)
     {
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,

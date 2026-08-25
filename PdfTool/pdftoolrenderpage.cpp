@@ -4,6 +4,7 @@
 
 #include "pdffont.h"
 #include "pdfsafefilewriter.h"
+#include "pdftoolstructuredoutput.h"
 
 #include <QCryptographicHash>
 #include <QImage>
@@ -53,7 +54,7 @@ QString PDFToolRenderPageApplication::getStandardString(StandardString standardS
 
 PDFToolAbstractApplication::Options PDFToolRenderPageApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument;
+    return ConsoleFormat | OpenDocument | DestructiveWrite;
 }
 
 PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& options)
@@ -64,6 +65,12 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"),
                          QStringLiteral("render-page requires document, --page-index, positive --dpi, positive --max-raster-pixels, and --output."));
         return PDFToolExitCode::InvalidInvocation;
+    }
+
+    const PDFToolExitCode outputValidation = validateDestructiveOutput(options, options.renderPageOutput);
+    if (outputValidation != PDFToolExitCode::Success)
+    {
+        return outputValidation;
     }
 
     pdf::PDFDocument document;
@@ -146,19 +153,27 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
 
     const QImage outputImage = fullImage.copy(bleedPixels);
     QString writeError;
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device) {
-        QImageWriter writer(device, QByteArray("png"));
-        if (!writer.write(outputImage))
-        {
-            writeError = writer.errorString();
-            return false;
-        }
-        return true;
-    }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
-    if (!writeResult)
+    bool outputWritten = false;
+    if (!options.destructiveDryRun)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("render.output-error"), writeError.isEmpty() ? writeResult.getErrorMessage() : writeError);
-        return PDFToolExitCode::ProcessingFailure;
+        const pdf::PDFSafeFileWriter::OverwritePolicy overwritePolicy = options.destructiveOverwrite
+                                                                              ? pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite
+                                                                              : pdf::PDFSafeFileWriter::OverwritePolicy::Fail;
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device) {
+            QImageWriter writer(device, QByteArray("png"));
+            if (!writer.write(outputImage))
+            {
+                writeError = writer.errorString();
+                return false;
+            }
+            return true;
+        }, overwritePolicy);
+        if (!writeResult)
+        {
+            reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("render.output-error"), writeError.isEmpty() ? writeResult.getErrorMessage() : writeError);
+            return PDFToolExitCode::ProcessingFailure;
+        }
+        outputWritten = true;
     }
 
     QTransform outputTransform = fullTransform;
@@ -181,15 +196,17 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         { QStringLiteral("renderer_features"), features.toInt() },
         { QStringLiteral("color_output_identity"), QString::fromLatin1(COLOR_OUTPUT_IDENTITY) },
         { QStringLiteral("output"), options.renderPageOutput },
+        { QStringLiteral("output_state"), outputWritten ? QStringLiteral("written") : QStringLiteral("planned") },
     };
     if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
     {
         options.executionContext->setData(data);
-        options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("render-page"), options.renderPageOutput, QStringLiteral("written") });
+        options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("render-page"), options.renderPageOutput,
+                                              outputWritten ? QStringLiteral("written") : QStringLiteral("planned") });
     }
     else
     {
-        PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
+        PDFConsole::writeText(formatStructuredObject(data, options.outputStyle, QStringLiteral("render-page")), options.outputCodec);
     }
     return PDFToolExitCode::Success;
 }

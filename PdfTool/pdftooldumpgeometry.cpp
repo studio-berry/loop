@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdftooldumpgeometry.h"
+#include "pdftoolstructuredoutput.h"
 #include "pdfutils.h"
 
 #include <QCryptographicHash>
@@ -139,7 +140,7 @@ PDFToolExitCode PDFToolDumpGeometryApplication::execute(const PDFToolOptions& op
     }
     else
     {
-        PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
+        PDFConsole::writeText(formatStructuredObject(data, options.outputStyle, QStringLiteral("dump-page-geometry")), options.outputCodec);
     }
     return PDFToolExitCode::Success;
 }

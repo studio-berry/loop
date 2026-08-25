@@ -50,6 +50,8 @@ add_executable(PdfTool
     pdftoolrender.cpp
     pdftoolrenderpage.cpp
     pdftoolrenderpage.h
+    pdftoolstructuredoutput.cpp
+    pdftoolstructuredoutput.h
     pdftoolremoveexternallinks.cpp
     pdftoolremoveexternallinks.h
     pdftoolseparate.cpp
