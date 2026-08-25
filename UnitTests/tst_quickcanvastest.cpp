@@ -457,7 +457,7 @@ void QuickCanvasTest::traceOverlayCarriesNoDocumentPayload()
     // Drive real input at a distinctive coordinate over a target with a
     // distinctive id, so anything that leaked either into the panel is visible.
     const QPointF probe(1379.0, 2473.0);
-    QMouseEvent press(QEvent::MouseButtonPress, probe, probe, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress, probe, probe, probe, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mousePressEvent(&press);
 
     QKeyEvent key(QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("secret-text"));
@@ -496,10 +496,10 @@ void QuickCanvasTest::pointerEventBecomesAPointerIntent()
 
     const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
 
-    QMouseEvent press(QEvent::MouseButtonPress, inside, inside, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress, inside, inside, inside, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mousePressEvent(&press);
 
-    QMouseEvent release(QEvent::MouseButtonRelease, inside, inside, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, inside, inside, inside, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     m_item->mouseReleaseEvent(&release);
 
     QVERIFY(press.isAccepted());
@@ -571,11 +571,11 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
     const QRect placed = m_viewport->placedPageRect(0);
     const QPointF start(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
 
-    QMouseEvent press(QEvent::MouseButtonPress, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress, start, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mousePressEvent(&press);
 
     const QPointF dragged = start + QPointF(40.0, 40.0);
-    QMouseEvent move(QEvent::MouseMove, dragged, dragged, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, dragged, dragged, dragged, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
     m_item->mouseMoveEvent(&move);
 
     QFocusEvent focusOut(QEvent::FocusOut, Qt::OtherFocusReason);
@@ -596,7 +596,7 @@ void QuickCanvasTest::unboundItemIgnoresInput()
     item.setSize(QSizeF(200.0, 200.0));
 
     const QPointF position(10.0, 10.0);
-    QMouseEvent press(QEvent::MouseButtonPress, position, position, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress, position, position, position, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     item.mousePressEvent(&press);
 
     QKeyEvent key(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
@@ -622,7 +622,7 @@ void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
     QVERIFY(!placed.isEmpty());
 
     const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
-    QMouseEvent move(QEvent::MouseMove, inside, inside, Qt::NoButton, Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, inside, inside, inside, Qt::NoButton, Qt::NoModifier);
     m_item->mouseMoveEvent(&move);
 
     // A hover through the admitted host must rebuild overlays only. Issue #143 and
