@@ -1051,7 +1051,15 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
 
 void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
 {
-    showItemInWindow();
+    buildCoordinator();
+
+    m_window = std::make_unique<TestQuickWindow>();
+    m_window->resize(400, 400);
+
+    m_item->setParentItem(m_window->contentItem());
+    m_item->setSize(QSizeF(400.0, 400.0));
+
+    bindItem();
 
     const QJsonObject before = m_item->presentMetrics()->summary().value(QStringLiteral("present")).toObject().value(QStringLiteral("first_view_ms")).toObject();
 
@@ -1060,6 +1068,9 @@ void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
     // slowest possible open look like the fastest.
     QVERIFY(!before.value(QStringLiteral("available")).toBool(true));
     QVERIFY(before.value(QStringLiteral("ms")).isNull());
+
+    m_window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(m_window.get()));
 
     requestSurfacesAndDrain();
     renderFrame();
