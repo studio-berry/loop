@@ -201,6 +201,19 @@ public:
     using pdfquick::LoupeCanvasItem::focusOutEvent;
 };
 
+/// sceneGraphInvalidated is a protected QQuickWindow signal. Emitting it from the
+/// test body does not activate connected slots, so the harness exposes a public
+/// trigger that stays on the window side of the contract.
+class TestQuickWindow final : public QQuickWindow
+{
+    Q_OBJECT
+
+public:
+    using QQuickWindow::QQuickWindow;
+
+    void emitSceneGraphInvalidatedForTest() { Q_EMIT sceneGraphInvalidated(); }
+};
+
 /// The P4-S3 fake, trimmed to what a canvas test needs: work runs inline, so a
 /// requested surface is admitted by the time requestSurfaces() returns and the
 /// scene graph has something real to hold.
@@ -373,7 +386,7 @@ private:
     std::unique_ptr<InlineJobSubmitter> m_submitter;
     std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
     std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> m_surfaces;
-    std::unique_ptr<QQuickWindow> m_window;
+    std::unique_ptr<TestQuickWindow> m_window;
 };
 
 void QuickCanvasTest::init()
@@ -439,7 +452,7 @@ void QuickCanvasTest::showItemInWindow()
 {
     buildCoordinator();
 
-    m_window = std::make_unique<QQuickWindow>();
+    m_window = std::make_unique<TestQuickWindow>();
     m_window->resize(400, 400);
 
     m_item->setParentItem(m_window->contentItem());
@@ -825,10 +838,11 @@ void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
     const int requestedBefore = m_surfaces->counters().requested;
     const quint64 rebuildsBefore = m_item->presentMetrics()->builderRebuilds();
 
-    // The device-loss signal. Emitting it directly is what makes this
-    // deterministic: a real backend loss cannot be provoked on demand, and the
-    // item's contract is with the signal, not with the cause behind it.
-    Q_EMIT m_window->sceneGraphInvalidated();
+    // The device-loss signal. Emitting it through the window harness is what
+    // makes this deterministic: a real backend loss cannot be provoked on
+    // demand, and the item's contract is with the signal, not with the cause
+    // behind it.
+    m_window->emitSceneGraphInvalidatedForTest();
     QCoreApplication::processEvents();
 
     QCOMPARE(m_item->presentMetrics()->sceneGraphInvalidations(), quint64(1));

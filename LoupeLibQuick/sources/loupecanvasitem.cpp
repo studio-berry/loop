@@ -401,6 +401,8 @@ void LoupeCanvasItem::onSceneGraphInitialized()
 
 void LoupeCanvasItem::onSceneGraphInvalidated()
 {
+    m_builderResetPending.store(true);
+    m_present.noteSceneGraphInvalidated();
     m_tilesDirty = true;
     m_overlaysDirty = true;
     requestFrame();
