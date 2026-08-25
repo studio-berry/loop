@@ -98,13 +98,14 @@ foreach ($surface in $installSurfaces) {
 
 
 # Catch first-party drift in either direction. Third-party Qt/vcpkg libraries
-# are intentionally outside this product-artifact namespace.
+# and bundled QML import plugins are intentionally outside this namespace.
 $knownArtifacts = @($installSurfaces | Where-Object {
     (Get-ProfileValue $_.profiles $Profile) -eq "present"
 } | ForEach-Object artifact)
 $firstPartyFiles = @($files | Where-Object {
     $_.Extension -in @(".exe", ".dll", ".so", ".dylib") -and
-    $_.BaseName -match "^(lib)?(Loupe(Editor|Viewer|PageMaster|Diff|LaunchPad)|PdfTool|[A-Za-z]+Plugin)$"
+    $_.FullName -notmatch '[/\\]qml[/\\]' -and
+    $_.BaseName -match "^(lib)?(Loupe(Editor|Viewer|PageMaster|Diff|LaunchPad)|PdfTool|[A-Z][A-Za-z]*Plugin)$"
 })
 foreach ($file in $firstPartyFiles) {
     $artifactName = $file.BaseName -replace "^lib", ""
