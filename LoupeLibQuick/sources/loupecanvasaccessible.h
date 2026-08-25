@@ -23,10 +23,12 @@
 #ifndef LOUPECANVASACCESSIBLE_H
 #define LOUPECANVASACCESSIBLE_H
 
+#include "loupelibquick_export.h"
+
 namespace pdfquick
 {
 
-void installLoupeCanvasAccessibility();
+void LOUPELIBQUICK_EXPORT installLoupeCanvasAccessibility();
 
 }   // namespace pdfquick
 
