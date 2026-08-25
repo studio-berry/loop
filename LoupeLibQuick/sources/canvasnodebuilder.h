@@ -129,6 +129,19 @@ public:
     int tileCount() const noexcept { return m_tileCount; }
     int inexactTileCount() const noexcept { return m_inexactTileCount; }
 
+    /// Bytes behind the textures currently retained, and the most this builder
+    /// has ever retained at once.
+    ///
+    /// It is the source image's size, not the GPU allocation: the scene graph
+    /// does not report what a QSGTexture cost, and a number invented from a
+    /// format guess would be worse than one that says what it measured. The
+    /// roadmap asks for scene-graph texture bytes "where available", and this is
+    /// what is actually available. The high-water mark survives forget(), which
+    /// is the point of a high-water mark: a scene-graph loss is exactly the
+    /// event you want it to have remembered.
+    qint64 tileBytes() const noexcept { return m_tileBytes; }
+    qint64 tileBytesHighWater() const noexcept { return m_tileBytesHighWater; }
+
 private:
     struct TileNode
     {
@@ -171,6 +184,9 @@ private:
     int m_skippedPrimitives = 0;
     int m_tileCount = 0;
     int m_inexactTileCount = 0;
+
+    qint64 m_tileBytes = 0;
+    qint64 m_tileBytesHighWater = 0;
 };
 
 }   // namespace pdfquick

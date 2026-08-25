@@ -125,6 +125,11 @@
       "id": "I25",
       "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer",
       "test_targets": ["UnitTestsQuickCanvas"]
+    },
+    {
+      "id": "I26",
+      "title": "The Qt Quick canvas releases and rebuilds its scene-graph state, follows the display metrics, and never presents another revision's pixels",
+      "test_targets": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity"]
     }
   ]
 }

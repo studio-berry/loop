@@ -60,6 +60,10 @@ PageSurfaceCoordinator::PageSurfaceCoordinator(IDocumentRevisionSource& revision
 {
     connect(m_viewport, &ViewportController::demandChanged, this, &PageSurfaceCoordinator::onDemandChanged);
     connect(m_viewport, &ViewportController::placementsChanged, this, &PageSurfaceCoordinator::rebuildSnapshot);
+
+    // Stamp the snapshot token before the first admission so the presenter does
+    // not treat the initial empty state as a replaced document.
+    rebuildSnapshot();
 }
 
 PageSurfaceCoordinator::~PageSurfaceCoordinator()
@@ -548,6 +552,11 @@ void PageSurfaceCoordinator::cancelInFlight()
         m_submitter->cancel(m_inFlight[requestId].jobId);
         finishInFlight(requestId, SurfaceTerminalState::Cancelled);
     }
+}
+
+pdf::PDFRevisionIdentity PageSurfaceCoordinator::currentRevision() const
+{
+    return m_revisions->currentRevision();
 }
 
 void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
