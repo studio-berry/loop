@@ -334,7 +334,8 @@ void LoupeCanvasItem::attachWindow(QQuickWindow* hostWindow)
         {
             m_builderResetPending.store(true);
             m_present.noteSceneGraphInvalidated();
-            QMetaObject::invokeMethod(this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(
+                this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection);
         },
         Qt::DirectConnection));
 
