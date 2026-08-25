@@ -39,6 +39,13 @@
 #include <QString>
 #include <qqmlintegration.h>
 
+#include <atomic>
+
+QT_BEGIN_NAMESPACE
+class QQuickWindow;
+class QScreen;
+QT_END_NAMESPACE
+
 namespace pdfinteraction
 {
 class InteractionController;
@@ -86,12 +93,13 @@ class LOUPELIBQUICK_EXPORT LoupeCanvasItem : public QQuickItem
     /// Presentation state only. Every one of these is a value QML may legitimately
     /// bind a control to; none of them is a document, a session, a scheduler or a
     /// pixel buffer.
-    Q_PROPERTY(qreal zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
+    Q_PROPERTY(qreal zoom READ zoom NOTIFY zoomChanged)
     Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
     Q_PROPERTY(int blockCount READ blockCount NOTIFY blockCountChanged)
-    Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
+    Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(bool traceOverlayVisible READ isTraceOverlayVisible WRITE setTraceOverlayVisible NOTIFY traceOverlayVisibleChanged)
     Q_PROPERTY(bool highContrast READ isHighContrast WRITE setHighContrast NOTIFY highContrastChanged)
+    Q_PROPERTY(QString accessibleDocumentSummary READ accessibleDocumentSummary WRITE setAccessibleDocumentSummary NOTIFY accessibleDocumentSummaryChanged)
 
 public:
     explicit LoupeCanvasItem(QQuickItem* parent = nullptr);
@@ -99,8 +107,8 @@ public:
 
     /// Connects the item to the neutral layer. All three are observed, not
     /// owned, and must outlive the item. Any of them may be nullptr, which is
-    /// how a closed document is expressed: the item then draws its background
-    /// and accepts no input.
+    /// how a closed document is expressed: the item clears retained tiles and
+    /// overlays and accepts no input.
     void bind(pdfinteraction::ViewportController* viewport,
               pdfinteraction::InteractionController* interaction,
               pdfinteraction::PageSurfaceCoordinator* surfaces);
@@ -132,6 +140,10 @@ public:
     bool isHighContrast() const noexcept { return m_highContrast; }
     void setHighContrast(bool highContrast);
 
+    QString accessibleDocumentSummary() const;
+    void setAccessibleDocumentSummary(const QString& summary);
+    void notifyAccessibilityUpdate();
+
     /// The stats the developer overlay reports. Updated in updatePaintNode, so
     /// they describe the last frame actually built.
     CanvasFrameStats frameStats() const;
@@ -143,6 +155,7 @@ signals:
     void activeToolChanged();
     void traceOverlayVisibleChanged();
     void highContrastChanged();
+    void accessibleDocumentSummaryChanged();
 
 protected:
     QSGNode* updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData* data) override;
@@ -185,9 +198,30 @@ private:
     void publishViewportGeometry();
     void refreshPalette();
 
+    /// Reconnects the window-lifetime signals. Called from itemChange for every
+    /// scene change, including the change to nullptr when the item is removed
+    /// from a window.
+    void attachWindow(QQuickWindow* hostWindow);
+
+    /// Reconnects the screen-lifetime signals. Separate from attachWindow
+    /// because a window keeps its identity when it is dragged onto another
+    /// monitor, and it is the screen's metrics that changed.
+    void attachScreen(QScreen* hostScreen);
+
     void onOverlayFrameChanged();
     void onViewportChanged();
     void onSnapshotChanged();
+
+    /// The device pixel ratio or the physical DPI changed without the item
+    /// moving to another window. Republishes viewport geometry and asks for the
+    /// surfaces the new ratio needs; the old ones cannot stand in, because
+    /// PageSurfaceKey::compatibleWith requires an exact device-pixel-ratio match.
+    void onDisplayMetricsChanged();
+
+    /// The scene graph came back after an invalidation. Rebuilds from the CPU
+    /// surface cache, which was deliberately not dropped.
+    void onSceneGraphInitialized();
+    void onSceneGraphInvalidated();
 
     void requestFrame();
 
@@ -205,6 +239,7 @@ private:
 
     bool m_traceOverlayVisible = false;
     bool m_highContrast = false;
+    QString m_accessibleDocumentSummary;
 
     /// Set when the snapshot or the frame changed and the scene graph has not
     /// caught up yet. Both are read in updatePaintNode straight from the
@@ -214,13 +249,19 @@ private:
     /// and the recorder would count every one of them as unbalanced.
     bool m_framePending = false;
 
-    /// Set on the GUI thread, acted on in updatePaintNode.
+    /// Set on the GUI thread or the render thread, acted on in updatePaintNode.
     ///
     /// CanvasNodeBuilder holds scene-graph nodes and is render-thread state, so
     /// the GUI thread must never call into it -- not even to reset it. Deferring
     /// the reset to updatePaintNode, where the GUI thread is blocked, is what
     /// makes bind() and a window change safe to call at any time.
-    bool m_builderResetPending = true;
+    ///
+    /// Atomic because sceneGraphInvalidated and sceneGraphAboutToStop are
+    /// emitted on the render thread without the GUI thread blocked, so this flag
+    /// is genuinely written from two threads. Those handlers set it and do
+    /// nothing else: updatePaintNode is the only place where "render thread" and
+    /// "GUI thread is blocked" are both true, which is what forget() requires.
+    std::atomic_bool m_builderResetPending{ true };
 
     bool m_tilesDirty = true;
     bool m_overlaysDirty = true;
@@ -229,11 +270,24 @@ private:
     /// Written in updatePaintNode on the render thread, read on the GUI thread
     /// by frameStats(). Plain ints: the GUI thread is blocked while
     /// updatePaintNode runs, so the two never touch them at once.
+    int m_lastTileCount = 0;
+    int m_lastInexactTileCount = 0;
     int m_lastOverlayPrimitives = 0;
     int m_lastDroppedPrimitives = 0;
     int m_lastUnrenderablePrimitives = 0;
+    int m_refusedStaleFrames = 0;
 
+    /// True once a frame has presented at least one current-revision page tile.
+    /// Set in updatePaintNode, read when reporting the first-view milestone.
+    bool m_firstViewReached = false;
+
+    /// Connections to the bound neutral objects, and connections to the current
+    /// window and screen. Kept apart because bind() and a window change happen
+    /// independently: clearing one list must not silently drop the other's
+    /// connections, which is what a single list would do.
     QList<QMetaObject::Connection> m_connections;
+    QList<QMetaObject::Connection> m_windowConnections;
+    QList<QMetaObject::Connection> m_screenConnections;
 };
 
 }   // namespace pdfquick

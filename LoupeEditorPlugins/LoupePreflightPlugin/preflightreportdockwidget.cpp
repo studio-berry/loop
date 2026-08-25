@@ -96,7 +96,7 @@ PreflightReportDockWidget::PreflightReportDockWidget(QWidget* parent) :
             [this](const QModelIndex& current, const QModelIndex& previous)
             {
                 Q_UNUSED(previous);
-                Q_EMIT findingSelectionChanged(current.isValid() ? current.row() : -1);
+                Q_EMIT findingSelectionChanged(current.isValid() ? m_model.stableFindingIdAtRow(current.row()) : QString());
             });
 
     m_fixupsList = new QListWidget(reportPage);
@@ -164,7 +164,7 @@ void PreflightReportDockWidget::clearFindingSelection()
     {
         m_findingsView->selectionModel()->clearSelection();
     }
-    Q_EMIT findingSelectionChanged(-1);
+    Q_EMIT findingSelectionChanged(QString());
 }
 
 void PreflightReportDockWidget::refreshHeader()

@@ -33,10 +33,8 @@
 # is compiled POSITION_INDEPENDENT_CODE for exactly this link edge: a non-PIC
 # static archive cannot be linked into a shared object on Linux.
 #
-# Deliberately not installed. ADR-010's packaging and accessibility gates are
-# Phase-4-exit gates and there is no shipped product Quick module yet; an
-# install rule here would claim one exists. The rule arrives with that gate,
-# together with LoupeLibInteraction's.
+# Deliberately not installed until P4-S7 shipped the product Quick shell.
+# LoupeLibQuick now installs with LoupeEditor; see LoupeEditor/CMakeLists.txt.
 #
 # ADR-009 as amended admits the direct QQuickItem and prohibits QQuickPaintedItem,
 # QQuickWidget and WindowContainer as shipped product architecture. There is no
@@ -54,6 +52,9 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvaspresentmetrics.h
     sources/canvastraceoverlay.cpp
     sources/canvastraceoverlay.h
+    sources/loupecanvasitem.cpp
+    sources/loupecanvasaccessible.cpp
+    sources/loupecanvasaccessible.h
 )
 
 # No QML_FILES. LoupeCanvasItem is registered from C++ with QML_NAMED_ELEMENT,
@@ -65,9 +66,20 @@ qt_add_qml_module(LoupeLibQuick
     URI Loupe.Canvas
     VERSION 1.0
     DEPENDENCIES QtQuick
-    SOURCES
-        sources/loupecanvasitem.cpp
-        sources/loupecanvasitem.h
+)
+
+# Qt 6.11's generated qmltyperegistrations unit registers LoupeCanvasItem and its
+# QQuickItem base but does not include either header. Force the canvas header into
+# that translation unit only; it already pulls in QQuickItem.
+set(_loupe_qml_type_registrations "${CMAKE_CURRENT_BINARY_DIR}/loupelibquick_qmltyperegistrations.cpp")
+if(MSVC)
+    set(_loupe_qml_reg_compile_options "/FI${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h")
+else()
+    set(_loupe_qml_reg_compile_options "-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h")
+endif()
+set_source_files_properties("${_loupe_qml_type_registrations}" PROPERTIES
+    GENERATED TRUE
+    COMPILE_OPTIONS "${_loupe_qml_reg_compile_options}"
 )
 
 include(GenerateExportHeader)
@@ -99,3 +111,9 @@ set_target_properties(LoupeLibQuick PROPERTIES
                       SOVERSION ${LOUPE_VERSION}
                       LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
                       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR})
+
+install(TARGETS LoupeLibQuick
+    RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR}
+    LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+    ARCHIVE DESTINATION ${LOUPE_INSTALL_LIB_DIR}
+)

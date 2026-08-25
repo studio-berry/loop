@@ -233,6 +233,11 @@ void CanvasNodeBuilder::forget()
     m_skippedPrimitives = 0;
     m_tileCount = 0;
     m_inexactTileCount = 0;
+
+    // Nothing is retained any more, so nothing is held. The high-water mark is
+    // deliberately not cleared: it is a lifetime measurement, and clearing it
+    // here would erase the peak that the scene-graph loss came after.
+    m_tileBytes = 0;
 }
 
 void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapshot, qreal pixelScale)
@@ -244,6 +249,8 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
     {
         return;
     }
+
+    qint64 retainedBytes = 0;
 
     std::map<PageSurfaceKey, TileNode> retained;
 
@@ -302,6 +309,8 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
         parent->appendChildNode(entry.node);
         retained.insert({ tile.key, entry });
 
+        retainedBytes += qint64(tile.pixels->image.sizeInBytes());
+
         ++m_tileCount;
         if (!tile.exact)
         {
@@ -318,6 +327,9 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
     }
 
     m_tiles = std::move(retained);
+
+    m_tileBytes = retainedBytes;
+    m_tileBytesHighWater = qMax(m_tileBytesHighWater, retainedBytes);
 }
 
 void CanvasNodeBuilder::destroyOverlayNode(OverlayNode& entry)
@@ -432,6 +444,19 @@ void CanvasNodeBuilder::buildOverlayNode(OverlayNode& entry, const OverlayPrimit
     entry.valid = true;
 }
 
+namespace
+{
+
+QString overlayRetentionKey(const pdfinteraction::OverlayPrimitive& primitive)
+{
+    return QStringLiteral("%1:%2:%3")
+        .arg(int(primitive.layer))
+        .arg(int(primitive.target.kind))
+        .arg(primitive.id);
+}
+
+}   // namespace
+
 void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
                                      const OverlayFrame& frame,
                                      const std::function<bool(int, QTransform*)>& transformForPage)
@@ -468,7 +493,7 @@ void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
             continue;
         }
 
-        OverlayNode entry = m_overlays.take(primitive.id);
+        OverlayNode entry = m_overlays.take(overlayRetentionKey(primitive));
 
         const bool reusable = entry.valid && entry.primitive == primitive && entry.transform == transform;
         if (!reusable)
@@ -495,7 +520,7 @@ void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
             continue;
         }
 
-        retained.insert(primitive.id, entry);
+        retained.insert(overlayRetentionKey(primitive), entry);
     }
 
     // Whatever is left keyed in m_overlays is a primitive this frame dropped.

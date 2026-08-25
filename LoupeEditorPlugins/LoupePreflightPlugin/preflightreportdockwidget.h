@@ -55,9 +55,10 @@ public:
     const PreflightFixupEntry* addBleedFixup() const { return m_model.addBleedFixup(); }
     bool hasRgbToCmykFixup() const { return m_model.hasRgbToCmykFixup(); }
     const PreflightFixupEntry* rgbToCmykFixup() const { return m_model.rgbToCmykFixup(); }
+    QString verdictState() const { return m_model.verdictState(); }
 
 Q_SIGNALS:
-    void findingSelectionChanged(int row);
+    void findingSelectionChanged(const QString& findingId);
     void applyFixupRequested(const QString& id);
 
 private:
@@ -80,4 +81,4 @@ private:
 
 }   // namespace pdfplugin
 
-#endif // PREFLIGHTREPORTDOCKWIDGET_H
+#endif   // PREFLIGHTREPORTDOCKWIDGET_H

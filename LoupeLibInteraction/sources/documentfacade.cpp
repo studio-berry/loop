@@ -186,6 +186,8 @@ void DocumentFacade::resolveCancellation(CommandInvocationId invocation,
     const pdf::PDFJobSnapshot snapshot = m_submitter->snapshot(jobId);
     if (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running)
     {
+        m_relay->post([this, invocation, jobId, workStarted]()
+                      { resolveCancellation(invocation, jobId, workStarted); });
         return;
     }
 

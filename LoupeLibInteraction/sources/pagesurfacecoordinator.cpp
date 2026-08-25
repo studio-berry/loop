@@ -60,6 +60,10 @@ PageSurfaceCoordinator::PageSurfaceCoordinator(IDocumentRevisionSource& revision
 {
     connect(m_viewport, &ViewportController::demandChanged, this, &PageSurfaceCoordinator::onDemandChanged);
     connect(m_viewport, &ViewportController::placementsChanged, this, &PageSurfaceCoordinator::rebuildSnapshot);
+
+    // Stamp the snapshot token before the first admission so the presenter does
+    // not treat the initial empty state as a replaced document.
+    rebuildSnapshot();
 }
 
 PageSurfaceCoordinator::~PageSurfaceCoordinator()
@@ -169,9 +173,11 @@ void PageSurfaceCoordinator::requestSurfaces()
 
     for (const Demand& item : demand)
     {
-        if (m_cache.find(item.key) != m_cache.end())
+        const auto cacheHit = m_cache.find(item.key);
+        if (cacheHit != m_cache.end())
         {
             ++m_counters.cacheHitsExact;
+            m_lru.splice(m_lru.begin(), m_lru, cacheHit->second.lru);
             snapshotDirty = true;
             continue;
         }
@@ -228,6 +234,10 @@ void PageSurfaceCoordinator::requestSurfaces()
 
                 if (!reclaimed)
                 {
+                    if (item.priority == pdf::PDFJobPriority::VisiblePage)
+                    {
+                        m_retrySurfaceRequest = true;
+                    }
                     continue;
                 }
             }
@@ -243,6 +253,11 @@ void PageSurfaceCoordinator::requestSurfaces()
     if (snapshotDirty)
     {
         rebuildSnapshot();
+    }
+
+    if (m_retrySurfaceRequest)
+    {
+        scheduleSurfaceRetry();
     }
 }
 
@@ -334,6 +349,19 @@ void PageSurfaceCoordinator::finishInFlight(quint64 requestId, SurfaceTerminalSt
 
     countTerminal(state);
     Q_EMIT surfaceTerminal(key, state);
+    scheduleSurfaceRetry();
+}
+
+void PageSurfaceCoordinator::scheduleSurfaceRetry()
+{
+    if (!m_retrySurfaceRequest)
+    {
+        return;
+    }
+
+    m_retrySurfaceRequest = false;
+    m_relay->post([this]()
+                  { requestSurfaces(); });
 }
 
 void PageSurfaceCoordinator::requestCancellation(quint64 requestId)
@@ -384,6 +412,8 @@ void PageSurfaceCoordinator::resolveCancellation(quint64 requestId, std::shared_
     const pdf::PDFJobSnapshot snapshot = m_submitter->snapshot(it->jobId);
     if (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running)
     {
+        m_relay->post([this, requestId, workStarted]()
+                      { resolveCancellation(requestId, workStarted); });
         return;
     }
 
@@ -476,6 +506,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     if (existing != m_cache.end())
     {
         m_counters.admittedBytes -= existing->second.cost;
+        m_lru.erase(existing->second.lru);
         m_cache.erase(existing);
     }
 
@@ -485,6 +516,8 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     entry.accessSequence = ++m_accessSequence;
 
     m_counters.admittedBytes += entry.cost;
+    m_lru.push_front(key);
+    entry.lru = m_lru.begin();
     m_cache.emplace(key, std::move(entry));
 
     trimCacheToBudget();
@@ -498,17 +531,17 @@ void PageSurfaceCoordinator::trimCacheToBudget()
 {
     while (m_counters.admittedBytes > m_bounds.maxAdmittedBytes && !m_cache.empty())
     {
-        auto oldest = m_cache.begin();
-        for (auto it = m_cache.begin(); it != m_cache.end(); ++it)
+        const PageSurfaceKey oldestKey = m_lru.back();
+        const auto oldest = m_cache.find(oldestKey);
+        if (oldest == m_cache.end())
         {
-            if (it->second.accessSequence < oldest->second.accessSequence)
-            {
-                oldest = it;
-            }
+            m_lru.pop_back();
+            continue;
         }
 
         m_counters.admittedBytes -= oldest->second.cost;
         m_cache.erase(oldest);
+        m_lru.pop_back();
         ++m_counters.evictions;
     }
 }
@@ -550,6 +583,11 @@ void PageSurfaceCoordinator::cancelInFlight()
     }
 }
 
+pdf::PDFRevisionIdentity PageSurfaceCoordinator::currentRevision() const
+{
+    return m_revisions->currentRevision();
+}
+
 void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
 {
     cancelInFlight();
@@ -561,6 +599,7 @@ void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
         if (!(it->first.revision == current))
         {
             m_counters.admittedBytes -= it->second.cost;
+            m_lru.erase(it->second.lru);
             it = m_cache.erase(it);
         }
         else

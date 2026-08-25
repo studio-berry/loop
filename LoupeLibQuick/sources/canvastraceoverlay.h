@@ -50,6 +50,12 @@ struct CanvasFrameStats
     /// emitted with renderable == false.
     int droppedPrimitives = 0;
     int unrenderablePrimitives = 0;
+
+    /// Frames the presenter refused to draw because the snapshot or the overlay
+    /// frame carried a revision that is no longer current. Shown because a
+    /// canvas that is correctly refusing and a canvas that has stopped being
+    /// asked for anything look identical from the outside.
+    int refusedStaleFrames = 0;
 };
 
 /// The developer-facing trace overlay -- the other half of issue #140 that P4-S4

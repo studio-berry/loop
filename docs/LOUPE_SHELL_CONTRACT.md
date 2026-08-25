@@ -13,11 +13,15 @@ Editor action inventory is recorded in [`loupe-shell-actions.json`](loupe-shell-
 
 ## Product shell
 
-`LoupeEditor` remains the only interactive Loupe shell. `PdfTool` remains Loupe
-CLI. Opening a PDF is the Document workspace and includes inherited Viewer
-behavior. PageMaster, Diff, and Viewer are not new windows in this contract;
-their retained Core/CLI semantics are routed into the product workspaces when
-the GUI gate opens.
+`LoupeEditor` is the installed interactive Loupe shell on the P4-S7 navigable
+product root: a packaged `Loupe.Quick` `ApplicationWindow` that opens, closes,
+reopens, and navigates a PDF through the host-neutral Interaction/Canvas stack.
+The Widgets editor remains available as the non-installed `LoupeEditorWidgetsOracle`
+parity target until Phase 5. This is a navigable slice, not the Phase 4 operator
+loop or GUI exit gate.
+
+The repository may contain qualification-only Quick harnesses (`QuickShellSmoke`,
+`CanvasBenchmark`); they are not product UI.
 
 The eventual shell has these workspace IDs:
 
@@ -146,13 +150,11 @@ become self-authoritative.
 
 ## UI foundation gate
 
-Issue #178 selects Qt Quick Controls for the later application shell. The
-decision is accepted with admission gates. No product Qt Quick module, product
-QML file, `QQuickWidget`, or shell restyle is introduced by this slice; the
-optional `QuickShellSmoke` target is qualification-only. ADR-010 and the
-Quick policy contracts resolve the migration strategy, canvas hosting,
-rendering fallback, licensing, and accessibility evidence required before
-large-scale shell wiring begins.
+Issue #178 selects Qt Quick Controls for the application shell. The installed
+`LoupeEditor` product root is now Qt Quick (`gui_status: quick-admitted` in
+`loupe-shell.json`). The non-installed `LoupeEditorWidgetsOracle` remains the
+Widgets migration oracle until Phase 5 deletes it per
+`docs/PHASE5_WIDGETS_DELETION_HANDOFF.md`.
 
 ## Accessibility gate
 
@@ -160,7 +162,9 @@ When the GUI gate opens, workspace switching and rail/canvas/inspector traversal
 must be keyboard reachable, every panel must expose a screen-reader name and
 role, focus must survive workspace changes, and 100/150/200% high-DPI layouts
 must remain usable. Contrast and severity colors follow #25 and #194; this
-contract does not create a second accessibility baseline.
+contract does not create a second accessibility baseline. P4-S10 evidence lives
+in [QUICK_ACCESSIBILITY_CONTRACT.md](QUICK_ACCESSIBILITY_CONTRACT.md) and
+`scripts/run-product-quick-a11y-smoke.ps1`.
 
 ## Verification
 

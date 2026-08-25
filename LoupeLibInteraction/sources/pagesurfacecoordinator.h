@@ -38,6 +38,8 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <list>
+#include <unordered_map>
 
 namespace pdfinteraction
 {
@@ -165,6 +167,15 @@ public:
     const CanvasSnapshot& snapshot() const noexcept { return m_snapshot; }
     const PageSurfaceCounters& counters() const noexcept { return m_counters; }
 
+    /// The revision the fence is currently against, read from the one
+    /// IDocumentRevisionSource this class already holds.
+    ///
+    /// It exists so a presentation host can refuse to draw a snapshot or an
+    /// overlay frame from a superseded document without inventing a second
+    /// revision truth of its own. The host is not the fence -- admit() is -- but
+    /// a host that has retained scene-graph nodes needs to be able to check.
+    pdf::PDFRevisionIdentity currentRevision() const;
+
 signals:
     void snapshotChanged(quint64 requestGeneration);
     void surfaceTerminal(pdfinteraction::PageSurfaceKey key, pdfinteraction::SurfaceTerminalState state);
@@ -188,6 +199,24 @@ private:
         SurfaceBufferPointer pixels;
         qint64 cost = 0;
         quint64 accessSequence = 0;
+        std::list<PageSurfaceKey>::iterator lru;
+    };
+
+    struct PageSurfaceKeyHash
+    {
+        size_t operator()(const PageSurfaceKey& key) const noexcept
+        {
+            size_t hash = qHash(key.revision.toString());
+            hash = hash * 31u + qHash(key.pageIndex);
+            hash = hash * 31u + qHash(static_cast<int>(key.rotation));
+            hash = hash * 31u + qHash(key.featureBits);
+            hash = hash * 31u + qHash(key.colorOutputIdentity);
+            hash = hash * 31u + qHash(key.zoomBucket);
+            hash = hash * 31u + qHash(key.targetPixelSize.width());
+            hash = hash * 31u + qHash(key.targetPixelSize.height());
+            hash = hash * 31u + qHash(key.devicePixelRatio1000);
+            return hash;
+        }
     };
 
     void onDemandChanged();
@@ -206,6 +235,7 @@ private:
     int inFlightCount(pdf::PDFJobPriority priority) const;
     void rebuildSnapshot();
     void countTerminal(SurfaceTerminalState state);
+    void scheduleSurfaceRetry();
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;
@@ -223,10 +253,12 @@ private:
     quint64 m_requestSequence = 0;
 
     QHash<quint64, InFlight> m_inFlight;
-    std::map<PageSurfaceKey, CacheEntry> m_cache;
+    std::unordered_map<PageSurfaceKey, CacheEntry, PageSurfaceKeyHash> m_cache;
+    std::list<PageSurfaceKey> m_lru;
 
     CanvasSnapshot m_snapshot;
     PageSurfaceCounters m_counters;
+    bool m_retrySurfaceRequest = false;
 };
 
 }   // namespace pdfinteraction

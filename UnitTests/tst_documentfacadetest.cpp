@@ -341,7 +341,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    QCOMPARE(implemented, 4);
+    QCOMPARE(implemented, 16);
 }
 
 void DocumentFacadeTest::catalogRejectsAnUnknownCommand()
@@ -844,12 +844,12 @@ void DocumentFacadeTest::markModifiedFencesTheCapturedRevision()
 
 void DocumentFacadeTest::shellStatusProjectionIsPinned()
 {
+    using pdfinteraction::DocumentFacade;
     using pdfinteraction::DocumentFacet;
     using pdfinteraction::DocumentFacets;
     using pdfinteraction::DocumentOutputState;
     using pdfinteraction::DocumentState;
     using pdfinteraction::ShellDocumentStatus;
-    using pdfinteraction::DocumentFacade;
 
     // docs/loupe-shell.json names five document states. The facade's richer
     // model answers in those five terms; this table is the whole projection, so

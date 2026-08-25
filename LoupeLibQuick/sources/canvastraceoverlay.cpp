@@ -111,6 +111,35 @@ QString formatSlowCauses(const QJsonObject& slowCauses)
     return parts.isEmpty() ? QStringLiteral("slow frames  none") : QStringLiteral("slow frames  ") + parts.join(QStringLiteral("  "));
 }
 
+QString formatFirstView(const QJsonObject& firstView)
+{
+    if (!firstView.value(QStringLiteral("available")).toBool(false))
+    {
+        // Same gap glyph the percentiles use. A first view that has not happened
+        // is not a fast first view.
+        return QStringLiteral("first view     --");
+    }
+
+    return QStringLiteral("first view     %1 ms").arg(QString::number(firstView.value(QStringLiteral("ms")).toDouble(), 'f', 1));
+}
+
+/// Bytes as a short human-readable magnitude. The panel is a fixed-width strip
+/// over the page, so a raw byte count would push the line off it.
+QString formatBytes(qint64 bytes)
+{
+    if (bytes >= 1024 * 1024)
+    {
+        return QStringLiteral("%1 MiB").arg(QString::number(double(bytes) / (1024.0 * 1024.0), 'f', 1));
+    }
+
+    if (bytes >= 1024)
+    {
+        return QStringLiteral("%1 KiB").arg(QString::number(double(bytes) / 1024.0, 'f', 1));
+    }
+
+    return QStringLiteral("%1 B").arg(QString::number(bytes));
+}
+
 }   // namespace
 
 QStringList CanvasTraceOverlay::lines(const QJsonObject& traceSummary, const QJsonObject& presentSummary, const CanvasFrameStats& stats)
@@ -149,7 +178,20 @@ QStringList CanvasTraceOverlay::lines(const QJsonObject& traceSummary, const QJs
 
     result.append(formatSlowCauses(traceSummary.value(QStringLiteral("slow_frame_causes")).toObject()));
 
-    result.append(QStringLiteral("tiles %1 (inexact %2)").arg(QString::number(stats.tiles), QString::number(stats.inexactTiles)));
+    result.append(formatFirstView(present.value(QStringLiteral("first_view_ms")).toObject()));
+
+    const QJsonObject lifecycle = presentSummary.value(QStringLiteral("lifecycle")).toObject();
+    result.append(QStringLiteral("scene graph    invalidated %1   rebuilt %2")
+                      .arg(QString::number(lifecycle.value(QStringLiteral("scene_graph_invalidations")).toInteger(0)),
+                           QString::number(lifecycle.value(QStringLiteral("builder_rebuilds")).toInteger(0))));
+    result.append(QStringLiteral("tile bytes     %1 (peak %2)")
+                      .arg(formatBytes(lifecycle.value(QStringLiteral("tile_bytes")).toInteger(0)),
+                           formatBytes(lifecycle.value(QStringLiteral("tile_bytes_high_water")).toInteger(0))));
+
+    result.append(QStringLiteral("tiles %1 (inexact %2, stale frames refused %3)")
+                      .arg(QString::number(stats.tiles),
+                           QString::number(stats.inexactTiles),
+                           QString::number(stats.refusedStaleFrames)));
     result.append(QStringLiteral("overlay %1 (skipped %2, dropped %3, unrenderable %4)")
                       .arg(QString::number(stats.overlayPrimitives),
                            QString::number(stats.skippedPrimitives),

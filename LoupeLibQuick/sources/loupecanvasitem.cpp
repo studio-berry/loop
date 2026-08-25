@@ -23,10 +23,12 @@
 
 #include "loupecanvasitem.h"
 
+#include "loupecanvasaccessible.h"
 #include "interactioncontroller.h"
 #include "pagesurfacecoordinator.h"
 #include "viewportcontroller.h"
 
+#include <QAccessible>
 #include <QFocusEvent>
 #include <QHoverEvent>
 #include <QKeyEvent>
@@ -91,6 +93,9 @@ LoupeCanvasItem::LoupeCanvasItem(QQuickItem* parent) :
 
     connect(&m_present, &CanvasPresentMetrics::framePresented, this, [this]()
             { m_framePending = false; });
+
+    installLoupeCanvasAccessibility();
+    setAccessibleDocumentSummary(tr("No document is currently open."));
 }
 
 LoupeCanvasItem::~LoupeCanvasItem()
@@ -100,6 +105,11 @@ LoupeCanvasItem::~LoupeCanvasItem()
         QObject::disconnect(connection);
     }
     m_connections.clear();
+
+    // The window and screen connections include render-thread DirectConnection
+    // handlers, so they must be gone before the members they touch are. The
+    // scene graph deletes the node tree itself; nothing here does.
+    attachWindow(nullptr);
 }
 
 void LoupeCanvasItem::bind(ViewportController* viewport, InteractionController* interaction, PageSurfaceCoordinator* surfaces)
@@ -114,9 +124,14 @@ void LoupeCanvasItem::bind(ViewportController* viewport, InteractionController* 
     m_interaction = interaction;
     m_surfaces = surfaces;
 
-    m_builderResetPending = true;
+    m_builderResetPending.store(true);
     m_tilesDirty = true;
     m_overlaysDirty = true;
+
+    // A new binding is a new document, so the previous document's first view
+    // says nothing about this one.
+    m_firstViewReached = false;
+    m_present.markViewRequested();
 
     if (m_interaction)
     {
@@ -235,6 +250,29 @@ void LoupeCanvasItem::setHighContrast(bool highContrast)
     requestFrame();
 }
 
+QString LoupeCanvasItem::accessibleDocumentSummary() const
+{
+    return m_accessibleDocumentSummary;
+}
+
+void LoupeCanvasItem::setAccessibleDocumentSummary(const QString& summary)
+{
+    if (m_accessibleDocumentSummary == summary)
+    {
+        return;
+    }
+
+    m_accessibleDocumentSummary = summary;
+    Q_EMIT accessibleDocumentSummaryChanged();
+    notifyAccessibilityUpdate();
+}
+
+void LoupeCanvasItem::notifyAccessibilityUpdate()
+{
+    QAccessibleValueChangeEvent event(this, m_accessibleDocumentSummary);
+    QAccessible::updateAccessibility(&event);
+}
+
 void LoupeCanvasItem::refreshPalette()
 {
     m_palette = m_highContrast ? CanvasPalette::highContrast() : CanvasPalette::standard();
@@ -246,12 +284,13 @@ void LoupeCanvasItem::refreshPalette()
 CanvasFrameStats LoupeCanvasItem::frameStats() const
 {
     CanvasFrameStats stats;
-    stats.tiles = m_builder.tileCount();
-    stats.inexactTiles = m_builder.inexactTileCount();
+    stats.tiles = m_lastTileCount;
+    stats.inexactTiles = m_lastInexactTileCount;
     stats.overlayPrimitives = m_lastOverlayPrimitives;
     stats.skippedPrimitives = m_builder.skippedPrimitives();
     stats.droppedPrimitives = m_lastDroppedPrimitives;
     stats.unrenderablePrimitives = m_lastUnrenderablePrimitives;
+    stats.refusedStaleFrames = m_refusedStaleFrames;
     return stats;
 }
 
@@ -297,6 +336,106 @@ void LoupeCanvasItem::publishViewportGeometry()
     }
 }
 
+void LoupeCanvasItem::attachWindow(QQuickWindow* hostWindow)
+{
+    for (const QMetaObject::Connection& connection : m_windowConnections)
+    {
+        QObject::disconnect(connection);
+    }
+    m_windowConnections.clear();
+
+    m_present.attach(hostWindow);
+    attachScreen(hostWindow ? hostWindow->screen() : nullptr);
+
+    if (!hostWindow)
+    {
+        return;
+    }
+
+    // Render thread, GUI thread not blocked. The handler therefore does exactly
+    // one thing -- raise the deferred reset -- and never calls into the builder:
+    // forget() drops maps whose nodes the scene graph is in the middle of
+    // destroying, and updatePaintNode is the only place where this thread and a
+    // blocked GUI thread coincide.
+    m_windowConnections.append(QObject::connect(
+        hostWindow, &QQuickWindow::sceneGraphInvalidated, this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection));
+
+    // The teardown that does not call releaseResources: a window whose
+    // persistent scene graph is off stops the graph without asking the item to
+    // release anything. Without this the retention maps outlive their nodes.
+    m_windowConnections.append(QObject::connect(
+        hostWindow, &QQuickWindow::sceneGraphAboutToStop, this, [this]()
+        { m_builderResetPending.store(true); }, Qt::DirectConnection));
+
+    // Backend recovery. Queued because it arrives on the render thread and
+    // update() is a GUI-thread call. The CPU surface cache was deliberately not
+    // dropped on the invalidation, so this rebuilds without re-parsing the
+    // document or admitting anything new.
+    m_windowConnections.append(QObject::connect(
+        hostWindow, &QQuickWindow::sceneGraphInitialized, this, &LoupeCanvasItem::onSceneGraphInitialized, Qt::QueuedConnection));
+
+    // A drag onto a second monitor keeps the window and changes its metrics.
+    m_windowConnections.append(QObject::connect(
+        hostWindow, &QQuickWindow::screenChanged, this, [this](QScreen* hostScreen)
+        {
+            attachScreen(hostScreen);
+            onDisplayMetricsChanged(); }));
+}
+
+void LoupeCanvasItem::attachScreen(QScreen* hostScreen)
+{
+    for (const QMetaObject::Connection& connection : m_screenConnections)
+    {
+        QObject::disconnect(connection);
+    }
+    m_screenConnections.clear();
+
+    if (!hostScreen)
+    {
+        return;
+    }
+
+    // Both matter and they change independently: the physical DPI is what the
+    // viewport converts millimetres with, and the device pixel ratio is part of
+    // the page surface key.
+    m_screenConnections.append(connect(hostScreen, &QScreen::physicalDotsPerInchChanged, this, &LoupeCanvasItem::onDisplayMetricsChanged));
+    m_screenConnections.append(connect(hostScreen, &QScreen::logicalDotsPerInchChanged, this, &LoupeCanvasItem::onDisplayMetricsChanged));
+}
+
+void LoupeCanvasItem::onDisplayMetricsChanged()
+{
+    publishViewportGeometry();
+
+    // Nothing retained can stand in for the new ratio: the device pixel ratio is
+    // part of PageSurfaceKey and compatibleWith() requires it to match exactly,
+    // so the coordinator's next snapshot legitimately excludes every tile
+    // rendered for the old one.
+    if (m_surfaces)
+    {
+        m_surfaces->requestSurfaces();
+    }
+
+    m_tilesDirty = true;
+    m_overlaysDirty = true;
+    requestFrame();
+}
+
+void LoupeCanvasItem::onSceneGraphInitialized()
+{
+    m_tilesDirty = true;
+    m_overlaysDirty = true;
+    requestFrame();
+}
+
+void LoupeCanvasItem::onSceneGraphInvalidated()
+{
+    m_builderResetPending.store(true);
+    m_present.noteSceneGraphInvalidated();
+    m_tilesDirty = true;
+    m_overlaysDirty = true;
+    requestFrame();
+}
+
 void LoupeCanvasItem::requestFrame()
 {
     if (!m_framePending)
@@ -319,11 +458,6 @@ void LoupeCanvasItem::onOverlayFrameChanged()
 
 void LoupeCanvasItem::onViewportChanged()
 {
-    if (m_surfaces)
-    {
-        m_surfaces->requestSurfaces();
-    }
-
     m_tilesDirty = true;
     m_overlaysDirty = true;
     requestFrame();
@@ -350,11 +484,6 @@ void LoupeCanvasItem::geometryChange(const QRectF& newGeometry, const QRectF& ol
 
     publishViewportGeometry();
 
-    if (m_surfaces)
-    {
-        m_surfaces->requestSurfaces();
-    }
-
     m_tilesDirty = true;
     m_overlaysDirty = true;
     requestFrame();
@@ -365,7 +494,7 @@ void LoupeCanvasItem::releaseResources()
     // Qt is taking the node tree away. The nodes are deleted by the scene graph;
     // only the retention maps that pointed at them have to be dropped, and the
     // next updatePaintNode does that.
-    m_builderResetPending = true;
+    m_builderResetPending.store(true);
     QQuickItem::releaseResources();
 }
 
@@ -377,15 +506,21 @@ void LoupeCanvasItem::itemChange(ItemChange change, const ItemChangeData& value)
         // retained node is invalid the moment it changes -- a texture outliving
         // its window is a crash rather than a glitch. The reset is deferred
         // rather than done here: this runs on the GUI thread, and the builder is
-        // render-thread state. CanvasPresentMetrics is a plain QObject on this
-        // thread and is attached directly.
-        m_builderResetPending = true;
-        m_present.attach(value.window);
+        // render-thread state.
+        m_builderResetPending.store(true);
+        attachWindow(value.window);
 
         m_tilesDirty = true;
         m_overlaysDirty = true;
 
         publishViewportGeometry();
+    }
+    else if (change == ItemDevicePixelRatioHasChanged)
+    {
+        // Same window, different ratio: a scale change, or a move between
+        // monitors that Qt resolved without a screenChanged. The viewport has to
+        // be told, because nothing else here can see it.
+        onDisplayMetricsChanged();
     }
 
     QQuickItem::itemChange(change, value);
@@ -546,6 +681,12 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
     QQuickWindow* hostWindow = window();
     if (!hostWindow || width() <= 0.0 || height() <= 0.0)
     {
+        // The node tree goes with it, so the retention maps pointing into it are
+        // stale from here on. Raising the flag explicitly rather than relying on
+        // the next call happening to take the fresh-root branch below: the two
+        // are equivalent today, and only one of them stays true if that branch
+        // ever changes.
+        m_builderResetPending.store(true);
         delete oldNode;
         return nullptr;
     }
@@ -555,10 +696,16 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
         refreshPalette();
     }
 
-    if (m_builderResetPending)
+    if (m_builderResetPending.exchange(false))
     {
         m_builder.forget();
-        m_builderResetPending = false;
+        m_present.noteBuilderRebuilt();
+
+        // Nothing is retained any more, so the next sync is not optional. Without
+        // this the page simply vanishes after a scene-graph invalidation whose
+        // frame happened to arrive with nothing else marked dirty.
+        m_tilesDirty = true;
+        m_overlaysDirty = true;
     }
 
     m_builder.setWindow(hostWindow);
@@ -584,15 +731,87 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
     const qreal ratio = hostWindow->effectiveDevicePixelRatio();
     const qreal pixelScale = ratio > 0.0 ? 1.0 / ratio : 1.0;
 
-    if (m_tilesDirty && m_surfaces)
+    // The presenter's own last-line fence.
+    //
+    // PageSurfaceCoordinator::admit() is where staleness is decided, and it is
+    // thorough. What it cannot do is reach into a scene graph that is already
+    // holding textures: between a document being replaced and the host getting
+    // round to invalidating the coordinator, the retained nodes are the previous
+    // revision's pixels, and a frame drawn in that window is a frozen page from
+    // a document that no longer exists.
+    //
+    // Only the revision is fenced here, deliberately. A superseded *generation*
+    // means the current revision's pixels are being shown at the wrong
+    // resolution, and the roadmap explicitly allows that to stand in during a
+    // rapid zoom or pan. A superseded *revision* is another document, and there
+    // is no version of showing it that is correct.
+    //
+    // With no coordinator bound there is nothing to fence against, and inventing
+    // a revision here would be exactly the second document truth the boundary
+    // exists to prevent.
+    const bool haveRevisionAuthority = m_surfaces != nullptr;
+    const pdf::PDFRevisionIdentity currentRevision = haveRevisionAuthority ? m_surfaces->currentRevision() : pdf::PDFRevisionIdentity();
+
+    int refusedThisFrame = 0;
+
+    // An empty snapshot whose token has not been stamped yet is not a stale
+    // document; it is the coordinator before the first rebuildSnapshot(). Treating
+    // that as a revision mismatch would refuse every bootstrap frame.
+    const pdf::PDFRevisionIdentity snapshotRevision = m_surfaces ? m_surfaces->snapshot().token.revision : pdf::PDFRevisionIdentity();
+    const bool snapshotIsCurrent = !m_surfaces || !snapshotRevision.isValid() || snapshotRevision == currentRevision;
+
+    // The fence is evaluated on every frame, not only on a dirty one. That is
+    // the whole difference between refusing a stale frame and freezing one: a
+    // repaint caused by something else entirely -- a hover, a resize, another
+    // item in the window -- would otherwise leave the previous document's
+    // textures attached and draw them again.
+    if (m_surfaces && (m_tilesDirty || !snapshotIsCurrent))
     {
-        m_builder.syncTiles(root->childAtIndex(TilesChild), m_surfaces->snapshot(), pixelScale);
+        const CanvasSnapshot& snapshot = m_surfaces->snapshot();
+
+        if (snapshotIsCurrent)
+        {
+            m_builder.syncTiles(root->childAtIndex(TilesChild), snapshot, pixelScale);
+        }
+        else
+        {
+            // An empty snapshot rather than the stale one: syncTiles then drops
+            // every retained tile and its texture, which is the point. Leaving
+            // the previous frame up would be the frozen page.
+            m_builder.syncTiles(root->childAtIndex(TilesChild), CanvasSnapshot(), pixelScale);
+            ++refusedThisFrame;
+        }
+
+        m_tilesDirty = false;
+    }
+    else if (!m_surfaces && m_tilesDirty)
+    {
+        m_builder.syncTiles(root->childAtIndex(TilesChild), CanvasSnapshot(), pixelScale);
         m_tilesDirty = false;
     }
 
-    if (m_overlaysDirty && m_interaction)
+    m_lastTileCount = m_builder.tileCount();
+    m_lastInexactTileCount = m_builder.inexactTileCount();
+
+    // Same rule as the tiles, for the same reason: a finding highlight from a
+    // replaced document points at geometry that is no longer there.
+    // OverlayFrame's own header states the contract -- a frame whose token no
+    // longer matches is refused rather than drawn -- and this is the host's half
+    // of it.
+    const OverlayFrame& liveOverlay = m_interaction ? m_interaction->overlayFrame() : OverlayFrame();
+    const bool overlayWasPublished = liveOverlay.token.isValid();
+    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished || liveOverlay.token.revision == currentRevision;
+
+    if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
     {
-        const OverlayFrame& frame = m_interaction->overlayFrame();
+        const OverlayFrame& live = liveOverlay;
+        const OverlayFrame empty;
+        const OverlayFrame& frame = overlayIsCurrent ? live : empty;
+
+        if (!overlayIsCurrent)
+        {
+            ++refusedThisFrame;
+        }
 
         // Page space to item space, through the viewport's own matrix. Deriving
         // a second matrix here is how overlays and page pixels drift apart.
@@ -613,7 +832,7 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
                                        return false;
                                    }
 
-                                   *out = viewport->pagePointToViewportMatrix(pageIndex) * pixelsToItem;
+                                   *out = pixelsToItem * viewport->pagePointToViewportMatrix(pageIndex);
                                    return true;
                                });
 
@@ -621,6 +840,28 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
         m_lastDroppedPrimitives = frame.droppedPrimitives;
         m_lastUnrenderablePrimitives = frame.unrenderablePrimitives;
         m_overlaysDirty = false;
+    }
+    else if (!m_interaction && m_overlaysDirty)
+    {
+        m_builder.syncOverlays(root->childAtIndex(OverlaysChild), OverlayFrame(), nullptr);
+        m_overlaysDirty = false;
+    }
+
+    m_refusedStaleFrames += refusedThisFrame;
+
+    // Texture bytes are the builder's to measure and the metrics object's to
+    // report, so the developer overlay and a diagnostic bundle read the same
+    // number.
+    m_present.noteTileBytes(m_builder.tileBytes(), m_builder.tileBytesHighWater());
+
+    // The first-view milestone is the first frame that actually put a
+    // current-revision page on screen -- not the first frame, which is an empty
+    // background, and not the first admitted surface, which is a measurement of
+    // the renderer rather than of the view.
+    if (!m_firstViewReached && m_builder.tileCount() > 0)
+    {
+        m_firstViewReached = true;
+        m_present.markFirstView();
     }
 
     // The developer panel is rebuilt every frame it is visible, on purpose: its

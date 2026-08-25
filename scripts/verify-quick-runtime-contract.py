@@ -42,17 +42,93 @@ def target_block(path: Path) -> str:
         raise ContractError(f"cannot read {path.relative_to(ROOT)}: {exc}") from exc
 
 
-def validate_manifest(manifest: dict) -> list[dict]:
+def validate_qualification_target(target: dict, root_cmake: str) -> None:
+    name = require_string(target, "name", "target")
+    option = require_string(target, "cmake_option", name)
+    uri = require_string(target, "qml_uri", name)
+    qml_file = ROOT / require_string(target, "qml_file", name)
+    cmake_file = ROOT / require_string(target, "cmake_file", name)
+    if target.get("install") is not False:
+        raise ContractError(f"{name} must be marked install=false")
+    modules = target.get("qt_modules")
+    if not isinstance(modules, list) or not modules or not all(isinstance(item, str) for item in modules):
+        raise ContractError(f"{name}.qt_modules must be a non-empty string list")
+
+    option_pattern = re.compile(
+        rf"option\(\s*{re.escape(option)}\b.*?\sOFF\s*\)", re.IGNORECASE | re.DOTALL
+    )
+    if not option_pattern.search(root_cmake):
+        raise ContractError(f"{option} must default OFF in CMakeLists.txt")
+
+    block = target_block(cmake_file)
+    if not re.search(rf"qt_add_executable\(\s*{re.escape(name)}\b", block):
+        raise ContractError(f"{name} is not declared by {cmake_file.relative_to(ROOT)}")
+    if not re.search(rf"qt_add_qml_module\(\s*{re.escape(name)}\b", block):
+        raise ContractError(f"{name} has no qt_add_qml_module declaration")
+    if not re.search(rf"\bURI\s+{re.escape(uri)}\b", block):
+        raise ContractError(f"{name} QML URI drifted from {uri}")
+    if not qml_file.is_file():
+        raise ContractError(f"{name} QML file is missing: {qml_file.relative_to(ROOT)}")
+
+    for module in modules:
+        if module not in block:
+            raise ContractError(f"{name} no longer links declared module {module}")
+
+    install_pattern = re.compile(rf"install\s*\([^)]*\b{re.escape(name)}\b", re.IGNORECASE | re.DOTALL)
+    if install_pattern.search(root_cmake) or install_pattern.search(block):
+        raise ContractError(f"qualification target {name} must not be installed")
+
+
+def validate_product_target(product: dict, root_cmake: str) -> None:
+    name = require_string(product, "name", "product_target")
+    uri = require_string(product, "qml_uri", "product_target")
+    qml_file = ROOT / require_string(product, "qml_file", "product_target")
+    cmake_file = ROOT / require_string(product, "cmake_file", "product_target")
+    if product.get("install") is not True:
+        raise ContractError("product_target must be marked install=true")
+    modules = product.get("qt_modules")
+    if not isinstance(modules, list) or not modules or not all(isinstance(item, str) for item in modules):
+        raise ContractError("product_target.qt_modules must be a non-empty string list")
+
+    block = target_block(cmake_file)
+    if not re.search(rf"qt_add_executable\(\s*{re.escape(name)}\b", block):
+        raise ContractError(f"{name} is not declared by {cmake_file.relative_to(ROOT)}")
+    if not re.search(rf"\bURI\s+{re.escape(uri)}\b", block):
+        raise ContractError(f"product QML URI drifted from {uri}")
+    if not qml_file.is_file():
+        raise ContractError(f"product QML file is missing: {qml_file.relative_to(ROOT)}")
+
+    for module in modules:
+        if module not in block:
+            raise ContractError(f"product target no longer links declared module {module}")
+
+    install_pattern = re.compile(rf"install\s*\([^)]*\b{re.escape(name)}\b", re.IGNORECASE | re.DOTALL)
+    if not install_pattern.search(block):
+        raise ContractError(f"product target {name} must be installed")
+
+
+def validate_manifest(manifest: dict) -> tuple[list[dict], dict | None]:
     if manifest.get("schema_version") != 1:
         raise ContractError("quick-runtime-manifest schema_version must be 1")
-    if manifest.get("status") != "qualification-only":
-        raise ContractError("Quick targets must remain qualification-only until G4 is closed")
-    if manifest.get("product_qml_shipped") is not False:
-        raise ContractError("product_qml_shipped must remain false for this session")
+
+    status = manifest.get("status")
+    product_shipped = manifest.get("product_qml_shipped")
+    if product_shipped is True:
+        if status not in {"product-navigable", "product-qml-shipped", "product-complete"}:
+            raise ContractError("product_qml_shipped requires a product manifest status")
+    elif product_shipped is not False:
+        raise ContractError("product_qml_shipped must be a boolean")
 
     targets = manifest.get("qualification_targets")
     if not isinstance(targets, list) or not targets:
         raise ContractError("qualification_targets must be a non-empty list")
+
+    product_target = manifest.get("product_target")
+    if product_shipped is True:
+        if not isinstance(product_target, dict):
+            raise ContractError("product_qml_shipped requires product_target metadata")
+    elif product_target is not None:
+        raise ContractError("product_target must be absent until product_qml_shipped is true")
 
     names: set[str] = set()
     root_cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -63,44 +139,15 @@ def validate_manifest(manifest: dict) -> list[dict]:
         if name in names:
             raise ContractError(f"duplicate qualification target: {name}")
         names.add(name)
-
-        option = require_string(target, "cmake_option", name)
-        uri = require_string(target, "qml_uri", name)
-        qml_file = ROOT / require_string(target, "qml_file", name)
-        cmake_file = ROOT / require_string(target, "cmake_file", name)
-        if target.get("install") is not False:
-            raise ContractError(f"{name} must be marked install=false")
-        modules = target.get("qt_modules")
-        if not isinstance(modules, list) or not modules or not all(isinstance(item, str) for item in modules):
-            raise ContractError(f"{name}.qt_modules must be a non-empty string list")
-
-        option_pattern = re.compile(
-            rf"option\(\s*{re.escape(option)}\b.*?\sOFF\s*\)", re.IGNORECASE | re.DOTALL
-        )
-        if not option_pattern.search(root_cmake):
-            raise ContractError(f"{option} must default OFF in CMakeLists.txt")
-
-        block = target_block(cmake_file)
-        if not re.search(rf"qt_add_executable\(\s*{re.escape(name)}\b", block):
-            raise ContractError(f"{name} is not declared by {cmake_file.relative_to(ROOT)}")
-        if not re.search(rf"qt_add_qml_module\(\s*{re.escape(name)}\b", block):
-            raise ContractError(f"{name} has no qt_add_qml_module declaration")
-        if not re.search(rf"\bURI\s+{re.escape(uri)}\b", block):
-            raise ContractError(f"{name} QML URI drifted from {uri}")
-        if not qml_file.is_file():
-            raise ContractError(f"{name} QML file is missing: {qml_file.relative_to(ROOT)}")
-
-        for module in modules:
-            if module not in block:
-                raise ContractError(f"{name} no longer links declared module {module}")
-
-        install_pattern = re.compile(rf"install\s*\([^)]*\b{re.escape(name)}\b", re.IGNORECASE | re.DOTALL)
-        if install_pattern.search(root_cmake) or install_pattern.search(block):
-            raise ContractError(f"qualification target {name} must not be installed")
+        validate_qualification_target(target, root_cmake)
 
     if names != {"QuickShellSmoke", "CanvasBenchmark"}:
         raise ContractError(f"unexpected qualification target set: {sorted(names)}")
-    return targets
+
+    if product_shipped is True and isinstance(product_target, dict):
+        validate_product_target(product_target, root_cmake)
+
+    return targets, product_target if isinstance(product_target, dict) else None
 
 
 def validate_licensing(manifest: dict) -> None:
@@ -121,6 +168,8 @@ def validate_licensing(manifest: dict) -> None:
         value = gates.get(key)
         if value not in {"open", "partial", "complete"}:
             raise ContractError(f"release_gates.{key} must be open, partial, or complete")
+        if value == "complete" and key in {"final_artifact_sbom", "clean_machine_package_smoke", "qt_relink_test"}:
+            raise ContractError(f"do not claim release gate {key} is complete for this session")
 
 
 def validate_install_dir(install_dir: Path, targets: list[dict]) -> None:
@@ -146,7 +195,7 @@ def main() -> int:
 
     try:
         manifest = load_json(MANIFEST_PATH)
-        targets = validate_manifest(manifest)
+        targets, product_target = validate_manifest(manifest)
         validate_licensing(manifest)
         if args.install_dir:
             validate_install_dir(args.install_dir.resolve(), targets)
@@ -154,10 +203,12 @@ def main() -> int:
         print(f"Quick runtime contract FAILED: {exc}", file=sys.stderr)
         return 1
 
+    product_flag = "true" if manifest.get("product_qml_shipped") else "false"
+    product_name = product_target["name"] if product_target else "none"
     print(
         "Quick runtime contract verified: "
         f"qualification_targets={','.join(target['name'] for target in targets)}; "
-        "product_qml_shipped=false; package-gates=open"
+        f"product_qml_shipped={product_flag}; product_target={product_name}; package-gates=open"
     )
     return 0
 

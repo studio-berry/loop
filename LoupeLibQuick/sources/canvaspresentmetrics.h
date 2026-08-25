@@ -112,6 +112,26 @@ public:
     /// asks for an update, so the frame spans the work that produced it.
     void frameRequested();
 
+    /// Starts the first-view clock. Called on the GUI thread when the canvas is
+    /// bound to a document, which is the moment an operator would say they asked
+    /// to see it. Calling it again restarts the measurement, because a second
+    /// document is a second first view.
+    void markViewRequested();
+
+    /// Records the first-view milestone, once, on the GUI thread. The item calls
+    /// it after presenting the first frame that carried a current-revision page
+    /// tile -- not the first frame, which is an empty background and would
+    /// report a first view of a document nobody can see yet.
+    void markFirstView();
+
+    /// Scene-graph lifecycle counts. noteSceneGraphInvalidated() is called from
+    /// the render thread, hence the atomics; noteBuilderRebuilt() and
+    /// noteTileBytes() run inside updatePaintNode with the GUI thread blocked and
+    /// are atomic only so summary() may be read at any time without a lock.
+    void noteSceneGraphInvalidated();
+    void noteBuilderRebuilt();
+    void noteTileBytes(qint64 bytes, qint64 highWater);
+
     /// Privacy-safe present aggregates, shaped like the recorder's own summary
     /// and using its percentile helper so there is one implementation.
     QJsonObject summary() const;
@@ -119,6 +139,14 @@ public:
     void reset();
 
     quint64 presentedFrames() const noexcept { return m_presentedFrames; }
+
+    quint64 sceneGraphInvalidations() const noexcept { return m_sceneGraphInvalidations.load(); }
+    quint64 builderRebuilds() const noexcept { return m_builderRebuilds.load(); }
+
+    /// Nanoseconds from markViewRequested() to markFirstView(), or -1 when the
+    /// first view has not happened. Never 0: a milestone that has not been
+    /// reached is unavailable, not instantaneous.
+    qint64 firstViewNs() const noexcept { return m_firstViewNs; }
 
 signals:
     /// One presented frame, with its GPU and present durations in nanoseconds.
@@ -150,6 +178,14 @@ private:
     quint64 m_presentedFrames = 0;
     quint64 m_framesWithoutRenderStamp = 0;
     int m_maxSamples = 2048;
+
+    qint64 m_viewRequestedNs = -1;
+    qint64 m_firstViewNs = -1;
+
+    std::atomic<quint64> m_sceneGraphInvalidations{ 0 };
+    std::atomic<quint64> m_builderRebuilds{ 0 };
+    std::atomic<qint64> m_tileBytes{ 0 };
+    std::atomic<qint64> m_tileBytesHighWater{ 0 };
 
     QList<QMetaObject::Connection> m_connections;
 };
