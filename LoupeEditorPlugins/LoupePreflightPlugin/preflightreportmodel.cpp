@@ -24,6 +24,7 @@
 
 #include "preflightsidecarutils.h"
 #include "pdfuitheme.h"
+#include "preflightengine.h"
 
 namespace pdfplugin
 {
@@ -256,12 +257,44 @@ bool PreflightReportModel::hasWhiteOverprintFinding() const
     return false;
 }
 
+QString PreflightReportModel::stableFindingId(const PreflightFindingEntry& entry) const
+{
+    if (preflight::isStableFindingId(entry.id))
+    {
+        return entry.id;
+    }
+
+    pdf::PreflightFinding finding;
+    finding.scope = entry.scope;
+    finding.page = entry.page;
+    finding.objectId = entry.objectId;
+    finding.severity = entry.severity;
+    finding.type = entry.type;
+    finding.message = entry.message;
+    finding.checkId = entry.checkId;
+    finding.bbox = entry.bbox;
+    return finding.stableId();
+}
+
+QString PreflightReportModel::stableFindingIdAtRow(int row) const
+{
+    if (row < 0 || row >= m_findings.size())
+    {
+        return QString();
+    }
+
+    return stableFindingId(m_findings.at(row));
+}
+
 void PreflightReportModel::appendFindings(const QJsonArray& findings)
 {
     for (const QJsonValue& findingValue : findings)
     {
         const QJsonObject findingObject = findingValue.toObject();
         PreflightFindingEntry finding;
+
+        finding.id = findingObject.value(QStringLiteral("id")).toString();
+        finding.objectId = findingObject.value(QStringLiteral("object_id")).toString();
 
         if (m_schemaVersion >= 2)
         {

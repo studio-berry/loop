@@ -35,6 +35,14 @@
 class QJsonObject;
 class QTemporaryDir;
 
+namespace pdfinteraction
+{
+class InteractionController;
+class OverlayBuilder;
+class PreflightController;
+class PreflightOverlayBridge;
+}
+
 namespace pdfplugin
 {
 
@@ -65,12 +73,17 @@ public:
                           const pdf::PDFColorConvertor& convertor,
                           QList<pdf::PDFRenderError>& errors) const override;
 
+    /// Connects the Quick interaction stack for overlay markers (P4-S8 / P4-S7 shell).
+    void setInteractionHost(pdfinteraction::OverlayBuilder* overlays,
+                            pdfinteraction::InteractionController* interaction);
+
 private:
     void updateOverlayGraphics();
-    void onFindingSelectionChanged(int row);
+    void onFindingSelectionChanged(const QString& findingId);
     void ensureDockWidget();
     void updateActions();
     bool applyReportJson(const QJsonObject& report, QString* errorMessage = nullptr, const QString& sourceLabel = QString());
+    void syncReportToInteractionController();
     bool resolvePreflightPaths(QString* pdfToolPath, QString* profilePath) const;
     void startPreflightOnFile(const QString& filePath,
                               const QString& profilePath,
@@ -115,7 +128,9 @@ private:
     quint64 m_preflightRunRevision = 0;
     bool m_preflightIgnoreRevision = false;
     QString m_preflightReportSourceLabel;
-    mutable int m_selectedFindingIndex = -1;
+    mutable QString m_selectedFindingId;
+    std::unique_ptr<pdfinteraction::PreflightController> m_preflightController;
+    std::unique_ptr<pdfinteraction::PreflightOverlayBridge> m_overlayBridge;
 };
 
 }   // namespace pdfplugin

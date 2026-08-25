@@ -78,6 +78,12 @@ add_library(LoupeLibInteraction STATIC
     sources/interactiontrace.h
     sources/interactioncontroller.cpp
     sources/interactioncontroller.h
+    sources/preflightcontroller.cpp
+    sources/preflightcontroller.h
+    sources/preflightfindingsmodel.cpp
+    sources/preflightfindingsmodel.h
+    sources/preflightoverlaybridge.cpp
+    sources/preflightoverlaybridge.h
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
@@ -106,6 +112,14 @@ qt_add_resources(LoupeLibInteraction "commandcatalog"
     PREFIX "/loupe"
     FILES ${LOUPE_INTERACTION_COMMAND_CONTRACT}
 )
+
+# qt_add_resources keeps the qInitResources_* TU in a sibling target. For this
+# STATIC archive that initializer must live in libLoupeLibInteraction.a itself.
+get_target_property(_loupe_cmdcat_init_cpp LoupeLibInteraction_resources_1 SOURCES)
+if(_loupe_cmdcat_init_cpp)
+    target_sources(LoupeLibInteraction PRIVATE ${_loupe_cmdcat_init_cpp})
+endif()
+unset(_loupe_cmdcat_init_cpp)
 
 # LoupeLibQuick is SHARED in P4-S5; a non-PIC static archive cannot be linked
 # into a shared object on Linux.

@@ -26,6 +26,11 @@
 #include "repairpreviewdialog.h"
 #include "../pdftoolenvelopeutils.h"
 
+#include "interactioncontroller.h"
+#include "overlaybuilder.h"
+#include "preflightcontroller.h"
+#include "preflightoverlaybridge.h"
+
 #include "pdfbleedfixup.h"
 #include "pdfdocumentwriter.h"
 #include "pdfdocumentreader.h"
@@ -255,8 +260,11 @@ bool writeReviewedRepairCandidate(pdf::PDFRepairTransaction& transaction,
 }   // namespace
 
 LoupePreflightPlugin::LoupePreflightPlugin() :
-    pdf::PDFPlugin(nullptr)
+    pdf::PDFPlugin(nullptr),
+    m_preflightController(std::make_unique<pdfinteraction::PreflightController>()),
+    m_overlayBridge(std::make_unique<pdfinteraction::PreflightOverlayBridge>())
 {
+    m_overlayBridge->setFindingsModel(m_preflightController->findingsModel());
 }
 
 LoupePreflightPlugin::~LoupePreflightPlugin()
@@ -387,6 +395,7 @@ bool LoupePreflightPlugin::applyReportJson(const QJsonObject& report, QString* e
     ensureDockWidget();
     m_reportDockWidget->setReport(filteredReport, sourceLabel);
     m_reportDocumentRevision = m_documentRevision;
+    syncReportToInteractionController();
     m_actionShowPanel->setChecked(true);
     m_reportDockWidget->show();
     return true;
@@ -729,7 +738,7 @@ void LoupePreflightPlugin::abortPreflightRun(const QString& message)
 
 void LoupePreflightPlugin::invalidateReport()
 {
-    m_selectedFindingIndex = -1;
+    m_selectedFindingId.clear();
 
     if (m_reportDockWidget)
     {
@@ -737,6 +746,14 @@ void LoupePreflightPlugin::invalidateReport()
     }
 
     m_reportDocumentRevision = 0;
+    if (m_preflightController)
+    {
+        m_preflightController->findingsModel()->clear();
+    }
+    if (m_overlayBridge)
+    {
+        m_overlayBridge->applyFindings();
+    }
     updateOverlayGraphics();
 }
 
@@ -836,13 +853,24 @@ void LoupePreflightPlugin::drawPage(QPainter* painter,
             continue;
         }
 
+        pdf::PreflightFinding coreFinding;
+        coreFinding.scope = finding.scope;
+        coreFinding.page = finding.page;
+        coreFinding.objectId = finding.objectId;
+        coreFinding.severity = finding.severity;
+        coreFinding.type = finding.type;
+        coreFinding.message = finding.message;
+        coreFinding.checkId = finding.checkId;
+        coreFinding.bbox = finding.bbox;
+        const QString stableId = preflight::isStableFindingId(finding.id) ? finding.id : coreFinding.stableId();
+
         const QRectF deviceRect = pagePointToDevicePointMatrix.mapRect(finding.bbox).normalized();
         if (deviceRect.isEmpty())
         {
             continue;
         }
 
-        const bool isSelected = findingIndex == m_selectedFindingIndex;
+        const bool isSelected = !m_selectedFindingId.isEmpty() && m_selectedFindingId == stableId;
         QColor borderColor;
         QColor fillColor;
 
@@ -890,30 +918,129 @@ void LoupePreflightPlugin::updateOverlayGraphics()
     }
 }
 
-void LoupePreflightPlugin::onFindingSelectionChanged(int row)
+void LoupePreflightPlugin::onFindingSelectionChanged(const QString& findingId)
 {
-    m_selectedFindingIndex = row;
+    m_selectedFindingId = findingId;
 
-    if (!m_reportDockWidget || !m_widget || row < 0)
+    if (m_preflightController)
+    {
+        m_preflightController->findingsModel()->setSelectedFinding(findingId);
+    }
+    if (m_overlayBridge)
+    {
+        m_overlayBridge->applyFindings();
+    }
+
+    if (!m_reportDockWidget || !m_widget || findingId.isEmpty())
     {
         updateOverlayGraphics();
         return;
     }
 
     const QVector<PreflightFindingEntry>& findings = m_reportDockWidget->findings();
-    if (row >= findings.size())
+    for (const PreflightFindingEntry& finding : findings)
     {
-        updateOverlayGraphics();
-        return;
-    }
+        pdf::PreflightFinding coreFinding;
+        coreFinding.scope = finding.scope;
+        coreFinding.page = finding.page;
+        coreFinding.objectId = finding.objectId;
+        coreFinding.severity = finding.severity;
+        coreFinding.type = finding.type;
+        coreFinding.message = finding.message;
+        coreFinding.checkId = finding.checkId;
+        coreFinding.bbox = finding.bbox;
+        const QString stableId = preflight::isStableFindingId(finding.id) ? finding.id : coreFinding.stableId();
+        if (stableId != findingId)
+        {
+            continue;
+        }
 
-    const PreflightFindingEntry& finding = findings.at(row);
-    if ((finding.scope == QStringLiteral("page") || finding.scope == QStringLiteral("object")) && finding.page > 0)
-    {
-        m_widget->getDrawWidgetProxy()->goToPage(finding.page - 1);
+        if ((finding.scope == QStringLiteral("page") || finding.scope == QStringLiteral("object")) && finding.page > 0)
+        {
+            m_widget->getDrawWidgetProxy()->goToPage(finding.page - 1);
+        }
+        break;
     }
 
     updateOverlayGraphics();
+}
+
+void LoupePreflightPlugin::setInteractionHost(pdfinteraction::OverlayBuilder* overlays,
+                                              pdfinteraction::InteractionController* interaction)
+{
+    if (!m_overlayBridge)
+    {
+        return;
+    }
+
+    m_overlayBridge->setOverlayBuilder(overlays);
+    m_overlayBridge->setInteractionController(interaction);
+    syncReportToInteractionController();
+}
+
+void LoupePreflightPlugin::syncReportToInteractionController()
+{
+    if (!m_preflightController || !m_reportDockWidget)
+    {
+        return;
+    }
+
+    if (!m_reportDockWidget->hasReport())
+    {
+        m_preflightController->findingsModel()->clear();
+        if (m_overlayBridge)
+        {
+            m_overlayBridge->applyFindings();
+        }
+        return;
+    }
+
+    const QVector<PreflightFindingEntry>& entries = m_reportDockWidget->findings();
+    QList<pdf::PreflightFinding> errors;
+    QList<pdf::PreflightFinding> warnings;
+    for (const PreflightFindingEntry& entry : entries)
+    {
+        pdf::PreflightFinding finding;
+        finding.scope = entry.scope;
+        finding.page = entry.page;
+        finding.objectId = entry.objectId;
+        finding.severity = entry.severity;
+        finding.type = entry.type;
+        finding.message = entry.message;
+        finding.checkId = entry.checkId;
+        finding.bbox = entry.bbox;
+
+        if (entry.severity == QStringLiteral("warning") || entry.severity == QStringLiteral("info"))
+        {
+            warnings.push_back(finding);
+        }
+        else
+        {
+            errors.push_back(finding);
+        }
+    }
+
+    const QString documentKey = m_dataExchangeInterface ? m_dataExchangeInterface->getOriginalFileName() : QStringLiteral("document");
+    const QString documentRevision = QString::number(m_reportDocumentRevision);
+
+    pdf::PreflightResult result;
+    result.errors = errors;
+    result.warnings = warnings;
+    result.inspectionComplete = m_reportDockWidget->verdictState() != QStringLiteral("incomplete");
+
+    m_preflightController->beginRun(documentKey, documentRevision, {}, QStringLiteral("report-load"));
+    m_preflightController->acceptResult(QStringLiteral("report-load"), documentRevision, result);
+    m_preflightController->setCurrentRevision(documentKey, documentRevision);
+
+    if (!m_selectedFindingId.isEmpty())
+    {
+        m_preflightController->findingsModel()->setSelectedFinding(m_selectedFindingId);
+    }
+
+    if (m_overlayBridge)
+    {
+        m_overlayBridge->applyFindings();
+    }
 }
 
 void LoupePreflightPlugin::onApplyFixupRequested(const QString& id)

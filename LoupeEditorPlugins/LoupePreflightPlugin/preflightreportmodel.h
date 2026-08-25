@@ -44,6 +44,8 @@ struct PreflightFixupEntry
 
 struct PreflightFindingEntry
 {
+    QString id;
+    QString objectId;
     QString scope;
     int page = 0;
     QString severity;
@@ -102,6 +104,9 @@ public:
     /// additional, more specific warning about the unsafe white/near-white case.
     bool hasWhiteOverprintFinding() const;
 
+    QString stableFindingId(const PreflightFindingEntry& entry) const;
+    QString stableFindingIdAtRow(int row) const;
+
 private:
     void appendFindings(const QJsonArray& findings);
 
@@ -119,4 +124,4 @@ private:
 
 }   // namespace pdfplugin
 
-#endif // PREFLIGHTREPORTMODEL_H
+#endif   // PREFLIGHTREPORTMODEL_H
