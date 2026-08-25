@@ -20,6 +20,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+
 foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, $EditorUiPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required shell contract input is missing: $path"
