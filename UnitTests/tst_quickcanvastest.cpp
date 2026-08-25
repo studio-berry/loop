@@ -345,6 +345,10 @@ private:
     /// than about which backend drew them.
     void showItemInWindow();
 
+    /// Submits surface demand and drains the coordinator relay until at least one
+    /// surface is admitted. The relay is always queued, even for inline work.
+    void requestSurfacesAndDrain();
+
     /// Renders one frame and returns it. Fails the test rather than skipping if
     /// the scene graph produced nothing: a parity gate that quietly passes when
     /// it could not render is worse than no gate.
@@ -409,6 +413,10 @@ void QuickCanvasTest::cleanup()
 void QuickCanvasTest::bindItem()
 {
     m_item->bind(m_viewport.get(), m_controller.get(), m_surfaces.get());
+
+    // publishViewportGeometry reads the screen. The tests in this file inject a
+    // known density so coordinator demand does not depend on the CI monitor.
+    m_viewport->setPixelPerMM(PixelPerMM);
 }
 
 void QuickCanvasTest::buildCoordinator()
@@ -422,14 +430,37 @@ void QuickCanvasTest::buildCoordinator()
 
 void QuickCanvasTest::showItemInWindow()
 {
+    buildCoordinator();
+
     m_window = std::make_unique<QQuickWindow>();
     m_window->resize(400, 400);
 
     m_item->setParentItem(m_window->contentItem());
     m_item->setSize(QSizeF(400.0, 400.0));
 
+    bindItem();
+
     m_window->show();
     QVERIFY(QTest::qWaitForWindowExposed(m_window.get()));
+}
+
+void QuickCanvasTest::requestSurfacesAndDrain()
+{
+    QVERIFY(m_surfaces);
+    m_surfaces->requestSurfaces();
+
+    QVERIFY2(QTest::qWaitFor([this]()
+                             {
+                                 QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+                                 return m_surfaces->counters().admitted > 0;
+                             },
+                             5000),
+             qPrintable(QStringLiteral("admitted=%1 requested=%2 rejected-superseded=%3 rejected-demand=%4 failed=%5")
+                            .arg(m_surfaces->counters().admitted)
+                            .arg(m_surfaces->counters().requested)
+                            .arg(m_surfaces->counters().rejectedSuperseded)
+                            .arg(m_surfaces->counters().rejectedDemand)
+                            .arg(m_surfaces->counters().failed)));
 }
 
 QImage QuickCanvasTest::renderFrame()
@@ -439,12 +470,6 @@ QImage QuickCanvasTest::renderFrame()
     // coordinator posts completions through is queued, so anything admitted
     // since the last call has to be delivered first.
     QCoreApplication::processEvents();
-
-    if (m_window && m_item)
-    {
-        m_item->update();
-        QCoreApplication::processEvents();
-    }
 
     const QImage frame = m_window ? m_window->grabWindow() : QImage();
     if (frame.isNull())
@@ -662,6 +687,7 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
     const QPointF dragged = start + QPointF(40.0, 40.0);
     QVERIFY(sendMouseMove(m_item.get(), dragged));
 
+    QCoreApplication::processEvents();
     QVERIFY(sendFocusOut(m_item.get()));
 
     // A drag the user stopped steering must never complete: a completed drag is
@@ -701,11 +727,8 @@ void QuickCanvasTest::unboundItemIgnoresInput()
 
 void QuickCanvasTest::admittedTilesReachTheSceneGraph()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
 
     // The relay the coordinator posts completions through is always queued, so
@@ -725,11 +748,8 @@ void QuickCanvasTest::admittedTilesReachTheSceneGraph()
 
 void QuickCanvasTest::revisionReplacementLeavesNoStaleTile()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -758,11 +778,8 @@ void QuickCanvasTest::revisionReplacementLeavesNoStaleTile()
 
 void QuickCanvasTest::staleOverlayFrameIsRefusedToo()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
 
     // Hover a scripted target so the overlay frame carries a primitive built
     // against the current revision.
@@ -787,11 +804,8 @@ void QuickCanvasTest::staleOverlayFrameIsRefusedToo()
 
 void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -820,11 +834,8 @@ void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
 
 void QuickCanvasTest::releaseResourcesThenRepaintRecovers()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -844,11 +855,8 @@ void QuickCanvasTest::releaseResourcesThenRepaintRecovers()
 
 void QuickCanvasTest::windowChangeDropsRetainedNodes()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -874,11 +882,8 @@ void QuickCanvasTest::windowChangeDropsRetainedNodes()
 
 void QuickCanvasTest::rapidZoomReversalNeverDrawsAnotherRevision()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
 
     for (const qreal zoom : { 1.5, 2.5, 4.0, 2.5, 1.5, 1.0 })
@@ -899,11 +904,8 @@ void QuickCanvasTest::rapidZoomReversalNeverDrawsAnotherRevision()
 
 void QuickCanvasTest::rapidPageChangeKeepsOneFrameCurrent()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
 
     const QPoint top = m_viewport->minimumOffset();
@@ -922,9 +924,7 @@ void QuickCanvasTest::rapidPageChangeKeepsOneFrameCurrent()
 
 void QuickCanvasTest::devicePixelRatioChangeRepublishesGeometry()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
 
     // 100%, 150%, 200%. The ratio is driven through the viewport rather than
     // through the window because an offscreen platform reports one fixed ratio
@@ -971,11 +971,8 @@ void QuickCanvasTest::devicePixelRatioChangeRepublishesGeometry()
 
 void QuickCanvasTest::itemDestroyedWithWorkInFlight()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -996,11 +993,8 @@ void QuickCanvasTest::itemDestroyedWithWorkInFlight()
 
 void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
-
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
@@ -1030,9 +1024,7 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
 
 void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
 {
-    buildCoordinator();
     showItemInWindow();
-    bindItem();
 
     const QJsonObject before = m_item->presentMetrics()->summary().value(QStringLiteral("present")).toObject().value(QStringLiteral("first_view_ms")).toObject();
 
@@ -1042,7 +1034,7 @@ void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
     QVERIFY(!before.value(QStringLiteral("available")).toBool(true));
     QVERIFY(before.value(QStringLiteral("ms")).isNull());
 
-    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
     renderFrame();
     QVERIFY(m_item->frameStats().tiles > 0);
 
