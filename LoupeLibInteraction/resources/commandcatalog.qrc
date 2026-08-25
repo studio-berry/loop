@@ -1,6 +1,0 @@
-<!DOCTYPE RCC>
-<RCC version="1.0">
-    <qresource prefix="/loupe">
-        <file alias="loupe-shell-actions.json">../../docs/loupe-shell-actions.json</file>
-    </qresource>
-</RCC>

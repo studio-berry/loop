@@ -84,12 +84,42 @@ add_library(LoupeLibInteraction STATIC
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
     sources/preflightoverlaybridge.h
-    resources/commandcatalog.qrc
 )
 
 target_link_libraries(LoupeLibInteraction PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
 
 target_include_directories(LoupeLibInteraction INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+
+# The command catalog reads docs/loupe-shell-actions.json — the same file the
+# Editor action policy verifier checks against pdfeditormainwindow.ui — so there
+# is one command registry rather than a copy that can drift. It is embedded
+# rather than read from disk: the neutral layer must not need a filesystem
+# service to know what commands exist.
+#
+# qt_add_resources is used rather than listing a .qrc among the sources above.
+# This target is STATIC, where an unreferenced AUTORCC initializer can be dropped
+# by the linker and the catalog would silently load empty; the target-based
+# signature propagates a resource init object to consumers instead.
+# CommandCatalog reports command-catalog/resource-unavailable rather than
+# starting with an empty command set if this ever regresses.
+set(LOUPE_INTERACTION_COMMAND_CONTRACT "${CMAKE_CURRENT_SOURCE_DIR}/../docs/loupe-shell-actions.json")
+
+set_source_files_properties(${LOUPE_INTERACTION_COMMAND_CONTRACT}
+    PROPERTIES QT_RESOURCE_ALIAS "loupe-shell-actions.json"
+)
+
+qt_add_resources(LoupeLibInteraction "commandcatalog"
+    PREFIX "/loupe"
+    FILES ${LOUPE_INTERACTION_COMMAND_CONTRACT}
+)
+
+# qt_add_resources keeps the qInitResources_* TU in a sibling target. For this
+# STATIC archive that initializer must live in libLoupeLibInteraction.a itself.
+get_target_property(_loupe_cmdcat_init_cpp LoupeLibInteraction_resources_1 SOURCES)
+if(_loupe_cmdcat_init_cpp)
+    target_sources(LoupeLibInteraction PRIVATE ${_loupe_cmdcat_init_cpp})
+endif()
+unset(_loupe_cmdcat_init_cpp)
 
 # LoupeLibQuick is SHARED in P4-S5; a non-PIC static archive cannot be linked
 # into a shared object on Linux.
