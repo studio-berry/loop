@@ -715,7 +715,10 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addPositionalArgument("document", "Source PDF for the repair transaction.");
         parser->addOption(QCommandLineOption("operation", "Registered repair operation id.", "id"));
-        parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        if (!optionFlags.testFlag(PreflightProfile))
+        {
+            parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        }
         parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
         parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
         parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
