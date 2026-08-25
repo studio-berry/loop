@@ -829,6 +829,7 @@ void QuickCanvasTest::sceneGraphInvalidationRebuildsWithoutReparsing()
     // deterministic: a real backend loss cannot be provoked on demand, and the
     // item's contract is with the signal, not with the cause behind it.
     Q_EMIT m_window->sceneGraphInvalidated();
+    QCoreApplication::processEvents();
 
     QCOMPARE(m_item->presentMetrics()->sceneGraphInvalidations(), quint64(1));
 
