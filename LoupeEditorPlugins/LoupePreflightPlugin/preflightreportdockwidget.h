@@ -81,4 +81,4 @@ private:
 
 }   // namespace pdfplugin
 
-#endif // PREFLIGHTREPORTDOCKWIDGET_H
+#endif   // PREFLIGHTREPORTDOCKWIDGET_H

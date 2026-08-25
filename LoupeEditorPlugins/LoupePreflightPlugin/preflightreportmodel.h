@@ -124,4 +124,4 @@ private:
 
 }   // namespace pdfplugin
 
-#endif // PREFLIGHTREPORTMODEL_H
+#endif   // PREFLIGHTREPORTMODEL_H
