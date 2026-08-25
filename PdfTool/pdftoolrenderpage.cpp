@@ -2,6 +2,7 @@
 
 #include "pdftoolrenderpage.h"
 
+#include "pdfconstants.h"
 #include "pdffont.h"
 #include "pdfsafefilewriter.h"
 #include "pdftoolstructuredoutput.h"
@@ -33,7 +34,7 @@ QJsonArray transformToJson(const QTransform& transform)
     return QJsonArray{ transform.m11(), transform.m12(), transform.m21(), transform.m22(), transform.dx(), transform.dy() };
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolRenderPageApplication::getStandardString(StandardString standardString) const
 {
@@ -184,7 +185,7 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("command"), QStringLiteral("render-page") },
         { QStringLiteral("document_sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) },
-        { QStringLiteral("page_index"), pageIndex },
+        { QStringLiteral("page_index"), static_cast<qint64>(pageIndex) },
         { QStringLiteral("reference_box"), QStringLiteral("bleed") },
         { QStringLiteral("reference_box_pt"), boxToJson(bleedBox) },
         { QStringLiteral("trim_box_pt"), boxToJson(trimBox) },
@@ -193,7 +194,7 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         { QStringLiteral("max_raster_pixels"), options.renderPageMaxRasterPixels },
         { QStringLiteral("pixel_size"), QJsonArray{ outputImage.width(), outputImage.height() } },
         { QStringLiteral("page_to_device"), transformToJson(outputTransform) },
-        { QStringLiteral("renderer_features"), features.toInt() },
+        { QStringLiteral("renderer_features"), static_cast<qint64>(features.toInt()) },
         { QStringLiteral("color_output_identity"), QString::fromLatin1(COLOR_OUTPUT_IDENTITY) },
         { QStringLiteral("output"), options.renderPageOutput },
         { QStringLiteral("output_state"), outputWritten ? QStringLiteral("written") : QStringLiteral("planned") },
@@ -211,4 +212,4 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
     return PDFToolExitCode::Success;
 }
 
-} // namespace pdftool
+}   // namespace pdftool

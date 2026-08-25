@@ -62,7 +62,7 @@ int rotationDegrees(pdf::PageRotation rotation)
     return 0;
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolDumpGeometryApplication::getStandardString(StandardString standardString) const
 {
@@ -96,7 +96,7 @@ PDFToolExitCode PDFToolDumpGeometryApplication::execute(const PDFToolOptions& op
     for (pdf::PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
         QJsonObject pageObject;
-        pageObject.insert(QStringLiteral("page_index"), pageIndex);
+        pageObject.insert(QStringLiteral("page_index"), static_cast<qint64>(pageIndex));
         try
         {
             const pdf::PDFPage* page = document.getCatalog()->getPage(pageIndex);
@@ -114,10 +114,9 @@ PDFToolExitCode PDFToolDumpGeometryApplication::execute(const PDFToolOptions& op
             pageObject.insert(QStringLiteral("error_code"), QStringLiteral("page_unreadable"));
             pageObject.insert(QStringLiteral("error_message"), message);
             errors.append(QJsonObject{
-                { QStringLiteral("page_index"), pageIndex },
+                { QStringLiteral("page_index"), static_cast<qint64>(pageIndex) },
                 { QStringLiteral("error_code"), QStringLiteral("page_unreadable") },
-                { QStringLiteral("error_message"), message }
-            });
+                { QStringLiteral("error_message"), message } });
         }
         pages.append(pageObject);
     }
@@ -126,7 +125,7 @@ PDFToolExitCode PDFToolDumpGeometryApplication::execute(const PDFToolOptions& op
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("command"), QStringLiteral("dump-page-geometry") },
         { QStringLiteral("document_sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) },
-        { QStringLiteral("page_count"), pageCount },
+        { QStringLiteral("page_count"), static_cast<qint64>(pageCount) },
         { QStringLiteral("pages"), pages },
         { QStringLiteral("errors"), errors }
     };
@@ -150,4 +149,4 @@ PDFToolAbstractApplication::Options PDFToolDumpGeometryApplication::getOptionsFl
     return ConsoleFormat | OpenDocument;
 }
 
-} // namespace pdftool
+}   // namespace pdftool

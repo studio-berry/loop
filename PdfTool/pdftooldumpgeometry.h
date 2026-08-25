@@ -38,4 +38,4 @@ public:
 
 }   // namespace pdftool
 
-#endif // PDFTOOLDUMPGEOMETRY_H
+#endif   // PDFTOOLDUMPGEOMETRY_H
