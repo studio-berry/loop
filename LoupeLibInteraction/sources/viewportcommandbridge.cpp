@@ -257,20 +257,7 @@ int ViewportCommandBridge::blockIndexForPage(int pageIndex) const
         return 0;
     }
 
-    switch (m_viewport->pageLayout())
-    {
-        case PageLayout::TwoPagesLeft:
-        case PageLayout::TwoPagesRight:
-        case PageLayout::TwoColumnLeft:
-        case PageLayout::TwoColumnRight:
-            return pageIndex / 2;
-
-        case PageLayout::SinglePage:
-        case PageLayout::OneColumn:
-            break;
-    }
-
-    return pageIndex;
+    return m_viewport->blockIndexForPage(pageIndex);
 }
 
 void ViewportCommandBridge::goToPage(int pageIndex)

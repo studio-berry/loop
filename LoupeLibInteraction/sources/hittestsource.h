@@ -96,6 +96,19 @@ private:
     int m_unrenderableRecords = 0;
 };
 
+/// Hit-tests finding geometry supplied as interaction targets (for example from
+/// PreflightFindingsModel::interactionTargets()).
+class FindingListHitTestSource final : public IHitTestSource
+{
+public:
+    void setTargets(QList<InteractionTarget> targets);
+
+    QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
+
+private:
+    QList<InteractionTarget> m_targets;
+};
+
 /// Hit-tests the page boxes: media, crop, bleed, trim, art.
 ///
 /// Boxes come from pdf::PDFPage, which already owns them, through the observed

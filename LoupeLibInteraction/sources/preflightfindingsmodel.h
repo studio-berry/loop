@@ -100,6 +100,8 @@ public:
     void clear();
     void setSelectedFinding(const QString& findingId);
 
+    Q_INVOKABLE QString findingIdAt(int row) const;
+
     bool containsCurrent(const QString& findingId, const QString& documentRevision) const;
     const PreflightFindingView* finding(const QString& findingId) const;
     QVector<FindingOverlay> overlays(const QString& documentRevision, int page) const;

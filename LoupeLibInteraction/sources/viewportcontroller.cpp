@@ -507,6 +507,24 @@ int ViewportController::pageUnderPoint(QPoint viewportPoint, QPointF* pagePoint)
     return -1;
 }
 
+int ViewportController::blockIndexForPage(int pageIndex) const
+{
+    if (pageIndex < 0)
+    {
+        return 0;
+    }
+
+    for (const LayoutItemMM& item : m_layoutItems)
+    {
+        if (item.pageIndex == pageIndex)
+        {
+            return item.blockIndex;
+        }
+    }
+
+    return pageIndex;
+}
+
 void ViewportController::invalidateLayout()
 {
     rebuildLayout();

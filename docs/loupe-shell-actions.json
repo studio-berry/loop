@@ -964,7 +964,7 @@
         "parameters": [],
         "capability": "unclassified",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {

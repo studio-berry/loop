@@ -35,6 +35,7 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSettings>
 #include <QSGRendererInterface>
 #include <QStyleHints>
 #include <QTimer>
@@ -70,18 +71,53 @@ QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
     return QStringLiteral("unrecognized");
 }
 
-void applyColorScheme(bool lightTheme, bool darkTheme)
+void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
 {
     if (!QGuiApplication::styleHints())
     {
         return;
     }
 
-    if (lightTheme)
+    enum class SavedColorScheme
+    {
+        Auto = 0,
+        Light = 1,
+        Dark = 2
+    };
+
+    QSettings settings(QSettings::IniFormat,
+                       QSettings::UserScope,
+                       QStringLiteral("MelkaJ"),
+                       QStringLiteral("LOUPE Editor"));
+    settings.beginGroup(QStringLiteral("ColorScheme"));
+    const SavedColorScheme savedScheme = static_cast<SavedColorScheme>(
+        settings.value(QStringLiteral("colorScheme"), int(SavedColorScheme::Auto)).toInt());
+    settings.endGroup();
+
+    bool isLightGui = false;
+    bool isDarkGui = false;
+
+    switch (savedScheme)
+    {
+        case SavedColorScheme::Auto:
+            isLightGui = cliLightTheme;
+            isDarkGui = cliDarkTheme;
+            break;
+
+        case SavedColorScheme::Light:
+            isLightGui = true;
+            break;
+
+        case SavedColorScheme::Dark:
+            isDarkGui = true;
+            break;
+    }
+
+    if (isLightGui)
     {
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
     }
-    else if (darkTheme)
+    else if (isDarkGui)
     {
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
     }
@@ -229,8 +265,7 @@ int main(int argc, char* argv[])
     const QStringList arguments = parser.positionalArguments();
     if (!arguments.isEmpty())
     {
-        QMetaObject::invokeMethod(&host, [path = arguments.front(), &host]()
-                                  { host.openInitialPath(path); }, Qt::QueuedConnection);
+        host.openInitialPath(arguments.front());
     }
 
     return application.exec();

@@ -228,6 +228,16 @@ void CanvasNodeBuilder::setPalette(const CanvasPalette& palette)
 
 void CanvasNodeBuilder::forget()
 {
+    for (auto& entry : m_overlays)
+    {
+        destroyOverlayNode(entry);
+    }
+
+    for (auto& entry : m_tiles)
+    {
+        delete entry.second.node;
+    }
+
     m_tiles.clear();
     m_overlays.clear();
     m_skippedPrimitives = 0;
@@ -444,6 +454,19 @@ void CanvasNodeBuilder::buildOverlayNode(OverlayNode& entry, const OverlayPrimit
     entry.valid = true;
 }
 
+namespace
+{
+
+QString overlayRetentionKey(const pdfinteraction::OverlayPrimitive& primitive)
+{
+    return QStringLiteral("%1:%2:%3")
+        .arg(int(primitive.layer))
+        .arg(int(primitive.target.kind))
+        .arg(primitive.id);
+}
+
+}   // namespace
+
 void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
                                      const OverlayFrame& frame,
                                      const std::function<bool(int, QTransform*)>& transformForPage)
@@ -480,7 +503,7 @@ void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
             continue;
         }
 
-        OverlayNode entry = m_overlays.take(primitive.id);
+        OverlayNode entry = m_overlays.take(overlayRetentionKey(primitive));
 
         const bool reusable = entry.valid && entry.primitive == primitive && entry.transform == transform;
         if (!reusable)
@@ -507,7 +530,7 @@ void CanvasNodeBuilder::syncOverlays(QSGNode* parent,
             continue;
         }
 
-        retained.insert(primitive.id, entry);
+        retained.insert(overlayRetentionKey(primitive), entry);
     }
 
     // Whatever is left keyed in m_overlays is a primitive this frame dropped.

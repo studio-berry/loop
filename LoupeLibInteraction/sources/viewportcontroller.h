@@ -205,6 +205,9 @@ public:
     /// `pagePoint` is given.
     int pageUnderPoint(QPoint viewportPoint, QPointF* pagePoint = nullptr) const;
 
+    /// Block that contains `pageIndex` in the current layout, or 0 when unknown.
+    int blockIndexForPage(int pageIndex) const;
+
     /// Rebuilds the layout for a replaced document or a changed revision. This
     /// supersedes all prior surface demand.
     void invalidateLayout();

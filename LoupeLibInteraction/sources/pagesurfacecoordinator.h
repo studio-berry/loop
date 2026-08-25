@@ -215,6 +215,7 @@ private:
     int inFlightCount(pdf::PDFJobPriority priority) const;
     void rebuildSnapshot();
     void countTerminal(SurfaceTerminalState state);
+    void scheduleSurfaceRetry();
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;
@@ -236,6 +237,7 @@ private:
 
     CanvasSnapshot m_snapshot;
     PageSurfaceCounters m_counters;
+    bool m_retrySurfaceRequest = false;
 };
 
 }   // namespace pdfinteraction

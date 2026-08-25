@@ -196,6 +196,16 @@ void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
     Q_EMIT selectedFindingIdChanged(m_selectedFindingId);
 }
 
+QString PreflightFindingsModel::findingIdAt(int row) const
+{
+    if (row < 0 || row >= m_findings.size())
+    {
+        return QString();
+    }
+
+    return m_findings.at(row).id;
+}
+
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
 {
     return documentRevision == m_documentRevision && finding(findingId) != nullptr;

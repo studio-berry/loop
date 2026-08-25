@@ -110,7 +110,9 @@ ApplicationWindow {
             MenuSeparator {}
             Action {
                 text: qsTr("E&xit")
-                onTriggered: Qt.quit()
+                enabled: commandEnabled("actionQuit")
+                shortcut: shortcutSequence(commandMap["actionQuit"])
+                onTriggered: invoke("actionQuit")
             }
         }
 

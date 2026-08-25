@@ -138,6 +138,24 @@ QList<InteractionTarget> EvidenceHitTestSource::targetsForPage(int pageIndex) co
     return targets;
 }
 
+void FindingListHitTestSource::setTargets(QList<InteractionTarget> targets)
+{
+    m_targets = std::move(targets);
+}
+
+QList<InteractionTarget> FindingListHitTestSource::hitTest(int pageIndex, QPointF pagePoint) const
+{
+    QList<InteractionTarget> hits;
+    for (const InteractionTarget& target : m_targets)
+    {
+        if (target.pageIndex == pageIndex && target.pageBounds.contains(pagePoint))
+        {
+            hits.push_back(target);
+        }
+    }
+    return hits;
+}
+
 PageBoxHitTestSource::PageBoxHitTestSource(pdf::PDFDocumentContext* context) :
     m_context(context)
 {

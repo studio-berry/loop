@@ -458,11 +458,6 @@ void LoupeCanvasItem::onOverlayFrameChanged()
 
 void LoupeCanvasItem::onViewportChanged()
 {
-    if (m_surfaces)
-    {
-        m_surfaces->requestSurfaces();
-    }
-
     m_tilesDirty = true;
     m_overlaysDirty = true;
     requestFrame();
@@ -488,11 +483,6 @@ void LoupeCanvasItem::geometryChange(const QRectF& newGeometry, const QRectF& ol
     }
 
     publishViewportGeometry();
-
-    if (m_surfaces)
-    {
-        m_surfaces->requestSurfaces();
-    }
 
     m_tilesDirty = true;
     m_overlaysDirty = true;
@@ -794,6 +784,11 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
 
         m_tilesDirty = false;
     }
+    else if (!m_surfaces && m_tilesDirty)
+    {
+        m_builder.syncTiles(root->childAtIndex(TilesChild), CanvasSnapshot(), pixelScale);
+        m_tilesDirty = false;
+    }
 
     m_lastTileCount = m_builder.tileCount();
     m_lastInexactTileCount = m_builder.inexactTileCount();
@@ -837,13 +832,18 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
                                        return false;
                                    }
 
-                                   *out = viewport->pagePointToViewportMatrix(pageIndex) * pixelsToItem;
+                                   *out = pixelsToItem * viewport->pagePointToViewportMatrix(pageIndex);
                                    return true;
                                });
 
         m_lastOverlayPrimitives = int(frame.primitives.size());
         m_lastDroppedPrimitives = frame.droppedPrimitives;
         m_lastUnrenderablePrimitives = frame.unrenderablePrimitives;
+        m_overlaysDirty = false;
+    }
+    else if (!m_interaction && m_overlaysDirty)
+    {
+        m_builder.syncOverlays(root->childAtIndex(OverlaysChild), OverlayFrame(), nullptr);
         m_overlaysDirty = false;
     }
 

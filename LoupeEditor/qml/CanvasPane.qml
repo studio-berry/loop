@@ -32,21 +32,4 @@ Item {
             }
         }
     }
-
-  onWidthChanged: publishGeometry()
-  onHeightChanged: publishGeometry()
-
-  function publishGeometry() {
-      if (!host || width <= 0 || height <= 0) {
-          return
-      }
-
-      const screen = Window.window ? Window.window.screen : null
-      const pixelPerMM = screen ? screen.physicalDotsPerInchX / 25.4 : 96 / 25.4
-      const devicePixelRatio = screen ? screen.devicePixelRatio : 1.0
-      host.setViewportGeometry(pixelPerMM, devicePixelRatio, Math.round(width), Math.round(height))
-      viewportGeometryChanged()
-  }
-
-  Component.onCompleted: publishGeometry()
 }

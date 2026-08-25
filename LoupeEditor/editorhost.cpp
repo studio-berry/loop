@@ -26,6 +26,7 @@
 #include "focusrestoration.h"
 #include "hittestsource.h"
 #include "interactioncontroller.h"
+#include "interactionstate.h"
 #include "interactiontarget.h"
 #include "loupecanvasitem.h"
 #include "overlaybuilder.h"
@@ -38,16 +39,17 @@
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
 #include <QUrl>
 
-#include <QCoreApplication>
-
 namespace
 {
+
+constexpr auto QuitCommandId = QStringLiteral("actionQuit");
 
 int rotationToDegrees(pdf::PageRotation rotation)
 {
@@ -111,7 +113,8 @@ EditorHost::EditorHost(QObject* parent) :
     m_facade(m_context, m_submitter, m_loader, m_writer, m_catalog, this),
     m_renderer(m_context),
     m_commandBridge(m_catalog, m_facade, m_viewport, this),
-    m_preflight(&m_scheduler, this)
+    m_preflight(&m_scheduler, this),
+    m_pageBoxSource(&m_context)
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
@@ -141,8 +144,15 @@ EditorHost::EditorHost(QObject* parent) :
     connectFacade();
     connectViewport();
     connectCatalog();
+    connectInteraction();
+    registerShellHandlers();
+
+    m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
+    m_preflightOverlayBridge.setOverlayBuilder(m_overlays.get());
+    m_preflightOverlayBridge.setInteractionController(m_interaction.get());
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
@@ -386,6 +396,11 @@ void EditorHost::detachCanvas()
 
 void EditorHost::setViewportGeometry(qreal pixelPerMM, qreal devicePixelRatio, int widthPx, int heightPx)
 {
+    if (m_canvas)
+    {
+        return;
+    }
+
     if (pixelPerMM > 0.0)
     {
         m_viewport.setPixelPerMM(pixelPerMM);
@@ -454,17 +469,14 @@ void EditorHost::connectFacade()
 {
     connect(&m_facade, &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
             {
-                if (state == pdfinteraction::DocumentState::Ready)
-                {
-                    onDocumentReady();
-                }
-                else if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
+                if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
                 {
                     onDocumentGone();
                 }
 
                 bumpPresentation();
-                bumpCommandEpoch(); });
+                bumpCommandEpoch();
+            });
 
     connect(&m_facade, &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             { bumpPresentation(); });
@@ -474,25 +486,47 @@ void EditorHost::connectFacade()
                 onDocumentGone();
                 onDocumentReady();
                 bumpPresentation();
-                bumpCommandEpoch(); });
+                bumpCommandEpoch();
+            });
 
     connect(&m_facade, &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
             {
                 onDocumentGone();
                 bumpPresentation();
-                bumpCommandEpoch(); });
+                bumpCommandEpoch();
+            });
 }
 
 void EditorHost::connectViewport()
 {
     connect(&m_viewport, &pdfinteraction::ViewportController::placementsChanged, this, &EditorHost::bumpPresentation);
-    connect(&m_viewport, &pdfinteraction::ViewportController::demandChanged, this, [this](quint64)
-            {
-                if (m_documentBound)
-                {
-                    m_surfaces->requestSurfaces();
-                }
-                bumpPresentation(); });
+    connect(&m_viewport, &pdfinteraction::ViewportController::demandChanged, this, &EditorHost::bumpPresentation);
+}
+
+void EditorHost::connectInteraction()
+{
+    connect(m_interaction.get(),
+            &pdfinteraction::InteractionController::dragCompleted,
+            this,
+            &EditorHost::onDragCompleted);
+}
+
+void EditorHost::registerShellHandlers()
+{
+    pdfinteraction::CommandCatalog::Handler quit;
+    quit.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        m_catalog.finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+        QCoreApplication::quit();
+    };
+    m_catalog.setHandler(QuitCommandId, std::move(quit));
+    m_catalog.setEnabled(QuitCommandId, true);
+}
+
+void EditorHost::refreshHitTestSources()
+{
+    m_findingsHitTest.setTargets(m_preflight.findingsModel()->interactionTargets());
+    m_preflightOverlayBridge.applyFindings();
 }
 
 void EditorHost::connectCatalog()
@@ -531,6 +565,7 @@ void EditorHost::onDocumentReady()
     m_surfaces->requestSurfaces();
 
     syncRevisionModels();
+    refreshHitTestSources();
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
@@ -539,6 +574,11 @@ void EditorHost::onDocumentReady()
 
 void EditorHost::onDocumentGone()
 {
+    if (m_interaction)
+    {
+        m_interaction->invalidate();
+    }
+
     unbindCanvas();
     m_viewport.setGeometrySource(nullptr);
     m_geometry.reset();
@@ -546,6 +586,7 @@ void EditorHost::onDocumentGone()
     m_preflight.findingsModel()->clear();
     m_inspector.clearSelection();
     m_preview.clear();
+    m_hitTest->clearSources();
     m_documentBound = false;
     updateCanvasAccessibilitySummary();
 }
@@ -556,6 +597,11 @@ void EditorHost::bindCanvas()
     {
         return;
     }
+
+    m_hitTest->clearSources();
+    m_hitTest->addSource(&m_findingsHitTest);
+    m_hitTest->addSource(&m_pageBoxSource);
+    m_pageBoxSource.setEdgeTolerance(2.0 / qMax(m_viewport.zoom(), qreal(0.01)));
 
     m_canvas->bind(&m_viewport, m_interaction.get(), m_surfaces.get());
 }
@@ -630,4 +676,13 @@ void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::Evid
     target.pageBounds = request.bbox;
     m_interaction->selectTarget(target);
     bumpPresentation();
+}
+
+void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
+{
+    Q_UNUSED(session);
+    if (m_interaction)
+    {
+        m_interaction->refreshOverlay();
+    }
 }

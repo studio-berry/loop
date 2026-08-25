@@ -232,6 +232,10 @@ void PageSurfaceCoordinator::requestSurfaces()
 
                 if (!reclaimed)
                 {
+                    if (item.priority == pdf::PDFJobPriority::VisiblePage)
+                    {
+                        m_retrySurfaceRequest = true;
+                    }
                     continue;
                 }
             }
@@ -247,6 +251,11 @@ void PageSurfaceCoordinator::requestSurfaces()
     if (snapshotDirty)
     {
         rebuildSnapshot();
+    }
+
+    if (m_retrySurfaceRequest)
+    {
+        scheduleSurfaceRetry();
     }
 }
 
@@ -338,6 +347,19 @@ void PageSurfaceCoordinator::finishInFlight(quint64 requestId, SurfaceTerminalSt
 
     countTerminal(state);
     Q_EMIT surfaceTerminal(key, state);
+    scheduleSurfaceRetry();
+}
+
+void PageSurfaceCoordinator::scheduleSurfaceRetry()
+{
+    if (!m_retrySurfaceRequest)
+    {
+        return;
+    }
+
+    m_retrySurfaceRequest = false;
+    m_relay->post([this]()
+                  { requestSurfaces(); });
 }
 
 void PageSurfaceCoordinator::requestCancellation(quint64 requestId)
@@ -388,6 +410,8 @@ void PageSurfaceCoordinator::resolveCancellation(quint64 requestId, std::shared_
     const pdf::PDFJobSnapshot snapshot = m_submitter->snapshot(it->jobId);
     if (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running)
     {
+        m_relay->post([this, requestId, workStarted]()
+                      { resolveCancellation(requestId, workStarted); });
         return;
     }
 

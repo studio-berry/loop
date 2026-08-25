@@ -93,10 +93,10 @@ class LOUPELIBQUICK_EXPORT LoupeCanvasItem : public QQuickItem
     /// Presentation state only. Every one of these is a value QML may legitimately
     /// bind a control to; none of them is a document, a session, a scheduler or a
     /// pixel buffer.
-    Q_PROPERTY(qreal zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
+    Q_PROPERTY(qreal zoom READ zoom NOTIFY zoomChanged)
     Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
     Q_PROPERTY(int blockCount READ blockCount NOTIFY blockCountChanged)
-    Q_PROPERTY(QString activeTool READ activeTool WRITE setActiveTool NOTIFY activeToolChanged)
+    Q_PROPERTY(QString activeTool READ activeTool NOTIFY activeToolChanged)
     Q_PROPERTY(bool traceOverlayVisible READ isTraceOverlayVisible WRITE setTraceOverlayVisible NOTIFY traceOverlayVisibleChanged)
     Q_PROPERTY(bool highContrast READ isHighContrast WRITE setHighContrast NOTIFY highContrastChanged)
     Q_PROPERTY(QString accessibleDocumentSummary READ accessibleDocumentSummary WRITE setAccessibleDocumentSummary NOTIFY accessibleDocumentSummaryChanged)
@@ -107,8 +107,8 @@ public:
 
     /// Connects the item to the neutral layer. All three are observed, not
     /// owned, and must outlive the item. Any of them may be nullptr, which is
-    /// how a closed document is expressed: the item then draws its background
-    /// and accepts no input.
+    /// how a closed document is expressed: the item clears retained tiles and
+    /// overlays and accepts no input.
     void bind(pdfinteraction::ViewportController* viewport,
               pdfinteraction::InteractionController* interaction,
               pdfinteraction::PageSurfaceCoordinator* surfaces);

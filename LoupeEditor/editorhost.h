@@ -23,13 +23,17 @@
 #ifndef EDITORHOST_H
 #define EDITORHOST_H
 
+#include "interactionstate.h"
+
 #include "commandcatalog.h"
 #include "documentfacade.h"
 #include "documentloader.h"
+#include "hittestsource.h"
 #include "inspectormodel.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
 #include "preflightcontroller.h"
+#include "preflightoverlaybridge.h"
 #include "previewstatemodel.h"
 #include "viewportcommandbridge.h"
 #include "viewportcontroller.h"
@@ -142,6 +146,7 @@ public:
     Q_INVOKABLE void attachCanvas(QObject* canvasObject);
     Q_INVOKABLE void detachCanvas();
 
+    /// Legacy geometry hook for headless tests without a LoupeCanvas item.
     Q_INVOKABLE void setViewportGeometry(qreal pixelPerMM, qreal devicePixelRatio, int widthPx, int heightPx);
 
     /// Opens a positional CLI path after the shell is loaded.
@@ -156,6 +161,9 @@ private:
     void connectFacade();
     void connectViewport();
     void connectCatalog();
+    void connectInteraction();
+    void registerShellHandlers();
+    void refreshHitTestSources();
     void bumpPresentation();
     void bumpCommandEpoch();
 
@@ -166,6 +174,7 @@ private:
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
+    void onDragCompleted(pdfinteraction::DragSession session);
 
     pdf::PDFJobScheduler m_scheduler;
     pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
@@ -184,9 +193,12 @@ private:
     std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
     pdfinteraction::ViewportCommandBridge m_commandBridge;
     pdfinteraction::PreflightController m_preflight;
+    pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
     FocusRestoration m_focusRestoration;
+    pdfinteraction::PageBoxHitTestSource m_pageBoxSource;
+    pdfinteraction::FindingListHitTestSource m_findingsHitTest;
 
     QPointer<pdfquick::LoupeCanvasItem> m_canvas;
     int m_commandEpoch = 0;
