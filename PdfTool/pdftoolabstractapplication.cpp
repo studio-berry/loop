@@ -286,6 +286,13 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("pswd"), { QStringLiteral("--pswd") }, QStringLiteral("password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("no-permissive-reading"), { QStringLiteral("--no-permissive-reading") }, {}, PDFToolValueType::Boolean);
     }
+    if (optionFlags.testFlag(RenderPage))
+    {
+        add(QStringLiteral("page-index"), { QStringLiteral("--page-index") }, QStringLiteral("index"), PDFToolValueType::Integer, {}, {}, true);
+        add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("max-raster-pixels"), { QStringLiteral("--max-raster-pixels") }, QStringLiteral("pixels"), PDFToolValueType::Integer, {}, QStringLiteral("250000000"));
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+    }
     if (optionFlags.testFlag(Redact))
     {
         add(QStringLiteral("redact-copy-title"), { QStringLiteral("--redact-copy-title") }, {}, PDFToolValueType::Boolean);
@@ -669,6 +676,14 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("pswd"), QStringLiteral("Password for encrypted document."));
         parser->addPositionalArgument("document", "Processed document.");
         addDescribedOption(parser, optionDescriptors, QStringLiteral("no-permissive-reading"), QStringLiteral("Do not attempt to fix damaged documents."));
+    }
+
+    if (optionFlags.testFlag(RenderPage))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("page-index"), QStringLiteral("Zero-based page index to render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization resolution in DPI."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("max-raster-pixels"), QStringLiteral("Maximum pixels permitted for the render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output PNG file."));
     }
 
     if (optionFlags.testFlag(Separate))
@@ -1109,6 +1124,27 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.document = positionalArguments.isEmpty() ? QString() : positionalArguments.front();
         options.password = parser->isSet("pswd") ? parser->value("pswd") : QString();
         options.permissiveReading = !parser->isSet("no-permissive-reading");
+    }
+
+    if (optionFlags.testFlag(RenderPage))
+    {
+        bool ok = false;
+        options.renderPageIndex = parser->value("page-index").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageIndex = -1;
+        }
+        options.renderPageDpi = parser->value("dpi").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageDpi = 300;
+        }
+        options.renderPageMaxRasterPixels = parser->value("max-raster-pixels").toLongLong(&ok);
+        if (!ok)
+        {
+            options.renderPageMaxRasterPixels = 250000000;
+        }
+        options.renderPageOutput = parser->value("output");
     }
 
     if (optionFlags.testFlag(Redact))
@@ -2480,7 +2516,7 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
         return PDFToolExitCode::InvalidInvocation;
     }
 
-    if (outputInfo.exists() && !options.destructiveOverwrite)
+    if (outputInfo.exists() && !options.destructiveOverwrite && !options.destructiveDryRun)
     {
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,

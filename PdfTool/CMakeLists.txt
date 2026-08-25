@@ -43,10 +43,15 @@ add_executable(PdfTool
     pdftoolinfometadata.cpp
     pdftoolinfonameddestinations.cpp
     pdftoolinfopageboxes.cpp
+    pdftooldumpgeometry.cpp
     pdftoolinfostructuretree.cpp
     pdftoolinkcoverage.cpp
     pdftooloptimize.cpp
     pdftoolrender.cpp
+    pdftoolrenderpage.cpp
+    pdftoolrenderpage.h
+    pdftoolstructuredoutput.cpp
+    pdftoolstructuredoutput.h
     pdftoolremoveexternallinks.cpp
     pdftoolremoveexternallinks.h
     pdftoolseparate.cpp
