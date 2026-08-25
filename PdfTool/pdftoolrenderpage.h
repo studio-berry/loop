@@ -16,6 +16,6 @@ public:
     Options getOptionsFlags() const override;
 };
 
-} // namespace pdftool
+}   // namespace pdftool
 
-#endif // PDFTOOLRENDERPAGE_H
+#endif   // PDFTOOLRENDERPAGE_H

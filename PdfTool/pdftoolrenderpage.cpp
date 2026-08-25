@@ -2,6 +2,7 @@
 
 #include "pdftoolrenderpage.h"
 
+#include "pdfconstants.h"
 #include "pdffont.h"
 #include "pdfsafefilewriter.h"
 
@@ -32,7 +33,7 @@ QJsonArray transformToJson(const QTransform& transform)
     return QJsonArray{ transform.m11(), transform.m12(), transform.m21(), transform.m22(), transform.dx(), transform.dy() };
 }
 
-} // namespace
+}   // namespace
 
 QString PDFToolRenderPageApplication::getStandardString(StandardString standardString) const
 {
@@ -146,15 +147,15 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
 
     const QImage outputImage = fullImage.copy(bleedPixels);
     QString writeError;
-    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device) {
+    const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(options.renderPageOutput, [&outputImage, &writeError](QIODevice* device)
+                                                                                    {
         QImageWriter writer(device, QByteArray("png"));
         if (!writer.write(outputImage))
         {
             writeError = writer.errorString();
             return false;
         }
-        return true;
-    }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+        return true; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
     if (!writeResult)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("render.output-error"), writeError.isEmpty() ? writeResult.getErrorMessage() : writeError);
@@ -169,7 +170,7 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("command"), QStringLiteral("render-page") },
         { QStringLiteral("document_sha256"), QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex()) },
-        { QStringLiteral("page_index"), pageIndex },
+        { QStringLiteral("page_index"), static_cast<qint64>(pageIndex) },
         { QStringLiteral("reference_box"), QStringLiteral("bleed") },
         { QStringLiteral("reference_box_pt"), boxToJson(bleedBox) },
         { QStringLiteral("trim_box_pt"), boxToJson(trimBox) },
@@ -178,7 +179,7 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
         { QStringLiteral("max_raster_pixels"), options.renderPageMaxRasterPixels },
         { QStringLiteral("pixel_size"), QJsonArray{ outputImage.width(), outputImage.height() } },
         { QStringLiteral("page_to_device"), transformToJson(outputTransform) },
-        { QStringLiteral("renderer_features"), features.toInt() },
+        { QStringLiteral("renderer_features"), static_cast<qint64>(features.toInt()) },
         { QStringLiteral("color_output_identity"), QString::fromLatin1(COLOR_OUTPUT_IDENTITY) },
         { QStringLiteral("output"), options.renderPageOutput },
     };
@@ -194,4 +195,4 @@ PDFToolExitCode PDFToolRenderPageApplication::execute(const PDFToolOptions& opti
     return PDFToolExitCode::Success;
 }
 
-} // namespace pdftool
+}   // namespace pdftool
