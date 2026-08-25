@@ -194,6 +194,14 @@ bool sendFocusOut(QQuickItem* item, Qt::FocusReason reason = Qt::OtherFocusReaso
     return QCoreApplication::sendEvent(item, &event);
 }
 
+/// Re-exposes protected handlers the translation contract must drive directly.
+class TestCanvasItem final : public pdfquick::LoupeCanvasItem
+{
+public:
+    using pdfquick::LoupeCanvasItem::LoupeCanvasItem;
+    using pdfquick::LoupeCanvasItem::focusOutEvent;
+};
+
 /// The P4-S3 fake, trimmed to what a canvas test needs: work runs inline, so a
 /// requested surface is admitted by the time requestSurfaces() returns and the
 /// scene graph has something real to hold.
@@ -361,7 +369,7 @@ private:
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
-    std::unique_ptr<pdfquick::LoupeCanvasItem> m_item;
+    std::unique_ptr<TestCanvasItem> m_item;
 
     std::unique_ptr<InlineJobSubmitter> m_submitter;
     std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
@@ -390,7 +398,7 @@ void QuickCanvasTest::init()
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
-    m_item = std::make_unique<pdfquick::LoupeCanvasItem>();
+    m_item = std::make_unique<TestCanvasItem>();
     m_item->setSize(QSizeF(400.0, 400.0));
 }
 
@@ -688,7 +696,9 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
     QVERIFY(sendMouseMove(m_item.get(), dragged));
 
     QCoreApplication::processEvents();
-    QVERIFY(sendFocusOut(m_item.get()));
+
+    QFocusEvent focusOut(QEvent::FocusOut, Qt::MouseFocusReason);
+    m_item->focusOutEvent(&focusOut);
 
     // A drag the user stopped steering must never complete: a completed drag is
     // routed to a command, and this one would commit a transform nobody asked
