@@ -228,16 +228,6 @@ void CanvasNodeBuilder::setPalette(const CanvasPalette& palette)
 
 void CanvasNodeBuilder::forget()
 {
-    for (auto& entry : m_overlays)
-    {
-        destroyOverlayNode(entry);
-    }
-
-    for (auto& entry : m_tiles)
-    {
-        delete entry.second.node;
-    }
-
     m_tiles.clear();
     m_overlays.clear();
     m_skippedPrimitives = 0;
