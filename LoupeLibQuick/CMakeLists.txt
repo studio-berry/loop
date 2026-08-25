@@ -53,7 +53,6 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvastraceoverlay.cpp
     sources/canvastraceoverlay.h
     sources/loupecanvasitem.cpp
-    sources/loupecanvasitem.h
     sources/loupecanvasaccessible.cpp
     sources/loupecanvasaccessible.h
 )
@@ -75,7 +74,9 @@ qt_add_qml_module(LoupeLibQuick
 set(_loupe_qml_type_registrations "${CMAKE_CURRENT_BINARY_DIR}/loupelibquick_qmltyperegistrations.cpp")
 set_source_files_properties("${_loupe_qml_type_registrations}" PROPERTIES
     GENERATED TRUE
-    COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h"
+    COMPILE_OPTIONS
+        "$<$<CXX_COMPILER_ID:MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h>"
+        "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h>"
 )
 
 include(GenerateExportHeader)
