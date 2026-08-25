@@ -72,11 +72,14 @@ qt_add_qml_module(LoupeLibQuick
 # QQuickItem base but does not include either header. Force the canvas header into
 # that translation unit only; it already pulls in QQuickItem.
 set(_loupe_qml_type_registrations "${CMAKE_CURRENT_BINARY_DIR}/loupelibquick_qmltyperegistrations.cpp")
+if(MSVC)
+    set(_loupe_qml_reg_compile_options "/FI${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h")
+else()
+    set(_loupe_qml_reg_compile_options "-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h")
+endif()
 set_source_files_properties("${_loupe_qml_type_registrations}" PROPERTIES
     GENERATED TRUE
-    COMPILE_OPTIONS
-        "$<$<CXX_COMPILER_ID:MSVC>:/FI${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h>"
-        "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h>"
+    COMPILE_OPTIONS "${_loupe_qml_reg_compile_options}"
 )
 
 include(GenerateExportHeader)
