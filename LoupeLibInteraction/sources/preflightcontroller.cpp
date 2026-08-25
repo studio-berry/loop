@@ -41,7 +41,7 @@ void PreflightController::setState(State state)
         return;
     }
     m_state = state;
-    emit stateChanged(m_state);
+    Q_EMIT stateChanged(m_state);
 }
 
 void PreflightController::setCurrentRevision(QString documentKey, QString documentRevision)
@@ -63,7 +63,7 @@ bool PreflightController::updateProgress(const QString& jobId,
     {
         return false;
     }
-    emit progressChanged(qBound(0, progress, 100));
+    Q_EMIT progressChanged(qBound(0, progress, 100));
     return true;
 }
 
@@ -79,7 +79,7 @@ void PreflightController::beginRun(QString documentKey,
     m_cancelRequested = false;
     m_findings.clear();
     setState(State::Running);
-    emit progressChanged(0);
+    Q_EMIT progressChanged(0);
 }
 
 bool PreflightController::acceptResult(const QString& jobId,
@@ -92,7 +92,7 @@ bool PreflightController::acceptResult(const QString& jobId,
     }
 
     m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings);
-    emit progressChanged(100);
+    Q_EMIT progressChanged(100);
     if (!result.inspectionComplete)
     {
         setState(State::Incomplete);

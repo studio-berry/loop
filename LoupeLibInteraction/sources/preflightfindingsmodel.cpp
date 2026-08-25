@@ -157,7 +157,7 @@ void PreflightFindingsModel::replace(QString documentKey,
     m_findings = std::move(next);
     m_selectedFindingId.clear();
     endResetModel();
-    emit findingsReplaced();
+    Q_EMIT findingsReplaced();
 }
 
 void PreflightFindingsModel::clear()
@@ -168,7 +168,7 @@ void PreflightFindingsModel::clear()
     m_documentRevision.clear();
     m_selectedFindingId.clear();
     endResetModel();
-    emit findingsReplaced();
+    Q_EMIT findingsReplaced();
 }
 
 void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
@@ -189,11 +189,11 @@ void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
     {
         if (m_findings.at(row).id == previous || m_findings.at(row).id == m_selectedFindingId)
         {
-            emit dataChanged(index(row), index(row), { SelectedRole });
+            Q_EMIT dataChanged(index(row), index(row), { SelectedRole });
         }
     }
 
-    emit selectedFindingIdChanged(m_selectedFindingId);
+    Q_EMIT selectedFindingIdChanged(m_selectedFindingId);
 }
 
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
