@@ -218,8 +218,10 @@ struct ParityFixture
         item->bind(&viewport, controller.get(), surfaces.get());
 
         window->show();
+        QTest::qWaitForWindowExposed(window.get());
 
         surfaces->requestSurfaces();
+        QCoreApplication::processEvents();
     }
 
     ~ParityFixture()
@@ -234,6 +236,13 @@ struct ParityFixture
     QImage renderFrame()
     {
         QCoreApplication::processEvents();
+
+        if (window && item)
+        {
+            item->update();
+            QCoreApplication::processEvents();
+        }
+
         const QImage frame = window ? window->grabWindow() : QImage();
         QCoreApplication::processEvents();
         return frame;

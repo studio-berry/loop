@@ -440,6 +440,12 @@ QImage QuickCanvasTest::renderFrame()
     // since the last call has to be delivered first.
     QCoreApplication::processEvents();
 
+    if (m_window && m_item)
+    {
+        m_item->update();
+        QCoreApplication::processEvents();
+    }
+
     const QImage frame = m_window ? m_window->grabWindow() : QImage();
     if (frame.isNull())
     {
@@ -924,12 +930,18 @@ void QuickCanvasTest::devicePixelRatioChangeRepublishesGeometry()
     // through the window because an offscreen platform reports one fixed ratio
     // and no test can change it; what has to be proven is the consequence, and
     // the consequence lives in the key.
+    qreal previousRatio = m_viewport->devicePixelRatio();
     for (const qreal ratio : { 1.0, 1.5, 2.0 })
     {
         const quint64 generationBefore = m_viewport->requestGeneration();
 
         m_viewport->setDevicePixelRatio(ratio);
-        QVERIFY(m_viewport->requestGeneration() > generationBefore);
+        if (!qFuzzyCompare(previousRatio, ratio))
+        {
+            QVERIFY(m_viewport->requestGeneration() > generationBefore);
+        }
+
+        previousRatio = ratio;
 
         m_surfaces->requestSurfaces();
         renderFrame();

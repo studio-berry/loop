@@ -262,6 +262,8 @@ private:
     /// Written in updatePaintNode on the render thread, read on the GUI thread
     /// by frameStats(). Plain ints: the GUI thread is blocked while
     /// updatePaintNode runs, so the two never touch them at once.
+    int m_lastTileCount = 0;
+    int m_lastInexactTileCount = 0;
     int m_lastOverlayPrimitives = 0;
     int m_lastDroppedPrimitives = 0;
     int m_lastUnrenderablePrimitives = 0;

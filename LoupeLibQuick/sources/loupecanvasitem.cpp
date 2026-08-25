@@ -256,8 +256,8 @@ void LoupeCanvasItem::refreshPalette()
 CanvasFrameStats LoupeCanvasItem::frameStats() const
 {
     CanvasFrameStats stats;
-    stats.tiles = m_builder.tileCount();
-    stats.inexactTiles = m_builder.inexactTileCount();
+    stats.tiles = m_lastTileCount;
+    stats.inexactTiles = m_lastInexactTileCount;
     stats.overlayPrimitives = m_lastOverlayPrimitives;
     stats.skippedPrimitives = m_builder.skippedPrimitives();
     stats.droppedPrimitives = m_lastDroppedPrimitives;
@@ -730,7 +730,11 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
 
     int refusedThisFrame = 0;
 
-    const bool snapshotIsCurrent = !m_surfaces || m_surfaces->snapshot().token.revision == currentRevision;
+    // An empty snapshot whose token has not been stamped yet is not a stale
+    // document; it is the coordinator before the first rebuildSnapshot(). Treating
+    // that as a revision mismatch would refuse every bootstrap frame.
+    const pdf::PDFRevisionIdentity snapshotRevision = m_surfaces ? m_surfaces->snapshot().token.revision : pdf::PDFRevisionIdentity();
+    const bool snapshotIsCurrent = !m_surfaces || !snapshotRevision.isValid() || snapshotRevision == currentRevision;
 
     // The fence is evaluated on every frame, not only on a dirty one. That is
     // the whole difference between refusing a stale frame and freezing one: a
@@ -757,12 +761,16 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
         m_tilesDirty = false;
     }
 
+    m_lastTileCount = m_builder.tileCount();
+    m_lastInexactTileCount = m_builder.inexactTileCount();
+
     // Same rule as the tiles, for the same reason: a finding highlight from a
     // replaced document points at geometry that is no longer there.
     // OverlayFrame's own header states the contract -- a frame whose token no
     // longer matches is refused rather than drawn -- and this is the host's half
     // of it.
-    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || m_interaction->overlayFrame().token.revision == currentRevision;
+    const pdf::PDFRevisionIdentity overlayRevision = m_interaction ? m_interaction->overlayFrame().token.revision : pdf::PDFRevisionIdentity();
+    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayRevision.isValid() || overlayRevision == currentRevision;
 
     if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
     {
