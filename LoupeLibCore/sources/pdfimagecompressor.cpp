@@ -208,11 +208,7 @@ PDFImageCompressor::ImageStatisticsList PDFImageCompressor::collectImages(const 
                                              &optionalContentActivity,
                                              meshQualitySettings,
                                              &statistics);
-        const QList<PDFRenderError> collectErrors = processor.processContents();
-        for (const PDFRenderError& collectError : collectErrors)
-        {
-            qWarning().noquote() << "TEMP-DIAG collectImages page" << pageIndex << "error:" << collectError.message;
-        }
+        processor.processContents();
     }
 
     result.reserve(statistics.size());
