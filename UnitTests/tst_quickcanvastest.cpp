@@ -38,6 +38,7 @@
 #include <QtTest>
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QHash>
 #include <QImage>
 #include <QJsonDocument>
@@ -157,21 +158,41 @@ public:
 /// screenshot rather than an assertion.
 ///
 /// The scene-graph cases below deliberately do not call updatePaintNode or
-/// releaseResources by hand. updatePaintNode needs a live render context to
-/// create nodes and upload textures at all, and releaseResources is only correct
-/// when the scene graph has already taken the node tree away -- calling either
-/// directly would test a sequence that cannot happen. They drive the window
-/// instead.
-class ExposedCanvasItem final : public pdfquick::LoupeCanvasItem
+bool sendMousePress(QQuickItem* item, const QPointF& local, Qt::MouseButton button = Qt::LeftButton)
 {
-public:
-    using pdfquick::LoupeCanvasItem::focusOutEvent;
-    using pdfquick::LoupeCanvasItem::keyPressEvent;
-    using pdfquick::LoupeCanvasItem::mouseMoveEvent;
-    using pdfquick::LoupeCanvasItem::mousePressEvent;
-    using pdfquick::LoupeCanvasItem::mouseReleaseEvent;
-    using pdfquick::LoupeCanvasItem::wheelEvent;
-};
+    QMouseEvent event(QEvent::MouseButtonPress, local, local, button, button, Qt::NoModifier);
+    return QCoreApplication::sendEvent(item, &event);
+}
+
+bool sendMouseMove(QQuickItem* item, const QPointF& local, Qt::MouseButtons buttons = Qt::LeftButton)
+{
+    QMouseEvent event(QEvent::MouseMove, local, local, Qt::NoButton, buttons, Qt::NoModifier);
+    return QCoreApplication::sendEvent(item, &event);
+}
+
+bool sendMouseRelease(QQuickItem* item, const QPointF& local, Qt::MouseButton button = Qt::LeftButton)
+{
+    QMouseEvent event(QEvent::MouseButtonRelease, local, local, button, Qt::NoButton, Qt::NoModifier);
+    return QCoreApplication::sendEvent(item, &event);
+}
+
+bool sendWheel(QQuickItem* item, const QPointF& local, const QPoint& angleDelta, Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+{
+    QWheelEvent event(local, local, QPoint(0, 0), angleDelta, Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+    return QCoreApplication::sendEvent(item, &event);
+}
+
+bool sendKeyPress(QQuickItem* item, int key, const QString& text = QString(), Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+{
+    QKeyEvent event(QEvent::KeyPress, key, modifiers, text);
+    return QCoreApplication::sendEvent(item, &event);
+}
+
+bool sendFocusOut(QQuickItem* item, Qt::FocusReason reason = Qt::OtherFocusReason)
+{
+    QFocusEvent event(QEvent::FocusOut, reason);
+    return QCoreApplication::sendEvent(item, &event);
+}
 
 /// The P4-S3 fake, trimmed to what a canvas test needs: work runs inline, so a
 /// requested surface is admitted by the time requestSurfaces() returns and the
@@ -336,7 +357,7 @@ private:
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
-    std::unique_ptr<ExposedCanvasItem> m_item;
+    std::unique_ptr<pdfquick::LoupeCanvasItem> m_item;
 
     std::unique_ptr<InlineJobSubmitter> m_submitter;
     std::unique_ptr<FakePageSurfaceRenderer> m_renderer;
@@ -365,7 +386,7 @@ void QuickCanvasTest::init()
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
-    m_item = std::make_unique<ExposedCanvasItem>();
+    m_item = std::make_unique<pdfquick::LoupeCanvasItem>();
     m_item->setSize(QSizeF(400.0, 400.0));
 }
 
@@ -530,11 +551,9 @@ void QuickCanvasTest::traceOverlayCarriesNoDocumentPayload()
     // Drive real input at a distinctive coordinate over a target with a
     // distinctive id, so anything that leaked either into the panel is visible.
     const QPointF probe(1379.0, 2473.0);
-    QMouseEvent press(QEvent::MouseButtonPress, probe, probe, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    m_item->mousePressEvent(&press);
+    QVERIFY(sendMousePress(m_item.get(), probe));
 
-    QKeyEvent key(QEvent::KeyPress, Qt::Key_S, Qt::NoModifier, QStringLiteral("secret-text"));
-    m_item->keyPressEvent(&key);
+    QVERIFY(sendKeyPress(m_item.get(), Qt::Key_S, QStringLiteral("secret-text")));
 
     pdfquick::CanvasFrameStats stats;
     stats.tiles = 2;
@@ -569,13 +588,8 @@ void QuickCanvasTest::pointerEventBecomesAPointerIntent()
 
     const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
 
-    QMouseEvent press(QEvent::MouseButtonPress, inside, inside, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    m_item->mousePressEvent(&press);
-
-    QMouseEvent release(QEvent::MouseButtonRelease, inside, inside, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
-    m_item->mouseReleaseEvent(&release);
-
-    QVERIFY(press.isAccepted());
+    QVERIFY(sendMousePress(m_item.get(), inside));
+    QVERIFY(sendMouseRelease(m_item.get(), inside));
     QCOMPARE(selectionSpy.count(), 1);
 
     const auto target = selectionSpy.at(0).at(0).value<pdfinteraction::InteractionTarget>();
@@ -593,20 +607,14 @@ void QuickCanvasTest::wheelEventForwardsBothDeltas()
     const qreal restingZoom = m_viewport->zoom();
     const QPoint offsetBefore = m_viewport->offset();
 
-    QWheelEvent scroll(anchor, anchor, QPoint(0, 0), QPoint(0, -notch), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
-    m_item->wheelEvent(&scroll);
-
-    QVERIFY(scroll.isAccepted());
+    QVERIFY(sendWheel(m_item.get(), anchor, QPoint(0, -notch)));
     QCOMPARE(m_viewport->zoom(), restingZoom);
     QVERIFY(m_viewport->offset() != offsetBefore);
 
     // With it, the same notch zooms. Which modifier means zoom is the
     // controller's setting, not this item's; the item forwards the modifier and
     // lets the controller decide what it means.
-    QWheelEvent zoomIn(anchor, anchor, QPoint(0, 0), QPoint(0, notch), Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
-    m_item->wheelEvent(&zoomIn);
-
-    QVERIFY(zoomIn.isAccepted());
+    QVERIFY(sendWheel(m_item.get(), anchor, QPoint(0, notch), Qt::ControlModifier));
     QVERIFY(m_viewport->zoom() > restingZoom);
 }
 
@@ -618,8 +626,7 @@ void QuickCanvasTest::keyEventCarriesNoTypedText()
 
     bindItem();
 
-    QKeyEvent key(QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a"));
-    m_item->keyPressEvent(&key);
+    QVERIFY(sendKeyPress(m_item.get(), Qt::Key_A, QStringLiteral("a")));
 
     QCOMPARE(recorder.trace().inputs.size(), 1);
 
@@ -644,15 +651,12 @@ void QuickCanvasTest::focusLossCancelsTheDrag()
     const QRect placed = m_viewport->placedPageRect(0);
     const QPointF start(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
 
-    QMouseEvent press(QEvent::MouseButtonPress, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    m_item->mousePressEvent(&press);
+    QVERIFY(sendMousePress(m_item.get(), start));
 
     const QPointF dragged = start + QPointF(40.0, 40.0);
-    QMouseEvent move(QEvent::MouseMove, dragged, dragged, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
-    m_item->mouseMoveEvent(&move);
+    QVERIFY(sendMouseMove(m_item.get(), dragged));
 
-    QFocusEvent focusOut(QEvent::FocusOut, Qt::OtherFocusReason);
-    m_item->focusOutEvent(&focusOut);
+    QVERIFY(sendFocusOut(m_item.get()));
 
     // A drag the user stopped steering must never complete: a completed drag is
     // routed to a command, and this one would commit a transform nobody asked
@@ -665,15 +669,12 @@ void QuickCanvasTest::unboundItemIgnoresInput()
 {
     // No bind() call. An item with no document behind it is the normal state at
     // startup and after a close, and it must not crash or half-report.
-    ExposedCanvasItem item;
+    pdfquick::LoupeCanvasItem item;
     item.setSize(QSizeF(200.0, 200.0));
 
     const QPointF position(10.0, 10.0);
-    QMouseEvent press(QEvent::MouseButtonPress, position, position, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    item.mousePressEvent(&press);
-
-    QKeyEvent key(QEvent::KeyPress, Qt::Key_Left, Qt::NoModifier);
-    item.keyPressEvent(&key);
+    QVERIFY(sendMousePress(&item, position));
+    QVERIFY(sendKeyPress(&item, Qt::Key_Left));
 
     QCOMPARE(item.zoom(), 1.0);
     QCOMPARE(item.currentPage(), -1);
@@ -763,8 +764,7 @@ void QuickCanvasTest::staleOverlayFrameIsRefusedToo()
     QVERIFY(!placed.isEmpty());
 
     const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
-    QMouseEvent press(QEvent::MouseButtonPress, inside, inside, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
-    m_item->mousePressEvent(&press);
+    QVERIFY(sendMousePress(m_item.get(), inside));
 
     renderFrame();
     QVERIFY(m_item->frameStats().overlayPrimitives > 0);
@@ -1003,8 +1003,7 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
     for (int step = 0; step < 8; ++step)
     {
         const QPointF position(placed.left() + placed.width() * (0.1 + 0.1 * step), placed.top() + placed.height() * 0.5);
-        QMouseEvent move(QEvent::MouseMove, position, position, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
-        m_item->mouseMoveEvent(&move);
+        QVERIFY(sendMouseMove(m_item.get(), position, Qt::NoButton));
     }
 
     renderFrame();
