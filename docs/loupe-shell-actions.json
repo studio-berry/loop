@@ -962,7 +962,7 @@
           }
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
         "availability": "implemented"
       }
