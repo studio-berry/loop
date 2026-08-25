@@ -55,6 +55,7 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvastraceoverlay.cpp
     sources/canvastraceoverlay.h
     sources/loupecanvasitem.cpp
+    sources/loupecanvasitem.h
 )
 
 # No QML_FILES. LoupeCanvasItem is registered from C++ with QML_NAMED_ELEMENT,
@@ -66,8 +67,15 @@ qt_add_qml_module(LoupeLibQuick
     URI Loupe.Canvas
     VERSION 1.0
     DEPENDENCIES QtQuick
-    SOURCES
-        sources/loupecanvasitem.h
+)
+
+# Qt 6.11's generated qmltyperegistrations unit registers LoupeCanvasItem and its
+# QQuickItem base but does not include either header. Force the canvas header into
+# that translation unit only; it already pulls in QQuickItem.
+set(_loupe_qml_type_registrations "${CMAKE_CURRENT_BINARY_DIR}/loupelibquick_qmltyperegistrations.cpp")
+set_source_files_properties("${_loupe_qml_type_registrations}" PROPERTIES
+    GENERATED TRUE
+    COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/sources/loupecanvasitem.h"
 )
 
 include(GenerateExportHeader)
