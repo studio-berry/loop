@@ -44,18 +44,39 @@ const CommandId ViewportCommandBridge::RotateRightCommandId = QStringLiteral("ac
 namespace
 {
 
-const CommandId kHandledCommands[] = {
-    ViewportCommandBridge::GoToNextPageCommandId,
-    ViewportCommandBridge::GoToPreviousPageCommandId,
-    ViewportCommandBridge::GoToDocumentStartCommandId,
-    ViewportCommandBridge::GoToDocumentEndCommandId,
-    ViewportCommandBridge::ZoomInCommandId,
-    ViewportCommandBridge::ZoomOutCommandId,
-    ViewportCommandBridge::FitPageCommandId,
-    ViewportCommandBridge::FitWidthCommandId,
-    ViewportCommandBridge::FitHeightCommandId,
-    ViewportCommandBridge::RotateLeftCommandId,
-    ViewportCommandBridge::RotateRightCommandId,
+enum class Operation
+{
+    Next,
+    Previous,
+    Start,
+    End,
+    ZoomIn,
+    ZoomOut,
+    FitPage,
+    FitWidth,
+    FitHeight,
+    RotateLeft,
+    RotateRight,
+};
+
+struct CommandSpec
+{
+    CommandId id;
+    Operation operation;
+};
+
+const CommandSpec kCommandSpecs[] = {
+    { ViewportCommandBridge::GoToNextPageCommandId, Operation::Next },
+    { ViewportCommandBridge::GoToPreviousPageCommandId, Operation::Previous },
+    { ViewportCommandBridge::GoToDocumentStartCommandId, Operation::Start },
+    { ViewportCommandBridge::GoToDocumentEndCommandId, Operation::End },
+    { ViewportCommandBridge::ZoomInCommandId, Operation::ZoomIn },
+    { ViewportCommandBridge::ZoomOutCommandId, Operation::ZoomOut },
+    { ViewportCommandBridge::FitPageCommandId, Operation::FitPage },
+    { ViewportCommandBridge::FitWidthCommandId, Operation::FitWidth },
+    { ViewportCommandBridge::FitHeightCommandId, Operation::FitHeight },
+    { ViewportCommandBridge::RotateLeftCommandId, Operation::RotateLeft },
+    { ViewportCommandBridge::RotateRightCommandId, Operation::RotateRight },
 };
 
 }   // namespace
@@ -99,51 +120,57 @@ bool ViewportCommandBridge::registerHandlers()
         return false;
     }
 
-    auto bindAction = [this](const CommandId& id, const std::function<void()>& action)
+    auto bindAction = [this](const CommandSpec& spec)
     {
         CommandCatalog::Handler handler;
-        handler.invoke = [this, action](CommandInvocationId invocation, const QVariantMap&)
+        handler.invoke = [this, spec](CommandInvocationId invocation, const QVariantMap&)
         {
-            action();
+            switch (spec.operation)
+            {
+                case Operation::Next:
+                    goToPage(resolvedPageIndex() + 1);
+                    break;
+                case Operation::Previous:
+                    goToPage(resolvedPageIndex() - 1);
+                    break;
+                case Operation::Start:
+                    goToPage(0);
+                    break;
+                case Operation::End:
+                    goToPage(lastPageIndex());
+                    break;
+                case Operation::ZoomIn:
+                    zoomByStep(ViewportController::ZoomStep);
+                    break;
+                case Operation::ZoomOut:
+                    zoomByStep(1.0 / ViewportController::ZoomStep);
+                    break;
+                case Operation::FitPage:
+                    applyZoomHint(ZoomHint::Fit);
+                    break;
+                case Operation::FitWidth:
+                    applyZoomHint(ZoomHint::FitWidth);
+                    break;
+                case Operation::FitHeight:
+                    applyZoomHint(ZoomHint::FitHeight);
+                    break;
+                case Operation::RotateLeft:
+                    rotateBy(-1);
+                    break;
+                case Operation::RotateRight:
+                    rotateBy(1);
+                    break;
+            }
             finish(invocation);
         };
-        return m_catalog->setHandler(id, std::move(handler));
+        return m_catalog->setHandler(spec.id, std::move(handler));
     };
 
     bool registered = true;
-    registered = bindAction(GoToNextPageCommandId, [this]()
-                            { goToPage(resolvedPageIndex() + 1); }) &&
-                 registered;
-    registered = bindAction(GoToPreviousPageCommandId, [this]()
-                            { goToPage(resolvedPageIndex() - 1); }) &&
-                 registered;
-    registered = bindAction(GoToDocumentStartCommandId, [this]()
-                            { goToPage(0); }) &&
-                 registered;
-    registered = bindAction(GoToDocumentEndCommandId, [this]()
-                            { goToPage(lastPageIndex()); }) &&
-                 registered;
-    registered = bindAction(ZoomInCommandId, [this]()
-                            { zoomByStep(ViewportController::ZoomStep); }) &&
-                 registered;
-    registered = bindAction(ZoomOutCommandId, [this]()
-                            { zoomByStep(1.0 / ViewportController::ZoomStep); }) &&
-                 registered;
-    registered = bindAction(FitPageCommandId, [this]()
-                            { applyZoomHint(ZoomHint::Fit); }) &&
-                 registered;
-    registered = bindAction(FitWidthCommandId, [this]()
-                            { applyZoomHint(ZoomHint::FitWidth); }) &&
-                 registered;
-    registered = bindAction(FitHeightCommandId, [this]()
-                            { applyZoomHint(ZoomHint::FitHeight); }) &&
-                 registered;
-    registered = bindAction(RotateLeftCommandId, [this]()
-                            { rotateBy(-1); }) &&
-                 registered;
-    registered = bindAction(RotateRightCommandId, [this]()
-                            { rotateBy(1); }) &&
-                 registered;
+    for (const CommandSpec& spec : kCommandSpecs)
+    {
+        registered = bindAction(spec) && registered;
+    }
 
     if (!registered)
     {
@@ -161,10 +188,10 @@ void ViewportCommandBridge::clearHandlers()
         return;
     }
 
-    for (const CommandId& id : kHandledCommands)
+    for (const CommandSpec& spec : kCommandSpecs)
     {
-        m_catalog->clearHandler(id);
-        m_catalog->setEnabled(id, false);
+        m_catalog->clearHandler(spec.id);
+        m_catalog->setEnabled(spec.id, false);
     }
 
     m_handlersRegistered = false;
@@ -191,17 +218,39 @@ void ViewportCommandBridge::refreshAvailability()
     const bool hasPages = ready && count > 0;
     const qreal zoom = m_viewport ? m_viewport->zoom() : 1.0;
 
-    m_catalog->setEnabled(GoToNextPageCommandId, hasPages && page >= 0 && page < count - 1);
-    m_catalog->setEnabled(GoToPreviousPageCommandId, hasPages && page > 0);
-    m_catalog->setEnabled(GoToDocumentStartCommandId, hasPages && page > 0);
-    m_catalog->setEnabled(GoToDocumentEndCommandId, hasPages && page >= 0 && page < count - 1);
-    m_catalog->setEnabled(ZoomInCommandId, hasPages && zoom < ViewportController::MaximumZoom - 1e-9);
-    m_catalog->setEnabled(ZoomOutCommandId, hasPages && zoom > ViewportController::MinimumZoom + 1e-9);
-    m_catalog->setEnabled(FitPageCommandId, hasPages);
-    m_catalog->setEnabled(FitWidthCommandId, hasPages);
-    m_catalog->setEnabled(FitHeightCommandId, hasPages);
-    m_catalog->setEnabled(RotateLeftCommandId, hasPages);
-    m_catalog->setEnabled(RotateRightCommandId, hasPages);
+    for (const CommandSpec& spec : kCommandSpecs)
+    {
+        bool enabled = false;
+        switch (spec.operation)
+        {
+            case Operation::Next:
+                enabled = hasPages && page >= 0 && page < count - 1;
+                break;
+            case Operation::Previous:
+                enabled = hasPages && page > 0;
+                break;
+            case Operation::Start:
+                enabled = hasPages && page > 0;
+                break;
+            case Operation::End:
+                enabled = hasPages && page >= 0 && page < count - 1;
+                break;
+            case Operation::ZoomIn:
+                enabled = hasPages && zoom < ViewportController::MaximumZoom - 1e-9;
+                break;
+            case Operation::ZoomOut:
+                enabled = hasPages && zoom > ViewportController::MinimumZoom + 1e-9;
+                break;
+            case Operation::FitPage:
+            case Operation::FitWidth:
+            case Operation::FitHeight:
+            case Operation::RotateLeft:
+            case Operation::RotateRight:
+                enabled = hasPages;
+                break;
+        }
+        m_catalog->setEnabled(spec.id, enabled);
+    }
 }
 
 void ViewportCommandBridge::onDocumentReplaced(quint64)
@@ -257,20 +306,7 @@ int ViewportCommandBridge::blockIndexForPage(int pageIndex) const
         return 0;
     }
 
-    switch (m_viewport->pageLayout())
-    {
-        case PageLayout::TwoPagesLeft:
-        case PageLayout::TwoPagesRight:
-        case PageLayout::TwoColumnLeft:
-        case PageLayout::TwoColumnRight:
-            return pageIndex / 2;
-
-        case PageLayout::SinglePage:
-        case PageLayout::OneColumn:
-            break;
-    }
-
-    return pageIndex;
+    return m_viewport->blockIndexForPage(pageIndex);
 }
 
 void ViewportCommandBridge::goToPage(int pageIndex)

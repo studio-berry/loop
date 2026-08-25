@@ -36,7 +36,8 @@ ApplicationWindow {
     }
 
     function commandEnabled(commandId) {
-        return host ? host.isCommandEnabled(commandId) : false
+        const entry = commandMap[commandId]
+        return !!entry && entry.enabled === true
     }
 
     function invoke(commandId) {
@@ -50,7 +51,7 @@ ApplicationWindow {
         if (!entry || !entry.id) {
             return ""
         }
-        return host ? host.shortcutForCommand(entry.id) : ""
+        return entry.shortcutText || ""
     }
 
     Connections {
@@ -110,7 +111,9 @@ ApplicationWindow {
             MenuSeparator {}
             Action {
                 text: qsTr("E&xit")
-                onTriggered: Qt.quit()
+                enabled: commandEnabled("actionQuit")
+                shortcut: shortcutSequence(commandMap["actionQuit"])
+                onTriggered: invoke("actionQuit")
             }
         }
 

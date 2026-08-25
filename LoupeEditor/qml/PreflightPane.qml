@@ -45,6 +45,7 @@ Pane {
                 Accessible.name: model.message
                 Accessible.description: qsTr("Severity %1 on page %2").arg(model.severity).arg(model.page)
                 onClicked: {
+                    findingsView.currentIndex = index
                     if (host) {
                         host.selectFinding(model.findingId)
                     }
@@ -53,8 +54,7 @@ Pane {
 
             Keys.onReturnPressed: {
                 if (currentIndex >= 0 && host && findingsModel) {
-                    const idx = findingsModel.index(currentIndex, 0)
-                    host.selectFinding(findingsModel.data(idx, 257))
+                    host.selectFinding(findingsModel.findingIdAt(currentIndex))
                 }
             }
         }

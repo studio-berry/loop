@@ -209,7 +209,7 @@ class CommandCatalogTests(unittest.TestCase):
 
     def test_unexpected_implemented_command_is_rejected(self):
         errors = self.mutate("actionAbout", availability="implemented", capability="none")
-        self.assertTrue(any("without a handler" in error for error in errors), errors)
+        self.assertTrue(any("without a registered handler" in error for error in errors), errors)
 
     def test_downgrading_an_implemented_command_is_rejected(self):
         errors = self.mutate("actionOpen", availability="declared", parameters=[])

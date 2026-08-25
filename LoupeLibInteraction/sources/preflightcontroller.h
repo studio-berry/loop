@@ -37,6 +37,8 @@ class PreflightController final : public QObject
 {
     Q_OBJECT
 
+    Q_PROPERTY(PreflightFindingsModel* findingsModel READ findingsModel CONSTANT)
+
 public:
     enum class State
     {

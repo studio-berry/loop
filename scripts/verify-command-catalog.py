@@ -53,6 +53,15 @@ IMPLEMENTED_COMMANDS = frozenset(
     }
 )
 
+# Commands registered by the Quick shell host (EditorHost) rather than
+# LoupeLibInteraction. Promoting one to implemented still requires a real
+# capability in loupe-shell-actions.json.
+SHELL_IMPLEMENTED_COMMANDS = frozenset(
+    {
+        "actionQuit",
+    }
+)
+
 REQUIRED_COMMAND_KEYS = frozenset(
     {"label_key", "parameters", "capability", "cancellable", "availability"}
 )
@@ -314,11 +323,12 @@ def check_implemented_set(policy: dict) -> list[str]:
         for action in policy["actions"]
         if action.get("command", {}).get("availability") == "implemented"
     }
-    unexpected = sorted(implemented - IMPLEMENTED_COMMANDS)
+    known_handlers = IMPLEMENTED_COMMANDS | SHELL_IMPLEMENTED_COMMANDS
+    unexpected = sorted(implemented - known_handlers)
     if unexpected:
         errors.append(
-            "commands marked implemented without a handler in "
-            f"LoupeLibInteraction: {', '.join(unexpected)}"
+            "commands marked implemented without a registered handler: "
+            f"{', '.join(unexpected)}"
         )
     missing = sorted(IMPLEMENTED_COMMANDS - implemented)
     if missing:

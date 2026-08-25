@@ -22,14 +22,12 @@
 
 #include "editorhost.h"
 
-#include "documentcontextsource.h"
 #include "focusrestoration.h"
 #include "hittestsource.h"
 #include "interactioncontroller.h"
+#include "interactionstate.h"
 #include "interactiontarget.h"
 #include "loupecanvasitem.h"
-#include "overlaybuilder.h"
-#include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
 #include "previewstatemodel.h"
 
@@ -38,16 +36,17 @@
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
 #include <QUrl>
 
-#include <QCoreApplication>
-
 namespace
 {
+
+const QString QuitCommandId = QStringLiteral("actionQuit");
 
 int rotationToDegrees(pdf::PageRotation rotation)
 {
@@ -88,17 +87,20 @@ QString preflightStateToString(pdfinteraction::PreflightController::State state)
     return QStringLiteral("not-checked");
 }
 
-QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor)
+QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
 {
     QVariantMap entry;
     entry.insert(QStringLiteral("id"), descriptor.id);
     entry.insert(QStringLiteral("labelKey"), descriptor.labelKey);
     entry.insert(QStringLiteral("implemented"), descriptor.isImplemented());
+    entry.insert(QStringLiteral("enabled"), enabled);
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
     shortcut.insert(QStringLiteral("sequence"), descriptor.shortcut.sequence);
     entry.insert(QStringLiteral("shortcut"), shortcut);
+    entry.insert(QStringLiteral("shortcutText"),
+                 descriptor.shortcut.sequence.isEmpty() ? descriptor.shortcut.standardKey : descriptor.shortcut.sequence);
     return entry;
 }
 
@@ -106,43 +108,21 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
-    m_context(nullptr),
-    m_submitter(m_scheduler),
-    m_facade(m_context, m_submitter, m_loader, m_writer, m_catalog, this),
-    m_renderer(m_context),
-    m_commandBridge(m_catalog, m_facade, m_viewport, this),
-    m_preflight(&m_scheduler, this)
+    m_session(std::make_unique<DocumentViewSession>(this)),
+    m_preflight(&m_session->scheduler(), this)
 {
-    m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
-    m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
-    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport);
-    m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
-                                                                            m_viewport,
-                                                                            *m_hitTest,
-                                                                            *m_overlays,
-                                                                            this);
-    m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
-                                                                          m_submitter,
-                                                                          m_renderer,
-                                                                          m_viewport,
-                                                                          pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
-                                                                          this);
-
-    m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
-
-    if (QScreen* screen = QGuiApplication::primaryScreen())
-    {
-        m_viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
-        m_viewport.setDevicePixelRatio(screen->devicePixelRatio());
-    }
-
-    m_commandBridge.setCoordinator(m_surfaces.get());
-
     connectFacade();
     connectViewport();
     connectCatalog();
+    connectInteraction();
+    registerShellHandlers();
+
+    m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
+    m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
+    m_preflightOverlayBridge.setInteractionController(m_session->interaction());
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
@@ -151,62 +131,61 @@ EditorHost::EditorHost(QObject* parent) :
 EditorHost::~EditorHost()
 {
     unbindCanvas();
-    m_renderer.detach();
 }
 
 QString EditorHost::documentState() const
 {
-    return QString::fromLatin1(pdfinteraction::getDocumentStateName(m_facade.state()));
+    return QString::fromLatin1(pdfinteraction::getDocumentStateName(m_session->facade().state()));
 }
 
 bool EditorHost::hasDocument() const
 {
-    return m_facade.state() == pdfinteraction::DocumentState::Ready;
+    return m_session->facade().state() == pdfinteraction::DocumentState::Ready;
 }
 
 QString EditorHost::displayTitle() const
 {
-    return m_facade.source().displayLabel();
+    return m_session->facade().source().displayLabel();
 }
 
 QString EditorHost::typedError() const
 {
-    return m_facade.typedError();
+    return m_session->facade().typedError();
 }
 
 int EditorHost::pageCount() const
 {
-    return m_viewport.pageCount();
+    return m_session->viewport().pageCount();
 }
 
 int EditorHost::currentPage() const
 {
-    return m_viewport.currentPage();
+    return m_session->viewport().currentPage();
 }
 
 qreal EditorHost::zoom() const
 {
-    return m_viewport.zoom();
+    return m_session->viewport().zoom();
 }
 
 int EditorHost::rotationDegrees() const
 {
-    return rotationToDegrees(m_viewport.rotation());
+    return rotationToDegrees(m_session->viewport().rotation());
 }
 
 bool EditorHost::incomplete() const
 {
-    return m_facade.facets().testFlag(pdfinteraction::DocumentFacet::Incomplete);
+    return m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Incomplete);
 }
 
 bool EditorHost::cancelled() const
 {
-    return m_facade.facets().testFlag(pdfinteraction::DocumentFacet::Cancelled);
+    return m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Cancelled);
 }
 
 bool EditorHost::unsupported() const
 {
-    return m_facade.facets().testFlag(pdfinteraction::DocumentFacet::Unsupported);
+    return m_session->facade().facets().testFlag(pdfinteraction::DocumentFacet::Unsupported);
 }
 
 QObject* EditorHost::preflight()
@@ -267,13 +246,13 @@ bool EditorHost::highContrast() const
 
 void EditorHost::selectFinding(const QString& findingId)
 {
-    if (!m_revisionSource || findingId.isEmpty())
+    if (!m_session->revisionSource() || findingId.isEmpty())
     {
         return;
     }
 
-    const QString documentKey = m_revisionSource->documentKey();
-    const QString documentRevision = m_facade.currentRevision().toString();
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.findingsModel()->setSelectedFinding(findingId);
     m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision);
 
@@ -301,22 +280,22 @@ void EditorHost::announceDocumentState(const QString& message)
 QVariantList EditorHost::commandDescriptors() const
 {
     QVariantList descriptors;
-    descriptors.reserve(m_catalog.descriptors().size());
-    for (const pdfinteraction::CommandDescriptor& descriptor : m_catalog.descriptors())
+    descriptors.reserve(m_session->catalog().descriptors().size());
+    for (const pdfinteraction::CommandDescriptor& descriptor : m_session->catalog().descriptors())
     {
-        descriptors.append(descriptorToVariant(descriptor));
+        descriptors.append(descriptorToVariant(descriptor, m_session->catalog().isEnabled(descriptor.id)));
     }
     return descriptors;
 }
 
 bool EditorHost::isCommandEnabled(const QString& commandId) const
 {
-    return m_catalog.isEnabled(commandId);
+    return m_session->catalog().isEnabled(commandId);
 }
 
 quint64 EditorHost::invokeCommand(const QString& commandId, const QVariantMap& parameters)
 {
-    const pdfinteraction::CommandInvocationId invocation = m_catalog.invoke(commandId, parameters);
+    const pdfinteraction::CommandInvocationId invocation = m_session->catalog().invoke(commandId, parameters);
     if (invocation != pdfinteraction::InvalidCommandInvocation)
     {
         bumpCommandEpoch();
@@ -326,7 +305,7 @@ quint64 EditorHost::invokeCommand(const QString& commandId, const QVariantMap& p
 
 bool EditorHost::cancelCommand(quint64 invocationId)
 {
-    return m_catalog.cancelInvocation(invocationId);
+    return m_session->catalog().cancelInvocation(invocationId);
 }
 
 void EditorHost::openFileUrl(const QUrl& url)
@@ -355,7 +334,7 @@ void EditorHost::saveAsFileUrl(const QUrl& url)
 
 void EditorHost::reopenDocument()
 {
-    if (m_facade.reopen() != pdfinteraction::InvalidCommandInvocation)
+    if (m_session->facade().reopen() != pdfinteraction::InvalidCommandInvocation)
     {
         bumpCommandEpoch();
     }
@@ -363,7 +342,7 @@ void EditorHost::reopenDocument()
 
 void EditorHost::cancelPendingOperation()
 {
-    if (m_facade.cancelPendingOperation())
+    if (m_session->facade().cancelPendingOperation())
     {
         bumpCommandEpoch();
     }
@@ -386,22 +365,27 @@ void EditorHost::detachCanvas()
 
 void EditorHost::setViewportGeometry(qreal pixelPerMM, qreal devicePixelRatio, int widthPx, int heightPx)
 {
+    if (m_canvas)
+    {
+        return;
+    }
+
     if (pixelPerMM > 0.0)
     {
-        m_viewport.setPixelPerMM(pixelPerMM);
+        m_session->viewport().setPixelPerMM(pixelPerMM);
     }
 
     if (devicePixelRatio > 0.0)
     {
-        m_viewport.setDevicePixelRatio(devicePixelRatio);
+        m_session->viewport().setDevicePixelRatio(devicePixelRatio);
     }
 
     if (widthPx > 0 && heightPx > 0)
     {
-        m_viewport.setViewportSizePx(QSize(widthPx, heightPx));
+        m_session->viewport().setViewportSizePx(QSize(widthPx, heightPx));
         if (m_documentBound)
         {
-            m_surfaces->requestSurfaces();
+            m_session->surfaces()->requestSurfaces();
         }
     }
 
@@ -422,7 +406,7 @@ void EditorHost::openInitialPath(const QString& path)
 
 QString EditorHost::shortcutForCommand(const QString& commandId) const
 {
-    const pdfinteraction::CommandDescriptor* descriptor = m_catalog.descriptor(commandId);
+    const pdfinteraction::CommandDescriptor* descriptor = m_session->catalog().descriptor(commandId);
     if (!descriptor)
     {
         return QString();
@@ -452,13 +436,9 @@ QString EditorHost::shortcutForCommand(const QString& commandId) const
 
 void EditorHost::connectFacade()
 {
-    connect(&m_facade, &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
+    connect(&m_session->facade(), &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
             {
-                if (state == pdfinteraction::DocumentState::Ready)
-                {
-                    onDocumentReady();
-                }
-                else if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
+                if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
                 {
                     onDocumentGone();
                 }
@@ -466,17 +446,17 @@ void EditorHost::connectFacade()
                 bumpPresentation();
                 bumpCommandEpoch(); });
 
-    connect(&m_facade, &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
+    connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             { bumpPresentation(); });
 
-    connect(&m_facade, &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
+    connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
             {
                 onDocumentGone();
                 onDocumentReady();
                 bumpPresentation();
                 bumpCommandEpoch(); });
 
-    connect(&m_facade, &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
+    connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
             {
                 onDocumentGone();
                 bumpPresentation();
@@ -485,19 +465,39 @@ void EditorHost::connectFacade()
 
 void EditorHost::connectViewport()
 {
-    connect(&m_viewport, &pdfinteraction::ViewportController::placementsChanged, this, &EditorHost::bumpPresentation);
-    connect(&m_viewport, &pdfinteraction::ViewportController::demandChanged, this, [this](quint64)
-            {
-                if (m_documentBound)
-                {
-                    m_surfaces->requestSurfaces();
-                }
-                bumpPresentation(); });
+    connect(&m_session->viewport(), &pdfinteraction::ViewportController::placementsChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_session->viewport(), &pdfinteraction::ViewportController::demandChanged, this, &EditorHost::bumpPresentation);
+}
+
+void EditorHost::connectInteraction()
+{
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::dragCompleted,
+            this,
+            &EditorHost::onDragCompleted);
+}
+
+void EditorHost::registerShellHandlers()
+{
+    pdfinteraction::CommandCatalog::Handler quit;
+    quit.invoke = [this](pdfinteraction::CommandInvocationId invocation, const QVariantMap&)
+    {
+        m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+        QCoreApplication::quit();
+    };
+    m_session->catalog().setHandler(QuitCommandId, std::move(quit));
+    m_session->catalog().setEnabled(QuitCommandId, true);
+}
+
+void EditorHost::refreshHitTestSources()
+{
+    m_findingsHitTest.setTargets(m_preflight.findingsModel()->interactionTargets());
+    m_preflightOverlayBridge.applyFindings();
 }
 
 void EditorHost::connectCatalog()
 {
-    connect(&m_catalog, &pdfinteraction::CommandCatalog::availabilityChanged, this, &EditorHost::bumpCommandEpoch);
+    connect(&m_session->catalog(), &pdfinteraction::CommandCatalog::availabilityChanged, this, &EditorHost::bumpCommandEpoch);
 }
 
 void EditorHost::bumpPresentation()
@@ -518,19 +518,10 @@ void EditorHost::bumpCommandEpoch()
 
 void EditorHost::onDocumentReady()
 {
-    m_geometry = std::make_unique<pdfinteraction::PDFDocumentPageGeometrySource>(&m_context);
-    m_viewport.setGeometrySource(m_geometry.get());
-    m_viewport.invalidateLayout();
-
-    if (m_revisionSource)
-    {
-        m_surfaces->setDocumentKey(m_revisionSource->documentKey());
-    }
-
-    m_surfaces->invalidate(m_facade.currentRevision());
-    m_surfaces->requestSurfaces();
+    m_session->prepareDocumentView();
 
     syncRevisionModels();
+    refreshHitTestSources();
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
@@ -540,12 +531,11 @@ void EditorHost::onDocumentReady()
 void EditorHost::onDocumentGone()
 {
     unbindCanvas();
-    m_viewport.setGeometrySource(nullptr);
-    m_geometry.reset();
-    m_surfaces->invalidate(m_facade.currentRevision());
+    m_session->clearDocumentView();
     m_preflight.findingsModel()->clear();
     m_inspector.clearSelection();
     m_preview.clear();
+    m_session->hitTest()->clearSources();
     m_documentBound = false;
     updateCanvasAccessibilitySummary();
 }
@@ -557,7 +547,12 @@ void EditorHost::bindCanvas()
         return;
     }
 
-    m_canvas->bind(&m_viewport, m_interaction.get(), m_surfaces.get());
+    m_session->hitTest()->clearSources();
+    m_session->hitTest()->addSource(&m_findingsHitTest);
+    m_session->hitTest()->addSource(&m_session->pageBoxSource());
+    m_session->pageBoxSource().setEdgeTolerance(2.0 / qMax(m_session->viewport().zoom(), qreal(0.01)));
+
+    m_canvas->bind(&m_session->viewport(), m_session->interaction(), m_session->surfaces());
 }
 
 void EditorHost::unbindCanvas()
@@ -572,13 +567,13 @@ void EditorHost::unbindCanvas()
 
 void EditorHost::syncRevisionModels()
 {
-    if (!m_revisionSource)
+    if (!m_session->revisionSource())
     {
         return;
     }
 
-    const QString documentKey = m_revisionSource->documentKey();
-    const QString documentRevision = m_facade.currentRevision().toString();
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
@@ -616,18 +611,27 @@ void EditorHost::updateCanvasAccessibilitySummary()
 
 void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)
 {
-    if (!m_interaction || request.page <= 0)
+    if (!m_session->interaction() || request.page <= 0)
     {
         return;
     }
 
-    m_commandBridge.goToPage(request.page - 1);
+    m_session->commandBridge().goToPage(request.page - 1);
 
     pdfinteraction::InteractionTarget target;
     target.kind = pdfinteraction::InteractionTargetKind::Finding;
     target.pageIndex = request.page - 1;
     target.id = request.findingId;
     target.pageBounds = request.bbox;
-    m_interaction->selectTarget(target);
+    m_session->interaction()->selectTarget(target);
     bumpPresentation();
+}
+
+void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
+{
+    Q_UNUSED(session);
+    if (m_session->interaction())
+    {
+        m_session->interaction()->refreshOverlay();
+    }
 }
