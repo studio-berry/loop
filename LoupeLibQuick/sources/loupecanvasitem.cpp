@@ -330,14 +330,7 @@ void LoupeCanvasItem::attachWindow(QQuickWindow* hostWindow)
     // destroying, and updatePaintNode is the only place where this thread and a
     // blocked GUI thread coincide.
     m_windowConnections.append(QObject::connect(
-        hostWindow, &QQuickWindow::sceneGraphInvalidated, this, [this]()
-        {
-            m_builderResetPending.store(true);
-            m_present.noteSceneGraphInvalidated();
-            QMetaObject::invokeMethod(
-                this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection);
-        },
-        Qt::DirectConnection));
+        hostWindow, &QQuickWindow::sceneGraphInvalidated, this, &LoupeCanvasItem::onSceneGraphInvalidated, Qt::QueuedConnection));
 
     // The teardown that does not call releaseResources: a window whose
     // persistent scene graph is off stops the graph without asking the item to
