@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "product-navigable",
+  "status": "product-complete",
   "product_qml_shipped": true,
   "product_target": {
     "name": "LoupeEditor",

@@ -26,16 +26,22 @@
 #include "commandcatalog.h"
 #include "documentfacade.h"
 #include "documentloader.h"
+#include "inspectormodel.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
+#include "preflightcontroller.h"
+#include "previewstatemodel.h"
 #include "viewportcommandbridge.h"
 #include "viewportcontroller.h"
+
+#include "focusrestoration.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
 
 #include <QObject>
 #include <QPointer>
+#include <QStyleHints>
 #include <QVariantMap>
 
 #include <memory>
@@ -76,6 +82,15 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool cancelled READ cancelled NOTIFY presentationChanged)
     Q_PROPERTY(bool unsupported READ unsupported NOTIFY presentationChanged)
     Q_PROPERTY(int commandEpoch READ commandEpoch NOTIFY commandEpochChanged)
+    Q_PROPERTY(QObject* preflight READ preflight CONSTANT)
+    Q_PROPERTY(QObject* inspector READ inspector CONSTANT)
+    Q_PROPERTY(QObject* preview READ preview CONSTANT)
+    Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
+    Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
+    Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
+    Q_PROPERTY(bool highContrast READ highContrast NOTIFY presentationChanged)
 
 public:
     explicit EditorHost(QObject* parent = nullptr);
@@ -96,6 +111,20 @@ public:
     bool cancelled() const;
     bool unsupported() const;
     int commandEpoch() const noexcept { return m_commandEpoch; }
+
+    QObject* preflight();
+    QObject* inspector();
+    QObject* preview();
+    FocusRestoration* focusRestoration() { return &m_focusRestoration; }
+
+    QString preflightStateName() const;
+    QString previewSummary() const;
+    QString inspectorTitle() const;
+    bool preferReducedMotion() const;
+    bool highContrast() const;
+
+    Q_INVOKABLE void selectFinding(const QString& findingId);
+    Q_INVOKABLE void announceDocumentState(const QString& message);
 
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
@@ -134,6 +163,9 @@ private:
     void onDocumentGone();
     void bindCanvas();
     void unbindCanvas();
+    void syncRevisionModels();
+    void updateCanvasAccessibilitySummary();
+    void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
 
     pdf::PDFJobScheduler m_scheduler;
     pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
@@ -151,6 +183,10 @@ private:
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
     pdfinteraction::ViewportCommandBridge m_commandBridge;
+    pdfinteraction::PreflightController m_preflight;
+    pdfinteraction::InspectorModel m_inspector;
+    pdfinteraction::PreviewStateModel m_preview;
+    FocusRestoration m_focusRestoration;
 
     QPointer<pdfquick::LoupeCanvasItem> m_canvas;
     int m_commandEpoch = 0;

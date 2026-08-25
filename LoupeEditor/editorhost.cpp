@@ -23,14 +23,21 @@
 #include "editorhost.h"
 
 #include "documentcontextsource.h"
+#include "focusrestoration.h"
 #include "hittestsource.h"
 #include "interactioncontroller.h"
+#include "interactiontarget.h"
 #include "loupecanvasitem.h"
 #include "overlaybuilder.h"
 #include "pagesurfacecoordinator.h"
+#include "preflightcontroller.h"
+#include "previewstatemodel.h"
 
 #include "pdfpage.h"
 
+#include <QAccessible>
+#include <QAccessibleAnnouncementEvent>
+#include <QAccessibilityHints>
 #include <QGuiApplication>
 #include <QKeySequence>
 #include <QMetaEnum>
@@ -59,6 +66,28 @@ int rotationToDegrees(pdf::PageRotation rotation)
     return 0;
 }
 
+QString preflightStateToString(pdfinteraction::PreflightController::State state)
+{
+    switch (state)
+    {
+        case pdfinteraction::PreflightController::State::NotChecked:
+            return QStringLiteral("not-checked");
+        case pdfinteraction::PreflightController::State::Running:
+            return QStringLiteral("running");
+        case pdfinteraction::PreflightController::State::Cancelled:
+            return QStringLiteral("cancelled");
+        case pdfinteraction::PreflightController::State::Pass:
+            return QStringLiteral("pass");
+        case pdfinteraction::PreflightController::State::Findings:
+            return QStringLiteral("findings");
+        case pdfinteraction::PreflightController::State::Stale:
+            return QStringLiteral("stale");
+        case pdfinteraction::PreflightController::State::Incomplete:
+            return QStringLiteral("incomplete");
+    }
+    return QStringLiteral("not-checked");
+}
+
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor)
 {
     QVariantMap entry;
@@ -81,7 +110,8 @@ EditorHost::EditorHost(QObject* parent) :
     m_submitter(m_scheduler),
     m_facade(m_context, m_submitter, m_loader, m_writer, m_catalog, this),
     m_renderer(m_context),
-    m_commandBridge(m_catalog, m_facade, m_viewport, this)
+    m_commandBridge(m_catalog, m_facade, m_viewport, this),
+    m_preflight(&m_scheduler, this)
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
@@ -111,6 +141,11 @@ EditorHost::EditorHost(QObject* parent) :
     connectFacade();
     connectViewport();
     connectCatalog();
+
+    connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
+    connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
 }
 
 EditorHost::~EditorHost()
@@ -172,6 +207,95 @@ bool EditorHost::cancelled() const
 bool EditorHost::unsupported() const
 {
     return m_facade.facets().testFlag(pdfinteraction::DocumentFacet::Unsupported);
+}
+
+QObject* EditorHost::preflight()
+{
+    return &m_preflight;
+}
+
+QObject* EditorHost::inspector()
+{
+    return &m_inspector;
+}
+
+QObject* EditorHost::preview()
+{
+    return &m_preview;
+}
+
+QString EditorHost::preflightStateName() const
+{
+    return preflightStateToString(m_preflight.state());
+}
+
+QString EditorHost::previewSummary() const
+{
+    return m_preview.summary();
+}
+
+QString EditorHost::inspectorTitle() const
+{
+    return m_inspector.title();
+}
+
+bool EditorHost::preferReducedMotion() const
+{
+    const QByteArray env = qgetenv("QT_ACCESSIBILITY_REDUCE_MOTION");
+    if (!env.isEmpty())
+    {
+        return env == "1" || env.toLower() == "true";
+    }
+
+    return false;
+}
+
+bool EditorHost::highContrast() const
+{
+    if (QGuiApplication* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance()))
+    {
+        if (QStyleHints* hints = app->styleHints())
+        {
+            if (const QAccessibilityHints* accessibility = hints->accessibility())
+            {
+                return accessibility->contrastPreference() != Qt::ContrastPreference::NoPreference;
+            }
+        }
+    }
+    return false;
+}
+
+void EditorHost::selectFinding(const QString& findingId)
+{
+    if (!m_revisionSource || findingId.isEmpty())
+    {
+        return;
+    }
+
+    const QString documentKey = m_revisionSource->documentKey();
+    const QString documentRevision = m_facade.currentRevision().toString();
+    m_preflight.findingsModel()->setSelectedFinding(findingId);
+    m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision);
+
+    pdfinteraction::PreflightController::EvidenceNavigationRequest request;
+    if (!m_preflight.navigationFor(findingId, &request))
+    {
+        bumpPresentation();
+        return;
+    }
+
+    onPreflightNavigation(request);
+}
+
+void EditorHost::announceDocumentState(const QString& message)
+{
+    if (message.trimmed().isEmpty())
+    {
+        return;
+    }
+
+    QAccessibleAnnouncementEvent event(this, message);
+    QAccessible::updateAccessibility(&event);
 }
 
 QVariantList EditorHost::commandDescriptors() const
@@ -378,6 +502,11 @@ void EditorHost::connectCatalog()
 
 void EditorHost::bumpPresentation()
 {
+    updateCanvasAccessibilitySummary();
+    if (m_canvas)
+    {
+        m_canvas->setHighContrast(highContrast());
+    }
     Q_EMIT presentationChanged();
 }
 
@@ -401,8 +530,11 @@ void EditorHost::onDocumentReady()
     m_surfaces->invalidate(m_facade.currentRevision());
     m_surfaces->requestSurfaces();
 
+    syncRevisionModels();
     m_documentBound = true;
     bindCanvas();
+    updateCanvasAccessibilitySummary();
+    announceDocumentState(tr("Document ready."));
 }
 
 void EditorHost::onDocumentGone()
@@ -411,7 +543,11 @@ void EditorHost::onDocumentGone()
     m_viewport.setGeometrySource(nullptr);
     m_geometry.reset();
     m_surfaces->invalidate(m_facade.currentRevision());
+    m_preflight.findingsModel()->clear();
+    m_inspector.clearSelection();
+    m_preview.clear();
     m_documentBound = false;
+    updateCanvasAccessibilitySummary();
 }
 
 void EditorHost::bindCanvas()
@@ -432,4 +568,66 @@ void EditorHost::unbindCanvas()
     }
 
     m_canvas->bind(nullptr, nullptr, nullptr);
+}
+
+void EditorHost::syncRevisionModels()
+{
+    if (!m_revisionSource)
+    {
+        return;
+    }
+
+    const QString documentKey = m_revisionSource->documentKey();
+    const QString documentRevision = m_facade.currentRevision().toString();
+    m_preflight.setCurrentRevision(documentKey, documentRevision);
+    m_inspector.setCurrentRevision(documentKey, documentRevision);
+    m_preview.setCurrentRevision(documentKey, documentRevision);
+
+    if (hasDocument())
+    {
+        m_preview.setState(documentKey,
+                           documentRevision,
+                           pdfinteraction::PreviewStateModel::Authority::Approximate,
+                           tr("Production preview is approximate until proof mode is active."),
+                           tr("The current view uses the standard render path."),
+                           QString());
+    }
+}
+
+void EditorHost::updateCanvasAccessibilitySummary()
+{
+    if (!m_canvas)
+    {
+        return;
+    }
+
+    if (!hasDocument())
+    {
+        m_canvas->setAccessibleDocumentSummary(tr("No document is currently open."));
+        return;
+    }
+
+    const int pageNumber = currentPage() + 1;
+    const int pages = pageCount();
+    const int zoomPercent = qRound(zoom() * 100.0);
+    m_canvas->setAccessibleDocumentSummary(
+        tr("Document canvas. Page %1 of %2. Zoom %3 percent.").arg(pageNumber).arg(pages).arg(zoomPercent));
+}
+
+void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)
+{
+    if (!m_interaction || request.page <= 0)
+    {
+        return;
+    }
+
+    m_commandBridge.goToPage(request.page - 1);
+
+    pdfinteraction::InteractionTarget target;
+    target.kind = pdfinteraction::InteractionTargetKind::Finding;
+    target.pageIndex = request.page - 1;
+    target.id = request.findingId;
+    target.pageBounds = request.bbox;
+    m_interaction->selectTarget(target);
+    bumpPresentation();
 }

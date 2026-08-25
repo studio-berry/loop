@@ -54,6 +54,8 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvastraceoverlay.h
     sources/loupecanvasitem.cpp
     sources/loupecanvasitem.h
+    sources/loupecanvasaccessible.cpp
+    sources/loupecanvasaccessible.h
 )
 
 # No QML_FILES. LoupeCanvasItem is registered from C++ with QML_NAMED_ELEMENT,

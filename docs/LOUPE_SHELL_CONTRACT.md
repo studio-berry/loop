@@ -150,13 +150,11 @@ become self-authoritative.
 
 ## UI foundation gate
 
-Issue #178 selects Qt Quick Controls for the later application shell. The
-decision is accepted with admission gates. No product Qt Quick module, product
-QML file, `QQuickWidget`, or shell restyle is introduced by this slice; the
-optional `QuickShellSmoke` target is qualification-only. ADR-010 and the
-Quick policy contracts resolve the migration strategy, canvas hosting,
-rendering fallback, licensing, and accessibility evidence required before
-large-scale shell wiring begins.
+Issue #178 selects Qt Quick Controls for the application shell. The installed
+`LoupeEditor` product root is now Qt Quick (`gui_status: quick-admitted` in
+`loupe-shell.json`). The non-installed `LoupeEditorWidgetsOracle` remains the
+Widgets migration oracle until Phase 5 deletes it per
+`docs/PHASE5_WIDGETS_DELETION_HANDOFF.md`.
 
 ## Accessibility gate
 
@@ -164,7 +162,9 @@ When the GUI gate opens, workspace switching and rail/canvas/inspector traversal
 must be keyboard reachable, every panel must expose a screen-reader name and
 role, focus must survive workspace changes, and 100/150/200% high-DPI layouts
 must remain usable. Contrast and severity colors follow #25 and #194; this
-contract does not create a second accessibility baseline.
+contract does not create a second accessibility baseline. P4-S10 evidence lives
+in [QUICK_ACCESSIBILITY_CONTRACT.md](QUICK_ACCESSIBILITY_CONTRACT.md) and
+`scripts/run-product-quick-a11y-smoke.ps1`.
 
 ## Verification
 

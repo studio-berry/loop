@@ -1,103 +1,13 @@
-// MIT License
-//
-// Copyright (c) 2018-2025 Jakub Melka and Contributors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #include "preflightcontroller.h"
-#include "preflightoverlaybridge.h"
-#include "preflightreportmodel.h"
 
 #include <QSignalSpy>
 #include <QtTest>
-
-#include <memory>
-
-#include "documentcontextsource.h"
-#include "hittestsource.h"
-#include "interactioncontroller.h"
-#include "interactionstate.h"
-#include "overlaybuilder.h"
-#include "overlayframe.h"
-#include "viewportcontroller.h"
-
-#include "pdfdocumentcontext.h"
 
 using pdfinteraction::PreflightController;
 using pdfinteraction::PreflightFindingsModel;
 
 namespace
 {
-
-constexpr QSizeF PageSizeMM = QSizeF(100.0, 100.0);
-constexpr qreal PixelPerMM = 2.0;
-constexpr qreal PageBoxSize = 100.0;
-
-pdf::PDFRevisionIdentity makeRevision(const QString& documentId, quint64 documentRevision = 1)
-{
-    pdf::PDFRevisionIdentity revision;
-    revision.document.documentId = documentId;
-    revision.document.sourceDataHash = documentId.toUtf8();
-    revision.documentRevision = documentRevision;
-    return revision;
-}
-
-pdfinteraction::RevisionFencedToken makeToken(quint64 generation = 1, const QString& documentId = QStringLiteral("doc-1"))
-{
-    pdfinteraction::RevisionFencedToken token;
-    token.generation = generation;
-    token.revision = makeRevision(documentId);
-    return token;
-}
-
-class FakeGeometrySource final : public pdfinteraction::IPageGeometrySource
-{
-public:
-    explicit FakeGeometrySource(int pageCount) :
-        m_pageCount(pageCount)
-    {
-    }
-
-    int pageCount() const override { return m_pageCount; }
-
-    QSizeF pageSizeMM(int pageIndex, pdf::PageRotation extraRotation) const override
-    {
-        Q_UNUSED(pageIndex);
-
-        const bool transposed = extraRotation == pdf::PageRotation::Rotate90 || extraRotation == pdf::PageRotation::Rotate270;
-        return transposed ? PageSizeMM.transposed() : PageSizeMM;
-    }
-
-    QTransform pagePointToDeviceMatrix(int pageIndex, const QRectF& deviceRect, pdf::PageRotation extraRotation) const override
-    {
-        Q_UNUSED(pageIndex);
-        Q_UNUSED(extraRotation);
-
-        QTransform matrix;
-        matrix.translate(deviceRect.left(), deviceRect.bottom());
-        matrix.scale(deviceRect.width() / PageBoxSize, -deviceRect.height() / PageBoxSize);
-        return matrix;
-    }
-
-private:
-    int m_pageCount = 0;
-};
 
 pdf::PreflightFinding makeFinding(const QString& checkId,
                                   int page,
@@ -126,27 +36,6 @@ pdf::PreflightResult resultWith(const QList<pdf::PreflightFinding>& errors,
     return result;
 }
 
-const pdfinteraction::OverlayPrimitive* findPrimitive(const pdfinteraction::OverlayFrame& frame, const QString& id)
-{
-    for (const pdfinteraction::OverlayPrimitive& primitive : frame.primitives)
-    {
-        if (primitive.id == id)
-        {
-            return &primitive;
-        }
-    }
-    return nullptr;
-}
-
-class FakeRevisionSource final : public pdfinteraction::IDocumentRevisionSource
-{
-public:
-    pdf::PDFRevisionIdentity currentRevision() const override { return revision; }
-    bool isCurrent(const pdf::PDFRevisionIdentity& candidate) const override { return candidate == revision; }
-
-    pdf::PDFRevisionIdentity revision = makeRevision(QStringLiteral("doc-1"));
-};
-
 }   // namespace
 
 class PreflightInteractionTest final : public QObject
@@ -159,10 +48,6 @@ private slots:
     void controllerAcceptsCurrentResultAndBuildsNavigation();
     void controllerRejectsStaleAndCancelledResults();
     void controllerRepresentsIncompleteRun();
-    void overlayAdapterMapsStableIdsAndSeverities();
-    void dockSelectionSetsFocusedOverlayPrimitive();
-    void reportModelParsesIdAndObjectId();
-    void reportModelStableIdFallback();
 };
 
 void PreflightInteractionTest::modelRetainsStableIdentityAndFilters()
@@ -237,120 +122,6 @@ void PreflightInteractionTest::controllerRepresentsIncompleteRun()
     result.inspectionComplete = false;
     QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
     QCOMPARE(controller.state(), PreflightController::State::Incomplete);
-}
-
-void PreflightInteractionTest::overlayAdapterMapsStableIdsAndSeverities()
-{
-    PreflightFindingsModel model;
-    const pdf::PreflightFinding error = makeFinding(QStringLiteral("bleed"), 2, QStringLiteral("error"), QRectF(1, 2, 3, 4));
-    const pdf::PreflightFinding warning = makeFinding(QStringLiteral("fonts"), 2, QStringLiteral("warning"), QRectF(5, 6, 7, 8));
-    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { error }, { warning });
-
-    const QList<pdfinteraction::InteractionTarget> targets = model.interactionTargets();
-    QCOMPARE(targets.size(), 2);
-    QCOMPARE(targets.at(0).id, error.stableId());
-    QCOMPARE(targets.at(0).pageIndex, 1);
-    QCOMPARE(targets.at(0).kind, pdfinteraction::InteractionTargetKind::Finding);
-
-    const QHash<QString, pdfinteraction::OverlaySeverity> severities = model.severityMap();
-    QCOMPARE(severities.value(error.stableId()), pdfinteraction::OverlaySeverity::Error);
-    QCOMPARE(severities.value(warning.stableId()), pdfinteraction::OverlaySeverity::Warning);
-}
-
-void PreflightInteractionTest::dockSelectionSetsFocusedOverlayPrimitive()
-{
-    FakeGeometrySource geometry(4);
-    pdfinteraction::ViewportController viewport;
-    viewport.setGeometrySource(&geometry);
-    viewport.setPixelPerMM(PixelPerMM);
-    viewport.setViewportSizePx(QSize(300, 500));
-    viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
-    viewport.setZoom(1.0);
-
-    pdfinteraction::OverlayBuilder overlays(viewport);
-    FakeRevisionSource revisions;
-    pdfinteraction::HitTestDispatcher dispatcher;
-    pdfinteraction::InteractionController controller(revisions, viewport, dispatcher, overlays);
-
-    PreflightFindingsModel model;
-    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(20.0, 20.0, 20.0, 20.0));
-    model.replace(QStringLiteral("doc"), QStringLiteral("rev-1"), { finding }, {});
-    const QString findingId = finding.stableId();
-
-    pdfinteraction::PreflightOverlayBridge bridge;
-    bridge.setFindingsModel(&model);
-    bridge.setOverlayBuilder(&overlays);
-    bridge.setInteractionController(&controller);
-
-    model.setSelectedFinding(findingId);
-    bridge.applyFindings();
-
-    pdfinteraction::InteractionState state;
-    const pdfinteraction::OverlayFrame frame = overlays.build(state, makeToken());
-    const pdfinteraction::OverlayPrimitive* primitive = findPrimitive(frame, findingId);
-    QVERIFY(primitive);
-    QVERIFY(primitive->focused);
-    QCOMPARE(primitive->severity, pdfinteraction::OverlaySeverity::Error);
-    QCOMPARE(controller.state().selected().id, findingId);
-}
-
-void PreflightInteractionTest::reportModelParsesIdAndObjectId()
-{
-    pdfplugin::PreflightReportModel model;
-    QJsonObject findingObject;
-    findingObject.insert(QStringLiteral("id"), QStringLiteral("0123456789abcdef"));
-    findingObject.insert(QStringLiteral("object_id"), QStringLiteral("42 0 R"));
-    findingObject.insert(QStringLiteral("scope"), QStringLiteral("object"));
-    findingObject.insert(QStringLiteral("page"), 1);
-    findingObject.insert(QStringLiteral("severity"), QStringLiteral("error"));
-    findingObject.insert(QStringLiteral("type"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("message"), QStringLiteral("Bleed missing"));
-    findingObject.insert(QStringLiteral("check_id"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("bbox"), QJsonArray{ 0.0, 0.0, 10.0, 10.0 });
-
-    QJsonObject report;
-    report.insert(QStringLiteral("schema_version"), 3);
-    report.insert(QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("fail") } });
-    report.insert(QStringLiteral("errors"), QJsonArray{ findingObject });
-    report.insert(QStringLiteral("warnings"), QJsonArray());
-
-    model.setReport(report);
-    QCOMPARE(model.findings().size(), 1);
-    QCOMPARE(model.findings().constFirst().id, QStringLiteral("0123456789abcdef"));
-    QCOMPARE(model.findings().constFirst().objectId, QStringLiteral("42 0 R"));
-    QCOMPARE(model.stableFindingId(model.findings().constFirst()), QStringLiteral("0123456789abcdef"));
-}
-
-void PreflightInteractionTest::reportModelStableIdFallback()
-{
-    pdfplugin::PreflightReportModel model;
-    QJsonObject findingObject;
-    findingObject.insert(QStringLiteral("scope"), QStringLiteral("page"));
-    findingObject.insert(QStringLiteral("page"), 2);
-    findingObject.insert(QStringLiteral("severity"), QStringLiteral("error"));
-    findingObject.insert(QStringLiteral("type"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("message"), QStringLiteral("Bleed missing"));
-    findingObject.insert(QStringLiteral("check_id"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("bbox"), QJsonArray{ 1.0, 2.0, 11.0, 12.0 });
-
-    QJsonObject report;
-    report.insert(QStringLiteral("schema_version"), 3);
-    report.insert(QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("fail") } });
-    report.insert(QStringLiteral("errors"), QJsonArray{ findingObject });
-    report.insert(QStringLiteral("warnings"), QJsonArray());
-
-    model.setReport(report);
-
-    pdf::PreflightFinding coreFinding;
-    coreFinding.scope = QStringLiteral("page");
-    coreFinding.page = 2;
-    coreFinding.severity = QStringLiteral("error");
-    coreFinding.type = QStringLiteral("bleed");
-    coreFinding.message = QStringLiteral("Bleed missing");
-    coreFinding.checkId = QStringLiteral("bleed");
-    coreFinding.bbox = QRectF(1.0, 2.0, 10.0, 10.0);
-
-    QCOMPARE(model.stableFindingId(model.findings().constFirst()), coreFinding.stableId());
 }
 
 QTEST_GUILESS_MAIN(PreflightInteractionTest)

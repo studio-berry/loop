@@ -15,6 +15,10 @@ Item {
         id: canvas
         anchors.fill: parent
         focus: true
+        highContrast: root.host ? root.host.highContrast : false
+
+        Accessible.name: qsTr("Document canvas")
+        Accessible.description: canvas.accessibleDocumentSummary
 
         Component.onCompleted: {
             if (root.host) {

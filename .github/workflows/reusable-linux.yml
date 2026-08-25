@@ -43,7 +43,11 @@ jobs:
 
       - name: Verify Loupe shell contract
         working-directory: loupe
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loupe-shell-contract.ps1
+        run: |
+          python3 scripts/verify-loupe-shell-contract.py
+      - name: Verify installed product graph
+        working-directory: loupe
+        run: python3 scripts/verify-installed-product-graph.py
       - name: Verify interaction boundary
         working-directory: loupe
         run: python3 scripts/verify-interaction-boundary.py
@@ -146,7 +150,7 @@ jobs:
       - name: Build project
         working-directory: loupe
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${{ inputs.fast }}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build
@@ -222,6 +226,16 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode software
+
+      - name: Run product Quick accessibility smoke (native)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend native
+
+      - name: Run product Quick accessibility smoke (software)
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend software
 
       - name: Prove change with agent-fast
         if: inputs.fast

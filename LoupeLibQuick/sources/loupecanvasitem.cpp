@@ -23,10 +23,12 @@
 
 #include "loupecanvasitem.h"
 
+#include "loupecanvasaccessible.h"
 #include "interactioncontroller.h"
 #include "pagesurfacecoordinator.h"
 #include "viewportcontroller.h"
 
+#include <QAccessible>
 #include <QFocusEvent>
 #include <QHoverEvent>
 #include <QKeyEvent>
@@ -91,6 +93,9 @@ LoupeCanvasItem::LoupeCanvasItem(QQuickItem* parent) :
 
     connect(&m_present, &CanvasPresentMetrics::framePresented, this, [this]()
             { m_framePending = false; });
+
+    installLoupeCanvasAccessibility();
+    setAccessibleDocumentSummary(tr("No document is currently open."));
 }
 
 LoupeCanvasItem::~LoupeCanvasItem()
@@ -243,6 +248,29 @@ void LoupeCanvasItem::setHighContrast(bool highContrast)
     m_paletteDirty = true;
     Q_EMIT highContrastChanged();
     requestFrame();
+}
+
+QString LoupeCanvasItem::accessibleDocumentSummary() const
+{
+    return m_accessibleDocumentSummary;
+}
+
+void LoupeCanvasItem::setAccessibleDocumentSummary(const QString& summary)
+{
+    if (m_accessibleDocumentSummary == summary)
+    {
+        return;
+    }
+
+    m_accessibleDocumentSummary = summary;
+    Q_EMIT accessibleDocumentSummaryChanged();
+    notifyAccessibilityUpdate();
+}
+
+void LoupeCanvasItem::notifyAccessibilityUpdate()
+{
+    QAccessibleValueChangeEvent event(this, m_accessibleDocumentSummary);
+    QAccessible::updateAccessibility(&event);
 }
 
 void LoupeCanvasItem::refreshPalette()
@@ -775,12 +803,13 @@ QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*
     // OverlayFrame's own header states the contract -- a frame whose token no
     // longer matches is refused rather than drawn -- and this is the host's half
     // of it.
-    const pdf::PDFRevisionIdentity overlayRevision = m_interaction ? m_interaction->overlayFrame().token.revision : pdf::PDFRevisionIdentity();
-    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayRevision.isValid() || overlayRevision == currentRevision;
+    const OverlayFrame& liveOverlay = m_interaction ? m_interaction->overlayFrame() : OverlayFrame();
+    const bool overlayWasPublished = liveOverlay.token.isValid();
+    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished || liveOverlay.token.revision == currentRevision;
 
     if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
     {
-        const OverlayFrame& live = m_interaction->overlayFrame();
+        const OverlayFrame& live = liveOverlay;
         const OverlayFrame empty;
         const OverlayFrame& frame = overlayIsCurrent ? live : empty;
 

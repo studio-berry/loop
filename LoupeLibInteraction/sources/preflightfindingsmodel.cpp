@@ -1,58 +1,9 @@
-// MIT License
-//
-// Copyright (c) 2018-2025 Jakub Melka and Contributors
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
 #include "preflightfindingsmodel.h"
 
 #include <QVariant>
 
 namespace pdfinteraction
 {
-
-namespace
-{
-
-OverlaySeverity severityFromString(const QString& severity)
-{
-    if (severity == QStringLiteral("error"))
-    {
-        return OverlaySeverity::Error;
-    }
-    if (severity == QStringLiteral("warning"))
-    {
-        return OverlaySeverity::Warning;
-    }
-    if (severity == QStringLiteral("info"))
-    {
-        return OverlaySeverity::Info;
-    }
-    return OverlaySeverity::Info;
-}
-
-bool hasRenderableBbox(const QRectF& bbox)
-{
-    return !bbox.isNull() && !bbox.isEmpty();
-}
-
-}   // namespace
 
 PreflightFindingsModel::PreflightFindingsModel(QObject* parent) :
     QAbstractListModel(parent)
@@ -157,7 +108,6 @@ void PreflightFindingsModel::replace(QString documentKey,
     m_findings = std::move(next);
     m_selectedFindingId.clear();
     endResetModel();
-    Q_EMIT findingsReplaced();
 }
 
 void PreflightFindingsModel::clear()
@@ -168,7 +118,6 @@ void PreflightFindingsModel::clear()
     m_documentRevision.clear();
     m_selectedFindingId.clear();
     endResetModel();
-    Q_EMIT findingsReplaced();
 }
 
 void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
@@ -192,8 +141,6 @@ void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
             Q_EMIT dataChanged(index(row), index(row), { SelectedRole });
         }
     }
-
-    Q_EMIT selectedFindingIdChanged(m_selectedFindingId);
 }
 
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
@@ -265,36 +212,6 @@ QHash<QString, int> PreflightFindingsModel::groupCounts(QString severity) const
         ++result[finding.checkId];
     }
     return result;
-}
-
-QList<InteractionTarget> PreflightFindingsModel::interactionTargets() const
-{
-    QList<InteractionTarget> targets;
-    for (const PreflightFindingView& finding : m_findings)
-    {
-        if (!hasRenderableBbox(finding.bbox) || finding.page <= 0)
-        {
-            continue;
-        }
-
-        InteractionTarget target;
-        target.kind = InteractionTargetKind::Finding;
-        target.pageIndex = finding.page - 1;
-        target.id = finding.id;
-        target.pageBounds = finding.bbox.normalized();
-        targets.push_back(target);
-    }
-    return targets;
-}
-
-QHash<QString, OverlaySeverity> PreflightFindingsModel::severityMap() const
-{
-    QHash<QString, OverlaySeverity> severities;
-    for (const PreflightFindingView& finding : m_findings)
-    {
-        severities.insert(finding.id, severityFromString(finding.severity));
-    }
-    return severities;
 }
 
 }   // namespace pdfinteraction

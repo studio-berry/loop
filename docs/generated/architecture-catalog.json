@@ -199,6 +199,13 @@
         "UnitTestsQuickCanvas"
       ],
       "title": "The Qt Quick canvas releases and rebuilds its scene-graph state, follows the display metrics, and never presents another revision's pixels"
+    },
+    {
+      "id": "I27",
+      "test_targets": [
+        "UnitTestsQuickAccessibility"
+      ],
+      "title": "The Quick canvas accessible tree has one privacy-safe canvas node and no tile-level children"
     }
   ],
   "branch_policy": {
@@ -404,6 +411,7 @@
     "UnitTestsOverlayFrame",
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
+    "UnitTestsP4S9Interaction",
     "UnitTestsPageMasterExport",
     "UnitTestsPageSurface",
     "UnitTestsPdfToolContract",
@@ -417,7 +425,9 @@
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
+    "UnitTestsProductOperatorLoop",
     "UnitTestsProfileIdentity",
+    "UnitTestsQuickAccessibility",
     "UnitTestsQuickCanvas",
     "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
@@ -427,6 +437,7 @@
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",
+    "UnitTestsShellKeyboard",
     "UnitTestsStandardOracle",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",

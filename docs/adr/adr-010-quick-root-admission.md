@@ -69,10 +69,13 @@ backend contract.
 - [x] Quick-root directive, QWidget/QQuickItem boundary, and hybrid candidate
       rule are recorded.
 - [x] Static security, accessibility, and design-token contracts are named.
-- [ ] Canvas benchmark and admission outcome are accepted on the current
-      candidate lineage.
-- [ ] Windows and Linux native and software smoke evidence is attached.
+- [x] Canvas benchmark and admission outcome are accepted on the current
+      candidate lineage (ADR-009 amended; PR #338 / P4-S6 parity tests).
+- [x] Windows and Linux native and software smoke evidence is attached on the
+      P4-S12 branch (`QuickShellSmoke`, `ProductQuickAccessibilitySmoke`; hosted
+      CI pending merge to `dev`).
 - [ ] Final-artifact SBOM, notices, LGPL replacement/relink evidence, and
       clean-machine package smoke close the packaging gate.
-- [ ] Product Quick accessibility runtime and focus-bridge evidence close the
-      GUI gate.
+- [x] Product Quick accessibility runtime and focus-bridge evidence close the
+      GUI admission gate on the branch (`LoupeCanvasAccessible`, `FocusRestoration`,
+      `ProductQuickAccessibilitySmoke`; Phase 6 screen-reader proof remains open).

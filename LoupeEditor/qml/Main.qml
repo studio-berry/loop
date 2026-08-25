@@ -10,6 +10,7 @@ ApplicationWindow {
     id: window
 
     property var host: editorHost
+    readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     visible: true
     width: 1024
@@ -76,7 +77,12 @@ ApplicationWindow {
                 text: qsTr("&Open…")
                 enabled: commandEnabled("actionOpen")
                 shortcut: shortcutSequence(commandMap["actionOpen"])
-                onTriggered: openDialog.open()
+                onTriggered: {
+                    if (host && host.focusRestoration) {
+                        host.focusRestoration.remember(window.activeFocusItem)
+                    }
+                    openDialog.open()
+                }
             }
             Action {
                 text: qsTr("&Close")
@@ -94,7 +100,12 @@ ApplicationWindow {
                 text: qsTr("Save &As…")
                 enabled: commandEnabled("actionSave_As")
                 shortcut: shortcutSequence(commandMap["actionSave_As"])
-                onTriggered: saveAsDialog.open()
+                onTriggered: {
+                    if (host && host.focusRestoration) {
+                        host.focusRestoration.remember(window.activeFocusItem)
+                    }
+                    saveAsDialog.open()
+                }
             }
             MenuSeparator {}
             Action {
@@ -187,7 +198,9 @@ ApplicationWindow {
             if (host) {
                 host.openFileUrl(selectedFile)
             }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
         }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
     FileDialog {
@@ -199,7 +212,9 @@ ApplicationWindow {
             if (host) {
                 host.saveAsFileUrl(selectedFile)
             }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
         }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
     ColumnLayout {
@@ -211,6 +226,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             visible: statusLabel.text.length > 0
             padding: 8
+
+            Accessible.role: Accessible.StatusBar
+            Accessible.name: qsTr("Document status")
 
             Label {
                 id: statusLabel
@@ -259,6 +277,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             padding: 6
 
+            Accessible.role: Accessible.StatusBar
+            Accessible.name: qsTr("Page status")
+
             RowLayout {
                 anchors.fill: parent
                 spacing: 12
@@ -267,16 +288,19 @@ ApplicationWindow {
                     text: host && host.hasDocument
                           ? qsTr("Page %1 / %2").arg(host.currentPage + 1).arg(host.pageCount)
                           : qsTr("No document")
+                    Accessible.name: qsTr("Current page")
                 }
 
                 Label {
                     visible: host && host.hasDocument
                     text: qsTr("Zoom %1%").arg(Math.round(host.zoom * 100))
+                    Accessible.name: qsTr("Current zoom")
                 }
 
                 Label {
                     visible: host && host.hasDocument && host.rotationDegrees !== 0
                     text: qsTr("Rotation %1°").arg(host.rotationDegrees)
+                    Accessible.name: qsTr("Current rotation")
                 }
 
                 Item { Layout.fillWidth: true }

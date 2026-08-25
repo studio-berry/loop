@@ -231,6 +231,26 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         )
         add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsEditorHost")
         set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        add_executable(UnitTestsProductOperatorLoop
+            tst_productoperatorloop.cpp
+        )
+
+        target_link_libraries(UnitTestsProductOperatorLoop PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_compile_definitions(UnitTestsProductOperatorLoop PRIVATE
+            LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+            LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+        )
+
+        set_target_properties(UnitTestsProductOperatorLoop PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsProductOperatorLoop "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsProductOperatorLoop")
+        set_tests_properties(UnitTestsProductOperatorLoop PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endif()
 
     # Architecture invariant I23, admission half: one render-request path through
@@ -304,6 +324,51 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
+
+    add_executable(UnitTestsP4S9Interaction
+        tst_p4s9interaction.cpp
+    )
+
+    target_link_libraries(UnitTestsP4S9Interaction PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsP4S9Interaction PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
+
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_executable(UnitTestsQuickAccessibility
+            tst_quickaccessibilitytest.cpp
+        )
+
+        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore LoupeEditorQuick LoupeEditorQuickplugin LoupeEditorQuickplugin_init Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        set_target_properties(UnitTestsQuickAccessibility PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsQuickAccessibility "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsQuickAccessibility")
+        set_tests_properties(UnitTestsQuickAccessibility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        add_executable(UnitTestsShellKeyboard
+            tst_shellkeyboardtest.cpp
+        )
+
+        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+
+        set_target_properties(UnitTestsShellKeyboard PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsShellKeyboard "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsShellKeyboard")
+    endif()
 
     # Architecture invariant I25. The inverse of the five targets above: this one
     # links LoupeLibQuick and therefore Qt6::Quick, because it is the admitted

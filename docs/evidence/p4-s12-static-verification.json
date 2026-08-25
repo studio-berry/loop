@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "session": "P4-S12",
+  "branch": "cursor/p4-s12-product-cutover-2f85",
+  "base_sha": "06004dac1d460d0fe8de06cd9506c4fcd5e2e18a",
+  "recorded_at": "2026-08-24",
+  "static_verification": [
+    {
+      "command": "python3 scripts/verify-installed-product-graph.py",
+      "platform": "linux-agent",
+      "result": "pass"
+    },
+    {
+      "command": "python3 scripts/verify-loupe-shell-contract.py",
+      "platform": "linux-agent",
+      "result": "pass"
+    },
+    {
+      "command": "python3 scripts/verify-quick-runtime-contract.py",
+      "platform": "linux-agent",
+      "result": "pass"
+    },
+    {
+      "command": "python3 scripts/ci/test_verify_loupe_shell_contract.py",
+      "platform": "linux-agent",
+      "result": "pass"
+    },
+    {
+      "command": "python3 scripts/agent/check-change.py --base origin/dev",
+      "platform": "linux-agent",
+      "result": "pass"
+    }
+  ],
+  "hosted_ci_pending": [
+    "Linux/Windows UnitTestsProductOperatorLoop",
+    "Linux/Windows QuickShellSmoke native + QT_QUICK_BACKEND=software",
+    "Linux/Windows ProductQuickAccessibilitySmoke",
+    "clean-machine package smoke (P-01)",
+    "final-artifact SBOM/notices/relink (P-02)"
+  ],
+  "notes": "Hosted CI evidence attaches after merge to dev on exact candidate SHA."
+}

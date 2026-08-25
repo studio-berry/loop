@@ -25,6 +25,8 @@ qt_policy(SET QTP0001 NEW)
 add_library(LoupeEditorQuick STATIC
     editorhost.cpp
     editorhost.h
+    focusrestoration.cpp
+    focusrestoration.h
 )
 
 qt_add_qml_module(LoupeEditorQuick
@@ -34,6 +36,8 @@ qt_add_qml_module(LoupeEditorQuick
         qml/Main.qml
         qml/Workspace.qml
         qml/CanvasPane.qml
+        qml/PreflightPane.qml
+        qml/InspectorPane.qml
 )
 
 target_link_libraries(LoupeEditorQuick
