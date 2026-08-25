@@ -622,7 +622,7 @@ void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
     QVERIFY(!placed.isEmpty());
 
     const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
-    QMouseEvent move(QEvent::MouseMove, inside, inside, inside, Qt::NoButton, Qt::NoModifier);
+    QMouseEvent move(QEvent::MouseMove, inside, inside, inside, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
     m_item->mouseMoveEvent(&move);
 
     // A hover through the admitted host must rebuild overlays only. Issue #143 and
