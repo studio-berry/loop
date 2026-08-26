@@ -286,6 +286,13 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("pswd"), { QStringLiteral("--pswd") }, QStringLiteral("password"), PDFToolValueType::String, {}, {}, false, false, true);
         add(QStringLiteral("no-permissive-reading"), { QStringLiteral("--no-permissive-reading") }, {}, PDFToolValueType::Boolean);
     }
+    if (optionFlags.testFlag(RenderPage))
+    {
+        add(QStringLiteral("page-index"), { QStringLiteral("--page-index") }, QStringLiteral("index"), PDFToolValueType::Integer, {}, {}, true);
+        add(QStringLiteral("dpi"), { QStringLiteral("--dpi") }, QStringLiteral("dpi"), PDFToolValueType::Integer, {}, QStringLiteral("300"));
+        add(QStringLiteral("max-raster-pixels"), { QStringLiteral("--max-raster-pixels") }, QStringLiteral("pixels"), PDFToolValueType::Integer, {}, QStringLiteral("250000000"));
+        add(QStringLiteral("output"), { QStringLiteral("--output") }, QStringLiteral("file"), PDFToolValueType::Path, {}, {}, true);
+    }
     if (optionFlags.testFlag(Redact))
     {
         add(QStringLiteral("redact-copy-title"), { QStringLiteral("--redact-copy-title") }, {}, PDFToolValueType::Boolean);
@@ -358,6 +365,7 @@ QList<PDFToolOptionDescriptor> PDFToolAbstractApplication::describeOptions(Optio
         add(QStringLiteral("stock"), { QStringLiteral("--stock") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("finishing"), { QStringLiteral("--finishing") }, QStringLiteral("id"), PDFToolValueType::String);
         add(QStringLiteral("param"), { QStringLiteral("--param") }, QStringLiteral("key=value"), PDFToolValueType::String, {}, {}, false, true);
+        add(QStringLiteral("checks"), { QStringLiteral("--checks") }, QStringLiteral("ids"), PDFToolValueType::Csv);
     }
     if (optionFlags.testFlag(CapabilityDiscovery))
     {
@@ -670,6 +678,14 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("no-permissive-reading"), QStringLiteral("Do not attempt to fix damaged documents."));
     }
 
+    if (optionFlags.testFlag(RenderPage))
+    {
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("page-index"), QStringLiteral("Zero-based page index to render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("dpi"), QStringLiteral("Rasterization resolution in DPI."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("max-raster-pixels"), QStringLiteral("Maximum pixels permitted for the render."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("output"), QStringLiteral("Output PNG file."));
+    }
+
     if (optionFlags.testFlag(Separate))
     {
         parser->addPositionalArgument("pattern", "Page pattern, must contain '%' character if multiple pages are selected.");
@@ -714,7 +730,10 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
     {
         parser->addPositionalArgument("document", "Source PDF for the repair transaction.");
         parser->addOption(QCommandLineOption("operation", "Registered repair operation id.", "id"));
-        parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        if (!optionFlags.testFlag(PreflightProfile))
+        {
+            parser->addOption(QCommandLineOption("param", "Typed operation parameter as key=value; may be repeated.", "key=value"));
+        }
         parser->addOption(QCommandLineOption("output", "Final output PDF path.", "file"));
         parser->addOption(QCommandLineOption("report-file", "Portable operation report JSON path.", "file"));
         parser->addOption(QCommandLineOption("render-dir", "Directory for repair-diff artifacts.", "directory"));
@@ -807,6 +826,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
         addDescribedOption(parser, optionDescriptors, QStringLiteral("stock"), QStringLiteral("Stable stock identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("finishing"), QStringLiteral("Stable finishing identifier."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("param"), QStringLiteral("Profile variable binding as key=value; may be repeated. Overrides job-spec and profile defaults."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("checks"), QStringLiteral("Comma-separated preflight check ids for targeted revalidation; default runs all enabled checks."));
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -1106,6 +1126,27 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.permissiveReading = !parser->isSet("no-permissive-reading");
     }
 
+    if (optionFlags.testFlag(RenderPage))
+    {
+        bool ok = false;
+        options.renderPageIndex = parser->value("page-index").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageIndex = -1;
+        }
+        options.renderPageDpi = parser->value("dpi").toInt(&ok);
+        if (!ok)
+        {
+            options.renderPageDpi = 300;
+        }
+        options.renderPageMaxRasterPixels = parser->value("max-raster-pixels").toLongLong(&ok);
+        if (!ok)
+        {
+            options.renderPageMaxRasterPixels = 250000000;
+        }
+        options.renderPageOutput = parser->value("output");
+    }
+
     if (optionFlags.testFlag(Redact))
     {
         options.redactedDocument = positionalArguments.size() >= 2 ? positionalArguments[1] : QString();
@@ -1318,6 +1359,15 @@ PDFToolOptions PDFToolAbstractApplication::getOptions(QCommandLineParser* parser
         options.preflightStockId = parser->value("stock");
         options.preflightFinishingId = parser->value("finishing");
         options.preflightParameterAssignments = parser->values("param");
+        const QString checksValue = parser->value("checks").trimmed();
+        if (!checksValue.isEmpty())
+        {
+            options.preflightCheckFilter = checksValue.split(QLatin1Char(','), Qt::SkipEmptyParts);
+            for (QString& checkId : options.preflightCheckFilter)
+            {
+                checkId = checkId.trimmed();
+            }
+        }
     }
 
     if (optionFlags.testFlag(CapabilityDiscovery))
@@ -2466,7 +2516,7 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutput(const PDFT
         return PDFToolExitCode::InvalidInvocation;
     }
 
-    if (outputInfo.exists() && !options.destructiveOverwrite)
+    if (outputInfo.exists() && !options.destructiveOverwrite && !options.destructiveDryRun)
     {
         reportDiagnostic(options,
                          PDFToolDiagnosticSeverity::Error,

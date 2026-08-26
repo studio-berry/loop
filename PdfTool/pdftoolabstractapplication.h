@@ -199,6 +199,12 @@ struct PDFToolOptions
     int renderMSAAsamples = 4;
     int renderRasterizerCount = pdf::PDFRasterizerPool::getDefaultRasterizerCount();
 
+    // For the versioned STCH render-page contract
+    int renderPageIndex = -1;
+    int renderPageDpi = 300;
+    qint64 renderPageMaxRasterPixels = 250000000;
+    QString renderPageOutput;
+
     // For option 'Separate'
     QString separatePagePattern;
 
@@ -257,6 +263,7 @@ struct PDFToolOptions
     QString preflightStockId;
     QString preflightFinishingId;
     QStringList preflightParameterAssignments;
+    QStringList preflightCheckFilter;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
@@ -391,6 +398,7 @@ public:
         RepairDiff = 0x400000000ULL,   ///< Deterministic before/after repair comparison
         Repair = 0x800000000ULL,   ///< Transactional prepress-safe repair operation
         ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
+        RenderPage = 0x4000000000ULL,   ///< Settings for render-page STCH contract
     };
     Q_DECLARE_FLAGS(Options, Option)
 

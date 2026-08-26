@@ -39,9 +39,11 @@ private slots:
     void incompleteImpactSelectsFullRevalidation();
     void imagesOnlyPlanSelectsImageResolution();
     void unmappedCheckForcesFullPlan();
+    void emptyTargetedPlanFallsBackToFull();
     void standardsConvertRequiresOracle();
     void registeredOperationsDeclareImpact();
     void targetedMatchesFullOnImageProfile();
+    void targetedMatchesFullOnMultiCheckImageProfile();
 };
 
 namespace
@@ -89,6 +91,21 @@ QJsonObject imageProfile()
     };
 }
 
+QJsonObject multiCheckImageProfile()
+{
+    return QJsonObject{
+        { QStringLiteral("name"), QStringLiteral("Images and fonts") },
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("image-resolution") },
+                                            { QStringLiteral("min_dpi"), 300 },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } },
+                                        QJsonObject{
+                                            { QStringLiteral("id"), QStringLiteral("embedded-fonts") },
+                                            { QStringLiteral("severity"), QStringLiteral("error") } } } }
+    };
+}
+
 }   // namespace
 
 void OperationImpactTest::incompleteImpactSelectsFullRevalidation()
@@ -118,6 +135,17 @@ void OperationImpactTest::unmappedCheckForcesFullPlan()
     const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("bleed") });
     QVERIFY(plan.full);
     QCOMPARE(plan.reason, QStringLiteral("unmapped-check"));
+}
+
+void OperationImpactTest::emptyTargetedPlanFallsBackToFull()
+{
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("embedded-fonts") });
+    QVERIFY(plan.full);
+    QCOMPARE(plan.reason, QStringLiteral("no-targeted-checks"));
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("embedded-fonts") });
 }
 
 void OperationImpactTest::standardsConvertRequiresOracle()
@@ -158,9 +186,33 @@ void OperationImpactTest::targetedMatchesFullOnImageProfile()
     QVERIFY(!plan.full);
     QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
 
-    const pdf::PreflightResult targeted = engine.run(imageProfile());
+    const pdf::PreflightResult targeted = engine.run(imageProfile(), plan);
     QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
     QCOMPARE(targeted.errors.size(), full.errors.size());
+}
+
+void OperationImpactTest::targetedMatchesFullOnMultiCheckImageProfile()
+{
+    pdf::PDFDocument document = buildLowDpiImagePage();
+    pdf::PDFDocumentSession session(&document);
+    pdf::PreflightEngine engine(&session);
+    const QJsonObject profile = multiCheckImageProfile();
+    const pdf::PreflightResult full = engine.run(profile);
+
+    pdf::PDFOperationImpact impact;
+    impact.domains = pdf::PDFEvidenceDomain::Images;
+    impact.impactComplete = true;
+    const pdf::PDFRevalidationPlan plan = pdf::planRevalidation(impact, { QStringLiteral("image-resolution"), QStringLiteral("embedded-fonts") });
+    QVERIFY(!plan.full);
+    QCOMPARE(plan.checkIds, QStringList{ QStringLiteral("image-resolution") });
+
+    const pdf::PreflightResult targeted = engine.run(profile, plan);
+    QCOMPARE(pdf::reducePreflightVerdict(targeted).state, pdf::reducePreflightVerdict(full).state);
+    QCOMPARE(targeted.errors.size(), full.errors.size());
+    for (const pdf::PreflightFinding& error : targeted.errors)
+    {
+        QCOMPARE(error.checkId, QStringLiteral("image-resolution"));
+    }
 }
 
 QTEST_APPLESS_MAIN(OperationImpactTest)

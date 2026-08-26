@@ -109,6 +109,8 @@ add_library(LoupeLibCore SHARED
     sources/pdfdocumenttextfloweditormodel.h
     sources/pdfdocumentwriter.cpp
     sources/pdfdocumentwriter.h
+    sources/pdfwriteobjectvisitor.cpp
+    sources/pdfwriteobjectvisitor_p.h
     sources/pdfexecutionpolicy.cpp
     sources/pdfexecutionpolicy.h
     sources/pdffile.cpp
@@ -150,6 +152,7 @@ add_library(LoupeLibCore SHARED
     sources/pdfdocument.cpp
     sources/pdfdocument.h
     sources/pdfdocumentreader.cpp
+    sources/pdfdocumentreaderio.cpp
     sources/pdfdocumentreader.h
     sources/pdfpattern.cpp
     sources/pdfpattern.h
@@ -224,6 +227,7 @@ add_library(LoupeLibCore SHARED
     sources/pdfwidgetsnapshot.cpp
     sources/pdfwidgetsnapshot.h
     cmaps.qrc
+    schema-compatibility.qrc
     aatl.qrc
     sources/pdfcertificatestore.h
     sources/pdfcertificatestore.cpp
@@ -281,6 +285,10 @@ endif()
 
 if(MINGW)
     target_link_libraries(LoupeLibCore PRIVATE Secur32 Mscms Gdi32 User32 crypt32)
+endif()
+
+if(WIN32)
+    target_link_libraries(LoupeLibCore PRIVATE Psapi)
 endif()
 
 target_include_directories(LoupeLibCore INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)

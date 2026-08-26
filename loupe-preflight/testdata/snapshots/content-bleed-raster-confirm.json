@@ -25,6 +25,7 @@
     "inspection_complete": true,
     "pass": true,
     "profile": "Sinalite Tiered Bleed (Raster Confirm)",
+    "schema_kind": "preflight-report",
     "schema_version": 3,
     "verdict": {
         "blocking_finding_ids": [

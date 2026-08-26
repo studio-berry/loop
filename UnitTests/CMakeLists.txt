@@ -150,6 +150,9 @@ set_target_properties(UnitTestsJobScheduler PROPERTIES
 
 add_test(UnitTestsJobScheduler "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsJobScheduler")
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/phase4-tests.cmake)
+
+
 add_executable(UnitTestsImageOptimizer
 	tst_imageoptimizertest.cpp
 )
@@ -446,6 +449,8 @@ add_executable(UnitTestsLifecycle
     tst_lifecycletest.cpp
 )
 target_link_libraries(UnitTestsLifecycle PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Sql Qt6::Test)
+target_compile_definitions(UnitTestsLifecycle PRIVATE
+    LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(UnitTestsLifecycle PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
@@ -778,13 +783,15 @@ add_test(UnitTestsPreflightChecks  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 # Locks the Editor plugin's pure sidecar path, exit-code, and report-contract helpers.
 add_executable(UnitTestsPreflightPlugin
     tst_preflightplugintest.cpp
+    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
 )
 
-target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test LoupeLibCore)
+target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test LoupeLibCore LoupeLibWidgets)
 target_include_directories(UnitTestsPreflightPlugin PRIVATE
     ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
     ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
     ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
     ${CMAKE_BINARY_DIR})
 target_compile_definitions(UnitTestsPreflightPlugin PRIVATE
     LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
@@ -861,6 +868,28 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsOperatorAcceptance  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOperatorAcceptance")
+
+    add_executable(UnitTestsRepairOperatorAcceptance
+        tst_repairoperatoracceptance.cpp
+    )
+
+    target_link_libraries(UnitTestsRepairOperatorAcceptance PRIVATE LoupeLibCore Qt6::Core Qt6::Test)
+    add_dependencies(UnitTestsRepairOperatorAcceptance PdfTool)
+    target_compile_definitions(UnitTestsRepairOperatorAcceptance PRIVATE
+        PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+    )
+    target_include_directories(UnitTestsRepairOperatorAcceptance PRIVATE
+        ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
+
+    set_target_properties(UnitTestsRepairOperatorAcceptance PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsRepairOperatorAcceptance  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRepairOperatorAcceptance")
 endif()
 
 # Compiles both identity headers into one TU so the pdf::PDFArtifactIdentity

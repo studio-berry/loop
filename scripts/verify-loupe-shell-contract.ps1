@@ -6,7 +6,8 @@
 .DESCRIPTION
     This check intentionally does not build or launch the GUI. It verifies the
     state/workspace contract, the #192 product-surface linkage, plugin routing,
-    and complete action coverage before GUI wiring is allowed.
+  legacy surface disposition inventory, and complete action coverage before GUI
+    wiring is allowed.
 #>
 param(
     [string]$RepoRoot = (Join-Path $PSScriptRoot ".."),
@@ -18,6 +19,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 
 foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, $EditorUiPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -36,8 +39,9 @@ if ($productSurface.shell_contract -ne "docs/loupe-shell.json") {
 if ($shell.schema_version -ne 1 -or $shell.issue -ne 193) {
     throw "Unsupported shell contract version or issue number."
 }
-if ($shell.gui_status -ne "deferred-until-0.1.1") {
-    throw "GUI deferral gate changed without an explicit scope update: $($shell.gui_status)"
+$allowedGuiStatuses = @("gated-by-quick-admission", "quick-admitted")
+if ($allowedGuiStatuses -notcontains $shell.gui_status) {
+    throw "Unsupported gui_status: $($shell.gui_status)"
 }
 if ($shell.shell_surface -ne "LoupeEditor") {
     throw "Loupe shell must remain LoupeEditor: $($shell.shell_surface)"
@@ -65,6 +69,7 @@ if (($shellWorkspaceIds -join ",") -ne (($expectedWorkspaceIds | Sort-Object) -j
 }
 $validDispositions = @("KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING")
 $validTargets = @("Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced")
+$validLegacyDispositions = @("MIGRATE", "CONSOLIDATE", "HEADLESS", "RETIRE")
 $policyActions = @($actionPolicy.actions)
 if ($actionPolicy.schema_version -ne 1 -or $actionPolicy.issue -ne 193) {
     throw "Unsupported Editor action policy version or issue number."
@@ -96,6 +101,7 @@ if ([int]$actionPolicy.expected_action_count -ne $uiIds.Count -or $policyActions
     throw "Editor action count mismatch. UI=$($uiIds.Count), policy=$($policyActions.Count), expected=$($actionPolicy.expected_action_count)"
 }
 
+$pluginPolicyFields = @("owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition")
 foreach ($pluginAction in @($shell.plugin_action_policy)) {
     $pluginSurface = @($productSurface.surfaces | Where-Object { $_.kind -eq "plugin" -and $_.artifact -eq $pluginAction.plugin })
     if ($pluginSurface.Count -ne 1) {
@@ -107,10 +113,62 @@ foreach ($pluginAction in @($shell.plugin_action_policy)) {
     if ($validTargets -notcontains $pluginAction.target) {
         throw "Invalid plugin target for $($pluginAction.plugin): $($pluginAction.target)"
     }
+    foreach ($field in $pluginPolicyFields) {
+        if (-not ($pluginAction.PSObject.Properties.Name -contains $field)) {
+            throw "Plugin policy $($pluginAction.plugin) is missing required field: $field"
+        }
+        if ($field -ne "replacement_target" -and [string]::IsNullOrWhiteSpace([string]$pluginAction.$field)) {
+            throw "Plugin policy $($pluginAction.plugin) has empty required field: $field"
+        }
+    }
     $expectedShellDisposition = if ($pluginSurface[0].disposition -eq "CLI-ONLY") { "STOP-SHIPPING" } else { $pluginSurface[0].disposition }
     if ($pluginAction.disposition -ne $expectedShellDisposition) {
         throw "Plugin shell disposition diverges from product-surface manifest for $($pluginAction.plugin): expected $expectedShellDisposition, found $($pluginAction.disposition)"
     }
 }
 
-Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies; GUI remains deferred until 0.1.1."
+$legacyLedger = @($shell.legacy_surface_disposition)
+$legacyPaths = @()
+$legacyFields = @("path", "disposition", "owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition", "rationale")
+foreach ($entry in $legacyLedger) {
+    foreach ($field in $legacyFields) {
+        if (-not ($entry.PSObject.Properties.Name -contains $field)) {
+            throw "Legacy surface entry is missing required field: $field"
+        }
+        if ($field -ne "replacement_target" -and [string]::IsNullOrWhiteSpace([string]$entry.$field)) {
+            throw "Legacy surface $($entry.path) has empty required field: $field"
+        }
+    }
+    if ($validLegacyDispositions -notcontains $entry.disposition) {
+        throw "Invalid legacy disposition for $($entry.path): $($entry.disposition)"
+    }
+    $fullPath = Join-Path $RepoRoot $entry.path
+    if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+        throw "Legacy surface ledger references missing file: $($entry.path)"
+    }
+    if ($legacyPaths -contains $entry.path) {
+        throw "Duplicate legacy surface ledger entry: $($entry.path)"
+    }
+    $legacyPaths += $entry.path
+}
+
+if ($legacyLedger.Count -ne 48) {
+    throw "legacy_surface_disposition must contain exactly 48 tracked .ui forms, found $($legacyLedger.Count)"
+}
+
+$repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | ForEach-Object {
+    $_.FullName.Substring($RepoRoot.Length + 1).Replace("\", "/")
+} | Sort-Object)
+$ledgerOnly = @($legacyPaths | Where-Object { $repoUiFiles -notcontains $_ })
+$repoOnly = @($repoUiFiles | Where-Object { $legacyPaths -notcontains $_ })
+if ($ledgerOnly.Count -gt 0 -or $repoOnly.Count -gt 0) {
+    throw "Legacy surface inventory drift. Ledger-only: $($ledgerOnly -join ', '); repo-only: $($repoOnly -join ', ')"
+}
+
+$guiMessage = if ($shell.gui_status -eq "quick-admitted") {
+    "Quick product shell admitted."
+} else {
+    "product GUI remains gated by S21/S22 Quick admission."
+}
+
+Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies, $($legacyLedger.Count) legacy UI dispositions; $guiMessage"

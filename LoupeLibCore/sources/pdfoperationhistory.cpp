@@ -108,6 +108,8 @@ QString pdfOperationHistoryEventKindToString(PDFOperationHistoryEventKind kind)
             return QStringLiteral("CertificateIssued");
         case PDFOperationHistoryEventKind::CertificateInvalidated:
             return QStringLiteral("CertificateInvalidated");
+        case PDFOperationHistoryEventKind::SchemaMigrated:
+            return QStringLiteral("SchemaMigrated");
     }
     return QStringLiteral("operation");
 }
@@ -129,6 +131,8 @@ PDFOperationHistoryEventKind pdfOperationHistoryEventKindFromString(const QStrin
         return PDFOperationHistoryEventKind::CertificateIssued;
     if (normalized == QStringLiteral("certificateinvalidated"))
         return PDFOperationHistoryEventKind::CertificateInvalidated;
+    if (normalized == QStringLiteral("schemamigrated"))
+        return PDFOperationHistoryEventKind::SchemaMigrated;
     return PDFOperationHistoryEventKind::Operation;
 }
 

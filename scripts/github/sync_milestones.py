@@ -57,8 +57,16 @@ def load_manifest() -> tuple[list[MilestoneSpec], list[RetireSpec]]:
     return specs, retire
 
 
-def gh_api(method: str, path: str, payload: dict | None = None) -> object:
+def gh_api(
+    method: str,
+    path: str,
+    payload: dict | None = None,
+    *,
+    paginate: bool = False,
+) -> object:
     command = ["gh", "api", "--method", method, path]
+    if paginate:
+        command.append("--paginate")
     if payload is not None:
         command.extend(["--input", "-"])
     try:
@@ -86,7 +94,11 @@ def remote_from_payload(item: dict) -> RemoteMilestone:
 
 
 def list_remote_milestones() -> list[RemoteMilestone]:
-    raw = gh_api("GET", f"repos/{REPO}/milestones?state=all&per_page=100")
+    raw = gh_api(
+        "GET",
+        f"repos/{REPO}/milestones?state=all&per_page=100",
+        paginate=True,
+    )
     if not isinstance(raw, list):
         raise RuntimeError("unexpected milestone list response")
     return [remote_from_payload(item) for item in raw]

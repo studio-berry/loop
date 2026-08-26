@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "issue": 178,
+  "status": "admission-contract",
+  "root_mode": "Qt Quick root after canvas and bridge admission",
+  "qml_imports": {
+    "allowed": [
+      "QtQuick",
+      "QtQuick.Controls",
+      "QtQuick.Layouts",
+      "QtQuick.Window",
+      "QtQuick.Dialogs",
+      "Loupe.Canvas",
+      "Loupe.Quick"
+    ],
+    "forbidden": [
+      "remote URLs",
+      "filesystem paths",
+      "process or shell modules",
+      "web or JavaScript network runtimes"
+    ]
+  },
+  "forbidden_qml_patterns": [
+    "Qt\\.create(?:Component|QmlObject)",
+    "XMLHttpRequest",
+    "Qt\\.openUrlExternally",
+    "QNetworkAccessManager",
+    "QFile(?:Info)?",
+    "QProcess",
+    "PDFDocument",
+    "import\\s+\\.",
+    "import\\s+(?:https?|file):"
+  ],
+  "runtime_boundaries": {
+    "document_and_revision_owner": "C++ session model",
+    "command_owner": "C++ typed revision-fenced command boundary",
+    "qml_role": "presentation, focus, and transient control state",
+    "plugin_policy": "trusted packaged native plugins are inspected before instance creation",
+    "resource_policy": "qrc-only first-party QML and assets",
+    "network_access": false,
+    "filesystem_access": false,
+    "process_launch": false,
+    "remote_imports": false,
+    "customer_content_persistence": false,
+    "pdf_payload_logging": false
+  },
+  "accessibility_contract": [
+    "meaningful name and description",
+    "role and semantic state",
+    "visible keyboard focus",
+    "keyboard reachability and predictable traversal",
+    "normal and high-contrast color contrast",
+    "status announcements without document payloads",
+    "DPI-aware and scalable text and controls",
+    "reduced-motion behavior"
+  ],
+  "verification": {
+    "static_policy_check": "scripts/verify-quick-shell-policy.py",
+    "static_policy_test": "scripts/ci/test_quick_shell_contract.py",
+    "scene_graph_smoke": "scripts/run-quick-backend-smoke.ps1",
+    "product_accessibility_smoke": "scripts/run-product-quick-a11y-smoke.ps1",
+    "preferred_rhi_variable": "QSG_RHI_BACKEND",
+    "software_backend_variable": "QT_QUICK_BACKEND=software",
+    "warp_preference_variable": "QSG_RHI_PREFER_SOFTWARE_RENDERER=1",
+    "offscreen_is_not_sufficient": true
+  }
+}

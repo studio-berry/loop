@@ -29,6 +29,7 @@
 #include "pdfcolorspaces.h"
 #include "pdfconstants.h"
 #include "pdfdocumentsession.h"
+#include "pdfdocumentwriter.h"
 #include "pdfexception.h"
 #include "pdffont.h"
 #include "pdfimage.h"
@@ -41,7 +42,9 @@
 
 #include <QJsonArray>
 #include <QPainterPathStroker>
+#include <QBuffer>
 #include <QSet>
+#include <QCryptographicHash>
 
 #include <cmath>
 #include <functional>
@@ -92,6 +95,10 @@ QJsonObject PDFEvidenceRecord::toJson() const
         { QStringLiteral("incomplete_reason"), incompleteReason },
         { QStringLiteral("budget_context"), budgetContext }
     };
+    if (artifact.isValid())
+    {
+        object.insert(QStringLiteral("artifact"), artifact.toJson());
+    }
     if (!extra.isEmpty())
     {
         object.insert(QStringLiteral("extra"), extra);
@@ -139,6 +146,10 @@ QJsonObject PDFEvidenceGraph::toJson() const
         { QStringLiteral("incomplete_reason"), incompleteReason },
         { QStringLiteral("records"), items }
     };
+    if (artifact.isValid())
+    {
+        object.insert(QStringLiteral("artifact"), artifact.toJson());
+    }
     writeSchemaEnvelope(object, PDFSchemaKind::EvidenceGraph, PDFSchemaVersion{ 1, 0 });
     return object;
 }
@@ -147,6 +158,61 @@ namespace
 {
 
 constexpr int EVIDENCE_MAX_FORM_DEPTH = 32;
+
+PDFArtifactIdentity artifactIdentityFromDocument(const PDFDocument* document)
+{
+    PDFArtifactIdentity artifact;
+    if (!document)
+    {
+        return artifact;
+    }
+
+    const QByteArray sourceHash = document->getSourceDataHash();
+    if (sourceHash.size() == 32)
+    {
+        artifact.sha256 = QString::fromLatin1(sourceHash.toHex());
+        artifact.mediaType = QStringLiteral("application/pdf");
+        artifact.size = 0;
+        return artifact;
+    }
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    QBuffer buffer;
+    if (!buffer.open(QIODevice::WriteOnly) || !writer.write(&buffer, document))
+    {
+        return artifact;
+    }
+    const QByteArray serialized = buffer.data();
+    if (!serialized.isEmpty())
+    {
+        artifact.sha256 = QString::fromLatin1(QCryptographicHash::hash(serialized, QCryptographicHash::Sha256).toHex());
+        artifact.mediaType = QStringLiteral("application/pdf");
+        artifact.size = serialized.size();
+    }
+    return artifact;
+}
+
+void ensureRequestedFamiliesComplete(PDFEvidenceGraph& graph, PDFEvidenceDomains requested, PDFEvidenceDomains completed)
+{
+    if (!graph.isComplete())
+    {
+        return;
+    }
+
+    for (PDFEvidenceDomain domain : { PDFEvidenceDomain::Images,
+                                      PDFEvidenceDomain::Colorants,
+                                      PDFEvidenceDomain::Strokes,
+                                      PDFEvidenceDomain::OverprintTransparency,
+                                      PDFEvidenceDomain::Fonts })
+    {
+        if (requested.testFlag(domain) && !completed.testFlag(domain))
+        {
+            graph.complete = false;
+            graph.incompleteReason = QStringLiteral("family-incomplete:%1").arg(pdfEvidenceDomainToString(domain));
+            return;
+        }
+    }
+}
 
 PDFEvidenceRecord makeRecord(const PDFEvidenceGraph* graph,
                              PDFEvidenceDomain domain,
@@ -1208,16 +1274,20 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
 
     PDFDocument* document = session->getDocument();
     graph.revision = session->getRevision();
+    graph.artifact = artifactIdentityFromDocument(document);
+    PDFEvidenceDomains completedFamilies;
 
     try
     {
         if (domains.testFlag(PDFEvidenceDomain::Fonts))
         {
             collectFonts(document, &graph, session->getProcessingBudget());
+            completedFamilies |= PDFEvidenceDomain::Fonts;
         }
         if (domains.testFlag(PDFEvidenceDomain::Colorants))
         {
             collectColorants(session, &graph, settings, session->getProcessingBudget());
+            completedFamilies |= PDFEvidenceDomain::Colorants;
         }
 
         const bool needsWalk = domains.testFlag(PDFEvidenceDomain::Images) || domains.testFlag(PDFEvidenceDomain::Strokes) || domains.testFlag(PDFEvidenceDomain::OverprintTransparency) || domains.testFlag(PDFEvidenceDomain::Colorants);
@@ -1312,7 +1382,10 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                     }
                 }
             }
+
+            completedFamilies |= domains & (PDFEvidenceDomains(PDFEvidenceDomain::Images) | PDFEvidenceDomain::Strokes | PDFEvidenceDomain::OverprintTransparency | PDFEvidenceDomain::Colorants);
         }
+        ensureRequestedFamiliesComplete(graph, domains, completedFamilies);
     }
     catch (const PDFBudgetExceededException& exception)
     {

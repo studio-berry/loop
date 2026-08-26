@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run-bash.py scripts/hooks/cc-guard-bash.sh"
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/run-bash.py\" \"$CLAUDE_PROJECT_DIR/scripts/hooks/cc-guard-bash.sh\""
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run-bash.py scripts/hooks/cc-guard-write.sh"
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/run-bash.py\" \"$CLAUDE_PROJECT_DIR/scripts/hooks/cc-guard-write.sh\""
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run-bash.py scripts/hooks/cc-format-cpp.sh"
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/run-bash.py\" \"$CLAUDE_PROJECT_DIR/scripts/hooks/cc-format-cpp.sh\""
           }
         ]
       }
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run-bash.py scripts/hooks/session-policy.sh"
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/run-bash.py\" \"$CLAUDE_PROJECT_DIR/scripts/hooks/session-policy.sh\""
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/hooks/run-bash.py scripts/hooks/cc-stop-self-review.sh"
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/hooks/run-bash.py\" \"$CLAUDE_PROJECT_DIR/scripts/hooks/cc-stop-self-review.sh\""
           }
         ]
       }

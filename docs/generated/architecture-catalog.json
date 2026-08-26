@@ -154,6 +154,58 @@
         "UnitTestsWorkloadEnvelope"
       ],
       "title": "Measured envelopes and benchmarks carry run identity fields"
+    },
+    {
+      "id": "I21",
+      "test_targets": [
+        "UnitTestsInteractionBoundary"
+      ],
+      "title": "The host-neutral interaction layer has no Widgets or QML dependency"
+    },
+    {
+      "id": "I22",
+      "test_targets": [
+        "UnitTestsDocumentFacade"
+      ],
+      "title": "One document lifecycle facade and one command catalog; no second action registry"
+    },
+    {
+      "id": "I23",
+      "test_targets": [
+        "UnitTestsPageSurface",
+        "UnitTestsViewportController"
+      ],
+      "title": "One host-neutral render-request path; a page surface is admitted only under its complete key"
+    },
+    {
+      "id": "I24",
+      "test_targets": [
+        "UnitTestsInteractionController",
+        "UnitTestsOverlayFrame"
+      ],
+      "title": "Transient interaction and overlays are revision-fenced; neither mutates the document nor forces a page rerender"
+    },
+    {
+      "id": "I25",
+      "test_targets": [
+        "UnitTestsQuickCanvas"
+      ],
+      "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer"
+    },
+    {
+      "id": "I26",
+      "test_targets": [
+        "UnitTestsCanvasParity",
+        "UnitTestsQuickCanvas"
+      ],
+      "title": "The Qt Quick canvas releases and rebuilds its scene-graph state, follows the display metrics, and never presents another revision's pixels"
+    },
+    {
+      "id": "I27",
+      "test_targets": [
+        "UnitTestsQuickAccessibility"
+      ],
+      "title": "The Quick canvas accessible tree has one privacy-safe canvas node and no tile-level children"
     }
   ],
   "branch_policy": {
@@ -329,11 +381,14 @@
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
     "UnitTestsBudgetExhaustion",
+    "UnitTestsCanvasParity",
     "UnitTestsContentEditor",
     "UnitTestsContentProcessorLimits",
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
+    "UnitTestsDocumentFacade",
     "UnitTestsDocumentSession",
+    "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
@@ -342,6 +397,8 @@
     "UnitTestsImageDownsampleFixup",
     "UnitTestsImageOptimizer",
     "UnitTestsIncrementalSave",
+    "UnitTestsInteractionBoundary",
+    "UnitTestsInteractionController",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
@@ -351,37 +408,48 @@
     "UnitTestsOperationHistory",
     "UnitTestsOperationImpact",
     "UnitTestsOperatorAcceptance",
+    "UnitTestsOverlayFrame",
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
+    "UnitTestsP4S9Interaction",
     "UnitTestsPageMasterExport",
+    "UnitTestsPageSurface",
     "UnitTestsPdfToolContract",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",
+    "UnitTestsPreflightInteraction",
     "UnitTestsPreflightPlugin",
     "UnitTestsPreflightProfileResolver",
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
     "UnitTestsProductionGeometry",
+    "UnitTestsProductOperatorLoop",
     "UnitTestsProfileIdentity",
+    "UnitTestsQuickAccessibility",
+    "UnitTestsQuickCanvas",
     "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",
     "UnitTestsRepairOperation",
+    "UnitTestsRepairOperatorAcceptance",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",
+    "UnitTestsShellKeyboard",
     "UnitTestsStandardOracle",
     "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
     "UnitTestsUndoRedoManager",
+    "UnitTestsViewportCommands",
+    "UnitTestsViewportController",
     "UnitTestsWorkloadEnvelope"
   ],
   "version_policy": {
     "cmake_format": "MAJOR.MINOR.PATCH",
-    "current": "0.1.0",
-    "prerelease": null,
+    "current": "0.2.0",
+    "prerelease": "alpha",
     "scheme": "semver",
     "tag_prefix": "v"
   },

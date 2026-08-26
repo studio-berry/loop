@@ -15,12 +15,16 @@
     "state_invariants",
     "status_contract",
     "action_policy",
-    "plugin_action_policy"
+    "plugin_action_policy",
+    "legacy_surface_disposition"
   ],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "issue": { "type": "integer", "const": 193 },
-    "gui_status": { "type": "string", "const": "deferred-until-0.1.1" },
+    "gui_status": {
+      "type": "string",
+      "enum": ["gated-by-quick-admission", "quick-admitted"]
+    },
     "shell_surface": { "type": "string", "const": "LoupeEditor" },
     "ui_foundation": {
       "type": "object",
@@ -29,7 +33,10 @@
       "properties": {
         "candidate": { "type": "string", "const": "Qt Quick Controls" },
         "decision_issue": { "type": "integer", "const": 178 },
-        "decision_status": { "type": "string", "enum": ["pending", "accepted", "rejected"] }
+        "decision_status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "accepted-with-admission-gates", "rejected"]
+        }
       }
     },
     "workspaces": {
@@ -40,7 +47,10 @@
         "additionalProperties": false,
         "required": ["id", "manifest_surface", "preserves"],
         "properties": {
-          "id": { "type": "string", "enum": ["document", "preflight", "production-preview", "pages", "inspect", "fix", "compare"] },
+          "id": {
+            "type": "string",
+            "enum": ["document", "preflight", "production-preview", "pages", "inspect", "fix", "compare"]
+          },
           "manifest_surface": { "type": "string", "pattern": "^loupe-[a-z0-9-]+$" },
           "preserves": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
         }
@@ -64,16 +74,70 @@
     "action_policy": { "type": "string", "const": "docs/loupe-shell-actions.json" },
     "plugin_action_policy": {
       "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["plugin", "disposition", "target"],
-        "properties": {
-          "plugin": { "type": "string", "minLength": 1 },
-          "disposition": { "enum": ["KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"] },
-          "target": { "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"] }
-        }
+      "minItems": 12,
+      "items": { "$ref": "#/$defs/plugin_policy" }
+    },
+    "legacy_surface_disposition": {
+      "type": "array",
+      "minItems": 48,
+      "maxItems": 48,
+      "items": { "$ref": "#/$defs/legacy_surface" }
+    }
+  },
+  "$defs": {
+    "plugin_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plugin",
+        "disposition",
+        "target",
+        "owner",
+        "replacement_target",
+        "required_test",
+        "evidence_artifact",
+        "deletion_condition"
+      ],
+      "properties": {
+        "plugin": { "type": "string", "minLength": 1 },
+        "disposition": {
+          "enum": ["KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"]
+        },
+        "target": {
+          "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"]
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "replacement_target": { "type": ["string", "null"] },
+        "required_test": { "type": "string", "minLength": 1 },
+        "evidence_artifact": { "type": "string", "minLength": 1 },
+        "deletion_condition": { "type": "string", "minLength": 1 },
+        "follow_up_issue": { "type": "integer" }
+      }
+    },
+    "legacy_surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "disposition",
+        "owner",
+        "replacement_target",
+        "required_test",
+        "evidence_artifact",
+        "deletion_condition",
+        "rationale"
+      ],
+      "properties": {
+        "path": { "type": "string", "pattern": "^[^/\\\\]+/.+\\.ui$" },
+        "disposition": {
+          "enum": ["MIGRATE", "CONSOLIDATE", "HEADLESS", "RETIRE"]
+        },
+        "owner": { "type": "string", "minLength": 1 },
+        "replacement_target": { "type": ["string", "null"] },
+        "required_test": { "type": "string", "minLength": 1 },
+        "evidence_artifact": { "type": "string", "minLength": 1 },
+        "deletion_condition": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string", "minLength": 1 }
       }
     }
   }

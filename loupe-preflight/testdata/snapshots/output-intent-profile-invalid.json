@@ -19,6 +19,7 @@
     "inspection_complete": true,
     "pass": false,
     "profile": "Loupe Test - Output Intent",
+    "schema_kind": "preflight-report",
     "schema_version": 3,
     "verdict": {
         "blocking_finding_ids": [

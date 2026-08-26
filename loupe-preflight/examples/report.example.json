@@ -2,7 +2,7 @@
   "schema_version": 2,
   "pass": false,
   "profile": "Loupe Default",
-  "engine_version": "0.1.0-alpha",
+  "engine_version": "0.2.0-alpha",
   "pdf": "example-venue-poster.pdf",
   "errors": [
     {

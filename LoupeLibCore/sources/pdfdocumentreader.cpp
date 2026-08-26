@@ -28,7 +28,6 @@
 #include "pdfstreamfilters.h"
 #include "pdfexecutionpolicy.h"
 
-#include <QFile>
 #include <QCryptographicHash>
 
 #include "pdfdbgheap.h"
@@ -53,7 +52,6 @@ PDFDocumentReader::PDFDocumentReader(PDFProgress* progress,
     m_authorizeOwnerOnly(authorizeOwnerOnly),
     m_processingBudget(std::move(processingLimits))
 {
-
 }
 
 void PDFDocumentReader::setProcessingLimits(const PDFProcessingLimits& limits)
@@ -61,38 +59,15 @@ void PDFDocumentReader::setProcessingLimits(const PDFProcessingLimits& limits)
     m_processingBudget.setLimits(limits);
 }
 
-PDFDocument PDFDocumentReader::readFromFile(const QString& fileName)
-{
-    QFile file(fileName);
-
-    reset();
-
-    if (file.exists())
-    {
-        if (file.open(QFile::ReadOnly))
-        {
-            PDFDocument document = readFromDevice(&file);
-            file.close();
-            return document;
-        }
-        else
-        {
-            m_result = Result::Failed;
-            m_errorMessage = tr("File '%1' cannot be opened for reading. %1").arg(file.errorString());
-        }
-    }
-    else
-    {
-        m_result = Result::Failed;
-        m_errorMessage = tr("File '%1' doesn't exist.").arg(fileName);
-    }
-
-    return PDFDocument();
-}
-
 PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
 {
     reset();
+
+    if (isOperationCancelled())
+    {
+        m_result = Result::Cancelled;
+        return PDFDocument();
+    }
 
     auto rejectOversizedDevice = [this, device]() -> bool
     {
@@ -123,6 +98,12 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
         QByteArray buffer;
         while (!device->atEnd())
         {
+            if (isOperationCancelled())
+            {
+                m_result = Result::Cancelled;
+                return QByteArray();
+            }
+
             const QByteArray chunk = device->read(CHUNK_SIZE);
             if (chunk.isEmpty())
             {
@@ -131,6 +112,11 @@ PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
 
             m_processingBudget.chargeInputBytes(static_cast<uint64_t>(chunk.size()), tr("PDF input"));
             buffer.append(chunk);
+        }
+        if (isOperationCancelled())
+        {
+            m_result = Result::Cancelled;
+            return QByteArray();
         }
         return buffer;
     };
@@ -580,6 +566,12 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
             objectNumberAndOffset.reserve(n);
             for (PDFInteger i = 0; i < n; ++i)
             {
+                progressStep();
+                if (m_result != Result::OK)
+                {
+                    return;
+                }
+
                 PDFObject currentObjectNumber = parser.getObject();
                 PDFObject currentOffset = parser.getObject();
 
@@ -595,6 +587,12 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
 
             for (size_t i = 0; i < objectNumberAndOffset.size(); ++i)
             {
+                progressStep();
+                if (m_result != Result::OK)
+                {
+                    return;
+                }
+
                 m_processingBudget.chargeObject(PDFTranslationContext::tr("object stream entry"));
                 const PDFInteger objectNumber = objectNumberAndOffset[i].first;
                 const PDFInteger offset = objectNumberAndOffset[i].second;
@@ -636,6 +634,13 @@ PDFDocument PDFDocumentReader::readFromBuffer(const QByteArray& buffer)
     try
     {
         reset();
+
+        if (isOperationCancelled())
+        {
+            m_result = Result::Cancelled;
+            return PDFDocument();
+        }
+
         m_processingBudget.chargeInputBytes(static_cast<uint64_t>(buffer.size()), tr("PDF input"));
         m_source = buffer;
 
@@ -954,6 +959,12 @@ void PDFDocumentReader::progressStart(size_t stepCount, QString text)
 
 void PDFDocumentReader::progressStep()
 {
+    if (isOperationCancelled())
+    {
+        m_result = Result::Cancelled;
+        return;
+    }
+
     if (m_progress)
     {
         m_progress->step();

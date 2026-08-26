@@ -114,6 +114,8 @@ void StandardOracleTest::missingValidatorIsError()
     QVERIFY(!result);
     QVERIFY(!report.independentValidationPassed);
     QVERIFY(!report.conversionAttempted);
+    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("incomplete"));
+    QCOMPARE(report.validator.value(QStringLiteral("reason_code")).toString(), QStringLiteral("validator-not-configured"));
 }
 
 void StandardOracleTest::alwaysFailValidatorIsError()
@@ -132,6 +134,13 @@ void StandardOracleTest::alwaysFailValidatorIsError()
     QVERIFY(!result);
     QVERIFY(!report.independentValidationPassed);
     QVERIFY(!report.conversionAttempted);
+    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("rejected"));
+    QCOMPARE(report.validator.value(QStringLiteral("reason_code")).toString(), QStringLiteral("validator-rejected"));
+    QCOMPARE(report.validator.value(QStringLiteral("exit_status")).toString(), QStringLiteral("normal"));
+    QCOMPARE(report.validator.value(QStringLiteral("exit_code")).toInt(), 1);
+    QVERIFY(report.validator.value(QStringLiteral("input_bytes")).toInteger() > 0);
+    QVERIFY(report.validator.value(QStringLiteral("input_sha256")).toString().size() == 64);
+    QVERIFY(report.validator.value(QStringLiteral("duration_ms")).toInteger() >= 0);
 }
 
 void StandardOracleTest::alwaysPassValidatorCanCommitPdfa()
@@ -150,6 +159,12 @@ void StandardOracleTest::alwaysPassValidatorCanCommitPdfa()
     QVERIFY2(result, qPrintable(result.getErrorMessage()));
     QVERIFY(report.independentValidationPassed);
     QVERIFY(report.conversionAttempted);
+    QCOMPARE(report.validator.value(QStringLiteral("result")).toString(), QStringLiteral("passed"));
+    QCOMPARE(report.validator.value(QStringLiteral("exit_status")).toString(), QStringLiteral("normal"));
+    QCOMPARE(report.validator.value(QStringLiteral("exit_code")).toInt(), 0);
+    QVERIFY(report.validator.value(QStringLiteral("input_bytes")).toInteger() > 0);
+    QVERIFY(report.validator.value(QStringLiteral("input_sha256")).toString().size() == 64);
+    QVERIFY(report.validator.value(QStringLiteral("duration_ms")).toInteger() >= 0);
 }
 
 void StandardOracleTest::unconvertiblePdfxHasNoMarker()

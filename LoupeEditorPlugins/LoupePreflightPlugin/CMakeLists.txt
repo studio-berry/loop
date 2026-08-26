@@ -31,7 +31,7 @@ set(LOUPE_PREFLIGHT_PLUGIN_SOURCES
 
 add_library(LoupePreflightPlugin SHARED ${LOUPE_PREFLIGHT_PLUGIN_SOURCES})
 
-target_link_libraries(LoupePreflightPlugin PRIVATE LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Widgets)
+target_link_libraries(LoupePreflightPlugin PRIVATE LoupeLibCore LoupeLibInteraction LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Widgets)
 
 set(LOUPE_PREFLIGHT_PROFILES_DIR ${LOUPE_INSTALL_SHARE_DIR}/loupe/profiles)
 cmake_path(RELATIVE_PATH LOUPE_PREFLIGHT_PROFILES_DIR

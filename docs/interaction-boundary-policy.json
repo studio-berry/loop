@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "session": "P4-S1",
+  "adr": "docs/adr/adr-010-quick-root-admission.md",
+  "invariant": "I21",
+  "status": "enforced",
+  "rationale": "LoupeLibInteraction is the host-neutral seam between LoupeLibCore and a future Qt Quick layer. It must stay buildable without any presentation host, so it links neither Widgets nor QML. Qt scopes its headers per module, so the absent link edge is what makes a forbidden include a compile error; this policy stops the edge from being re-added.",
+  "targets": [
+    {
+      "name": "LoupeLibInteraction",
+      "cmake": "LoupeLibInteraction/CMakeLists.txt",
+      "sources": "LoupeLibInteraction/sources",
+      "linkage": "STATIC",
+      "installed": false,
+      "allowed_link_targets": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui"
+      ]
+    }
+  ],
+  "forbidden_includes": [
+    "^QtWidgets(/|$)",
+    "^QtQml(/|$)",
+    "^QtQuick(/|$)",
+    "^QtQuickControls2(/|$)",
+    "^QWidget$",
+    "^QDialog$",
+    "^QAction$",
+    "^QMainWindow$",
+    "^QMenu(Bar)?$",
+    "^QToolBar$",
+    "^QLayout$",
+    "^QApplication$",
+    "^QQml.*$",
+    "^QQuick.*$",
+    "^QSG.*$"
+  ],
+  "forbidden_include_reason": "Widgets, QML, and scene-graph types are presentation-host concerns. QML never receives a document, session, scheduler, or mutable pixel buffer, and the neutral layer never owns a QWidget, QDialog, or QAction.",
+  "verification": {
+    "static_policy_check": "scripts/verify-interaction-boundary.py",
+    "static_policy_test": "scripts/ci/test_interaction_boundary.py",
+    "boundary_test_target": "UnitTestsInteractionBoundary"
+  }
+}

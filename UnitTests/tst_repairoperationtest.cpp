@@ -25,6 +25,7 @@
 #include "pdfstandardconversion.h"
 
 #include <QJsonDocument>
+#include <QTemporaryDir>
 #include <QJsonValue>
 #include <QtTest>
 
@@ -51,7 +52,7 @@ public:
     }
 };
 
-} // namespace
+}   // namespace
 
 class RepairOperationTest : public QObject
 {
@@ -63,6 +64,7 @@ private slots:
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
+    void addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff();
     void standardTargets_areExplicitAndStable();
 };
 
@@ -83,9 +85,7 @@ void RepairOperationTest::builtInOperations_areRegistered()
         QVERIFY(savePolicy.contains(QStringLiteral("mode")));
         QVERIFY(savePolicy.contains(QStringLiteral("invalidates_signatures")));
         QVERIFY(savePolicy.contains(QStringLiteral("reversible_in_session")));
-        if (descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("add-bleed")
-            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("downsample-images")
-            || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("rgb-to-cmyk"))
+        if (descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("add-bleed") || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("downsample-images") || descriptor.value(QStringLiteral("id")).toString() == QStringLiteral("rgb-to-cmyk"))
         {
             QVERIFY(descriptor.value(QStringLiteral("preflight_fixup")).toBool());
         }
@@ -95,7 +95,8 @@ void RepairOperationTest::builtInOperations_areRegistered()
 void RepairOperationTest::builtInOperations_declareSavePolicies()
 {
     const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
-    const auto policyMode = [&registry](const QString& id) {
+    const auto policyMode = [&registry](const QString& id)
+    {
         return registry.find(id)->descriptor().value(QStringLiteral("save_policy")).toObject().value(QStringLiteral("mode")).toString();
     };
 
@@ -111,9 +112,8 @@ void RepairOperationTest::builtInOperations_declareSavePolicies()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFRepairTransaction transaction(source);
     QVERIFY(transaction.add(registry.find(QStringLiteral("add-bleed")), QJsonObject{
-        { QStringLiteral("bleed_mm"), 3.0 },
-        { QStringLiteral("force"), true }
-    }));
+                                                                            { QStringLiteral("bleed_mm"), 3.0 },
+                                                                            { QStringLiteral("force"), true } }));
     QCOMPARE(transaction.savePolicy().mode, pdf::PDFSaveMode::SaveAsNewArtifact);
     QVERIFY(transaction.savePolicy().invalidatesSignatures);
 }
@@ -127,9 +127,8 @@ void RepairOperationTest::analyze_doesNotMutateSource()
 
     pdf::PDFRepairTransaction transaction(source);
     QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), QJsonObject{
-        { QStringLiteral("bleed_mm"), 3.0 },
-        { QStringLiteral("force"), true }
-    }));
+                                                                                                      { QStringLiteral("bleed_mm"), 3.0 },
+                                                                                                      { QStringLiteral("force"), true } }));
     QVERIFY(transaction.analyze());
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), originalWidth);
     QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Planned);
@@ -138,9 +137,8 @@ void RepairOperationTest::analyze_doesNotMutateSource()
     const QByteArray first = QJsonDocument(transaction.plans().front().toJson()).toJson(QJsonDocument::Compact);
     pdf::PDFRepairTransaction second(source);
     QVERIFY(second.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), QJsonObject{
-        { QStringLiteral("bleed_mm"), 3.0 },
-        { QStringLiteral("force"), true }
-    }));
+                                                                                                 { QStringLiteral("bleed_mm"), 3.0 },
+                                                                                                 { QStringLiteral("force"), true } }));
     QVERIFY(second.analyze());
     QCOMPARE(first, QJsonDocument(second.plans().front().toJson()).toJson(QJsonDocument::Compact));
 }
@@ -175,11 +173,43 @@ void RepairOperationTest::failedOperation_discardsCandidate()
     QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
 }
 
+void RepairOperationTest::addBleedExpectedChanges_areMeasuredWithoutUnexpectedDiff()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), QJsonObject{
+                                                                                                      { QStringLiteral("bleed_mm"), 3.0 },
+                                                                                                      { QStringLiteral("mode"), QStringLiteral("mirror") },
+                                                                                                      { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.plans().first().expectedChanges.metadata);
+    QVERIFY(transaction.plans().first().expectedChanges.pageBoxes);
+    QVERIFY(transaction.plans().first().expectedChanges.pageContent);
+    QVERIFY(transaction.apply());
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    pdf::PDFRepairDiffOptions options;
+    options.renderVisualDiff = !pdf::repairPlansMutatePageContent(transaction.plans());
+    pdf::PDFRepairDiffReport report;
+    QVERIFY(transaction.compareCandidate(directory.filePath(QStringLiteral("candidate.pdf")), options, &report));
+    QVERIFY(report.status == pdf::PDFRepairDiffStatus::Complete || report.status == pdf::PDFRepairDiffStatus::CompleteWithWarnings);
+    for (const pdf::PDFRepairStructuralChange& change : report.structuralChanges)
+    {
+        QVERIFY2(change.classification != pdf::PDFRepairChangeClass::Unexpected,
+                 qPrintable(QStringLiteral("unexpected change: %1").arg(change.path)));
+    }
+    QCOMPARE(source.getCatalog()->getPage(0)->getMediaBox().width(), 100.0);
+}
+
 void RepairOperationTest::standardTargets_areExplicitAndStable()
 {
     QCOMPARE(pdf::supportedPDFStandardTargets(), (QStringList{
-        QStringLiteral("PDF/X-1a:2001"), QStringLiteral("PDF/X-3:2002"),
-        QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") }));
+                                                     QStringLiteral("PDF/X-1a:2001"), QStringLiteral("PDF/X-3:2002"),
+                                                     QStringLiteral("PDF/X-4"), QStringLiteral("PDF/A-2b") }));
     pdf::PDFStandardTarget target = pdf::PDFStandardTarget::PDFX4;
     QVERIFY(pdf::pdfStandardTargetFromString(QStringLiteral("PDF/X-3:2002"), &target));
     QCOMPARE(target, pdf::PDFStandardTarget::PDFX3_2002);
@@ -188,4 +218,6 @@ void RepairOperationTest::standardTargets_areExplicitAndStable()
 
 QTEST_GUILESS_MAIN(RepairOperationTest)
 
+#if __has_include("tst_repairoperationtest.moc")
 #include "tst_repairoperationtest.moc"
+#endif

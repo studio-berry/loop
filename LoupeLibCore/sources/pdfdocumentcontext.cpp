@@ -102,9 +102,16 @@ void PDFDocumentContext::setDocument(PDFDocument* document, PDFModifiedDocument:
 
 void PDFDocumentContext::setDocument(PDFDocumentPointer document, PDFModifiedDocument::ModificationFlags flags)
 {
-    if (document.data() != m_document)
+    // The raw pointer is read before the move, not inside the same call. Argument
+    // evaluation order is unspecified, so replaceDocument(document.data(),
+    // std::move(document)) may move the owner out first and then read data() from
+    // an already-null pointer, leaving the context owning a document it reports as
+    // absent. MSVC evaluates right to left and does exactly that.
+    PDFDocument* rawDocument = document.data();
+
+    if (rawDocument != m_document)
     {
-        replaceDocument(document.data(), std::move(document));
+        replaceDocument(rawDocument, std::move(document));
     }
     else if (flags != PDFModifiedDocument::None)
     {

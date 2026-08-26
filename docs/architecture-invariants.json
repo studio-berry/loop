@@ -100,6 +100,41 @@
       "id": "I20",
       "title": "Measured envelopes and benchmarks carry run identity fields",
       "test_targets": ["UnitTestsWorkloadEnvelope"]
+    },
+    {
+      "id": "I21",
+      "title": "The host-neutral interaction layer has no Widgets or QML dependency",
+      "test_targets": ["UnitTestsInteractionBoundary"]
+    },
+    {
+      "id": "I22",
+      "title": "One document lifecycle facade and one command catalog; no second action registry",
+      "test_targets": ["UnitTestsDocumentFacade"]
+    },
+    {
+      "id": "I23",
+      "title": "One host-neutral render-request path; a page surface is admitted only under its complete key",
+      "test_targets": ["UnitTestsViewportController", "UnitTestsPageSurface"]
+    },
+    {
+      "id": "I24",
+      "title": "Transient interaction and overlays are revision-fenced; neither mutates the document nor forces a page rerender",
+      "test_targets": ["UnitTestsInteractionController", "UnitTestsOverlayFrame"]
+    },
+    {
+      "id": "I25",
+      "title": "The Qt Quick canvas presents only; QML receives no document, session, scheduler, or pixel buffer",
+      "test_targets": ["UnitTestsQuickCanvas"]
+    },
+    {
+      "id": "I26",
+      "title": "The Qt Quick canvas releases and rebuilds its scene-graph state, follows the display metrics, and never presents another revision's pixels",
+      "test_targets": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity"]
+    },
+    {
+      "id": "I27",
+      "title": "The Quick canvas accessible tree has one privacy-safe canvas node and no tile-level children",
+      "test_targets": ["UnitTestsQuickAccessibility"]
     }
   ]
 }

@@ -22,8 +22,7 @@
 
 #include "pdfdocumentwriter.h"
 #include "pdfconstants.h"
-#include "pdfvisitor.h"
-#include "pdfparser.h"
+#include "pdfwriteobjectvisitor_p.h"
 
 #include <QFile>
 #include <QBuffer>
@@ -34,34 +33,6 @@
 
 namespace pdf
 {
-
-class PDFWriteObjectVisitor : public PDFAbstractVisitor
-{
-public:
-    explicit PDFWriteObjectVisitor(QIODevice* device) :
-        m_device(device)
-    {
-
-    }
-
-    virtual void visitNull() override;
-    virtual void visitBool(bool value) override;
-    virtual void visitInt(PDFInteger value) override;
-    virtual void visitReal(PDFReal value) override;
-    virtual void visitString(PDFStringRef string) override;
-    virtual void visitName(PDFStringRef name) override;
-    virtual void visitArray(const PDFArray* array) override;
-    virtual void visitDictionary(const PDFDictionary* dictionary) override;
-    virtual void visitStream(const PDFStream* stream) override;
-    virtual void visitReference(const PDFObjectReference reference) override;
-
-    PDFObject getDecryptedObject();
-
-private:
-    void writeName(const QByteArray& string);
-
-    QIODevice* m_device;
-};
 
 namespace
 {
@@ -78,128 +49,16 @@ struct IncrementalXrefEntry
     bool free = false;
 };
 
-} // namespace
-
-void PDFWriteObjectVisitor::visitNull()
-{
-    m_device->write("null ");
-}
-
-void PDFWriteObjectVisitor::visitBool(bool value)
-{
-    if (value)
-    {
-        m_device->write("true ");
-    }
-    else
-    {
-        m_device->write("false ");
-    }
-}
-
-void PDFWriteObjectVisitor::visitInt(PDFInteger value)
-{
-    m_device->write(QString::number(value).toLatin1());
-    m_device->write(" ");
-}
-
-void PDFWriteObjectVisitor::visitReal(PDFReal value)
-{
-    // Jakub Melka: we use 5 digits, because they are specified
-    // in PDF 1.7 specification, appendix C, Table C.1, where it is defined,
-    // that number of significant digits of precision is 5.
-    m_device->write(QString::number(value, 'f', 5).toLatin1());
-    m_device->write(" ");
-}
-
-void PDFWriteObjectVisitor::visitString(PDFStringRef string)
-{
-    QByteArray data = string.getString();
-    if (data.indexOf('(') != -1 ||
-        data.indexOf(')') != -1 ||
-        data.indexOf('\\') != -1)
-    {
-        m_device->write("<");
-        m_device->write(data.toHex());
-        m_device->write(">");
-    }
-    else
-    {
-        m_device->write("(");
-        m_device->write(data);
-        m_device->write(")");
-    }
-
-    m_device->write(" ");
-}
-
-void PDFWriteObjectVisitor::writeName(const QByteArray& string)
-{
-    m_device->write("/");
-
-    for (const char character : string)
-    {
-        if (PDFLexicalAnalyzer::isRegular(character))
-        {
-            m_device->write(&character, 1);
-        }
-        else
-        {
-            m_device->write("#");
-            m_device->write(QByteArray(&character, 1).toHex());
-        }
-    }
-
-    m_device->write(" ");
-}
-
-void PDFWriteObjectVisitor::visitName(PDFStringRef name)
-{
-    writeName(name.getString());
-}
-
-void PDFWriteObjectVisitor::visitArray(const PDFArray* array)
-{
-    m_device->write("[ ");
-    acceptArray(array);
-    m_device->write("] ");
-}
-
-void PDFWriteObjectVisitor::visitDictionary(const PDFDictionary* dictionary)
-{
-    m_device->write("<< ");
-
-    for (size_t i = 0, count = dictionary->getCount(); i < count; ++i)
-    {
-        writeName(dictionary->getKey(i).getString());
-        dictionary->getValue(i).accept(this);
-    }
-
-    m_device->write(">> ");
-}
-
-void PDFWriteObjectVisitor::visitStream(const PDFStream* stream)
-{
-    visitDictionary(stream->getDictionary());
-
-    m_device->write("stream");
-    m_device->write("\x0D\x0A");
-    m_device->write(*stream->getContent());
-    m_device->write("\x0D\x0A");
-    m_device->write("endstream");
-    m_device->write("\x0D\x0A");
-}
-
-void PDFWriteObjectVisitor::visitReference(const PDFObjectReference reference)
-{
-    visitInt(reference.objectNumber);
-    visitInt(reference.generation);
-    m_device->write("R ");
-}
+}   // namespace
 
 PDFOperationResult PDFDocumentWriter::write(const QString& fileName, const PDFDocument* document, bool safeWrite)
 {
     Q_ASSERT(document);
+
+    if (isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
 
     const PDFObjectStorage& storage = document->getStorage();
     if (!storage.getSecurityHandler()->isEncryptionAllowed())
@@ -259,6 +118,16 @@ PDFOperationResult PDFDocumentWriter::write(const QString& fileName, const PDFDo
 
 PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument* document)
 {
+    if (!document)
+    {
+        return tr("Document is null.");
+    }
+
+    if (isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
+
     if (!device->isWritable())
     {
         return tr("Device is not writable.");
@@ -294,6 +163,11 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
     std::vector<PDFInteger> offsets(objectCount, -1);
     for (size_t i = 0; i < objectCount; ++i)
     {
+        if (isOperationCancelled())
+        {
+            return tr("Operation cancelled.");
+        }
+
         const PDFObjectStorage::Entry& entry = objects[i];
         if (entry.object.isNull())
         {
@@ -313,16 +187,24 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
                 objectToWrite = storage.getSecurityHandler()->encryptObject(objectToWrite, reference);
             }
 
-            PDFWriteObjectVisitor visitor(device);
+            PDFWriteObjectVisitor visitor(device, m_operationControl);
             writeObjectHeader(device, reference);
             objectToWrite.accept(&visitor);
+            if (visitor.isCancelled())
+            {
+                return tr("Operation cancelled.");
+            }
             writeObjectFooter(device);
         }
         else
         {
-            PDFWriteObjectVisitor visitor(device);
+            PDFWriteObjectVisitor visitor(device, m_operationControl);
             writeObjectHeader(device, PDFObjectReference(i, entry.generation));
             entry.object.accept(&visitor);
+            if (visitor.isCancelled())
+            {
+                return tr("Operation cancelled.");
+            }
             writeObjectFooter(device);
         }
     }
@@ -336,6 +218,11 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
 
     for (size_t i = 0; i < objectCount; ++i)
     {
+        if (isOperationCancelled())
+        {
+            return tr("Operation cancelled.");
+        }
+
         const PDFObjectStorage::Entry& entry = objects[i];
         PDFInteger generation = entry.generation;
 
@@ -378,8 +265,12 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
 
     device->write("trailer");
     writeCRLF(device);
-    PDFWriteObjectVisitor trailerVisitor(device);
+    PDFWriteObjectVisitor trailerVisitor(device, m_operationControl);
     trailerDictionaryObject.accept(&trailerVisitor);
+    if (trailerVisitor.isCancelled() || isOperationCancelled())
+    {
+        return tr("Operation cancelled.");
+    }
     writeCRLF(device);
     device->write("startxref");
     writeCRLF(device);

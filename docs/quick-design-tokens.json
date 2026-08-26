@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "issue": 178,
+  "status": "provisional-admission-contract",
+  "note": "These tokens constrain the first Quick slice; they do not authorize a product-wide visual restyle.",
+  "colors": {
+    "background": "#111827",
+    "surface": "#1F2937",
+    "text": "#F8FAFC",
+    "muted_text": "#CBD5E1",
+    "accent": "#93C5FD",
+    "focus": "#FDE68A",
+    "danger": "#FCA5A5",
+    "success": "#86EFAC"
+  },
+  "contrast_pairs": [
+    { "name": "normal_text", "foreground": "text", "background": "background", "minimum_ratio": 4.5 },
+    { "name": "muted_text", "foreground": "muted_text", "background": "background", "minimum_ratio": 4.5 },
+    { "name": "focus_indicator", "foreground": "focus", "background": "background", "minimum_ratio": 3.0 },
+    { "name": "danger_state", "foreground": "danger", "background": "background", "minimum_ratio": 3.0 },
+    { "name": "success_state", "foreground": "success", "background": "background", "minimum_ratio": 3.0 }
+  ],
+  "typography": {
+    "body_px": 14,
+    "small_px": 12,
+    "heading_px": 24,
+    "minimum_text_scale": 1.0,
+    "supports_user_scaling": true
+  },
+  "spacing": {
+    "unit_px": 4,
+    "values_px": [0, 4, 8, 12, 16, 24, 32, 48],
+    "minimum_interactive_gap_px": 4
+  },
+  "density": {
+    "default": "comfortable",
+    "minimum_pointer_target_px": 44,
+    "minimum_keyboard_target_px": 32
+  },
+  "focus": {
+    "outline_width_px": 2,
+    "outline_offset_px": 2,
+    "minimum_non_text_contrast_ratio": 3.0
+  },
+  "motion": {
+    "default_duration_ms": 160,
+    "maximum_duration_ms": 240,
+    "reduced_motion_duration_ms": 0,
+    "supports_reduced_motion": true
+  },
+  "elevation": {
+    "levels": [0, 1, 2, 3],
+    "shadow_must_not_be_the_only_state_indicator": true
+  },
+  "semantic_state": {
+    "required_states": ["neutral", "active", "disabled", "warning", "error", "success", "pending"],
+    "state_requires_text_or_accessible_name": true
+  },
+  "high_contrast": {
+    "supported": true,
+    "must_preserve_focus_indicator": true,
+    "must_not_depend_on_color_alone": true
+  }
+}

@@ -24,6 +24,7 @@
 
 #include "preflightsidecarutils.h"
 #include "pdfuitheme.h"
+#include "preflightengine.h"
 
 namespace pdfplugin
 {
@@ -31,7 +32,6 @@ namespace pdfplugin
 PreflightReportModel::PreflightReportModel(QObject* parent) :
     QAbstractTableModel(parent)
 {
-
 }
 
 int PreflightReportModel::rowCount(const QModelIndex& parent) const
@@ -132,13 +132,33 @@ void PreflightReportModel::setReport(const QJsonObject& report)
     m_findings.clear();
     m_fixups.clear();
     m_hasReport = true;
+    m_schemaVersion = report.value(QStringLiteral("schema_version")).toInt(1);
     const QJsonObject verdict = report.value(QStringLiteral("verdict")).toObject();
-    m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(true)
-        ? QStringLiteral("pass") : QStringLiteral("fail"));
-    m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
+    if (m_schemaVersion >= 3)
+    {
+        const QString state = verdict.value(QStringLiteral("state")).toString();
+        if (state == QStringLiteral("pass") || state == QStringLiteral("fail") ||
+            state == QStringLiteral("incomplete") || state == QStringLiteral("error"))
+        {
+            m_verdictState = state;
+            m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
+        }
+        else
+        {
+            // Current-schema reports must be reduced by the canonical verdict.
+            // A missing or malformed verdict is not evidence of a clean pass,
+            // even when a legacy `pass` field happens to say true.
+            m_verdictState = QStringLiteral("error");
+            m_verdictReason = QStringLiteral("The report is missing a canonical verdict.");
+        }
+    }
+    else
+    {
+        m_verdictState = verdict.value(QStringLiteral("state")).toString(report.value(QStringLiteral("pass")).toBool(false) ? QStringLiteral("pass") : QStringLiteral("fail"));
+        m_verdictReason = verdict.value(QStringLiteral("reason")).toString();
+    }
     m_pass = m_verdictState == QStringLiteral("pass");
     m_profileName = report.value(QStringLiteral("profile")).toString();
-    m_schemaVersion = report.value(QStringLiteral("schema_version")).toInt(1);
     m_errorCount = 0;
     m_warningCount = 0;
 
@@ -237,12 +257,44 @@ bool PreflightReportModel::hasWhiteOverprintFinding() const
     return false;
 }
 
+QString PreflightReportModel::stableFindingId(const PreflightFindingEntry& entry) const
+{
+    if (preflight::isStableFindingId(entry.id))
+    {
+        return entry.id;
+    }
+
+    pdf::PreflightFinding finding;
+    finding.scope = entry.scope;
+    finding.page = entry.page;
+    finding.objectId = entry.objectId;
+    finding.severity = entry.severity;
+    finding.type = entry.type;
+    finding.message = entry.message;
+    finding.checkId = entry.checkId;
+    finding.bbox = entry.bbox;
+    return finding.stableId();
+}
+
+QString PreflightReportModel::stableFindingIdAtRow(int row) const
+{
+    if (row < 0 || row >= m_findings.size())
+    {
+        return QString();
+    }
+
+    return stableFindingId(m_findings.at(row));
+}
+
 void PreflightReportModel::appendFindings(const QJsonArray& findings)
 {
     for (const QJsonValue& findingValue : findings)
     {
         const QJsonObject findingObject = findingValue.toObject();
         PreflightFindingEntry finding;
+
+        finding.id = findingObject.value(QStringLiteral("id")).toString();
+        finding.objectId = findingObject.value(QStringLiteral("object_id")).toString();
 
         if (m_schemaVersion >= 2)
         {

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "product-complete",
+  "product_qml_shipped": true,
+  "product_target": {
+    "name": "LoupeEditor",
+    "qml_uri": "Loupe.Quick",
+    "qml_file": "LoupeEditor/qml/Main.qml",
+    "cmake_file": "LoupeEditor/CMakeLists.txt",
+    "install": true,
+    "qt_modules": [
+      "Qt6::Qml",
+      "Qt6::Quick",
+      "Qt6::QuickControls2",
+      "Qt6::QuickDialogs2"
+    ]
+  },
+  "qualification_targets": [
+    {
+      "name": "QuickShellSmoke",
+      "cmake_option": "LOUPE_BUILD_QUICK_SHELL_SMOKE",
+      "qml_uri": "Loupe.QuickShellSmoke",
+      "qml_file": "QuickShellSmoke/QuickShellSmoke.qml",
+      "cmake_file": "QuickShellSmoke/CMakeLists.txt",
+      "install": false,
+      "qt_modules": [
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2"
+      ]
+    },
+    {
+      "name": "CanvasBenchmark",
+      "cmake_option": "LOUPE_BUILD_CANVAS_BENCHMARK",
+      "qml_uri": "Loupe.CanvasBenchmark",
+      "qml_file": "CanvasBenchmark/CanvasBenchmark.qml",
+      "cmake_file": "CanvasBenchmark/CMakeLists.txt",
+      "install": false,
+      "qt_modules": [
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2",
+        "Qt6::QuickWidgets",
+        "Qt6::Widgets"
+      ]
+    }
+  ],
+  "qt_license": {
+    "route": "LGPL-3.0",
+    "policy": "docs/PACKAGING_LICENSING.md",
+    "notice_generator": "scripts/generate-third-party-notices.ps1",
+    "relink_evidence": "open",
+    "corresponding_source_or_written_offer": "open"
+  },
+  "release_gates": {
+    "final_artifact_sbom": "open",
+    "third_party_notices": "partial",
+    "clean_machine_package_smoke": "open",
+    "qt_relink_test": "open"
+  }
+}

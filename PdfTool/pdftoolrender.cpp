@@ -202,7 +202,18 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
         if (options.executionContext)
         {
             QJsonObject data = formatter.getJsonObject();
-            data.insert(QStringLiteral("identity"), identity.toJson());
+
+            pdf::PDFWorkloadEnvelope envelope;
+            envelope.identity = identity;
+            envelope.family = QStringLiteral("benchmark-render");
+            const bool cancelled = isCancelRequested();
+            envelope.status = cancelled ? QStringLiteral("cancelled") : QStringLiteral("complete");
+            envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
+            envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+            envelope.elapsedMs = m_wallTime;
+            envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
+            envelope.incompleteReason = cancelled ? QStringLiteral("operation-cancelled") : QString();
+            data.insert(QStringLiteral("workload_envelope"), envelope.toJson());
             options.executionContext->setData(data);
         }
     }

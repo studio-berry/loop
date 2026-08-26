@@ -58,7 +58,8 @@ enum class PDFOperationHistoryEventKind
     DecisionRecorded,
     DecisionInvalidated,
     CertificateIssued,
-    CertificateInvalidated
+    CertificateInvalidated,
+    SchemaMigrated
 };
 
 enum class PDFApprovalKind
@@ -187,9 +188,9 @@ struct LOUPELIBCORESHARED_EXPORT PDFHistoryRetentionResult
 };
 
 LOUPELIBCORESHARED_EXPORT QByteArray computeOperationHistoryEventHash(
-        const PDFOperationHistoryEvent& event,
-        const QByteArray& previousHash);
+    const PDFOperationHistoryEvent& event,
+    const QByteArray& previousHash);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFOPERATIONHISTORY_H
+#endif   // PDFOPERATIONHISTORY_H

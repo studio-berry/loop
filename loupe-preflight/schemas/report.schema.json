@@ -7,6 +7,11 @@
   "additionalProperties": false,
   "required": ["schema_version", "pass", "profile", "errors", "warnings", "fixups_available", "inspection_complete", "checks", "verdict"],
   "properties": {
+    "schema_kind": {
+      "type": "string",
+      "const": "preflight-report",
+      "description": "Machine-readable schema kind for compatibility routing."
+    },
     "schema_version": {
       "type": "integer",
       "enum": [1, 2, 3],
@@ -188,6 +193,41 @@
       "maxItems": 4,
       "items": { "type": "number" }
     },
+    "graph_backed_finding_type": {
+      "type": "string",
+      "enum": [
+        "image-resolution",
+        "color-mode",
+        "spot-color",
+        "separation",
+        "rich-black",
+        "embedded-fonts",
+        "white-overprint",
+        "transparency-blend-mode",
+        "transparency-blend-space",
+        "hairline-stroke",
+        "thin-stroke"
+      ],
+      "description": "Finding types emitted from Evidence Graph records; each must cite evidence_ids."
+    },
+    "evidence_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Ids of Evidence Graph records this finding cites. Required for graph-backed finding types."
+    },
+    "graph_backed_finding_evidence": {
+      "if": {
+        "properties": { "type": { "$ref": "#/$defs/graph_backed_finding_type" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["evidence_ids"],
+        "properties": {
+          "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+        }
+      }
+    },
     "finding_v1": {
       "type": "object",
       "additionalProperties": false,
@@ -227,12 +267,9 @@
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
         },
-        "evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Optional ids of Evidence Graph records this finding cites."
-        }
-      }
+        "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+      },
+      "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
     },
     "finding_v2": {
       "type": "object",
@@ -283,12 +320,9 @@
           "additionalProperties": true,
           "description": "Optional structured evidence for deterministic diagnostics."
         },
-        "evidence_ids": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Optional ids of Evidence Graph records this finding cites."
-        }
-      }
+        "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+      },
+      "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
     },
     "finding": {
       "oneOf": [

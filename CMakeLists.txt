@@ -22,8 +22,8 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-set(LOUPE_VERSION 0.1.0)
-set(LOUPE_VERSION_PRERELEASE)
+set(LOUPE_VERSION 0.2.0)
+set(LOUPE_VERSION_PRERELEASE alpha)
 message(STATUS "Build type - CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 project(LOUPE VERSION ${LOUPE_VERSION} LANGUAGES CXX)
@@ -57,6 +57,14 @@ endif()
 
 option(LOUPE_BUILD_ONLY_CORE_LIBRARY "Build only core library" OFF)
 option(LOUPE_BUILD_TESTS "Build UnitTests" ON)
+option(LOUPE_BUILD_QUICK_SHELL_SMOKE "Build the Qt Quick shell backend smoke harness (S22 qualification-only, non-installed)" OFF)
+option(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE "Build the product Quick accessibility smoke harness (P4-S10)" OFF)
+option(LOUPE_BUILD_CANVAS_BENCHMARK "Build the Qt Quick canvas-hosting benchmark (S21 qualification-only, non-installed)" OFF)
+if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    option(LOUPE_BUILD_QUICK_CANVAS "Build LoupeLibQuick, the direct QQuickItem canvas adapter (P4-S5)" OFF)
+else()
+    option(LOUPE_BUILD_QUICK_CANVAS "Build LoupeLibQuick, the direct QQuickItem canvas adapter (P4-S5)" ON)
+endif()
 option(LOUPE_ENABLE_SANITIZERS "Build with ASan+UBSan" OFF)
 option(LOUPE_BUILD_FUZZERS "Build libFuzzer harnesses" OFF)
 if(WIN32)
@@ -194,10 +202,34 @@ if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql)
 else()
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 endif()
 
 if(LOUPE_BUILD_TESTS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)
+endif()
+
+if(LOUPE_BUILD_QUICK_SHELL_SMOKE OR LOUPE_BUILD_CANVAS_BENCHMARK)
+    if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
+        message(FATAL_ERROR "Qt Quick qualification targets require a GUI build")
+    endif()
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2)
+endif()
+
+# LoupeLibQuick needs Qml and Quick, and deliberately not QuickControls2: it
+# contributes a canvas item, not a control, and not linking Controls is what
+# keeps a control from being reached from inside the canvas.
+if(LOUPE_BUILD_QUICK_CANVAS)
+    if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
+        message(FATAL_ERROR "LoupeLibQuick requires a GUI build")
+    endif()
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick)
+elseif(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
+    message(FATAL_ERROR "The product Quick accessibility smoke requires LOUPE_BUILD_QUICK_CANVAS=ON")
+endif()
+
+if(LOUPE_BUILD_CANVAS_BENCHMARK)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
 
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
@@ -318,6 +350,17 @@ if(LOUPE_INSTALL_INCLUDE)
 endif()
 
 if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    # Host-neutral interaction seam. Depends only on LoupeLibCore and is not
+    # installed; see LoupeLibInteraction/CMakeLists.txt.
+    add_subdirectory(LoupeLibInteraction)
+
+    # The Quick product host and its direct QQuickItem canvas are one build
+    # boundary. An OFF build remains a supported tools/legacy-host build and
+    # must not descend into a target that requires LoupeLibQuick.
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_subdirectory(LoupeLibQuick)
+    endif()
+
     add_subdirectory(LoupeLibWidgets)
     if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
@@ -331,9 +374,20 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     add_subdirectory(PdfTool)
     add_subdirectory(loupe-preflight/tools)
     add_subdirectory(loupe-ocr/tools)
+    if(LOUPE_BUILD_QUICK_SHELL_SMOKE)
+        add_subdirectory(QuickShellSmoke)
+    endif()
+    if(LOUPE_BUILD_CANVAS_BENCHMARK)
+        add_subdirectory(CanvasBenchmark)
+    endif()
     add_subdirectory(LoupeLibGui)
     add_subdirectory(LoupeEditorPlugins)
-    add_subdirectory(LoupeEditor)
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_subdirectory(LoupeEditor)
+        if(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
+            add_subdirectory(ProductQuickAccessibilitySmoke)
+        endif()
+    endif()
     if(LOUPE_BUILD_VIEWER)
         add_subdirectory(LoupeViewer)
     endif()
@@ -476,7 +530,7 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         install(DIRECTORY ${LOUPE_QT_ROOT}/bin/
             RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
-            REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network)\\..*"
+            REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*"
             PATTERN "Debug" EXCLUDE
             PATTERN "*.pdb" EXCLUDE
         )
@@ -536,6 +590,11 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.so"
             PATTERN "*.dylib"
             REGEX "d\\..*" EXCLUDE
+            PATTERN "*.pdb" EXCLUDE
+        )
+
+        install(DIRECTORY ${LOUPE_QT_ROOT}/qml/
+            DESTINATION ${LOUPE_INSTALL_LIB_DIR}/qml/
             PATTERN "*.pdb" EXCLUDE
         )
     endif()

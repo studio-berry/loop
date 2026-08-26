@@ -1,5 +1,5 @@
 CURRENT:
- - Loupe product version: 0.1.0-alpha (SemVer; see docs/VERSIONING.md).
+ - Loupe product version: 0.2.0-alpha (SemVer; see docs/VERSIONING.md).
  - Known limitation (MIC-320): standard page rendering does not simulate overprint.
    Overprint-accurate proofing requires Output Preview. Preflight detects white or
    near-white overprint and the preflight report panel now says so explicitly.
