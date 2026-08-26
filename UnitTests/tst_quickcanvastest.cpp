@@ -203,10 +203,13 @@ private Q_SLOTS:
     void devicePixelRatioChangeRepublishesGeometry();
     void itemDestroyedWithWorkInFlight();
     void overlayOnlyChangeDoesNotResyncTiles();
+    void overlayOnlyHoverPreservesSurfaceDemand();
+    void zoomReissuesSurfaceDemand();
     void firstViewIsUnavailableUntilAPageIsOnScreen();
 
 private:
     void bindItem();
+    void bindItemWithSurfaces();
 
     /// Builds the coordinator half of the graph. Separate from init() because
     /// most cases in this file are translation tests that must keep proving they
@@ -298,6 +301,12 @@ void QuickCanvasTest::bindItem()
     // publishViewportGeometry reads the screen. The tests in this file inject a
     // known density so coordinator demand does not depend on the CI monitor.
     m_viewport->setPixelPerMM(PixelPerMM);
+}
+
+void QuickCanvasTest::bindItemWithSurfaces()
+{
+    buildCoordinator();
+    bindItem();
 }
 
 void QuickCanvasTest::buildCoordinator()
@@ -908,6 +917,50 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
     QCOMPARE(m_renderer->renderCount, rendersBefore);
     QCOMPARE(m_surfaces->counters().requested, requestedBefore);
     QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+}
+
+void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
+
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    QSignalSpy overlaySpy(m_controller.get(), &pdfinteraction::InteractionController::overlayFrameChanged);
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QVERIFY(sendMouseMove(m_item.get(), inside, Qt::NoButton));
+
+    // A hover through the admitted host must rebuild overlays only. Issue #143 and
+    // gh-143 overlayOnlyUpdatePreservesPageSurfaceCache are the oracle here.
+    QVERIFY(overlaySpy.size() >= 1);
+    QCOMPARE(m_submitter->submittedSpecs.size(), submissionsBefore);
+    QCOMPARE(m_viewport->requestGeneration(), generationBefore);
+}
+
+void QuickCanvasTest::zoomReissuesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
+
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    const QPointF anchor(100.0, 100.0);
+    const int notch = pdfinteraction::InteractionController::WheelDeltasPerStep;
+
+    QVERIFY(sendWheel(m_item.get(), anchor, QPoint(0, notch), Qt::ControlModifier));
+
+    QVERIFY(m_viewport->requestGeneration() > generationBefore);
+    QVERIFY(m_submitter->submittedSpecs.size() >= submissionsBefore);
 }
 
 void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()
