@@ -43,14 +43,14 @@ public:
     DocumentViewSession(const DocumentViewSession&) = delete;
     DocumentViewSession& operator=(const DocumentViewSession&) = delete;
 
-    pdf::PDFJobScheduler& scheduler() noexcept { return m_scheduler; }
+    pdf::PDFJobScheduler& scheduler() noexcept { return *m_scheduler; }
     pdfinteraction::PDFJobSchedulerSubmitter& submitter() noexcept { return m_submitter; }
     pdfinteraction::CommandCatalog& catalog() noexcept { return m_catalog; }
     pdf::PDFDocumentContext& context() noexcept { return m_context; }
     pdfinteraction::PDFReaderDocumentLoader& loader() noexcept { return m_loader; }
     pdfinteraction::PDFDocumentFileWriter& writer() noexcept { return m_writer; }
-    pdfinteraction::DocumentFacade& facade() noexcept { return m_facade; }
-    const pdfinteraction::DocumentFacade& facade() const noexcept { return m_facade; }
+    pdfinteraction::DocumentFacade& facade() noexcept { return *m_facade; }
+    const pdfinteraction::DocumentFacade& facade() const noexcept { return *m_facade; }
     pdfinteraction::PDFDocumentContextSource* revisionSource() const noexcept { return m_revisionSource.get(); }
     pdfinteraction::ViewportController& viewport() noexcept { return m_viewport; }
     const pdfinteraction::ViewportController& viewport() const noexcept { return m_viewport; }
@@ -66,13 +66,15 @@ public:
     void clearDocumentView();
 
 private:
-    pdf::PDFJobScheduler m_scheduler;
+    // Reset explicitly in the destructor so every worker is joined while the
+    // loader, writer, and renderer captured by jobs are still alive.
+    std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
     pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
     pdfinteraction::CommandCatalog m_catalog;
     pdf::PDFDocumentContext m_context;
     pdfinteraction::PDFReaderDocumentLoader m_loader;
     pdfinteraction::PDFDocumentFileWriter m_writer;
-    pdfinteraction::DocumentFacade m_facade;
+    std::unique_ptr<pdfinteraction::DocumentFacade> m_facade;
     std::unique_ptr<pdfinteraction::PDFDocumentContextSource> m_revisionSource;
     pdfinteraction::ViewportController m_viewport;
     std::unique_ptr<pdfinteraction::PDFDocumentPageGeometrySource> m_geometry;

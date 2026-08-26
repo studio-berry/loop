@@ -268,18 +268,27 @@ bool CommandCatalog::isEnabled(const CommandId& id) const
 
 void CommandCatalog::setEnabled(const CommandId& id, bool enabled)
 {
-    if (!descriptor(id))
+    setEnabledBatch({ { id, enabled } });
+}
+
+void CommandCatalog::setEnabledBatch(const QHash<CommandId, bool>& availability)
+{
+    bool changed = false;
+    for (auto it = availability.cbegin(); it != availability.cend(); ++it)
     {
-        return;
+        if (!descriptor(it.key()) || m_enabled.value(it.key(), false) == it.value())
+        {
+            continue;
+        }
+
+        m_enabled.insert(it.key(), it.value());
+        changed = true;
     }
 
-    if (m_enabled.value(id, false) == enabled)
+    if (changed)
     {
-        return;
+        Q_EMIT availabilityChanged();
     }
-
-    m_enabled.insert(id, enabled);
-    Q_EMIT availabilityChanged();
 }
 
 void CommandCatalog::invalidateAvailability()

@@ -34,48 +34,22 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QQuickWindow>
-#include <QSGImageNode>
-#include <QSGNode>
-#include <QSGSimpleRectNode>
 #include <QScreen>
 #include <QWheelEvent>
 
 namespace pdfquick
 {
 
-using pdfinteraction::CanvasSnapshot;
 using pdfinteraction::HostNotification;
 using pdfinteraction::InputStamp;
 using pdfinteraction::InteractionController;
 using pdfinteraction::KeyAction;
 using pdfinteraction::KeyIntent;
-using pdfinteraction::OverlayFrame;
 using pdfinteraction::PageSurfaceCoordinator;
 using pdfinteraction::PointerAction;
 using pdfinteraction::PointerIntent;
 using pdfinteraction::ViewportController;
 using pdfinteraction::WheelIntent;
-
-namespace
-{
-
-/// Root child order. The scene graph paints children in order, so this is the
-/// z-order: background, page pixels, overlays, developer panel. It is fixed
-/// here rather than chosen per frame for the same reason OverlayLayer's bands
-/// are fixed -- a composite order that depends on what happened to be built
-/// first is not an order.
-enum RootChild
-{
-    BackgroundChild = 0,
-    TilesChild = 1,
-    OverlaysChild = 2,
-    HudChild = 3
-};
-
-/// docs/quick-design-tokens.json, spacing.values_px.
-constexpr qreal HudMarginPx = 12.0;
-
-}   // namespace
 
 LoupeCanvasItem::LoupeCanvasItem(QQuickItem* parent) :
     QQuickItem(parent)
@@ -674,243 +648,6 @@ void LoupeCanvasItem::notifyHost(HostNotification notification)
     {
         m_interaction->handleHostNotification(notification);
     }
-}
-
-QSGNode* LoupeCanvasItem::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
-{
-    QQuickWindow* hostWindow = window();
-    if (!hostWindow || width() <= 0.0 || height() <= 0.0)
-    {
-        // The node tree goes with it, so the retention maps pointing into it are
-        // stale from here on. Raising the flag explicitly rather than relying on
-        // the next call happening to take the fresh-root branch below: the two
-        // are equivalent today, and only one of them stays true if that branch
-        // ever changes.
-        m_builderResetPending.store(true);
-        delete oldNode;
-        return nullptr;
-    }
-
-    if (m_paletteDirty)
-    {
-        refreshPalette();
-    }
-
-    if (m_builderResetPending.exchange(false))
-    {
-        m_builder.forget();
-        m_present.noteBuilderRebuilt();
-
-        // Nothing is retained any more, so the next sync is not optional. Without
-        // this the page simply vanishes after a scene-graph invalidation whose
-        // frame happened to arrive with nothing else marked dirty.
-        m_tilesDirty = true;
-        m_overlaysDirty = true;
-    }
-
-    m_builder.setWindow(hostWindow);
-
-    QSGNode* root = oldNode;
-    if (!root)
-    {
-        root = new QSGNode;
-        root->appendChildNode(new QSGSimpleRectNode);
-        root->appendChildNode(new QSGNode);
-        root->appendChildNode(new QSGNode);
-
-        // A fresh root has no retained nodes behind it.
-        m_builder.forget();
-        m_tilesDirty = true;
-        m_overlaysDirty = true;
-    }
-
-    auto* background = static_cast<QSGSimpleRectNode*>(root->childAtIndex(BackgroundChild));
-    background->setRect(boundingRect());
-    background->setColor(m_palette.canvasBackground());
-
-    const qreal ratio = hostWindow->effectiveDevicePixelRatio();
-    const qreal pixelScale = ratio > 0.0 ? 1.0 / ratio : 1.0;
-
-    // The presenter's own last-line fence.
-    //
-    // PageSurfaceCoordinator::admit() is where staleness is decided, and it is
-    // thorough. What it cannot do is reach into a scene graph that is already
-    // holding textures: between a document being replaced and the host getting
-    // round to invalidating the coordinator, the retained nodes are the previous
-    // revision's pixels, and a frame drawn in that window is a frozen page from
-    // a document that no longer exists.
-    //
-    // Only the revision is fenced here, deliberately. A superseded *generation*
-    // means the current revision's pixels are being shown at the wrong
-    // resolution, and the roadmap explicitly allows that to stand in during a
-    // rapid zoom or pan. A superseded *revision* is another document, and there
-    // is no version of showing it that is correct.
-    //
-    // With no coordinator bound there is nothing to fence against, and inventing
-    // a revision here would be exactly the second document truth the boundary
-    // exists to prevent.
-    const bool haveRevisionAuthority = m_surfaces != nullptr;
-    const pdf::PDFRevisionIdentity currentRevision = haveRevisionAuthority ? m_surfaces->currentRevision() : pdf::PDFRevisionIdentity();
-
-    int refusedThisFrame = 0;
-
-    // An empty snapshot whose token has not been stamped yet is not a stale
-    // document; it is the coordinator before the first rebuildSnapshot(). Treating
-    // that as a revision mismatch would refuse every bootstrap frame.
-    const pdf::PDFRevisionIdentity snapshotRevision = m_surfaces ? m_surfaces->snapshot().token.revision : pdf::PDFRevisionIdentity();
-    const bool snapshotIsCurrent = !m_surfaces || !snapshotRevision.isValid() || snapshotRevision == currentRevision;
-
-    // The fence is evaluated on every frame, not only on a dirty one. That is
-    // the whole difference between refusing a stale frame and freezing one: a
-    // repaint caused by something else entirely -- a hover, a resize, another
-    // item in the window -- would otherwise leave the previous document's
-    // textures attached and draw them again.
-    if (m_surfaces && (m_tilesDirty || !snapshotIsCurrent))
-    {
-        const CanvasSnapshot& snapshot = m_surfaces->snapshot();
-
-        if (snapshotIsCurrent)
-        {
-            m_builder.syncTiles(root->childAtIndex(TilesChild), snapshot, pixelScale);
-        }
-        else
-        {
-            // An empty snapshot rather than the stale one: syncTiles then drops
-            // every retained tile and its texture, which is the point. Leaving
-            // the previous frame up would be the frozen page.
-            m_builder.syncTiles(root->childAtIndex(TilesChild), CanvasSnapshot(), pixelScale);
-            ++refusedThisFrame;
-        }
-
-        m_tilesDirty = false;
-    }
-    else if (!m_surfaces && m_tilesDirty)
-    {
-        m_builder.syncTiles(root->childAtIndex(TilesChild), CanvasSnapshot(), pixelScale);
-        m_tilesDirty = false;
-    }
-
-    m_lastTileCount = m_builder.tileCount();
-    m_lastInexactTileCount = m_builder.inexactTileCount();
-
-    // Same rule as the tiles, for the same reason: a finding highlight from a
-    // replaced document points at geometry that is no longer there.
-    // OverlayFrame's own header states the contract -- a frame whose token no
-    // longer matches is refused rather than drawn -- and this is the host's half
-    // of it.
-    const OverlayFrame& liveOverlay = m_interaction ? m_interaction->overlayFrame() : OverlayFrame();
-    const bool overlayWasPublished = liveOverlay.token.isValid();
-    const bool overlayIsCurrent = !haveRevisionAuthority || !m_interaction || !overlayWasPublished || liveOverlay.token.revision == currentRevision;
-
-    if (m_interaction && (m_overlaysDirty || !overlayIsCurrent))
-    {
-        const OverlayFrame& live = liveOverlay;
-        const OverlayFrame empty;
-        const OverlayFrame& frame = overlayIsCurrent ? live : empty;
-
-        if (!overlayIsCurrent)
-        {
-            ++refusedThisFrame;
-        }
-
-        // Page space to item space, through the viewport's own matrix. Deriving
-        // a second matrix here is how overlays and page pixels drift apart.
-        const QTransform pixelsToItem = QTransform::fromScale(pixelScale, pixelScale);
-        ViewportController* viewport = m_viewport;
-
-        m_builder.syncOverlays(root->childAtIndex(OverlaysChild),
-                               frame,
-                               [viewport, pixelsToItem](int pageIndex, QTransform* out) -> bool
-                               {
-                                   if (!viewport || pageIndex < 0 || !out)
-                                   {
-                                       return false;
-                                   }
-
-                                   if (viewport->placedPageRect(pageIndex).isEmpty())
-                                   {
-                                       return false;
-                                   }
-
-                                   *out = pixelsToItem * viewport->pagePointToViewportMatrix(pageIndex);
-                                   return true;
-                               });
-
-        m_lastOverlayPrimitives = int(frame.primitives.size());
-        m_lastDroppedPrimitives = frame.droppedPrimitives;
-        m_lastUnrenderablePrimitives = frame.unrenderablePrimitives;
-        m_overlaysDirty = false;
-    }
-    else if (!m_interaction && m_overlaysDirty)
-    {
-        m_builder.syncOverlays(root->childAtIndex(OverlaysChild), OverlayFrame(), nullptr);
-        m_overlaysDirty = false;
-    }
-
-    m_refusedStaleFrames += refusedThisFrame;
-
-    // Texture bytes are the builder's to measure and the metrics object's to
-    // report, so the developer overlay and a diagnostic bundle read the same
-    // number.
-    m_present.noteTileBytes(m_builder.tileBytes(), m_builder.tileBytesHighWater());
-
-    // The first-view milestone is the first frame that actually put a
-    // current-revision page on screen -- not the first frame, which is an empty
-    // background, and not the first admitted surface, which is a measurement of
-    // the renderer rather than of the view.
-    if (!m_firstViewReached && m_builder.tileCount() > 0)
-    {
-        m_firstViewReached = true;
-        m_present.markFirstView();
-    }
-
-    // The developer panel is rebuilt every frame it is visible, on purpose: its
-    // whole content is the numbers that changed since the last one.
-    const bool wantHud = m_traceOverlayVisible && m_recorder;
-    const bool hasHud = root->childCount() > HudChild;
-
-    if (!wantHud)
-    {
-        if (hasHud)
-        {
-            QSGNode* hud = root->childAtIndex(HudChild);
-            root->removeChildNode(hud);
-            delete hud;
-        }
-    }
-    else
-    {
-        const QImage panel = CanvasTraceOverlay::render(m_recorder->summary(), m_present.summary(), frameStats(), m_palette, ratio);
-
-        QSGImageNode* hud = hasHud ? static_cast<QSGImageNode*>(root->childAtIndex(HudChild)) : nullptr;
-
-        if (panel.isNull())
-        {
-            if (hud)
-            {
-                root->removeChildNode(hud);
-                delete hud;
-            }
-        }
-        else
-        {
-            if (!hud)
-            {
-                hud = hostWindow->createImageNode();
-                hud->setOwnsTexture(true);
-                hud->setFiltering(QSGTexture::Nearest);
-                root->appendChildNode(hud);
-            }
-
-            hud->setTexture(hostWindow->createTextureFromImage(panel, QQuickWindow::TextureHasAlphaChannel));
-
-            const qreal panelWidth = panel.width() / ratio;
-            const qreal panelHeight = panel.height() / ratio;
-            hud->setRect(QRectF(HudMarginPx, HudMarginPx, panelWidth, panelHeight));
-        }
-    }
-
-    return root;
 }
 
 }   // namespace pdfquick

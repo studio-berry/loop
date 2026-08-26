@@ -53,6 +53,7 @@ qt_add_library(LoupeLibQuick SHARED
     sources/canvastraceoverlay.cpp
     sources/canvastraceoverlay.h
     sources/loupecanvasitem.cpp
+    sources/loupecanvasitemscene.cpp
     sources/loupecanvasaccessible.cpp
     sources/loupecanvasaccessible.h
 )

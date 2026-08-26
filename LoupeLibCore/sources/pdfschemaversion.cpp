@@ -39,26 +39,20 @@ namespace
 
 QJsonObject loadCompatibilityMatrix()
 {
-    static QJsonObject cached;
-    static bool loaded = false;
-    if (loaded)
+    static const QJsonObject cached = []
     {
-        return cached;
-    }
-
-    QFile file(QStringLiteral(":/loupe/schema-compatibility.json"));
-    if (file.open(QIODevice::ReadOnly))
-    {
-        QJsonParseError error;
-        const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
-        if (error.error == QJsonParseError::NoError && document.isObject())
+        QFile file(QStringLiteral(":/loupe/schema-compatibility.json"));
+        if (file.open(QIODevice::ReadOnly))
         {
-            cached = document.object();
-            loaded = true;
-            return cached;
+            QJsonParseError error;
+            const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
+            if (error.error == QJsonParseError::NoError && document.isObject())
+            {
+                return document.object();
+            }
         }
-    }
-    loaded = true;
+        return QJsonObject();
+    }();
     return cached;
 }
 
@@ -424,11 +418,23 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
 
     while (envelope.version.major < target.major)
     {
+        const PDFSchemaVersion previousVersion = envelope.version;
         result.document = migrateSchemaDocument(envelope.kind, envelope.version, result.document);
         envelope = readSchemaEnvelope(result.document);
         if (!envelope.version.isValid())
         {
             envelope.version = PDFSchemaVersion::fromJsonValue(result.document.value(QStringLiteral("schema_version")));
+        }
+
+        // A kind can be declared compatible before its migrator ships. Never
+        // spin forever or silently relabel such a document as current: a
+        // migration step must produce a valid, strictly newer supported major.
+        if (!envelope.version.isValid() || envelope.version.major <= previousVersion.major ||
+            envelope.version.major > target.major)
+        {
+            result.document = {};
+            result.migrated = false;
+            return result;
         }
         result.migrated = true;
     }

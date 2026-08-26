@@ -11,11 +11,17 @@
 
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
+    m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
+    m_submitter(*m_scheduler),
     m_context(nullptr),
-    m_submitter(m_scheduler),
-    m_facade(m_context, m_submitter, m_loader, m_writer, m_catalog, this),
+    m_facade(std::make_unique<pdfinteraction::DocumentFacade>(m_context,
+                                                              m_submitter,
+                                                              m_loader,
+                                                              m_writer,
+                                                              m_catalog,
+                                                              this)),
     m_renderer(m_context),
-    m_commandBridge(m_catalog, m_facade, m_viewport, this),
+    m_commandBridge(m_catalog, *m_facade, m_viewport, this),
     m_pageBoxSource(&m_context)
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
@@ -45,6 +51,14 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
 
 DocumentViewSession::~DocumentViewSession()
 {
+    // Coordinators detach their completion relays and cancel admitted work.
+    // Destroy them before joining the scheduler so no completion can address a
+    // session object during teardown. The captured adapters remain alive until
+    // after reset() has joined every worker.
+    m_commandBridge.setCoordinator(nullptr);
+    m_surfaces.reset();
+    m_facade.reset();
+    m_scheduler.reset();
     m_renderer.detach();
 }
 
@@ -54,7 +68,7 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
-    m_surfaces->invalidate(m_facade.currentRevision());
+    m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
 }
 
@@ -63,5 +77,5 @@ void DocumentViewSession::clearDocumentView()
     m_interaction->invalidate();
     m_viewport.setGeometrySource(nullptr);
     m_geometry.reset();
-    m_surfaces->invalidate(m_facade.currentRevision());
+    m_surfaces->invalidate(m_facade->currentRevision());
 }

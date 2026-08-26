@@ -23,7 +23,12 @@
 #include <QtTest>
 
 #include <QSignalSpy>
+#include <QThread>
 
+#include <atomic>
+#include <memory>
+
+#include "documentviewsession.h"
 #include "editorhost.h"
 
 class EditorHostTest : public QObject
@@ -34,6 +39,7 @@ private slots:
     void startsWithNoDocument();
     void exposesCatalogDescriptorsWithoutMutating();
     void navigationCommandsStayDisabledUntilOpen();
+    void sessionTeardownDrainsWorkersBeforeAdapters();
 };
 
 void EditorHostTest::startsWithNoDocument()
@@ -69,6 +75,36 @@ void EditorHostTest::navigationCommandsStayDisabledUntilOpen()
     EditorHost host;
     QVERIFY(!host.isCommandEnabled(QStringLiteral("actionGoToNextPage")));
     QCOMPARE(host.invokeCommand(QStringLiteral("actionGoToNextPage")), quint64(0));
+}
+
+void EditorHostTest::sessionTeardownDrainsWorkersBeforeAdapters()
+{
+    auto session = std::make_unique<DocumentViewSession>();
+    DocumentViewSession* rawSession = session.get();
+    std::atomic_bool started = false;
+    std::atomic_bool adapterReached = false;
+
+    pdf::PDFJobSpec spec;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Background;
+    rawSession->scheduler().submit(spec,
+                                   [rawSession, &started, &adapterReached](pdf::PDFJobContext& context)
+                                   {
+                                       started.store(true, std::memory_order_release);
+                                       while (!context.isCancellationRequested())
+                                       {
+                                           QThread::yieldCurrentThread();
+                                       }
+
+                                       // The session destructor must join this
+                                       // work before destroying the renderer.
+                                       rawSession->renderer().shedPrefetchAndQuality();
+                                       adapterReached.store(true, std::memory_order_release);
+                                   });
+
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+    session.reset();
+    QVERIFY(adapterReached.load(std::memory_order_acquire));
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)

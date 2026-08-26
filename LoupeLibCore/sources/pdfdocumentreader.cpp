@@ -28,7 +28,6 @@
 #include "pdfstreamfilters.h"
 #include "pdfexecutionpolicy.h"
 
-#include <QFile>
 #include <QCryptographicHash>
 
 #include "pdfdbgheap.h"
@@ -53,47 +52,11 @@ PDFDocumentReader::PDFDocumentReader(PDFProgress* progress,
     m_authorizeOwnerOnly(authorizeOwnerOnly),
     m_processingBudget(std::move(processingLimits))
 {
-
 }
 
 void PDFDocumentReader::setProcessingLimits(const PDFProcessingLimits& limits)
 {
     m_processingBudget.setLimits(limits);
-}
-
-PDFDocument PDFDocumentReader::readFromFile(const QString& fileName)
-{
-    QFile file(fileName);
-
-    reset();
-
-    if (isOperationCancelled())
-    {
-        m_result = Result::Cancelled;
-        return PDFDocument();
-    }
-
-    if (file.exists())
-    {
-        if (file.open(QFile::ReadOnly))
-        {
-            PDFDocument document = readFromDevice(&file);
-            file.close();
-            return document;
-        }
-        else
-        {
-            m_result = Result::Failed;
-            m_errorMessage = tr("File '%1' cannot be opened for reading. %1").arg(file.errorString());
-        }
-    }
-    else
-    {
-        m_result = Result::Failed;
-        m_errorMessage = tr("File '%1' doesn't exist.").arg(fileName);
-    }
-
-    return PDFDocument();
 }
 
 PDFDocument PDFDocumentReader::readFromDevice(QIODevice* device)
