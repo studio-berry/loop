@@ -54,6 +54,16 @@ directories.
 `scripts/ci/check_generated_dependency_paths.py` inspects the Git index and
 fails CI if any known generated dependency path is tracked again.
 
+### Windows local test executables
+
+Windows test executables need the configured Qt and Loupe/vcpkg runtime DLLs beside
+the executable. If the dependency set is not deployed into the build output,
+the process can wait behind a missing-DLL system error instead of printing a
+normal test failure. For a Release test directory, run `windeployqt` with the
+configured Qt root and deploy the Qt/Loupe dependencies into that same
+directory before invoking CTest. Generated DLLs and plugin directories remain
+local build output and must not be committed.
+
 ## Tracked source integrity
 
 `scripts/ci/check_source_integrity.py` runs before Qt/vcpkg configure on every
