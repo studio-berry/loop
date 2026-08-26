@@ -161,7 +161,9 @@ void PDFWriteObjectVisitor::visitStream(const PDFStream* stream)
         m_device->write(content.constData() + offset,
                         qMin(WriteChunkSize, content.size() - offset));
     }
-    m_device->write("\x0D\x0Aendstream\x0D\x0A");
+    m_device->write("\x0D\x0A");
+    m_device->write("endstream");
+    m_device->write("\x0D\x0A");
 }
 
 void PDFWriteObjectVisitor::visitReference(PDFObjectReference reference)
