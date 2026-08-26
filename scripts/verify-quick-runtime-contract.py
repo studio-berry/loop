@@ -106,6 +106,19 @@ def validate_product_target(product: dict, root_cmake: str) -> None:
     if not install_pattern.search(block):
         raise ContractError(f"product target {name} must be installed")
 
+    declaration = f"add_subdirectory({name})"
+    quick_blocks = re.findall(
+        r"if\s*\(\s*LOUPE_BUILD_QUICK_CANVAS\s*\)(.*?)endif\s*\(\s*\)",
+        root_cmake,
+        re.DOTALL,
+    )
+    if root_cmake.count(declaration) != 1 or not any(
+        declaration in quick_block for quick_block in quick_blocks
+    ):
+        raise ContractError(
+            f"product target {name} must be gated by LOUPE_BUILD_QUICK_CANVAS"
+        )
+
 
 def validate_manifest(manifest: dict) -> tuple[list[dict], dict | None]:
     if manifest.get("schema_version") != 1:

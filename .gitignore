@@ -32,6 +32,9 @@ build/*
 # Local git worktrees checked out beside the main tree.
 /.worktrees/
 
+# Local Qt Quick loop scaffold; not part of the Loupe product graph.
+/loop/
+
 # One-off investigation artifacts. Debug logs and per-PR debug scripts are
 # local scratch; scripts/ci/ holds the checks that are meant to be shared.
 /debug-*.log

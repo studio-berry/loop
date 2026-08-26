@@ -124,11 +124,12 @@ void DocumentFacade::updateAvailability()
     // Open and Close are escape/supersede paths and stay available while work
     // is in flight. Save commands require a ready document and exclusive output
     // admission.
-    m_catalog->setEnabled(OpenCommandId, true);
-    m_catalog->setEnabled(CloseCommandId,
-                          hasDocument || m_state == DocumentState::Opening || busy);
-    m_catalog->setEnabled(SaveCommandId, hasDocument && !busy && m_source.isValid());
-    m_catalog->setEnabled(SaveAsCommandId, hasDocument && !busy);
+    m_catalog->setEnabledBatch({
+        { OpenCommandId, true },
+        { CloseCommandId, hasDocument || m_state == DocumentState::Opening || busy },
+        { SaveCommandId, hasDocument && !busy && m_source.isValid() },
+        { SaveAsCommandId, hasDocument && !busy },
+    });
 }
 
 void DocumentFacade::finishPending(CommandInvocationId invocation,

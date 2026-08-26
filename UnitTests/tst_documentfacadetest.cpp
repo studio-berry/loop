@@ -265,6 +265,7 @@ private slots:
     void initTestCase();
 
     void catalogLoadsTheWholeEditorActionSet();
+    void catalogPublishesAvailabilityAtomically();
     void catalogRejectsAnUnknownCommand();
     void declaredCommandIsNotImplementedAndRunsNothing();
     void catalogRefusesAHandlerForADeclaredCommand();
@@ -342,6 +343,30 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
         }
     }
     QCOMPARE(implemented, 16);
+}
+
+void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
+{
+    pdfinteraction::CommandCatalog catalog;
+    QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
+    QSignalSpy changed(&catalog, &pdfinteraction::CommandCatalog::availabilityChanged);
+
+    catalog.setEnabledBatch({
+        { pdfinteraction::DocumentFacade::OpenCommandId, true },
+        { pdfinteraction::DocumentFacade::CloseCommandId, true },
+        { QStringLiteral("not-a-command"), true },
+    });
+
+    QCOMPARE(changed.count(), 1);
+    QVERIFY(catalog.isEnabled(pdfinteraction::DocumentFacade::OpenCommandId));
+    QVERIFY(catalog.isEnabled(pdfinteraction::DocumentFacade::CloseCommandId));
+    QVERIFY(!catalog.isEnabled(QStringLiteral("not-a-command")));
+
+    catalog.setEnabledBatch({
+        { pdfinteraction::DocumentFacade::OpenCommandId, true },
+        { pdfinteraction::DocumentFacade::CloseCommandId, true },
+    });
+    QCOMPARE(changed.count(), 1);
 }
 
 void DocumentFacadeTest::catalogRejectsAnUnknownCommand()

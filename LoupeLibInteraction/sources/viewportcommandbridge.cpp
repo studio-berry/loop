@@ -188,11 +188,13 @@ void ViewportCommandBridge::clearHandlers()
         return;
     }
 
+    QHash<CommandId, bool> availability;
     for (const CommandSpec& spec : kCommandSpecs)
     {
         m_catalog->clearHandler(spec.id);
-        m_catalog->setEnabled(spec.id, false);
+        availability.insert(spec.id, false);
     }
+    m_catalog->setEnabledBatch(availability);
 
     m_handlersRegistered = false;
 }
@@ -218,6 +220,7 @@ void ViewportCommandBridge::refreshAvailability()
     const bool hasPages = ready && count > 0;
     const qreal zoom = m_viewport ? m_viewport->zoom() : 1.0;
 
+    QHash<CommandId, bool> availability;
     for (const CommandSpec& spec : kCommandSpecs)
     {
         bool enabled = false;
@@ -249,8 +252,9 @@ void ViewportCommandBridge::refreshAvailability()
                 enabled = hasPages;
                 break;
         }
-        m_catalog->setEnabled(spec.id, enabled);
+        availability.insert(spec.id, enabled);
     }
+    m_catalog->setEnabledBatch(availability);
 }
 
 void ViewportCommandBridge::onDocumentReplaced(quint64)

@@ -44,6 +44,7 @@ private slots:
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
     void v2GoldenMigratesToV3Deterministically();
+    void compatibleSchemaWithoutMigratorFailsClosed();
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
 };
@@ -211,6 +212,27 @@ void SchemaEvolutionTest::v2GoldenMigratesToV3Deterministically()
     const pdf::PDFSchemaMigrationResult second = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, source);
     QCOMPARE(QJsonDocument(second.document).toJson(QJsonDocument::Compact),
              QJsonDocument(first.document).toJson(QJsonDocument::Compact));
+}
+
+void SchemaEvolutionTest::compatibleSchemaWithoutMigratorFailsClosed()
+{
+    QJsonObject document{
+        { QStringLiteral("schema_kind"), QStringLiteral("history-db") },
+        { QStringLiteral("schema_version"), 2 },
+        { QStringLiteral("payload"), QStringLiteral("must-not-be-relabeled") },
+    };
+
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::HistoryDb, { 2, 0 }),
+             pdf::PDFSchemaCompatibility::Compatible);
+
+    const pdf::PDFSchemaMigrationResult prepared =
+        pdf::prepareSchemaDocument(pdf::PDFSchemaKind::HistoryDb, document);
+    QVERIFY(prepared.document.isEmpty());
+    QVERIFY(!prepared.migrated);
+    const pdf::PDFSchemaVersion expectedFrom{ 2, 0 };
+    const pdf::PDFSchemaVersion expectedTo{ 3, 0 };
+    QCOMPARE(prepared.fromVersion, expectedFrom);
+    QCOMPARE(prepared.toVersion, expectedTo);
 }
 
 void SchemaEvolutionTest::incompleteV2MigrationPreservesInspectionIncomplete()

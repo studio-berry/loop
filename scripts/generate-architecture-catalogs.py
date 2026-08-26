@@ -260,7 +260,12 @@ def parse_schema_versions() -> dict[str, Any]:
 
 
 def parse_test_targets() -> list[str]:
-    source = read(ROOT / "UnitTests" / "CMakeLists.txt")
+    unit_test_dir = ROOT / "UnitTests"
+    cmake_sources = [
+        unit_test_dir / "CMakeLists.txt",
+        unit_test_dir / "phase4-tests.cmake",
+    ]
+    source = "\n".join(read(path) for path in cmake_sources)
     targets = re.findall(r"add_executable\(\s*(UnitTests[A-Za-z0-9_]*)\b", source)
     targets = unique_sorted(targets)
     if not targets:

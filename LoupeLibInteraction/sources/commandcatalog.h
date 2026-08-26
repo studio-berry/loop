@@ -102,6 +102,10 @@ public:
     bool isEnabled(const CommandId& id) const;
     void setEnabled(const CommandId& id, bool enabled);
 
+    /// Applies one logical availability update atomically. Unknown IDs are
+    /// ignored and observers see at most one availabilityChanged signal.
+    void setEnabledBatch(const QHash<CommandId, bool>& availability);
+
     /// Drops the whole availability snapshot. Document replacement invalidates
     /// it: availability computed against the previous document is not evidence
     /// about the new one.

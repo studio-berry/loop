@@ -109,6 +109,8 @@ add_library(LoupeLibCore SHARED
     sources/pdfdocumenttextfloweditormodel.h
     sources/pdfdocumentwriter.cpp
     sources/pdfdocumentwriter.h
+    sources/pdfwriteobjectvisitor.cpp
+    sources/pdfwriteobjectvisitor_p.h
     sources/pdfexecutionpolicy.cpp
     sources/pdfexecutionpolicy.h
     sources/pdffile.cpp
@@ -150,6 +152,7 @@ add_library(LoupeLibCore SHARED
     sources/pdfdocument.cpp
     sources/pdfdocument.h
     sources/pdfdocumentreader.cpp
+    sources/pdfdocumentreaderio.cpp
     sources/pdfdocumentreader.h
     sources/pdfpattern.cpp
     sources/pdfpattern.h

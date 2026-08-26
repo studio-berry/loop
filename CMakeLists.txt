@@ -224,6 +224,8 @@ if(LOUPE_BUILD_QUICK_CANVAS)
         message(FATAL_ERROR "LoupeLibQuick requires a GUI build")
     endif()
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick)
+elseif(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
+    message(FATAL_ERROR "The product Quick accessibility smoke requires LOUPE_BUILD_QUICK_CANVAS=ON")
 endif()
 
 if(LOUPE_BUILD_CANVAS_BENCHMARK)
@@ -352,10 +354,9 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     # installed; see LoupeLibInteraction/CMakeLists.txt.
     add_subdirectory(LoupeLibInteraction)
 
-    # The Qt Quick presentation host for the canvas. Opt-in for the same reason
-    # the S21/S22 qualification targets are: Qml and Quick are not dependencies
-    # of a default build, and Phase 4 has not reached the exit gate that would
-    # make this a shipped module. CI configures it ON.
+    # The Quick product host and its direct QQuickItem canvas are one build
+    # boundary. An OFF build remains a supported tools/legacy-host build and
+    # must not descend into a target that requires LoupeLibQuick.
     if(LOUPE_BUILD_QUICK_CANVAS)
         add_subdirectory(LoupeLibQuick)
     endif()
@@ -381,9 +382,11 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     endif()
     add_subdirectory(LoupeLibGui)
     add_subdirectory(LoupeEditorPlugins)
-    add_subdirectory(LoupeEditor)
-    if(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
-        add_subdirectory(ProductQuickAccessibilitySmoke)
+    if(LOUPE_BUILD_QUICK_CANVAS)
+        add_subdirectory(LoupeEditor)
+        if(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
+            add_subdirectory(ProductQuickAccessibilitySmoke)
+        endif()
     endif()
     if(LOUPE_BUILD_VIEWER)
         add_subdirectory(LoupeViewer)

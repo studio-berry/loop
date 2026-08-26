@@ -180,6 +180,11 @@ protected:
     void focusOutEvent(QFocusEvent* event) override;
 
 private:
+    QSGNode* prepareSceneGraph(QSGNode* oldNode, QQuickWindow* hostWindow);
+    int syncTiles(QSGNode* root, qreal pixelScale);
+    int syncOverlays(QSGNode* root, qreal pixelScale);
+    void syncTraceHud(QSGNode* root, QQuickWindow* hostWindow, qreal devicePixelRatio);
+
     /// The next stamp. `sequence` is this item's own monotonic ordinal, which is
     /// what a recorded trace replays in order; the timestamp is read from the
     /// same clock the present metrics use, so a latency measured across the two
