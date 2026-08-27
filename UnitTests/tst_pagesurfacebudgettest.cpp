@@ -19,7 +19,7 @@ namespace
 {
 
 constexpr QSizeF A4 = QSizeF(210.0, 297.0);
-constexpr qint64 SurfaceBytes = 210 * 297 * 4;
+constexpr qint64 SurfaceBytes = 210LL * 297 * 4;
 
 class DocumentGeometrySource final : public pdfinteraction::IPageGeometrySource
 {
