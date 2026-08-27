@@ -38,22 +38,21 @@ REQUIRED_MARKERS = {
         "class LOUPELIBCORESHARED_EXPORT PDFOperationHistoryStore",
         "PDFOperationResult appendEvent(PDFOperationHistoryEvent event",
     ),
-    "LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp": (
-        "The report is missing a canonical verdict.",
-        "m_pass = m_verdictState == QStringLiteral(\"pass\")",
+    "LoupeLibInteraction/sources/preflightcontroller.cpp": (
+        "result.inspectionComplete",
+        "State::Pass",
+        "State::Findings",
     ),
 }
 
 PRODUCT_ROOTS = (
     "PdfTool",
-    "LoupeEditorPlugins",
-    "LoupePageMaster",
     "LoupeLibCore",
-    "LoupeLibGui",
-    "LoupeLibWidgets",
+    "LoupeLibInteraction",
+    "LoupeEditor",
 )
 SOURCE_SUFFIXES = {".cpp", ".h", ".hpp", ".cc", ".cxx"}
-OVERLAY_FINDINGS_GUARD = "LoupeEditorPlugins/LoupePreflightPlugin/loupepreflightplugin.cpp"
+OVERLAY_FINDINGS_GUARD = "LoupeLibInteraction/sources/preflightcontroller.cpp"
 
 
 def source_paths() -> list[Path]:
