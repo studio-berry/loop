@@ -124,6 +124,26 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         ):
             self.assertFalse(options[option], option)
 
+    def test_retired_plugins_leave_install_graph(self):
+        product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))
+        by_id = {row["id"]: row for row in product["surfaces"]}
+        audiobook = next(row for row in self.disposition["rows"] if row.get("target") == "AudioBookPlugin")
+        self.assertEqual(audiobook["disposition"], "DELETE")
+        self.assertIn("may drop this plugin", audiobook["testable_condition"])
+        ocr = next(row for row in self.disposition["rows"] if row.get("target") == "OcrPlugin")
+        self.assertEqual(ocr["replacement_target"], "loupe-cli")
+        self.assertIn("only after loupe-cli is proven", ocr["testable_condition"])
+        for name, surface_id in (
+            ("AudioBookPlugin", "audiobook-plugin"),
+            ("OcrPlugin", "ocr-plugin"),
+        ):
+            target = next(row for row in self.inventory["targets"] if row["id"] == name)
+            self.assertFalse(target["install_rule"], name)
+            self.assertFalse(target["installed_in_profile"], name)
+            product_row = by_id[surface_id]
+            self.assertEqual(product_row["artifact_scope"], "build", name)
+            self.assertEqual(product_row["profiles"]["loupe-release"], "absent", name)
+
     def test_loupe_editor_is_sole_installed_interactive_product(self):
         completed = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "verify-installed-product-graph.py")],

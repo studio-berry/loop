@@ -92,8 +92,13 @@ See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are a
 
 ## Plugin directories (12)
 
+Session 04 Issue 13 removed `AudioBookPlugin` and `OcrPlugin` from the install
+graph. They remain optional developer build targets (`LOUPE_PLUGIN_*` defaults
+keep AudioBook/OCR off in the loupe-release profile) until a later session deletes
+sources and `.ui` forms.
+
 All plugin policies in `docs/loupe-shell.json` include `deletion_condition` metadata.
-Widgets plugin binaries may remain installed until Fix/Inspect/Production Quick
+Remaining Widgets plugin binaries may stay installed until Fix/Inspect/Production Quick
 surfaces absorb the capability or the plugin is explicitly retired (`STOP-SHIPPING`).
 
 | Plugin | Target workspace | Notes |
@@ -108,8 +113,8 @@ surfaces absorb the capability or the plugin is explicitly retired (`STOP-SHIPPI
 | `SignaturePlugin` | Inspect | Advanced workflow |
 | `ScannerPlugin` | Document | Advanced workflow |
 | `RedactPlugin` | Fix | OPEN product decision #66 |
-| `AudioBookPlugin` | — | STOP-SHIPPING; delete in Phase 5 |
-| `OcrPlugin` | CLI | STOP-SHIPPING; PdfTool owns OCR |
+| `AudioBookPlugin` | — | STOP-SHIPPING; not installed; delete in Phase 5 |
+| `OcrPlugin` | CLI | STOP-SHIPPING UI; PdfTool owns OCR; not installed |
 
 ## Legacy `.ui` inventory (48 forms)
 

@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EDITOR_CMAKE = ROOT / "LoupeEditor" / "CMakeLists.txt"
 SECONDARY_EXECUTABLES = ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad")
+RETIRED_PLUGINS = ("AudioBookPlugin", "OcrPlugin")
 BUILD_DEFAULTS = ("VIEWER", "PAGEMASTER", "DIFF", "LAUNCHPAD")
 
 FORBIDDEN_EDITOR_LIBS = frozenset(
@@ -66,6 +67,20 @@ def validate_sole_interactive_product(root: Path) -> None:
         raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
     for name in SECONDARY_EXECUTABLES:
         cmake = (root / name / "CMakeLists.txt").read_text(encoding="utf-8")
+        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake):
+            raise ContractError(f"{name} still has an install() rule")
+    plugin_rows = {
+        row["artifact"]: row
+        for row in product.get("surfaces", [])
+        if row.get("kind") == "plugin" and row.get("artifact")
+    }
+    for name in RETIRED_PLUGINS:
+        row = plugin_rows[name]
+        if row.get("artifact_scope") != "build":
+            raise ContractError(f"{name} must be build-only in the product ledger")
+        if row.get("profiles", {}).get("loupe-release") != "absent":
+            raise ContractError(f"{name} must be absent from the loupe-release profile")
+        cmake = (root / "LoupeEditorPlugins" / name / "CMakeLists.txt").read_text(encoding="utf-8")
         if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake):
             raise ContractError(f"{name} still has an install() rule")
     root_cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
