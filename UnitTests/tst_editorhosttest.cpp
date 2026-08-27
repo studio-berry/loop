@@ -127,9 +127,9 @@ void EditorHostTest::openLargeDocument()
 
     const QString path = directory.filePath(QStringLiteral("large.pdf"));
     {
-        const pdf::PDFDocumentPointer document = builder.build();
+        const pdf::PDFDocument document = builder.build();
         pdf::PDFDocumentWriter writer(nullptr);
-        QVERIFY(writer.write(path, document.data(), true));
+        QVERIFY(writer.write(path, &document, true));
     }
 
     EditorHost host;

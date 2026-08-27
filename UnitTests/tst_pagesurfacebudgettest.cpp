@@ -73,10 +73,9 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     {
         builder.appendPage(QRectF(0, 0, A4.width(), A4.height()));
     }
-    const pdf::PDFDocumentPointer document = builder.build();
+    pdf::PDFDocument document = builder.build();
 
-    pdf::PDFDocumentContext context(nullptr);
-    context.setDocument(document);
+    pdf::PDFDocumentContext context(&document);
     pdf::PDFDocumentSession* session = context.getSession();
     QVERIFY(session != nullptr);
     QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::CompileCacheLimit);
@@ -88,7 +87,7 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     pdfinteraction::PDFDocumentContextSource revisions(&context);
 
     pdfinteraction::ViewportController viewport;
-    DocumentGeometrySource geometry(document.data());
+    DocumentGeometrySource geometry(&document);
     viewport.setGeometrySource(&geometry);
     viewport.setPixelPerMM(1.0);
     viewport.setViewportSizePx(QSize(220, 320));
@@ -100,14 +99,11 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
     coordinator.setDocumentKey(revisions.documentKey());
-    coordinator.invalidate(revisions.revision());
+    coordinator.invalidate(revisions.currentRevision());
 
     coordinator.requestSurfaces();
     QTRY_VERIFY_WITH_TIMEOUT(coordinator.counters().admitted >= 1, 30000);
-    while (QCoreApplication::hasPendingEvents())
-    {
-        QCoreApplication::processEvents();
-    }
+    QCoreApplication::processEvents();
 
     QVERIFY(coordinator.counters().shed > 0);
     QVERIFY(coordinator.counters().admittedBytes <= bounds.maxAdmittedBytes);

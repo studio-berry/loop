@@ -4,6 +4,7 @@
 
 #include "documentviewsession.h"
 
+#include "overlaybuilder.h"
 #include "pdfrenderer.h"
 
 #include <QtTest>
