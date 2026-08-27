@@ -192,7 +192,7 @@
       "cmake": "LoupeEditorPlugins/AudioBookPlugin/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "LOUPE_PLUGIN_AUDIOBOOK=OFF in the loupe-release profile",
-      "install_rule": true,
+      "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
@@ -1273,7 +1273,7 @@
       "cmake": "LoupeEditorPlugins/OcrPlugin/CMakeLists.txt",
       "profile_enabled": false,
       "profile_condition": "LOUPE_PLUGIN_OCR=OFF in the loupe-release profile",
-      "install_rule": true,
+      "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [

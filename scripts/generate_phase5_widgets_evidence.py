@@ -96,15 +96,24 @@ def _tracked_files(root: Path, *pathspecs: str) -> list[str]:
 
 def _read_tracked_text(root: Path, relative: str) -> str:
     path_posix = Path(relative).as_posix()
+    work_path = root / relative
+    working = (
+        _normalize_newlines(work_path.read_text(encoding="utf-8")) if work_path.is_file() else None
+    )
     try:
         data = subprocess.check_output(
             ["git", "show", f"HEAD:{path_posix}"],
             cwd=root,
             stderr=subprocess.DEVNULL,
         )
-        return _normalize_newlines(data.decode("utf-8"))
+        indexed = _normalize_newlines(data.decode("utf-8"))
     except (subprocess.CalledProcessError, FileNotFoundError, OSError):
-        return _normalize_newlines((root / relative).read_text(encoding="utf-8"))
+        if working is None:
+            raise EvidenceError(f"missing tracked file: {path_posix}")
+        return working
+    if working is not None and working != indexed:
+        return working
+    return indexed
 
 
 def _strip_comments(text: str) -> str:
@@ -542,7 +551,7 @@ def _proven_owner_ids(product: dict) -> frozenset[str]:
 
 
 def _product_testable_condition(row: dict, disposition: str, replacement, proven_owners: frozenset[str]) -> str:
-    if row.get("kind") == "application" and replacement in proven_owners:
+    if row.get("kind") in {"application", "plugin"} and replacement in proven_owners:
         if disposition == "DELETE":
             return (
                 "The product/package graph may drop this executable; "
@@ -550,9 +559,14 @@ def _product_testable_condition(row: dict, disposition: str, replacement, proven
             )
         if disposition == "HEADLESS-REPLACE":
             return (
-                "The Widgets executable may leave the install graph; keep the named "
-                f"replacement ({replacement})."
+                f"Remove the interactive Widgets surface only after {replacement} is proven "
+                "to carry the required capability."
             )
+    if row.get("kind") == "plugin" and disposition == "DELETE" and replacement is None:
+        return (
+            "The product/package graph may drop this plugin; "
+            "LoupeEditor is the sole supported installed interactive product."
+        )
     return {
         "DELETE": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
         "HEADLESS-REPLACE": f"Remove the interactive Widgets surface only after {replacement or 'the named headless boundary'} is proven to carry the required capability.",
