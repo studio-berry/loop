@@ -79,8 +79,8 @@ public:
     /// Qt reports a wheel notch as 120 eighths of a degree
     /// (QWheelEvent::DefaultDeltasPerStep). Spelled out rather than included,
     /// because QWheelEvent lives in Qt6::Gui's event headers and this layer takes
-    /// values, not events. PDFDrawWidget uses the same number, so the Quick shell
-    /// and the Widgets oracle zoom by the same amount per notch.
+    /// values, not events. The host-independent command contract uses the same
+    /// number for every presentation host.
     static constexpr int WheelDeltasPerStep = 120;
 
     void setZoomModifier(Qt::KeyboardModifier modifier);

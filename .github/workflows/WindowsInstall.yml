@@ -25,6 +25,11 @@ jobs:
         working-directory: loupe
         run: python scripts\ci\check_supply_chain_pins.py
 
+      - name: Verify Phase 5 Widgets completeness contract
+        working-directory: loupe
+        shell: pwsh
+        run: .\scripts\verify-phase5-widgets-contract.ps1
+
       - name: Add pinned MakeAppx to PATH
         shell: pwsh
         run: |

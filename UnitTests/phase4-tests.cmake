@@ -257,22 +257,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         # is what makes node and texture lifetime deterministic.
         set_tests_properties(UnitTestsQuickCanvas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 
-        # Architecture invariant I26, and the only target in the tree that links
-        # both canvases.
-        #
-        # The Widgets link is the Phase 4 migration oracle the 0.2.0 plan of
-        # record authorises, and it is narrow on purpose: the only thing this
-        # target calls is pdf::PDFDrawSpaceLayoutProbe, which hands back page
-        # rectangles in millimetres. No QWidget is constructed and
-        # PDFDrawWidgetProxy, QQuickWidget and WindowContainer are unreachable.
-        # ADR-009's prohibition is intact -- UnitTestsQuickCanvas above is still
-        # Widgets-free and is still what pins I25. This target is not installed
-        # and Phase 5 deletes it with the library it compares against.
+        # Architecture invariant I26. This target carries the retained
+        # Quick-native geometry, interaction, and presentation checks. Its
+        # expected geometry is explicit in the test cases; it has no dependency
+        # on the retired Widgets host or a second rendering implementation.
         add_executable(UnitTestsCanvasParity
             tst_canvasparitytest.cpp
         )
 
-        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibWidgets LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_compile_definitions(UnitTestsCanvasParity PRIVATE
             LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

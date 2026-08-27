@@ -35,6 +35,10 @@ jobs:
         run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
+      - name: Verify Phase 5 Widgets evidence is current
+        run: python3 scripts/generate_phase5_widgets_evidence.py --check
+      - name: Verify Phase 5 Widgets completeness contract
+        run: python3 scripts/verify_phase5_widgets_contract.py
 
   agent-fast:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'

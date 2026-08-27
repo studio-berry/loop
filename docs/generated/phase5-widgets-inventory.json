@@ -1,0 +1,5458 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "phase5-widgets-qualified-graph",
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "profile": {
+    "id": "loupe-release",
+    "options": {
+      "LOUPE_LOUPE_DISTRIBUTION": true,
+      "LOUPE_BUILD_ONLY_CORE_LIBRARY": false,
+      "LOUPE_BUILD_QUICK_CANVAS": true,
+      "LOUPE_BUILD_TESTS": false,
+      "LOUPE_BUILD_FUZZERS": false,
+      "LOUPE_BUILD_QUICK_SHELL_SMOKE": false,
+      "LOUPE_BUILD_CANVAS_BENCHMARK": false,
+      "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE": false,
+      "LOUPE_BUILD_CODE_GENERATOR": true,
+      "LOUPE_BUILD_JBIG2_VIEWER": true,
+      "LOUPE_BUILD_EXAMPLE_GENERATOR": true,
+      "LOUPE_BUILD_VIEWER": false,
+      "LOUPE_BUILD_PAGEMASTER": false,
+      "LOUPE_BUILD_DIFF": false,
+      "LOUPE_BUILD_LAUNCHPAD": false,
+      "LOUPE_PLUGIN_AUDIOBOOK": false,
+      "LOUPE_PLUGIN_OCR": false,
+      "LOUPE_PLUGIN_SCANNER": true
+    },
+    "configuration_mode": "source-static",
+    "configured_build_dir": null,
+    "configuration_note": "Static CMake/file evidence is used when a qualified build directory is unavailable; no build qualification is implied."
+  },
+  "inputs": {
+    "cmake_files": [
+      "CanvasBenchmark/CMakeLists.txt",
+      "CodeGenerator/CMakeLists.txt",
+      "JBIG2_Viewer/CMakeLists.txt",
+      "LoupeDiff/CMakeLists.txt",
+      "LoupeEditor/CMakeLists.txt",
+      "LoupeEditor/CMakeLists.txt",
+      "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/AudioBookPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/DimensionsPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/EditorPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/ObjectInspectorPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/OcrPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/OutputPreviewPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/RedactPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/ScannerPlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/SignaturePlugin/CMakeLists.txt",
+      "LoupeEditorPlugins/SoftProofingPlugin/CMakeLists.txt",
+      "LoupeLaunchPad/CMakeLists.txt",
+      "LoupeLibCore/CMakeLists.txt",
+      "LoupeLibGui/CMakeLists.txt",
+      "LoupeLibInteraction/CMakeLists.txt",
+      "LoupeLibQuick/CMakeLists.txt",
+      "LoupeLibWidgets/CMakeLists.txt",
+      "LoupePageMaster/CMakeLists.txt",
+      "LoupeViewer/CMakeLists.txt",
+      "PdfExampleGenerator/CMakeLists.txt",
+      "PdfTool/CMakeLists.txt",
+      "ProductQuickAccessibilitySmoke/CMakeLists.txt",
+      "QuickShellSmoke/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "loupe-preflight/tools/CMakeLists.txt"
+    ],
+    "shell_ledger": "docs/loupe-shell.json",
+    "product_ledger": "docs/product-surface.json",
+    "ui_glob": "**/*.ui"
+  },
+  "targets": [
+    {
+      "id": "ActionListPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets",
+        "Qt6::Concurrent",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "ActionListPlugin",
+          "LoupeLibGui",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "ActionListPlugin",
+          "LoupeLibGui",
+          "Qt6::Widgets"
+        ],
+        [
+          "ActionListPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "ActionListPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "AudioBookPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/AudioBookPlugin/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_PLUGIN_AUDIOBOOK=OFF in the loupe-release profile",
+      "install_rule": true,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets",
+        "ole32",
+        "sapi"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "AudioBookPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "AudioBookPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "CanvasBenchmark",
+      "kind": "executable",
+      "cmake": "CanvasBenchmark/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_CANVAS_BENCHMARK=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2",
+        "Qt6::QuickWidgets",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickWidgets",
+        "Widgets"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickWidgets",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "CanvasBenchmark",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "CodeGenerator",
+      "kind": "executable",
+      "cmake": "CodeGenerator/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_CODE_GENERATOR=ON in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets",
+        "Qt6::Xml"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets",
+        "Xml"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "CodeGenerator",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "DimensionsPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/DimensionsPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "DimensionsPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "DimensionsPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "EditorPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/EditorPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "EditorPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "EditorPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "JBIG2_VIEWER",
+      "kind": "executable",
+      "cmake": "JBIG2_Viewer/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_JBIG2_VIEWER=ON in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "JBIG2_VIEWER",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "LoupeDiff",
+      "kind": "executable",
+      "cmake": "LoupeDiff/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_DIFF=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupeDiff",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeDiff",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "LoupeEditor",
+      "kind": "executable",
+      "cmake": "LoupeEditor/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeEditorQuick",
+        "LoupeEditorQuickplugin",
+        "LoupeEditorQuickplugin_init",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2",
+        "Qt6::QuickDialogs2"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2"
+      ],
+      "transitive_targets": [
+        "LoupeEditorQuick",
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibQuick"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "LoupeEditorQuick",
+      "kind": "library",
+      "cmake": "LoupeEditor/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibQuick",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2",
+        "Qt6::QuickDialogs2"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibQuick"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": [
+        "LoupeEditor",
+        "ProductQuickAccessibilitySmoke"
+      ]
+    },
+    {
+      "id": "LoupeGenerateFixtures",
+      "kind": "executable",
+      "cmake": "loupe-preflight/tools/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "${LCMS2_LIBRARIES}",
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "LoupeLaunchPad",
+      "kind": "executable",
+      "cmake": "LoupeLaunchPad/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_LAUNCHPAD=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupeLaunchPad",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeLaunchPad",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "LoupeLibCore",
+      "kind": "library",
+      "cmake": "LoupeLibCore/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "always reachable from the loupe-release GUI build",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "${LCMS2_LIBRARIES}",
+        "Freetype::Freetype",
+        "Gdi32",
+        "JPEG::JPEG",
+        "Mscms",
+        "OpenSSL::Crypto",
+        "OpenSSL::SSL",
+        "Psapi",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Sql",
+        "Qt6::Svg",
+        "Qt6::Xml",
+        "Secur32",
+        "TBB::tbb",
+        "User32",
+        "ZLIB::ZLIB",
+        "blend2d::blend2d",
+        "crypt32",
+        "openjp2",
+        "sentry::sentry"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "CodeGenerator",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "JBIG2_VIEWER",
+        "LoupeDiff",
+        "LoupeEditor",
+        "LoupeEditorQuick",
+        "LoupeGenerateFixtures",
+        "LoupeLaunchPad",
+        "LoupeLibGui",
+        "LoupeLibInteraction",
+        "LoupeLibQuick",
+        "LoupeLibWidgets",
+        "LoupePageMaster",
+        "LoupePreflightPlugin",
+        "LoupeViewer",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "PdfExampleGenerator",
+        "PdfTool",
+        "ProductQuickAccessibilitySmoke",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+        "UnitTests",
+        "UnitTestsAccessibility",
+        "UnitTestsActionList",
+        "UnitTestsAuthorSettings",
+        "UnitTestsBenchmarkIdentity",
+        "UnitTestsBleedFixup",
+        "UnitTestsBleedMarginProbe",
+        "UnitTestsBudgetExhaustion",
+        "UnitTestsContentEditor",
+        "UnitTestsContentProcessorLimits",
+        "UnitTestsConversionOracle",
+        "UnitTestsDiagnostics",
+        "UnitTestsDocumentSession",
+        "UnitTestsEvidenceGraph",
+        "UnitTestsFilenameSanitizer",
+        "UnitTestsFontEncoding",
+        "UnitTestsHugeDocumentEnvelope",
+        "UnitTestsIdentitySeparation",
+        "UnitTestsImageDownsampleFixup",
+        "UnitTestsImageOptimizer",
+        "UnitTestsIncrementalSave",
+        "UnitTestsJbig2Decoder",
+        "UnitTestsJobScheduler",
+        "UnitTestsLifecycle",
+        "UnitTestsOcrPageGate",
+        "UnitTestsOperationHistory",
+        "UnitTestsOperationImpact",
+        "UnitTestsOperatorAcceptance",
+        "UnitTestsOverprint",
+        "UnitTestsOverprintRender",
+        "UnitTestsPageMasterExport",
+        "UnitTestsPluginAbi",
+        "UnitTestsPreflightEngine",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsPreflightProfileResolver",
+        "UnitTestsPreflightVerdict",
+        "UnitTestsProcessingBudget",
+        "UnitTestsProductionGeometry",
+        "UnitTestsProfileIdentity",
+        "UnitTestsRecovery",
+        "UnitTestsRedactVerifier",
+        "UnitTestsRepairDiff",
+        "UnitTestsRepairOperation",
+        "UnitTestsRepairOperatorAcceptance",
+        "UnitTestsRgbToCmyk",
+        "UnitTestsSafeFileWriter",
+        "UnitTestsSchemaEvolution",
+        "UnitTestsStandardOracle",
+        "UnitTestsThumbnailsRenderer",
+        "UnitTestsTransparencyFlattener",
+        "UnitTestsUndoRedoManager",
+        "UnitTestsWorkloadEnvelope"
+      ]
+    },
+    {
+      "id": "LoupeLibGui",
+      "kind": "library",
+      "cmake": "LoupeLibGui/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::PrintSupport",
+        "Qt6::Svg",
+        "Qt6::TextToSpeech",
+        "Qt6::Widgets",
+        "Qt6::Xml"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "PrintSupport",
+        "Svg",
+        "TextToSpeech",
+        "Widgets",
+        "Xml"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Sql"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "TextToSpeech",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupeLibGui",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeLibGui",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": [
+        "ActionListPlugin",
+        "LoupeViewer",
+        "UnitTestsRecovery",
+        "UnitTestsUndoRedoManager"
+      ]
+    },
+    {
+      "id": "LoupeLibInteraction",
+      "kind": "library",
+      "cmake": "LoupeLibInteraction/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": [
+        "LoupeEditor",
+        "LoupeEditorQuick",
+        "LoupeLibQuick",
+        "LoupePreflightPlugin",
+        "ProductQuickAccessibilitySmoke"
+      ]
+    },
+    {
+      "id": "LoupeLibQuick",
+      "kind": "library",
+      "cmake": "LoupeLibQuick/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibInteraction"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": [
+        "LoupeEditor",
+        "LoupeEditorQuick",
+        "ProductQuickAccessibilitySmoke"
+      ]
+    },
+    {
+      "id": "LoupeLibWidgets",
+      "kind": "library",
+      "cmake": "LoupeLibWidgets/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Gdi32",
+        "LoupeLibCore",
+        "Mscms",
+        "Qt6::Concurrent",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Svg",
+        "Qt6::Widgets",
+        "Qt6::Xml",
+        "Secur32",
+        "TBB::tbb",
+        "User32",
+        "blend2d::blend2d",
+        "crypt32"
+      ],
+      "direct_qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Svg",
+        "Widgets",
+        "Xml"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupeDiff",
+        "LoupeLaunchPad",
+        "LoupeLibGui",
+        "LoupePageMaster",
+        "LoupePreflightPlugin",
+        "LoupeViewer",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+        "UnitTestsAccessibility",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsRecovery",
+        "UnitTestsThumbnailsRenderer",
+        "UnitTestsUndoRedoManager"
+      ]
+    },
+    {
+      "id": "LoupePageMaster",
+      "kind": "executable",
+      "cmake": "LoupePageMaster/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_PAGEMASTER=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Concurrent",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Svg",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupePageMaster",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupePageMaster",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "LoupePreflightPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupePreflightPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupePreflightPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "LoupeViewer",
+      "kind": "executable",
+      "cmake": "LoupeViewer/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_VIEWER=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Svg",
+        "TextToSpeech",
+        "Xml",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "TextToSpeech",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "LoupeViewer",
+          "LoupeLibGui",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeViewer",
+          "LoupeLibGui",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeViewer",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "LoupeViewer",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "ObjectInspectorPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/ObjectInspectorPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "ObjectInspectorPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "ObjectInspectorPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "OcrPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/OcrPlugin/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_PLUGIN_OCR=OFF in the loupe-release profile",
+      "install_rule": true,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "OcrPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "OcrPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "OutputPreviewPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/OutputPreviewPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "OutputPreviewPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "OutputPreviewPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "PdfExampleGenerator",
+      "kind": "executable",
+      "cmake": "PdfExampleGenerator/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_BUILD_EXAMPLE_GENERATOR=ON in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "PdfExampleGenerator",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "PdfTool",
+      "kind": "executable",
+      "cmake": "PdfTool/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Xml",
+        "ole32",
+        "sapi"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Xml"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "ProductQuickAccessibilitySmoke",
+      "kind": "executable",
+      "cmake": "ProductQuickAccessibilitySmoke/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeEditorQuick",
+        "LoupeEditorQuickplugin",
+        "LoupeEditorQuickplugin_init",
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibQuick",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2",
+        "Qt6::QuickDialogs2"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2"
+      ],
+      "transitive_targets": [
+        "LoupeEditorQuick",
+        "LoupeLibCore",
+        "LoupeLibInteraction",
+        "LoupeLibQuick"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2",
+        "QuickDialogs2",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "QuickShellSmoke",
+      "kind": "executable",
+      "cmake": "QuickShellSmoke/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_QUICK_SHELL_SMOKE=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Qml",
+        "Qt6::Quick",
+        "Qt6::QuickControls2"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Qml",
+        "Quick",
+        "QuickControls2"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "RedactPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/RedactPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "RedactPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "RedactPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "ScannerPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/ScannerPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "LOUPE_PLUGIN_SCANNER=ON in the loupe-release profile",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "${SANE_LIBRARY}",
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "ScannerPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "ScannerPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "SignaturePlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/SignaturePlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "OpenSSL::Crypto",
+        "OpenSSL::SSL",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "SignaturePlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "SignaturePlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "SoftProofingPlugin",
+      "kind": "library",
+      "cmake": "LoupeEditorPlugins/SoftProofingPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "profile_condition": "not LOUPE_BUILD_ONLY_CORE_LIBRARY",
+      "install_rule": true,
+      "installed_in_profile": true,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Widgets"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "SoftProofingPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "SoftProofingPlugin",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTests",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsAccessibility",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "UnitTestsAccessibility",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsAccessibility",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsActionList",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsAuthorSettings",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBenchmarkIdentity",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBleedFixup",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBleedMarginProbe",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBleedStress",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBudgetExhaustion",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsContentEditor",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsContentProcessorLimits",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsConversionOracle",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsDiagnostics",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsDocumentSession",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsEvidenceGraph",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsFilenameSanitizer",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsFontEncoding",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsHugeDocumentEnvelope",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsIdentitySeparation",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsImageDownsampleFixup",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsImageOptimizer",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsIncrementalSave",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsJbig2Decoder",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsJobScheduler",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsLifecycle",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Sql",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOcrCli",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOcrContract",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOcrPageGate",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOperationHistory",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Sql",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOperationImpact",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOperatorAcceptance",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOverprint",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsOverprintRender",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPageMasterExport",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Concurrent",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPdfToolContract",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPluginAbi",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightChecks",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightCorpus",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [],
+      "transitive_qt_modules": [],
+      "qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightEngine",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightPlugin",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Widgets",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "transitive",
+      "widgets_paths": [
+        [
+          "UnitTestsPreflightPlugin",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightProfileResolver",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsPreflightVerdict",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsProcessingBudget",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsProductionGeometry",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsProfileIdentity",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRecovery",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Svg",
+        "TextToSpeech",
+        "Xml",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "Test",
+        "TextToSpeech",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "UnitTestsRecovery",
+          "LoupeLibGui",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsRecovery",
+          "LoupeLibGui",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsRecovery",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsRecovery",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRedactVerifier",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRepairDiff",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRepairOperation",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRepairOperatorAcceptance",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRgbToCmyk",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsSafeFileWriter",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsSchemaEvolution",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsStandardOracle",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsThumbnailsRenderer",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibWidgets",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "UnitTestsThumbnailsRenderer",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsThumbnailsRenderer",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsTransparencyFlattener",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsUndoRedoManager",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test",
+        "Qt6::Widgets"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test",
+        "Widgets"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore",
+        "LoupeLibGui",
+        "LoupeLibWidgets"
+      ],
+      "transitive_qt_modules": [
+        "Concurrent",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "Svg",
+        "Svg",
+        "TextToSpeech",
+        "Xml",
+        "Xml",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Concurrent",
+        "Core",
+        "Gui",
+        "PrintSupport",
+        "Sql",
+        "Svg",
+        "Test",
+        "TextToSpeech",
+        "Widgets",
+        "Xml"
+      ],
+      "widgets_linkage": "direct",
+      "widgets_paths": [
+        [
+          "UnitTestsUndoRedoManager",
+          "LoupeLibGui",
+          "LoupeLibWidgets",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsUndoRedoManager",
+          "LoupeLibGui",
+          "Qt6::Widgets"
+        ],
+        [
+          "UnitTestsUndoRedoManager",
+          "Qt6::Widgets"
+        ]
+      ],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsWorkloadEnvelope",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_TESTS=OFF in the loupe-release profile",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    }
+  ],
+  "legacy_executables": [
+    {
+      "target": "CanvasBenchmark",
+      "kind": "executable",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "CanvasBenchmark/CMakeLists.txt"
+    },
+    {
+      "target": "CodeGenerator",
+      "kind": "executable",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "CodeGenerator/CMakeLists.txt"
+    },
+    {
+      "target": "JBIG2_VIEWER",
+      "kind": "executable",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "JBIG2_Viewer/CMakeLists.txt"
+    },
+    {
+      "target": "LoupeDiff",
+      "kind": "executable",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "LoupeDiff/CMakeLists.txt"
+    },
+    {
+      "target": "LoupeLaunchPad",
+      "kind": "executable",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "LoupeLaunchPad/CMakeLists.txt"
+    },
+    {
+      "target": "LoupePageMaster",
+      "kind": "executable",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "LoupePageMaster/CMakeLists.txt"
+    },
+    {
+      "target": "LoupeViewer",
+      "kind": "executable",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "LoupeViewer/CMakeLists.txt"
+    },
+    {
+      "target": "PdfExampleGenerator",
+      "kind": "executable",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "cmake": "PdfExampleGenerator/CMakeLists.txt"
+    }
+  ],
+  "plugin_ui": [
+    {
+      "plugin": "ActionListPlugin",
+      "target": "ActionListPlugin",
+      "forms": []
+    },
+    {
+      "plugin": "AudioBookPlugin",
+      "target": "AudioBookPlugin",
+      "forms": [
+        "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui"
+      ]
+    },
+    {
+      "plugin": "DimensionsPlugin",
+      "target": "DimensionsPlugin",
+      "forms": [
+        "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui"
+      ]
+    },
+    {
+      "plugin": "EditorPlugin",
+      "target": "EditorPlugin",
+      "forms": []
+    },
+    {
+      "plugin": "LoupePreflightPlugin",
+      "target": "LoupePreflightPlugin",
+      "forms": []
+    },
+    {
+      "plugin": "ObjectInspectorPlugin",
+      "target": "ObjectInspectorPlugin",
+      "forms": [
+        "LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+        "LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+        "LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+        "LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui"
+      ]
+    },
+    {
+      "plugin": "OcrPlugin",
+      "target": "OcrPlugin",
+      "forms": []
+    },
+    {
+      "plugin": "OutputPreviewPlugin",
+      "target": "OutputPreviewPlugin",
+      "forms": [
+        "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+        "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui"
+      ]
+    },
+    {
+      "plugin": "RedactPlugin",
+      "target": "RedactPlugin",
+      "forms": [
+        "LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui"
+      ]
+    },
+    {
+      "plugin": "ScannerPlugin",
+      "target": "ScannerPlugin",
+      "forms": []
+    },
+    {
+      "plugin": "SignaturePlugin",
+      "target": "SignaturePlugin",
+      "forms": [
+        "LoupeEditorPlugins/SignaturePlugin/signdialog.ui"
+      ]
+    },
+    {
+      "plugin": "SoftProofingPlugin",
+      "target": "SoftProofingPlugin",
+      "forms": [
+        "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui"
+      ]
+    }
+  ],
+  "ui_forms": [
+    {
+      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "path": "CodeGenerator/generatormainwindow.ui",
+      "owner_target": "CodeGenerator",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "path": "JBIG2_Viewer/mainwindow.ui",
+      "owner_target": "JBIG2_VIEWER",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeDiff/aboutdialog.ui",
+      "path": "LoupeDiff/aboutdialog.ui",
+      "owner_target": "LoupeDiff",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeDiff/differencesdockwidget.ui",
+      "path": "LoupeDiff/differencesdockwidget.ui",
+      "owner_target": "LoupeDiff",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeDiff/mainwindow.ui",
+      "path": "LoupeDiff/mainwindow.ui",
+      "owner_target": "LoupeDiff",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeDiff/settingsdockwidget.ui",
+      "path": "LoupeDiff/settingsdockwidget.ui",
+      "owner_target": "LoupeDiff",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "owner_target": "AudioBookPlugin",
+      "plugin": "AudioBookPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "owner_target": "DimensionsPlugin",
+      "plugin": "DimensionsPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "owner_target": "OutputPreviewPlugin",
+      "plugin": "OutputPreviewPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "owner_target": "OutputPreviewPlugin",
+      "plugin": "OutputPreviewPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "path": "LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "owner_target": "RedactPlugin",
+      "plugin": "RedactPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "path": "LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "owner_target": "SignaturePlugin",
+      "plugin": "SignaturePlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "path": "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "owner_target": "SoftProofingPlugin",
+      "plugin": "SoftProofingPlugin",
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
+      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
+      "owner_target": "LoupeLaunchPad",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchdialog.ui",
+      "path": "LoupeLaunchPad/launchdialog.ui",
+      "owner_target": "LoupeLaunchPad",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfaboutdialog.ui",
+      "path": "LoupeLibGui/pdfaboutdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfadvancedfindwidget.ui",
+      "path": "LoupeLibGui/pdfadvancedfindwidget.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "path": "LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfeditormainwindow.ui",
+      "path": "LoupeLibGui/pdfeditormainwindow.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "path": "LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "path": "LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "path": "LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "path": "LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "path": "LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsidebarwidget.ui",
+      "path": "LoupeLibGui/pdfsidebarwidget.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewermainwindow.ui",
+      "path": "LoupeLibGui/pdfviewermainwindow.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewersettingsdialog.ui",
+      "path": "LoupeLibGui/pdfviewersettingsdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "path": "LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/aboutdialog.ui",
+      "path": "LoupePageMaster/aboutdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/croppagesdialog.ui",
+      "path": "LoupePageMaster/croppagesdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
+      "path": "LoupePageMaster/itempropertiesdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/mainwindow.ui",
+      "path": "LoupePageMaster/mainwindow.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
+      "path": "LoupePageMaster/pdfpageimportdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    },
+    {
+      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "plugin": null,
+      "widgets_related": true
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "target:ActionListPlugin",
+      "kind": "plugin",
+      "target": "ActionListPlugin",
+      "cmake": "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:AudioBookPlugin",
+      "kind": "plugin",
+      "target": "AudioBookPlugin",
+      "cmake": "LoupeEditorPlugins/AudioBookPlugin/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:CanvasBenchmark",
+      "kind": "developer-tool",
+      "target": "CanvasBenchmark",
+      "cmake": "CanvasBenchmark/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:CodeGenerator",
+      "kind": "developer-tool",
+      "target": "CodeGenerator",
+      "cmake": "CodeGenerator/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:DimensionsPlugin",
+      "kind": "plugin",
+      "target": "DimensionsPlugin",
+      "cmake": "LoupeEditorPlugins/DimensionsPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:EditorPlugin",
+      "kind": "plugin",
+      "target": "EditorPlugin",
+      "cmake": "LoupeEditorPlugins/EditorPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:JBIG2_VIEWER",
+      "kind": "developer-tool",
+      "target": "JBIG2_VIEWER",
+      "cmake": "JBIG2_Viewer/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:LoupeDiff",
+      "kind": "application",
+      "target": "LoupeDiff",
+      "cmake": "LoupeDiff/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:LoupeLaunchPad",
+      "kind": "application",
+      "target": "LoupeLaunchPad",
+      "cmake": "LoupeLaunchPad/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:LoupeLibGui",
+      "kind": "library",
+      "target": "LoupeLibGui",
+      "cmake": "LoupeLibGui/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": [
+        "ActionListPlugin",
+        "LoupeViewer",
+        "UnitTestsRecovery",
+        "UnitTestsUndoRedoManager"
+      ]
+    },
+    {
+      "id": "target:LoupeLibWidgets",
+      "kind": "library",
+      "target": "LoupeLibWidgets",
+      "cmake": "LoupeLibWidgets/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupeDiff",
+        "LoupeLaunchPad",
+        "LoupeLibGui",
+        "LoupePageMaster",
+        "LoupePreflightPlugin",
+        "LoupeViewer",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+        "UnitTestsAccessibility",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsRecovery",
+        "UnitTestsThumbnailsRenderer",
+        "UnitTestsUndoRedoManager"
+      ]
+    },
+    {
+      "id": "target:LoupePageMaster",
+      "kind": "application",
+      "target": "LoupePageMaster",
+      "cmake": "LoupePageMaster/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:LoupePreflightPlugin",
+      "kind": "plugin",
+      "target": "LoupePreflightPlugin",
+      "cmake": "LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:LoupeViewer",
+      "kind": "application",
+      "target": "LoupeViewer",
+      "cmake": "LoupeViewer/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:ObjectInspectorPlugin",
+      "kind": "plugin",
+      "target": "ObjectInspectorPlugin",
+      "cmake": "LoupeEditorPlugins/ObjectInspectorPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:OcrPlugin",
+      "kind": "plugin",
+      "target": "OcrPlugin",
+      "cmake": "LoupeEditorPlugins/OcrPlugin/CMakeLists.txt",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:OutputPreviewPlugin",
+      "kind": "plugin",
+      "target": "OutputPreviewPlugin",
+      "cmake": "LoupeEditorPlugins/OutputPreviewPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:PdfExampleGenerator",
+      "kind": "developer-tool",
+      "target": "PdfExampleGenerator",
+      "cmake": "PdfExampleGenerator/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:RedactPlugin",
+      "kind": "plugin",
+      "target": "RedactPlugin",
+      "cmake": "LoupeEditorPlugins/RedactPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:ScannerPlugin",
+      "kind": "plugin",
+      "target": "ScannerPlugin",
+      "cmake": "LoupeEditorPlugins/ScannerPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:SignaturePlugin",
+      "kind": "plugin",
+      "target": "SignaturePlugin",
+      "cmake": "LoupeEditorPlugins/SignaturePlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "target:SoftProofingPlugin",
+      "kind": "plugin",
+      "target": "SoftProofingPlugin",
+      "cmake": "LoupeEditorPlugins/SoftProofingPlugin/CMakeLists.txt",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "direct",
+      "consumers": []
+    },
+    {
+      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "kind": "ui-form",
+      "path": "CodeGenerator/generatormainwindow.ui",
+      "target": "CodeGenerator",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "CodeGenerator"
+      ]
+    },
+    {
+      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "JBIG2_Viewer/mainwindow.ui",
+      "target": "JBIG2_VIEWER",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "JBIG2_VIEWER"
+      ]
+    },
+    {
+      "id": "ui:LoupeDiff/aboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/aboutdialog.ui",
+      "target": "LoupeDiff",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeDiff"
+      ]
+    },
+    {
+      "id": "ui:LoupeDiff/differencesdockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/differencesdockwidget.ui",
+      "target": "LoupeDiff",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeDiff"
+      ]
+    },
+    {
+      "id": "ui:LoupeDiff/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/mainwindow.ui",
+      "target": "LoupeDiff",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeDiff"
+      ]
+    },
+    {
+      "id": "ui:LoupeDiff/settingsdockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/settingsdockwidget.ui",
+      "target": "LoupeDiff",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeDiff"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "target": "AudioBookPlugin",
+      "plugin": "AudioBookPlugin",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "AudioBookPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "target": "DimensionsPlugin",
+      "plugin": "DimensionsPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "DimensionsPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "ObjectInspectorPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "ObjectInspectorPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "ObjectInspectorPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "target": "ObjectInspectorPlugin",
+      "plugin": "ObjectInspectorPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "ObjectInspectorPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "target": "OutputPreviewPlugin",
+      "plugin": "OutputPreviewPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "OutputPreviewPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "target": "OutputPreviewPlugin",
+      "plugin": "OutputPreviewPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "OutputPreviewPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "target": "RedactPlugin",
+      "plugin": "RedactPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "RedactPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "target": "SignaturePlugin",
+      "plugin": "SignaturePlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "SignaturePlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "target": "SoftProofingPlugin",
+      "plugin": "SoftProofingPlugin",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "SoftProofingPlugin"
+      ]
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
+      "target": "LoupeLaunchPad",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLaunchPad"
+      ]
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLaunchPad/launchdialog.ui",
+      "target": "LoupeLaunchPad",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLaunchPad"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfaboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfaboutdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfadvancedfindwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfadvancedfindwidget.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfeditormainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfeditormainwindow.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsidebarwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfsidebarwidget.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewermainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfviewermainwindow.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewersettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfviewersettingsdialog.ui",
+      "target": "LoupeLibGui",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibGui"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "target": "LoupeLibWidgets",
+      "plugin": null,
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupeLibWidgets"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/aboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/aboutdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/croppagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/croppagesdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/itempropertiesdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/mainwindow.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/pdfpageimportdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    },
+    {
+      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "target": "LoupePageMaster",
+      "plugin": null,
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "widgets_linkage": "owned-by-widgets-surface",
+      "consumers": [
+        "LoupePageMaster"
+      ]
+    }
+  ],
+  "counts": {
+    "targets": 89,
+    "installed_in_profile": 17,
+    "build_only_in_profile": 5,
+    "widgets_surfaces": 22,
+    "legacy_executables": 8,
+    "plugin_ui_groups": 12,
+    "ui_forms": 48
+  }
+}

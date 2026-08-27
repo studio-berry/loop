@@ -96,31 +96,3 @@ install(TARGETS LoupeEditor LoupeEditorQuick
 if(LOUPE_ENABLE_SENTRY)
     loupe_deploy_sentry_crashpad(LoupeEditor)
 endif()
-
-option(LOUPE_BUILD_EDITOR_WIDGETS_ORACLE "Build the non-installed Widgets editor oracle" ON)
-
-if(LOUPE_BUILD_EDITOR_WIDGETS_ORACLE)
-    add_executable(LoupeEditorWidgetsOracle
-        widgets_oracle_main.cpp
-        icon.rc
-        app.qrc
-    )
-
-    target_link_libraries(LoupeEditorWidgetsOracle
-        PRIVATE
-            LoupeLibCore
-            LoupeLibWidgets
-            LoupeLibGui
-            Qt6::Core
-            Qt6::Gui
-            Qt6::Widgets
-    )
-
-    set_target_properties(LoupeEditorWidgetsOracle PROPERTIES
-        WIN32_EXECUTABLE ON
-        MACOSX_BUNDLE ON
-        EXCLUDE_FROM_ALL OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-    )
-endif()

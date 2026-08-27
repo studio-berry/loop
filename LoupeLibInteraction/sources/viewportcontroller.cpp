@@ -38,8 +38,8 @@ namespace
 /// Marks a slot in a left/right page pair that no page occupies.
 constexpr int NoPage = -1;
 
-/// The Widgets path leaves a 5% margin around a fitted page; keeping the same
-/// ratio keeps the two hosts comparable while the Widgets build is the oracle.
+/// Keep a 5% margin around a fitted page so fit behavior stays stable across
+/// presentation hosts.
 constexpr qreal FitMarginRatio = 0.95;
 
 /// Pages after the last visible one that are still worth rendering. Matches the

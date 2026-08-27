@@ -112,6 +112,15 @@ target) reaching `status: pass`. `qquickwidget` and `window-container` are
 still run and their JSON recorded for diagnostic reference, but a headless
 `window-container` focus limitation does not block S21 admission.
 
+## Retirement update (2026-08-26)
+
+The temporary non-installed comparison target and its layout probe described by
+this amendment have now been removed in Phase 5 Session 02. The retained
+Quick-native claim map, explicit geometry measurements, and pixel budgets are
+archived in `docs/evidence/phase5-widgets-parity-evidence.json`; this ADR's
+historical hosting decision remains diagnostic context rather than a maintained
+build target.
+
 ## Verification contract
 
 The target is opt-in through `LOUPE_BUILD_CANVAS_BENCHMARK=ON`. The runner
