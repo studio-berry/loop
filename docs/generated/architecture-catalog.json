@@ -76,8 +76,7 @@
     {
       "id": "I10",
       "test_targets": [
-        "UnitTestsLifecycle",
-        "UnitTestsRecovery"
+        "UnitTestsLifecycle"
       ],
       "title": "Recovered or unapproved output is not certified"
     },
@@ -373,7 +372,6 @@
   ],
   "test_targets": [
     "UnitTests",
-    "UnitTestsAccessibility",
     "UnitTestsActionList",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",
@@ -419,8 +417,6 @@
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",
-    "UnitTestsPreflightInteraction",
-    "UnitTestsPreflightPlugin",
     "UnitTestsPreflightProfileResolver",
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
@@ -429,7 +425,6 @@
     "UnitTestsProfileIdentity",
     "UnitTestsQuickAccessibility",
     "UnitTestsQuickCanvas",
-    "UnitTestsRecovery",
     "UnitTestsRedactVerifier",
     "UnitTestsRepairDiff",
     "UnitTestsRepairOperation",
@@ -439,9 +434,7 @@
     "UnitTestsSchemaEvolution",
     "UnitTestsShellKeyboard",
     "UnitTestsStandardOracle",
-    "UnitTestsThumbnailsRenderer",
     "UnitTestsTransparencyFlattener",
-    "UnitTestsUndoRedoManager",
     "UnitTestsViewportCommands",
     "UnitTestsViewportController",
     "UnitTestsWorkloadEnvelope"

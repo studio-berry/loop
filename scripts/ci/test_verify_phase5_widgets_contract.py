@@ -30,11 +30,11 @@ class Phase5WidgetsContractTests(unittest.TestCase):
 
     def test_current_evidence_is_valid_and_complete(self):
         self.assertEqual(validate_contract(ROOT, self.inventory, self.disposition), [])
-        self.assertEqual(self.inventory["counts"]["targets"], 89)
-        self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 22)
-        self.assertEqual(self.inventory["counts"]["ui_forms"], 34)
-        self.assertEqual(len(self.inventory["plugin_ui"]), 12)
-        self.assertEqual(len(self.disposition["rows"]), 56)
+        self.assertEqual(self.inventory["counts"]["targets"], 66)
+        self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 4)
+        self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
+        self.assertEqual(len(self.inventory["plugin_ui"]), 0)
+        self.assertEqual(len(self.disposition["rows"]), 6)
 
     def test_unknown_surface_fails_closed(self):
         disposition = copy.deepcopy(self.disposition)
@@ -76,45 +76,17 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         errors = validate_disposition(self.inventory, disposition, ROOT)
         self.assertTrue(any("invalid disposition" in error for error in errors))
 
-    def test_secondary_executables_are_frozen_to_installed_owners(self):
-        rows = {row["target"]: row for row in self.disposition["rows"] if "target" in row}
-        expected = {
-            "LoupeViewer": ("DELETE", "loupe-editor", "STOP-SHIPPING"),
-            "LoupeLaunchPad": ("DELETE", "loupe-editor", "STOP-SHIPPING"),
-            "LoupePageMaster": ("HEADLESS-REPLACE", "loupe-cli", "CLI-ONLY"),
-            "LoupeDiff": ("HEADLESS-REPLACE", "loupe-cli", "CLI-ONLY"),
-        }
-        for target, (disposition, replacement, source) in expected.items():
-            row = rows[target]
-            self.assertEqual(row["disposition"], disposition, target)
-            self.assertEqual(row["replacement_target"], replacement, target)
-            self.assertEqual(row["source_disposition"], source, target)
-            self.assertIn(replacement, row["testable_condition"], target)
-            self.assertNotRegex(row["rationale"], r"Issue \d+", target)
-            self.assertNotRegex(row["testable_condition"], r"Issue \d+", target)
-            self.assertNotEqual(row["disposition"], "BLOCKED", target)
-        blocked = [row["id"] for row in self.disposition["rows"] if row["disposition"] == "BLOCKED"]
-        self.assertEqual(blocked, ["target:RedactPlugin"])
-        ocr = rows["OcrPlugin"]
-        self.assertEqual(ocr["replacement_target"], "loupe-cli")
-        self.assertIn("only after loupe-cli is proven", ocr["testable_condition"])
-        self.assertNotIn("may leave the install graph", ocr["testable_condition"])
+    def test_secondary_executables_are_absent_after_issue_17(self):
         product = json.loads((ROOT / "docs" / "product-surface.json").read_text(encoding="utf-8"))
-        self.assertEqual(sorted(_proven_owner_ids(product)), ["loupe-cli", "loupe-editor"])
         by_id = {row["id"]: row for row in product["surfaces"]}
         for surface_id in ("loupe-viewer", "loupe-pagemaster", "loupe-diff", "loupe-launchpad"):
             row = by_id[surface_id]
             self.assertEqual(row["artifact_scope"], "build", surface_id)
             self.assertEqual(row["profiles"]["developer"], "absent", surface_id)
             self.assertEqual(row["profiles"]["loupe-release"], "absent", surface_id)
-        packaging = product["packaging"]
-        self.assertEqual(packaging["appx_applications"]["developer"], ["LoupeEditor"])
-        self.assertEqual(packaging["appx_applications"]["loupe-release"], ["LoupeEditor"])
+        inventory_ids = {row["id"] for row in self.inventory["targets"]}
         for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
-            target = next(row for row in self.inventory["targets"] if row["id"] == name)
-            self.assertFalse(target["install_rule"], name)
-            self.assertFalse(target["installed_in_profile"], name)
-            self.assertFalse(target["profile_enabled"], name)
+            self.assertNotIn(name, inventory_ids, name)
         options = self.inventory["profile"]["options"]
         for option in (
             "LOUPE_BUILD_VIEWER",
@@ -124,25 +96,33 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         ):
             self.assertFalse(options[option], option)
 
-    def test_retired_plugins_leave_install_graph(self):
+    def test_widgets_plugins_are_absent_after_issue_17(self):
         product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))
-        by_id = {row["id"]: row for row in product["surfaces"]}
-        audiobook = next(row for row in self.disposition["rows"] if row.get("target") == "AudioBookPlugin")
-        self.assertEqual(audiobook["disposition"], "DELETE")
-        self.assertIn("may drop this plugin", audiobook["testable_condition"])
-        ocr = next(row for row in self.disposition["rows"] if row.get("target") == "OcrPlugin")
-        self.assertEqual(ocr["replacement_target"], "loupe-cli")
-        self.assertIn("only after loupe-cli is proven", ocr["testable_condition"])
-        for name, surface_id in (
-            ("AudioBookPlugin", "audiobook-plugin"),
-            ("OcrPlugin", "ocr-plugin"),
+        plugin_rows = [
+            row
+            for row in product["surfaces"]
+            if row.get("kind") == "plugin" and row.get("artifact")
+        ]
+        self.assertEqual(len(plugin_rows), 12)
+        for row in plugin_rows:
+            self.assertEqual(row["artifact_scope"], "build", row["artifact"])
+            self.assertEqual(row["profiles"]["loupe-release"], "absent", row["artifact"])
+        inventory_ids = {row["id"] for row in self.inventory["targets"]}
+        for plugin in (
+            "ActionListPlugin",
+            "DimensionsPlugin",
+            "EditorPlugin",
+            "LoupePreflightPlugin",
+            "ObjectInspectorPlugin",
+            "OutputPreviewPlugin",
+            "RedactPlugin",
+            "ScannerPlugin",
+            "SignaturePlugin",
+            "SoftProofingPlugin",
+            "AudioBookPlugin",
+            "OcrPlugin",
         ):
-            target = next(row for row in self.inventory["targets"] if row["id"] == name)
-            self.assertFalse(target["install_rule"], name)
-            self.assertFalse(target["installed_in_profile"], name)
-            product_row = by_id[surface_id]
-            self.assertEqual(product_row["artifact_scope"], "build", name)
-            self.assertEqual(product_row["profiles"]["loupe-release"], "absent", name)
+            self.assertNotIn(plugin, inventory_ids, plugin)
 
     def test_loupe_editor_is_sole_installed_interactive_product(self):
         completed = subprocess.run(
@@ -161,29 +141,11 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
-        rows = {row["target"]: row for row in self.disposition["rows"] if row.get("kind") == "plugin"}
-        for plugin in (
-            "ActionListPlugin",
-            "DimensionsPlugin",
-            "EditorPlugin",
-            "LoupePreflightPlugin",
-            "OutputPreviewPlugin",
-            "SoftProofingPlugin",
-        ):
-            row = rows[plugin]
-            self.assertEqual(row["disposition"], "HEADLESS-REPLACE", plugin)
-            self.assertEqual(row["source_disposition"], "ABSORB", plugin)
-        for plugin in ("ObjectInspectorPlugin", "SignaturePlugin", "ScannerPlugin"):
-            row = rows[plugin]
-            self.assertEqual(row["disposition"], "RETAIN-NON-PRODUCT", plugin)
-            self.assertEqual(row["source_disposition"], "ADVANCED", plugin)
-        self.assertEqual(rows["RedactPlugin"]["disposition"], "BLOCKED")
 
-    def test_retired_ui_forms_removed_from_repo_and_ledger(self):
+    def test_developer_tool_ui_forms_match_ledger(self):
         shell = json.loads((ROOT / "docs/loupe-shell.json").read_text(encoding="utf-8"))
         legacy = shell["legacy_surface_disposition"]
-        self.assertEqual(len(legacy), 34)
-        self.assertFalse(any(entry["disposition"] == "RETIRE" for entry in legacy))
+        self.assertEqual(len(legacy), 2)
         repo_ui = sorted(
             str(path.relative_to(ROOT)).replace("\\", "/")
             for path in ROOT.rglob("*.ui")
@@ -191,8 +153,8 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         )
         ledger_paths = sorted(entry["path"] for entry in legacy)
         self.assertEqual(repo_ui, ledger_paths)
-        self.assertEqual(self.inventory["counts"]["ui_forms"], 34)
-        self.assertEqual(len(self.disposition["rows"]), 56)
+        self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
+        self.assertEqual(len(self.disposition["rows"]), 6)
 
 
 if __name__ == "__main__":
