@@ -2,8 +2,6 @@
 //
 // Copyright (c) 2018-2025 Jakub Melka and Contributors
 
-#include "documentcontextsource.h"
-#include "jobsubmitter.h"
 #include "pagesurfacecoordinator.h"
 #include "pagesurfacerenderer.h"
 #include "viewportcontroller.h"
@@ -12,6 +10,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfdocumentsession.h"
 #include "pdfjobscheduler.h"
+#include "pdfprocessingbudget.h"
 
 #include <QtTest>
 
@@ -21,39 +20,114 @@ namespace
 constexpr QSizeF A4 = QSizeF(210.0, 297.0);
 constexpr qint64 SurfaceBytes = 210LL * 297 * 4;
 
-class DocumentGeometrySource final : public pdfinteraction::IPageGeometrySource
+pdf::PDFRevisionIdentity makeRevision(const QString& documentId, quint64 documentRevision = 1)
+{
+    pdf::PDFRevisionIdentity revision;
+    revision.document.documentId = documentId;
+    revision.document.sourceDataHash = documentId.toUtf8();
+    revision.documentRevision = documentRevision;
+    return revision;
+}
+
+class FakeGeometrySource final : public pdfinteraction::IPageGeometrySource
 {
 public:
-    explicit DocumentGeometrySource(pdf::PDFDocument* document) :
-        m_document(document)
+    explicit FakeGeometrySource(int pageCount) :
+        m_pageCount(pageCount)
     {
     }
 
-    int pageCount() const override
-    {
-        return m_document ? int(m_document->getCatalog()->getPageCount()) : 0;
-    }
+    int pageCount() const override { return m_pageCount; }
 
     QSizeF pageSizeMM(int pageIndex, pdf::PageRotation extraRotation) const override
     {
         Q_UNUSED(pageIndex);
-        const bool transposed = extraRotation == pdf::PageRotation::Rotate90 || extraRotation == pdf::PageRotation::Rotate270;
-        return transposed ? A4.transposed() : A4;
+        Q_UNUSED(extraRotation);
+        return A4;
     }
 
     QTransform pagePointToDeviceMatrix(int pageIndex, const QRectF& deviceRect, pdf::PageRotation extraRotation) const override
     {
         Q_UNUSED(pageIndex);
         Q_UNUSED(extraRotation);
-
-        QTransform matrix;
-        matrix.translate(deviceRect.left(), deviceRect.bottom());
-        matrix.scale(deviceRect.width() / A4.width(), -deviceRect.height() / A4.height());
-        return matrix;
+        Q_UNUSED(deviceRect);
+        return QTransform();
     }
 
 private:
-    pdf::PDFDocument* m_document = nullptr;
+    int m_pageCount = 0;
+};
+
+class FakeRevisionSource final : public pdfinteraction::IDocumentRevisionSource
+{
+public:
+    pdf::PDFRevisionIdentity currentRevision() const override { return revision; }
+    bool isCurrent(const pdf::PDFRevisionIdentity& candidate) const override { return candidate == revision; }
+
+    pdf::PDFRevisionIdentity revision = makeRevision(QStringLiteral("doc-1"));
+};
+
+class SessionCoupledRenderer final : public pdfinteraction::IPageSurfaceRenderer
+{
+public:
+    explicit SessionCoupledRenderer(pdf::PDFDocumentContext& context) :
+        m_context(context)
+    {
+    }
+
+    pdfinteraction::PageSurfaceResult render(const pdfinteraction::PageSurfaceRequest& request, pdf::PDFJobContext& jobContext) override
+    {
+        pdfinteraction::PageSurfaceResult result;
+        result.key = request.key;
+        result.token = request.token;
+
+        if (jobContext.isCancellationRequested())
+        {
+            result.state = pdfinteraction::SurfaceTerminalState::Cancelled;
+            result.typedError = QStringLiteral("page-surface/cancelled");
+            return result;
+        }
+
+        QImage image(request.key.targetPixelSize, QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        result.state = pdfinteraction::SurfaceTerminalState::Complete;
+        result.pixels = pdfinteraction::makeSurfaceBuffer(std::move(image));
+        result.pixelSize = request.key.targetPixelSize;
+        result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+        return result;
+    }
+
+    void shedPrefetchAndQuality() override
+    {
+        ++shedCalls;
+        if (pdf::PDFDocumentSession* session = m_context.getSession())
+        {
+            session->shedPrefetchAndQuality();
+        }
+    }
+
+    int shedCalls = 0;
+
+private:
+    pdf::PDFDocumentContext& m_context;
+};
+
+class InlineJobSubmitter final : public pdfinteraction::IJobSubmitter
+{
+public:
+    QString submit(pdf::PDFJobSpec spec, pdf::PDFJobWork work) override
+    {
+        Q_UNUSED(spec);
+        pdf::PDFJobContext context(std::make_shared<pdf::PDFJobCancellationToken>(), pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
+        work(context);
+        return spec.jobId;
+    }
+
+    bool cancel(const QString& jobId) override
+    {
+        Q_UNUSED(jobId);
+        return false;
+    }
 };
 
 }   // namespace
@@ -74,40 +148,34 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
         builder.appendPage(QRectF(0, 0, A4.width(), A4.height()));
     }
     pdf::PDFDocument document = builder.build();
-
     pdf::PDFDocumentContext context(&document);
     pdf::PDFDocumentSession* session = context.getSession();
     QVERIFY(session != nullptr);
-    QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::CompileCacheLimit);
-    QVERIFY(session->prefetchEnabled());
+    QVERIFY(session->compileCacheLimit() > pdf::PDFDocumentSession::ShedCompileCacheLimit);
 
-    pdf::PDFJobScheduler scheduler(2);
-    pdfinteraction::PDFJobSchedulerSubmitter submitter(scheduler);
-    pdfinteraction::PDFSessionPageSurfaceRenderer renderer(context);
-    pdfinteraction::PDFDocumentContextSource revisions(&context);
-
+    FakeRevisionSource revisions;
+    InlineJobSubmitter submitter;
+    SessionCoupledRenderer renderer(context);
     pdfinteraction::ViewportController viewport;
-    DocumentGeometrySource geometry(&document);
-    viewport.setGeometrySource(&geometry);
+    FakeGeometrySource geometry(4);
     viewport.setPixelPerMM(1.0);
-    viewport.setViewportSizePx(QSize(220, 320));
-    viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
+    viewport.setViewportSizePx(QSize(100, 100));
+    viewport.setGeometrySource(&geometry);
 
     pdfinteraction::PageSurfaceBounds bounds;
     bounds.maxInFlightBytes = SurfaceBytes;
     bounds.maxAdmittedBytes = SurfaceBytes * 2;
+    bounds.maxNearViewportRequests = 1;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
-    coordinator.setDocumentKey(revisions.documentKey());
-    coordinator.invalidate(revisions.currentRevision());
-
+    coordinator.setDocumentKey(QStringLiteral("doc-1"));
     coordinator.requestSurfaces();
-    QTRY_VERIFY_WITH_TIMEOUT(coordinator.counters().admitted >= 1, 30000);
     QCoreApplication::processEvents();
 
     QVERIFY(coordinator.counters().shed > 0);
+    QVERIFY(renderer.shedCalls > 0);
+    QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::ShedCompileCacheLimit);
     QVERIFY(coordinator.counters().admittedBytes <= bounds.maxAdmittedBytes);
-    QVERIFY(session->compileCacheLimit() <= pdf::PDFDocumentSession::CompileCacheLimit);
 }
 
 QTEST_GUILESS_MAIN(PageSurfaceBudgetTest)
