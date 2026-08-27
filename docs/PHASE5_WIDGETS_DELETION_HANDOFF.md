@@ -135,6 +135,15 @@ Session 04 Issue 15 adds `scripts/verify-plugin-form-accounting.py`, wired into 
 `source_integrity` and Linux agent-fast, to reject unledgered `.ui` files, stale
 CMake `uic` references, and retired install boundaries.
 
+## Session 05 Issue 16 consumer trace
+
+Session 05 Issue 16 adds `scripts/generate_widgets_library_consumer_graph.py` and
+`scripts/verify-widgets-library-consumer-graph.py`. The generated artifact
+`docs/generated/widgets-library-consumer-graph.json` re-dumps every
+loupe-release consumer of `LoupeLibWidgets` and Widgets-bound `LoupeLibGui`,
+classifies neutral relocation owners, and records the ten installed plugin
+blockers that must clear before Issue 17 deletes either library.
+
 ## Configure and package proof required in Phase 5
 
 1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile.
