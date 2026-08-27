@@ -351,13 +351,19 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         add_subdirectory(LoupeViewer)
     endif()
     if(LOUPE_BUILD_PAGEMASTER)
-        add_subdirectory(LoupePageMaster)
+        message(FATAL_ERROR
+            "LoupePageMaster Widgets UI was retired in Phase 5 Session 04 Issue 14. "
+            "Use PdfTool page commands via loupe-cli.")
     endif()
     if(LOUPE_BUILD_DIFF)
-        add_subdirectory(LoupeDiff)
+        message(FATAL_ERROR
+            "LoupeDiff Widgets UI was retired in Phase 5 Session 04 Issue 14. "
+            "Use PdfTool diff via loupe-cli.")
     endif()
     if(LOUPE_BUILD_LAUNCHPAD)
-        add_subdirectory(LoupeLaunchPad)
+        message(FATAL_ERROR
+            "LoupeLaunchPad Widgets UI was retired in Phase 5 Session 04 Issue 14. "
+            "LoupeEditor is the product launcher.")
     endif()
     add_subdirectory(WixInstaller)
 endif()

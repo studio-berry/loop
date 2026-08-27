@@ -152,8 +152,8 @@ foreach ($entry in $legacyLedger) {
     $legacyPaths += $entry.path
 }
 
-if ($legacyLedger.Count -ne 48) {
-    throw "legacy_surface_disposition must contain exactly 48 tracked .ui forms, found $($legacyLedger.Count)"
+if ($legacyLedger.Count -ne 34) {
+    throw "legacy_surface_disposition must contain exactly 34 tracked .ui forms, found $($legacyLedger.Count)"
 }
 
 $repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | ForEach-Object {

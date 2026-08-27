@@ -137,8 +137,8 @@ def main() -> int:
         if not (ROOT / path).is_file():
             raise ContractError(f"missing legacy ui file: {path}")
 
-    if len(legacy) != 48:
-        raise ContractError(f"legacy_surface_disposition must contain 48 entries, found {len(legacy)}")
+    if len(legacy) != 34:
+        raise ContractError(f"legacy_surface_disposition must contain 34 entries, found {len(legacy)}")
 
     repo_ui = sorted(
         str(p.relative_to(ROOT)).replace("\\", "/")

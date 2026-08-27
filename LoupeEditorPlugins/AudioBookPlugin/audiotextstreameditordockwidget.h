@@ -30,11 +30,7 @@
 class QToolBar;
 class QLineEdit;
 class QTableView;
-
-namespace Ui
-{
-class AudioTextStreamEditorDockWidget;
-}
+class QVBoxLayout;
 
 namespace pdfplugin
 {
@@ -77,10 +73,11 @@ public:
     void goToIndex(size_t index);
 
 private:
-    Ui::AudioTextStreamEditorDockWidget* ui;
     pdf::PDFDocumentTextFlowEditorModel* m_model;
     QToolBar* m_toolBar;
     QLineEdit* m_selectionTextEdit;
+    QVBoxLayout* m_layout;
+    QTableView* m_textStreamTableView;
 };
 
 } // namespace pdfplugin

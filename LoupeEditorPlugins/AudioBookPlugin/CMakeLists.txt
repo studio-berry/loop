@@ -24,7 +24,6 @@ add_library(AudioBookPlugin SHARED
     audiobookcreator.cpp
     audiobookplugin.cpp
     audiotextstreameditordockwidget.cpp
-    audiotextstreameditordockwidget.ui
     icons.qrc
 )
 
