@@ -34,8 +34,7 @@ namespace pdfplugin::pdftool
 
 inline bool isResultEnvelope(const QJsonObject& object, const QString& expectedCommand)
 {
-    return object.value(QStringLiteral("schema_version")).toInt() == 1
-        && object.value(QStringLiteral("command")).toString() == expectedCommand;
+    return object.value(QStringLiteral("schema_version")).toInt() == 1 && object.value(QStringLiteral("command")).toString() == expectedCommand;
 }
 
 inline QString formatDiagnosticMessages(const QJsonArray& diagnostics)
@@ -89,4 +88,4 @@ inline QJsonObject reportFromEnvelope(const QJsonObject& envelope)
 
 }   // namespace pdfplugin::pdftool
 
-#endif // PDFTOOLENVELOPEUTILS_H
+#endif   // PDFTOOLENVELOPEUTILS_H
