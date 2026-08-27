@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Session 05 Issue 16 Widgets library consumer graph evidence.
+"""Generate Session 05 Issue 16/17 Widgets library consumer graph evidence.
 
 Re-dumps the loupe-release dependency graph around LoupeLibWidgets and
 Widgets-bound LoupeLibGui, classifies every consumer and neutral relocation
@@ -89,7 +89,7 @@ def _scan_neutral_code(root: Path) -> list[dict]:
     for directory in ("LoupeLibWidgets/sources", "LoupeLibGui"):
         base = root / directory
         if not base.is_dir():
-            raise EvidenceError(f"missing Widgets library directory: {directory}")
+            continue
         for path in sorted(base.rglob("*")):
             if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
                 continue
@@ -145,6 +145,8 @@ def build_graph(root: Path) -> dict:
 
     consumers: list[dict] = []
     for library in LIBRARIES:
+        if library not in target_map:
+            continue
         library_row = target_map[library]
         for consumer in sorted(library_row.get("consumers", [])):
             target_row = target_map[consumer]
@@ -198,29 +200,46 @@ def build_graph(root: Path) -> dict:
 
     library_rows = []
     for library in LIBRARIES:
-        row = target_map[library]
-        library_rows.append(
-            {
-                "target": library,
-                "installed_in_profile": row["installed_in_profile"],
-                "direct_consumers": sorted(
-                    consumer["consumer"]
-                    for consumer in consumers
-                    if consumer["library"] == library and consumer["linkage"] == "direct"
-                ),
-                "transitive_consumers": sorted(
-                    consumer["consumer"]
-                    for consumer in consumers
-                    if consumer["library"] == library and consumer["linkage"] == "transitive"
-                ),
-                "deletion_blocked": bool(installed_product_blockers),
-            }
-        )
+        if library in target_map:
+            row = target_map[library]
+            library_rows.append(
+                {
+                    "target": library,
+                    "status": "present-in-profile",
+                    "installed_in_profile": row["installed_in_profile"],
+                    "direct_consumers": sorted(
+                        consumer["consumer"]
+                        for consumer in consumers
+                        if consumer["library"] == library and consumer["linkage"] == "direct"
+                    ),
+                    "transitive_consumers": sorted(
+                        consumer["consumer"]
+                        for consumer in consumers
+                        if consumer["library"] == library and consumer["linkage"] == "transitive"
+                    ),
+                    "deletion_blocked": bool(installed_product_blockers),
+                }
+            )
+        else:
+            library_rows.append(
+                {
+                    "target": library,
+                    "status": "deleted-not-in-profile",
+                    "installed_in_profile": False,
+                    "direct_consumers": [],
+                    "transitive_consumers": [],
+                    "deletion_blocked": False,
+                }
+            )
+
+    deletion_safe = not installed_product_blockers and all(
+        row.get("status") == "deleted-not-in-profile" for row in library_rows
+    )
 
     return {
         "schema_version": 1,
         "evidence_kind": "widgets-library-consumer-graph",
-        "issue": 16,
+        "issue": 17,
         "qualified_baseline_sha": QUALIFIED_BASELINE_SHA,
         "profile": inventory["profile"],
         "inputs": {
@@ -235,10 +254,11 @@ def build_graph(root: Path) -> dict:
             "unknown_product_consumers": unknown_product_consumers,
             "unclassified_neutral_code": unclassified_neutral_code,
             "installed_product_blockers": installed_product_blockers,
-            "deletion_safe": not installed_product_blockers,
+            "deletion_safe": deletion_safe,
             "issue_17_prerequisite": (
-                "Issue 17 must not delete LoupeLibWidgets or Widgets-bound LoupeLibGui "
-                "while installed_product_blockers is non-empty."
+                "Issue 17 deleted LoupeLibWidgets and Widgets-bound LoupeLibGui from the maintained loupe-release graph."
+                if deletion_safe
+                else "Issue 17 must not delete LoupeLibWidgets or Widgets-bound LoupeLibGui while installed_product_blockers is non-empty."
             ),
         },
         "counts": {

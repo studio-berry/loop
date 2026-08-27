@@ -144,6 +144,10 @@ loupe-release consumer of `LoupeLibWidgets` and Widgets-bound `LoupeLibGui`,
 classifies neutral relocation owners, and records the ten installed plugin
 blockers that must clear before Issue 17 deletes either library.
 
+## Session 05 Issue 17 library deletion
+
+Issue 17 deleted `LoupeLibWidgets`, Widgets-bound `LoupeLibGui`, all `LoupeEditorPlugins` sources, and the retired secondary executables (`LoupeViewer`, `LoupePageMaster`, `LoupeDiff`, `LoupeLaunchPad`). All twelve editor plugins are build-only and absent from the `loupe-release` install graph; `widgets-library-consumer-graph.json` records `deletion_safe: true` with no installed product blockers. Linux CI now configures with `-DLOUPE_LOUPE_DISTRIBUTION=ON` so agent-fast matches production profile gates.
+
 ## Configure and package proof required in Phase 5
 
 1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile.

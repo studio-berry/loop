@@ -14,14 +14,9 @@
       <ComponentGroupRef Id="LOUPE_Framework" />
       <ComponentRef Id="ProgramMenuDir" />
 
-      <Feature Id="feature_LOUPE_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="Advanced PDF viewer/editor with many functions, such as annotation editing, form filling, signature verification, and many optional plugins.">
+      <Feature Id="feature_LOUPE_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="LoupeEditor Quick shell for interactive PDF inspection and preparation.">
         <ComponentGroupRef Id="LOUPE_Editor"/>
-
-        <Feature Id="feature_LOUPE_Editor_Plugins" Absent="allow" AllowAdvertise="no" Title="Plugin Pack" Level="1" Description="${LOUPE_WIX_PLUGIN_PACK_DESCRIPTION}">
-          <ComponentGroupRef Id="LOUPE_Editor_Plugins"/>
-          <ComponentGroupRef Id="LOUPE_Loupe_Data"/>
-${LOUPE_WIX_FEATURE_OCR_SERVICE}
-        </Feature>
+${LOUPE_WIX_EDITOR_PLUGIN_FEATURE}
       </Feature>
 ${LOUPE_WIX_FEATURE_VIEWER}
 ${LOUPE_WIX_FEATURE_PAGEMASTER}
@@ -66,12 +61,7 @@ ${LOUPE_WIX_FEATURE_DIFF}
       <Component Id="cmpLoupeLibCore" Directory="INSTALLFOLDER" Guid="{C8CFFAE9-F913-4103-BD46-A8299E42938E}">
         <File Id="filLoupeLibCore" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibCore.dll" />
       </Component>
-      <Component Id="cmpLoupeLibWidgets" Directory="INSTALLFOLDER" Guid="{40A714A4-3F2A-41BE-9C70-216FAB048061}">
-        <File Id="filLoupeLibWidgets" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibWidgets.dll" />
-      </Component>
-      <Component Id="cmpLoupeLibGui" Directory="INSTALLFOLDER" Guid="{A6399A6E-EF73-4699-A723-E72529C248DB}">
-        <File Id="filLoupeLibGui" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibGui.dll" />
-      </Component>
+${LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS}
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
@@ -282,33 +272,7 @@ ${LOUPE_WIX_FRAGMENT_OCR_SERVICE}
 
   <Fragment>
     <ComponentGroup Id="LOUPE_Editor_Plugins">
-${LOUPE_WIX_PLUGIN_AUDIOBOOK}
-      <Component Id="cmpDimensionsPlugin" Directory="dir_pdfplugins" Guid="{0D422903-CBDD-47CF-B7A9-6C829BD64717}">
-        <File Id="filDimensionsPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\DimensionsPlugin.dll" />
-      </Component>
-      <Component Id="cmpObjectInspectorPlugin" Directory="dir_pdfplugins" Guid="{9058F5AB-6248-406D-8634-5657552DA6D2}">
-        <File Id="filObjectInspectorPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\ObjectInspectorPlugin.dll" />
-      </Component>
-      <Component Id="cmpOutputPreviewPlugin" Directory="dir_pdfplugins" Guid="{054CE9AB-A1FA-45E2-A75E-1D4DDE76D156}">
-        <File Id="filOutputPreviewPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\OutputPreviewPlugin.dll" />
-      </Component>
-      <Component Id="cmpRedactPlugin" Directory="dir_pdfplugins" Guid="{2B85C746-062F-4D93-9978-0E1206FF20C4}">
-        <File Id="filRedactPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\RedactPlugin.dll" />
-      </Component>
-      <Component Id="cmpSoftProofingPlugin" Directory="dir_pdfplugins" Guid="{421A01AF-BB7F-467C-A3C6-ED9F41BABC02}">
-        <File Id="filSoftProofingPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\SoftProofingPlugin.dll" />
-      </Component>
-      <Component Id="cmpSignaturePlugin" Directory="dir_pdfplugins" Guid="{BC0EA59D-3E89-402C-BB0A-93869214AB19}">
-        <File Id="filSignaturePlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\SignaturePlugin.dll" />
-      </Component>
-      <Component Id="cmpEditorPlugin" Directory="dir_pdfplugins" Guid="{FE5DC1D1-3320-43A7-BD4F-DCFB2A9DE039}">
-        <File Id="filEditorPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\EditorPlugin.dll" />
-      </Component>
-      <Component Id="cmpLoupePreflightPlugin" Directory="dir_pdfplugins" Guid="{A4E8C2F1-9B3D-4E71-A5C6-8F2D1E0B7A94}">
-        <File Id="filLoupePreflightPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\LoupePreflightPlugin.dll" />
-      </Component>
-${LOUPE_WIX_PLUGIN_OCR}
-${LOUPE_WIX_PLUGIN_SCANNER}
+${LOUPE_WIX_EDITOR_PLUGINS}
     </ComponentGroup>
   </Fragment>
 

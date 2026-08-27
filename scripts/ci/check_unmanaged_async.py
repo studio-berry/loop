@@ -30,17 +30,6 @@ LAUNCH_PATTERNS = {
 # files.  The count check makes the migration observable in every PR.
 KNOWN_QTCONCURRENT_COUNTS = {
     "LoupeLibCore/sources/pdfdiff.cpp": 1,
-    "LoupeEditorPlugins/ActionListPlugin/actionlistdialog.cpp": 1,
-    "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.cpp": 1,
-    "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.cpp": 1,
-    "LoupeLibGui/pdfcreatebitonaldocumentdialog.cpp": 1,
-    "LoupeLibGui/pdfdocumentpropertiesdialog.cpp": 1,
-    "LoupeLibGui/pdfoptimizedocumentdialog.cpp": 1,
-    "LoupeLibGui/pdfoptimizeimagesdialog.cpp": 1,
-    "LoupeLibGui/pdfprogramcontroller.cpp": 1,
-    "LoupeLibGui/pdfrecoverymanager.cpp": 2,
-    "LoupeLibGui/pdfsanitizedocumentdialog.cpp": 1,
-    "LoupeLibGui/pdfrendertoimagesdialog.cpp": 1,
 }
 
 SCHEDULER_INTERNALS = {

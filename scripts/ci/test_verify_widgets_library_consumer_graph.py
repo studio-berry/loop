@@ -36,18 +36,17 @@ class VerifyWidgetsLibraryConsumerGraphTest(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
-    def test_unknown_consumer_class_fails(self) -> None:
+    def test_unknown_product_consumer_fails(self) -> None:
         module = _load_verifier_module()
         original = GRAPH_PATH.read_text(encoding="utf-8")
         try:
             graph = json.loads(original)
-            graph["consumers"][0]["consumer_class"] = "unclassified"
-            graph["acceptance"]["unknown_product_consumers"] = [graph["consumers"][0]["consumer"]]
+            graph["acceptance"]["unknown_product_consumers"] = ["SyntheticConsumer"]
             GRAPH_PATH.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8")
             with patch.object(module, "_run_generator"):
                 with self.assertRaises(module.ContractError) as ctx:
                     module.validate_graph(ROOT)
-            self.assertIn("unclassified consumer class", str(ctx.exception))
+            self.assertIn("unknown product consumers", str(ctx.exception))
         finally:
             GRAPH_PATH.write_text(original, encoding="utf-8")
 

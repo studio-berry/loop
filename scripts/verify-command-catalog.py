@@ -364,9 +364,17 @@ def validate_catalog(
 
     errors.extend(check_implemented_set(policy))
 
-    enum_to_id = action_ids_by_enum(read_source(main_window_path), main_window_path)
-    shortcuts = widget_shortcuts(read_source(controller_path), controller_path)
-    errors.extend(check_shortcut_parity(policy, enum_to_id, shortcuts, main_window_path))
+    if main_window_path.is_file() and controller_path.is_file():
+        enum_to_id = action_ids_by_enum(read_source(main_window_path), main_window_path)
+        shortcuts = widget_shortcuts(read_source(controller_path), controller_path)
+        errors.extend(check_shortcut_parity(policy, enum_to_id, shortcuts, main_window_path))
+    elif not main_window_path.is_file() and not controller_path.is_file():
+        pass
+    else:
+        errors.append(
+            "Widgets shortcut parity requires both pdfeditormainwindow.cpp and "
+            "pdfprogramcontroller.cpp, or neither after Issue 17"
+        )
     return errors
 
 
@@ -376,12 +384,18 @@ def verify() -> str:
         raise ContractError("\n".join(f"  - {error}" for error in errors))
 
     policy = load_policy(POLICY_PATH)
-    shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
     implemented = len(IMPLEMENTED_COMMANDS)
+    if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
+        shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
+        shortcut_note = (
+            f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
+        )
+    else:
+        shortcut_note = "Widgets shortcut parity skipped (Quick shell owns bindings after Issue 17)."
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
-        f"({implemented} implemented, {len(policy['actions']) - implemented} declared), "
-        f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
+        f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "
+        f"{shortcut_note}"
     )
 
 
