@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue": 193,
-  "source_ui": "LoupeLibGui/pdfeditormainwindow.ui",
+  "source_ui": "LoupeEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
   "expected_action_count": 107,
   "actions": [
     {

@@ -27,7 +27,7 @@ class VerifyPluginFormAccountingTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
     def test_unledgered_repo_ui_fails(self) -> None:
-        orphan = ROOT / "LoupeDiff" / "orphan-form.ui"
+        orphan = ROOT / "CodeGenerator" / "orphan-form.ui"
         original_shell = SHELL_PATH.read_text(encoding="utf-8")
         try:
             orphan.write_text('<?xml version="1.0"?><ui version="4.0"></ui>\n', encoding="utf-8")

@@ -19,7 +19,9 @@ from generate_phase5_widgets_evidence import (
 
 
 ALLOWED_DISPOSITIONS = frozenset({"DELETE", "HEADLESS-REPLACE", "RETAIN-NON-PRODUCT", "BLOCKED"})
-ALLOWED_CROSSWALK_STATUSES = frozenset({"matched", "explained-policy-only", "explained-non-widgets-boundary"})
+ALLOWED_CROSSWALK_STATUSES = frozenset(
+    {"matched", "explained-policy-only", "explained-non-widgets-boundary", "explained-plugin-source-deleted"}
+)
 REQUIRED_ROW_FIELDS = ("id", "kind", "disposition", "consumer", "rationale", "testable_condition")
 
 
@@ -99,12 +101,13 @@ def validate_inventory(inventory: dict, root: Path) -> list[str]:
     plugin_ids = [row.get("plugin", "") for row in plugin_ui]
     _unique(plugin_ids, "plugin UI identity", errors)
     for group in plugin_ui:
-        target = target_map.get(group.get("target"))
-        if not target or target.get("kind") != "library" and not str(target.get("cmake", "")).startswith("LoupeEditorPlugins/"):
-            errors.append(f"plugin UI group has no plugin target: {group.get('plugin')}")
-        for path in group.get("forms", []):
-            if path not in {row.get("path") for row in ui_forms}:
-                errors.append(f"plugin UI group references unknown form: {path}")
+        if group.get("forms"):
+            target = target_map.get(group.get("target"))
+            if not target or not str(target.get("cmake", "")).startswith("LoupeEditorPlugins/"):
+                errors.append(f"plugin UI group has no plugin target: {group.get('plugin')}")
+            for path in group.get("forms", []):
+                if path not in {row.get("path") for row in ui_forms}:
+                    errors.append(f"plugin UI group references unknown form: {path}")
     return errors
 
 
@@ -152,8 +155,8 @@ def validate_disposition(inventory: dict, disposition: dict, root: Path) -> list
                     errors.append(f"explained {name} crosswalk entry has no explanation")
             if name == "plugin_action_policy" and len(entries) != 12:
                 errors.append(f"plugin crosswalk must contain 12 rows, found {len(entries)}")
-            if name == "legacy_surface_disposition" and len(entries) != 34:
-                errors.append(f"legacy crosswalk must contain 34 rows, found {len(entries)}")
+            if name == "legacy_surface_disposition" and len(entries) != 2:
+                errors.append(f"legacy crosswalk must contain 2 rows, found {len(entries)}")
     return errors
 
 

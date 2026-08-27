@@ -11,9 +11,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EDITOR_CMAKE = ROOT / "LoupeEditor" / "CMakeLists.txt"
-SECONDARY_EXECUTABLES = ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad")
-RETIRED_PLUGINS = ("AudioBookPlugin", "OcrPlugin")
-BUILD_DEFAULTS = ("VIEWER", "PAGEMASTER", "DIFF", "LAUNCHPAD")
+RETIRED_PLUGINS = frozenset(
+    {
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+    }
+)
 
 FORBIDDEN_EDITOR_LIBS = frozenset(
     {
@@ -65,10 +78,7 @@ def validate_sole_interactive_product(root: Path) -> None:
     cli = [row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY"]
     if cli != ["PdfTool"]:
         raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
-    for name in SECONDARY_EXECUTABLES:
-        cmake = (root / name / "CMakeLists.txt").read_text(encoding="utf-8")
-        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake):
-            raise ContractError(f"{name} still has an install() rule")
+
     plugin_rows = {
         row["artifact"]: row
         for row in product.get("surfaces", [])
@@ -80,22 +90,18 @@ def validate_sole_interactive_product(root: Path) -> None:
             raise ContractError(f"{name} must be build-only in the product ledger")
         if row.get("profiles", {}).get("loupe-release") != "absent":
             raise ContractError(f"{name} must be absent from the loupe-release profile")
-        cmake = (root / "LoupeEditorPlugins" / name / "CMakeLists.txt").read_text(encoding="utf-8")
-        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake):
+        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
+        if cmake.is_file() and re.search(
+            rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b",
+            cmake.read_text(encoding="utf-8"),
+        ):
             raise ContractError(f"{name} still has an install() rule")
-    root_cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
-    for option in BUILD_DEFAULTS:
-        needle = f"set(_LOUPE_BUILD_{option}_DEFAULT OFF)"
-        if needle not in root_cmake:
-            raise ContractError(f"missing {needle}")
+
     packaging = product["packaging"]
     for profile in ("developer", "loupe-release"):
         apps = list(packaging["appx_applications"][profile])
         if apps != ["LoupeEditor"]:
             raise ContractError(f"{profile} AppX applications must be only LoupeEditor, found {apps}")
-        desktop = packaging["desktop_entries"][profile]
-        if any(name in entry for entry in desktop for name in SECONDARY_EXECUTABLES):
-            raise ContractError(f"{profile} desktop entries still name a secondary executable")
 
 
 def main() -> int:

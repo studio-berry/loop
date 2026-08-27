@@ -11,8 +11,22 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RETIRED_EXECUTABLES = ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad")
-RETIRED_PLUGINS = ("AudioBookPlugin", "OcrPlugin")
+RETIRED_PLUGINS = frozenset(
+    {
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+    }
+)
 UI_REFERENCE = re.compile(r"[\w./\\-]+\.ui")
 
 
@@ -66,8 +80,9 @@ def validate_accounting(root: Path) -> None:
 
     shell = json.loads((root / "docs/loupe-shell.json").read_text(encoding="utf-8"))
     ledger = _ledger_ui_paths(shell)
-    if len(ledger) != 34:
-        raise AccountingError(f"expected 34 ledgered .ui forms, found {len(ledger)}")
+    expected_ledger_count = 2
+    if len(ledger) != expected_ledger_count:
+        raise AccountingError(f"expected {expected_ledger_count} ledgered .ui forms, found {len(ledger)}")
 
     repo_ui = {
         path.relative_to(root).as_posix()
@@ -96,29 +111,13 @@ def validate_accounting(root: Path) -> None:
     }
     for name in RETIRED_PLUGINS:
         row = plugin_rows[name]
-        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
-        text = cmake.read_text(encoding="utf-8")
-        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", text):
-            raise AccountingError(f"{name} still has install() rule")
         if row.get("artifact_scope") != "build":
-            raise AccountingError(f"{name} must remain build-only in product ledger")
-
-    for name in RETIRED_EXECUTABLES:
-        cmake = root / name / "CMakeLists.txt"
-        if not cmake.is_file():
-            continue
-        text = cmake.read_text(encoding="utf-8")
-        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", text):
+            raise AccountingError(f"{name} must be build-only in product ledger")
+        if row.get("profiles", {}).get("loupe-release") != "absent":
+            raise AccountingError(f"{name} must be absent from loupe-release in product ledger")
+        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
+        if cmake.is_file() and re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake.read_text(encoding="utf-8")):
             raise AccountingError(f"{name} still has install() rule")
-
-    root_cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
-    for option, message in (
-        ("LOUPE_BUILD_PAGEMASTER", "LoupePageMaster"),
-        ("LOUPE_BUILD_DIFF", "LoupeDiff"),
-        ("LOUPE_BUILD_LAUNCHPAD", "LoupeLaunchPad"),
-    ):
-        if f"if({option})" in root_cmake and "add_subdirectory" in root_cmake.split(f"if({option})")[1].split("endif()")[0]:
-            raise AccountingError(f"{message} must not be buildable after Issue 14 retirement")
 
 
 def main() -> int:

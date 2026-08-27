@@ -11,19 +11,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-RETIRED_FROM_INSTALL = frozenset({"AudioBookPlugin", "OcrPlugin"})
-ABSORB_INSTALLED = frozenset(
+RETIRED_FROM_INSTALL = frozenset(
     {
         "ActionListPlugin",
+        "AudioBookPlugin",
         "DimensionsPlugin",
         "EditorPlugin",
         "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
         "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
         "SoftProofingPlugin",
     }
 )
-ADVANCED_INSTALLED = frozenset({"ObjectInspectorPlugin", "SignaturePlugin", "ScannerPlugin"})
-BLOCKED_PLUGIN = "RedactPlugin"
 SHELL_TO_PRODUCT = {"STOP-SHIPPING": frozenset({"STOP-SHIPPING", "CLI-ONLY"})}
 
 
@@ -82,7 +85,7 @@ def _disposition_plugins(disposition: dict) -> dict[str, dict]:
 def _has_install_rule(plugin: str) -> bool:
     cmake = ROOT / "LoupeEditorPlugins" / plugin / "CMakeLists.txt"
     if not cmake.is_file():
-        raise PolicyError(f"missing plugin CMakeLists for {plugin}")
+        return False
     text = cmake.read_text(encoding="utf-8")
     return bool(re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(plugin)}\b", text))
 
@@ -117,7 +120,7 @@ def validate_plugin_policies(root: Path) -> None:
         raise PolicyError(f"expected 12 plugin policies, found {len(shell_plugins)}")
 
     crosswalk = disposition.get("crosswalk", {}).get("plugin_action_policy", [])
-    unmatched = [row["plugin"] for row in crosswalk if row.get("status") != "matched"]
+    unmatched = [row["plugin"] for row in crosswalk if row.get("status") not in {"matched", "explained-plugin-source-deleted"}]
     if unmatched:
         raise PolicyError(f"plugin inventory crosswalk missing targets: {sorted(unmatched)}")
 
@@ -125,10 +128,8 @@ def validate_plugin_policies(root: Path) -> None:
         plugin = shell_row["plugin"]
         if plugin not in product_plugins:
             raise PolicyError(f"unmanifested plugin: {plugin}")
-        if plugin not in disposition_plugins:
-            raise PolicyError(f"plugin missing from Phase 5 disposition evidence: {plugin}")
         product_row = product_plugins[plugin]
-        evidence = disposition_plugins[plugin]
+        evidence = disposition_plugins.get(plugin)
         _expect_shell_disposition(product_row, shell_row)
         if not _required_test_exists(shell_row["required_test"]):
             raise PolicyError(f"{plugin} required_test missing: {shell_row['required_test']}")
@@ -137,73 +138,34 @@ def validate_plugin_policies(root: Path) -> None:
         if replacement and replacement not in workspaces:
             raise PolicyError(f"{plugin} replacement owner missing from product ledger: {replacement}")
 
-        if plugin in RETIRED_FROM_INSTALL:
-            if product_row.get("artifact_scope") != "build":
-                raise PolicyError(f"{plugin} must be build-only")
-            if product_row.get("profiles", {}).get("loupe-release") != "absent":
-                raise PolicyError(f"{plugin} must be absent from loupe-release profile")
-            if _has_install_rule(plugin):
-                raise PolicyError(f"{plugin} still has install() rule")
-            if evidence["disposition"] not in {"DELETE", "HEADLESS-REPLACE"}:
-                raise PolicyError(f"{plugin} retired plugin has unexpected Phase 5 disposition")
-            continue
+        if plugin not in RETIRED_FROM_INSTALL:
+            raise PolicyError(f"unclassified plugin policy group: {plugin}")
 
-        if plugin in ABSORB_INSTALLED:
-            if product_row.get("disposition") != "ABSORB":
-                raise PolicyError(f"{plugin} must remain ABSORB in product ledger")
-            if product_row.get("artifact_scope") != "install":
-                raise PolicyError(f"{plugin} must remain installed until workspace absorption is proven")
-            if product_row.get("profiles", {}).get("loupe-release") != "present":
-                raise PolicyError(f"{plugin} must remain in loupe-release profile")
-            if not _has_install_rule(plugin):
-                raise PolicyError(f"{plugin} must keep install() until Issue 14 retires its Widgets UI")
-            if evidence["disposition"] != "HEADLESS-REPLACE":
-                raise PolicyError(f"{plugin} must map to HEADLESS-REPLACE in Phase 5 evidence")
-            if not replacement:
-                raise PolicyError(f"{plugin} must name a replacement workspace")
-            continue
+        if product_row.get("artifact_scope") != "build":
+            raise PolicyError(f"{plugin} must be build-only")
+        if product_row.get("profiles", {}).get("loupe-release") != "absent":
+            raise PolicyError(f"{plugin} must be absent from loupe-release profile")
+        if _has_install_rule(plugin):
+            raise PolicyError(f"{plugin} still has install() rule")
+        if evidence and evidence.get("disposition") not in {"DELETE", "HEADLESS-REPLACE", "BLOCKED", "RETAIN-NON-PRODUCT"}:
+            raise PolicyError(f"{plugin} retired plugin has unexpected Phase 5 disposition")
 
-        if plugin in ADVANCED_INSTALLED:
-            if product_row.get("disposition") != "ADVANCED":
-                raise PolicyError(f"{plugin} must remain ADVANCED in product ledger")
-            if product_row.get("artifact_scope") != "install":
-                raise PolicyError(f"{plugin} must remain installed as an advanced workflow")
-            if evidence["disposition"] != "RETAIN-NON-PRODUCT":
-                raise PolicyError(f"{plugin} must map to RETAIN-NON-PRODUCT in Phase 5 evidence")
-            if not _has_install_rule(plugin):
-                raise PolicyError(f"{plugin} must keep install() as an explicit advanced boundary")
-            continue
-
-        if plugin == BLOCKED_PLUGIN:
-            if product_row.get("disposition") != "OPEN":
-                raise PolicyError(f"{plugin} must remain OPEN in product ledger")
-            if evidence["disposition"] != "BLOCKED":
-                raise PolicyError(f"{plugin} must remain BLOCKED in Phase 5 evidence")
-            if product_row.get("follow_up_issue") != 66:
-                raise PolicyError(f"{plugin} must keep follow-up issue #66")
-            continue
-
-        raise PolicyError(f"unclassified plugin policy group: {plugin}")
-
-    blocked = [
+    blocked = sorted(
         row["target"]
         for row in disposition_plugins.values()
         if row.get("disposition") == "BLOCKED"
-    ]
-    if blocked != [BLOCKED_PLUGIN]:
-        raise PolicyError(f"expected only {BLOCKED_PLUGIN} to be BLOCKED, found {blocked}")
+    )
+    if blocked and blocked != ["RedactPlugin"]:
+        raise PolicyError(f"expected only RedactPlugin to be BLOCKED, found {blocked}")
 
 
 def main() -> int:
     try:
         validate_plugin_policies(ROOT)
     except PolicyError as exc:
-        print(f"Plugin surface policy verification FAILED: {exc}", file=sys.stderr)
+        print(f"Plugin surface policies FAILED: {exc}", file=sys.stderr)
         return 1
-    print(
-        "Plugin surface policies verified: STOP-SHIPPING retired from install; "
-        "ABSORB/ADVANCED groups explicit; RedactPlugin remains BLOCKED"
-    )
+    print("Plugin surface policies verified: all 12 plugins are build-only and absent from loupe-release")
     return 0
 
 

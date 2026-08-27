@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed contract for Session 05 Issue 16 Widgets library consumer graph."""
+"""Fail-closed contract for Session 05 Issue 16/17 Widgets library consumer graph."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ ALLOWED_CONSUMER_CLASSES = frozenset(
 )
 ALLOWED_BINDINGS = frozenset({"widgets-bound", "neutral-relocatable"})
 ALLOWED_OWNERS = frozenset({"LoupeLibCore", "delete-with-widgets-library"})
+ALLOWED_LIBRARY_STATUSES = frozenset({"present-in-profile", "deleted-not-in-profile"})
 
 
 class ContractError(ValueError):
@@ -55,14 +56,11 @@ def validate_graph(root: Path) -> None:
 
     if graph.get("schema_version") != 1 or graph.get("evidence_kind") != "widgets-library-consumer-graph":
         raise ContractError("unsupported consumer graph schema")
-    if graph.get("issue") != 16:
-        raise ContractError("consumer graph must be tied to Issue 16")
+    if graph.get("issue") not in {16, 17}:
+        raise ContractError("consumer graph must be tied to Issue 16 or 17")
 
     inventory = json.loads((root / "docs/generated/phase5-widgets-inventory.json").read_text(encoding="utf-8"))
     target_map = {row["id"]: row for row in inventory["targets"]}
-    for library in LIBRARIES:
-        if library not in target_map:
-            raise ContractError(f"inventory missing library target: {library}")
 
     graph_consumers = graph.get("consumers")
     if not isinstance(graph_consumers, list):
@@ -76,7 +74,7 @@ def validate_graph(root: Path) -> None:
             raise ContractError(f"unknown library in consumer row: {library!r}")
         if consumer not in target_map:
             raise ContractError(f"consumer row references unknown target: {consumer!r}")
-        if consumer not in target_map[library].get("consumers", []):
+        if library in target_map and consumer not in target_map[library].get("consumers", []):
             raise ContractError(f"consumer row not present in inventory reverse graph: {library}->{consumer}")
         consumer_class = row.get("consumer_class")
         if consumer_class not in ALLOWED_CONSUMER_CLASSES:
@@ -86,6 +84,8 @@ def validate_graph(root: Path) -> None:
         observed[library].add(consumer)
 
     for library in LIBRARIES:
+        if library not in target_map:
+            continue
         expected = set(target_map[library].get("consumers", []))
         if observed[library] != expected:
             missing = sorted(expected - observed[library])
@@ -94,9 +94,18 @@ def validate_graph(root: Path) -> None:
                 f"{library} consumer graph drift missing={missing} extra={extra}"
             )
 
+    library_rows = graph.get("libraries")
+    if not isinstance(library_rows, list) or len(library_rows) != len(LIBRARIES):
+        raise ContractError("libraries section must list both Widgets libraries")
+
+    for row in library_rows:
+        status = row.get("status")
+        if status not in ALLOWED_LIBRARY_STATUSES:
+            raise ContractError(f"invalid library status for {row.get('target')}: {status!r}")
+
     neutral_code = graph.get("neutral_code")
-    if not isinstance(neutral_code, list) or not neutral_code:
-        raise ContractError("neutral_code must be a non-empty array")
+    if not isinstance(neutral_code, list):
+        raise ContractError("neutral_code must be an array")
 
     for row in neutral_code:
         if row.get("binding") not in ALLOWED_BINDINGS:
@@ -118,10 +127,15 @@ def validate_graph(root: Path) -> None:
             + ", ".join(acceptance["unclassified_neutral_code"])
         )
     blockers = acceptance.get("installed_product_blockers")
-    if not isinstance(blockers, list) or not blockers:
-        raise ContractError("expected installed product blockers to be recorded for Issue 16")
-    if acceptance.get("deletion_safe"):
-        raise ContractError("Issue 16 graph must record deletion_safe=false while blockers remain")
+    if not isinstance(blockers, list):
+        raise ContractError("installed_product_blockers must be an array")
+    deletion_safe = acceptance.get("deletion_safe")
+    if deletion_safe:
+        if blockers:
+            raise ContractError("deletion_safe=true requires empty installed_product_blockers")
+    else:
+        if not blockers:
+            raise ContractError("expected installed product blockers while deletion_safe=false")
 
 
 def main() -> int:

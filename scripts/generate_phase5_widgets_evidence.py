@@ -40,7 +40,7 @@ PROFILE_OPTIONS = {
     "LOUPE_BUILD_LAUNCHPAD": False,
     "LOUPE_PLUGIN_AUDIOBOOK": False,
     "LOUPE_PLUGIN_OCR": False,
-    "LOUPE_PLUGIN_SCANNER": True,
+    "LOUPE_PLUGIN_SCANNER": False,
 }
 
 TARGET_COMMANDS = {"add_library", "add_executable", "qt_add_library", "qt_add_executable"}
@@ -244,10 +244,6 @@ def _profile_for_target(name: str, cmake: str) -> tuple[bool, str]:
         "CodeGenerator/": "LOUPE_BUILD_CODE_GENERATOR",
         "JBIG2_Viewer/": "LOUPE_BUILD_JBIG2_VIEWER",
         "PdfExampleGenerator/": "LOUPE_BUILD_EXAMPLE_GENERATOR",
-        "LoupeViewer/": "LOUPE_BUILD_VIEWER",
-        "LoupePageMaster/": "LOUPE_BUILD_PAGEMASTER",
-        "LoupeDiff/": "LOUPE_BUILD_DIFF",
-        "LoupeLaunchPad/": "LOUPE_BUILD_LAUNCHPAD",
     }
     for directory, option in option_by_directory.items():
         if normalized.startswith(directory):
@@ -256,9 +252,7 @@ def _profile_for_target(name: str, cmake: str) -> tuple[bool, str]:
         return True, "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY"
     if normalized.startswith("LoupeLibQuick/"):
         return True, "LOUPE_BUILD_QUICK_CANVAS=ON"
-    if normalized.startswith("LoupeLibGui/") or normalized.startswith("LoupeEditorPlugins/"):
-        return True, "not LOUPE_BUILD_ONLY_CORE_LIBRARY"
-    if normalized.startswith(("LoupeLibWidgets/", "LoupeLibInteraction/", "PdfTool/", "loupe-preflight/", "loupe-ocr/")):
+    if normalized.startswith(("LoupeLibInteraction/", "PdfTool/", "loupe-preflight/", "loupe-ocr/")):
         return True, "not LOUPE_BUILD_ONLY_CORE_LIBRARY"
     return True, "always reachable from the loupe-release GUI build"
 
@@ -500,18 +494,6 @@ LEGACY_TO_PHASE5 = {
     "RETIRE": "DELETE",
 }
 SPECIAL_TARGETS = {
-    "LoupeLibWidgets": {
-        "disposition": "DELETE",
-        "consumer": "Quick workspaces and headless PdfTool paths",
-        "rationale": "Widgets canvas/dialog library is residual compatibility infrastructure, not the supported Quick product boundary.",
-        "testable_condition": "Delete only after no installed target links LoupeLibWidgets and required Quick/headless capabilities are proven.",
-    },
-    "LoupeLibGui": {
-        "disposition": "DELETE",
-        "consumer": "LoupeEditor Quick shell and PdfTool",
-        "rationale": "Widgets-bound editor/viewer chrome is replaced by the Quick shell and headless capability owners.",
-        "testable_condition": "Delete only after pdfeditormainwindow.ui and all remaining Widgets-bound GUI consumers have approved Quick/headless replacements.",
-    },
     "CanvasBenchmark": {
         "disposition": "RETAIN-NON-PRODUCT",
         "consumer": "Qualification-only benchmark harness",
@@ -671,8 +653,13 @@ def build_disposition(root: Path, inventory: dict) -> dict:
         {
             "plugin": plugin,
             "surface_id": f"target:{plugin}",
-            "status": "matched" if plugin in target_rows else "missing",
+            "status": "matched" if plugin in target_rows else "explained-plugin-source-deleted",
             "shell_disposition": row.get("disposition"),
+            "explanation": (
+                "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+                if plugin not in target_rows
+                else None
+            ),
         }
         for plugin, row in sorted(shell_plugins.items())
     ]

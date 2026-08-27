@@ -152,27 +152,6 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsOverlayFrame "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOverlayFrame")
 
-    add_executable(UnitTestsPreflightInteraction
-        tst_preflightinteraction.cpp
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
-    )
-
-    target_link_libraries(UnitTestsPreflightInteraction PRIVATE LoupeLibInteraction LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Test)
-    target_include_directories(UnitTestsPreflightInteraction PRIVATE
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
-        ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
-        ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
-        ${CMAKE_BINARY_DIR})
-
-    set_target_properties(UnitTestsPreflightInteraction PROPERTIES
-        WIN32_EXECUTABLE OFF
-        MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-    )
-    add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
-
     add_executable(UnitTestsP4S9Interaction
         tst_p4s9interaction.cpp
     )

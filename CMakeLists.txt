@@ -95,50 +95,20 @@ option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 # Compatibility Widgets executables are build-optional and never installed.
 # LoupeEditor is the only interactive application in either packaging profile.
 set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
-set(_LOUPE_BUILD_VIEWER_DEFAULT OFF)
-set(_LOUPE_BUILD_PAGEMASTER_DEFAULT OFF)
-set(_LOUPE_BUILD_DIFF_DEFAULT OFF)
-set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT OFF)
 
 if(LOUPE_LOUPE_DISTRIBUTION)
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
     set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT OFF)
-    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
-    set(_LOUPE_PLUGIN_OCR_DEFAULT OFF)
 else()
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
     set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT ON)
-    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
-    set(_LOUPE_PLUGIN_OCR_DEFAULT ON)
 endif()
 
 option(LOUPE_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_LOUPE_BUILD_CODE_GENERATOR_DEFAULT})
 option(LOUPE_BUILD_JBIG2_VIEWER "Build JBIG2_Viewer developer tool" ${_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT})
 option(LOUPE_BUILD_EXAMPLE_GENERATOR "Build PdfExampleGenerator developer tool" ${_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT})
-option(LOUPE_BUILD_VIEWER "Build LoupeViewer application" ${_LOUPE_BUILD_VIEWER_DEFAULT})
-option(LOUPE_BUILD_PAGEMASTER "Build LoupePageMaster application" ${_LOUPE_BUILD_PAGEMASTER_DEFAULT})
-option(LOUPE_BUILD_DIFF "Build LoupeDiff application" ${_LOUPE_BUILD_DIFF_DEFAULT})
-option(LOUPE_BUILD_LAUNCHPAD "Build LoupeLaunchPad application" ${_LOUPE_BUILD_LAUNCHPAD_DEFAULT})
-option(LOUPE_PLUGIN_AUDIOBOOK "Build AudioBook editor plugin" ${_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT})
-option(LOUPE_PLUGIN_SCANNER "Build Scanner editor plugin" ${_LOUPE_PLUGIN_SCANNER_DEFAULT})
-
-# V1 ships OCR as CLI-only (PdfTool ocr) per the 2026-07-25 product decision (MIC-343).
-# The Editor OCR UI plugin is not part of the V1 release surface, but stays buildable
-# for local/developer use. Release packaging workflows pass -DLOUPE_PLUGIN_OCR=OFF
-# explicitly; PdfTool's OCR subcommand is unaffected. (LOUPE_BUNDLE_OCR_SERVICE, the
-# other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
-option(LOUPE_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_LOUPE_PLUGIN_OCR_DEFAULT})
-
-if(LOUPE_LOUPE_DISTRIBUTION AND LOUPE_PLUGIN_OCR)
-    message(FATAL_ERROR
-        "LOUPE_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
-        "OCR is CLI-only in V1 (see issue #41 and ADR-005).")
-endif()
-
 if(LOUPE_ENABLE_SANITIZERS OR LOUPE_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
@@ -298,14 +268,6 @@ if(LOUPE_INSTALL_INCLUDE)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibcore_export.h
             DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibCore)
 
-    # Install public headers from LoupeLibWidgets/include
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/LoupeLibWidgets/sources/
-            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets
-            FILES_MATCHING PATTERN "*.h")
-
-    # Install generated export header
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibwidgets_export.h
-            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets)
 endif()
 
 if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
@@ -320,7 +282,6 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         add_subdirectory(LoupeLibQuick)
     endif()
 
-    add_subdirectory(LoupeLibWidgets)
     if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
     endif()
@@ -339,31 +300,11 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     if(LOUPE_BUILD_CANVAS_BENCHMARK)
         add_subdirectory(CanvasBenchmark)
     endif()
-    add_subdirectory(LoupeLibGui)
-    add_subdirectory(LoupeEditorPlugins)
     if(LOUPE_BUILD_QUICK_CANVAS)
         add_subdirectory(LoupeEditor)
         if(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
             add_subdirectory(ProductQuickAccessibilitySmoke)
         endif()
-    endif()
-    if(LOUPE_BUILD_VIEWER)
-        add_subdirectory(LoupeViewer)
-    endif()
-    if(LOUPE_BUILD_PAGEMASTER)
-        message(FATAL_ERROR
-            "LoupePageMaster Widgets UI was retired in Phase 5 Session 04 Issue 14. "
-            "Use PdfTool page commands via loupe-cli.")
-    endif()
-    if(LOUPE_BUILD_DIFF)
-        message(FATAL_ERROR
-            "LoupeDiff Widgets UI was retired in Phase 5 Session 04 Issue 14. "
-            "Use PdfTool diff via loupe-cli.")
-    endif()
-    if(LOUPE_BUILD_LAUNCHPAD)
-        message(FATAL_ERROR
-            "LoupeLaunchPad Widgets UI was retired in Phase 5 Session 04 Issue 14. "
-            "LoupeEditor is the product launcher.")
     endif()
     add_subdirectory(WixInstaller)
 endif()
@@ -387,7 +328,7 @@ message("LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_TS_OUTPUT_DI
 message("LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY})
 
 # Only add translation targets for targets that actually exist in this build.
-foreach(_tgt LoupeEditor LoupeViewer LoupePageMaster LoupeDiff PdfTool)
+foreach(_tgt LoupeEditor PdfTool)
     if(TARGET ${_tgt})
         list(APPEND _existing_translation_targets ${_tgt})
     endif()

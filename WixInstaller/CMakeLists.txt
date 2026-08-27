@@ -29,17 +29,20 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
     file(TO_NATIVE_PATH "${CMAKE_BINARY_DIR}/WixInstaller" LOUPE_WIX_DIR)
 
     if(LOUPE_LOUPE_DISTRIBUTION)
-        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor: Loupe preflight, signatures, soft-proofing, dimensions, object inspector, and redaction.")
+        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "LoupeEditor Quick shell; Widgets editor plugins were retired in Phase 5 Issue 17.")
         # Keep compatibility binaries in the release installer, but do not
         # present them as separate Loupe products in the WiX feature tree.
         set(LOUPE_WIX_COMPAT_FEATURE_DISPLAY [=[Display="hidden"]=])
     elseif(LOUPE_PLUGIN_AUDIOBOOK)
-        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains additional editing features, such as audio book conversion, signatures, soft-proofing, dimensions, object inspector, redaction etc.")
+        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "LoupeEditor Quick shell; Widgets editor plugins were retired in Phase 5 Issue 17.")
         set(LOUPE_WIX_COMPAT_FEATURE_DISPLAY "")
     else()
-        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "Plugin pack for editor. Contains signatures, soft-proofing, dimensions, object inspector, redaction, and Loupe preflight.")
+        set(LOUPE_WIX_PLUGIN_PACK_DESCRIPTION "LoupeEditor Quick shell; Widgets editor plugins were retired in Phase 5 Issue 17.")
         set(LOUPE_WIX_COMPAT_FEATURE_DISPLAY "")
     endif()
+
+    set(LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS "")
+    set(LOUPE_WIX_EDITOR_PLUGINS "")
 
     if(LOUPE_LOUPE_DISTRIBUTION)
         set(LOUPE_WIX_VIEWER_SHORTCUT "")
@@ -207,6 +210,12 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
         set(LOUPE_WIX_FEATURE_OCR_SERVICE "")
         set(LOUPE_WIX_FRAGMENT_OCR_SERVICE "")
     endif()
+
+    set(LOUPE_WIX_EDITOR_PLUGIN_FEATURE [=[
+        <ComponentGroupRef Id="LOUPE_Loupe_Data"/>
+@LOUPE_WIX_FEATURE_OCR_SERVICE@
+]=])
+    string(CONFIGURE "${LOUPE_WIX_EDITOR_PLUGIN_FEATURE}" LOUPE_WIX_EDITOR_PLUGIN_FEATURE @ONLY)
 
     if(LOUPE_ENABLE_SENTRY)
         set(LOUPE_WIX_SENTRY_CRASHPAD [=[
