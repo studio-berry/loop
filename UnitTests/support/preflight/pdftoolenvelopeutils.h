@@ -88,4 +88,4 @@ inline QJsonObject reportFromEnvelope(const QJsonObject& envelope)
 
 }   // namespace pdfplugin::pdftool
 
-#endif // PDFTOOLENVELOPEUTILS_H
+#endif   // PDFTOOLENVELOPEUTILS_H
