@@ -45,6 +45,9 @@ jobs:
         working-directory: loupe
         run: |
           python3 scripts/verify-loupe-shell-contract.py
+      - name: Verify plugin and legacy form accounting
+        working-directory: loupe
+        run: python3 scripts/verify-plugin-form-accounting.py
       - name: Verify installed product graph
         working-directory: loupe
         run: python3 scripts/verify-installed-product-graph.py

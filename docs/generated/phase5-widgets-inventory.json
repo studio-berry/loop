@@ -4163,9 +4163,7 @@
     {
       "plugin": "AudioBookPlugin",
       "target": "AudioBookPlugin",
-      "forms": [
-        "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui"
-      ]
+      "forms": []
     },
     {
       "plugin": "DimensionsPlugin",
@@ -4250,41 +4248,6 @@
       "widgets_related": true
     },
     {
-      "id": "ui:LoupeDiff/aboutdialog.ui",
-      "path": "LoupeDiff/aboutdialog.ui",
-      "owner_target": "LoupeDiff",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeDiff/differencesdockwidget.ui",
-      "path": "LoupeDiff/differencesdockwidget.ui",
-      "owner_target": "LoupeDiff",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeDiff/mainwindow.ui",
-      "path": "LoupeDiff/mainwindow.ui",
-      "owner_target": "LoupeDiff",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeDiff/settingsdockwidget.ui",
-      "path": "LoupeDiff/settingsdockwidget.ui",
-      "owner_target": "LoupeDiff",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "owner_target": "AudioBookPlugin",
-      "plugin": "AudioBookPlugin",
-      "widgets_related": true
-    },
-    {
       "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
       "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
       "owner_target": "DimensionsPlugin",
@@ -4352,20 +4315,6 @@
       "path": "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
       "owner_target": "SoftProofingPlugin",
       "plugin": "SoftProofingPlugin",
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
-      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
-      "owner_target": "LoupeLaunchPad",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchdialog.ui",
-      "path": "LoupeLaunchPad/launchdialog.ui",
-      "owner_target": "LoupeLaunchPad",
-      "plugin": null,
       "widgets_related": true
     },
     {
@@ -4519,55 +4468,6 @@
       "id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
       "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
       "owner_target": "LoupeLibWidgets",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/aboutdialog.ui",
-      "path": "LoupePageMaster/aboutdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/croppagesdialog.ui",
-      "path": "LoupePageMaster/croppagesdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
-      "path": "LoupePageMaster/itempropertiesdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/mainwindow.ui",
-      "path": "LoupePageMaster/mainwindow.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
-      "path": "LoupePageMaster/pdfpageimportdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "plugin": null,
-      "widgets_related": true
-    },
-    {
-      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "owner_target": "LoupePageMaster",
       "plugin": null,
       "widgets_related": true
     }
@@ -4848,71 +4748,6 @@
       ]
     },
     {
-      "id": "ui:LoupeDiff/aboutdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/aboutdialog.ui",
-      "target": "LoupeDiff",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeDiff"
-      ]
-    },
-    {
-      "id": "ui:LoupeDiff/differencesdockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/differencesdockwidget.ui",
-      "target": "LoupeDiff",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeDiff"
-      ]
-    },
-    {
-      "id": "ui:LoupeDiff/mainwindow.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/mainwindow.ui",
-      "target": "LoupeDiff",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeDiff"
-      ]
-    },
-    {
-      "id": "ui:LoupeDiff/settingsdockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/settingsdockwidget.ui",
-      "target": "LoupeDiff",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeDiff"
-      ]
-    },
-    {
-      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "target": "AudioBookPlugin",
-      "plugin": "AudioBookPlugin",
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "AudioBookPlugin"
-      ]
-    },
-    {
       "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
       "kind": "ui-form",
       "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
@@ -5040,32 +4875,6 @@
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
         "SoftProofingPlugin"
-      ]
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
-      "target": "LoupeLaunchPad",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeLaunchPad"
-      ]
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupeLaunchPad/launchdialog.ui",
-      "target": "LoupeLaunchPad",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupeLaunchPad"
       ]
     },
     {
@@ -5353,97 +5162,6 @@
       "consumers": [
         "LoupeLibWidgets"
       ]
-    },
-    {
-      "id": "ui:LoupePageMaster/aboutdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/aboutdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/croppagesdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/croppagesdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/itempropertiesdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/mainwindow.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/mainwindow.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/pdfpageimportdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
-    },
-    {
-      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "target": "LoupePageMaster",
-      "plugin": null,
-      "profile_enabled": false,
-      "installed_in_profile": false,
-      "widgets_linkage": "owned-by-widgets-surface",
-      "consumers": [
-        "LoupePageMaster"
-      ]
     }
   ],
   "counts": {
@@ -5453,6 +5171,6 @@
     "widgets_surfaces": 22,
     "legacy_executables": 8,
     "plugin_ui_groups": 12,
-    "ui_forms": 48
+    "ui_forms": 34
   }
 }

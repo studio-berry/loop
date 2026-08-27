@@ -28,10 +28,8 @@ add_executable(LoupeLaunchPad
     launchapplication.cpp
     launchapplicationwidget.h
     launchapplicationwidget.cpp
-    launchapplicationwidget.ui
     launchdialog.h
     launchdialog.cpp
-    launchdialog.ui
 )
 
 target_link_libraries(LoupeLaunchPad PRIVATE LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Widgets)

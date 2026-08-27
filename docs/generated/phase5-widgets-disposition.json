@@ -342,71 +342,6 @@
       "replacement_target": "loupe-inspect"
     },
     {
-      "id": "ui:LoupeDiff/aboutdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/aboutdialog.ui",
-      "owner_target": "LoupeDiff",
-      "consumer": "loupe-cli",
-      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupeDiff/differencesdockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/differencesdockwidget.ui",
-      "owner_target": "LoupeDiff",
-      "consumer": "loupe-cli",
-      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupeDiff/mainwindow.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/mainwindow.ui",
-      "owner_target": "LoupeDiff",
-      "consumer": "loupe-cli",
-      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupeDiff/settingsdockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeDiff/settingsdockwidget.ui",
-      "owner_target": "LoupeDiff",
-      "consumer": "loupe-cli",
-      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-      "owner_target": "AudioBookPlugin",
-      "consumer": "developer/CLI compatibility boundary",
-      "rationale": "AudioBook plugin is STOP-SHIPPING.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with AudioBookPlugin once install and packaging references are gone; no replacement surface.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": null
-    },
-    {
       "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
       "kind": "ui-form",
       "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
@@ -535,32 +470,6 @@
       "source_disposition": "CONSOLIDATE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
       "replacement_target": "loupe-production-preview"
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
-      "kind": "ui-form",
-      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
-      "owner_target": "LoupeLaunchPad",
-      "consumer": "loupe-editor",
-      "rationale": "LaunchPad is a hub with no PDF capability. LoupeEditor is the product launcher.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-editor"
-    },
-    {
-      "id": "ui:LoupeLaunchPad/launchdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupeLaunchPad/launchdialog.ui",
-      "owner_target": "LoupeLaunchPad",
-      "consumer": "loupe-editor",
-      "rationale": "LaunchPad is a hub with no PDF capability. LoupeEditor is the product launcher.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-editor"
     },
     {
       "id": "ui:LoupeLibGui/pdfaboutdialog.ui",
@@ -847,97 +756,6 @@
       "source_disposition": "CONSOLIDATE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
       "replacement_target": "loupe-pages-production"
-    },
-    {
-      "id": "ui:LoupePageMaster/aboutdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/aboutdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/croppagesdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/croppagesdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/itempropertiesdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/mainwindow.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/mainwindow.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/pdfpageimportdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
-    },
-    {
-      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "kind": "ui-form",
-      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
-      "owner_target": "LoupePageMaster",
-      "consumer": "loupe-cli",
-      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
-      "disposition": "DELETE",
-      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
-      "source_disposition": "RETIRE",
-      "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-cli"
     }
   ],
   "crosswalk": {
@@ -1173,36 +991,6 @@
         "shell_disposition": "HEADLESS"
       },
       {
-        "path": "LoupeDiff/aboutdialog.ui",
-        "surface_id": "ui:LoupeDiff/aboutdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupeDiff/differencesdockwidget.ui",
-        "surface_id": "ui:LoupeDiff/differencesdockwidget.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupeDiff/mainwindow.ui",
-        "surface_id": "ui:LoupeDiff/mainwindow.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupeDiff/settingsdockwidget.ui",
-        "surface_id": "ui:LoupeDiff/settingsdockwidget.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-        "surface_id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
         "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
         "surface_id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
         "status": "matched",
@@ -1261,18 +1049,6 @@
         "surface_id": "ui:LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
         "status": "matched",
         "shell_disposition": "CONSOLIDATE"
-      },
-      {
-        "path": "LoupeLaunchPad/launchapplicationwidget.ui",
-        "surface_id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupeLaunchPad/launchdialog.ui",
-        "surface_id": "ui:LoupeLaunchPad/launchdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupeLibGui/pdfaboutdialog.ui",
@@ -1405,54 +1181,12 @@
         "surface_id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
         "status": "matched",
         "shell_disposition": "CONSOLIDATE"
-      },
-      {
-        "path": "LoupePageMaster/aboutdialog.ui",
-        "surface_id": "ui:LoupePageMaster/aboutdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
-        "surface_id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/croppagesdialog.ui",
-        "surface_id": "ui:LoupePageMaster/croppagesdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/itempropertiesdialog.ui",
-        "surface_id": "ui:LoupePageMaster/itempropertiesdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/mainwindow.ui",
-        "surface_id": "ui:LoupePageMaster/mainwindow.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/pdfpageimportdialog.ui",
-        "surface_id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
-      },
-      {
-        "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
-        "surface_id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
-        "status": "matched",
-        "shell_disposition": "RETIRE"
       }
     ]
   },
   "counts": {
-    "rows": 70,
-    "delete": 19,
+    "rows": 56,
+    "delete": 5,
     "headless_replace": 38,
     "retain_non_product": 12,
     "blocked": 1

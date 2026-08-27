@@ -39,6 +39,10 @@ jobs:
         run: python3 scripts/generate_phase5_widgets_evidence.py --check
       - name: Verify Phase 5 Widgets completeness contract
         run: python3 scripts/verify_phase5_widgets_contract.py
+      - name: Verify plugin and legacy form accounting
+        run: |
+          python3 scripts/verify-plugin-form-accounting.py
+          python3 -m unittest scripts.ci.test_verify_plugin_form_accounting -q
 
   agent-fast:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'

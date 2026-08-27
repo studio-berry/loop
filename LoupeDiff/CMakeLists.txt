@@ -32,10 +32,6 @@ add_executable(LoupeDiff
     settingsdockwidget.h
     utils.cpp
     utils.h
-    aboutdialog.ui
-    differencesdockwidget.ui
-    mainwindow.ui
-    settingsdockwidget.ui
     resources.qrc
     icon.rc
     app.qrc

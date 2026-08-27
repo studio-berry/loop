@@ -152,8 +152,8 @@ def validate_disposition(inventory: dict, disposition: dict, root: Path) -> list
                     errors.append(f"explained {name} crosswalk entry has no explanation")
             if name == "plugin_action_policy" and len(entries) != 12:
                 errors.append(f"plugin crosswalk must contain 12 rows, found {len(entries)}")
-            if name == "legacy_surface_disposition" and len(entries) != 48:
-                errors.append(f"legacy crosswalk must contain 48 rows, found {len(entries)}")
+            if name == "legacy_surface_disposition" and len(entries) != 34:
+                errors.append(f"legacy crosswalk must contain 34 rows, found {len(entries)}")
     return errors
 
 

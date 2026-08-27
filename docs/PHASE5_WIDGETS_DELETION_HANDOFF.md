@@ -13,13 +13,13 @@ verified by the Python/PowerShell contract twins. The generated artifacts are
 `docs/generated/phase5-widgets-inventory.json` and
 `docs/generated/phase5-widgets-disposition.json`.
 
-The inventory records 90 declared targets, 23 maintained Widgets surfaces, 48
-repository `.ui` forms, 12 plugin UI groups (including plugins with no `.ui`
-form), and 9 legacy Widgets executables. It distinguishes profile-enabled,
+The inventory records 90 declared targets, 23 maintained Widgets surfaces, 34
+repository `.ui` forms after Session 04 Issue 14, 12 plugin UI groups (including
+plugins with no `.ui` form), and 9 legacy Widgets executables. It distinguishes profile-enabled,
 installed, and build-only targets and records direct/transitive Qt linkage and
 target consumers.
 
-The derived disposition view records 70 rows after Session 02. Session 03 Issue 10
+The derived disposition view records 56 rows after Session 04 Issue 14. Session 03 Issue 10
 freezes the four secondary executables: Viewer and LaunchPad are `DELETE`;
 PageMaster and Diff are `HEADLESS-REPLACE` onto existing Core/CLI owners. The
 remaining blocked row is the pending Redact product decision. No deletion is
@@ -114,18 +114,26 @@ ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
 | `AudioBookPlugin` | — | STOP-SHIPPING; not installed; delete in Phase 5 |
 | `OcrPlugin` | CLI | STOP-SHIPPING UI; PdfTool owns OCR; not installed |
 
-## Legacy `.ui` inventory (48 forms)
+## Legacy `.ui` inventory (34 retained forms)
+
+Session 04 Issue 14 deleted all 14 `RETIRE` forms for LoupeDiff, LoupePageMaster,
+LoupeLaunchPad, and the AudioBook plugin dock widget. Optional builds of the retired
+secondary executables now fail closed at configure time. The remaining 34 forms stay
+explicitly retained until their Quick or headless replacements are proven.
 
 Authoritative ledger: `docs/loupe-shell.json` → `legacy_surface_disposition`.
 
-| Disposition | Count | Phase 5 action |
+| Disposition | Count (retained) | Phase 5 action |
 | --- | --- | --- |
 | `MIGRATE` | 5 | Delete after Quick replacement proven on merged SHA |
 | `CONSOLIDATE` | 24 | Delete after workspace/panel absorbs capability |
 | `HEADLESS` | 5 | Retain only if CLI/developer path still needs form; otherwise delete |
-| `RETIRE` | 14 | Delete with LaunchPad / AudioBook hub forms and with PageMaster/Diff executables once they leave the install graph |
+| `RETIRE` | 0 | Session 04 Issue 14 deleted the former 14 forms |
 
 Verifier: `scripts/verify-loupe-shell-contract.ps1` (fail-closed inventory).
+Session 04 Issue 15 adds `scripts/verify-plugin-form-accounting.py`, wired into CI
+`source_integrity` and Linux agent-fast, to reject unledgered `.ui` files, stale
+CMake `uic` references, and retired install boundaries.
 
 ## Configure and package proof required in Phase 5
 

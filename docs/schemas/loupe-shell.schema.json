@@ -79,8 +79,8 @@
     },
     "legacy_surface_disposition": {
       "type": "array",
-      "minItems": 48,
-      "maxItems": 48,
+      "minItems": 34,
+      "maxItems": 34,
       "items": { "$ref": "#/$defs/legacy_surface" }
     }
   },

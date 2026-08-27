@@ -24,6 +24,7 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
         self.assertIn("python3 scripts/verify_phase5_widgets_contract.py", workflow)
+        self.assertIn("python3 scripts/verify-plugin-form-accounting.py", workflow)
 
     def test_windows_validation_runs_phase5_widgets_twin(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")

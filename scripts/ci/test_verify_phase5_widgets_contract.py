@@ -32,9 +32,9 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         self.assertEqual(validate_contract(ROOT, self.inventory, self.disposition), [])
         self.assertEqual(self.inventory["counts"]["targets"], 89)
         self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 22)
-        self.assertEqual(self.inventory["counts"]["ui_forms"], 48)
+        self.assertEqual(self.inventory["counts"]["ui_forms"], 34)
         self.assertEqual(len(self.inventory["plugin_ui"]), 12)
-        self.assertEqual(len(self.disposition["rows"]), 70)
+        self.assertEqual(len(self.disposition["rows"]), 56)
 
     def test_unknown_surface_fails_closed(self):
         disposition = copy.deepcopy(self.disposition)
@@ -178,6 +178,21 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             self.assertEqual(row["disposition"], "RETAIN-NON-PRODUCT", plugin)
             self.assertEqual(row["source_disposition"], "ADVANCED", plugin)
         self.assertEqual(rows["RedactPlugin"]["disposition"], "BLOCKED")
+
+    def test_retired_ui_forms_removed_from_repo_and_ledger(self):
+        shell = json.loads((ROOT / "docs/loupe-shell.json").read_text(encoding="utf-8"))
+        legacy = shell["legacy_surface_disposition"]
+        self.assertEqual(len(legacy), 34)
+        self.assertFalse(any(entry["disposition"] == "RETIRE" for entry in legacy))
+        repo_ui = sorted(
+            str(path.relative_to(ROOT)).replace("\\", "/")
+            for path in ROOT.rglob("*.ui")
+            if path.is_file()
+        )
+        ledger_paths = sorted(entry["path"] for entry in legacy)
+        self.assertEqual(repo_ui, ledger_paths)
+        self.assertEqual(self.inventory["counts"]["ui_forms"], 34)
+        self.assertEqual(len(self.disposition["rows"]), 56)
 
 
 if __name__ == "__main__":

@@ -21,27 +21,37 @@
 // SOFTWARE.
 
 #include "audiotextstreameditordockwidget.h"
-#include "ui_audiotextstreameditordockwidget.h"
 
 #include "pdfwidgetutils.h"
 
-#include <QToolBar>
 #include <QLineEdit>
+#include <QTableView>
+#include <QToolBar>
+#include <QVBoxLayout>
+#include <QWidget>
 
 namespace pdfplugin
 {
 
 AudioTextStreamEditorDockWidget::AudioTextStreamEditorDockWidget(AudioTextStreamActions actions,
-                                                                 QWidget *parent) :
+                                                                 QWidget* parent) :
     QDockWidget(parent),
-    ui(new Ui::AudioTextStreamEditorDockWidget),
     m_model(nullptr),
     m_toolBar(nullptr),
-    m_selectionTextEdit(nullptr)
+    m_selectionTextEdit(nullptr),
+    m_layout(nullptr),
+    m_textStreamTableView(nullptr)
 {
-    ui->setupUi(this);
-    ui->textStreamTableView->horizontalHeader()->setStretchLastSection(true);
-    ui->textStreamTableView->horizontalHeader()->setMinimumSectionSize(pdf::PDFWidgetUtils::scaleDPI_x(this, 85));
+    setWindowTitle(tr("Text Stream for Audio Book"));
+
+    auto* contents = new QWidget(this);
+    m_layout = new QVBoxLayout(contents);
+    m_textStreamTableView = new QTableView(contents);
+    m_layout->addWidget(m_textStreamTableView);
+    setWidget(contents);
+
+    m_textStreamTableView->horizontalHeader()->setStretchLastSection(true);
+    m_textStreamTableView->horizontalHeader()->setMinimumSectionSize(pdf::PDFWidgetUtils::scaleDPI_x(this, 85));
 
     QSize iconSize = pdf::PDFWidgetUtils::scaleDPI(this, QSize(24, 24));
     m_toolBar = new QToolBar(tr("Audio Book Actions"), this);
@@ -49,7 +59,7 @@ AudioTextStreamEditorDockWidget::AudioTextStreamEditorDockWidget(AudioTextStream
     m_selectionTextEdit = new QLineEdit(m_toolBar);
     m_selectionTextEdit->setMinimumWidth(pdf::PDFWidgetUtils::scaleDPI_x(this, 125));
     m_selectionTextEdit->setMaximumWidth(pdf::PDFWidgetUtils::scaleDPI_x(this, 400));
-    ui->verticalLayout->insertWidget(0, m_toolBar);
+    m_layout->insertWidget(0, m_toolBar);
 
     m_toolBar->addActions({ actions.actionSynchronizeFromTableToGraphics,
                             actions.actionSynchronizeFromGraphicsToTable });
@@ -75,10 +85,7 @@ AudioTextStreamEditorDockWidget::AudioTextStreamEditorDockWidget(AudioTextStream
     setMinimumSize(pdf::PDFWidgetUtils::scaleDPI(this, QSize(300, 150)));
 }
 
-AudioTextStreamEditorDockWidget::~AudioTextStreamEditorDockWidget()
-{
-    delete ui;
-}
+AudioTextStreamEditorDockWidget::~AudioTextStreamEditorDockWidget() = default;
 
 pdf::PDFDocumentTextFlowEditorModel* AudioTextStreamEditorDockWidget::getModel() const
 {
@@ -88,12 +95,12 @@ pdf::PDFDocumentTextFlowEditorModel* AudioTextStreamEditorDockWidget::getModel()
 void AudioTextStreamEditorDockWidget::setModel(pdf::PDFDocumentTextFlowEditorModel* model)
 {
     m_model = model;
-    ui->textStreamTableView->setModel(m_model);
+    m_textStreamTableView->setModel(m_model);
 }
 
 QTableView* AudioTextStreamEditorDockWidget::getTextStreamView() const
 {
-    return ui->textStreamTableView;
+    return m_textStreamTableView;
 }
 
 QString AudioTextStreamEditorDockWidget::getSelectionText() const
@@ -108,8 +115,8 @@ void AudioTextStreamEditorDockWidget::clearSelectionText()
 
 void AudioTextStreamEditorDockWidget::goToIndex(size_t index)
 {
-    QModelIndex modelIndex = ui->textStreamTableView->model()->index(int(index), 0);
-    ui->textStreamTableView->scrollTo(modelIndex);
+    QModelIndex modelIndex = m_textStreamTableView->model()->index(int(index), 0);
+    m_textStreamTableView->scrollTo(modelIndex);
 }
 
 } // namespace pdfplugin
