@@ -1,0 +1,1220 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "widgets-library-consumer-graph",
+  "issue": 16,
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "profile": {
+    "id": "loupe-release",
+    "options": {
+      "LOUPE_LOUPE_DISTRIBUTION": true,
+      "LOUPE_BUILD_ONLY_CORE_LIBRARY": false,
+      "LOUPE_BUILD_QUICK_CANVAS": true,
+      "LOUPE_BUILD_TESTS": false,
+      "LOUPE_BUILD_FUZZERS": false,
+      "LOUPE_BUILD_QUICK_SHELL_SMOKE": false,
+      "LOUPE_BUILD_CANVAS_BENCHMARK": false,
+      "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE": false,
+      "LOUPE_BUILD_CODE_GENERATOR": true,
+      "LOUPE_BUILD_JBIG2_VIEWER": true,
+      "LOUPE_BUILD_EXAMPLE_GENERATOR": true,
+      "LOUPE_BUILD_VIEWER": false,
+      "LOUPE_BUILD_PAGEMASTER": false,
+      "LOUPE_BUILD_DIFF": false,
+      "LOUPE_BUILD_LAUNCHPAD": false,
+      "LOUPE_PLUGIN_AUDIOBOOK": false,
+      "LOUPE_PLUGIN_OCR": false,
+      "LOUPE_PLUGIN_SCANNER": true
+    },
+    "configuration_mode": "source-static",
+    "configured_build_dir": null,
+    "configuration_note": "Static CMake/file evidence is used when a qualified build directory is unavailable; no build qualification is implied."
+  },
+  "inputs": {
+    "inventory": "docs/generated/phase5-widgets-inventory.json",
+    "disposition": "docs/generated/phase5-widgets-disposition.json",
+    "product_ledger": "docs/product-surface.json"
+  },
+  "libraries": [
+    {
+      "target": "LoupeLibWidgets",
+      "installed_in_profile": true,
+      "direct_consumers": [
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupeDiff",
+        "LoupeLaunchPad",
+        "LoupeLibGui",
+        "LoupePageMaster",
+        "LoupePreflightPlugin",
+        "LoupeViewer",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+        "UnitTestsAccessibility",
+        "UnitTestsPreflightPlugin",
+        "UnitTestsRecovery",
+        "UnitTestsThumbnailsRenderer"
+      ],
+      "transitive_consumers": [
+        "UnitTestsUndoRedoManager"
+      ],
+      "deletion_blocked": true
+    },
+    {
+      "target": "LoupeLibGui",
+      "installed_in_profile": true,
+      "direct_consumers": [
+        "ActionListPlugin",
+        "LoupeViewer",
+        "UnitTestsRecovery",
+        "UnitTestsUndoRedoManager"
+      ],
+      "transitive_consumers": [],
+      "deletion_blocked": true
+    }
+  ],
+  "consumers": [
+    {
+      "id": "LoupeLibWidgets->ActionListPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "ActionListPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-fix",
+      "cmake": "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->AudioBookPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "AudioBookPlugin",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "build-only-plugin",
+      "product_disposition": "STOP-SHIPPING",
+      "phase5_disposition": "DELETE",
+      "replacement_owner": "AudioBookPlugin",
+      "cmake": "LoupeEditorPlugins/AudioBookPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->DimensionsPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "DimensionsPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-pages-production",
+      "cmake": "LoupeEditorPlugins/DimensionsPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->EditorPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "EditorPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-fix",
+      "cmake": "LoupeEditorPlugins/EditorPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupeDiff",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupeDiff",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "profile-disabled-executable",
+      "product_disposition": "CLI-ONLY",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-cli",
+      "cmake": "LoupeDiff/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupeLaunchPad",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupeLaunchPad",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "profile-disabled-executable",
+      "product_disposition": "STOP-SHIPPING",
+      "phase5_disposition": "DELETE",
+      "replacement_owner": "loupe-editor",
+      "cmake": "LoupeLaunchPad/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupeLibGui",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupeLibGui",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "widgets-library",
+      "product_disposition": null,
+      "phase5_disposition": "DELETE",
+      "replacement_owner": "LoupeEditor Quick shell and PdfTool",
+      "cmake": "LoupeLibGui/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupePageMaster",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupePageMaster",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "profile-disabled-executable",
+      "product_disposition": "CLI-ONLY",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-cli",
+      "cmake": "LoupePageMaster/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupePreflightPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupePreflightPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-preflight",
+      "cmake": "LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->LoupeViewer",
+      "library": "LoupeLibWidgets",
+      "consumer": "LoupeViewer",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "profile-disabled-executable",
+      "product_disposition": "STOP-SHIPPING",
+      "phase5_disposition": "DELETE",
+      "replacement_owner": "loupe-editor",
+      "cmake": "LoupeViewer/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->ObjectInspectorPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "ObjectInspectorPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ADVANCED",
+      "phase5_disposition": "RETAIN-NON-PRODUCT",
+      "replacement_owner": "loupe-inspect",
+      "cmake": "LoupeEditorPlugins/ObjectInspectorPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->OcrPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "OcrPlugin",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "build-only-plugin",
+      "product_disposition": "CLI-ONLY",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-cli",
+      "cmake": "LoupeEditorPlugins/OcrPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->OutputPreviewPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "OutputPreviewPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-production-preview",
+      "cmake": "LoupeEditorPlugins/OutputPreviewPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->RedactPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "RedactPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "OPEN",
+      "phase5_disposition": "BLOCKED",
+      "replacement_owner": "loupe-fix",
+      "cmake": "LoupeEditorPlugins/RedactPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->ScannerPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "ScannerPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ADVANCED",
+      "phase5_disposition": "RETAIN-NON-PRODUCT",
+      "replacement_owner": "loupe-document",
+      "cmake": "LoupeEditorPlugins/ScannerPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->SignaturePlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "SignaturePlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ADVANCED",
+      "phase5_disposition": "RETAIN-NON-PRODUCT",
+      "replacement_owner": "loupe-fix",
+      "cmake": "LoupeEditorPlugins/SignaturePlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->SoftProofingPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "SoftProofingPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-production-preview",
+      "cmake": "LoupeEditorPlugins/SoftProofingPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->UnitTestsAccessibility",
+      "library": "LoupeLibWidgets",
+      "consumer": "UnitTestsAccessibility",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->UnitTestsPreflightPlugin",
+      "library": "LoupeLibWidgets",
+      "consumer": "UnitTestsPreflightPlugin",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->UnitTestsRecovery",
+      "library": "LoupeLibWidgets",
+      "consumer": "UnitTestsRecovery",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->UnitTestsThumbnailsRenderer",
+      "library": "LoupeLibWidgets",
+      "consumer": "UnitTestsThumbnailsRenderer",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibWidgets->UnitTestsUndoRedoManager",
+      "library": "LoupeLibWidgets",
+      "consumer": "UnitTestsUndoRedoManager",
+      "linkage": "transitive",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibGui->ActionListPlugin",
+      "library": "LoupeLibGui",
+      "consumer": "ActionListPlugin",
+      "linkage": "direct",
+      "profile_enabled": true,
+      "installed_in_profile": true,
+      "consumer_class": "installed-product-plugin",
+      "product_disposition": "ABSORB",
+      "phase5_disposition": "HEADLESS-REPLACE",
+      "replacement_owner": "loupe-fix",
+      "cmake": "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibGui->LoupeViewer",
+      "library": "LoupeLibGui",
+      "consumer": "LoupeViewer",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "profile-disabled-executable",
+      "product_disposition": "STOP-SHIPPING",
+      "phase5_disposition": "DELETE",
+      "replacement_owner": "loupe-editor",
+      "cmake": "LoupeViewer/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibGui->UnitTestsRecovery",
+      "library": "LoupeLibGui",
+      "consumer": "UnitTestsRecovery",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    },
+    {
+      "id": "LoupeLibGui->UnitTestsUndoRedoManager",
+      "library": "LoupeLibGui",
+      "consumer": "UnitTestsUndoRedoManager",
+      "linkage": "direct",
+      "profile_enabled": false,
+      "installed_in_profile": false,
+      "consumer_class": "test-consumer",
+      "product_disposition": null,
+      "phase5_disposition": null,
+      "replacement_owner": "UnitTests (profile-disabled in loupe-release)",
+      "cmake": "UnitTests/CMakeLists.txt"
+    }
+  ],
+  "neutral_code": [
+    {
+      "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfaccessibility.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfaccessibility.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfadvancedtools.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfadvancedtools.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcertificatelisthelper.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcertificatelisthelper.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcompiler.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcompiler.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfdocumentdrawinterface.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfdrawspacecontroller.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfdrawspacecontroller.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfdrawwidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfdrawwidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfitemmodels.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfitemmodels.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfobjecteditorwidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfobjecteditorwidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfobjecteditorwidget_impl.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditortools.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditortools.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontentelements.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagecontentelements.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagegeometrydialog.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagegeometrydialog.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagerangewidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfpagerangewidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdftexteditpseudowidget.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdftexteditpseudowidget.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfthumbnailsrenderer.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfthumbnailsrenderer.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfuitheme.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetannotation.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetannotation.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetformmanager.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetformmanager.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetsglobal.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgettool.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgettool.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetutils.cpp",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibWidgets/sources/pdfwidgetutils.h",
+      "current_owner": "LoupeLibWidgets",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/main.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfaboutdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfaboutdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfactioncombobox.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfactioncombobox.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfadvancedfindwidget.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfadvancedfindwidget.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfbookmarkmanager.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfbookmarkmanager.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfbookmarkui.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfbookmarkui.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfdocumentpropertiesdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfdocumentpropertiesdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfeditormainwindow.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfeditormainwindow.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfencryptionsettingsdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfencryptionsettingsdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfencryptionstrengthhintwidget.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfencryptionstrengthhintwidget.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdffullscreenwidget.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdffullscreenwidget.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfoptimizedocumentdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfoptimizedocumentdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfoptimizeimagesdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfoptimizeimagesdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfprogramcontroller.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfprogramcontroller.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfrecentfilemanager.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfrecentfilemanager.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfrecoverymanager.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfrecoverymanager.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfrendertoimagesdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfrendertoimagesdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsanitizedocumentdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsanitizedocumentdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsendmail.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsendmail.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsidebarwidget.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfsidebarwidget.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdftexttospeech.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdftexttospeech.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfundoredomanager.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfundoredomanager.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewerglobal.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewermainwindow.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewermainwindow.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewersettings.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewersettings.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewersettingsdialog.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfviewersettingsdialog.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfwintaskbarprogress.cpp",
+      "current_owner": "LoupeLibGui",
+      "binding": "widgets-bound",
+      "correct_owner": "delete-with-widgets-library",
+      "rationale": "Widgets UI or presentation code deletes with its library after Quick/headless replacements are proven."
+    },
+    {
+      "path": "LoupeLibGui/pdfwintaskbarprogress.h",
+      "current_owner": "LoupeLibGui",
+      "binding": "neutral-relocatable",
+      "correct_owner": "LoupeLibCore",
+      "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library."
+    }
+  ],
+  "acceptance": {
+    "unknown_product_consumers": [],
+    "unclassified_neutral_code": [],
+    "installed_product_blockers": [
+      "ActionListPlugin",
+      "DimensionsPlugin",
+      "EditorPlugin",
+      "LoupePreflightPlugin",
+      "ObjectInspectorPlugin",
+      "OutputPreviewPlugin",
+      "RedactPlugin",
+      "ScannerPlugin",
+      "SignaturePlugin",
+      "SoftProofingPlugin"
+    ],
+    "deletion_safe": false,
+    "issue_17_prerequisite": "Issue 17 must not delete LoupeLibWidgets or Widgets-bound LoupeLibGui while installed_product_blockers is non-empty."
+  },
+  "counts": {
+    "libraries": 2,
+    "consumers": 26,
+    "neutral_code": 110,
+    "neutral_relocatable": 21,
+    "widgets_bound": 89,
+    "installed_product_blockers": 10
+  }
+}

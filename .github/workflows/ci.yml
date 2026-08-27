@@ -43,6 +43,11 @@ jobs:
         run: |
           python3 scripts/verify-plugin-form-accounting.py
           python3 -m unittest scripts.ci.test_verify_plugin_form_accounting -q
+      - name: Verify Widgets library consumer graph
+        run: |
+          python3 scripts/generate_widgets_library_consumer_graph.py --check
+          python3 scripts/verify-widgets-library-consumer-graph.py
+          python3 -m unittest scripts.ci.test_verify_widgets_library_consumer_graph -q
 
   agent-fast:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
