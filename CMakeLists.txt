@@ -143,6 +143,7 @@ else()
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql PrintSupport TextToSpeech Concurrent)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 endif()
+set(LOUPE_CONFIGURE_REQUIRES_WIDGETS "${_LOUPE_REQUIRES_WIDGETS}" CACHE INTERNAL "Whether configure required Qt6::Widgets")
 
 if(LOUPE_BUILD_TESTS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)

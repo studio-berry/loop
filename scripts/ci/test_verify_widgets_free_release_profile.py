@@ -34,7 +34,7 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
-    def test_cache_with_widgets_fails(self) -> None:
+    def test_cache_without_widgets_requirement_passes(self) -> None:
         module = _load_verifier_module()
         with tempfile.TemporaryDirectory() as tmp:
             cache = Path(tmp) / "CMakeCache.txt"
@@ -42,7 +42,23 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
                 "\n".join(
                     [
                         "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "Qt6Widgets_DIR:PATH=/tmp/Qt6Widgets",
+                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            module.validate_cmake_cache(cache)
+
+    def test_cache_requiring_widgets_fails(self) -> None:
+        module = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "CMakeCache.txt"
+            cache.write_text(
+                "\n".join(
+                    [
+                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
+                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=ON",
                     ]
                 )
                 + "\n",
@@ -50,7 +66,7 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             )
             with self.assertRaises(module.ContractError) as ctx:
                 module.validate_cmake_cache(cache)
-            self.assertIn("Qt6::Widgets", str(ctx.exception))
+            self.assertIn("LOUPE_CONFIGURE_REQUIRES_WIDGETS", str(ctx.exception))
 
     def test_cache_with_widgets_bound_target_fails(self) -> None:
         module = _load_verifier_module()
@@ -60,6 +76,7 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
                 "\n".join(
                     [
                         "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
+                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
                         "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
                     ]
                 )

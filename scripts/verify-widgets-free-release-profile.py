@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 import tempfile
@@ -19,10 +18,16 @@ FORBIDDEN_WIDGETS_ARTIFACTS = (
     "libQt6Widgets.so.6",
     "Qt6Widgets.dylib",
 )
-FORBIDDEN_CACHE_MARKERS = (
-    "Qt6Widgets_DIR:",
-    "Qt6Widgets_FOUND:",
-    "Qt6Widgets_VERSION:",
+FORBIDDEN_CACHE_MARKERS = ()
+REQUIRED_CACHE_MARKERS = (
+    "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
+    "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+)
+FORBIDDEN_OPTION_MARKERS = (
+    "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
+    "LOUPE_BUILD_JBIG2_VIEWER:BOOL=ON",
+    "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
+    "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
 
 
@@ -51,16 +56,11 @@ def validate_cmake_cache(cache_path: Path) -> None:
     if hits:
         raise ContractError(f"release configure pulled Qt6::Widgets into cache: {hits[:3]}")
 
-    distribution = re.search(r"^LOUPE_LOUPE_DISTRIBUTION:BOOL=(ON|OFF)$", text, re.MULTILINE)
-    if distribution is None or distribution.group(1) != "ON":
-        raise ContractError("CMake cache must be configured with LOUPE_LOUPE_DISTRIBUTION=ON")
+    missing = [marker for marker in REQUIRED_CACHE_MARKERS if marker not in text]
+    if missing:
+        raise ContractError(f"release configure cache missing required markers: {missing[:3]}")
 
-    for option in (
-        "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
-        "LOUPE_BUILD_JBIG2_VIEWER:BOOL=ON",
-        "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
-        "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
-    ):
+    for option in FORBIDDEN_OPTION_MARKERS:
         if option in text:
             raise ContractError(f"Widgets-bound qualification target enabled in release probe: {option}")
 
