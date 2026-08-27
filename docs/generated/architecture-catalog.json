@@ -386,6 +386,7 @@
     "UnitTestsDiagnostics",
     "UnitTestsDocumentFacade",
     "UnitTestsDocumentSession",
+    "UnitTestsDocumentViewSession",
     "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",

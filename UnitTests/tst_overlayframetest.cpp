@@ -385,6 +385,7 @@ void OverlayFrameTest::denyExtraGraphicsSuppressesOverlays()
 {
     m_overlays->setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
     m_overlays->setGuides({ makeTarget(pdfinteraction::InteractionTargetKind::Guide, QStringLiteral("guide-a"), QRectF(5.0, 5.0, 90.0, 90.0)) });
+    m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)));
     m_overlays->setDenyExtraGraphics(true);
 
     const pdfinteraction::OverlayFrame suppressed = m_overlays->build(m_state, makeToken());
@@ -392,7 +393,7 @@ void OverlayFrameTest::denyExtraGraphicsSuppressesOverlays()
 
     m_overlays->setDenyExtraGraphics(false);
     const pdfinteraction::OverlayFrame restored = m_overlays->build(m_state, makeToken());
-    QVERIFY(!restored.primitives.isEmpty());
+    QVERIFY(restored.primitives.size() >= 2);
 }
 
 void OverlayFrameTest::invalidTokenYieldsAnEmptyFrame()

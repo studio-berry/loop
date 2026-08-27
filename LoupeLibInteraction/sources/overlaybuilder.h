@@ -90,7 +90,7 @@ public:
     /// touches the document (issue #143 AC4).
     void setHiddenFindingIds(QSet<QString> hiddenIds);
 
-    /// When true, suppress tool/findings overlays (PDFRenderer::DenyExtraGraphics parity).
+    /// When true, suppress tool/findings overlay primitives for this frame.
     void setDenyExtraGraphics(bool deny) noexcept { m_denyExtraGraphics = deny; }
     bool denyExtraGraphics() const noexcept { return m_denyExtraGraphics; }
 

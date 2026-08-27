@@ -19,6 +19,7 @@ namespace
 {
 
 constexpr QSizeF A4 = QSizeF(210.0, 297.0);
+constexpr qint64 SurfaceBytes = 210 * 297 * 4;
 
 class DocumentGeometrySource final : public pdfinteraction::IPageGeometrySource
 {
@@ -76,9 +77,8 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
 
     pdf::PDFDocumentContext context(nullptr);
     context.setDocument(document);
-    QVERIFY(context.getSession() != nullptr);
-
     pdf::PDFDocumentSession* session = context.getSession();
+    QVERIFY(session != nullptr);
     QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::CompileCacheLimit);
     QVERIFY(session->prefetchEnabled());
 
@@ -95,25 +95,23 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
 
     pdfinteraction::PageSurfaceBounds bounds;
-    bounds.maxInFlightBytes = 210 * 297 * 4;
-    bounds.maxAdmittedBytes = 210 * 297 * 4 * 2;
+    bounds.maxInFlightBytes = SurfaceBytes;
+    bounds.maxAdmittedBytes = SurfaceBytes * 2;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
     coordinator.setDocumentKey(revisions.documentKey());
     coordinator.invalidate(revisions.revision());
 
-    for (int page = 0; page < 4; ++page)
-    {
-        QVERIFY(session->compilePage(static_cast<size_t>(page)) != nullptr);
-    }
-
     coordinator.requestSurfaces();
     QTRY_VERIFY_WITH_TIMEOUT(coordinator.counters().admitted >= 1, 30000);
-    QCoreApplication::processEvents();
+    while (QCoreApplication::hasPendingEvents())
+    {
+        QCoreApplication::processEvents();
+    }
 
+    QVERIFY(coordinator.counters().shed > 0);
     QVERIFY(coordinator.counters().admittedBytes <= bounds.maxAdmittedBytes);
     QVERIFY(session->compileCacheLimit() <= pdf::PDFDocumentSession::CompileCacheLimit);
-    QVERIFY(!session->prefetchEnabled() || session->qualityPrefetchShed() || coordinator.counters().shed > 0);
 }
 
 QTEST_GUILESS_MAIN(PageSurfaceBudgetTest)

@@ -47,6 +47,7 @@ jobs:
         run: |
           python3 scripts/generate_widgets_library_consumer_graph.py --check
           python3 scripts/verify-widgets-library-consumer-graph.py
+          python3 scripts/verify-widgets-free-release-profile.py
           python3 -m unittest scripts.ci.test_verify_widgets_library_consumer_graph -q
 
   agent-fast:

@@ -54,6 +54,9 @@ jobs:
       - name: Verify installed product graph
         working-directory: loupe
         run: python3 scripts/verify-installed-product-graph.py
+      - name: Verify Widgets-free release profile
+        working-directory: loupe
+        run: python3 scripts/verify-widgets-free-release-profile.py
       - name: Verify interaction boundary
         working-directory: loupe
         run: python3 scripts/verify-interaction-boundary.py
