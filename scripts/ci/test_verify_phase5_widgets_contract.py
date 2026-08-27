@@ -153,6 +153,32 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
+    def test_plugin_surface_policies_are_executed(self):
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "verify-plugin-surface-policies.py")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        rows = {row["target"]: row for row in self.disposition["rows"] if row.get("kind") == "plugin"}
+        for plugin in (
+            "ActionListPlugin",
+            "DimensionsPlugin",
+            "EditorPlugin",
+            "LoupePreflightPlugin",
+            "OutputPreviewPlugin",
+            "SoftProofingPlugin",
+        ):
+            row = rows[plugin]
+            self.assertEqual(row["disposition"], "HEADLESS-REPLACE", plugin)
+            self.assertEqual(row["source_disposition"], "ABSORB", plugin)
+        for plugin in ("ObjectInspectorPlugin", "SignaturePlugin", "ScannerPlugin"):
+            row = rows[plugin]
+            self.assertEqual(row["disposition"], "RETAIN-NON-PRODUCT", plugin)
+            self.assertEqual(row["source_disposition"], "ADVANCED", plugin)
+        self.assertEqual(rows["RedactPlugin"]["disposition"], "BLOCKED")
+
 
 if __name__ == "__main__":
     unittest.main()

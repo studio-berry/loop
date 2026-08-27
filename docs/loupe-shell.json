@@ -206,7 +206,7 @@
       "replacement_target": null,
       "required_test": "scripts/verify-loupe-shell-contract.ps1",
       "evidence_artifact": "docs/loupe-shell.json",
-      "deletion_condition": "Phase 5 removes AudioBookPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability."
+      "deletion_condition": "Delete source and .ui after STOP-SHIPPING install retirement; LoupeEditor is the sole interactive product."
     },
     {
       "plugin": "OcrPlugin",
@@ -216,7 +216,7 @@
       "replacement_target": "loupe-cli",
       "required_test": "PdfTool capabilities --console-format json",
       "evidence_artifact": "docs/loupe-shell.json",
-      "deletion_condition": "Phase 5 removes OcrPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Delete Widgets UI after loupe-cli owns OCR; plugin is absent from the loupe-release install graph.",
       "follow_up_issue": 41
     },
     {
@@ -299,7 +299,7 @@
       "replacement_target": null,
       "required_test": "scripts/verify-loupe-shell-contract.ps1",
       "evidence_artifact": "docs/loupe-shell.json",
-      "deletion_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui.",
+      "deletion_condition": "Delete this form with AudioBookPlugin once install and packaging references are gone; no replacement surface.",
       "rationale": "AudioBook plugin is STOP-SHIPPING."
     },
     {
