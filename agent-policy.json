@@ -90,23 +90,23 @@
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
     },
     "preflight": {
-      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp"],
-      "targets": ["PdfTool"],
+      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp", "LoupeLibInteraction/sources/preflight*.cpp", "LoupeLibInteraction/sources/preflight*.h"],
+      "targets": ["PdfTool", "LoupeLibInteraction"],
       "tests": [
         "UnitTestsPreflightChecks",
         "UnitTestsPreflightCorpus",
-        "UnitTestsPreflightPlugin",
         "UnitTestsPreflightEngine",
         "UnitTestsPreflightVerdict",
         "UnitTestsPreflightProfileResolver",
         "UnitTestsProfileIdentity",
         "UnitTestsOperatorAcceptance",
-        "UnitTestsStandardOracle"
+        "UnitTestsStandardOracle",
+        "UnitTestsPreflightInteraction"
       ]
     },
     "pagemaster": {
-      "paths": ["LoupePageMaster/**"],
-      "targets": ["LoupePageMaster"],
+      "paths": ["LoupeLibCore/sources/pdfpagemasterexport.*", "PdfTool/**"],
+      "targets": ["PdfTool"],
       "tests": ["UnitTestsPageMasterExport"]
     },
     "interaction": {
@@ -146,32 +146,20 @@
       "targets": ["LoupeLibQuick", "LoupeEditor", "LoupeEditorQuick", "ProductQuickAccessibilitySmoke"],
       "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsPreflightInteraction", "UnitTestsP4S9Interaction"]
     },
-    "widgets_gui": {
+    "developer_widgets": {
       "paths": [
-        "LoupeLibWidgets/**",
-        "LoupeLibGui/**",
-        "LoupeViewer/**"
+        "CodeGenerator/**",
+        "JBIG2_Viewer/**",
+        "PdfExampleGenerator/**",
+        "CanvasBenchmark/**"
       ],
-      "targets": ["LoupeViewer"],
-      "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
+      "targets": ["CodeGenerator", "JBIG2_VIEWER", "PdfExampleGenerator", "CanvasBenchmark"],
+      "tests": []
     },
     "plugins": {
-      "paths": ["LoupeEditorPlugins/**"],
-      "targets": [
-        "ActionListPlugin",
-        "AudioBookPlugin",
-        "DimensionsPlugin",
-        "EditorPlugin",
-        "LoupePreflightPlugin",
-        "ObjectInspectorPlugin",
-        "OcrPlugin",
-        "OutputPreviewPlugin",
-        "RedactPlugin",
-        "ScannerPlugin",
-        "SignaturePlugin",
-        "SoftProofingPlugin"
-      ],
-      "tests": ["UnitTestsPreflightPlugin", "UnitTestsPluginAbi"]
+      "paths": ["docs/product-surface.json", "docs/loupe-shell.json"],
+      "targets": [],
+      "tests": ["UnitTestsPluginAbi"]
     },
     "schemas_contracts": {
       "paths": [

@@ -21,7 +21,6 @@
 // SOFTWARE.
 
 #include "ocrsidecarprotocol.h"
-#include "ocrsidecarutils.h"
 
 #include <QtTest>
 
@@ -30,10 +29,6 @@ class OcrContractTest : public QObject
     Q_OBJECT
 
 private slots:
-    void validEditorEnvelope_isExtracted();
-    void failedEditorEnvelope_isRejected();
-    void missingEditorReport_isRejected();
-    void wrongEditorReportSchema_isRejected();
     void sidecarResponse_requiresValidatedShape();
     void sidecarResponse_rejectsWrongPageAndMalformedLine();
     void languageSets_areNormalizedAndDeduplicated();
@@ -41,18 +36,6 @@ private slots:
 
 namespace
 {
-
-QJsonObject validReport()
-{
-    return QJsonObject{
-        { QStringLiteral("schema_version"), 1 },
-        { QStringLiteral("pass"), true },
-        { QStringLiteral("pdf"), QStringLiteral("test.pdf") },
-        { QStringLiteral("pages"), QJsonArray{} },
-        { QStringLiteral("skipped_pages"), QJsonArray{} },
-        { QStringLiteral("errors"), QJsonArray{} },
-    };
-}
 
 QJsonObject validSidecarResponse()
 {
@@ -76,63 +59,6 @@ QJsonObject validSidecarResponse()
 }
 
 }   // namespace
-
-void OcrContractTest::validEditorEnvelope_isExtracted()
-{
-    const QJsonObject envelope{
-        { QStringLiteral("schema_version"), 1 },
-        { QStringLiteral("command"), QStringLiteral("ocr") },
-        { QStringLiteral("status"), QStringLiteral("success") },
-        { QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), validReport() } } },
-    };
-
-    QJsonObject report;
-    QString error;
-    QVERIFY2(pdfplugin::ocr::extractOcrReport(envelope, &report, &error), qPrintable(error));
-    QCOMPARE(report.value(QStringLiteral("schema_version")).toInt(), 1);
-}
-
-void OcrContractTest::failedEditorEnvelope_isRejected()
-{
-    const QJsonObject envelope{
-        { QStringLiteral("schema_version"), 1 },
-        { QStringLiteral("status"), QStringLiteral("error") },
-    };
-
-    QString error;
-    QVERIFY(!pdfplugin::ocr::extractOcrReport(envelope, nullptr, &error));
-    QVERIFY(error.contains(QStringLiteral("did not succeed")));
-}
-
-void OcrContractTest::missingEditorReport_isRejected()
-{
-    const QJsonObject envelope{
-        { QStringLiteral("schema_version"), 1 },
-        { QStringLiteral("status"), QStringLiteral("success") },
-        { QStringLiteral("data"), QJsonObject{} },
-    };
-
-    QString error;
-    QVERIFY(!pdfplugin::ocr::extractOcrReport(envelope, nullptr, &error));
-    QVERIFY(error.contains(QStringLiteral("missing OCR report")));
-}
-
-void OcrContractTest::wrongEditorReportSchema_isRejected()
-{
-    const QJsonObject envelope{
-        { QStringLiteral("status"), QStringLiteral("success") },
-        { QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), validReport() } } },
-    };
-    QJsonObject report = envelope.value(QStringLiteral("data")).toObject()
-                             .value(QStringLiteral("report")).toObject();
-    report.insert(QStringLiteral("schema_version"), 99);
-
-    QJsonObject malformedEnvelope = envelope;
-    malformedEnvelope.insert(QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), report } });
-    QString error;
-    QVERIFY(!pdfplugin::ocr::extractOcrReport(malformedEnvelope, nullptr, &error));
-    QVERIFY(error.contains(QStringLiteral("Unsupported OCR report schema_version")));
-}
 
 void OcrContractTest::sidecarResponse_requiresValidatedShape()
 {
