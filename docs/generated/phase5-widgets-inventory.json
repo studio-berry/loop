@@ -16,10 +16,10 @@
       "LOUPE_BUILD_CODE_GENERATOR": true,
       "LOUPE_BUILD_JBIG2_VIEWER": true,
       "LOUPE_BUILD_EXAMPLE_GENERATOR": true,
-      "LOUPE_BUILD_VIEWER": true,
-      "LOUPE_BUILD_PAGEMASTER": true,
-      "LOUPE_BUILD_DIFF": true,
-      "LOUPE_BUILD_LAUNCHPAD": true,
+      "LOUPE_BUILD_VIEWER": false,
+      "LOUPE_BUILD_PAGEMASTER": false,
+      "LOUPE_BUILD_DIFF": false,
+      "LOUPE_BUILD_LAUNCHPAD": false,
       "LOUPE_PLUGIN_AUDIOBOOK": false,
       "LOUPE_PLUGIN_OCR": false,
       "LOUPE_PLUGIN_SCANNER": true
@@ -453,11 +453,11 @@
       "id": "LoupeDiff",
       "kind": "executable",
       "cmake": "LoupeDiff/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_DIFF=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_DIFF=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "LoupeLibWidgets",
@@ -625,11 +625,11 @@
       "id": "LoupeLaunchPad",
       "kind": "executable",
       "cmake": "LoupeLaunchPad/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_LAUNCHPAD=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_LAUNCHPAD=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "LoupeLibWidgets",
@@ -1040,11 +1040,11 @@
       "id": "LoupePageMaster",
       "kind": "executable",
       "cmake": "LoupePageMaster/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_PAGEMASTER=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_PAGEMASTER=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "LoupeLibWidgets",
@@ -1144,11 +1144,11 @@
       "id": "LoupeViewer",
       "kind": "executable",
       "cmake": "LoupeViewer/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_VIEWER=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_VIEWER=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "LoupeLibGui",
@@ -4109,7 +4109,7 @@
     {
       "target": "LoupeDiff",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "LoupeDiff/CMakeLists.txt"
@@ -4117,7 +4117,7 @@
     {
       "target": "LoupeLaunchPad",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "LoupeLaunchPad/CMakeLists.txt"
@@ -4125,7 +4125,7 @@
     {
       "target": "LoupePageMaster",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "LoupePageMaster/CMakeLists.txt"
@@ -4133,7 +4133,7 @@
     {
       "target": "LoupeViewer",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "LoupeViewer/CMakeLists.txt"
@@ -4641,7 +4641,7 @@
       "kind": "application",
       "target": "LoupeDiff",
       "cmake": "LoupeDiff/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -4651,7 +4651,7 @@
       "kind": "application",
       "target": "LoupeLaunchPad",
       "cmake": "LoupeLaunchPad/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -4709,7 +4709,7 @@
       "kind": "application",
       "target": "LoupePageMaster",
       "cmake": "LoupePageMaster/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -4729,7 +4729,7 @@
       "kind": "application",
       "target": "LoupeViewer",
       "cmake": "LoupeViewer/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -4846,7 +4846,7 @@
       "path": "LoupeDiff/aboutdialog.ui",
       "target": "LoupeDiff",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -4859,7 +4859,7 @@
       "path": "LoupeDiff/differencesdockwidget.ui",
       "target": "LoupeDiff",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -4872,7 +4872,7 @@
       "path": "LoupeDiff/mainwindow.ui",
       "target": "LoupeDiff",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -4885,7 +4885,7 @@
       "path": "LoupeDiff/settingsdockwidget.ui",
       "target": "LoupeDiff",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5041,7 +5041,7 @@
       "path": "LoupeLaunchPad/launchapplicationwidget.ui",
       "target": "LoupeLaunchPad",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5054,7 +5054,7 @@
       "path": "LoupeLaunchPad/launchdialog.ui",
       "target": "LoupeLaunchPad",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5353,7 +5353,7 @@
       "path": "LoupePageMaster/aboutdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5366,7 +5366,7 @@
       "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5379,7 +5379,7 @@
       "path": "LoupePageMaster/croppagesdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5392,7 +5392,7 @@
       "path": "LoupePageMaster/itempropertiesdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5405,7 +5405,7 @@
       "path": "LoupePageMaster/mainwindow.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5418,7 +5418,7 @@
       "path": "LoupePageMaster/pdfpageimportdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5431,7 +5431,7 @@
       "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
       "target": "LoupePageMaster",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -5442,7 +5442,7 @@
   "counts": {
     "targets": 89,
     "installed_in_profile": 17,
-    "build_only_in_profile": 9,
+    "build_only_in_profile": 5,
     "widgets_surfaces": 22,
     "legacy_executables": 8,
     "plugin_ui_groups": 12,

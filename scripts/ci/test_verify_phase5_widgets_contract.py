@@ -114,6 +114,15 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             target = next(row for row in self.inventory["targets"] if row["id"] == name)
             self.assertFalse(target["install_rule"], name)
             self.assertFalse(target["installed_in_profile"], name)
+            self.assertFalse(target["profile_enabled"], name)
+        options = self.inventory["profile"]["options"]
+        for option in (
+            "LOUPE_BUILD_VIEWER",
+            "LOUPE_BUILD_PAGEMASTER",
+            "LOUPE_BUILD_DIFF",
+            "LOUPE_BUILD_LAUNCHPAD",
+        ):
+            self.assertFalse(options[option], option)
 
     def test_loupe_editor_is_sole_installed_interactive_product(self):
         completed = subprocess.run(
