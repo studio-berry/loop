@@ -203,6 +203,7 @@ private Q_SLOTS:
     void devicePixelRatioChangeRepublishesGeometry();
     void itemDestroyedWithWorkInFlight();
     void overlayOnlyChangeDoesNotResyncTiles();
+    void denyExtraGraphicsSuppressesOverlaysOnCanvas();
     void overlayOnlyHoverPreservesSurfaceDemand();
     void zoomReissuesSurfaceDemand();
     void firstViewIsUnavailableUntilAPageIsOnScreen();
@@ -917,6 +918,40 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
     QCOMPARE(m_renderer->renderCount, rendersBefore);
     QCOMPARE(m_surfaces->counters().requested, requestedBefore);
     QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+}
+
+void QuickCanvasTest::denyExtraGraphicsSuppressesOverlaysOnCanvas()
+{
+    showItemInWindow();
+    requestSurfacesAndDrain();
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QVERIFY(sendMousePress(m_item.get(), inside));
+
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QVERIFY(m_item->frameStats().overlayPrimitives > 0);
+
+    const int tilesBefore = m_item->frameStats().tiles;
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+
+    m_overlays->setDenyExtraGraphics(true);
+    m_controller->refreshOverlay();
+    renderFrame();
+
+    QCOMPARE(m_item->frameStats().overlayPrimitives, 0);
+    QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+
+    m_overlays->setDenyExtraGraphics(false);
+    m_controller->refreshOverlay();
+    renderFrame();
+    QVERIFY(m_item->frameStats().overlayPrimitives > 0);
 }
 
 void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()

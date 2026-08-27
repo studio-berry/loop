@@ -49,6 +49,7 @@ jobs:
           python3 scripts/verify-widgets-library-consumer-graph.py
           python3 scripts/verify-widgets-free-release-profile.py
           python3 -m unittest scripts.ci.test_verify_widgets_library_consumer_graph -q
+          python3 -m unittest scripts.ci.test_verify_widgets_free_release_profile -q
 
   agent-fast:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'

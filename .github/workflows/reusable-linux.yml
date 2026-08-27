@@ -156,6 +156,14 @@ jobs:
           cache: 'true'
           cache-key-prefix: ${{ runner.os }}-qt-6111
 
+      - name: Verify Widgets-free release configure
+        working-directory: loupe
+        run: |
+          python3 scripts/verify-widgets-free-release-profile.py --configure \
+            --build-dir build-widgets-free-verify -- \
+            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_VCPKG_BUILD_TYPE=Release
+
       - name: Build project
         working-directory: loupe
         run: |
