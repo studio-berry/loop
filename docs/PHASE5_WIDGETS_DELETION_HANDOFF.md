@@ -19,17 +19,18 @@ form), and 9 legacy Widgets executables. It distinguishes profile-enabled,
 installed, and build-only targets and records direct/transitive Qt linkage and
 target consumers.
 
-The derived disposition view records 71 rows: 8 `DELETE`, 49
-`HEADLESS-REPLACE`, 12 `RETAIN-NON-PRODUCT`, and 2 `BLOCKED`. The two blocked
-rows are the open Diff product decision and the pending Redact product decision.
-No deletion is authorized by this evidence alone.
+The derived disposition view records 70 rows after Session 02. Session 03 Issue 10
+freezes the four secondary executables: Viewer and LaunchPad are `DELETE`;
+PageMaster and Diff are `HEADLESS-REPLACE` onto existing Core/CLI owners. The
+remaining blocked row is the pending Redact product decision. No deletion is
+authorized by this evidence alone.
 
 Consumer-first sequence for later sessions:
 
 1. Resolve or preserve the secondary executable, plugin, and legacy-form rows
    according to their explicit disposition and testable condition.
-2. Preserve the non-product developer/qualification rows and resolve the two
-   blocked product decisions.
+2. Preserve the non-product developer/qualification rows and resolve the remaining
+   blocked Redact product decision.
 3. The former comparison target is retired only after parity evidence is archived.
 4. Remove `LoupeLibGui` and `LoupeLibWidgets` only after the inventory proves
    that no installed consumer remains and the replacement boundaries are green.
@@ -76,14 +77,17 @@ Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperator
 
 ## Widgets executables still in default build graph
 
+Session 03 Issue 10 froze the four secondary executables. Profiles stay
+`present` until install and packaging references are removed.
+
 | Executable | Disposition | Phase 5 route |
 | --- | --- | --- |
-| `LoupeViewer` | ABSORB into Document workspace | Headlessify, retire, or developer-only |
-| `LoupePageMaster` | ABSORB into Pages / Production workspace | Headlessify or route to `PDFPageMasterExport` CLI |
-| `LoupeDiff` | OPEN Compare product decision | Headlessify until Compare workspace approved |
-| `LoupeLaunchPad` | HIDE / retire hub | Delete launcher surfaces (`RETIRE` in ledger) |
+| `LoupeViewer` | `STOP-SHIPPING` → `DELETE` | LoupeEditor document-open already owns viewing |
+| `LoupePageMaster` | `CLI-ONLY` → `HEADLESS-REPLACE` | `PDFPageMasterExport` + existing PdfTool page commands; no new `pagemaster` CLI and no Pages workspace required |
+| `LoupeDiff` | `CLI-ONLY` → `HEADLESS-REPLACE` | PdfTool `diff` over Core `PDFDiff`; `loupe-compare` stays OPEN and does not retain `LoupeDiff.exe` |
+| `LoupeLaunchPad` | `STOP-SHIPPING` → `DELETE` | LoupeEditor is already the product launcher |
 
-See `docs/product-surface.json` and `docs/loupe-shell.json` workspace IDs.
+See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
 
 ## Plugin directories (12)
 
@@ -113,9 +117,9 @@ Authoritative ledger: `docs/loupe-shell.json` → `legacy_surface_disposition`.
 | Disposition | Count | Phase 5 action |
 | --- | --- | --- |
 | `MIGRATE` | 5 | Delete after Quick replacement proven on merged SHA |
-| `CONSOLIDATE` | 35 | Delete after workspace/panel absorbs capability |
-| `HEADLESS` | 6 | Retain only if CLI/developer path still needs form; otherwise delete |
-| `RETIRE` | 3 | Delete with LaunchPad / AudioBook surfaces |
+| `CONSOLIDATE` | 24 | Delete after workspace/panel absorbs capability |
+| `HEADLESS` | 5 | Retain only if CLI/developer path still needs form; otherwise delete |
+| `RETIRE` | 14 | Delete with LaunchPad / AudioBook hub forms and with PageMaster/Diff executables once they leave the install graph |
 
 Verifier: `scripts/verify-loupe-shell-contract.ps1` (fail-closed inventory).
 

@@ -493,24 +493,49 @@ def _product_target_map(product: dict) -> dict[str, dict]:
     }
 
 
-def _product_phase5(row: dict) -> dict:
+def _proven_owner_ids(product: dict) -> frozenset[str]:
+    return frozenset(
+        row["id"]
+        for row in product.get("surfaces", [])
+        if row.get("kind") == "application"
+        and row.get("artifact_scope") == "install"
+        and row.get("profiles", {}).get("loupe-release") == "present"
+        and not row.get("replacement_surface")
+    )
+
+
+def _product_testable_condition(row: dict, disposition: str, replacement, proven_owners: frozenset[str]) -> str:
+    if row.get("kind") == "application" and replacement in proven_owners:
+        if disposition == "DELETE":
+            return (
+                "The product/package graph may drop this executable; "
+                f"replacement {replacement} is already the installed owner."
+            )
+        if disposition == "HEADLESS-REPLACE":
+            return (
+                "The Widgets executable may leave the install graph; keep the named "
+                f"replacement ({replacement})."
+            )
+    return {
+        "DELETE": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
+        "HEADLESS-REPLACE": f"Remove the interactive Widgets surface only after {replacement or 'the named headless boundary'} is proven to carry the required capability.",
+        "RETAIN-NON-PRODUCT": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+        "BLOCKED": f"Resolve the linked product decision before deletion or replacement; current follow-up issue is {row.get('follow_up_issue') or 'not assigned'}.",
+    }[disposition]
+
+
+def _product_phase5(row: dict, proven_owners: frozenset[str]) -> dict:
     source = row.get("disposition")
     if source not in PRODUCT_TO_PHASE5:
         raise EvidenceError(f"Widgets surface {row.get('id')} has unsupported product disposition {source!r}")
     disposition = PRODUCT_TO_PHASE5[source]
     replacement = row.get("replacement_surface")
     consumer = replacement or ("developer-only surface" if disposition == "RETAIN-NON-PRODUCT" else row.get("artifact"))
-    condition = {
-        "DELETE": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
-        "HEADLESS-REPLACE": f"Remove the interactive Widgets surface only after {replacement or 'the named headless boundary'} is proven to carry the required capability.",
-        "RETAIN-NON-PRODUCT": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
-        "BLOCKED": f"Resolve the linked product decision before deletion or replacement; current follow-up issue is {row.get('follow_up_issue', 'not assigned')}.",
-    }[disposition]
     return {
         "disposition": disposition,
         "consumer": str(consumer),
         "rationale": str(row.get("rationale", "")),
-        "testable_condition": condition,
+        "testable_condition": _product_testable_condition(row, disposition, replacement, proven_owners),
         "source_disposition": source,
         "source": "docs/product-surface.json",
         "replacement_target": replacement,
@@ -522,6 +547,7 @@ def build_disposition(root: Path, inventory: dict) -> dict:
     shell = _load_json(root, "docs/loupe-shell.json")
     product = _load_json(root, "docs/product-surface.json")
     product_targets = _product_target_map(product)
+    proven_owners = _proven_owner_ids(product)
     shell_plugins = {row["plugin"]: row for row in shell.get("plugin_action_policy", [])}
     shell_legacy = {row["path"]: row for row in shell.get("legacy_surface_disposition", [])}
     target_rows = {row["target"]: row for row in inventory["surfaces"] if row["kind"] != "ui-form"}
@@ -559,7 +585,7 @@ def build_disposition(root: Path, inventory: dict) -> dict:
         source = product_targets.get(target)
         if not source:
             raise EvidenceError(f"Widgets inventory target has no product/special disposition: {target}")
-        policy = _product_phase5(source)
+        policy = _product_phase5(source, proven_owners)
         if target in shell_plugins:
             policy = {
                 **policy,

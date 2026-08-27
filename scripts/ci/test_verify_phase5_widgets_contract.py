@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from generate_phase5_widgets_evidence import (  # noqa: E402
     _check_or_write,
     _normalize_newlines,
+    _proven_owner_ids,
     _serialized,
     generate,
 )
@@ -73,6 +74,32 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         disposition["rows"][0]["disposition"] = "DEFAULT"
         errors = validate_disposition(self.inventory, disposition, ROOT)
         self.assertTrue(any("invalid disposition" in error for error in errors))
+
+    def test_secondary_executables_are_frozen_to_installed_owners(self):
+        rows = {row["target"]: row for row in self.disposition["rows"] if "target" in row}
+        expected = {
+            "LoupeViewer": ("DELETE", "loupe-editor", "STOP-SHIPPING"),
+            "LoupeLaunchPad": ("DELETE", "loupe-editor", "STOP-SHIPPING"),
+            "LoupePageMaster": ("HEADLESS-REPLACE", "loupe-cli", "CLI-ONLY"),
+            "LoupeDiff": ("HEADLESS-REPLACE", "loupe-cli", "CLI-ONLY"),
+        }
+        for target, (disposition, replacement, source) in expected.items():
+            row = rows[target]
+            self.assertEqual(row["disposition"], disposition, target)
+            self.assertEqual(row["replacement_target"], replacement, target)
+            self.assertEqual(row["source_disposition"], source, target)
+            self.assertIn(replacement, row["testable_condition"], target)
+            self.assertNotRegex(row["rationale"], r"Issue \d+", target)
+            self.assertNotRegex(row["testable_condition"], r"Issue \d+", target)
+            self.assertNotEqual(row["disposition"], "BLOCKED", target)
+        blocked = [row["id"] for row in self.disposition["rows"] if row["disposition"] == "BLOCKED"]
+        self.assertEqual(blocked, ["target:RedactPlugin"])
+        ocr = rows["OcrPlugin"]
+        self.assertEqual(ocr["replacement_target"], "loupe-cli")
+        self.assertIn("only after loupe-cli is proven", ocr["testable_condition"])
+        self.assertNotIn("may leave the install graph", ocr["testable_condition"])
+        product = json.loads((ROOT / "docs" / "product-surface.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(_proven_owner_ids(product)), ["loupe-cli", "loupe-editor"])
 
 
 if __name__ == "__main__":

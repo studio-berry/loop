@@ -114,14 +114,14 @@
       "id": "target:LoupeDiff",
       "kind": "application",
       "target": "LoupeDiff",
-      "disposition": "BLOCKED",
-      "consumer": "loupe-compare",
-      "rationale": "Compare is not approved as an in-app production workspace yet; preserve the Core diff contract and compatibility executable without a product entry.",
-      "testable_condition": "Resolve the linked product decision before deletion or replacement; current follow-up issue is 193.",
-      "source_disposition": "OPEN",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-cli",
+      "rationale": "Comparison capability is PdfTool diff over Core PDFDiff. loupe-compare stays OPEN as an in-app workspace decision and is not a reason to keep LoupeDiff.exe.",
+      "testable_condition": "The Widgets executable may leave the install graph; keep the named replacement (loupe-cli).",
+      "source_disposition": "CLI-ONLY",
       "source": "docs/product-surface.json",
-      "replacement_target": "loupe-compare",
-      "follow_up_issue": 193
+      "replacement_target": "loupe-cli",
+      "follow_up_issue": null
     },
     {
       "id": "target:LoupeLaunchPad",
@@ -129,9 +129,9 @@
       "target": "LoupeLaunchPad",
       "disposition": "DELETE",
       "consumer": "loupe-editor",
-      "rationale": "A hub for upstream executables contradicts the Loupe product model; retain direct compatibility invocation but expose no entrypoint.",
-      "testable_condition": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
-      "source_disposition": "HIDE",
+      "rationale": "LaunchPad is a hub with no PDF capability. LoupeEditor is already the product launcher.",
+      "testable_condition": "The product/package graph may drop this executable; replacement loupe-editor is already the installed owner.",
+      "source_disposition": "STOP-SHIPPING",
       "source": "docs/product-surface.json",
       "replacement_target": "loupe-editor",
       "follow_up_issue": null
@@ -161,13 +161,13 @@
       "kind": "application",
       "target": "LoupePageMaster",
       "disposition": "HEADLESS-REPLACE",
-      "consumer": "loupe-pages-production",
-      "rationale": "PageMaster becomes the Pages / Production workspace over PDFPageMasterExport; the standalone executable remains compatibility-only until the shell lands.",
-      "testable_condition": "Remove the interactive Widgets surface only after loupe-pages-production is proven to carry the required capability.",
-      "source_disposition": "ABSORB",
+      "consumer": "loupe-cli",
+      "rationale": "Required batch assembly and geometry live in Core PDFPageMasterExport and existing PdfTool unite/separate/dump-page-geometry/info page-box commands. The Widgets executable is UI identity. Do not invent a Pages workspace or a new pagemaster CLI to delete it.",
+      "testable_condition": "The Widgets executable may leave the install graph; keep the named replacement (loupe-cli).",
+      "source_disposition": "CLI-ONLY",
       "source": "docs/product-surface.json",
-      "replacement_target": "loupe-pages-production",
-      "follow_up_issue": 193
+      "replacement_target": "loupe-cli",
+      "follow_up_issue": null
     },
     {
       "id": "target:LoupePreflightPlugin",
@@ -188,14 +188,14 @@
       "id": "target:LoupeViewer",
       "kind": "application",
       "target": "LoupeViewer",
-      "disposition": "HEADLESS-REPLACE",
-      "consumer": "loupe-document",
-      "rationale": "Viewing is normal document-open behavior in Loupe, not a second product shell; compatibility invocation remains available.",
-      "testable_condition": "Remove the interactive Widgets surface only after loupe-document is proven to carry the required capability.",
-      "source_disposition": "ABSORB",
+      "disposition": "DELETE",
+      "consumer": "loupe-editor",
+      "rationale": "Interactive viewing is LoupeEditor document-open. The Viewer executable is a second Widgets product identity, not a required capability.",
+      "testable_condition": "The product/package graph may drop this executable; replacement loupe-editor is already the installed owner.",
+      "source_disposition": "STOP-SHIPPING",
       "source": "docs/product-surface.json",
-      "replacement_target": "loupe-document",
-      "follow_up_issue": 193
+      "replacement_target": "loupe-editor",
+      "follow_up_issue": null
     },
     {
       "id": "target:ObjectInspectorPlugin",
@@ -346,52 +346,52 @@
       "kind": "ui-form",
       "path": "LoupeDiff/aboutdialog.ui",
       "owner_target": "LoupeDiff",
-      "consumer": "loupe-compare",
-      "rationale": "Compare workspace about surface.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/aboutdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-compare"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupeDiff/differencesdockwidget.ui",
       "kind": "ui-form",
       "path": "LoupeDiff/differencesdockwidget.ui",
       "owner_target": "LoupeDiff",
-      "consumer": "loupe-compare",
-      "rationale": "Compare workspace diff panel.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/differencesdockwidget.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-compare"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupeDiff/mainwindow.ui",
       "kind": "ui-form",
       "path": "LoupeDiff/mainwindow.ui",
       "owner_target": "LoupeDiff",
-      "consumer": "loupe-compare",
-      "rationale": "LoupeDiff executable shell absorbed into Compare workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/mainwindow.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-compare"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupeDiff/settingsdockwidget.ui",
       "kind": "ui-form",
       "path": "LoupeDiff/settingsdockwidget.ui",
       "owner_target": "LoupeDiff",
-      "consumer": "loupe-compare",
-      "rationale": "Compare workspace settings panel.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/settingsdockwidget.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "Diff Widgets chrome is not the Compare workspace. PdfTool diff over Core PDFDiff already owns comparison.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-compare"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
@@ -542,9 +542,9 @@
       "path": "LoupeLaunchPad/launchapplicationwidget.ui",
       "owner_target": "LoupeLaunchPad",
       "consumer": "loupe-editor",
-      "rationale": "LaunchPad hub contradicts Loupe product model.",
+      "rationale": "LaunchPad is a hub with no PDF capability. LoupeEditor is the product launcher.",
       "disposition": "DELETE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLaunchPad/launchapplicationwidget.ui.",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
       "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
       "replacement_target": "loupe-editor"
@@ -555,9 +555,9 @@
       "path": "LoupeLaunchPad/launchdialog.ui",
       "owner_target": "LoupeLaunchPad",
       "consumer": "loupe-editor",
-      "rationale": "LaunchPad dialog retired with hub.",
+      "rationale": "LaunchPad is a hub with no PDF capability. LoupeEditor is the product launcher.",
       "disposition": "DELETE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLaunchPad/launchdialog.ui.",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
       "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
       "replacement_target": "loupe-editor"
@@ -853,91 +853,91 @@
       "kind": "ui-form",
       "path": "LoupePageMaster/aboutdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "PageMaster about absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/aboutdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "Assembly settings absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/assembleoutputsettingsdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/croppagesdialog.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/croppagesdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "Crop pages absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/croppagesdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/itempropertiesdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "Item properties absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/itempropertiesdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/mainwindow.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/mainwindow.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "PageMaster main window absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/mainwindow.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/pdfpageimportdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "Page import absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/pdfpageimportdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     },
     {
       "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
       "kind": "ui-form",
       "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
       "owner_target": "LoupePageMaster",
-      "consumer": "loupe-pages-production",
-      "rationale": "Outline regroup absorbed into Pages workspace.",
-      "disposition": "HEADLESS-REPLACE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/selectoutlinetoregroupdialog.ui.",
-      "source_disposition": "CONSOLIDATE",
+      "consumer": "loupe-cli",
+      "rationale": "PageMaster Widgets chrome is not a Pages workspace. Core PDFPageMasterExport and existing PdfTool page commands already own batch geometry.",
+      "disposition": "DELETE",
+      "testable_condition": "Delete this form with the owning executable once install and packaging references are gone; keep the named replacement.",
+      "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
-      "replacement_target": "loupe-pages-production"
+      "replacement_target": "loupe-cli"
     }
   ],
   "crosswalk": {
@@ -1176,25 +1176,25 @@
         "path": "LoupeDiff/aboutdialog.ui",
         "surface_id": "ui:LoupeDiff/aboutdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupeDiff/differencesdockwidget.ui",
         "surface_id": "ui:LoupeDiff/differencesdockwidget.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupeDiff/mainwindow.ui",
         "surface_id": "ui:LoupeDiff/mainwindow.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupeDiff/settingsdockwidget.ui",
         "surface_id": "ui:LoupeDiff/settingsdockwidget.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
@@ -1410,51 +1410,51 @@
         "path": "LoupePageMaster/aboutdialog.ui",
         "surface_id": "ui:LoupePageMaster/aboutdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
         "surface_id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/croppagesdialog.ui",
         "surface_id": "ui:LoupePageMaster/croppagesdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/itempropertiesdialog.ui",
         "surface_id": "ui:LoupePageMaster/itempropertiesdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/mainwindow.ui",
         "surface_id": "ui:LoupePageMaster/mainwindow.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/pdfpageimportdialog.ui",
         "surface_id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       },
       {
         "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
         "surface_id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
         "status": "matched",
-        "shell_disposition": "CONSOLIDATE"
+        "shell_disposition": "RETIRE"
       }
     ]
   },
   "counts": {
     "rows": 70,
-    "delete": 7,
-    "headless_replace": 49,
+    "delete": 19,
+    "headless_replace": 38,
     "retain_non_product": 12,
-    "blocked": 2
+    "blocked": 1
   }
 }
