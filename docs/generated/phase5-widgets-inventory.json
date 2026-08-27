@@ -612,10 +612,17 @@
       "transitive_targets": [
         "LoupeLibCore"
       ],
-      "transitive_qt_modules": [],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
-        "Gui"
+        "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],

@@ -12,6 +12,7 @@ import argparse
 import json
 import re
 import shlex
+import subprocess
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Iterable
@@ -70,6 +71,42 @@ class EvidenceError(ValueError):
     """Raised when repository evidence cannot be represented safely."""
 
 
+def _normalize_newlines(text: str) -> str:
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _tracked_files(root: Path, *pathspecs: str) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", "--", *pathspecs],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        if pathspecs == ("CMakeLists.txt", "**/CMakeLists.txt"):
+            return sorted(path.relative_to(root).as_posix() for path in root.rglob("CMakeLists.txt"))
+        if pathspecs == ("*.ui", "**/*.ui"):
+            return sorted(path.relative_to(root).as_posix() for path in root.rglob("*.ui"))
+        raise EvidenceError(f"cannot enumerate tracked files for {pathspecs!r}") from None
+    return sorted(line for line in output.splitlines() if line)
+
+
+def _read_tracked_text(root: Path, relative: str) -> str:
+    path_posix = Path(relative).as_posix()
+    try:
+        data = subprocess.check_output(
+            ["git", "show", f"HEAD:{path_posix}"],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+        )
+        return _normalize_newlines(data.decode("utf-8"))
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return _normalize_newlines((root / relative).read_text(encoding="utf-8"))
+
+
 def _strip_comments(text: str) -> str:
     """Remove ordinary CMake line comments without changing line structure."""
 
@@ -124,9 +161,9 @@ def _tokens(body: str) -> list[str]:
 def _target_declarations(root: Path) -> tuple[dict[str, dict], dict[Path, list[str]]]:
     targets: dict[str, dict] = {}
     by_cmake: dict[Path, list[str]] = defaultdict(list)
-    for cmake in sorted(root.rglob("CMakeLists.txt")):
-        relative = cmake.relative_to(root).as_posix()
-        for command, body in _calls(cmake.read_text(encoding="utf-8"), TARGET_COMMANDS):
+    for relative in _tracked_files(root, "CMakeLists.txt", "**/CMakeLists.txt"):
+        cmake = root / relative
+        for command, body in _calls(_read_tracked_text(root, relative), TARGET_COMMANDS):
             args = _tokens(body)
             if not args or args[0].startswith("${"):
                 continue
@@ -145,8 +182,8 @@ def _target_declarations(root: Path) -> tuple[dict[str, dict], dict[Path, list[s
 
 def _target_links(root: Path) -> dict[str, list[str]]:
     links: dict[str, list[str]] = defaultdict(list)
-    for cmake in sorted(root.rglob("CMakeLists.txt")):
-        for _command, body in _calls(cmake.read_text(encoding="utf-8"), {"target_link_libraries"}):
+    for relative in _tracked_files(root, "CMakeLists.txt", "**/CMakeLists.txt"):
+        for _command, body in _calls(_read_tracked_text(root, relative), {"target_link_libraries"}):
             args = _tokens(body)
             if not args or args[0].startswith("${"):
                 continue
@@ -161,8 +198,8 @@ def _target_links(root: Path) -> dict[str, list[str]]:
 
 def _installed_targets(root: Path) -> set[str]:
     installed: set[str] = set()
-    for cmake in sorted(root.rglob("CMakeLists.txt")):
-        for _command, body in _calls(cmake.read_text(encoding="utf-8"), {"install"}):
+    for relative in _tracked_files(root, "CMakeLists.txt", "**/CMakeLists.txt"):
+        for _command, body in _calls(_read_tracked_text(root, relative), {"install"}):
             args = _tokens(body)
             if not args or args[0] != "TARGETS":
                 continue
@@ -322,8 +359,8 @@ def build_inventory(root: Path) -> dict:
             reverse_consumers[dependency].add(name)
 
     ui_forms: list[dict] = []
-    for ui in sorted(root.rglob("*.ui")):
-        relative = ui.relative_to(root).as_posix()
+    for relative in _tracked_files(root, "*.ui", "**/*.ui"):
+        ui = root / relative
         owner = _ui_owner(root, ui, by_cmake)
         plugin = None
         parts = relative.split("/")
@@ -477,7 +514,7 @@ SPECIAL_TARGETS = {
 
 def _load_json(root: Path, relative: str) -> dict:
     try:
-        value = json.loads((root / relative).read_text(encoding="utf-8"))
+        value = json.loads(_read_tracked_text(root, relative))
     except (OSError, json.JSONDecodeError) as exc:
         raise EvidenceError(f"cannot load {relative}: {exc}") from exc
     if not isinstance(value, dict):
@@ -667,8 +704,16 @@ def _serialized(value: dict) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False, sort_keys=False) + "\n"
 
 
-def _normalize_newlines(text: str) -> str:
-    return text.replace("\r\n", "\n").replace("\r", "\n")
+def _artifact_matches(path: Path, content: str) -> bool:
+    if not path.is_file():
+        return False
+    on_disk = _normalize_newlines(path.read_text(encoding="utf-8"))
+    if on_disk == content:
+        return True
+    try:
+        return json.loads(on_disk) == json.loads(content)
+    except json.JSONDecodeError:
+        return False
 
 
 def _check_or_write(root: Path, write: bool) -> list[str]:
@@ -682,7 +727,7 @@ def _check_or_write(root: Path, write: bool) -> list[str]:
         if write:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
-        elif not path.is_file() or _normalize_newlines(path.read_text(encoding="utf-8")) != content:
+        elif not _artifact_matches(path, content):
             mismatches.append(path.relative_to(root).as_posix())
     return mismatches
 
