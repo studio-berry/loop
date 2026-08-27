@@ -1,6 +1,8 @@
 * text=auto eol=crlf
 *.desktop text eol=lf
 *.sh text eol=lf
+docs/generated/phase5-widgets-inventory.json text eol=lf
+docs/generated/phase5-widgets-disposition.json text eol=lf
 *.pdf binary
 *.icc binary
 Fuzz/corpus/regression/** binary
