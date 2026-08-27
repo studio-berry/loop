@@ -117,10 +117,11 @@ class InlineJobSubmitter final : public pdfinteraction::IJobSubmitter
 public:
     QString submit(pdf::PDFJobSpec spec, pdf::PDFJobWork work) override
     {
-        Q_UNUSED(spec);
+        const QString jobId = spec.jobId.isEmpty() ? QStringLiteral("job-%1").arg(++m_sequence) : spec.jobId;
+        Q_UNUSED(jobId);
         pdf::PDFJobContext context(std::make_shared<pdf::PDFJobCancellationToken>(), pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
         work(context);
-        return spec.jobId;
+        return jobId;
     }
 
     bool cancel(const QString& jobId) override
@@ -128,6 +129,28 @@ public:
         Q_UNUSED(jobId);
         return false;
     }
+
+    pdf::PDFJobSnapshot snapshot(const QString& jobId) const override
+    {
+        pdf::PDFJobSnapshot result;
+        result.jobId = jobId;
+        result.status = pdf::PDFJobStatus::Succeeded;
+        return result;
+    }
+
+    void publishCurrentRevision(const QString& documentKey, const pdf::PDFRevisionIdentity& revision) override
+    {
+        publishedRevisions.insert(documentKey, revision);
+    }
+
+    void clearCurrentRevision(const QString& documentKey) override
+    {
+        publishedRevisions.remove(documentKey);
+    }
+
+private:
+    quint64 m_sequence = 0;
+    QHash<QString, pdf::PDFRevisionIdentity> publishedRevisions;
 };
 
 }   // namespace
