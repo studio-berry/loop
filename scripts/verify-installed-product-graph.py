@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Verify installed LoupeEditor links the Quick product graph only (W-01)."""
+"""Verify installed LoupeEditor is the Quick product graph and sole interactive install."""
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -10,6 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EDITOR_CMAKE = ROOT / "LoupeEditor" / "CMakeLists.txt"
+SECONDARY_EXECUTABLES = ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad")
+BUILD_DEFAULTS = ("VIEWER", "PAGEMASTER", "DIFF", "LAUNCHPAD")
 
 FORBIDDEN_EDITOR_LIBS = frozenset(
     {
@@ -48,6 +51,38 @@ def linked_libraries(link_block: str) -> set[str]:
     return {token.strip() for token in tokens if token.strip() and token not in {"PRIVATE", "PUBLIC", "INTERFACE"}}
 
 
+def validate_sole_interactive_product(root: Path) -> None:
+    product = json.loads((root / "docs" / "product-surface.json").read_text(encoding="utf-8"))
+    installed_apps = [
+        row
+        for row in product.get("surfaces", [])
+        if row.get("kind") == "application" and row.get("artifact_scope") == "install"
+    ]
+    keep = [row.get("artifact") for row in installed_apps if row.get("disposition") == "KEEP"]
+    if keep != ["LoupeEditor"]:
+        raise ContractError(f"installed KEEP applications must be only LoupeEditor, found {keep}")
+    cli = [row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY"]
+    if cli != ["PdfTool"]:
+        raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
+    for name in SECONDARY_EXECUTABLES:
+        cmake = (root / name / "CMakeLists.txt").read_text(encoding="utf-8")
+        if re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake):
+            raise ContractError(f"{name} still has an install() rule")
+    root_cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+    for option in BUILD_DEFAULTS:
+        needle = f"set(_LOUPE_BUILD_{option}_DEFAULT OFF)"
+        if needle not in root_cmake:
+            raise ContractError(f"missing {needle}")
+    packaging = product["packaging"]
+    for profile in ("developer", "loupe-release"):
+        apps = list(packaging["appx_applications"][profile])
+        if apps != ["LoupeEditor"]:
+            raise ContractError(f"{profile} AppX applications must be only LoupeEditor, found {apps}")
+        desktop = packaging["desktop_entries"][profile]
+        if any(name in entry for entry in desktop for name in SECONDARY_EXECUTABLES):
+            raise ContractError(f"{profile} desktop entries still name a secondary executable")
+
+
 def main() -> int:
     try:
         cmake_text = EDITOR_CMAKE.read_text(encoding="utf-8")
@@ -64,13 +99,15 @@ def main() -> int:
         if not re.search(r"install\s*\([^)]*\bLoupeEditor\b", cmake_text, re.DOTALL):
             raise ContractError("LoupeEditor must remain an installed product target")
 
-    except (ContractError, OSError) as exc:
+        validate_sole_interactive_product(ROOT)
+
+    except (ContractError, OSError, KeyError, json.JSONDecodeError) as exc:
         print(f"Installed product graph FAILED: {exc}", file=sys.stderr)
         return 1
 
     print(
-        "Installed product graph verified: LoupeEditor=Quick-only; "
-        "no legacy Widgets comparison target"
+        "Installed product graph verified: LoupeEditor=Quick-only sole interactive install; "
+        "PdfTool remains the installed CLI"
     )
     return 0
 

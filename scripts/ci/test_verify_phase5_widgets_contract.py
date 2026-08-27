@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import subprocess
 import sys
 from pathlib import Path
 import unittest
@@ -113,6 +114,15 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             target = next(row for row in self.inventory["targets"] if row["id"] == name)
             self.assertFalse(target["install_rule"], name)
             self.assertFalse(target["installed_in_profile"], name)
+
+    def test_loupe_editor_is_sole_installed_interactive_product(self):
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "verify-installed-product-graph.py")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
 
 if __name__ == "__main__":
