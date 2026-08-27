@@ -746,6 +746,7 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     target_include_directories(UnitTestsOperatorAcceptance PRIVATE
         ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight
         ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
     set_target_properties(UnitTestsOperatorAcceptance PROPERTIES
