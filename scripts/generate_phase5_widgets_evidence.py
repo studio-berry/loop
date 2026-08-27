@@ -641,6 +641,10 @@ def _serialized(value: dict) -> str:
     return json.dumps(value, indent=2, ensure_ascii=False, sort_keys=False) + "\n"
 
 
+def _normalize_newlines(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def _check_or_write(root: Path, write: bool) -> list[str]:
     inventory, disposition = generate(root)
     expected = {
@@ -652,7 +656,7 @@ def _check_or_write(root: Path, write: bool) -> list[str]:
         if write:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
-        elif not path.is_file() or path.read_text(encoding="utf-8") != content:
+        elif not path.is_file() or _normalize_newlines(path.read_text(encoding="utf-8")) != content:
             mismatches.append(path.relative_to(root).as_posix())
     return mismatches
 

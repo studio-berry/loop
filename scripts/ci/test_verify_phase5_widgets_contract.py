@@ -12,7 +12,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from generate_phase5_widgets_evidence import generate  # noqa: E402
+from generate_phase5_widgets_evidence import (  # noqa: E402
+    _check_or_write,
+    _normalize_newlines,
+    _serialized,
+    generate,
+)
 from verify_phase5_widgets_contract import validate_contract, validate_disposition  # noqa: E402
 
 
@@ -56,6 +61,12 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         disposition["rows"].append(copy.deepcopy(disposition["rows"][0]))
         errors = validate_disposition(self.inventory, disposition, ROOT)
         self.assertTrue(any("duplicate disposition identity" in error for error in errors))
+
+    def test_check_treats_crlf_checkout_as_current(self):
+        self.assertEqual(_normalize_newlines("a\r\nb\n"), "a\nb\n")
+        crlf = _serialized(self.inventory).replace("\n", "\r\n")
+        self.assertEqual(_normalize_newlines(crlf), _serialized(self.inventory))
+        self.assertEqual(_check_or_write(ROOT, write=False), [])
 
     def test_invalid_disposition_fails_closed(self):
         disposition = copy.deepcopy(self.disposition)
