@@ -131,6 +131,9 @@ Authoritative ledger: `docs/loupe-shell.json` → `legacy_surface_disposition`.
 | `RETIRE` | 0 | Session 04 Issue 14 deleted the former 14 forms |
 
 Verifier: `scripts/verify-loupe-shell-contract.ps1` (fail-closed inventory).
+Session 04 Issue 15 adds `scripts/verify-plugin-form-accounting.py`, wired into CI
+`source_integrity` and Linux agent-fast, to reject unledgered `.ui` files, stale
+CMake `uic` references, and retired install boundaries.
 
 ## Configure and package proof required in Phase 5
 

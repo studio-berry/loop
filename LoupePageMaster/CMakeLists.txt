@@ -44,13 +44,6 @@ add_executable(LoupePageMaster
     pageitemmodel.h
     selectoutlinetoregroupdialog.cpp
     selectoutlinetoregroupdialog.h
-    aboutdialog.ui
-    assembleoutputsettingsdialog.ui
-    croppagesdialog.ui
-    itempropertiesdialog.ui
-    mainwindow.ui
-    pdfpageimportdialog.ui
-    selectoutlinetoregroupdialog.ui
     resources.qrc
     icon.rc
     app.qrc
