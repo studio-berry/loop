@@ -16,9 +16,9 @@ Editor action inventory is recorded in [`loupe-shell-actions.json`](loupe-shell-
 `LoupeEditor` is the installed interactive Loupe shell on the P4-S7 navigable
 product root: a packaged `Loupe.Quick` `ApplicationWindow` that opens, closes,
 reopens, and navigates a PDF through the host-neutral Interaction/Canvas stack.
-The Widgets editor remains available as the non-installed `LoupeEditorWidgetsOracle`
-parity target until Phase 5. This is a navigable slice, not the Phase 4 operator
-loop or GUI exit gate.
+The former non-installed Widgets migration target has been retired after its
+parity assertions were moved into the Quick-native canvas contract suite. This
+is a navigable slice, not the Phase 4 operator loop or GUI exit gate.
 
 The repository may contain qualification-only Quick harnesses (`QuickShellSmoke`,
 `CanvasBenchmark`); they are not product UI.
@@ -152,9 +152,9 @@ become self-authoritative.
 
 Issue #178 selects Qt Quick Controls for the application shell. The installed
 `LoupeEditor` product root is now Qt Quick (`gui_status: quick-admitted` in
-`loupe-shell.json`). The non-installed `LoupeEditorWidgetsOracle` remains the
-Widgets migration oracle until Phase 5 deletes it per
-`docs/PHASE5_WIDGETS_DELETION_HANDOFF.md`.
+`loupe-shell.json`). The migration-only Widgets comparison target is retired;
+the preserved parity evidence and Quick-native replacement checks are recorded
+in `docs/evidence/phase5-widgets-parity-evidence.json`.
 
 ## Accessibility gate
 

@@ -26,7 +26,6 @@ REQUIRED_EDITOR_LIBS = frozenset(
         "Qt6::QuickControls2",
     }
 )
-ORACLE_TARGET = "LoupeEditorWidgetsOracle"
 
 
 class ContractError(ValueError):
@@ -62,14 +61,8 @@ def main() -> int:
         if missing:
             raise ContractError(f"LoupeEditor missing required Quick links: {', '.join(missing)}")
 
-        if re.search(rf"install\s*\([^)]*\b{ORACLE_TARGET}\b", cmake_text, re.DOTALL):
-            raise ContractError(f"{ORACLE_TARGET} must not be installed")
-
         if not re.search(r"install\s*\([^)]*\bLoupeEditor\b", cmake_text, re.DOTALL):
             raise ContractError("LoupeEditor must remain an installed product target")
-
-        if ORACLE_TARGET not in cmake_text:
-            raise ContractError(f"{ORACLE_TARGET} oracle target is missing from LoupeEditor/CMakeLists.txt")
 
     except (ContractError, OSError) as exc:
         print(f"Installed product graph FAILED: {exc}", file=sys.stderr)
@@ -77,7 +70,7 @@ def main() -> int:
 
     print(
         "Installed product graph verified: LoupeEditor=Quick-only; "
-        f"oracle={ORACLE_TARGET} non-installed"
+        "no legacy Widgets comparison target"
     )
     return 0
 

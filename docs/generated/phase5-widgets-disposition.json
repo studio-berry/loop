@@ -124,16 +124,6 @@
       "follow_up_issue": 193
     },
     {
-      "id": "target:LoupeEditorWidgetsOracle",
-      "kind": "oracle",
-      "target": "LoupeEditorWidgetsOracle",
-      "disposition": "DELETE",
-      "consumer": "Archived parity evidence and Quick-native tests",
-      "rationale": "The oracle is a non-installed migration comparison target, not a supported product surface.",
-      "testable_condition": "Delete only after parity assertions and SHA-attributed evidence are archived in Quick-native coverage.",
-      "source": "phase5-special-target-policy"
-    },
-    {
       "id": "target:LoupeLaunchPad",
       "kind": "application",
       "target": "LoupeLaunchPad",
@@ -1461,8 +1451,8 @@
     ]
   },
   "counts": {
-    "rows": 71,
-    "delete": 8,
+    "rows": 70,
+    "delete": 7,
     "headless_replace": 49,
     "retain_non_product": 12,
     "blocked": 2

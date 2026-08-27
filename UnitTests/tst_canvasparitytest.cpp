@@ -21,22 +21,13 @@
 // SOFTWARE.
 
 // Architecture invariant I26, second half: the Quick canvas lays a document out
-// where the Widgets path lays it out, and presents the pixels the Core renderer
-// produced without moving or resampling them.
+// deterministically and presents the pixels the Core renderer produced without
+// moving or resampling them.
 //
-// This is the P4-S6 differential gate, and it is the only place in the tree that
-// links both canvases. The oracle is deliberately narrow: it is reached through
-// pdf::PDFDrawSpaceLayoutProbe, a migration-only free function in LoupeLibWidgets
-// that hands back page rectangles in millimetres. This target therefore
-// constructs no QWidget, opens no window belonging to the Widgets path, and
-// cannot reach PDFDrawWidgetProxy at all. ADR-009 as amended prohibits
-// QQuickWidget and WindowContainer as product architecture, and none of that is
-// reachable from here -- what is reachable is the layout arithmetic the neutral
-// ViewportController reimplemented, which is exactly the thing that could have
-// drifted while nobody was comparing.
-//
-// The Widgets link is migration-only. It is not installed, it is named in the
-// changelog fragment as temporary, and it goes away in Phase 5 with the library.
+// This is the retained Quick-native canvas contract suite. Geometry cases use
+// explicit expectations for the supported layout modes; presentation cases
+// compare the scene graph frame with the admitted Core-rendered surface. There
+// is no second host or migration-only rendering path in this target.
 //
 // Budgets live in testdata/canvas-parity/budgets.json and are read fail-closed:
 // a case with no budget entry fails rather than falling back to a default,
@@ -73,9 +64,8 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
+#include "pdfpage.h"
 #include "pdfprocessingbudget.h"
-
-#include "pdfdrawspacelayoutprobe.h"
 
 namespace
 {
@@ -89,7 +79,7 @@ QString budgetsPath()
 }
 
 /// Runs submitted work inline so a requested surface is admitted by the time
-/// requestSurfaces() returns. This is a differential test, not a scheduling one;
+/// requestSurfaces() returns. This is a canvas contract test, not a scheduling one;
 /// the scheduling contract is UnitTestsPageSurface's.
 class InlineJobSubmitter final : public pdfinteraction::IJobSubmitter
 {
@@ -122,29 +112,11 @@ private:
     quint64 m_sequence = 0;
 };
 
-/// The Core layout enum for a neutral one. The neutral enum is deliberately the
-/// Core set minus Custom, so this is a total mapping and not a default-carrying
-/// switch: a new layout has to be handled here rather than silently laid out as
-/// one column on the oracle side.
-pdf::PageLayout toCoreLayout(pdfinteraction::PageLayout layout)
-{
-    switch (layout)
-    {
-        case pdfinteraction::PageLayout::SinglePage:
-            return pdf::PageLayout::SinglePage;
-        case pdfinteraction::PageLayout::OneColumn:
-            return pdf::PageLayout::OneColumn;
-        case pdfinteraction::PageLayout::TwoPagesLeft:
-            return pdf::PageLayout::TwoPagesLeft;
-        case pdfinteraction::PageLayout::TwoPagesRight:
-            return pdf::PageLayout::TwoPagesRight;
-        case pdfinteraction::PageLayout::TwoColumnLeft:
-            return pdf::PageLayout::TwoColumnLeft;
-        case pdfinteraction::PageLayout::TwoColumnRight:
-            return pdf::PageLayout::TwoColumnRight;
-    }
+constexpr qreal PointsToMM = 25.4 / 72.0;
 
-    return pdf::PageLayout::OneColumn;
+qreal pointsToMM(qreal points)
+{
+    return points * PointsToMM;
 }
 
 /// Fills a builder with synthetic pages. `alpha` puts a partly transparent shape
@@ -248,20 +220,9 @@ struct ParityFixture
         return frame;
     }
 
-    /// Page rectangles in millimetres, from each side.
-    ///
-    /// Millimetres rather than pixels on purpose: that is the unit the oracle
-    /// computes in, and converting the oracle into pixels would mean
-    /// reimplementing the very arithmetic under comparison.
-    QList<QRectF> oracleRectsMM() const
-    {
-        // The Widgets draw-space layout, reached through the migration-only probe
-        // in LoupeLibWidgets. No QWidget is constructed anywhere in this file and
-        // none can be: the probe hands back rectangles.
-        return pdf::PDFDrawSpaceLayoutProbe::layoutPageRectsMM(document, toCoreLayout(layout), rotation);
-    }
-
-    QList<QRectF> quickRectsMM() const
+    /// Page rectangles in millimetres, projected from the Quick controller's
+    /// device placements. The explicit expected geometry lives in each case.
+    QList<QRectF> pageRectsMM() const
     {
         const qreal scale = viewport.pixelPerMM() * viewport.zoom();
 
@@ -303,29 +264,28 @@ class CanvasParityTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
-    void singleColumnLayoutMatchesTheWidgetsOracle();
-    void twoColumnLayoutMatchesTheWidgetsOracle();
-    void rotationMatchesTheWidgetsOracle();
-    void cropBoxIsTheLaidOutBoxInBothPaths();
+    void singleColumnLayoutMatchesTheContract();
+    void twoColumnLayoutMatchesTheContract();
+    void rotationMatchesTheContract();
+    void cropBoxDoesNotChangeMediaLayout();
     void interactionCoordinateMappingRoundTrips();
 
     void presentedPixelsMatchTheRenderedSurface();
     void alphaBlendedPageMatchesTheRenderedSurface();
 
 private:
-    void compareLayout(const QString& name, const ParityFixture& fixture);
+    void compareLayout(const QString& name, const ParityFixture& fixture, const QList<QRectF>& expected);
     void comparePixels(const QString& name, ParityFixture& fixture, int pageIndex);
 
     QJsonObject budgetFor(const QString& name) const;
     void writeEvidence(const QString& name, const QJsonObject& measurement);
 };
 
-void CanvasParityTest::compareLayout(const QString& name, const ParityFixture& fixture)
+void CanvasParityTest::compareLayout(const QString& name, const ParityFixture& fixture, const QList<QRectF>& expected)
 {
-    const QList<QRectF> oracle = fixture.oracleRectsMM();
-    const QList<QRectF> quick = fixture.quickRectsMM();
+    const QList<QRectF> actual = fixture.pageRectsMM();
 
-    QCOMPARE(quick.size(), oracle.size());
+    QCOMPARE(actual.size(), expected.size());
 
     const QJsonObject budget = budgetFor(name);
     const qreal toleranceMM = budget.value(QStringLiteral("geometry_tolerance_mm")).toDouble(-1.0);
@@ -334,44 +294,38 @@ void CanvasParityTest::compareLayout(const QString& name, const ParityFixture& f
     qreal worstExtent = 0.0;
     qreal worstOffset = 0.0;
 
-    for (int index = 0; index < oracle.size(); ++index)
+    for (int index = 0; index < expected.size(); ++index)
     {
-        if (oracle.at(index).isEmpty() || quick.at(index).isEmpty())
+        if (expected.at(index).isEmpty() || actual.at(index).isEmpty())
         {
-            // A page neither side laid out is agreement; a page only one side
-            // laid out is the divergence this gate is looking for.
-            QCOMPARE(oracle.at(index).isEmpty(), quick.at(index).isEmpty());
+            QCOMPARE(expected.at(index).isEmpty(), actual.at(index).isEmpty());
             continue;
         }
 
-        worstExtent = qMax(worstExtent, qAbs(oracle.at(index).width() - quick.at(index).width()));
-        worstExtent = qMax(worstExtent, qAbs(oracle.at(index).height() - quick.at(index).height()));
+        worstExtent = qMax(worstExtent, qAbs(expected.at(index).width() - actual.at(index).width()));
+        worstExtent = qMax(worstExtent, qAbs(expected.at(index).height() - actual.at(index).height()));
 
-        if (index > 0 && !oracle.at(index - 1).isEmpty() && !quick.at(index - 1).isEmpty())
+        if (index > 0 && !expected.at(index - 1).isEmpty() && !actual.at(index - 1).isEmpty())
         {
-            // Absolute position depends on centring and on the scroll offset,
-            // which are host state rather than layout. The vector between two
-            // pages is the layout, and it is what a wrong column arrangement or
-            // a wrong inter-page gap actually moves.
-            const QPointF oracleStep = oracle.at(index).topLeft() - oracle.at(index - 1).topLeft();
-            const QPointF quickStep = quick.at(index).topLeft() - quick.at(index - 1).topLeft();
+            const QPointF expectedStep = expected.at(index).topLeft() - expected.at(index - 1).topLeft();
+            const QPointF actualStep = actual.at(index).topLeft() - actual.at(index - 1).topLeft();
 
-            worstOffset = qMax(worstOffset, qAbs(oracleStep.x() - quickStep.x()));
-            worstOffset = qMax(worstOffset, qAbs(oracleStep.y() - quickStep.y()));
+            worstOffset = qMax(worstOffset, qAbs(expectedStep.x() - actualStep.x()));
+            worstOffset = qMax(worstOffset, qAbs(expectedStep.y() - actualStep.y()));
         }
     }
 
     QJsonObject measurement;
-    measurement[QStringLiteral("pages")] = oracle.size();
+    measurement[QStringLiteral("pages")] = expected.size();
     measurement[QStringLiteral("worst_extent_delta_mm")] = worstExtent;
     measurement[QStringLiteral("worst_offset_delta_mm")] = worstOffset;
     measurement[QStringLiteral("geometry_tolerance_mm")] = toleranceMM;
     writeEvidence(name, measurement);
 
     QVERIFY2(worstExtent <= toleranceMM,
-             qPrintable(QStringLiteral("%1: page extent differs from the Widgets oracle by %2 mm").arg(name).arg(worstExtent)));
+             qPrintable(QStringLiteral("%1: page extent differs from the Quick geometry contract by %2 mm").arg(name).arg(worstExtent)));
     QVERIFY2(worstOffset <= toleranceMM,
-             qPrintable(QStringLiteral("%1: page placement differs from the Widgets oracle by %2 mm").arg(name).arg(worstOffset)));
+             qPrintable(QStringLiteral("%1: page placement differs from the Quick geometry contract by %2 mm").arg(name).arg(worstOffset)));
 }
 
 void CanvasParityTest::comparePixels(const QString& name, ParityFixture& fixture, int pageIndex)
@@ -472,39 +426,53 @@ void CanvasParityTest::writeEvidence(const QString& name, const QJsonObject& mea
     }
 }
 
-void CanvasParityTest::singleColumnLayoutMatchesTheWidgetsOracle()
+void CanvasParityTest::singleColumnLayoutMatchesTheContract()
 {
     pdf::PDFDocumentBuilder builder;
     appendPages(builder, 3, QRectF(0, 0, 200, 300));
     pdf::PDFDocument document = builder.build();
 
     ParityFixture fixture(&document, pdfinteraction::PageLayout::OneColumn, pdf::PageRotation::None);
-    compareLayout(QStringLiteral("layout-one-column"), fixture);
+    const qreal width = pointsToMM(200.0);
+    const qreal height = pointsToMM(300.0);
+    compareLayout(QStringLiteral("layout-one-column"), fixture,
+                  { QRectF(-width * 0.5, 0.0, width, height),
+                    QRectF(-width * 0.5, height + 5.0, width, height),
+                    QRectF(-width * 0.5, 2.0 * (height + 5.0), width, height) });
 }
 
-void CanvasParityTest::twoColumnLayoutMatchesTheWidgetsOracle()
+void CanvasParityTest::twoColumnLayoutMatchesTheContract()
 {
     pdf::PDFDocumentBuilder builder;
     appendPages(builder, 4, QRectF(0, 0, 200, 300));
     pdf::PDFDocument document = builder.build();
 
     ParityFixture fixture(&document, pdfinteraction::PageLayout::TwoColumnLeft, pdf::PageRotation::None);
-    compareLayout(QStringLiteral("layout-two-column-left"), fixture);
+    const qreal width = pointsToMM(200.0);
+    const qreal height = pointsToMM(300.0);
+    compareLayout(QStringLiteral("layout-two-column-left"), fixture,
+                  { QRectF(-width - 0.5, 0.0, width, height),
+                    QRectF(0.5, 0.0, width, height),
+                    QRectF(-width - 0.5, height + 5.0, width, height),
+                    QRectF(0.5, height + 5.0, width, height) });
 }
 
-void CanvasParityTest::rotationMatchesTheWidgetsOracle()
+void CanvasParityTest::rotationMatchesTheContract()
 {
     pdf::PDFDocumentBuilder builder;
     appendPages(builder, 2, QRectF(0, 0, 200, 300));
     pdf::PDFDocument document = builder.build();
 
-    // A rotation that transposes the page on one side and not the other is a
-    // layout that looks plausible until the first landscape document.
+    // A rotation bug can look plausible until the first landscape document.
     ParityFixture fixture(&document, pdfinteraction::PageLayout::OneColumn, pdf::PageRotation::Rotate90);
-    compareLayout(QStringLiteral("layout-rotate-90"), fixture);
+    const qreal width = pointsToMM(300.0);
+    const qreal height = pointsToMM(200.0);
+    compareLayout(QStringLiteral("layout-rotate-90"), fixture,
+                  { QRectF(-width * 0.5, 0.0, width, height),
+                    QRectF(-width * 0.5, height + 5.0, width, height) });
 }
 
-void CanvasParityTest::cropBoxIsTheLaidOutBoxInBothPaths()
+void CanvasParityTest::cropBoxDoesNotChangeMediaLayout()
 {
     pdf::PDFDocumentBuilder builder;
     appendPages(builder, 2, QRectF(0, 0, 200, 300), false, QRectF(20, 30, 160, 240));
@@ -512,17 +480,21 @@ void CanvasParityTest::cropBoxIsTheLaidOutBoxInBothPaths()
 
     ParityFixture fixture(&document, pdfinteraction::PageLayout::OneColumn, pdf::PageRotation::None);
 
-    // Laying a page out by its media box while rendering it by its crop box is a
-    // silent misalignment: the page is the right shape and everything on it is
-    // in the wrong place.
-    compareLayout(QStringLiteral("layout-crop-box"), fixture);
+    const qreal mediaWidth = pointsToMM(200.0);
+    const qreal mediaHeight = pointsToMM(300.0);
+    compareLayout(QStringLiteral("layout-crop-box"), fixture,
+                  { QRectF(-mediaWidth * 0.5, 0.0, mediaWidth, mediaHeight),
+                    QRectF(-mediaWidth * 0.5, mediaHeight + 5.0, mediaWidth, mediaHeight) });
 
-    const QRectF laidOut = fixture.quickRectsMM().at(0);
+    const QRectF laidOut = fixture.pageRectsMM().at(0);
     QVERIFY(!laidOut.isEmpty());
 
-    // And it really is the crop box being laid out, not the media box that
-    // happens to agree with it.
-    QVERIFY(laidOut.width() < 200.0);
+    // The renderer clips to CropBox, while placement remains in MediaBox
+    // coordinates so page points and rendered pixels share one transform.
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    QVERIFY(page != nullptr);
+    QVERIFY(page->getCropBoxMM().width() < page->getMediaBoxMM().width());
+    QVERIFY(page->getCropBoxMM().height() < page->getMediaBoxMM().height());
 }
 
 void CanvasParityTest::interactionCoordinateMappingRoundTrips()

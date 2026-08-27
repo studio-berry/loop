@@ -938,7 +938,7 @@ void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
     QVERIFY(sendMouseMove(m_item.get(), inside, Qt::NoButton));
 
     // A hover through the admitted host must rebuild overlays only. Issue #143 and
-    // gh-143 overlayOnlyUpdatePreservesPageSurfaceCache are the oracle here.
+    // gh-143 overlayOnlyUpdatePreservesPageSurfaceCache are the reference here.
     QVERIFY(overlaySpy.size() >= 1);
     QCOMPARE(m_submitter->submittedSpecs.size(), submissionsBefore);
     QCOMPARE(m_viewport->requestGeneration(), generationBefore);

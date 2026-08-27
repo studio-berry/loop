@@ -12,7 +12,6 @@ import argparse
 import json
 import re
 import shlex
-import subprocess
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Iterable
@@ -26,7 +25,6 @@ PROFILE_OPTIONS = {
     "LOUPE_LOUPE_DISTRIBUTION": True,
     "LOUPE_BUILD_ONLY_CORE_LIBRARY": False,
     "LOUPE_BUILD_QUICK_CANVAS": True,
-    "LOUPE_BUILD_EDITOR_WIDGETS_ORACLE": True,
     "LOUPE_BUILD_TESTS": False,
     "LOUPE_BUILD_FUZZERS": False,
     "LOUPE_BUILD_QUICK_SHELL_SMOKE": False,
@@ -208,8 +206,6 @@ def _profile_for_target(name: str, cmake: str) -> tuple[bool, str]:
     for directory, option in option_by_directory.items():
         if normalized.startswith(directory):
             return PROFILE_OPTIONS[option], f"{option}={'ON' if PROFILE_OPTIONS[option] else 'OFF'} in the loupe-release profile"
-    if name == "LoupeEditorWidgetsOracle":
-        return True, "LOUPE_BUILD_QUICK_CANVAS=ON and LOUPE_BUILD_EDITOR_WIDGETS_ORACLE=ON"
     if normalized.startswith("LoupeEditor/"):
         return True, "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY"
     if normalized.startswith("LoupeLibQuick/"):
@@ -263,8 +259,6 @@ def _surface_kind(name: str, cmake: str) -> str:
     normalized = cmake.replace("\\", "/")
     if normalized.startswith(("UnitTests/", "Fuzz/")):
         return "test"
-    if name == "LoupeEditorWidgetsOracle":
-        return "oracle"
     if normalized.startswith("LoupeEditorPlugins/"):
         return "plugin"
     if name.endswith("Plugin"):
@@ -471,12 +465,6 @@ SPECIAL_TARGETS = {
         "consumer": "LoupeEditor Quick shell and PdfTool",
         "rationale": "Widgets-bound editor/viewer chrome is replaced by the Quick shell and headless capability owners.",
         "testable_condition": "Delete only after pdfeditormainwindow.ui and all remaining Widgets-bound GUI consumers have approved Quick/headless replacements.",
-    },
-    "LoupeEditorWidgetsOracle": {
-        "disposition": "DELETE",
-        "consumer": "Archived parity evidence and Quick-native tests",
-        "rationale": "The oracle is a non-installed migration comparison target, not a supported product surface.",
-        "testable_condition": "Delete only after parity assertions and SHA-attributed evidence are archived in Quick-native coverage.",
     },
     "CanvasBenchmark": {
         "disposition": "RETAIN-NON-PRODUCT",

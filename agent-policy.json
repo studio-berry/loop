@@ -150,10 +150,9 @@
       "paths": [
         "LoupeLibWidgets/**",
         "LoupeLibGui/**",
-        "LoupeEditor/widgets_oracle_main.cpp",
         "LoupeViewer/**"
       ],
-      "targets": ["LoupeEditorWidgetsOracle", "LoupeViewer"],
+      "targets": ["LoupeViewer"],
       "tests": ["UnitTestsThumbnailsRenderer", "UnitTestsAccessibility"]
     },
     "plugins": {

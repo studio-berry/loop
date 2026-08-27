@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Budgets for the P4-S6 canvas parity gate (UnitTestsCanvasParity). Read fail-closed: a case with no entry here fails rather than falling back to a default. Observed measurements are written next to the test binary as canvas-parity-<case>.json and are evidence, not a baseline -- nothing in this gate can be made to pass by regenerating a golden.",
+  "description": "Budgets for the Quick-native canvas contract gate (UnitTestsCanvasParity). Read fail-closed: a case with no entry here fails rather than falling back to a default. Observed measurements are written next to the test binary as canvas-parity-<case>.json and are evidence, not a baseline -- nothing in this gate can be made to pass by regenerating a golden.",
   "geometry_units": "millimetres, as computed by PDFDrawSpaceController",
   "pixel_units": "per-channel 0-255 delta between the grabbed frame and the surface the Core renderer produced, alpha included",
   "cases": {

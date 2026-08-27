@@ -8,7 +8,6 @@
       "LOUPE_LOUPE_DISTRIBUTION": true,
       "LOUPE_BUILD_ONLY_CORE_LIBRARY": false,
       "LOUPE_BUILD_QUICK_CANVAS": true,
-      "LOUPE_BUILD_EDITOR_WIDGETS_ORACLE": true,
       "LOUPE_BUILD_TESTS": false,
       "LOUPE_BUILD_FUZZERS": false,
       "LOUPE_BUILD_QUICK_SHELL_SMOKE": false,
@@ -35,7 +34,6 @@
       "CodeGenerator/CMakeLists.txt",
       "JBIG2_Viewer/CMakeLists.txt",
       "LoupeDiff/CMakeLists.txt",
-      "LoupeEditor/CMakeLists.txt",
       "LoupeEditor/CMakeLists.txt",
       "LoupeEditor/CMakeLists.txt",
       "LoupeEditorPlugins/ActionListPlugin/CMakeLists.txt",
@@ -593,64 +591,6 @@
       ]
     },
     {
-      "id": "LoupeEditorWidgetsOracle",
-      "kind": "executable",
-      "cmake": "LoupeEditor/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON and LOUPE_BUILD_EDITOR_WIDGETS_ORACLE=ON",
-      "install_rule": false,
-      "installed_in_profile": false,
-      "build_only_in_profile": true,
-      "direct_links": [
-        "LoupeLibCore",
-        "LoupeLibGui",
-        "LoupeLibWidgets",
-        "Qt6::Core",
-        "Qt6::Gui",
-        "Qt6::Widgets"
-      ],
-      "direct_qt_modules": [
-        "Core",
-        "Gui",
-        "Widgets"
-      ],
-      "transitive_targets": [
-        "LoupeLibCore",
-        "LoupeLibGui",
-        "LoupeLibWidgets"
-      ],
-      "transitive_qt_modules": [],
-      "qt_modules": [
-        "Core",
-        "Gui",
-        "Widgets"
-      ],
-      "widgets_linkage": "direct",
-      "widgets_paths": [
-        [
-          "LoupeEditorWidgetsOracle",
-          "LoupeLibGui",
-          "LoupeLibWidgets",
-          "Qt6::Widgets"
-        ],
-        [
-          "LoupeEditorWidgetsOracle",
-          "LoupeLibGui",
-          "Qt6::Widgets"
-        ],
-        [
-          "LoupeEditorWidgetsOracle",
-          "LoupeLibWidgets",
-          "Qt6::Widgets"
-        ],
-        [
-          "LoupeEditorWidgetsOracle",
-          "Qt6::Widgets"
-        ]
-      ],
-      "consumers": []
-    },
-    {
       "id": "LoupeGenerateFixtures",
       "kind": "executable",
       "cmake": "loupe-preflight/tools/CMakeLists.txt",
@@ -786,7 +726,6 @@
         "LoupeDiff",
         "LoupeEditor",
         "LoupeEditorQuick",
-        "LoupeEditorWidgetsOracle",
         "LoupeGenerateFixtures",
         "LoupeLaunchPad",
         "LoupeLibGui",
@@ -920,7 +859,6 @@
       ],
       "consumers": [
         "ActionListPlugin",
-        "LoupeEditorWidgetsOracle",
         "LoupeViewer",
         "UnitTestsRecovery",
         "UnitTestsUndoRedoManager"
@@ -1079,7 +1017,6 @@
         "DimensionsPlugin",
         "EditorPlugin",
         "LoupeDiff",
-        "LoupeEditorWidgetsOracle",
         "LoupeLaunchPad",
         "LoupeLibGui",
         "LoupePageMaster",
@@ -4178,14 +4115,6 @@
       "cmake": "LoupeDiff/CMakeLists.txt"
     },
     {
-      "target": "LoupeEditorWidgetsOracle",
-      "kind": "executable",
-      "profile_enabled": true,
-      "installed_in_profile": false,
-      "widgets_linkage": "direct",
-      "cmake": "LoupeEditor/CMakeLists.txt"
-    },
-    {
       "target": "LoupeLaunchPad",
       "kind": "executable",
       "profile_enabled": true,
@@ -4718,16 +4647,6 @@
       "consumers": []
     },
     {
-      "id": "target:LoupeEditorWidgetsOracle",
-      "kind": "oracle",
-      "target": "LoupeEditorWidgetsOracle",
-      "cmake": "LoupeEditor/CMakeLists.txt",
-      "profile_enabled": true,
-      "installed_in_profile": false,
-      "widgets_linkage": "direct",
-      "consumers": []
-    },
-    {
       "id": "target:LoupeLaunchPad",
       "kind": "application",
       "target": "LoupeLaunchPad",
@@ -4747,7 +4666,6 @@
       "widgets_linkage": "direct",
       "consumers": [
         "ActionListPlugin",
-        "LoupeEditorWidgetsOracle",
         "LoupeViewer",
         "UnitTestsRecovery",
         "UnitTestsUndoRedoManager"
@@ -4767,7 +4685,6 @@
         "DimensionsPlugin",
         "EditorPlugin",
         "LoupeDiff",
-        "LoupeEditorWidgetsOracle",
         "LoupeLaunchPad",
         "LoupeLibGui",
         "LoupePageMaster",
@@ -5523,11 +5440,11 @@
     }
   ],
   "counts": {
-    "targets": 90,
+    "targets": 89,
     "installed_in_profile": 21,
-    "build_only_in_profile": 6,
-    "widgets_surfaces": 23,
-    "legacy_executables": 9,
+    "build_only_in_profile": 5,
+    "widgets_surfaces": 22,
+    "legacy_executables": 8,
     "plugin_ui_groups": 12,
     "ui_forms": 48
   }

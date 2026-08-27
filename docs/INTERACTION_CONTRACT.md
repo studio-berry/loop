@@ -37,8 +37,8 @@ it through P4-S2's `CommandCatalog`, which stays the only mutation path.
 
 `QMouseEvent`, `QWheelEvent` and `QKeyEvent` do not cross the seam. Three value types do,
 each carrying an `InputStamp` — a host-supplied monotonic nanosecond reading plus a sequence
-ordinal. Two consequences follow, and both are the point: a Widgets oracle, a Quick canvas
-and a test drive identical code, and a recorded session replays with its original spacing,
+ordinal. Two consequences follow, and both are the point: the Quick canvas and its tests
+drive identical code, and a recorded session replays with its original spacing,
 which a `QEvent` cannot.
 
 `KeyIntent` carries a key code and no text. Key text can be document content being typed, and

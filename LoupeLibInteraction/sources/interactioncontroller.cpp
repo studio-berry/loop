@@ -277,9 +277,7 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
         const QPoint delta = intent.positionPx - m_panAnchorPx;
         m_panAnchorPx = intent.positionPx;
 
-        // The content follows the pointer -- the same sign PDFDrawWidget's
-        // Translate operation uses, so the Quick shell and the Widgets oracle pan
-        // in the same direction. Panning deliberately does not advance the
+        // The content follows the pointer. Panning deliberately does not advance the
         // viewport's request generation: cancelling every in-flight render on
         // each pointer delta is exactly what issue #142 forbids.
         if (!delta.isNull() && !m_viewport->scrollByPixels(delta).isNull())

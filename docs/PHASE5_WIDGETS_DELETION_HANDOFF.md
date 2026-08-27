@@ -30,28 +30,42 @@ Consumer-first sequence for later sessions:
    according to their explicit disposition and testable condition.
 2. Preserve the non-product developer/qualification rows and resolve the two
    blocked product decisions.
-3. Archive Widgets-oracle parity evidence before removing the oracle.
+3. The former comparison target is retired only after parity evidence is archived.
 4. Remove `LoupeLibGui` and `LoupeLibWidgets` only after the inventory proves
    that no installed consumer remains and the replacement boundaries are green.
 
 The shell/product ledgers remain the policy inputs; the generated artifacts are
 the reconciled evidence and do not replace those authorities.
 
+## Session 02 parity retirement
+
+Session 02 is complete on branch `cdx/retire-widgets-oracle` after Session 01's
+accepted output `fcabced047ee490e09fbd671939b3deecc1edba5`. The parity claim map,
+explicit geometry measurements, pixel budgets, and evidence limitations are
+archived in `docs/evidence/phase5-widgets-parity-evidence.json`.
+
+`UnitTestsCanvasParity` now has only Quick-native dependencies. It retains
+explicit layout, interaction, and Core-surface presentation assertions, while
+the former non-installed comparison target, its layout probe, and its exclusive
+build wiring have been removed. The installed-product verifier now proves the
+Quick editor boundary without requiring a retired target.
+
 Phase 4 closes with an installed Qt Quick `LoupeEditor` product shell. Phase 5 owns
-mechanical Widgets removal from the maintained graph. This document lists remaining
-Widgets residue, oracle targets, and deletion gates so Phase 5 is deletion and
-boundary proof rather than unfinished product migration.
+mechanical Widgets removal from the maintained graph. This document lists
+remaining Widgets residue and deletion gates so Phase 5 is deletion and boundary
+proof rather than unfinished product migration.
 
 ## Installed product boundary (Phase 4 exit)
 
 | Target | Phase 4 state | Phase 5 action |
 | --- | --- | --- |
 | `LoupeEditor` | Installed Quick Controls 2 root via `LoupeEditorQuick` | Keep; prove no Widgets link regression |
-| `LoupeEditorWidgetsOracle` | Built, **not installed** migration oracle | Delete after parity evidence archived |
 | `LoupeLibQuick` | Installed with product | Keep |
 | `LoupeLibInteraction` | STATIC, non-installed seam | Keep |
+| `UnitTestsCanvasParity` | Non-installed Quick-native contract suite | Keep; run geometry, interaction, and presentation checks |
 
-Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperatorLoop`.
+Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperatorLoop`;
+`docs/evidence/phase5-widgets-parity-evidence.json`.
 
 ## Libraries to remove from the maintained product graph
 

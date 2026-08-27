@@ -214,38 +214,26 @@ not been measured is `available: false`, never `0`.
 This is canvas evidence and it stays separate from PdfTool's benchmark evidence, which
 measures a different thing on a different path.
 
-## Parity against the Widgets oracle
+## Retained Quick-native canvas checks
 
-`UnitTestsCanvasParity` is the P4-S6 differential gate and the only target in the tree that
-links both canvases. It compares, for the same document, revision, renderer configuration and
-page box:
+`UnitTestsCanvasParity` is retained as a Quick-native contract suite. It has no
+Widgets link and no second host implementation. Its geometry cases assert the
+explicit supported layout contract for one-column, two-column, rotation, and
+media/crop-box behavior; its interaction case checks viewport/page round trips;
+and its pixel cases compare the grabbed frame with the admitted Core-rendered
+surface. The geometry and pixel budgets remain fail-closed in
+`UnitTests/testdata/canvas-parity/budgets.json`.
 
-- **layout**, against the Widgets draw-space controller — page extents and the vector between
-  page origins, in millimetres, which is the unit the oracle computes in. Absolute position
-  depends on centring and scroll offset, which are host state rather than layout;
-- **pixels**, against the surface the Core renderer produced — the grabbed frame cropped to
-  the placed page rect, inset by one pixel so the antialiased page edge is not measured.
+The SHA-attributed migration evidence and claim-to-test map are archived in
+`docs/evidence/phase5-widgets-parity-evidence.json`. The former migration-only
+comparison target and its layout probe were removed after this replacement
+coverage was recorded. Runtime output remains an observation written beside the
+test binary; it is not a regenerable golden or a release qualification claim.
 
-The oracle is narrow on purpose. It is reached through `pdf::PDFDrawSpaceLayoutProbe`, a
-migration-only free function in `LoupeLibWidgets` that constructs a `PDFDrawSpaceController`,
-asks it for page rectangles and destroys it. The probe exists because
-`PDFDrawSpaceController` is declared in a public header but is not exported, so a test outside
-that library cannot reach it on Windows; exporting one value-returning function is a smaller
-change than exporting the controller, and it means no upstream-derived source is modified at
-all. The parity target therefore constructs no `QWidget` and cannot reach
-`PDFDrawWidgetProxy`, `QQuickWidget` or `WindowContainer`; ADR-009's prohibition is intact,
-and `UnitTestsQuickCanvas` remains Widgets-free and remains what pins I25. Both the probe and
-the link are migration-only, and Phase 5 deletes them with the library.
-
-Budgets live in `UnitTests/testdata/canvas-parity/budgets.json` and are read fail-closed: a
-case with no entry fails rather than falling back to a default. Observed measurements are
-written next to the test binary as evidence, not as a baseline — there is no golden to
-regenerate, so the gate cannot be made to pass by refreshing it.
-
-The gate runs on the software backend under an offscreen platform, which is what makes it
-deterministic on a runner with no GPU. ADR-010 is right that offscreen is not by itself
-scene-graph evidence; native and both-OS evidence still comes from the smoke and benchmark
-runs, and P4-S6 does not close that gate.
+The suite runs on the software backend under an offscreen platform for
+deterministic pull-request coverage. Native and both-OS evidence still comes
+from the smoke and benchmark runs, and this contract does not close those later
+gates.
 
 ## Accessibility and design tokens
 
