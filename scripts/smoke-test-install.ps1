@@ -95,7 +95,8 @@ function Test-ForbiddenPayload {
     $rules = @(
         @{ Label = "Ghostscript"; Patterns = @("gswin*.exe", "gsdll*.dll", "gs.exe") },
         @{ Label = "Java runtime"; Patterns = @("java.exe", "javaw.exe", "jvm.dll", "*.jar") },
-        @{ Label = "Python runtime"; Patterns = @("python*.exe", "python3*.dll", "*.whl") }
+        @{ Label = "Python runtime"; Patterns = @("python*.exe", "python3*.dll", "*.whl") },
+        @{ Label = "Qt6Widgets"; Patterns = @("Qt6Widgets.dll", "Qt6Widgets*.dll") }
     )
 
     # The installer lays files down in more than one place: binaries under
@@ -145,7 +146,7 @@ function Test-ForbiddenPayload {
         throw $message
     }
 
-    Write-Host "OK: no Ghostscript / JRE / Python payload in the default bundle (scanned: $($scanned -join ', '))"
+    Write-Host "OK: no Ghostscript / JRE / Python / Qt6Widgets payload in the default bundle (scanned: $($scanned -join ', '))"
 }
 
 $pluginsDir = Join-Path $InstallDir "pdfplugins"

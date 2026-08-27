@@ -215,6 +215,11 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
 
     for (const InteractionTarget& guide : m_guides)
     {
+        if (m_denyExtraGraphics)
+        {
+            continue;
+        }
+
         if (!isVisiblePage(guide.pageIndex))
         {
             continue;
@@ -226,6 +231,11 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
 
     for (const InteractionTarget& finding : m_findings)
     {
+        if (m_denyExtraGraphics)
+        {
+            continue;
+        }
+
         if (!isVisiblePage(finding.pageIndex) || m_hiddenFindingIds.contains(finding.id))
         {
             continue;
@@ -242,26 +252,31 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     }
 
     const InteractionTarget& hovered = state.hovered();
-    if (hovered.isValid() && isVisiblePage(hovered.pageIndex))
+    if (!m_denyExtraGraphics && hovered.isValid() && isVisiblePage(hovered.pageIndex))
     {
         emitPrimitive(hovered, hovered.id + QStringLiteral("#hover"), hovered.pageBounds, OverlayLayer::Hover, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
     }
 
     const InteractionTarget& selected = state.selected();
-    if (selected.isValid() && isVisiblePage(selected.pageIndex))
+    if (!m_denyExtraGraphics && selected.isValid() && isVisiblePage(selected.pageIndex))
     {
         emitPrimitive(selected, selected.id + QStringLiteral("#selection"), selected.pageBounds, OverlayLayer::Selection, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
     }
 
     for (const InteractionTarget& handle : m_handles)
     {
+        if (m_denyExtraGraphics)
+        {
+            continue;
+        }
+
         if (isVisiblePage(handle.pageIndex))
         {
             emitPrimitive(handle, handle.id, handle.pageBounds, OverlayLayer::DragHandles, OverlayPrimitiveKind::Handle, OverlaySeverity::None);
         }
     }
 
-    if (state.drag().has_value())
+    if (!m_denyExtraGraphics && state.drag().has_value())
     {
         const DragSession& drag = *state.drag();
         if (drag.exceededThreshold && isVisiblePage(drag.target.pageIndex))

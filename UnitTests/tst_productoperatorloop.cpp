@@ -10,6 +10,9 @@
 
 #include <QtTest>
 
+#include <QCoreApplication>
+#include <QFileInfo>
+
 using pdfinteraction::InspectorModel;
 using pdfinteraction::PreflightController;
 using pdfinteraction::PreviewStateModel;
@@ -39,6 +42,7 @@ class ProductOperatorLoopTest final : public QObject
 
 private slots:
     void openDetectPinpointInspectUnderstandState();
+    void preflightPinpointProducesOverlayMarkers();
 };
 
 void ProductOperatorLoopTest::openDetectPinpointInspectUnderstandState()
@@ -84,6 +88,35 @@ void ProductOperatorLoopTest::openDetectPinpointInspectUnderstandState()
     QVERIFY(!host.previewSummary().isEmpty());
     QVERIFY(!host.inspectorTitle().isEmpty());
     QCOMPARE(host.currentPage(), 0);
+}
+
+void ProductOperatorLoopTest::preflightPinpointProducesOverlayMarkers()
+{
+    const QString pdfPath = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY2(QFileInfo::exists(pdfPath), pdfPath.toUtf8().constData());
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(pdfPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
+
+    auto* preflight = qobject_cast<PreflightController*>(host.preflight());
+    QVERIFY(preflight);
+    const QString documentRevision = preflight->documentRevision();
+    preflight->beginRun(preflight->documentKey(), documentRevision, QStringLiteral("profile"), QStringLiteral("job-overlay"));
+    const pdf::PreflightFinding finding = makeFinding();
+    pdf::PreflightResult result;
+    result.errors = { finding };
+    QVERIFY(preflight->acceptResult(QStringLiteral("job-overlay"), documentRevision, result));
+
+    const QString findingId = finding.stableId();
+    host.selectFinding(findingId);
+    QCoreApplication::processEvents();
+
+    const QVector<pdfinteraction::FindingOverlay> overlays = preflight->overlaysForPage(1);
+    QCOMPARE(overlays.size(), 1);
+    QCOMPARE(overlays.constFirst().findingId, findingId);
+    QCOMPARE(preflight->findingsModel()->selectedFindingId(), findingId);
 }
 
 QTEST_MAIN(ProductOperatorLoopTest)

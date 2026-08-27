@@ -412,6 +412,7 @@
     "UnitTestsP4S9Interaction",
     "UnitTestsPageMasterExport",
     "UnitTestsPageSurface",
+    "UnitTestsPageSurfaceBudget",
     "UnitTestsPdfToolContract",
     "UnitTestsPluginAbi",
     "UnitTestsPreflightChecks",

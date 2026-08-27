@@ -90,6 +90,10 @@ public:
     /// touches the document (issue #143 AC4).
     void setHiddenFindingIds(QSet<QString> hiddenIds);
 
+    /// When true, suppress tool/findings overlays (PDFRenderer::DenyExtraGraphics parity).
+    void setDenyExtraGraphics(bool deny) noexcept { m_denyExtraGraphics = deny; }
+    bool denyExtraGraphics() const noexcept { return m_denyExtraGraphics; }
+
     /// The finding that currently has keyboard focus, drawn with the focus ring.
     void setFocusedId(QString focusedId);
 
@@ -114,6 +118,7 @@ private:
     QHash<QString, OverlaySeverity> m_severities;
     QSet<QString> m_hiddenFindingIds;
     QString m_focusedId;
+    bool m_denyExtraGraphics = false;
 };
 
 }   // namespace pdfinteraction

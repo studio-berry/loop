@@ -140,6 +140,7 @@ private Q_SLOTS:
     void hiddenAndFocusedMarkersAreStateNotMutation();
     void highMarkerCountStaysBounded();
     void invalidTokenYieldsAnEmptyFrame();
+    void denyExtraGraphicsSuppressesOverlays();
 
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
@@ -378,6 +379,20 @@ void OverlayFrameTest::highMarkerCountStaysBounded()
     QCOMPARE(frame.primitives.size(), 32);
     QCOMPARE(frame.droppedPrimitives, 5000 - 32);
     QVERIFY(frame.isOrdered());
+}
+
+void OverlayFrameTest::denyExtraGraphicsSuppressesOverlays()
+{
+    m_overlays->setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
+    m_overlays->setGuides({ makeTarget(pdfinteraction::InteractionTargetKind::Guide, QStringLiteral("guide-a"), QRectF(5.0, 5.0, 90.0, 90.0)) });
+    m_overlays->setDenyExtraGraphics(true);
+
+    const pdfinteraction::OverlayFrame suppressed = m_overlays->build(m_state, makeToken());
+    QVERIFY(suppressed.primitives.isEmpty());
+
+    m_overlays->setDenyExtraGraphics(false);
+    const pdfinteraction::OverlayFrame restored = m_overlays->build(m_state, makeToken());
+    QVERIFY(!restored.primitives.isEmpty());
 }
 
 void OverlayFrameTest::invalidTokenYieldsAnEmptyFrame()

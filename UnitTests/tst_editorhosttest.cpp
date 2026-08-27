@@ -31,6 +31,11 @@
 #include "documentviewsession.h"
 #include "editorhost.h"
 
+#include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
+
+#include <QTemporaryDir>
+
 class EditorHostTest : public QObject
 {
     Q_OBJECT
@@ -40,6 +45,7 @@ private slots:
     void exposesCatalogDescriptorsWithoutMutating();
     void navigationCommandsStayDisabledUntilOpen();
     void sessionTeardownDrainsWorkersBeforeAdapters();
+    void openLargeDocument();
 };
 
 void EditorHostTest::startsWithNoDocument()
@@ -105,6 +111,35 @@ void EditorHostTest::sessionTeardownDrainsWorkersBeforeAdapters()
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     session.reset();
     QVERIFY(adapterReached.load(std::memory_order_acquire));
+}
+
+void EditorHostTest::openLargeDocument()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    constexpr int pageCount = 256;
+    for (int page = 0; page < pageCount; ++page)
+    {
+        builder.appendPage(QRectF(0, 0, 612, 792));
+    }
+
+    const QString path = directory.filePath(QStringLiteral("large.pdf"));
+    {
+        const pdf::PDFDocumentPointer document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, document.data(), true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 60000);
+    QCOMPARE(host.pageCount(), pageCount);
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
+    QVERIFY(host.isCommandEnabled(QStringLiteral("actionGoToDocumentEnd")));
+    QVERIFY(host.invokeCommand(QStringLiteral("actionGoToDocumentEnd")) != 0);
+    QTRY_COMPARE_WITH_TIMEOUT(host.currentPage(), pageCount - 1, 10000);
 }
 
 QTEST_GUILESS_MAIN(EditorHostTest)
