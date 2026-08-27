@@ -401,7 +401,7 @@
       "consumer": "developer/CLI compatibility boundary",
       "rationale": "AudioBook plugin is STOP-SHIPPING.",
       "disposition": "DELETE",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui.",
+      "testable_condition": "Delete this form with AudioBookPlugin once install and packaging references are gone; no replacement surface.",
       "source_disposition": "RETIRE",
       "source": "docs/loupe-shell.json:legacy_surface_disposition",
       "replacement_target": null

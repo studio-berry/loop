@@ -1,4 +1,4 @@
 Category: changed
 Audience: developers, reviewers, and release engineers
 Breaking-Change: no
-Summary: Remove AudioBookPlugin and OcrPlugin from the loupe-release install graph, refresh Phase 5 plugin disposition evidence, and prove the retired plugins stay build-only while remaining plugin policies stay explicit in the shell and product ledgers.
+Summary: Execute all 12 plugin surface disposition policies for Session 04 Issue 13: retire STOP-SHIPPING plugins from the install graph, verify ABSORB/ADVANCED/BLOCKED groups through `scripts/verify-plugin-surface-policies.py`, and refresh shell deletion metadata for retired plugin UI.

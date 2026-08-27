@@ -93,13 +93,11 @@ See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are a
 ## Plugin directories (12)
 
 Session 04 Issue 13 removed `AudioBookPlugin` and `OcrPlugin` from the install
-graph. They remain optional developer build targets (`LOUPE_PLUGIN_*` defaults
-keep AudioBook/OCR off in the loupe-release profile) until a later session deletes
-sources and `.ui` forms.
-
-All plugin policies in `docs/loupe-shell.json` include `deletion_condition` metadata.
-Remaining Widgets plugin binaries may stay installed until Fix/Inspect/Production Quick
-surfaces absorb the capability or the plugin is explicitly retired (`STOP-SHIPPING`).
+graph and verified all 12 plugin policy rows through
+`scripts/verify-plugin-surface-policies.py`. STOP-SHIPPING plugins are build-only;
+ABSORB plugins remain installed until Issue 14 retires their Widgets UI;
+ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
+`RedactPlugin` stays BLOCKED on issue #66.
 
 | Plugin | Target workspace | Notes |
 | --- | --- | --- |
