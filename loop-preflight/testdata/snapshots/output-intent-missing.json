@@ -1,0 +1,36 @@
+{
+    "checks": [
+        {
+            "id": "output-intent",
+            "status": "failed"
+        }
+    ],
+    "errors": [
+        {
+            "check_id": "output-intent",
+            "message": "No output intent is defined; the intended printing condition cannot be determined.",
+            "scope": "document",
+            "severity": "error",
+            "type": "output-intent-missing"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Loop Test - Output Intent",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "608e49af9263cc57"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

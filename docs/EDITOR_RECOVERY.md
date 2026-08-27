@@ -1,6 +1,6 @@
 # Editor crash/session recovery
 
-Loupe protects unsaved Editor work with a private, bounded recovery store. The
+Loop protects unsaved Editor work with a private, bounded recovery store. The
 store is owned by `PDFRecoveryManager` in the Editor/Core recovery boundary and is attached to the
 single-document Editor session.
 
@@ -20,7 +20,7 @@ single-document Editor session.
   bounded prefix/suffix digest), revision, schema, and checkpoint metadata. The
   raw source path is retained only in the private local recovery store so the
   UI can identify the candidate; diagnostics do not include it.
-- A per-session `QLockFile` prevents two Loupe instances from claiming the same
+- A per-session `QLockFile` prevents two Loop instances from claiming the same
   session. Stale locks are reclaimed only through Qt's stale-lock validation.
 
 Encrypted documents fail closed until a checkpoint can preserve encryption

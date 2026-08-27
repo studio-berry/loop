@@ -1,0 +1,36 @@
+{
+    "checks": [
+        {
+            "id": "white-overprint",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - White Overprint",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Inspection completed with no blocking findings.",
+        "reason_code": "no-blocking-findings",
+        "state": "pass",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "white-overprint",
+            "message": "White or near-white paint is set to overprint on page 1.",
+            "page": 1,
+            "scope": "page",
+            "severity": "warning",
+            "type": "white-overprint"
+        }
+    ]
+}

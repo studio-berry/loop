@@ -79,8 +79,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
-      - name: Verify Loupe shell contract
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loupe-shell-contract.ps1
+      - name: Verify Loop shell contract
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-loop-shell-contract.ps1
       - name: Verify Phase 5 Widgets completeness contract
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-phase5-widgets-contract.ps1
       - name: Verify command catalog

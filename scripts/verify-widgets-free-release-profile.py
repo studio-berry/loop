@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the Loupe release profile never requires or ships Qt6::Widgets."""
+"""Verify the Loop release profile never requires or ships Qt6::Widgets."""
 
 from __future__ import annotations
 
@@ -28,14 +28,14 @@ FORBIDDEN_QT_NAME_PREFIXES = (
 )
 FORBIDDEN_CACHE_MARKERS = ()
 REQUIRED_CACHE_MARKERS = (
-    "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-    "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+    "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+    "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
 )
 FORBIDDEN_OPTION_MARKERS = (
-    "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
-    "LOUPE_BUILD_JBIG2_VIEWER:BOOL=ON",
-    "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
-    "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
+    "LOOP_BUILD_CODE_GENERATOR:BOOL=ON",
+    "LOOP_BUILD_JBIG2_VIEWER:BOOL=ON",
+    "LOOP_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
+    "LOOP_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
 REQUIRED_QT_CONFIGS = (
     "Qt6/Qt6Config.cmake",
@@ -61,23 +61,23 @@ class ContractError(ValueError):
 
 def validate_cmake_release_profile() -> None:
     text = CMAKE.read_text(encoding="utf-8")
-    if "set(_LOUPE_REQUIRES_WIDGETS OFF)" not in text:
-        raise ContractError("CMake must define _LOUPE_REQUIRES_WIDGETS gating")
-    if "elseif(_LOUPE_REQUIRES_WIDGETS)" not in text:
-        raise ContractError("CMake must gate find_package(Qt6 Widgets) behind _LOUPE_REQUIRES_WIDGETS")
+    if "set(_LOOP_REQUIRES_WIDGETS OFF)" not in text:
+        raise ContractError("CMake must define _LOOP_REQUIRES_WIDGETS gating")
+    if "elseif(_LOOP_REQUIRES_WIDGETS)" not in text:
+        raise ContractError("CMake must gate find_package(Qt6 Widgets) behind _LOOP_REQUIRES_WIDGETS")
     if "REQUIRED COMPONENTS Core Gui Svg Xml Sql TextToSpeech Concurrent" not in text:
         raise ContractError("Widgets-free configure must not request Qt6::PrintSupport")
     release_regex = re.search(
-        r"if\(LOUPE_LOUPE_DISTRIBUTION\)\s*"
-        r"set\(_LOUPE_QT_DLL_REGEX \"([^\"]+)\"",
+        r"if\(LOOP_LOOP_DISTRIBUTION\)\s*"
+        r"set\(_LOOP_QT_DLL_REGEX \"([^\"]+)\"",
         text,
     )
     if release_regex is None:
         raise ContractError("CMake must define a release-profile Qt install regex")
     if "Qt6Widgets" in release_regex.group(1) or "Qt6PrintSupport" in release_regex.group(1):
         raise ContractError("release-profile Qt install regex must omit Widgets-bound Qt modules")
-    if "set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT OFF)" not in text:
-        raise ContractError("LOUPE_LOUPE_DISTRIBUTION must default developer Widgets tools OFF")
+    if "set(_LOOP_BUILD_CODE_GENERATOR_DEFAULT OFF)" not in text:
+        raise ContractError("LOOP_LOOP_DISTRIBUTION must default developer Widgets tools OFF")
 
 
 def _is_forbidden_qt_name(name: str) -> bool:
@@ -160,8 +160,8 @@ def run_release_profile_configure(
         str(ROOT),
         "-B",
         str(build_dir),
-        "-DLOUPE_LOUPE_DISTRIBUTION=ON",
-        "-DLOUPE_INSTALL_QT_DEPENDENCIES=0",
+        "-DLOOP_LOOP_DISTRIBUTION=ON",
+        "-DLOOP_INSTALL_QT_DEPENDENCIES=0",
         "-DCMAKE_BUILD_TYPE=Release",
         *cmake_args,
     ]
@@ -171,7 +171,7 @@ def run_release_profile_configure(
             [
                 f"-DCMAKE_PREFIX_PATH={qt_prefix}",
                 f"-DQt6_DIR={qt_prefix / 'lib' / 'cmake' / 'Qt6'}",
-                f"-DLOUPE_QT_ROOT={qt_prefix}",
+                f"-DLOOP_QT_ROOT={qt_prefix}",
             ]
         )
     completed = subprocess.run(
@@ -273,7 +273,7 @@ def main() -> int:
                     args.expect_configure_failure,
                 )
             else:
-                with tempfile.TemporaryDirectory(prefix="loupe-widgets-free-") as tmp:
+                with tempfile.TemporaryDirectory(prefix="loop-widgets-free-") as tmp:
                     run_release_profile_configure(
                         Path(tmp),
                         cmake_args,
@@ -290,7 +290,7 @@ def main() -> int:
         print(f"Widgets-free release profile FAILED: {exc}", file=sys.stderr)
         return 1
 
-    messages = ["Widgets-free release profile verified: CMake omits Widgets-bound Qt modules for loupe-release"]
+    messages = ["Widgets-free release profile verified: CMake omits Widgets-bound Qt modules for loop-release"]
     if args.cmake_cache is not None:
         messages.append(f"cache {args.cmake_cache} contains no Widgets requirement")
     if args.configure:

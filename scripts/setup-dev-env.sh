@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time (or idempotent) Loupe-PDF Linux dev environment bootstrap.
+# One-time (or idempotent) Loop-PDF Linux dev environment bootstrap.
 #
 # Installs system packages, vcpkg, Qt 6.11.1, manifest dependencies, and
 # configures the Ninja build directory at ./build.
@@ -11,11 +11,11 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-QT_VERSION="${LOUPE_QT_VERSION:-6.11.1}"
-QT_INSTALL_DIR="${LOUPE_QT_INSTALL_DIR:-/opt/Qt}"
+QT_VERSION="${LOOP_QT_VERSION:-6.11.1}"
+QT_INSTALL_DIR="${LOOP_QT_INSTALL_DIR:-/opt/Qt}"
 VCPKG_ROOT="${VCPKG_ROOT:-/opt/vcpkg}"
 VCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR:-/opt/vcpkg_installed}"
-BUILD_DIR="${LOUPE_BUILD_DIR:-${REPO_ROOT}/build}"
+BUILD_DIR="${LOOP_BUILD_DIR:-${REPO_ROOT}/build}"
 
 # shellcheck disable=SC1091
 source "${REPO_ROOT}/scripts/dev-env.sh"
@@ -118,18 +118,18 @@ export VCPKG_OVERLAY_PORTS="${REPO_ROOT}/vcpkg/overlays/linux:${REPO_ROOT}/vcpkg
 
 log "Configuring CMake build directory at ${BUILD_DIR}..."
 cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}" -G Ninja \
-    -DLOUPE_INSTALL_QT_DEPENDENCIES=0 \
+    -DLOOP_INSTALL_QT_DEPENDENCIES=0 \
     -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
     -DVCPKG_INSTALLED_DIR="${VCPKG_INSTALLED_DIR}" \
     -DVCPKG_MANIFEST_INSTALL=OFF \
     -DCMAKE_BUILD_TYPE=Release \
-    -DLOUPE_QT_ROOT="${LOUPE_QT_ROOT}" \
+    -DLOOP_QT_ROOT="${LOOP_QT_ROOT}" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-log "Writing ~/.bashrc Loupe dev block..."
+log "Writing ~/.bashrc Loop dev block..."
 BASHRC="${HOME}/.bashrc"
-MARKER_START="# >>> loupe-pdf dev env >>>"
-MARKER_END="# <<< loupe-pdf dev env <<<"
+MARKER_START="# >>> loop-pdf dev env >>>"
+MARKER_END="# <<< loop-pdf dev env <<<"
 if ! grep -qF "${MARKER_START}" "${BASHRC}" 2>/dev/null; then
     cat >> "${BASHRC}" <<EOF
 
@@ -144,18 +144,18 @@ fi
 log "Done."
 cat <<EOF
 
-Loupe-PDF dev environment is ready.
+Loop-PDF dev environment is ready.
 
 Next steps:
   1. Open a new shell, or run:  source scripts/dev-env.sh
   2. Build a target:            cmake --build build --target PdfTool -j\$(nproc)
   3. Run CLI:                   PdfTool help
-  4. Run GUI apps (VNC):        unset QT_QPA_PLATFORM; DISPLAY=:1 ./build/usr/bin/LoupeEditor
+  4. Run GUI apps (VNC):        unset QT_QPA_PLATFORM; DISPLAY=:1 ./build/usr/bin/LoopEditor
 
 Key variables (see scripts/dev-env.sh):
-  LOUPE_QT_ROOT=${LOUPE_QT_ROOT}
+  LOOP_QT_ROOT=${LOOP_QT_ROOT}
   VCPKG_ROOT=${VCPKG_ROOT}
   VCPKG_INSTALLED_DIR=${VCPKG_INSTALLED_DIR}
-  LOUPE_BUILD_DIR=${BUILD_DIR}
+  LOOP_BUILD_DIR=${BUILD_DIR}
 
 EOF

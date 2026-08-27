@@ -48,7 +48,7 @@ Consumer-first sequence for later sessions:
 2. Preserve the non-product developer/qualification rows and resolve the remaining
    blocked Redact product decision.
 3. The former comparison target is retired only after parity evidence is archived.
-4. Remove `LoupeLibGui` and `LoupeLibWidgets` only after the inventory proves
+4. Remove `LoopLibGui` and `LoopLibWidgets` only after the inventory proves
    that no installed consumer remains and the replacement boundaries are green.
 
 The shell/product ledgers remain the policy inputs; the generated artifacts are
@@ -67,7 +67,7 @@ the former non-installed comparison target, its layout probe, and its exclusive
 build wiring have been removed. The installed-product verifier now proves the
 Quick editor boundary without requiring a retired target.
 
-Phase 4 closes with an installed Qt Quick `LoupeEditor` product shell. Phase 5 owns
+Phase 4 closes with an installed Qt Quick `LoopEditor` product shell. Phase 5 owns
 mechanical Widgets removal from the maintained graph. This document lists
 remaining Widgets residue and deletion gates so Phase 5 is deletion and boundary
 proof rather than unfinished product migration.
@@ -76,9 +76,9 @@ proof rather than unfinished product migration.
 
 | Target | Phase 4 state | Phase 5 action |
 | --- | --- | --- |
-| `LoupeEditor` | Installed Quick Controls 2 root via `LoupeEditorQuick` | Keep; prove no Widgets link regression |
-| `LoupeLibQuick` | Installed with product | Keep |
-| `LoupeLibInteraction` | STATIC, non-installed seam | Keep |
+| `LoopEditor` | Installed Quick Controls 2 root via `LoopEditorQuick` | Keep; prove no Widgets link regression |
+| `LoopLibQuick` | Installed with product | Keep |
+| `LoopLibInteraction` | STATIC, non-installed seam | Keep |
 | `UnitTestsCanvasParity` | Non-installed Quick-native contract suite | Keep; run geometry, interaction, and presentation checks |
 
 Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperatorLoop`;
@@ -88,23 +88,23 @@ Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperator
 
 | Library | Role today | Deletion gate |
 | --- | --- | --- |
-| `LoupeLibWidgets` | Widgets canvas, dialogs, annotation helpers | No installed target links it; Quick workspaces cover required operator surfaces per `docs/loupe-shell.json` |
-| Widgets-bound `LoupeLibGui` | Editor/viewer windows, dialogs, chrome | Quick shell replaces `pdfeditormainwindow.ui` and related surfaces classified in `legacy_surface_disposition` |
+| `LoopLibWidgets` | Widgets canvas, dialogs, annotation helpers | No installed target links it; Quick workspaces cover required operator surfaces per `docs/loop-shell.json` |
+| Widgets-bound `LoopLibGui` | Editor/viewer windows, dialogs, chrome | Quick shell replaces `pdfeditormainwindow.ui` and related surfaces classified in `legacy_surface_disposition` |
 
 ## Widgets executables still in the source tree
 
 Session 03 removed the four secondary executables from the install and packaging
-graph. They remain optional non-installed build targets (`LOUPE_BUILD_*` default
+graph. They remain optional non-installed build targets (`LOOP_BUILD_*` default
 OFF) until a later session deletes the sources.
 
 | Executable | Disposition | Phase 5 route |
 | --- | --- | --- |
-| `LoupeViewer` | `STOP-SHIPPING` → `DELETE` | Not installed; LoupeEditor document-open already owns viewing |
-| `LoupePageMaster` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; `PDFPageMasterExport` + existing PdfTool page commands |
-| `LoupeDiff` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; PdfTool `diff` over Core `PDFDiff`; `loupe-compare` stays OPEN |
-| `LoupeLaunchPad` | `STOP-SHIPPING` → `DELETE` | Not installed; LoupeEditor is already the product launcher |
+| `LoopViewer` | `STOP-SHIPPING` → `DELETE` | Not installed; LoopEditor document-open already owns viewing |
+| `LoopPageMaster` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; `PDFPageMasterExport` + existing PdfTool page commands |
+| `LoopDiff` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; PdfTool `diff` over Core `PDFDiff`; `loop-compare` stays OPEN |
+| `LoopLaunchPad` | `STOP-SHIPPING` → `DELETE` | Not installed; LoopEditor is already the product launcher |
 
-See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
+See `docs/product-surface.json` and `docs/loop-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
 
 ## Plugin directories (12)
 
@@ -117,7 +117,7 @@ ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
 
 | Plugin | Target workspace | Notes |
 | --- | --- | --- |
-| `LoupePreflightPlugin` | Preflight | Absorbed by `PreflightPane.qml` + `PreflightController` |
+| `LoopPreflightPlugin` | Preflight | Absorbed by `PreflightPane.qml` + `PreflightController` |
 | `ObjectInspectorPlugin` | Inspect | Advanced; contextual `InspectorModel` is product dispatcher |
 | `DimensionsPlugin` | Inspect / Pages | Consolidate geometry into Inspect/Pages |
 | `OutputPreviewPlugin` | Production Preview | `PreviewStateModel` owns authority semantics |
@@ -132,12 +132,12 @@ ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
 
 ## Legacy `.ui` inventory (34 retained forms)
 
-Session 04 Issue 14 deleted all 14 `RETIRE` forms for LoupeDiff, LoupePageMaster,
-LoupeLaunchPad, and the AudioBook plugin dock widget. Optional builds of the retired
+Session 04 Issue 14 deleted all 14 `RETIRE` forms for LoopDiff, LoopPageMaster,
+LoopLaunchPad, and the AudioBook plugin dock widget. Optional builds of the retired
 secondary executables now fail closed at configure time. The remaining 34 forms stay
 explicitly retained until their Quick or headless replacements are proven.
 
-Authoritative ledger: `docs/loupe-shell.json` → `legacy_surface_disposition`.
+Authoritative ledger: `docs/loop-shell.json` → `legacy_surface_disposition`.
 
 | Disposition | Count (retained) | Phase 5 action |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ Authoritative ledger: `docs/loupe-shell.json` → `legacy_surface_disposition`.
 | `HEADLESS` | 5 | Retain only if CLI/developer path still needs form; otherwise delete |
 | `RETIRE` | 0 | Session 04 Issue 14 deleted the former 14 forms |
 
-Verifier: `scripts/verify-loupe-shell-contract.ps1` (fail-closed inventory).
+Verifier: `scripts/verify-loop-shell-contract.ps1` (fail-closed inventory).
 Session 04 Issue 15 adds `scripts/verify-plugin-form-accounting.py`, wired into CI
 `source_integrity` and Linux agent-fast, to reject unledgered `.ui` files, stale
 CMake `uic` references, and retired install boundaries.
@@ -156,18 +156,18 @@ CMake `uic` references, and retired install boundaries.
 Session 05 Issue 16 adds `scripts/generate_widgets_library_consumer_graph.py` and
 `scripts/verify-widgets-library-consumer-graph.py`. The generated artifact
 `docs/generated/widgets-library-consumer-graph.json` re-dumps every
-loupe-release consumer of `LoupeLibWidgets` and Widgets-bound `LoupeLibGui`,
+loop-release consumer of `LoopLibWidgets` and Widgets-bound `LoopLibGui`,
 classifies neutral relocation owners, and records the ten installed plugin
 blockers that must clear before Issue 17 deletes either library.
 
 ## Session 05 Issue 17 library deletion
 
-Issue 17 deleted `LoupeLibWidgets`, Widgets-bound `LoupeLibGui`, all `LoupeEditorPlugins` sources, and the retired secondary executables (`LoupeViewer`, `LoupePageMaster`, `LoupeDiff`, `LoupeLaunchPad`). All twelve editor plugins are build-only and absent from the `loupe-release` install graph; `widgets-library-consumer-graph.json` records `deletion_safe: true` with no installed product blockers. Linux CI now configures with `-DLOUPE_LOUPE_DISTRIBUTION=ON` so agent-fast matches production profile gates.
+Issue 17 deleted `LoopLibWidgets`, Widgets-bound `LoopLibGui`, all `LoopEditorPlugins` sources, and the retired secondary executables (`LoopViewer`, `LoopPageMaster`, `LoopDiff`, `LoopLaunchPad`). All twelve editor plugins are build-only and absent from the `loop-release` install graph; `widgets-library-consumer-graph.json` records `deletion_safe: true` with no installed product blockers. Linux CI now configures with `-DLOOP_LOOP_DISTRIBUTION=ON` so agent-fast matches production profile gates.
 
 ## Configure and package proof required in Phase 5
 
-1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile. **Done (static + configure + CI)** — `LOUPE_LOUPE_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` (static checks in source_integrity, configure probe in reusable-linux CI).
-2. `LoupeEditor` install tree must not load `Qt6Widgets` at runtime. **Done** — static graph proof + package smoke scans.
+1. Root CMake must not require `Qt6::Widgets` for the Loop release profile. **Done (static + configure + CI)** — `LOOP_LOOP_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` (static checks in source_integrity, configure probe in reusable-linux CI).
+2. `LoopEditor` install tree must not load `Qt6Widgets` at runtime. **Done** — static graph proof + package smoke scans.
 3. Clean-machine package smoke with Widgets unavailable in the product graph:
    - Linux: `scripts/smoke-test-appimage.sh` (now rejects `Qt6Widgets` artifacts)
    - Windows: `scripts/Invoke-MsiSmokeTest.ps1`, `scripts/smoke-test-install.ps1` (now rejects `Qt6Widgets.dll`)
@@ -184,7 +184,7 @@ Issue 17 deleted `LoupeLibWidgets`, Widgets-bound `LoupeLibGui`, all `LoupeEdito
 
 | Artifact | Purpose |
 | --- | --- |
-| `docs/loupe-shell.json` | Single disposition authority |
+| `docs/loop-shell.json` | Single disposition authority |
 | `docs/PHASE5_WIDGETS_DELETION_HANDOFF.md` | This handoff |
 | `docs/0.2.0-closeout-matrix.md` | Gate ledger |
 | `scripts/verify-installed-product-graph.py` | Installed editor Quick-only proof |

@@ -26,7 +26,7 @@ $executable = Get-ChildItem -LiteralPath $resolvedBuildDir -Recurse -File |
     Select-Object -First 1
 
 if (-not $executable) {
-    throw "QuickShellSmoke executable was not found below $resolvedBuildDir. Configure with -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON and build the target first."
+    throw "QuickShellSmoke executable was not found below $resolvedBuildDir. Configure with -DLOOP_BUILD_QUICK_SHELL_SMOKE=ON and build the target first."
 }
 
 switch ($Mode) {

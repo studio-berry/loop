@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/workload-envelope-v2.json",
-  "title": "Loupe measured workload envelope",
+  "$id": "https://github.com/studio-berry/loop/schema/workload-envelope-v2.json",
+  "title": "Loop measured workload envelope",
   "type": "object",
   "required": [
     "identity",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify installed LoupeEditor is the Quick product graph and sole interactive install."""
+"""Verify installed LoopEditor is the Quick product graph and sole interactive install."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EDITOR_CMAKE = ROOT / "LoupeEditor" / "CMakeLists.txt"
+EDITOR_CMAKE = ROOT / "LoopEditor" / "CMakeLists.txt"
 RETIRED_PLUGINS = frozenset(
     {
         "ActionListPlugin",
         "AudioBookPlugin",
         "DimensionsPlugin",
         "EditorPlugin",
-        "LoupePreflightPlugin",
+        "LoopPreflightPlugin",
         "ObjectInspectorPlugin",
         "OcrPlugin",
         "OutputPreviewPlugin",
@@ -30,15 +30,15 @@ RETIRED_PLUGINS = frozenset(
 
 FORBIDDEN_EDITOR_LIBS = frozenset(
     {
-        "LoupeLibWidgets",
-        "LoupeLibGui",
+        "LoopLibWidgets",
+        "LoopLibGui",
         "Qt6::Widgets",
         "Qt6::QuickWidgets",
     }
 )
 REQUIRED_EDITOR_LIBS = frozenset(
     {
-        "LoupeEditorQuick",
+        "LoopEditorQuick",
         "Qt6::Quick",
         "Qt6::QuickControls2",
     }
@@ -73,8 +73,8 @@ def validate_sole_interactive_product(root: Path) -> None:
         if row.get("kind") == "application" and row.get("artifact_scope") == "install"
     ]
     keep = [row.get("artifact") for row in installed_apps if row.get("disposition") == "KEEP"]
-    if keep != ["LoupeEditor"]:
-        raise ContractError(f"installed KEEP applications must be only LoupeEditor, found {keep}")
+    if keep != ["LoopEditor"]:
+        raise ContractError(f"installed KEEP applications must be only LoopEditor, found {keep}")
     cli = [row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY"]
     if cli != ["PdfTool"]:
         raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
@@ -88,9 +88,9 @@ def validate_sole_interactive_product(root: Path) -> None:
         row = plugin_rows[name]
         if row.get("artifact_scope") != "build":
             raise ContractError(f"{name} must be build-only in the product ledger")
-        if row.get("profiles", {}).get("loupe-release") != "absent":
-            raise ContractError(f"{name} must be absent from the loupe-release profile")
-        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
+        if row.get("profiles", {}).get("loop-release") != "absent":
+            raise ContractError(f"{name} must be absent from the loop-release profile")
+        cmake = root / "LoopEditorPlugins" / name / "CMakeLists.txt"
         if cmake.is_file() and re.search(
             rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b",
             cmake.read_text(encoding="utf-8"),
@@ -98,27 +98,27 @@ def validate_sole_interactive_product(root: Path) -> None:
             raise ContractError(f"{name} still has an install() rule")
 
     packaging = product["packaging"]
-    for profile in ("developer", "loupe-release"):
+    for profile in ("developer", "loop-release"):
         apps = list(packaging["appx_applications"][profile])
-        if apps != ["LoupeEditor"]:
-            raise ContractError(f"{profile} AppX applications must be only LoupeEditor, found {apps}")
+        if apps != ["LoopEditor"]:
+            raise ContractError(f"{profile} AppX applications must be only LoopEditor, found {apps}")
 
 
 def main() -> int:
     try:
         cmake_text = EDITOR_CMAKE.read_text(encoding="utf-8")
-        editor_links = linked_libraries(extract_target_link_block(cmake_text, "LoupeEditor"))
+        editor_links = linked_libraries(extract_target_link_block(cmake_text, "LoopEditor"))
 
         forbidden = sorted(FORBIDDEN_EDITOR_LIBS.intersection(editor_links))
         if forbidden:
-            raise ContractError(f"LoupeEditor links forbidden Widgets graph: {', '.join(forbidden)}")
+            raise ContractError(f"LoopEditor links forbidden Widgets graph: {', '.join(forbidden)}")
 
         missing = sorted(REQUIRED_EDITOR_LIBS - editor_links)
         if missing:
-            raise ContractError(f"LoupeEditor missing required Quick links: {', '.join(missing)}")
+            raise ContractError(f"LoopEditor missing required Quick links: {', '.join(missing)}")
 
-        if not re.search(r"install\s*\([^)]*\bLoupeEditor\b", cmake_text, re.DOTALL):
-            raise ContractError("LoupeEditor must remain an installed product target")
+        if not re.search(r"install\s*\([^)]*\bLoopEditor\b", cmake_text, re.DOTALL):
+            raise ContractError("LoopEditor must remain an installed product target")
 
         validate_sole_interactive_product(ROOT)
 
@@ -127,7 +127,7 @@ def main() -> int:
         return 1
 
     print(
-        "Installed product graph verified: LoupeEditor=Quick-only sole interactive install; "
+        "Installed product graph verified: LoopEditor=Quick-only sole interactive install; "
         "PdfTool remains the installed CLI"
     )
     return 0

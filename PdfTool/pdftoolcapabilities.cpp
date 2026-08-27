@@ -118,7 +118,7 @@ QJsonArray buildCapabilities()
         QStringLiteral("core.pdf.write"),
         QStringLiteral("pdftool.discovery.v1")
     };
-#ifdef LOUPE_ENABLE_SENTRY
+#ifdef LOOP_ENABLE_SENTRY
     capabilities.append(QStringLiteral("telemetry.sentry"));
 #endif
     if (PDFToolApplicationStorage::getApplicationByCommand(QStringLiteral("preflight")))
@@ -155,8 +155,8 @@ QJsonArray fixupCapabilities()
 QJsonArray schemaCapabilities()
 {
     return {
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loupe-preflight-profile") }, { QStringLiteral("version"), 1 }},
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loupe-preflight-report") }, { QStringLiteral("version"), 3 }},
+        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loop-preflight-profile") }, { QStringLiteral("version"), 1 }},
+        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loop-preflight-report") }, { QStringLiteral("version"), 3 }},
         QJsonObject{{ QStringLiteral("id"), QStringLiteral("pdftool-discovery") }, { QStringLiteral("version"), 1 }},
         QJsonObject{{ QStringLiteral("id"), QStringLiteral("pdftool-envelope") }, { QStringLiteral("version"), 1 }}
     };

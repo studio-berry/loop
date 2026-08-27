@@ -51,8 +51,8 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             cache.write_text(
                 "\n".join(
                     [
-                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+                        "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+                        "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
                     ]
                 )
                 + "\n",
@@ -67,8 +67,8 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             cache.write_text(
                 "\n".join(
                     [
-                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=ON",
+                        "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+                        "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=ON",
                     ]
                 )
                 + "\n",
@@ -76,7 +76,7 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             )
             with self.assertRaises(module.ContractError) as ctx:
                 module.validate_cmake_cache(cache)
-            self.assertIn("LOUPE_CONFIGURE_REQUIRES_WIDGETS", str(ctx.exception))
+            self.assertIn("LOOP_CONFIGURE_REQUIRES_WIDGETS", str(ctx.exception))
 
     def test_cache_with_widgets_bound_target_fails(self) -> None:
         module = _load_verifier_module()
@@ -85,9 +85,9 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             cache.write_text(
                 "\n".join(
                     [
-                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
-                        "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
+                        "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+                        "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+                        "LOOP_BUILD_CANVAS_BENCHMARK:BOOL=ON",
                     ]
                 )
                 + "\n",

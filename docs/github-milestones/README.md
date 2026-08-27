@@ -1,6 +1,6 @@
 # GitHub milestones
 
-Canonical milestone text for [studio-berry/loupe](https://github.com/studio-berry/loupe) is maintained here and aligned with the Notion Loupe [Roadmap](https://app.notion.com/p/38f9cb079ddb804a96dbe26b8d86e84f).
+Canonical milestone text for [studio-berry/loop](https://github.com/studio-berry/loop) is maintained here and aligned with the Notion Loop [Roadmap](https://app.notion.com/p/38f9cb079ddb804a96dbe26b8d86e84f).
 
 ## Sequence
 

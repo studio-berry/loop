@@ -167,25 +167,25 @@ class CheckChangeTests(unittest.TestCase):
         self.assertEqual(evidence.reason, "integration branch")
 
     def test_parse_name_status_deleted_is_excluded_from_format(self) -> None:
-        raw = b"D\0LoupeLibCore/sources/gone.cpp\0M\0LoupeLibCore/sources/keep.cpp\0"
+        raw = b"D\0LoopLibCore/sources/gone.cpp\0M\0LoopLibCore/sources/keep.cpp\0"
         changes = MODULE.parse_name_status(raw)
         self.assertEqual(changes[0].status, "D")
-        self.assertEqual(MODULE.format_sources(changes), ["LoupeLibCore/sources/keep.cpp"])
+        self.assertEqual(MODULE.format_sources(changes), ["LoopLibCore/sources/keep.cpp"])
 
     def test_format_sources_excludes_deleted_paths(self) -> None:
         changes = [
-            MODULE.Change("D", "LoupeLibCore/sources/old.cpp"),
-            MODULE.Change("M", "LoupeLibCore/sources/keep.cpp"),
-            MODULE.Change("A", "LoupeLibCore/sources/new.h"),
-            MODULE.Change("R", "LoupeLibCore/sources/renamed.cpp", "LoupeLibCore/sources/was.cpp"),
+            MODULE.Change("D", "LoopLibCore/sources/old.cpp"),
+            MODULE.Change("M", "LoopLibCore/sources/keep.cpp"),
+            MODULE.Change("A", "LoopLibCore/sources/new.h"),
+            MODULE.Change("R", "LoopLibCore/sources/renamed.cpp", "LoopLibCore/sources/was.cpp"),
             MODULE.Change("A", "changes/foo.md"),
         ]
         self.assertEqual(
             MODULE.format_sources(changes),
             [
-                "LoupeLibCore/sources/keep.cpp",
-                "LoupeLibCore/sources/new.h",
-                "LoupeLibCore/sources/renamed.cpp",
+                "LoopLibCore/sources/keep.cpp",
+                "LoopLibCore/sources/new.h",
+                "LoopLibCore/sources/renamed.cpp",
             ],
         )
 
@@ -236,10 +236,10 @@ class CheckChangeTests(unittest.TestCase):
     def test_classify_still_uses_deleted_paths(self) -> None:
         policy = {
             "module_boundaries": {
-                "core": {"paths": ["LoupeLibCore/**"], "targets": ["LoupeLibCore"], "tests": []},
+                "core": {"paths": ["LoopLibCore/**"], "targets": ["LoopLibCore"], "tests": []},
             }
         }
-        changes = [MODULE.Change("D", "LoupeLibCore/sources/gone.cpp")]
+        changes = [MODULE.Change("D", "LoopLibCore/sources/gone.cpp")]
         self.assertEqual(MODULE.classify(changes, policy), ["core"])
 
 

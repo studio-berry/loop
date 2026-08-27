@@ -184,7 +184,7 @@ int main(int argc, char* argv[])
     // Extract the requested command without terminating on unknown options so
     // invalid invocations can be reported through the result contract.
     QCommandLineParser parser;
-    parser.setApplicationDescription("Loupe CLI (PdfTool) - work with PDF documents via command line");
+    parser.setApplicationDescription("Loop CLI (PdfTool) - work with PDF documents via command line");
     parser.addPositionalArgument("command", "Command to execute.");
     parser.parse(arguments);
 

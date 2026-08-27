@@ -5,8 +5,8 @@
 #   scripts/fuzz-run-targets.sh <build_dir> <seconds_per_target> [target ...]
 #
 # Environment:
-#   LOUPE_FUZZ_CORPUS_DIR  - corpus root (default: <repo>/Fuzz/corpus)
-#   LOUPE_FUZZ_SCRATCH_DIR - writable mutation corpus (default: <build_dir>/fuzz-corpus-scratch)
+#   LOOP_FUZZ_CORPUS_DIR  - corpus root (default: <repo>/Fuzz/corpus)
+#   LOOP_FUZZ_SCRATCH_DIR - writable mutation corpus (default: <build_dir>/fuzz-corpus-scratch)
 
 set -euo pipefail
 
@@ -21,8 +21,8 @@ shift 2
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-CORPUS_DIR="${LOUPE_FUZZ_CORPUS_DIR:-${REPO_ROOT}/Fuzz/corpus}"
-SCRATCH_DIR="${LOUPE_FUZZ_SCRATCH_DIR:-${BUILD_DIR}/fuzz-corpus-scratch}"
+CORPUS_DIR="${LOOP_FUZZ_CORPUS_DIR:-${REPO_ROOT}/Fuzz/corpus}"
+SCRATCH_DIR="${LOOP_FUZZ_SCRATCH_DIR:-${BUILD_DIR}/fuzz-corpus-scratch}"
 
 if [[ $# -gt 0 ]]; then
     TARGETS=("$@")

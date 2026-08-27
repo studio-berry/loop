@@ -5,7 +5,7 @@ qt_add_executable(CanvasBenchmark
 )
 
 qt_add_qml_module(CanvasBenchmark
-    URI Loupe.CanvasBenchmark
+    URI Loop.CanvasBenchmark
     VERSION 1.0
     QML_FILES
         CanvasBenchmark.qml

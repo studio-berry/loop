@@ -5,7 +5,7 @@ qt_add_executable(QuickShellSmoke
 )
 
 qt_add_qml_module(QuickShellSmoke
-    URI Loupe.QuickShellSmoke
+    URI Loop.QuickShellSmoke
     VERSION 1.0
     QML_FILES
         QuickShellSmoke.qml

@@ -1,6 +1,6 @@
 # Resource budgets for hostile PDF workloads
 
-Loupe processing uses `pdf::PDFProcessingBudget` as a document-scoped,
+Loop processing uses `pdf::PDFProcessingBudget` as a document-scoped,
 cooperative safety boundary. The budget is shared by the Core document reader,
 stream filters, document session caches, rendering, and preflight. Exhaustion
 throws `pdf::PDFBudgetExceededException`; callers must treat it as an

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Guard against the identity-type collision that broke the LoupeLibCore build:
+// Guard against the identity-type collision that broke the LoopLibCore build:
 // two different structs named pdf::PDFArtifactIdentity, both in the same target,
 // one describing a persisted artifact and one an in-session document.
 //

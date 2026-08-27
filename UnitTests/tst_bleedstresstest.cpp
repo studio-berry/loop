@@ -42,12 +42,12 @@ constexpr char BLEED_MM[] = "3.175";   // 9 pt
 
 QString fixturesDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 QString sourceDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR);
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR);
 }
 
 QStringList stressFixturePdfs()
@@ -185,7 +185,7 @@ void BleedStressTest::aiArtFixtures_failBleedPreflight()
     const QString pdfPath = QDir(fixturesDir()).filePath(pdf);
     if (!QFile::exists(pdfPath))
     {
-        QSKIP("AI artwork fixture not generated yet. Run loupe-preflight/tools/generate_fixtures.py.");
+        QSKIP("AI artwork fixture not generated yet. Run loop-preflight/tools/generate_fixtures.py.");
     }
 
     QJsonObject report;
@@ -218,7 +218,7 @@ void BleedStressTest::aiArtFixtures_repairClearsBleed()
     const QString pdfPath = QDir(fixturesDir()).filePath(pdf);
     if (!QFile::exists(pdfPath))
     {
-        QSKIP("AI artwork fixture not generated yet. Run loupe-preflight/tools/generate_fixtures.py.");
+        QSKIP("AI artwork fixture not generated yet. Run loop-preflight/tools/generate_fixtures.py.");
     }
 
     QTemporaryDir temporaryDirectory;

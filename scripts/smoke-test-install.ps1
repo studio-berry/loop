@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Validates an installed Loupe-PDF tree on a clean machine (MIC-301).
+    Validates an installed Loop-PDF tree on a clean machine (MIC-301).
 
 .DESCRIPTION
     Asserts the shipped layout resolves, runs PdfTool preflight against a fixture,
@@ -13,7 +13,7 @@
     calls this script.
 
 .PARAMETER InstallDir
-    Directory containing LoupeEditor.exe and PdfTool.exe.
+    Directory containing LoopEditor.exe and PdfTool.exe.
 
 .PARAMETER ProfilesDir
     Override for the preflight profiles directory. When omitted the script probes
@@ -25,7 +25,7 @@
     pass the required exact SHA; clean-VM runs should pass it as well.
 
 .PARAMETER AllowOcrSidecar
-    Permit the LoupeOcrService bundle (which carries a Python runtime) to be
+    Permit the LoopOcrService bundle (which carries a Python runtime) to be
     present. docs/PACKAGING_LICENSING.md requires the *default* bundle to be
     C++/Qt only, so this is off by default and the scan fails when it is found.
 
@@ -63,8 +63,8 @@ function Assert-FileExists {
 
 function Resolve-ProfilesDir {
     <#
-        LOUPE_PREFLIGHT_PROFILES_DIR is ${LOUPE_INSTALL_SHARE_DIR}/loupe/profiles
-        (LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt). LOUPE_INSTALL_TO_USR=ON
+        LOOP_PREFLIGHT_PROFILES_DIR is ${LOOP_INSTALL_SHARE_DIR}/loop/profiles
+        (LoopEditorPlugins/LoopPreflightPlugin/CMakeLists.txt). LOOP_INSTALL_TO_USR=ON
         -- used by the Windows CI and MSI builds -- prefixes that with usr/, so the share
         tree can sit beside the bin directory or one level above it depending on how the
         installer flattens the staged prefix. Probe rather than assume.
@@ -74,25 +74,25 @@ function Resolve-ProfilesDir {
     $parent = Split-Path -Parent $InstallDir
 
     $candidates = @(
-        (Join-Path $InstallDir "share\loupe\profiles"),
-        (Join-Path $InstallDir "usr\share\loupe\profiles"),
+        (Join-Path $InstallDir "share\loop\profiles"),
+        (Join-Path $InstallDir "usr\share\loop\profiles"),
         # Pre-MIC-301 assumption, kept so an old layout still resolves.
-        (Join-Path $env:ProgramFiles "share\loupe\profiles")
+        (Join-Path $env:ProgramFiles "share\loop\profiles")
     )
 
     # $InstallDir can be a drive root, in which case there is no parent to probe.
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
-        $candidates += (Join-Path $parent "share\loupe\profiles")
-        $candidates += (Join-Path $parent "usr\share\loupe\profiles")
+        $candidates += (Join-Path $parent "share\loop\profiles")
+        $candidates += (Join-Path $parent "usr\share\loop\profiles")
     }
 
     foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath (Join-Path $candidate "loupe-default.json")) {
+        if (Test-Path -LiteralPath (Join-Path $candidate "loop-default.json")) {
             return $candidate
         }
     }
 
-    throw ("Could not locate loupe-default.json. Probed:`n  " + ($candidates -join "`n  ") +
+    throw ("Could not locate loop-default.json. Probed:`n  " + ($candidates -join "`n  ") +
            "`nIf the installer lays profiles down elsewhere, pass -ProfilesDir and update" +
            " docs/PLATFORM_SUPPORT.md to match what actually ships.")
 }
@@ -139,7 +139,7 @@ function Test-ForbiddenPayload {
             foreach ($pattern in $rule.Patterns) {
                 $hits = @(Get-ChildItem -LiteralPath $resolved -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue)
                 foreach ($hit in $hits) {
-                    $isOcrSidecar = $hit.FullName -like "*\LoupeOcrService\*"
+                    $isOcrSidecar = $hit.FullName -like "*\LoopOcrService\*"
                     if ($isOcrSidecar -and $AllowOcr) {
                         continue
                     }
@@ -157,7 +157,7 @@ function Test-ForbiddenPayload {
         $message = "Forbidden payload found in the installed tree (docs/PACKAGING_LICENSING.md):`n  " +
                    ($violations -join "`n  ")
         if (-not $AllowOcr) {
-            $message += "`nIf these come from an intentional LoupeOcrService bundle, re-run with -AllowOcrSidecar."
+            $message += "`nIf these come from an intentional LoopOcrService bundle, re-run with -AllowOcrSidecar."
         }
         throw $message
     }
@@ -174,9 +174,9 @@ Write-Host "Smoke-testing install at $InstallDir"
 Write-Host "Resolved preflight profiles to $ProfilesDir"
 
 $requiredFiles = @(
-    @{ Path = (Join-Path $InstallDir "LoupeEditor.exe"); Label = "Editor" },
+    @{ Path = (Join-Path $InstallDir "LoopEditor.exe"); Label = "Editor" },
     @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
-    @{ Path = (Join-Path $ProfilesDir "loupe-default.json"); Label = "Default preflight profile" },
+    @{ Path = (Join-Path $ProfilesDir "loop-default.json"); Label = "Default preflight profile" },
     @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
     @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
 )
@@ -195,7 +195,7 @@ if (Test-Path -LiteralPath $ocrPlugin) {
         Write-Host "OK: OcrPlugin.dll present (explicitly allowed via -AllowOcrPlugin)"
     } else {
         $ocrPluginMessage = "OcrPlugin.dll found at $ocrPlugin. V1 ships OCR as CLI-only (MIC-343) -- " +
-            "this plugin must not be in a release bundle. Build with -DLOUPE_PLUGIN_OCR=OFF, " +
+            "this plugin must not be in a release bundle. Build with -DLOOP_PLUGIN_OCR=OFF, " +
             "or re-run with -AllowOcrPlugin if this is an intentional non-V1 build."
         throw $ocrPluginMessage
     }
@@ -205,7 +205,7 @@ if (Test-Path -LiteralPath $ocrPlugin) {
 
 if ([string]::IsNullOrWhiteSpace($TestPdf)) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $candidate = Join-Path $repoRoot "loupe-preflight\testdata\fixtures\bleed-adequate.pdf"
+    $candidate = Join-Path $repoRoot "loop-preflight\testdata\fixtures\bleed-adequate.pdf"
     if (Test-Path -LiteralPath $candidate) {
         $TestPdf = $candidate
     }
@@ -215,12 +215,12 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
     throw "Test PDF not found. Pass -TestPdf pointing at a sample document."
 }
 
-$profilePath = Join-Path $ProfilesDir "loupe-default.json"
+$profilePath = Join-Path $ProfilesDir "loop-default.json"
 $pdfTool = Join-Path $InstallDir "PdfTool.exe"
-$editor = Join-Path $InstallDir "LoupeEditor.exe"
+$editor = Join-Path $InstallDir "LoopEditor.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
-$qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOUPE_QT_ROOT) |
+$qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOOP_QT_ROOT) |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 $pathParts = @($env:PATH -split ';' | Where-Object {
     $part = $_
@@ -239,7 +239,7 @@ $savedQpaPluginPath = $env:QT_QPA_PLATFORM_PLUGIN_PATH
 $savedQtdir = $env:QTDIR
 $savedQtRootDir = $env:QT_ROOT_DIR
 $savedQt6Dir = $env:Qt6_DIR
-$savedLoupeQtRoot = $env:LOUPE_QT_ROOT
+$savedLoopQtRoot = $env:LOOP_QT_ROOT
 $savedQuickBackend = $env:QT_QUICK_BACKEND
 $env:PATH = ($pathParts -join ';')
 Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
@@ -249,7 +249,7 @@ Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QTDIR -ErrorAction SilentlyContinue
 Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
-Remove-Item Env:LOUPE_QT_ROOT -ErrorAction SilentlyContinue
+Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue
 try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format text 2>&1
     $preflightExit = $LASTEXITCODE
@@ -257,16 +257,16 @@ try {
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
     $nativeExit = $LASTEXITCODE
     if ($nativeExit -ne 0) {
-        throw "LoupeEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
     }
-    Write-Host "OK: LoupeEditor native Quick startup"
+    Write-Host "OK: LoopEditor native Quick startup"
     $env:QT_QUICK_BACKEND = "software"
     $softwareOutput = @(& $editor --quick-smoke 2>&1)
     $softwareExit = $LASTEXITCODE
     if ($softwareExit -ne 0) {
-        throw "LoupeEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
+        throw "LoopEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
     }
-    Write-Host "OK: LoupeEditor software Quick startup"
+    Write-Host "OK: LoopEditor software Quick startup"
 } finally {
     $env:PATH = $savedPath
     if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }
@@ -276,7 +276,7 @@ try {
     if ($null -ne $savedQtdir) { $env:QTDIR = $savedQtdir } else { Remove-Item Env:QTDIR -ErrorAction SilentlyContinue }
     if ($null -ne $savedQtRootDir) { $env:QT_ROOT_DIR = $savedQtRootDir } else { Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue }
     if ($null -ne $savedQt6Dir) { $env:Qt6_DIR = $savedQt6Dir } else { Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue }
-    if ($null -ne $savedLoupeQtRoot) { $env:LOUPE_QT_ROOT = $savedLoupeQtRoot } else { Remove-Item Env:LOUPE_QT_ROOT -ErrorAction SilentlyContinue }
+    if ($null -ne $savedLoopQtRoot) { $env:LOOP_QT_ROOT = $savedLoopQtRoot } else { Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue }
     if ($null -ne $savedQuickBackend) { $env:QT_QUICK_BACKEND = $savedQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
 }
 if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
@@ -284,11 +284,11 @@ if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
 }
 Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
 
-$ocrSidecar = Join-Path $InstallDir "LoupeOcrService\LoupeOcrService.exe"
+$ocrSidecar = Join-Path $InstallDir "LoopOcrService\LoopOcrService.exe"
 if (Test-Path -LiteralPath $ocrSidecar) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $mockSidecar = Join-Path $repoRoot "loupe-ocr\tools\mock_ocr_sidecar.cmd"
-    $scanFixture = Join-Path $repoRoot "loupe-preflight\testdata\fixtures\image-dpi-low.pdf"
+    $mockSidecar = Join-Path $repoRoot "loop-ocr\tools\mock_ocr_sidecar.cmd"
+    $scanFixture = Join-Path $repoRoot "loop-preflight\testdata\fixtures\image-dpi-low.pdf"
     if ((Test-Path -LiteralPath $mockSidecar) -and (Test-Path -LiteralPath $scanFixture)) {
         $ocrOutput = & $pdfTool ocr $scanFixture --console-format json --sidecar $mockSidecar 2>&1
         $ocrExit = $LASTEXITCODE
@@ -297,7 +297,7 @@ if (Test-Path -LiteralPath $ocrSidecar) {
         }
         Write-Host "OK: PdfTool ocr completed with mock sidecar (exit $ocrExit)"
     }
-    Write-Host "OK: LoupeOcrService bundle present"
+    Write-Host "OK: LoopOcrService bundle present"
 }
 
 # Run the bundle-policy gate before the editor launch: it is a packaging
@@ -313,14 +313,14 @@ for ($i = 0; $i -lt 2; $i++) {
 Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidecar
 
 if (-not $SkipEditorLaunch) {
-    $editor = Join-Path $InstallDir "LoupeEditor.exe"
+    $editor = Join-Path $InstallDir "LoopEditor.exe"
     $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
     Start-Sleep -Seconds 5
     if ($editorProcess.HasExited) {
-        throw "LoupeEditor exited early with code $($editorProcess.ExitCode)"
+        throw "LoopEditor exited early with code $($editorProcess.ExitCode)"
     }
     Stop-Process -Id $editorProcess.Id -Force
-    Write-Host "OK: LoupeEditor launched without immediate crash"
+    Write-Host "OK: LoopEditor launched without immediate crash"
 }
 
 Write-Host "Smoke test passed."

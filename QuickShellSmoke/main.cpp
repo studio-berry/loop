@@ -49,7 +49,7 @@ int main(int argc, char** argv)
     QGuiApplication app(argc, argv);
     QQmlApplicationEngine engine;
 
-    const QUrl qmlUrl(QStringLiteral("qrc:/qt/qml/Loupe/QuickShellSmoke/QuickShellSmoke.qml"));
+    const QUrl qmlUrl(QStringLiteral("qrc:/qt/qml/Loop/QuickShellSmoke/QuickShellSmoke.qml"));
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &app,
                      [&app](QObject* object, const QUrl& url)

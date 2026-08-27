@@ -4,16 +4,16 @@
   "adr": "docs/adr/adr-010-quick-root-admission.md",
   "invariant": "I21",
   "status": "enforced",
-  "rationale": "LoupeLibInteraction is the host-neutral seam between LoupeLibCore and a future Qt Quick layer. It must stay buildable without any presentation host, so it links neither Widgets nor QML. Qt scopes its headers per module, so the absent link edge is what makes a forbidden include a compile error; this policy stops the edge from being re-added.",
+  "rationale": "LoopLibInteraction is the host-neutral seam between LoopLibCore and a future Qt Quick layer. It must stay buildable without any presentation host, so it links neither Widgets nor QML. Qt scopes its headers per module, so the absent link edge is what makes a forbidden include a compile error; this policy stops the edge from being re-added.",
   "targets": [
     {
-      "name": "LoupeLibInteraction",
-      "cmake": "LoupeLibInteraction/CMakeLists.txt",
-      "sources": "LoupeLibInteraction/sources",
+      "name": "LoopLibInteraction",
+      "cmake": "LoopLibInteraction/CMakeLists.txt",
+      "sources": "LoopLibInteraction/sources",
       "linkage": "STATIC",
       "installed": false,
       "allowed_link_targets": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui"
       ]

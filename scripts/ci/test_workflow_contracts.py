@@ -16,9 +16,9 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_windows_installer_verifies_from_its_checkout_root(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
-        self.assertIn("working-directory: loupe", workflow)
-        self.assertIn(".\\scripts\\verify-loupe-surface.ps1", workflow)
-        self.assertNotIn(".\\loupe\\scripts\\verify-loupe-surface.ps1", workflow)
+        self.assertIn("working-directory: loop", workflow)
+        self.assertIn(".\\scripts\\verify-loop-surface.ps1", workflow)
+        self.assertNotIn(".\\loop\\scripts\\verify-loop-surface.ps1", workflow)
 
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
