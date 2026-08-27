@@ -150,7 +150,7 @@ Issue 17 deleted `LoupeLibWidgets`, Widgets-bound `LoupeLibGui`, all `LoupeEdito
 
 ## Configure and package proof required in Phase 5
 
-1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile. **Done (static + CI)** — `LOUPE_LOUPE_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` in reusable-linux CI.
+1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile. **Done (static + configure + CI)** — `LOUPE_LOUPE_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` (static checks in source_integrity, configure probe in reusable-linux CI).
 2. `LoupeEditor` install tree must not load `Qt6Widgets` at runtime. **Done** — static graph proof + package smoke scans.
 3. Clean-machine package smoke with Widgets unavailable in the product graph:
    - Linux: `scripts/smoke-test-appimage.sh` (now rejects `Qt6Widgets` artifacts)
