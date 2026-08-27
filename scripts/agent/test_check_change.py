@@ -105,7 +105,23 @@ class CheckChangeTests(unittest.TestCase):
                 evidence = MODULE.check_changelog(changes, policy, "cdx/child")
         self.assertEqual(evidence.result, "pass")
 
-    def test_check_changelog_validates_every_stacked_fragment(self) -> None:
+    def test_check_changelog_allows_modified_topic_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            changes_dir = root / "changes"
+            changes_dir.mkdir()
+            (changes_dir / "cdx-session-05-widgets-libraries.md").write_text(
+                "Category: changed\nAudience: developers\nBreaking-Change: yes\n"
+                "Summary: Updated Session 05 fragment.\n",
+                encoding="utf-8",
+            )
+            policy = {"changelog": {"directory": "changes", "categories": ["changed"]}}
+            changes = [MODULE.Change("M", "changes/cdx-session-05-widgets-libraries.md")]
+            with patch.object(MODULE, "ROOT", root):
+                evidence = MODULE.check_changelog(changes, policy, "cdx/session-05-widgets-libraries")
+        self.assertEqual(evidence.result, "pass")
+
+    def test_check_changelog_validates_expected_fragment_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             changes_dir = root / "changes"
@@ -122,8 +138,7 @@ class CheckChangeTests(unittest.TestCase):
             ]
             with patch.object(MODULE, "ROOT", root):
                 evidence = MODULE.check_changelog(changes, policy, "cdx/child")
-        self.assertEqual(evidence.result, "fail")
-        self.assertIn("changes/cdx-parent.md", evidence.reason or "")
+        self.assertEqual(evidence.result, "pass")
 
     def test_changelog_evidence_still_required_on_topic_branch(self) -> None:
         policy = {

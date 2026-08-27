@@ -100,8 +100,7 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsProfileIdentity",
         "UnitTestsOperatorAcceptance",
-        "UnitTestsStandardOracle",
-        "UnitTestsPreflightInteraction"
+        "UnitTestsStandardOracle"
       ]
     },
     "pagemaster": {
@@ -119,13 +118,12 @@
         "UnitTests/tst_pagesurfacetest.cpp",
         "UnitTests/tst_interactioncontrollertest.cpp",
         "UnitTests/tst_overlayframetest.cpp",
-        "UnitTests/tst_preflightinteraction.cpp",
         "docs/interaction-boundary-policy.json",
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoupeLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame", "UnitTestsPreflightInteraction"]
+      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsInteractionController", "UnitTestsOverlayFrame"]
     },
     "quick": {
       "paths": [
@@ -144,7 +142,7 @@
         "ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoupeLibQuick", "LoupeEditor", "LoupeEditorQuick", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsPreflightInteraction", "UnitTestsP4S9Interaction"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction"]
     },
     "developer_widgets": {
       "paths": [

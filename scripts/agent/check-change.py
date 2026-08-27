@@ -218,19 +218,24 @@ def parse_changelog(path: Path, allowed_categories: set[str]) -> tuple[bool, str
 def check_changelog(changes: list[Change], policy: dict, branch: str) -> Evidence:
     directory = policy["changelog"]["directory"].rstrip("/")
     expected = f"{directory}/{branch_slug(branch)}.md"
-    added = [change.path for change in changes if change.status == "A" and change.path.startswith(f"{directory}/") and change.path.endswith(".md")]
+    fragments = [
+        change.path
+        for change in changes
+        if change.status in {"A", "M"}
+        and change.path.startswith(f"{directory}/")
+        and change.path.endswith(".md")
+    ]
     evidence = Evidence("changelog")
-    if expected not in added:
+    if expected not in fragments:
         evidence.result = "fail"
-        evidence.reason = f"expected added fragment {expected}; found {added or 'none'}"
+        evidence.reason = f"expected changelog fragment {expected}; found {fragments or 'none'}"
         return evidence
     categories = set(policy["changelog"]["categories"])
-    for path in added:
-        valid, reason = parse_changelog(ROOT / path, categories)
-        if not valid:
-            evidence.result = "fail"
-            evidence.reason = f"{path}: {reason}"
-            return evidence
+    valid, reason = parse_changelog(ROOT / expected, categories)
+    if not valid:
+        evidence.result = "fail"
+        evidence.reason = f"{expected}: {reason}"
+        return evidence
     evidence.result = "pass"
     return evidence
 

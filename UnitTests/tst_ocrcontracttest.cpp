@@ -39,22 +39,22 @@ namespace
 
 QJsonObject validSidecarResponse()
 {
+    const QJsonObject bbox{
+        { QStringLiteral("x"), 20.0 },
+        { QStringLiteral("y"), 30.0 },
+        { QStringLiteral("width"), 100.0 },
+        { QStringLiteral("height"), 12.0 },
+    };
+    const QJsonObject line{
+        { QStringLiteral("text"), QStringLiteral("Detected text") },
+        { QStringLiteral("confidence"), 0.97 },
+        { QStringLiteral("bbox"), bbox },
+    };
     return QJsonObject{
         { QStringLiteral("page"), 1 },
         { QStringLiteral("ok"), true },
         { QStringLiteral("text"), QStringLiteral("Detected text") },
-        { QStringLiteral("lines"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("text"), QStringLiteral("Detected text") },
-                { QStringLiteral("confidence"), 0.97 },
-                { QStringLiteral("bbox"), QJsonObject{
-                    { QStringLiteral("x"), 20.0 },
-                    { QStringLiteral("y"), 30.0 },
-                    { QStringLiteral("width"), 100.0 },
-                    { QStringLiteral("height"), 12.0 },
-                } },
-            },
-        } },
+        { QStringLiteral("lines"), QJsonArray{ line } },
     };
 }
 
@@ -65,7 +65,7 @@ void OcrContractTest::sidecarResponse_requiresValidatedShape()
     QString error;
     QVERIFY2(pdftool::ocr::validateSidecarResponse(validSidecarResponse(), 1, &error), qPrintable(error));
 
-    QJsonObject failedResponse{
+    const QJsonObject failedResponse{
         { QStringLiteral("page"), 1 },
         { QStringLiteral("ok"), false },
         { QStringLiteral("error"), QStringLiteral("image not found") },
@@ -81,11 +81,12 @@ void OcrContractTest::sidecarResponse_rejectsWrongPageAndMalformedLine()
     QVERIFY(!pdftool::ocr::validateSidecarResponse(wrongPage, 1, &error));
 
     QJsonObject malformedLineResponse = validSidecarResponse();
-    malformedLineResponse.insert(QStringLiteral("lines"), QJsonArray{ QJsonObject{
+    const QJsonObject malformedLine{
         { QStringLiteral("text"), QStringLiteral("bad") },
         { QStringLiteral("confidence"), QStringLiteral("not-a-number") },
         { QStringLiteral("bbox"), QJsonObject{} },
-    } });
+    };
+    malformedLineResponse.insert(QStringLiteral("lines"), QJsonArray{ malformedLine });
     QVERIFY(!pdftool::ocr::validateSidecarResponse(malformedLineResponse, 1, &error));
 }
 
