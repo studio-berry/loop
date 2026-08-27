@@ -117,6 +117,34 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsPageSurface "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurface")
 
+    add_executable(UnitTestsPageSurfaceBudget
+        tst_pagesurfacebudgettest.cpp
+    )
+
+    target_link_libraries(UnitTestsPageSurfaceBudget PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsPageSurfaceBudget PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsPageSurfaceBudget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurfaceBudget")
+
+    add_executable(UnitTestsDocumentViewSession
+        tst_documentviewsessiontest.cpp
+    )
+
+    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoupeEditorQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsDocumentViewSession PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsDocumentViewSession "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDocumentViewSession")
+
     # Architecture invariant I24, interaction half. Same load-bearing link line:
     # transient state, hit testing, cancellation and the interaction trace must be
     # drivable with no QWidget, no QML engine and no event loop, which is half of

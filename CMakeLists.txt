@@ -97,9 +97,11 @@ option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
 
 if(LOUPE_LOUPE_DISTRIBUTION)
-    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
+    # Release profile builds the installed Quick product only; Widgets-bound
+    # developer tools stay opt-in so configure never requires Qt6::Widgets.
+    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT OFF)
+    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT OFF)
+    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
 else()
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
@@ -127,12 +129,21 @@ include(GNUInstallDirs)
 
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
+set(_LOUPE_REQUIRES_WIDGETS OFF)
+if(LOUPE_BUILD_CODE_GENERATOR OR LOUPE_BUILD_JBIG2_VIEWER OR LOUPE_BUILD_EXAMPLE_GENERATOR OR LOUPE_BUILD_CANVAS_BENCHMARK)
+    set(_LOUPE_REQUIRES_WIDGETS ON)
+endif()
+
 if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql)
-else()
+elseif(_LOUPE_REQUIRES_WIDGETS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
+else()
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql PrintSupport TextToSpeech Concurrent)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 endif()
+set(LOUPE_CONFIGURE_REQUIRES_WIDGETS "${_LOUPE_REQUIRES_WIDGETS}" CACHE INTERNAL "Whether configure required Qt6::Widgets")
 
 if(LOUPE_BUILD_TESTS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)
@@ -424,10 +435,15 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     endif()
 
     if(LOUPE_INSTALL_QT_DEPENDENCIES)
+        if(LOUPE_LOUPE_DISTRIBUTION)
+            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
+        else()
+            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
+        endif()
         install(DIRECTORY ${LOUPE_QT_ROOT}/bin/
             RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
-            REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*"
+            REGEX "${_LOUPE_QT_DLL_REGEX}"
             PATTERN "Debug" EXCLUDE
             PATTERN "*.pdb" EXCLUDE
         )

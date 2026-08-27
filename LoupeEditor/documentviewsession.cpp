@@ -79,3 +79,16 @@ void DocumentViewSession::clearDocumentView()
     m_geometry.reset();
     m_surfaces->invalidate(m_facade->currentRevision());
 }
+
+void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features features)
+{
+    pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
+    settings.features = features;
+    m_surfaces->setRenderSettings(settings);
+    syncOverlaySuppressionFromRenderFeatures(features);
+}
+
+void DocumentViewSession::syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features)
+{
+    m_overlays->setDenyExtraGraphics(features.testFlag(pdf::PDFRenderer::DenyExtraGraphics));
+}

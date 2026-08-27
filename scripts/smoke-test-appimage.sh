@@ -137,5 +137,17 @@ if [[ "${#FORBIDDEN_HITS[@]}" -gt 0 ]]; then
 fi
 echo "OK: no Ghostscript / JRE / Python payload in the default bundle"
 
+WIDGETS_HITS=()
+while IFS= read -r hit; do
+    WIDGETS_HITS+=("$hit")
+done < <(find "$ROOT" -type f \( -name 'Qt6Widgets.*' -o -name 'libQt6Widgets.so*' \) 2>/dev/null)
+
+if [[ "${#WIDGETS_HITS[@]}" -gt 0 ]]; then
+    echo "Forbidden Qt6Widgets payload found in the AppImage tree:" >&2
+    printf '  %s\n' "${WIDGETS_HITS[@]}" >&2
+    exit 1
+fi
+echo "OK: no Qt6Widgets payload in the release bundle"
+
 echo "AppImage smoke test passed."
 exit 0

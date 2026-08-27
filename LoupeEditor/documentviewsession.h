@@ -13,6 +13,7 @@
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
+#include "pdfrenderer.h"
 
 #include <QObject>
 #include <memory>
@@ -64,8 +65,10 @@ public:
 
     void prepareDocumentView();
     void clearDocumentView();
+    void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
 private:
+    void syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features);
     // Reset explicitly in the destructor so every worker is joined while the
     // loader, writer, and renderer captured by jobs are still alive.
     std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
