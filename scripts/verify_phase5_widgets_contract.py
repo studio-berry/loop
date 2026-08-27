@@ -105,7 +105,7 @@ def validate_inventory(inventory: dict, root: Path) -> list[str]:
     for group in plugin_ui:
         if group.get("forms"):
             target = target_map.get(group.get("target"))
-            if not target or not str(target.get("cmake", "")).startswith("LoupeEditorPlugins/"):
+            if not target or not str(target.get("cmake", "")).startswith("LoopEditorPlugins/"):
                 errors.append(f"plugin UI group has no plugin target: {group.get('plugin')}")
             for path in group.get("forms", []):
                 if path not in {row.get("path") for row in ui_forms}:

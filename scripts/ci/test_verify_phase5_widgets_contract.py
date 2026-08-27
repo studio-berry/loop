@@ -80,11 +80,11 @@ class Phase5WidgetsContractTests(unittest.TestCase):
     def test_secondary_executables_are_absent_after_issue_17(self):
         product = json.loads((ROOT / "docs" / "product-surface.json").read_text(encoding="utf-8"))
         by_id = {row["id"]: row for row in product["surfaces"]}
-        for surface_id in ("loupe-viewer", "loupe-pagemaster", "loupe-diff", "loupe-launchpad"):
+        for surface_id in ("loop-viewer", "loop-pagemaster", "loop-diff", "loop-launchpad"):
             row = by_id[surface_id]
             self.assertEqual(row["artifact_scope"], "build", surface_id)
             self.assertEqual(row["profiles"]["developer"], "absent", surface_id)
-            self.assertEqual(row["profiles"]["loupe-release"], "absent", surface_id)
+            self.assertEqual(row["profiles"]["loop-release"], "absent", surface_id)
         inventory_ids = {row["id"] for row in self.inventory["targets"]}
         for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
             self.assertNotIn(name, inventory_ids, name)
@@ -98,7 +98,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         for row in product["surfaces"]:
             option = row.get("build_option")
             if option:
-                expected[option] = row["profiles"]["loupe-release"] == "present"
+                expected[option] = row["profiles"]["loop-release"] == "present"
         self.assertEqual(self.inventory["profile"]["options"], dict(sorted(expected.items())))
 
     def test_configured_cmake_cache_is_checked_against_manifest_profile(self):
@@ -130,7 +130,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         self.assertEqual(len(plugin_rows), 12)
         for row in plugin_rows:
             self.assertEqual(row["artifact_scope"], "build", row["artifact"])
-            self.assertEqual(row["profiles"]["loupe-release"], "absent", row["artifact"])
+            self.assertEqual(row["profiles"]["loop-release"], "absent", row["artifact"])
         inventory_ids = {row["id"] for row in self.inventory["targets"]}
         for plugin in (
             "ActionListPlugin",
@@ -148,7 +148,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         ):
             self.assertNotIn(plugin, inventory_ids, plugin)
 
-    def test_loupe_editor_is_sole_installed_interactive_product(self):
+    def test_loop_editor_is_sole_installed_interactive_product(self):
         completed = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "verify-installed-product-graph.py")],
             capture_output=True,
@@ -167,7 +167,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
 
     def test_developer_tool_ui_forms_match_ledger(self):
-        shell = json.loads((ROOT / "docs/loupe-shell.json").read_text(encoding="utf-8"))
+        shell = json.loads((ROOT / "docs/loop-shell.json").read_text(encoding="utf-8"))
         legacy = shell["legacy_surface_disposition"]
         self.assertEqual(len(legacy), 2)
         repo_ui = sorted(

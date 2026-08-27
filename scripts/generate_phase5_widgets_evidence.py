@@ -21,7 +21,7 @@ from typing import Iterable
 QUALIFIED_BASELINE_SHA = "d7f39224ad22f26c5f67dcd000383d6239acfff4"
 INVENTORY_PATH = Path("docs/generated/phase5-widgets-inventory.json")
 DISPOSITION_PATH = Path("docs/generated/phase5-widgets-disposition.json")
-PROFILE_ID = "loupe-release"
+PROFILE_ID = "loop-release"
 
 TARGET_COMMANDS = {"add_library", "add_executable", "qt_add_library", "qt_add_executable"}
 VISIBILITY = {"PRIVATE", "PUBLIC", "INTERFACE"}
@@ -461,7 +461,7 @@ def build_inventory(root: Path) -> dict:
         },
         "inputs": {
             "cmake_files": sorted(target["cmake"] for target in target_rows),
-            "shell_ledger": "docs/loupe-shell.json",
+            "shell_ledger": "docs/loop-shell.json",
             "product_ledger": "docs/product-surface.json",
             "ui_glob": "**/*.ui",
         },
@@ -530,7 +530,7 @@ def _proven_owner_ids(product: dict) -> frozenset[str]:
         for row in product.get("surfaces", [])
         if row.get("kind") == "application"
         and row.get("artifact_scope") == "install"
-        and row.get("profiles", {}).get("loupe-release") == "present"
+        and row.get("profiles", {}).get("loop-release") == "present"
         and not row.get("replacement_surface")
     )
 
@@ -580,7 +580,7 @@ def _product_phase5(row: dict, proven_owners: frozenset[str]) -> dict:
 
 
 def build_disposition(root: Path, inventory: dict) -> dict:
-    shell = _load_json(root, "docs/loupe-shell.json")
+    shell = _load_json(root, "docs/loop-shell.json")
     product = _load_json(root, "docs/product-surface.json")
     product_targets = _product_target_map(product)
     proven_owners = _proven_owner_ids(product)
@@ -608,7 +608,7 @@ def build_disposition(root: Path, inventory: dict) -> dict:
                     "disposition": disposition,
                     "testable_condition": source["deletion_condition"],
                     "source_disposition": source_disposition,
-                    "source": "docs/loupe-shell.json:legacy_surface_disposition",
+                    "source": "docs/loop-shell.json:legacy_surface_disposition",
                     "replacement_target": source.get("replacement_target"),
                 }
             )
@@ -659,7 +659,7 @@ def build_disposition(root: Path, inventory: dict) -> dict:
             "status": "matched" if plugin in target_rows else "explained-plugin-source-deleted",
             "shell_disposition": row.get("disposition"),
             "explanation": (
-                "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+                "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loop-release absence."
                 if plugin not in target_rows
                 else None
             ),
@@ -680,7 +680,7 @@ def build_disposition(root: Path, inventory: dict) -> dict:
         "evidence_kind": "phase5-widgets-disposition",
         "qualified_baseline_sha": inventory["qualified_baseline_sha"],
         "inventory": "docs/generated/phase5-widgets-inventory.json",
-        "policy_inputs": ["docs/loupe-shell.json", "docs/product-surface.json"],
+        "policy_inputs": ["docs/loop-shell.json", "docs/product-surface.json"],
         "allowed_dispositions": ["DELETE", "HEADLESS-REPLACE", "RETAIN-NON-PRODUCT", "BLOCKED"],
         "rows": sorted(rows, key=lambda row: row["id"]),
         "crosswalk": {
