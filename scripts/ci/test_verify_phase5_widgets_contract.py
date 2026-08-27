@@ -100,6 +100,19 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         self.assertNotIn("may leave the install graph", ocr["testable_condition"])
         product = json.loads((ROOT / "docs" / "product-surface.json").read_text(encoding="utf-8"))
         self.assertEqual(sorted(_proven_owner_ids(product)), ["loupe-cli", "loupe-editor"])
+        by_id = {row["id"]: row for row in product["surfaces"]}
+        for surface_id in ("loupe-viewer", "loupe-pagemaster", "loupe-diff", "loupe-launchpad"):
+            row = by_id[surface_id]
+            self.assertEqual(row["artifact_scope"], "build", surface_id)
+            self.assertEqual(row["profiles"]["developer"], "absent", surface_id)
+            self.assertEqual(row["profiles"]["loupe-release"], "absent", surface_id)
+        packaging = product["packaging"]
+        self.assertEqual(packaging["appx_applications"]["developer"], ["LoupeEditor"])
+        self.assertEqual(packaging["appx_applications"]["loupe-release"], ["LoupeEditor"])
+        for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
+            target = next(row for row in self.inventory["targets"] if row["id"] == name)
+            self.assertFalse(target["install_rule"], name)
+            self.assertFalse(target["installed_in_profile"], name)
 
 
 if __name__ == "__main__":

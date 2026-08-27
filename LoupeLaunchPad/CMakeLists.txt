@@ -43,8 +43,6 @@ set_target_properties(LoupeLaunchPad PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 
-install(TARGETS LoupeLaunchPad RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR})
-
 if(LOUPE_ENABLE_SENTRY)
     loupe_deploy_sentry_crashpad(LoupeLaunchPad)
 endif()

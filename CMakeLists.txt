@@ -92,55 +92,18 @@ endif()
 # deferring only explicitly out-of-profile plugins without deleting sources.
 option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 
-# 0.2B keeps compatibility executables in the install tree but presents one
-# desktop product. Full developer packages retain the inherited application
-# registrations for direct testing and upstream comparison.
-if(LOUPE_LOUPE_DISTRIBUTION)
-    set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
-else()
-    set(LOUPE_LOUPE_COMPAT_APPLICATIONS [=[
-	<Application Id="LoupeViewer" Executable="LoupeViewer.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe Viewer"
-						  Description="View and navigate PDF documents."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeViewer.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeViewer.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupePageMaster" Executable="LoupePageMaster.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe PageMaster"
-						  Description="Organize, merge, split, and duplicate PDF pages."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupePageMaster.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupePageMaster.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupeDiff" Executable="LoupeDiff.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe Diff"
-						  Description="Compare PDF documents."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeDiff.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeDiff.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupeLaunchPad" Executable="LoupeLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe LaunchPad"
-						  Description="Launch Loupe applications."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\logo.png"
-						  Square44x44Logo="assets\logo.png">
-      </uap:VisualElements>
-    </Application>]=])
-endif()
+# Compatibility Widgets executables are build-optional and never installed.
+# LoupeEditor is the only interactive application in either packaging profile.
+set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
+set(_LOUPE_BUILD_VIEWER_DEFAULT OFF)
+set(_LOUPE_BUILD_PAGEMASTER_DEFAULT OFF)
+set(_LOUPE_BUILD_DIFF_DEFAULT OFF)
+set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT OFF)
 
 if(LOUPE_LOUPE_DISTRIBUTION)
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
     set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
-    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT OFF)
     set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
     set(_LOUPE_PLUGIN_OCR_DEFAULT OFF)
@@ -148,10 +111,6 @@ else()
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
     set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
-    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
     set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT ON)
     set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
     set(_LOUPE_PLUGIN_OCR_DEFAULT ON)
@@ -483,21 +442,12 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         else()
             set(_LOUPE_DESKTOP_ENTRIES
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.desktop
                 Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.desktop
                 Desktop/io.github.mberrys.Loupe-pdf.desktop)
             set(_LOUPE_DESKTOP_ICONS
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.svg
-                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.svg
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.svg
                 Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.svg
                 Desktop/io.github.mberrys.Loupe-pdf.svg)
             set(_LOUPE_DESKTOP_PNGS
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeDiff.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupePageMaster.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeViewer.png
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeEditor.png
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         endif()

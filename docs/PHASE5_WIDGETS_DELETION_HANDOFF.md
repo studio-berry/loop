@@ -75,17 +75,18 @@ Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperator
 | `LoupeLibWidgets` | Widgets canvas, dialogs, annotation helpers | No installed target links it; Quick workspaces cover required operator surfaces per `docs/loupe-shell.json` |
 | Widgets-bound `LoupeLibGui` | Editor/viewer windows, dialogs, chrome | Quick shell replaces `pdfeditormainwindow.ui` and related surfaces classified in `legacy_surface_disposition` |
 
-## Widgets executables still in default build graph
+## Widgets executables still in the source tree
 
-Session 03 Issue 10 froze the four secondary executables. Profiles stay
-`present` until install and packaging references are removed.
+Session 03 removed the four secondary executables from the install and packaging
+graph. They remain optional non-installed build targets (`LOUPE_BUILD_*` default
+OFF) until a later session deletes the sources.
 
 | Executable | Disposition | Phase 5 route |
 | --- | --- | --- |
-| `LoupeViewer` | `STOP-SHIPPING` → `DELETE` | LoupeEditor document-open already owns viewing |
-| `LoupePageMaster` | `CLI-ONLY` → `HEADLESS-REPLACE` | `PDFPageMasterExport` + existing PdfTool page commands; no new `pagemaster` CLI and no Pages workspace required |
-| `LoupeDiff` | `CLI-ONLY` → `HEADLESS-REPLACE` | PdfTool `diff` over Core `PDFDiff`; `loupe-compare` stays OPEN and does not retain `LoupeDiff.exe` |
-| `LoupeLaunchPad` | `STOP-SHIPPING` → `DELETE` | LoupeEditor is already the product launcher |
+| `LoupeViewer` | `STOP-SHIPPING` → `DELETE` | Not installed; LoupeEditor document-open already owns viewing |
+| `LoupePageMaster` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; `PDFPageMasterExport` + existing PdfTool page commands |
+| `LoupeDiff` | `CLI-ONLY` → `HEADLESS-REPLACE` | Not installed; PdfTool `diff` over Core `PDFDiff`; `loupe-compare` stays OPEN |
+| `LoupeLaunchPad` | `STOP-SHIPPING` → `DELETE` | Not installed; LoupeEditor is already the product launcher |
 
 See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
 
