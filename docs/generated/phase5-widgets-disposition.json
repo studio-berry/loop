@@ -1,0 +1,1470 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "phase5-widgets-disposition",
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "inventory": "docs/generated/phase5-widgets-inventory.json",
+  "policy_inputs": [
+    "docs/loupe-shell.json",
+    "docs/product-surface.json"
+  ],
+  "allowed_dispositions": [
+    "DELETE",
+    "HEADLESS-REPLACE",
+    "RETAIN-NON-PRODUCT",
+    "BLOCKED"
+  ],
+  "rows": [
+    {
+      "id": "target:ActionListPlugin",
+      "kind": "plugin",
+      "target": "ActionListPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-fix",
+      "rationale": "Reusable Action Lists are batch execution of registered operations, surfaced contextually within Loupe Fix rather than as a separate product.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-fix is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-fix",
+      "follow_up_issue": 30,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Fix"
+    },
+    {
+      "id": "target:AudioBookPlugin",
+      "kind": "plugin",
+      "target": "AudioBookPlugin",
+      "disposition": "DELETE",
+      "consumer": "AudioBookPlugin",
+      "rationale": "Retain source and developer support, but keep audiobook conversion outside the Loupe release plugin pack.",
+      "testable_condition": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
+      "source_disposition": "STOP-SHIPPING",
+      "source": "docs/product-surface.json",
+      "replacement_target": null,
+      "follow_up_issue": null,
+      "shell_disposition": "STOP-SHIPPING",
+      "shell_target": "Advanced"
+    },
+    {
+      "id": "target:CanvasBenchmark",
+      "kind": "developer-tool",
+      "target": "CanvasBenchmark",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "Qualification-only benchmark harness",
+      "rationale": "CanvasBenchmark is explicitly non-installed qualification infrastructure.",
+      "testable_condition": "Retain only outside the supported installed interactive product and keep its qualification-only build option explicit.",
+      "source": "phase5-special-target-policy"
+    },
+    {
+      "id": "target:CodeGenerator",
+      "kind": "developer-tool",
+      "target": "CodeGenerator",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "developer-only surface",
+      "rationale": "Retained for developer/upstream comparison workflows; not a Loupe operator product entry.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": null,
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:DimensionsPlugin",
+      "kind": "plugin",
+      "target": "DimensionsPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-pages-production",
+      "rationale": "Page geometry and measurement belong to Pages / Inspect inside Loupe.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-pages-production is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-pages-production",
+      "follow_up_issue": 193,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Inspect"
+    },
+    {
+      "id": "target:EditorPlugin",
+      "kind": "plugin",
+      "target": "EditorPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-fix",
+      "rationale": "Only deterministic editing primitives that support Loupe workflows remain reachable through Fix.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-fix is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-fix",
+      "follow_up_issue": 193,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Document"
+    },
+    {
+      "id": "target:JBIG2_VIEWER",
+      "kind": "developer-tool",
+      "target": "JBIG2_VIEWER",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "loupe-inspect",
+      "rationale": "Retained for developer/upstream comparison workflows; no separate Loupe product entry.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-inspect",
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:LoupeDiff",
+      "kind": "application",
+      "target": "LoupeDiff",
+      "disposition": "BLOCKED",
+      "consumer": "loupe-compare",
+      "rationale": "Compare is not approved as an in-app production workspace yet; preserve the Core diff contract and compatibility executable without a product entry.",
+      "testable_condition": "Resolve the linked product decision before deletion or replacement; current follow-up issue is 193.",
+      "source_disposition": "OPEN",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-compare",
+      "follow_up_issue": 193
+    },
+    {
+      "id": "target:LoupeEditorWidgetsOracle",
+      "kind": "oracle",
+      "target": "LoupeEditorWidgetsOracle",
+      "disposition": "DELETE",
+      "consumer": "Archived parity evidence and Quick-native tests",
+      "rationale": "The oracle is a non-installed migration comparison target, not a supported product surface.",
+      "testable_condition": "Delete only after parity assertions and SHA-attributed evidence are archived in Quick-native coverage.",
+      "source": "phase5-special-target-policy"
+    },
+    {
+      "id": "target:LoupeLaunchPad",
+      "kind": "application",
+      "target": "LoupeLaunchPad",
+      "disposition": "DELETE",
+      "consumer": "loupe-editor",
+      "rationale": "A hub for upstream executables contradicts the Loupe product model; retain direct compatibility invocation but expose no entrypoint.",
+      "testable_condition": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",
+      "source_disposition": "HIDE",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-editor",
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:LoupeLibGui",
+      "kind": "library",
+      "target": "LoupeLibGui",
+      "disposition": "DELETE",
+      "consumer": "LoupeEditor Quick shell and PdfTool",
+      "rationale": "Widgets-bound editor/viewer chrome is replaced by the Quick shell and headless capability owners.",
+      "testable_condition": "Delete only after pdfeditormainwindow.ui and all remaining Widgets-bound GUI consumers have approved Quick/headless replacements.",
+      "source": "phase5-special-target-policy"
+    },
+    {
+      "id": "target:LoupeLibWidgets",
+      "kind": "library",
+      "target": "LoupeLibWidgets",
+      "disposition": "DELETE",
+      "consumer": "Quick workspaces and headless PdfTool paths",
+      "rationale": "Widgets canvas/dialog library is residual compatibility infrastructure, not the supported Quick product boundary.",
+      "testable_condition": "Delete only after no installed target links LoupeLibWidgets and required Quick/headless capabilities are proven.",
+      "source": "phase5-special-target-policy"
+    },
+    {
+      "id": "target:LoupePageMaster",
+      "kind": "application",
+      "target": "LoupePageMaster",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-pages-production",
+      "rationale": "PageMaster becomes the Pages / Production workspace over PDFPageMasterExport; the standalone executable remains compatibility-only until the shell lands.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-pages-production is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-pages-production",
+      "follow_up_issue": 193
+    },
+    {
+      "id": "target:LoupePreflightPlugin",
+      "kind": "plugin",
+      "target": "LoupePreflightPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-preflight",
+      "rationale": "Preflight is a Loupe workspace over the shared Core and CLI contracts.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-preflight is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-preflight",
+      "follow_up_issue": 195,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Preflight"
+    },
+    {
+      "id": "target:LoupeViewer",
+      "kind": "application",
+      "target": "LoupeViewer",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-document",
+      "rationale": "Viewing is normal document-open behavior in Loupe, not a second product shell; compatibility invocation remains available.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-document is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-document",
+      "follow_up_issue": 193
+    },
+    {
+      "id": "target:ObjectInspectorPlugin",
+      "kind": "plugin",
+      "target": "ObjectInspectorPlugin",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "loupe-inspect",
+      "rationale": "Object inspection remains available as an explicit advanced workflow.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-inspect",
+      "follow_up_issue": 193,
+      "shell_disposition": "ADVANCED",
+      "shell_target": "Inspect"
+    },
+    {
+      "id": "target:OcrPlugin",
+      "kind": "plugin",
+      "target": "OcrPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-cli",
+      "rationale": "OCR is a PdfTool client capability; no Editor OCR plugin is bundled in the Loupe release profile.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-cli is proven to carry the required capability.",
+      "source_disposition": "CLI-ONLY",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-cli",
+      "follow_up_issue": 41,
+      "shell_disposition": "STOP-SHIPPING",
+      "shell_target": "Advanced"
+    },
+    {
+      "id": "target:OutputPreviewPlugin",
+      "kind": "plugin",
+      "target": "OutputPreviewPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-production-preview",
+      "rationale": "Output Preview is the Production Preview workspace, not a separate product.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-production-preview is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-production-preview",
+      "follow_up_issue": 193,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Production"
+    },
+    {
+      "id": "target:PdfExampleGenerator",
+      "kind": "developer-tool",
+      "target": "PdfExampleGenerator",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "developer-only surface",
+      "rationale": "Retained for deterministic fixture generation and developer workflows, not shipped as a user surface.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": null,
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:RedactPlugin",
+      "kind": "plugin",
+      "target": "RedactPlugin",
+      "disposition": "BLOCKED",
+      "consumer": "loupe-fix",
+      "rationale": "Redaction product commitment remains blocked on the existing security/product decision.",
+      "testable_condition": "Resolve the linked product decision before deletion or replacement; current follow-up issue is 66.",
+      "source_disposition": "OPEN",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-fix",
+      "follow_up_issue": 66,
+      "shell_disposition": "OPEN",
+      "shell_target": "Fix"
+    },
+    {
+      "id": "target:ScannerPlugin",
+      "kind": "plugin",
+      "target": "ScannerPlugin",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "loupe-document",
+      "rationale": "Scanner remains retained by the release profile but is not a separate Loupe product entry.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-document",
+      "follow_up_issue": null,
+      "shell_disposition": "ADVANCED",
+      "shell_target": "Document"
+    },
+    {
+      "id": "target:SignaturePlugin",
+      "kind": "plugin",
+      "target": "SignaturePlugin",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "loupe-fix",
+      "rationale": "Signing and verification remain available as an advanced workflow.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-fix",
+      "follow_up_issue": null,
+      "shell_disposition": "ADVANCED",
+      "shell_target": "Inspect"
+    },
+    {
+      "id": "target:SoftProofingPlugin",
+      "kind": "plugin",
+      "target": "SoftProofingPlugin",
+      "disposition": "HEADLESS-REPLACE",
+      "consumer": "loupe-production-preview",
+      "rationale": "Separations and proofing belong to Production Preview.",
+      "testable_condition": "Remove the interactive Widgets surface only after loupe-production-preview is proven to carry the required capability.",
+      "source_disposition": "ABSORB",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-production-preview",
+      "follow_up_issue": 193,
+      "shell_disposition": "ABSORB",
+      "shell_target": "Production"
+    },
+    {
+      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "kind": "ui-form",
+      "path": "CodeGenerator/generatormainwindow.ui",
+      "owner_target": "CodeGenerator",
+      "consumer": "loupe-cli",
+      "rationale": "Developer fixture generator; not a product surface.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for CodeGenerator/generatormainwindow.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-cli"
+    },
+    {
+      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "JBIG2_Viewer/mainwindow.ui",
+      "owner_target": "JBIG2_VIEWER",
+      "consumer": "loupe-inspect",
+      "rationale": "Developer JBIG2 probe; not a product surface.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for JBIG2_Viewer/mainwindow.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeDiff/aboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/aboutdialog.ui",
+      "owner_target": "LoupeDiff",
+      "consumer": "loupe-compare",
+      "rationale": "Compare workspace about surface.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/aboutdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-compare"
+    },
+    {
+      "id": "ui:LoupeDiff/differencesdockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/differencesdockwidget.ui",
+      "owner_target": "LoupeDiff",
+      "consumer": "loupe-compare",
+      "rationale": "Compare workspace diff panel.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/differencesdockwidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-compare"
+    },
+    {
+      "id": "ui:LoupeDiff/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/mainwindow.ui",
+      "owner_target": "LoupeDiff",
+      "consumer": "loupe-compare",
+      "rationale": "LoupeDiff executable shell absorbed into Compare workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/mainwindow.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-compare"
+    },
+    {
+      "id": "ui:LoupeDiff/settingsdockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeDiff/settingsdockwidget.ui",
+      "owner_target": "LoupeDiff",
+      "consumer": "loupe-compare",
+      "rationale": "Compare workspace settings panel.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeDiff/settingsdockwidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-compare"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+      "owner_target": "AudioBookPlugin",
+      "consumer": "developer/CLI compatibility boundary",
+      "rationale": "AudioBook plugin is STOP-SHIPPING.",
+      "disposition": "DELETE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui.",
+      "source_disposition": "RETIRE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": null
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+      "owner_target": "DimensionsPlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Dimensions settings absorbed into Inspect workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Object inspector dialog absorbed into InspectorPane.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Statistics dialog absorbed into Inspect workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Object viewer absorbed into Inspect workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+      "owner_target": "ObjectInspectorPlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Statistics graph absorbed into Inspect workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+      "owner_target": "OutputPreviewPlugin",
+      "consumer": "loupe-production-preview",
+      "rationale": "Ink coverage absorbed into Production Preview.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-production-preview"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+      "owner_target": "OutputPreviewPlugin",
+      "consumer": "loupe-production-preview",
+      "rationale": "Output preview absorbed into Production Preview.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-production-preview"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+      "owner_target": "RedactPlugin",
+      "consumer": "loupe-fix",
+      "rationale": "Redaction dialog pending Fix workspace product decision #66.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-fix"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+      "owner_target": "SignaturePlugin",
+      "consumer": "loupe-inspect",
+      "rationale": "Signature dialog retained as advanced Inspect workflow.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/SignaturePlugin/signdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+      "owner_target": "SoftProofingPlugin",
+      "consumer": "loupe-production-preview",
+      "rationale": "Soft proofing settings absorbed into Production Preview.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-production-preview"
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLaunchPad/launchapplicationwidget.ui",
+      "owner_target": "LoupeLaunchPad",
+      "consumer": "loupe-editor",
+      "rationale": "LaunchPad hub contradicts Loupe product model.",
+      "disposition": "DELETE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLaunchPad/launchapplicationwidget.ui.",
+      "source_disposition": "RETIRE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-editor"
+    },
+    {
+      "id": "ui:LoupeLaunchPad/launchdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLaunchPad/launchdialog.ui",
+      "owner_target": "LoupeLaunchPad",
+      "consumer": "loupe-editor",
+      "rationale": "LaunchPad dialog retired with hub.",
+      "disposition": "DELETE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLaunchPad/launchdialog.ui.",
+      "source_disposition": "RETIRE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-editor"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfaboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfaboutdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Main.qml",
+      "rationale": "About dialog becomes Quick chrome.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfaboutdialog.ui.",
+      "source_disposition": "MIGRATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Main.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfadvancedfindwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfadvancedfindwidget.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Find widget becomes Document workspace Quick surface.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfadvancedfindwidget.ui.",
+      "source_disposition": "MIGRATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "loupe-cli",
+      "rationale": "Bitonal creation remains PdfTool/CLI workflow.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfcreatebitonaldocumentdialog.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-cli"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/InspectorPane.qml",
+      "rationale": "Document properties routed through InspectorModel.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfdocumentpropertiesdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/InspectorPane.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfeditormainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfeditormainwindow.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Main.qml",
+      "rationale": "Widgets editor main window replaced by Quick ApplicationWindow.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfeditormainwindow.ui.",
+      "source_disposition": "MIGRATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Main.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfencryptionsettingsdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Encryption settings absorbed into Document workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfencryptionsettingsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfoptimizedocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Optimize document absorbed into Document workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfoptimizedocumentdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfoptimizeimagesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Optimize images absorbed into Document workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfoptimizeimagesdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfrendertoimagesdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "loupe-cli",
+      "rationale": "Render-to-images remains PdfTool/CLI workflow.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfrendertoimagesdialog.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-cli"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfsanitizedocumentdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "loupe-cli",
+      "rationale": "Sanitize remains PdfTool/CLI workflow.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfsanitizedocumentdialog.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-cli"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfsidebarwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfsidebarwidget.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Sidebar becomes workspace rail in Quick shell.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfsidebarwidget.ui.",
+      "source_disposition": "MIGRATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewermainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfviewermainwindow.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "loupe-document",
+      "rationale": "Viewer main window absorbed into Document workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfviewermainwindow.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-document"
+    },
+    {
+      "id": "ui:LoupeLibGui/pdfviewersettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibGui/pdfviewersettingsdialog.ui",
+      "owner_target": "LoupeLibGui",
+      "consumer": "loupe-document",
+      "rationale": "Viewer settings absorbed into Document workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibGui/pdfviewersettingsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-document"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-pages-production",
+      "rationale": "Insert page numbers absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/insertpagenumbersdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-inspect",
+      "rationale": "Certificate manager retained as advanced Inspect workflow.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-inspect",
+      "rationale": "Certificate creation retained as advanced Inspect workflow.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-fix",
+      "rationale": "Content editor item settings absorbed into Fix workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-fix"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-fix",
+      "rationale": "Content editor style settings absorbed into Fix workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-fix"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-fix",
+      "rationale": "Page content editor absorbed into Fix workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-fix"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "LoupeEditor/qml/Workspace.qml",
+      "rationale": "Shared page-range widget reused by Quick dialogs.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfpagerangewidget.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Workspace.qml"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "LoupeEditor/qml/Main.qml",
+      "rationale": "Rendering errors become status rail presentation.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui.",
+      "source_disposition": "MIGRATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "LoupeEditor/qml/Main.qml"
+    },
+    {
+      "id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+      "owner_target": "LoupeLibWidgets",
+      "consumer": "loupe-pages-production",
+      "rationale": "Select pages dialog absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupeLibWidgets/sources/pdfselectpagesdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/aboutdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/aboutdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "PageMaster about absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/aboutdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "Assembly settings absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/assembleoutputsettingsdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/croppagesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/croppagesdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "Crop pages absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/croppagesdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/itempropertiesdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/itempropertiesdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "Item properties absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/itempropertiesdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/mainwindow.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "PageMaster main window absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/mainwindow.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/pdfpageimportdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "Page import absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/pdfpageimportdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    },
+    {
+      "id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "kind": "ui-form",
+      "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
+      "owner_target": "LoupePageMaster",
+      "consumer": "loupe-pages-production",
+      "rationale": "Outline regroup absorbed into Pages workspace.",
+      "disposition": "HEADLESS-REPLACE",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for LoupePageMaster/selectoutlinetoregroupdialog.ui.",
+      "source_disposition": "CONSOLIDATE",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-pages-production"
+    }
+  ],
+  "crosswalk": {
+    "product_surface": [
+      {
+        "id": "loupe-editor",
+        "artifact": "LoupeEditor",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-cli",
+        "artifact": "PdfTool",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-viewer",
+        "artifact": "LoupeViewer",
+        "status": "matched"
+      },
+      {
+        "id": "loupe-pagemaster",
+        "artifact": "LoupePageMaster",
+        "status": "matched"
+      },
+      {
+        "id": "loupe-diff",
+        "artifact": "LoupeDiff",
+        "status": "matched"
+      },
+      {
+        "id": "loupe-launchpad",
+        "artifact": "LoupeLaunchPad",
+        "status": "matched"
+      },
+      {
+        "id": "code-generator",
+        "artifact": "CodeGenerator",
+        "status": "matched"
+      },
+      {
+        "id": "jbig2-viewer",
+        "artifact": "JBIG2_VIEWER",
+        "status": "matched"
+      },
+      {
+        "id": "pdf-example-generator",
+        "artifact": "PdfExampleGenerator",
+        "status": "matched"
+      },
+      {
+        "id": "dimensions-plugin",
+        "artifact": "DimensionsPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "object-inspector-plugin",
+        "artifact": "ObjectInspectorPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "output-preview-plugin",
+        "artifact": "OutputPreviewPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "soft-proofing-plugin",
+        "artifact": "SoftProofingPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "redact-plugin",
+        "artifact": "RedactPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "signature-plugin",
+        "artifact": "SignaturePlugin",
+        "status": "matched"
+      },
+      {
+        "id": "editor-plugin",
+        "artifact": "EditorPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "loupe-preflight-plugin",
+        "artifact": "LoupePreflightPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "action-list-plugin",
+        "artifact": "ActionListPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "scanner-plugin",
+        "artifact": "ScannerPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "audiobook-plugin",
+        "artifact": "AudioBookPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "ocr-plugin",
+        "artifact": "OcrPlugin",
+        "status": "matched"
+      },
+      {
+        "id": "loupe-document",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-preflight",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-production-preview",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-pages-production",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-inspect",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-fix",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-compare",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      }
+    ],
+    "plugin_action_policy": [
+      {
+        "plugin": "ActionListPlugin",
+        "surface_id": "target:ActionListPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      },
+      {
+        "plugin": "AudioBookPlugin",
+        "surface_id": "target:AudioBookPlugin",
+        "status": "matched",
+        "shell_disposition": "STOP-SHIPPING"
+      },
+      {
+        "plugin": "DimensionsPlugin",
+        "surface_id": "target:DimensionsPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      },
+      {
+        "plugin": "EditorPlugin",
+        "surface_id": "target:EditorPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      },
+      {
+        "plugin": "LoupePreflightPlugin",
+        "surface_id": "target:LoupePreflightPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      },
+      {
+        "plugin": "ObjectInspectorPlugin",
+        "surface_id": "target:ObjectInspectorPlugin",
+        "status": "matched",
+        "shell_disposition": "ADVANCED"
+      },
+      {
+        "plugin": "OcrPlugin",
+        "surface_id": "target:OcrPlugin",
+        "status": "matched",
+        "shell_disposition": "STOP-SHIPPING"
+      },
+      {
+        "plugin": "OutputPreviewPlugin",
+        "surface_id": "target:OutputPreviewPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      },
+      {
+        "plugin": "RedactPlugin",
+        "surface_id": "target:RedactPlugin",
+        "status": "matched",
+        "shell_disposition": "OPEN"
+      },
+      {
+        "plugin": "ScannerPlugin",
+        "surface_id": "target:ScannerPlugin",
+        "status": "matched",
+        "shell_disposition": "ADVANCED"
+      },
+      {
+        "plugin": "SignaturePlugin",
+        "surface_id": "target:SignaturePlugin",
+        "status": "matched",
+        "shell_disposition": "ADVANCED"
+      },
+      {
+        "plugin": "SoftProofingPlugin",
+        "surface_id": "target:SoftProofingPlugin",
+        "status": "matched",
+        "shell_disposition": "ABSORB"
+      }
+    ],
+    "legacy_surface_disposition": [
+      {
+        "path": "CodeGenerator/generatormainwindow.ui",
+        "surface_id": "ui:CodeGenerator/generatormainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "JBIG2_Viewer/mainwindow.ui",
+        "surface_id": "ui:JBIG2_Viewer/mainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "LoupeDiff/aboutdialog.ui",
+        "surface_id": "ui:LoupeDiff/aboutdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeDiff/differencesdockwidget.ui",
+        "surface_id": "ui:LoupeDiff/differencesdockwidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeDiff/mainwindow.ui",
+        "surface_id": "ui:LoupeDiff/mainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeDiff/settingsdockwidget.ui",
+        "surface_id": "ui:LoupeDiff/settingsdockwidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+        "surface_id": "ui:LoupeEditorPlugins/AudioBookPlugin/audiotextstreameditordockwidget.ui",
+        "status": "matched",
+        "shell_disposition": "RETIRE"
+      },
+      {
+        "path": "LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/DimensionsPlugin/settingsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectinspectordialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectstatisticsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+        "surface_id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/objectviewerwidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+        "surface_id": "ui:LoupeEditorPlugins/ObjectInspectorPlugin/statisticsgraphwidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/inkcoveragedialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/OutputPreviewPlugin/outputpreviewdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/RedactPlugin/createredacteddocumentdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/SignaturePlugin/signdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+        "surface_id": "ui:LoupeEditorPlugins/SoftProofingPlugin/settingsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLaunchPad/launchapplicationwidget.ui",
+        "surface_id": "ui:LoupeLaunchPad/launchapplicationwidget.ui",
+        "status": "matched",
+        "shell_disposition": "RETIRE"
+      },
+      {
+        "path": "LoupeLaunchPad/launchdialog.ui",
+        "surface_id": "ui:LoupeLaunchPad/launchdialog.ui",
+        "status": "matched",
+        "shell_disposition": "RETIRE"
+      },
+      {
+        "path": "LoupeLibGui/pdfaboutdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfaboutdialog.ui",
+        "status": "matched",
+        "shell_disposition": "MIGRATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfadvancedfindwidget.ui",
+        "surface_id": "ui:LoupeLibGui/pdfadvancedfindwidget.ui",
+        "status": "matched",
+        "shell_disposition": "MIGRATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfcreatebitonaldocumentdialog.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfdocumentpropertiesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfeditormainwindow.ui",
+        "surface_id": "ui:LoupeLibGui/pdfeditormainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "MIGRATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfencryptionsettingsdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfencryptionsettingsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfoptimizedocumentdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfoptimizedocumentdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfoptimizeimagesdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfoptimizeimagesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfrendertoimagesdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfrendertoimagesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "LoupeLibGui/pdfsanitizedocumentdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfsanitizedocumentdialog.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "LoupeLibGui/pdfsidebarwidget.ui",
+        "surface_id": "ui:LoupeLibGui/pdfsidebarwidget.ui",
+        "status": "matched",
+        "shell_disposition": "MIGRATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfviewermainwindow.ui",
+        "surface_id": "ui:LoupeLibGui/pdfviewermainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibGui/pdfviewersettingsdialog.ui",
+        "surface_id": "ui:LoupeLibGui/pdfviewersettingsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/insertpagenumbersdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfcertificatemanagerdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfcreatecertificatedialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorediteditemsettings.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorstylesettings.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfpagecontenteditorwidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfpagerangewidget.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfrenderingerrorswidget.ui",
+        "status": "matched",
+        "shell_disposition": "MIGRATE"
+      },
+      {
+        "path": "LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+        "surface_id": "ui:LoupeLibWidgets/sources/pdfselectpagesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/aboutdialog.ui",
+        "surface_id": "ui:LoupePageMaster/aboutdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/assembleoutputsettingsdialog.ui",
+        "surface_id": "ui:LoupePageMaster/assembleoutputsettingsdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/croppagesdialog.ui",
+        "surface_id": "ui:LoupePageMaster/croppagesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/itempropertiesdialog.ui",
+        "surface_id": "ui:LoupePageMaster/itempropertiesdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/mainwindow.ui",
+        "surface_id": "ui:LoupePageMaster/mainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/pdfpageimportdialog.ui",
+        "surface_id": "ui:LoupePageMaster/pdfpageimportdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      },
+      {
+        "path": "LoupePageMaster/selectoutlinetoregroupdialog.ui",
+        "surface_id": "ui:LoupePageMaster/selectoutlinetoregroupdialog.ui",
+        "status": "matched",
+        "shell_disposition": "CONSOLIDATE"
+      }
+    ]
+  },
+  "counts": {
+    "rows": 71,
+    "delete": 8,
+    "headless_replace": 49,
+    "retain_non_product": 12,
+    "blocked": 2
+  }
+}

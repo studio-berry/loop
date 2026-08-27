@@ -20,6 +20,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn(".\\scripts\\verify-loupe-surface.ps1", workflow)
         self.assertNotIn(".\\loupe\\scripts\\verify-loupe-surface.ps1", workflow)
 
+    def test_ci_runs_phase5_widgets_evidence_and_contract(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
+        self.assertIn("python3 scripts/verify_phase5_widgets_contract.py", workflow)
+
+    def test_windows_validation_runs_phase5_widgets_twin(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn(".\\scripts\\verify-phase5-widgets-contract.ps1", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
