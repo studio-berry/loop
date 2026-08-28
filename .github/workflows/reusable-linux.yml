@@ -280,10 +280,10 @@ jobs:
           path: loupe/agent-fast-evidence.json
           if-no-files-found: error
 
-      - name: Verify developer product surface
+      - name: Verify loupe-release product surface
         if: ${{ !inputs.fast }}
         working-directory: loupe
-        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile developer
+        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release
 
       - name: Run unit tests
         if: ${{ !inputs.fast }}
