@@ -31,6 +31,12 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn(".\\scripts\\verify-phase5-widgets-contract.ps1", workflow)
 
+    def test_linux_release_gate_verifies_loupe_release_surface(self):
+        workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
+        self.assertIn("LOUPE_LOUPE_DISTRIBUTION=ON", workflow)
+        self.assertIn("-Profile loupe-release", workflow)
+        self.assertNotIn("-Profile developer", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
