@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "loop-default",
   "version": "1.0.0",
-  "digest": "b738807103cf89325c7235d8c5789e91b0237c5d7f357769fb29f669aae1b28e",
+  "digest": "0c32cc54154186f2d92a02804e4b8ac8ebd226863cca15e9670bf12f1c84c1a1",
   "name": "Loop Default",
   "description": "Default prepress profile for Loop print jobs (Venue Poster, Handbill, Signage).",
   "job_types": ["Venue Poster", "Handbill", "Signage"],
