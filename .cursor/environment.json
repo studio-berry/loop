@@ -1,0 +1,4 @@
+{
+  "name": "Loupe-PDF",
+  "install": "./scripts/setup-dev-env.sh"
+}
