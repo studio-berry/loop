@@ -31,10 +31,10 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn(".\\scripts\\verify-phase5-widgets-contract.ps1", workflow)
 
-    def test_linux_release_gate_verifies_loupe_release_surface(self):
+    def test_linux_release_gate_verifies_loop_release_surface(self):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
-        self.assertIn("LOUPE_LOUPE_DISTRIBUTION=ON", workflow)
-        self.assertIn("-Profile loupe-release", workflow)
+        self.assertIn("LOOP_LOOP_DISTRIBUTION=ON", workflow)
+        self.assertIn("-Profile loop-release", workflow)
         self.assertNotIn("-Profile developer", workflow)
 
     def test_linux_release_gate_qualifies_without_widgets(self):
@@ -67,13 +67,13 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
             self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
             self.assertIn("Verify exact source SHA", workflow)
-            self.assertIn("LOUPE_SOURCE_SHA", workflow)
+            self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)
             self.assertIn("source-sha", workflow)
         self.assertIn("--expected-architecture x86-64", linux)
         self.assertIn("--expected-architecture x64", windows)
-        self.assertIn("loupe-package-boundary-linux-evidence", linux)
-        self.assertIn("loupe-package-boundary-windows-evidence", windows)
+        self.assertIn("loop-package-boundary-linux-evidence", linux)
+        self.assertIn("loop-package-boundary-windows-evidence", windows)
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
@@ -89,8 +89,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("source_sha:", workflow)
         self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
         self.assertIn("compare_package_boundary_evidence.py", workflow)
-        self.assertIn("loupe-package-boundary-linux-evidence", workflow)
-        self.assertIn("loupe-package-boundary-windows-evidence", workflow)
+        self.assertIn("loop-package-boundary-linux-evidence", workflow)
+        self.assertIn("loop-package-boundary-windows-evidence", workflow)
         self.assertIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
         self.assertIn("Exclude CI evidence from release assets", workflow)
         self.assertIn("source_sha", workflow)
@@ -100,20 +100,20 @@ class WorkflowContractTests(unittest.TestCase):
         cmake = (ROOT / "WixInstaller/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertNotIn('Component Id="cmpQt6Widgets"', product)
         self.assertNotIn('Component Id="cmpQt6PrintSupport"', product)
-        self.assertIn("LOUPE_WIX_QT_WIDGETS_COMPONENT", product)
-        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", product)
-        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY", product)
+        self.assertIn("LOOP_WIX_QT_WIDGETS_COMPONENT", product)
+        self.assertIn("LOOP_WIX_QT_PRINTSUPPORT_COMPONENT", product)
+        self.assertIn("LOOP_WIX_QT_PRINTSUPPORT_DIRECTORY", product)
         self.assertNotIn('Component Id="cmpqmodernwindowsstyle"', product)
-        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", product)
-        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", product)
-        self.assertIn("if(LOUPE_LOUPE_DISTRIBUTION)", cmake)
-        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", cmake)
-        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", cmake)
-        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", cmake)
+        self.assertIn("LOOP_WIX_QT_STYLES_COMPONENT", product)
+        self.assertIn("LOOP_WIX_QT_STYLES_DIRECTORY", product)
+        self.assertIn("if(LOOP_LOOP_DISTRIBUTION)", cmake)
+        self.assertIn("LOOP_WIX_QT_PRINTSUPPORT_COMPONENT", cmake)
+        self.assertIn("LOOP_WIX_QT_STYLES_COMPONENT", cmake)
+        self.assertIn("LOOP_WIX_QT_STYLES_DIRECTORY", cmake)
 
     def test_release_profile_does_not_stage_qt_style_plugins(self):
         root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn("if(NOT LOUPE_LOUPE_DISTRIBUTION)", root)
+        self.assertIn("if(NOT LOOP_LOOP_DISTRIBUTION)", root)
         self.assertIn("plugins/styles/", root)
 
     def test_wix_package_uses_the_64_bit_program_files_directory(self):
@@ -122,7 +122,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('Directory Id="ProgramFiles64Folder"', product)
 
     def test_wix_solution_declares_only_x64_configurations(self):
-        solution = (ROOT / "WixInstaller/LOUPE.sln.in").read_text(encoding="utf-8")
+        solution = (ROOT / "WixInstaller/LOOP.sln.in").read_text(encoding="utf-8")
         self.assertIn("Debug|x64 = Debug|x64", solution)
         self.assertIn("Release|x64 = Release|x64", solution)
         self.assertNotIn("Debug|x86", solution)
@@ -130,8 +130,8 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_msi_smoke_scans_current_and_legacy_share_locations(self):
         smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
-        self.assertIn('(Join-Path $InstallDir "share\\loupe")', smoke)
-        self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loupe")', smoke)
+        self.assertIn('(Join-Path $InstallDir "share\\loop")', smoke)
+        self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loop")', smoke)
 
 
 if __name__ == "__main__":
