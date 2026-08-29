@@ -83,9 +83,9 @@ targeted Core tests before merging an authorized sync.
 | Area | Path | Purpose |
 |------|------|---------|
 | Core PDF library | `LoupeLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
-| Interactive editor | `LoupeEditor/`, `LoupeLibGui/` | Primary interactive shell and plugin host |
+| Interactive editor | `LoupeEditor/`, `LoupeLibQuick/` | Primary Qt Quick shell and canvas host |
 | Headless CLI | `PdfTool/` | Automation, batch checks, rendering, and repair |
-| Page production | `LoupePageMaster/` | Batch geometry, assembly, and production export |
+| Page production | `PdfTool/`, `LoupeLibCore/` | Batch geometry, assembly, and production export |
 | Editor plugins | `LoupeEditorPlugins/` | Editor-only capabilities |
 | Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
 | Preflight contract | `loupe-preflight/` | Profiles, schemas, examples, and report documentation |
