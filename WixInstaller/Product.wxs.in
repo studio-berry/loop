@@ -3,7 +3,7 @@
   <?define MyInstallDir="${WIX_INSTALL_PREFIX}" ?>
 
   <Product Id="*" Name="Loupe" Language="1033" Version="${LOUPE_VERSION}" Manufacturer="Michael Berry" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
-    <Package Id="*" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
+    <Package Id="*" Platform="x64" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Loupe is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -28,7 +28,7 @@ ${LOUPE_WIX_FEATURE_DIFF}
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
+      <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="LOUPE" />
         <Directory Id="dir_share_root" Name="share">
           <Directory Id="dir_loupe" Name="loupe">
@@ -85,9 +85,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6TextToSpeech" Directory="INSTALLFOLDER" Guid="{82AAD343-207F-4812-BC7E-0F17D9F6B8CD}">
                 <File Id="filQt6TextToSpeech" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6TextToSpeech.dll" />
       </Component>
-      <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
-                <File Id="filQt6Widgets" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Widgets.dll" />
-      </Component>
+${LOUPE_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Xml" Directory="INSTALLFOLDER" Guid="{686836FB-9324-4849-AEFC-3AC5575BE2EC}">
                 <File Id="filQt6Xml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Xml.dll" />
       </Component>

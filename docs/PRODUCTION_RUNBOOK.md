@@ -296,7 +296,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 - [ ] MIC-301 Windows MSI smoke green via `WindowsInstall.yml` → `scripts/Invoke-MsiSmokeTest.ps1`; run URL attached to MIC-327
 - [ ] MIC-301 Linux AppImage smoke green via `LinuxInstall.yml` → `scripts/smoke-test-appimage.sh`; run URL attached to MIC-301
 - [ ] MIC-326 fuzz workflow green on `master`; run URL attached to the issue
-- [ ] MSI install architecture confirmed 64-bit (see the `candle -arch x86` note in `docs/PLATFORM_SUPPORT.md`)
+- [ ] MSI install architecture confirmed 64-bit (`candle -arch x64`; install under 64-bit `Program Files`, see `docs/PLATFORM_SUPPORT.md`)
 - [x] MIC-320 documented as known limitation; report panel shows general overprint disclosure (MIC-330)
 - [x] README documents unsigned Windows installer, SmartScreen steps, and `SHA256SUMS.txt` integrity check (MIC-342)
 - [ ] `PACKAGING_LICENSING.md` critical items reviewed (full checklist gates *paid* distribution)

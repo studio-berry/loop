@@ -44,6 +44,20 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
     set(LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS "")
     set(LOUPE_WIX_EDITOR_PLUGINS "")
 
+    # The release product is Quick-only and must not ship or reference the
+    # Widgets runtime. Keep the legacy component available for developer
+    # installer experiments, but make the distribution decision explicit in
+    # the generated WiX source rather than relying on the staged directory.
+    if(LOUPE_LOUPE_DISTRIBUTION)
+        set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
+    else()
+        set(LOUPE_WIX_QT_WIDGETS_COMPONENT [=[
+      <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
+                <File Id="filQt6Widgets" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Widgets.dll" />
+      </Component>
+]=])
+    endif()
+
     if(LOUPE_LOUPE_DISTRIBUTION)
         set(LOUPE_WIX_VIEWER_SHORTCUT "")
         set(LOUPE_WIX_VIEWER_ASSOCIATION "")
