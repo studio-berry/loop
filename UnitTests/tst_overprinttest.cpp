@@ -34,7 +34,9 @@ private slots:
     void selectBlendOverprintMode_respectsFillStrokeGating();
     void selectBlendOverprintMode_rejectsUnknownMode();
     void renderPolicy_marksOutputPreviewAuthoritative();
+    void renderPolicy_keepsAnalysisPathsAuthoritative();
     void renderDiagnostics_escalatesFallbacksForStrictPolicy();
+    void renderDiagnostics_reportsStandardOverprintApproximation();
     void classifyOverprintFidelity_respectsSupportedBoundary();
     void floatBitmapBlend_mode0_selectsBackdropForInactiveChannels();
     void floatBitmapBlend_mode1_selectsNonOneSourceOrBackdropForSubtractiveChannels();
@@ -113,6 +115,19 @@ void OverprintTest::renderPolicy_marksOutputPreviewAuthoritative()
     QVERIFY(!policy.allowApproximation);
 }
 
+void OverprintTest::renderPolicy_keepsAnalysisPathsAuthoritative()
+{
+    const pdf::PDFRenderPolicy preflight = pdf::PDFRenderPolicy::forPreflightAnalysis();
+    const pdf::PDFRenderPolicy separation = pdf::PDFRenderPolicy::forSeparationPreview();
+
+    QCOMPARE(preflight.purpose, pdf::PDFRenderPurpose::PreflightAnalysis);
+    QVERIFY(preflight.requiresAuthoritativeRenderer());
+    QVERIFY(!preflight.allowApproximation);
+    QCOMPARE(separation.purpose, pdf::PDFRenderPurpose::SeparationPreview);
+    QVERIFY(separation.requiresAuthoritativeRenderer());
+    QVERIFY(!separation.allowApproximation);
+}
+
 void OverprintTest::renderDiagnostics_escalatesFallbacksForStrictPolicy()
 {
     pdf::PDFRenderDiagnostics diagnostics;
@@ -123,6 +138,23 @@ void OverprintTest::renderDiagnostics_escalatesFallbacksForStrictPolicy()
     diagnostics.record(pdf::PDFRenderFidelity::Unsupported, QStringLiteral("unsupported"));
     QCOMPARE(diagnostics.fidelity, pdf::PDFRenderFidelity::Unsupported);
     QCOMPARE(diagnostics.reasons.size(), 2);
+}
+
+void OverprintTest::renderDiagnostics_reportsStandardOverprintApproximation()
+{
+    pdf::PDFRenderDiagnostics diagnostics;
+    pdf::PDFRenderPolicy canvas;
+
+    diagnostics.recordStandardRendererOverprintApproximation(false, canvas);
+    QVERIFY(diagnostics.isExact());
+
+    diagnostics.recordStandardRendererOverprintApproximation(true, canvas);
+    QCOMPARE(diagnostics.fidelity, pdf::PDFRenderFidelity::SupportedWithFallback);
+    QVERIFY(diagnostics.reasons.constFirst().contains(QStringLiteral("Overprint")));
+
+    pdf::PDFRenderDiagnostics authoritative;
+    authoritative.recordStandardRendererOverprintApproximation(true, pdf::PDFRenderPolicy::forOutputPreview());
+    QVERIFY(authoritative.isExact());
 }
 
 void OverprintTest::classifyOverprintFidelity_respectsSupportedBoundary()
