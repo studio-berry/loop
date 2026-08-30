@@ -104,8 +104,10 @@ void DocumentSessionTest::invalidate_clearsCaches()
     const pdf::PDFPrecompiledPage* compiled = session.compilePage(0);
     QVERIFY(compiled != nullptr);
     QCOMPARE(session.compilePage(0), compiled);
+    QVERIFY(session.compiledCacheBytes() > 0);
 
     session.invalidate();
+    QCOMPARE(session.compiledCacheBytes(), qsizetype(0));
 
     const pdf::PDFPrecompiledPage* after = session.compilePage(0);
     QVERIFY(after != nullptr);
@@ -121,11 +123,13 @@ void DocumentSessionTest::setRendererFeatures_invalidatesCompileCache()
     pdf::PDFDocumentSession session(&document);
     const pdf::PDFPrecompiledPage* compiled = session.compilePage(0);
     QVERIFY(compiled != nullptr);
+    QVERIFY(session.compiledCacheBytes() > 0);
 
     pdf::PDFRenderer::Features newFeatures = pdf::PDFRenderer::getDefaultFeatures();
     newFeatures.setFlag(pdf::PDFRenderer::ClipToCropBox, !newFeatures.testFlag(pdf::PDFRenderer::ClipToCropBox));
     session.setRendererFeatures(newFeatures);
     QCOMPARE(session.getRendererFeatures(), newFeatures);
+    QCOMPARE(session.compiledCacheBytes(), qsizetype(0));
 
     const pdf::PDFPrecompiledPage* after = session.compilePage(0);
     QVERIFY(after != nullptr);

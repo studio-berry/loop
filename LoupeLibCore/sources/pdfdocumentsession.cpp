@@ -160,7 +160,6 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
     m_compiledCacheByteLimit = qMin(m_compiledCacheByteLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
-    m_cacheLimit = qMin(m_cacheLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit * 2));
     trimCachesToLimits();
 }
 
@@ -244,12 +243,24 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
     qsizetype estimate = static_cast<qsizetype>(compiledPage.getMemoryConsumptionEstimate());
     if (estimate <= 0)
     {
-        estimate = 256 * 1024;
+        // A finalized precompiled page always reports at least sizeof(*this).
+        // Do not admit an entry whose resident size cannot be accounted for.
+        return nullptr;
+    }
+
+    if (m_compileCacheLimit == 0 || estimate > m_compiledCacheByteLimit)
+    {
+        // An entry larger than its entire partition cannot be made resident
+        // without violating the shared byte cap. Returning nullptr is safe for
+        // callers: no cache entry or dangling pointer is exposed.
+        return nullptr;
     }
 
     // Evict before inserting, so the pointer returned below is never the entry
     // this call dropped. Evict by both entry count and byte budget.
-    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() >= m_compileCacheLimit || m_compiledCacheBytes + estimate > m_compiledCacheByteLimit))
+    while (!m_compileCacheOrder.empty() &&
+           (m_compileCacheOrder.size() >= m_compileCacheLimit ||
+            m_compiledCacheBytes > m_compiledCacheByteLimit - estimate))
     {
         const PageCacheKey evictKey = m_compileCacheOrder.front();
         auto bytesIt = m_compileCacheBytes.find(evictKey);
@@ -262,10 +273,6 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         m_compileCacheOrder.pop_front();
     }
 
-    // If the single entry does not fit, allow one oversize entry rather than
-    // refusing to cache and returning a dangling pointer. The byte limit still
-    // applies on the next insertion via the loop above. For truly huge pages
-    // (> limit) the caller still gets a valid pointer until the next compilePage().
     m_compileCacheOrder.push_back(key);
     auto result = m_compileCache.emplace(key, std::move(compiledPage));
     m_compileCacheBytes[key] = estimate;

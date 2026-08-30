@@ -102,8 +102,8 @@ public:
     void resetProcessingBudget();
 
     /// Under memory or time pressure, drop prefetch and quality work before
-    /// interaction. Compile/stream cache caps shrink; later compilePage calls
-    /// still succeed, they just retain fewer pages.
+    /// interaction. Compile/stream cache caps shrink; a compiled page that is
+    /// larger than the current compiled-page byte share is rejected.
     void shedPrefetchAndQuality();
     bool prefetchEnabled() const { return m_prefetchEnabled; }
     int qualityPercent() const { return m_qualityPercent; }
@@ -123,7 +123,9 @@ public:
     /// Cache bounds. Both caches evict in insertion order once full, so a
     /// document-wide sequential pass costs a fixed amount of memory instead of
     /// retaining one compiled page (and every decoded stream) for the lifetime
-    /// of the session.
+    /// of the session. Compiled pages are additionally bounded by their
+    /// getMemoryConsumptionEstimate() values; decoded streams remain an
+    /// independent entry-count cache.
     ///
     /// Eviction happens before insertion, so the pointer returned by
     /// compilePage() is never the entry evicted by that same call. It may be

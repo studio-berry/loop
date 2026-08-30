@@ -5,6 +5,8 @@
 #include "interactioncontroller.h"
 #include "overlaybuilder.h"
 #include "pagesurfacecoordinator.h"
+#include "pdfdocumentsession.h"
+#include "pdfpagecachebudget.h"
 
 #include <QGuiApplication>
 #include <QScreen>
@@ -38,6 +40,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
+    setCacheLimit(m_cacheLimit);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     if (QScreen* screen = QGuiApplication::primaryScreen())
@@ -68,6 +71,9 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
+    // PDFDocumentContext creates a fresh PDFDocumentSession for a replacement
+    // document. Reapply the session-owned total before requesting new surfaces.
+    setCacheLimit(m_cacheLimit);
     m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
 }
@@ -86,6 +92,21 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     settings.features = features;
     m_surfaces->setRenderSettings(settings);
     syncOverlaySuppressionFromRenderFeatures(features);
+}
+
+void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
+{
+    const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+    m_cacheLimit = normalized;
+
+    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        session->setCacheLimit(normalized);
+    }
+    if (m_surfaces)
+    {
+        m_surfaces->setCacheLimit(normalized);
+    }
 }
 
 void DocumentViewSession::syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features)
