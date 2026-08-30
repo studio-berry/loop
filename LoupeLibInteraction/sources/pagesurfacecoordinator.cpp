@@ -96,6 +96,7 @@ void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings setting
     // Different pixels for the same page: every key built before this point is a
     // different key now, so nothing in flight is wanted any more.
     cancelInFlight();
+    rebuildSnapshot();
 }
 
 void PageSurfaceCoordinator::onDemandChanged()
@@ -147,9 +148,10 @@ void PageSurfaceCoordinator::setPageAuthoritativeOverprint(int pageIndex, bool e
     }
 
     // keyForPage(pageIndex) now returns a different key, so requestSurfaces()'s
-    // own coalescing already cancels this page's stale in-flight request (its
-    // key no longer matches anything in fresh demand) -- unlike
-    // setRenderSettings, nothing else needs to be cancelled by hand.
+    // own coalescing cancels this page's stale in-flight request. Rebuild first
+    // so an approximate snapshot is not presented as authoritative while the
+    // accurate surface is pending (or vice versa when toggling back).
+    rebuildSnapshot();
     requestSurfaces();
 }
 
@@ -481,6 +483,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
 
     if (result.state != SurfaceTerminalState::Complete)
     {
+        resetAuthoritativePageAfterFailure(result.key, result.state);
         countTerminal(result.state);
         Q_EMIT surfaceTerminal(result.key, result.state);
         return;
@@ -514,6 +517,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
 
     if (!result.pixels || result.pixels->byteSize <= 0)
     {
+        resetAuthoritativePageAfterFailure(result.key, SurfaceTerminalState::Failed);
         ++m_counters.failed;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Failed);
         return;
@@ -521,6 +525,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
 
     if (!insertIntoCache(result.key, result.pixels, result.diagnostics))
     {
+        resetAuthoritativePageAfterFailure(result.key, SurfaceTerminalState::Failed);
         ++m_counters.rejectedOversize;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Failed);
         return;
@@ -574,6 +579,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
 
 void PageSurfaceCoordinator::trimCacheToBudget()
 {
+    bool snapshotDirty = false;
     while (m_counters.admittedBytes > m_bounds.maxAdmittedBytes && !m_cache.empty())
     {
         const PageSurfaceKey oldestKey = m_lru.back();
@@ -588,7 +594,36 @@ void PageSurfaceCoordinator::trimCacheToBudget()
         m_cache.erase(oldest);
         m_lru.pop_back();
         ++m_counters.evictions;
+        snapshotDirty = true;
     }
+
+    if (snapshotDirty)
+    {
+        // CacheEntry owns the immutable pixel buffer shared by the snapshot.
+        // Rebuild immediately so the snapshot cannot keep presenting an entry
+        // that admission has already released from the cache budget.
+        rebuildSnapshot();
+    }
+}
+
+void PageSurfaceCoordinator::resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state)
+{
+    if (state != SurfaceTerminalState::Failed && state != SurfaceTerminalState::BudgetExhausted)
+    {
+        return;
+    }
+
+    if (!hasAuthoritativeOverprintMarker(key.colorOutputIdentity) || !m_authoritativePages.contains(key.pageIndex))
+    {
+        return;
+    }
+
+    // The accurate request is terminally unsuccessful. Drop the intent and
+    // return to the cached fast surface, if one exists, instead of claiming
+    // that an approximation is authoritative.
+    m_authoritativePages.remove(key.pageIndex);
+    rebuildSnapshot();
+    requestSurfaces();
 }
 
 qint64 PageSurfaceCoordinator::inFlightBytes() const

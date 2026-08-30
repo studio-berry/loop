@@ -31,6 +31,7 @@ namespace
 {
 
 constexpr int MaxGridDimension = 128;
+constexpr int MaxCellMembershipsPerItem = 64;
 
 qint64 cellKey(int column, int row)
 {
@@ -48,6 +49,7 @@ void PageSpatialIndex::clear()
     m_rows = 1;
     m_itemCount = 0;
     m_cells.clear();
+    m_overflowItems.clear();
 }
 
 void PageSpatialIndex::build(const QList<QRectF>& bounds)
@@ -101,6 +103,21 @@ void PageSpatialIndex::build(const QList<QRectF>& bounds)
         const int rowBegin = rowForY(box.top());
         const int rowEnd = rowForY(box.bottom());
 
+        const int columnCount = columnEnd - columnBegin + 1;
+        const int rowCount = rowEnd - rowBegin + 1;
+        const qint64 cellMemberships = qint64(columnCount) * qint64(rowCount);
+
+        // Wide rectangles are common in evidence graphs and can otherwise be
+        // copied into every covered cell. Keep them in one bounded overflow
+        // bucket: query work becomes linear in the genuinely wide items, but
+        // index storage remains linear in item count instead of item-count
+        // times grid area.
+        if (cellMemberships > MaxCellMembershipsPerItem)
+        {
+            m_overflowItems.push_back(index);
+            continue;
+        }
+
         for (int column = columnBegin; column <= columnEnd; ++column)
         {
             for (int row = rowBegin; row <= rowEnd; ++row)
@@ -150,8 +167,10 @@ QList<int> PageSpatialIndex::query(QPointF point) const
         return {};
     }
 
+    QList<int> candidates = m_overflowItems;
     const qint64 key = cellKey(columnForX(point.x()), rowForY(point.y()));
-    return m_cells.value(key);
+    candidates.append(m_cells.value(key));
+    return candidates;
 }
 
 }   // namespace pdfinteraction

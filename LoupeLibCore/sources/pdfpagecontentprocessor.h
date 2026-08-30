@@ -670,6 +670,11 @@ protected:
     /// \param mesh Mesh to be drawn
     virtual void performMeshPainting(const PDFMesh& mesh);
 
+    /// Variant retaining whether the source path was filled or stroked. The
+    /// default delegates to the long-standing mesh callback so existing
+    /// renderers do not need to care about the paint operation.
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill);
+
     /// This function has to be implemented in the client drawing implementation, it should
     /// update the device according to the graphic state change. The flags are set when
     /// the value differs from the previous graphic state.

@@ -25,6 +25,7 @@
 
 #include "pdfevidencegraph.h"
 
+#include <QSet>
 #include <QtTest>
 
 using pdfinteraction::EvidenceHitTestSource;
@@ -75,6 +76,7 @@ private slots:
     void spatialIndexRejectsPointsOutsideExtent();
     void spatialIndexNarrowsCandidatesForLargeSpreadObjectCounts();
     void spatialIndexReturnsOverlappingCandidates();
+    void spatialIndexBoundsWideRectangleStorage();
 
     void evidenceSourceHitTestsIdenticalToLinearScan();
     void evidenceSourceHandlesEmptyPage();
@@ -157,6 +159,30 @@ void HitTestSourceTest::spatialIndexReturnsOverlappingCandidates()
     QCOMPARE(hits.size(), 2);
     QVERIFY(hits.contains(0));
     QVERIFY(hits.contains(1));
+}
+
+void HitTestSourceTest::spatialIndexBoundsWideRectangleStorage()
+{
+    // A full-page finding must not be copied into every grid cell. The
+    // overflow bucket keeps the candidate set correct while its storage stays
+    // proportional to the number of wide findings.
+    PageSpatialIndex index;
+    QList<QRectF> bounds;
+    bounds.reserve(10000);
+    for (int i = 0; i < 10000; ++i)
+    {
+        bounds.push_back(QRectF(0.0, 0.0, 1000.0, 1000.0));
+    }
+
+    index.build(bounds);
+    const QList<int> hits = index.query(QPointF(500.0, 500.0));
+    QCOMPARE(hits.size(), bounds.size());
+    QSet<int> unique;
+    for (int hit : hits)
+    {
+        unique.insert(hit);
+    }
+    QCOMPARE(unique.size(), bounds.size());
 }
 
 void HitTestSourceTest::evidenceSourceHitTestsIdenticalToLinearScan()

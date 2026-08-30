@@ -142,6 +142,7 @@ protected:
     virtual void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override;
     virtual void performImagePainting(const QImage& image) override;
     virtual void performMeshPainting(const PDFMesh& mesh) override;
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill) override;
     virtual void performSaveGraphicState(ProcessOrder order) override;
     virtual void performRestoreGraphicState(ProcessOrder order) override;
     virtual void setWorldMatrix(const QTransform& matrix) override;
@@ -400,6 +401,7 @@ protected:
     virtual void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override;
     virtual void performImagePainting(const QImage& image) override;
     virtual void performMeshPainting(const PDFMesh& mesh) override;
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill) override;
     virtual void performSaveGraphicState(ProcessOrder order) override;
     virtual void performRestoreGraphicState(ProcessOrder order) override;
     virtual void setWorldMatrix(const QTransform& matrix) override;

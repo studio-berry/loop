@@ -448,6 +448,13 @@ void PDFPageContentProcessor::performMeshPainting(const PDFMesh& mesh)
     Q_UNUSED(mesh);
 }
 
+void PDFPageContentProcessor::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    performMeshPainting(mesh);
+}
+
 void PDFPageContentProcessor::performUpdateGraphicsState(const PDFPageContentProcessorState& state)
 {
     if (state.getStateFlags().testFlag(PDFPageContentProcessorState::StateTextFont) ||
@@ -1007,7 +1014,7 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
                             }
                             mesh.setBoundingPath(boundingPath);
 
-                            performMeshPainting(mesh);
+                            performMeshPainting(mesh, false, true);
                         }
                     }
                     break;
@@ -1122,7 +1129,7 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
                             }
                             mesh.setBoundingPath(boundingPath);
 
-                            performMeshPainting(mesh);
+                            performMeshPainting(mesh, true, false);
                         }
                     }
                     break;

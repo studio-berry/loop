@@ -242,6 +242,7 @@ private:
     void rebuildSnapshot();
     void countTerminal(SurfaceTerminalState state);
     void scheduleSurfaceRetry();
+    void resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state);
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;

@@ -91,6 +91,7 @@ private:
     int m_rows = 1;
     int m_itemCount = 0;
     QHash<qint64, QList<int>> m_cells;
+    QList<int> m_overflowItems;
 };
 
 }   // namespace pdfinteraction

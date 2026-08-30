@@ -388,6 +388,13 @@ void PDFPainter::performMeshPainting(const PDFMesh& mesh)
     m_painter->restore();
 }
 
+void PDFPainter::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    performMeshPainting(mesh);
+}
+
 void PDFPainter::performSaveGraphicState(ProcessOrder order)
 {
     if (order == ProcessOrder::AfterOperation)
@@ -458,13 +465,13 @@ void PDFPrecompiledPageGenerator::performClipping(const QPainterPath& path, Qt::
 
 void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
 {
-    noteOverprintForPaint(true, false);
-
     if (isContentSuppressed())
     {
         // Content is suppressed, do not paint anything
         return;
     }
+
+    noteOverprintForPaint(true, false);
 
     // Add snap info for image to the snapper
     QTransform matrix = getCurrentWorldMatrix();
@@ -506,6 +513,12 @@ void PDFPrecompiledPageGenerator::performMeshPainting(const PDFMesh& mesh)
 {
     noteOverprintForPaint(true, false);
 
+    m_precompiledPage->addMesh(mesh, getEffectiveFillingAlpha());
+}
+
+void PDFPrecompiledPageGenerator::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    noteOverprintForPaint(fill, stroke);
     m_precompiledPage->addMesh(mesh, getEffectiveFillingAlpha());
 }
 
