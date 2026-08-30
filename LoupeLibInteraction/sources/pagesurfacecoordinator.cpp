@@ -125,7 +125,10 @@ void PageSurfaceCoordinator::refreshPageCacheBudget()
 
     m_cacheLimit = m_pageCacheBudget->total();
     m_bounds.maxAdmittedBytes = m_pageCacheBudget->pageSurfacesLimit();
-    trimCacheToBudget();
+    if (trimCacheToBudget())
+    {
+        rebuildSnapshot();
+    }
 }
 
 void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings settings)
@@ -779,8 +782,9 @@ void PageSurfaceCoordinator::trimCacheForIncoming(qsizetype bytes)
     }
 }
 
-void PageSurfaceCoordinator::trimCacheToBudget()
+bool PageSurfaceCoordinator::trimCacheToBudget()
 {
+    bool trimmed = false;
     const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
     while (m_counters.admittedBytes > surfaceLimit && !m_cache.empty())
     {
@@ -788,7 +792,9 @@ void PageSurfaceCoordinator::trimCacheToBudget()
         {
             break;
         }
+        trimmed = true;
     }
+    return trimmed;
 }
 
 void PageSurfaceCoordinator::clearCache()

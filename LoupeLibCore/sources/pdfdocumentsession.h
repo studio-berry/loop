@@ -161,9 +161,6 @@ public:
     /// direct rasterization control.
     PDFRenderer* getRenderer() const;
 
-    /// Estimates the heap footprint of a parsed document's in-memory model.
-    /// Returned value is a lower bound — suitable for resource-budget admission.
-    static qsizetype estimateDocumentModelBytes(const PDFDocument* document);
     PDFFontCache* getFontCache() const;
     PDFCMS* getCMS() const;
     PDFOptionalContentActivity* getOptionalContentActivity() const;

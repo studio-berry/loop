@@ -266,7 +266,7 @@ private:
                          std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
     bool evictOldestCacheEntry();
     void trimCacheForIncoming(qsizetype bytes);
-    void trimCacheToBudget();
+    bool trimCacheToBudget();
     void clearCache();
     qint64 inFlightBytes() const;
     int inFlightCount(pdf::PDFJobPriority priority) const;

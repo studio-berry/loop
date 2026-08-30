@@ -124,10 +124,12 @@ void WorkloadEnvelopeTest::pageHeavyEnvelopeRecordsIdentity()
     envelope.recordResources(*session.getResourceBudget());
 
     const QJsonObject json = envelope.toJson();
+    const qint64 expectedCacheHighWater =
+        qMax<qint64>(2048, session.getResourceBudget()->residentHighWaterBytes());
     QCOMPARE(json.value(QStringLiteral("family")).toString(), QStringLiteral("page-heavy"));
     QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("incomplete"));
     QCOMPARE(json.value(QStringLiteral("open_to_first_view_ms")).toInt(), 4);
-    QCOMPARE(json.value(QStringLiteral("cache_high_water_bytes")).toInt(), 2048);
+    QCOMPARE(json.value(QStringLiteral("cache_high_water_bytes")).toInt(), expectedCacheHighWater);
     QCOMPARE(json.value(QStringLiteral("pressure_shed_count")).toInt(), 1);
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("commit")));
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("os")));
