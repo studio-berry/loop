@@ -134,19 +134,37 @@ class ProductSurfaceContractTests(unittest.TestCase):
         manifest = copy.deepcopy(self.manifest)
         manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
         discovery = self._discovery_file([{"id": "help"}, {"id": "preflight"}])
-        self.assertEqual(validate_cli(manifest, discovery_json=discovery), [])
+        self.assertEqual(validate_cli(manifest, profile="loupe-release", discovery_json=discovery), [])
 
         manifest["cli"]["command_inventory"]["required_commands"] = ["missing"]
-        errors = validate_cli(manifest, discovery_json=discovery)
+        errors = validate_cli(manifest, profile="loupe-release", discovery_json=discovery)
         self.assertTrue(any("manifest CLI command is absent" in error for error in errors))
 
         manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
-        errors = validate_cli(manifest, discovery_json=self._discovery_file([{"id": "help"}, {"id": "preflight"}, {"id": "diagnostics"}]))
+        errors = validate_cli(
+            manifest,
+            profile="loupe-release",
+            discovery_json=self._discovery_file([{"id": "help"}, {"id": "preflight"}, {"id": "diagnostics"}]),
+        )
         self.assertTrue(any("absent from manifest CLI inventory: diagnostics" in error for error in errors))
+
+    def test_developer_profile_allows_extra_registered_commands(self):
+        manifest = copy.deepcopy(self.manifest)
+        command_ids = list(manifest["cli"]["command_inventory"]["required_commands"])
+        command_ids.extend(["audio-book", "audio-book-voices"])
+        discovery = self._discovery_file([{"id": command} for command in sorted(command_ids)])
+        self.assertEqual(validate_cli(manifest, profile="developer", discovery_json=discovery), [])
+
+    def test_cli_inventory_matches_pdftool_when_available(self):
+        pdf_tool = ROOT / "build" / "usr" / "bin" / "PdfTool"
+        if not pdf_tool.is_file():
+            self.skipTest("PdfTool is not built in this worktree")
+        errors = validate_cli(self.manifest, profile="loupe-release", pdf_tool=pdf_tool)
+        self.assertEqual(errors, [])
 
     def test_cli_inventory_must_be_sorted_and_unique(self):
         discovery = self._discovery_file([{"id": "preflight"}, {"id": "help"}, {"id": "help"}])
-        errors = validate_cli(self.manifest, discovery_json=discovery)
+        errors = validate_cli(self.manifest, profile="loupe-release", discovery_json=discovery)
         self.assertTrue(any("duplicate ids" in error for error in errors))
         self.assertTrue(any("not deterministically sorted" in error for error in errors))
 

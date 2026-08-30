@@ -586,6 +586,7 @@ def _run_discovery(pdf_tool: Path) -> dict[str, Any]:
 def validate_cli(
     manifest: dict[str, Any],
     *,
+    profile: str | None = None,
     install_dir: Path | None = None,
     pdf_tool: Path | None = None,
     discovery_json: Path | None = None,
@@ -634,10 +635,10 @@ def validate_cli(
     declared_command_ids = set(inventory["required_commands"])
     discovered_command_ids = set(valid_command_ids)
     for required in sorted(declared_command_ids - discovered_command_ids):
-        if required not in command_ids:
-            errors.append(f"manifest CLI command is absent from PdfTool capabilities: {required}")
-    for unexpected in sorted(discovered_command_ids - declared_command_ids):
-        errors.append(f"PdfTool capability command is absent from manifest CLI inventory: {unexpected}")
+        errors.append(f"manifest CLI command is absent from PdfTool capabilities: {required}")
+    if profile != "developer":
+        for unexpected in sorted(discovered_command_ids - declared_command_ids):
+            errors.append(f"PdfTool capability command is absent from manifest CLI inventory: {unexpected}")
     return errors
 
 
@@ -760,7 +761,15 @@ def run_verification(
     errors.extend(validate_packaging_sources(root, manifest, profile))
     if install_dir is not None:
         errors.extend(validate_install(install_dir, manifest, profile, install_manifest_path))
-        errors.extend(validate_cli(manifest, install_dir=install_dir, pdf_tool=pdf_tool, discovery_json=discovery_json))
+        errors.extend(
+            validate_cli(
+                manifest,
+                profile=profile,
+                install_dir=install_dir,
+                pdf_tool=pdf_tool,
+                discovery_json=discovery_json,
+            )
+        )
     elif pdf_tool is not None or discovery_json is not None:
-        errors.extend(validate_cli(manifest, pdf_tool=pdf_tool, discovery_json=discovery_json))
+        errors.extend(validate_cli(manifest, profile=profile, pdf_tool=pdf_tool, discovery_json=discovery_json))
     return errors
