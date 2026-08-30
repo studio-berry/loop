@@ -64,8 +64,8 @@ struct LOUPELIBCORESHARED_EXPORT PDFColorInventorySettings
 
 /// Shared rich-black predicate used by preflight and Output Preview.
 LOUPELIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
-                                                 const PDFPixelFormat& format,
-                                                 PDFColorComponent kThreshold);
+                                                const PDFPixelFormat& format,
+                                                PDFColorComponent kThreshold);
 
 class LOUPELIBCORESHARED_EXPORT PDFColorInventory
 {
@@ -78,6 +78,6 @@ private:
     PDFDocumentSession* m_session = nullptr;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFCOLORINVENTORY_H
+#endif   // PDFCOLORINVENTORY_H

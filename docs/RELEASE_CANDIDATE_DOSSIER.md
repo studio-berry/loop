@@ -20,6 +20,9 @@ dossier still has to assemble that nothing currently automates.
   dossier's `checks.source_integrity`, `checks.architecture_documentation_truth`,
   and part of `checks.build_and_test_{windows,linux}` -- it is not itself the
   full dossier.
+- `scripts/qualification/validate_release_candidate_dossier.py` validates the
+  dossier's cross-artifact provenance invariant: every `artifacts[].built_from_sha`
+  is required and must equal the top-level `candidate_sha`.
 - `docs/0.2.0-closeout-matrix.md` already tracks most of the dossier's other
   required-evidence categories as gates: T-03 (independent validation) →
   `checks.developer_and_release_manifest`-adjacent evidence, P-01/P-02

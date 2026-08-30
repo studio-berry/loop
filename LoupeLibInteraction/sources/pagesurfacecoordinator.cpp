@@ -609,9 +609,7 @@ void PageSurfaceCoordinator::trimCacheToBudget()
 
 void PageSurfaceCoordinator::resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state)
 {
-    if (state != SurfaceTerminalState::Cancelled
-        && state != SurfaceTerminalState::Failed
-        && state != SurfaceTerminalState::BudgetExhausted)
+    if (state != SurfaceTerminalState::Cancelled && state != SurfaceTerminalState::Failed && state != SurfaceTerminalState::BudgetExhausted)
     {
         return;
     }

@@ -69,19 +69,19 @@ inline bool inkCoverageExceedsLimit(qreal inkCoverage, qreal maxInkCoverage)
 
 struct LOUPELIBCORESHARED_EXPORT PDFInkCoverageRegion
 {
-    QRectF bbox;                 // page points, PDF coordinate space
+    QRectF bbox;   // page points, PDF coordinate space
     qreal areaMM2 = 0.0;
-    qreal peakInkCoverage = 0.0; // max TAC found inside the region
+    qreal peakInkCoverage = 0.0;   // max TAC found inside the region
 };
 
 struct LOUPELIBCORESHARED_EXPORT PDFInkCoverageProbeResult
 {
-    bool rasterized = false;     // false when rasterization was unavailable or over budget
+    bool rasterized = false;   // false when rasterization was unavailable or over budget
     bool budgetExceeded = false;
     PDFRenderDiagnostics diagnostics;
-    qreal peakInkCoverage = 0.0; // page-wide max TAC
+    qreal peakInkCoverage = 0.0;   // page-wide max TAC
     qreal overLimitAreaMM2 = 0.0;
-    std::vector<PDFInkCoverageRegion> regions;  // sorted by areaMM2, descending
+    std::vector<PDFInkCoverageRegion> regions;   // sorted by areaMM2, descending
 };
 
 class LOUPELIBCORESHARED_EXPORT PDFInkCoverageProbe
@@ -97,6 +97,6 @@ private:
     PDFDocumentSession* m_session;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFINKCOVERAGEPROBE_H
+#endif   // PDFINKCOVERAGEPROBE_H

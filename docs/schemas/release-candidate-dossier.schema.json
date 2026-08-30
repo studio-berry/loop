@@ -44,11 +44,11 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["name", "sha256"],
+        "required": ["name", "sha256", "built_from_sha"],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-          "built_from_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "Must equal candidate_sha; CreateReleaseDraft.yml already asserts this per package job before this dossier is assembled." },
+          "built_from_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "Must equal the dossier's candidate_sha; validate_release_candidate_dossier.py enforces the cross-field equality." },
           "sbom": { "type": "string", "description": "Path or URL to this artifact's SBOM." },
           "attestation": { "type": "string", "description": "Path or URL to this artifact's build provenance attestation." }
         },

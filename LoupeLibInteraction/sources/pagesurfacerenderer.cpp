@@ -113,6 +113,8 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
 
     pdf::PDFTransparencyRendererSettings settings;
     settings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, true);
+    settings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SmoothImageTransformation,
+                           features.testFlag(pdf::PDFRenderer::SmoothImages));
     settings.renderPolicy = pdf::PDFRenderPolicy::forOutputPreview();
 
     const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));

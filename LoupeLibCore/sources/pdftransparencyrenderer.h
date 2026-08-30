@@ -104,9 +104,7 @@ struct PDFRenderDiagnostics
 
     void merge(const PDFRenderDiagnostics& other)
     {
-        if (other.fidelity == PDFRenderFidelity::Unsupported
-            || (other.fidelity == PDFRenderFidelity::SupportedWithFallback
-                && fidelity == PDFRenderFidelity::ExactSupported))
+        if (other.fidelity == PDFRenderFidelity::Unsupported || (other.fidelity == PDFRenderFidelity::SupportedWithFallback && fidelity == PDFRenderFidelity::ExactSupported))
         {
             fidelity = other.fidelity;
         }
