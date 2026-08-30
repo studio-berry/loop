@@ -338,6 +338,10 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
         const pdf::PDFResourcePriority priority = request.priority == pdf::PDFJobPriority::NearViewport
                                                        ? pdf::PDFResourcePriority::Prefetch
                                                        : pdf::PDFResourcePriority::Visible;
+        if (priority == pdf::PDFResourcePriority::Visible && bytes > 0)
+        {
+            trimCacheForIncoming(bytes);
+        }
         if (bytes > 0 && !m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
                                                        bytes,
                                                        priority,
@@ -372,7 +376,7 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
 
     const QString jobId = m_submitter->submit(
         spec,
-        [this, relay, renderer, request, requestId, workStarted](pdf::PDFJobContext& jobContext)
+        [this, relay, renderer, request, requestId, workStarted, resourceReservation](pdf::PDFJobContext& jobContext)
         {
             workStarted->store(true, std::memory_order_release);
 
@@ -380,8 +384,11 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
 
             // The relay is always queued, so this runs after submit() returned and
             // registered the request, even when the submitter ran the work inline.
-            relay->post([this, requestId, result = std::move(result)]() mutable
-                        { admit(requestId, std::move(result)); });
+            relay->post([this,
+                         requestId,
+                         result = std::move(result),
+                         resourceReservation]() mutable
+                        { admit(requestId, std::move(result), std::move(resourceReservation)); });
         });
 
     if (jobId.isEmpty())
@@ -522,11 +529,12 @@ void PageSurfaceCoordinator::resolveCancellation(quint64 requestId, std::shared_
     finishInFlight(requestId, SurfaceTerminalState::Cancelled);
 }
 
-void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
+void PageSurfaceCoordinator::admit(quint64 requestId,
+                                   PageSurfaceResult result,
+                                   std::shared_ptr<pdf::PDFResourceReservation> resourceReservation)
 {
-    std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
     const auto inFlight = m_inFlight.find(requestId);
-    if (inFlight != m_inFlight.end())
+    if (!resourceReservation && inFlight != m_inFlight.end())
     {
         resourceReservation = inFlight->resourceReservation;
     }
@@ -618,8 +626,24 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
         resourceReservation.reset();
     }
 
+    const auto existing = m_cache.find(key);
+    if (existing != m_cache.end())
+    {
+        m_counters.admittedBytes -= existing->second.cost;
+        if (m_pageCacheBudget)
+        {
+            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, existing->second.cost);
+        }
+        m_lru.erase(existing->second.lru);
+        m_cache.erase(existing);
+    }
+
     if (m_resourceBudget && !resourceReservation)
     {
+        // A visible replacement may rotate out old surfaces to make room for
+        // the new one. Do this before taking the resource reservation so the
+        // admission check sees the bytes that are actually reclaimable.
+        trimCacheForIncoming(pixels->byteSize);
         if (!m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
                                           pixels->byteSize,
                                           pdf::PDFResourcePriority::Visible,
@@ -633,53 +657,11 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
                                                                               pixels->byteSize);
     }
 
-    const auto existing = m_cache.find(key);
-    if (existing != m_cache.end())
-    {
-        m_counters.admittedBytes -= existing->second.cost;
-        if (m_pageCacheBudget)
-        {
-            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, existing->second.cost);
-        }
-        m_lru.erase(existing->second.lru);
-        m_cache.erase(existing);
-    }
-
-    const auto evictOldest = [this]()
-    {
-        if (m_lru.empty())
-        {
-            return false;
-        }
-
-        const PageSurfaceKey oldestKey = m_lru.back();
-        const auto oldest = m_cache.find(oldestKey);
-        if (oldest == m_cache.end())
-        {
-            m_lru.pop_back();
-            return true;
-        }
-
-        m_counters.admittedBytes -= oldest->second.cost;
-        if (m_resourceBudget)
-        {
-            m_resourceBudget->recordEviction(pdf::PDFResourcePool::RasterTileCache, oldest->second.cost);
-        }
-        if (m_pageCacheBudget)
-        {
-            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, oldest->second.cost);
-        }
-        m_cache.erase(oldest);
-        m_lru.pop_back();
-        ++m_counters.evictions;
-        return true;
-    };
-
     if (m_pageCacheBudget)
     {
         while (!m_pageCacheBudget->tryReserve(pdf::PDFPageCacheBudget::Pool::PageSurfaces, pixels->byteSize))
         {
-            if (!evictOldest())
+            if (!evictOldestCacheEntry())
             {
                 return false;
             }
@@ -704,31 +686,86 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
     return m_cache.find(key) != m_cache.end();
 }
 
+bool PageSurfaceCoordinator::evictOldestCacheEntry()
+{
+    if (m_lru.empty())
+    {
+        return false;
+    }
+
+    const PageSurfaceKey oldestKey = m_lru.back();
+    const auto oldest = m_cache.find(oldestKey);
+    if (oldest == m_cache.end())
+    {
+        m_lru.pop_back();
+        return true;
+    }
+
+    m_counters.admittedBytes -= oldest->second.cost;
+    if (m_resourceBudget)
+    {
+        m_resourceBudget->recordEviction(pdf::PDFResourcePool::RasterTileCache, oldest->second.cost);
+    }
+    if (m_pageCacheBudget)
+    {
+        m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, oldest->second.cost);
+    }
+    m_cache.erase(oldest);
+    m_lru.pop_back();
+    ++m_counters.evictions;
+    return true;
+}
+
+void PageSurfaceCoordinator::trimCacheForIncoming(qsizetype bytes)
+{
+    if (bytes <= 0)
+    {
+        return;
+    }
+
+    while (!m_cache.empty())
+    {
+        bool pageCacheOverflow = false;
+        if (m_pageCacheBudget)
+        {
+            const qsizetype limit = m_pageCacheBudget->pageSurfacesLimit();
+            const qsizetype current = m_pageCacheBudget->usage(pdf::PDFPageCacheBudget::Pool::PageSurfaces);
+            pageCacheOverflow = bytes > limit || current > limit - bytes;
+        }
+
+        bool resourceOverflow = false;
+        if (m_resourceBudget)
+        {
+            const pdf::PDFResourceUsage usage = m_resourceBudget->usage(pdf::PDFResourcePool::RasterTileCache);
+            const qsizetype limit = usage.limitBytes;
+            resourceOverflow = bytes > limit || usage.currentBytes > limit - bytes;
+
+            const qsizetype residentLimit = m_resourceBudget->residentLimit();
+            resourceOverflow = resourceOverflow || bytes > residentLimit ||
+                               m_resourceBudget->residentBytes() > residentLimit - bytes;
+        }
+
+        if (!pageCacheOverflow && !resourceOverflow)
+        {
+            break;
+        }
+
+        if (!evictOldestCacheEntry())
+        {
+            break;
+        }
+    }
+}
+
 void PageSurfaceCoordinator::trimCacheToBudget()
 {
     const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
     while (m_counters.admittedBytes > surfaceLimit && !m_cache.empty())
     {
-        const PageSurfaceKey oldestKey = m_lru.back();
-        const auto oldest = m_cache.find(oldestKey);
-        if (oldest == m_cache.end())
+        if (!evictOldestCacheEntry())
         {
-            m_lru.pop_back();
-            continue;
+            break;
         }
-
-        m_counters.admittedBytes -= oldest->second.cost;
-        if (m_resourceBudget)
-        {
-            m_resourceBudget->recordEviction(pdf::PDFResourcePool::RasterTileCache, oldest->second.cost);
-        }
-        if (m_pageCacheBudget)
-        {
-            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, oldest->second.cost);
-        }
-        m_cache.erase(oldest);
-        m_lru.pop_back();
-        ++m_counters.evictions;
     }
 }
 

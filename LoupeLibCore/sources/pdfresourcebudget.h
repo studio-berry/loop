@@ -193,7 +193,12 @@ public:
     void release(PDFResourcePool pool, qsizetype bytes) noexcept;
 
     void recordEviction(PDFResourcePool pool, qsizetype bytes = 0) noexcept;
-    void recordShed(PDFResourcePool pool) noexcept;
+    /// Records a deliberate shed.  Only prefetch sheds affect the dedicated
+    /// prefetch signal; visible and background pressure still contribute to
+    /// the per-pool shed total.
+    void recordShed(PDFResourcePool pool,
+                   PDFResourcePriority priority = PDFResourcePriority::Visible) noexcept;
+    qint64 prefetchShedCount() const noexcept;
 
     PDFResourceUsage usage(PDFResourcePool pool) const;
     std::array<PDFResourceUsage, PDFResourcePoolCount> usages() const;
@@ -217,6 +222,7 @@ private:
     std::array<qsizetype, PDFResourcePoolCount> m_highWater{};
     std::array<qint64, PDFResourcePoolCount> m_evictions{};
     std::array<qint64, PDFResourcePoolCount> m_shed{};
+    qint64 m_prefetchShed = 0;
     qsizetype m_residentBytes = 0;
     qsizetype m_residentHighWaterBytes = 0;
 };

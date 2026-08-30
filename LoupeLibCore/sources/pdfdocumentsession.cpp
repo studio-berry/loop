@@ -41,7 +41,7 @@ namespace pdf
 namespace
 {
 
-qsizetype estimateDocumentModelBytes(const PDFDocument* document)
+qsizetype estimateDocumentModelBytesImpl(const PDFDocument* document)
 {
     if (!document)
     {
@@ -172,7 +172,7 @@ qsizetype estimateDocumentModelBytes(const PDFDocument* document)
     const PDFCatalog* catalog = document->getCatalog();
     if (catalog)
     {
-        addProduct(static_cast<quint64>(catalog->getPageCount()), sizeof(PDFPage));
+        addBytes(static_cast<quint64>(catalog->getMemoryConsumptionEstimate()));
     }
     return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
                ? std::numeric_limits<qsizetype>::max()
@@ -180,6 +180,11 @@ qsizetype estimateDocumentModelBytes(const PDFDocument* document)
 }
 
 }   // namespace
+
+qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* document)
+{
+    return estimateDocumentModelBytesImpl(document);
+}
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                        PDFDocumentContext* context,
@@ -339,7 +344,6 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
     m_compiledCachePressureLimit = qMin(m_compiledCachePressureLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
     m_streamCacheByteLimit = qMin(m_streamCacheByteLimit, 16 * PDFResourceBudgetConfig::MiB);
-    m_resourceBudget->setLimit(PDFResourcePool::DecodedStreamImageCache, m_streamCacheByteLimit);
     trimCachesToLimits();
 }
 
@@ -556,7 +560,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
     const qsizetype decodedBytes = decoded.size();
     if (m_streamCacheLimit == 0 || decodedBytes > m_streamCacheByteLimit)
     {
-        m_resourceBudget->recordShed(PDFResourcePool::DecodedStreamImageCache);
+        m_resourceBudget->recordShed(PDFResourcePool::DecodedStreamImageCache, PDFResourcePriority::Background);
         return decoded;
     }
 

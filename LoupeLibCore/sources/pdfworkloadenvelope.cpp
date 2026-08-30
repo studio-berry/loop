@@ -212,7 +212,7 @@ void PDFWorkloadEnvelope::recordResources(const PDFResourceBudget& budget)
         shed += usage.shed;
     }
     pressureShedCount = qMax(pressureShedCount, shed);
-    prefetchShed = prefetchShed || shed > 0;
+    prefetchShed = prefetchShed || budget.prefetchShedCount() > 0;
 }
 
 QJsonObject PDFWorkloadEnvelope::toJson() const

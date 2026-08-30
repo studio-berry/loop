@@ -24,6 +24,7 @@
 #include "pdftoolcancel.h"
 #include "pdffont.h"
 #include "pdfconstants.h"
+#include "pdfdocumentsession.h"
 #include "pdfsafefilewriter.h"
 #include "pdfworkloadenvelope.h"
 
@@ -243,11 +244,36 @@ void PDFToolBenchmark::onPageRendered(const PDFToolOptions& options, pdf::PDFRen
 PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
+    // Release the previous invocation before replacing its budget. The
+    // reservation is intentionally declared after the budget member, so it
+    // also releases before the budget during destruction.
+    m_documentModelReservation.release();
     m_resourceBudget = std::make_unique<pdf::PDFResourceBudget>();
     m_resourceBudgetExhausted = false;
     if (!readDocument(options, document, nullptr, false))
     {
         return PDFToolExitCode::InputError;
+    }
+
+    const qsizetype modelBytes = pdf::PDFDocumentSession::estimateDocumentModelBytes(&document);
+    if (modelBytes > 0)
+    {
+        try
+        {
+            m_documentModelReservation = m_resourceBudget->reserve(pdf::PDFResourcePool::ActiveDocumentModel,
+                                                                    modelBytes,
+                                                                    pdf::PDFResourcePriority::Interaction,
+                                                                    QStringLiteral("active document model"));
+        }
+        catch (const pdf::PDFResourceBudgetExceededException&)
+        {
+            m_resourceBudgetExhausted = true;
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("resource/budget-exceeded"),
+                             PDFToolTranslationContext::tr("The document exceeds the active model resource budget."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
     }
 
     QString parseError;

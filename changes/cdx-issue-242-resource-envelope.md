@@ -1,4 +1,4 @@
 Category: added
 Audience: developers and qualification operators
 Breaking-Change: yes
-Summary: Add a shared resident resource-budget authority, schema-v2 workload records, deterministic pathological fixtures, and CI validation for huge-document envelope qualification.
+Summary: Add a shared resident resource-budget authority, charge document models at editor and batch boundaries, preserve in-flight surface reservations through cancellation, and validate schema-v2 pathological workload envelopes.
