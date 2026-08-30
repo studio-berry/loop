@@ -22,6 +22,7 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("python3 scripts/ci/validate_product_surface.py", workflow)
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
         self.assertIn("python3 scripts/verify_phase5_widgets_contract.py", workflow)
         self.assertIn("python3 scripts/verify-plugin-form-accounting.py", workflow)
@@ -35,7 +36,14 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
         self.assertIn("LOUPE_LOUPE_DISTRIBUTION=ON", workflow)
         self.assertIn("-Profile loupe-release", workflow)
+        self.assertIn("-InstallManifestPath ./build/install_manifest.txt", workflow)
         self.assertNotIn("-Profile developer", workflow)
+
+    def test_windows_developer_gate_is_explicit_and_manifest_backed(self):
+        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("LOUPE_LOUPE_DISTRIBUTION=OFF", workflow)
+        self.assertIn("-Profile developer", workflow)
+        self.assertIn("-InstallManifestPath .\\build\\install_manifest.txt", workflow)
 
 
 if __name__ == "__main__":

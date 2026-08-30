@@ -283,7 +283,7 @@ jobs:
       - name: Verify loupe-release product surface
         if: ${{ !inputs.fast }}
         working-directory: loupe
-        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release
+        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir ./build -InstallManifestPath ./build/install_manifest.txt
 
       - name: Run unit tests
         if: ${{ !inputs.fast }}

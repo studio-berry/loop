@@ -1,9 +1,9 @@
 # Loupe workspace boundaries
 
-This document is the product boundary for issue #192. It describes where an
-operator finds a capability; it does not add a second application shell or
-move UI code. Editor workspace wiring is deferred to #193 and remains outside
-the pre-0.1.1 GUI scope.
+This document is the workspace companion to the authoritative product-surface
+contract in issue #191. It describes where an operator finds a capability; it
+does not add a second application shell or move UI code. Editor workspace wiring
+is deferred to #193 and remains outside the pre-0.1.1 GUI scope.
 
 ## Product surfaces
 
@@ -14,20 +14,23 @@ Loupe has two product surfaces:
 - **Loupe CLI** — `PdfTool`, the headless and automation surface. Its command
   names, JSON envelopes, and machine-readable capability discovery remain the
   automation contract.
+- `LoupeLibCore` and `LoupeLibQuick` are maintained implementation libraries,
+  not additional user-facing products.
 
-Compatibility executables may remain buildable and directly invokable. They do
-not receive a separate Loupe desktop entry, AppX application, or product
-identity in the release profile.
+The former Viewer, PageMaster, Diff, LaunchPad, and editor-plugin artifacts are
+deleted and absent from both supported profiles. Their dispositions remain in
+`docs/product-surface.json` so an accidental upstream reintroduction fails
+verification.
 
 ## Workspace boundaries
 
 | Workspace | Owns | Drives | Explicitly does not own |
 | --- | --- | --- | --- |
-| Document | Open, view, navigate, save/export, and ordinary PDF interaction | `LoupeEditor`, `LoupeLibGui`, shared document/session contracts | A separate Viewer product or a second document model |
-| Preflight | Run/rerun/cancel inspection, findings, evidence, report export, and stale-result state | Core `PreflightEngine`, `PdfTool preflight`, `LoupePreflightPlugin` | A GUI-only interpretation of the CLI report |
-| Production Preview | Soft proofing, output preview, separations, and production rendering evidence | `OutputPreviewPlugin`, `SoftProofingPlugin`, shared render/color contracts | Final approval or an alternate PDF-writing pipeline |
+| Document | Open, view, navigate, save/export, and ordinary PDF interaction | `LoupeEditor`, `LoupeLibQuick`, shared document/session contracts | A separate Viewer product or a second document model |
+| Preflight | Run/rerun/cancel inspection, findings, evidence, report export, and stale-result state | Core `PreflightEngine`, `PdfTool preflight`, Quick shell contract | A GUI-only interpretation of the CLI report |
+| Production Preview | Soft proofing, output preview, separations, and production rendering evidence | `LoupeLibCore`, `LoupeLibQuick`, shared render/color contracts | Final approval or an alternate PDF-writing pipeline |
 | Pages / Production | Multi-document assembly, page geometry, crop, regrouping, bleed, optimization, and export | `PDFPageMasterExport`, ADR-003 stage order, ADR-004 batch manifest | A copied PageMaster engine or a reordered export pipeline |
-| Inspect | Contextual page, image, object, dimension, color, and evidence inspection | `DimensionsPlugin`, `ObjectInspectorPlugin`, Core inspection APIs | A standalone inspector application |
+| Inspect | Contextual page, image, object, dimension, color, and evidence inspection | Core inspection APIs and the Quick shell contract | A standalone inspector application |
 | Fix | Deterministic, bounded corrective operations with preview, approval, output, and revalidation | Core repair operations and `PdfTool repair` | Silent mutation, GUI-only business logic, or implicit approval |
 | Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of `LoupeDiff` while the decision is `OPEN` |
 
@@ -37,11 +40,11 @@ is not a new executable and must not own a duplicate Core semantic path.
 
 ## PageMaster disposition and capability crosswalk
 
-`LoupePageMaster` is **ABSORB**: its UI becomes the Pages / Production
-workspace later, while `PDFPageMasterExport` and its ADR-003/ADR-004 contracts
-remain the single source of truth. The following is the complete action
-inventory from `LoupePageMaster/mainwindow.ui`; every action is assigned a
-destination or an explicit compatibility disposition.
+`LoupePageMaster` is recorded as **CLI-ONLY** and its source is deleted. Its
+historical UI action inventory maps to the Pages / Production workspace later,
+while `PDFPageMasterExport` and its ADR-003/ADR-004 contracts remain the single
+source of truth. The following action map is retained as product intent; it does
+not imply that a standalone executable or UI file is still shipped.
 
 | PageMaster action IDs | Disposition | Destination / contract |
 | --- | --- | --- |
@@ -58,35 +61,37 @@ destination or an explicit compatibility disposition.
 | `actionUndo`, `actionRedo` | ABSORB | Pages / Production history; must remain scoped to the workspace document model |
 | `actionGet_Source`, `actionBecomeASponsor`, `actionAbout`, `actionPrepare_Icon_Theme` | KEEP / ADVANCED | Loupe Help or developer/compatibility path; not a production capability |
 
-No PageMaster action is silently retired. The standalone executable remains a
-compatibility surface until #193 provides the shell host and parity evidence.
-Export order remains the ADR-003 contract: assembly, preflight, page geometry,
+No PageMaster semantic contract is silently retired, but the standalone
+executable is absent from both profiles. Export order remains the ADR-003
+contract: assembly, preflight, page geometry,
 bleed/content fixups, image optimization, then write, with ADR-004 manifest and
 rollback behavior unchanged.
 
 ## Compare disposition
 
 Compare is **OPEN**, not implicitly absorbed. The Core `PDFDiff` contract is
-retained and `LoupeDiff` remains directly invokable in both developer and
-release compatibility inventories, but the release package has no Diff desktop
-entry or AppX product entry. The owner is `m.berry`; #193 is the follow-up for
-the shell boundary and #197 is the release exit gate. No deletion or UI
-replacement is authorized by this document.
+retained while `LoupeDiff` is absent from both profiles because its source was
+already deleted. The owner is `m.berry`; #193 is the follow-up for the shell
+boundary and #197 is the release exit gate. No new UI replacement or product
+commitment is authorized by this document.
 
 ## Packaging rules
 
 The checked-in `docs/product-surface.json` manifest is the source of truth for
 surface disposition and the expected developer/release packaging inventory.
-`scripts/verify-loupe-surface.ps1` consumes that manifest. The release profile
+`scripts/verify_product_surface.py` (with
+`scripts/verify-loupe-surface.ps1` as the Windows/PowerShell entry point)
+consumes that manifest. The release profile
 must have:
 
 - one Linux desktop entry, `io.github.mberrys.Loupe-pdf.desktop`, launching
   `LoupeEditor` with `application/pdf` association;
 - one AppX application, `LoupeEditor`, with the same PDF association;
 - no Viewer, PageMaster, Diff, or LaunchPad desktop/AppX entry; and
-- the retained compatibility binaries/plugins listed by the manifest where
-  direct invocation or release-profile policy requires them.
+- only the manifest-declared `LoupeEditor`, `PdfTool`, `LoupeLibCore`, and
+  `LoupeLibQuick` first-party artifacts; deleted compatibility/plugin artifacts
+  are forbidden.
 
-The full developer profile keeps the inherited desktop entries for comparison
-and direct testing. This is packaging visibility, not a license to expose
-multiple Loupe products to release users.
+The full developer profile adds the explicit Editor desktop entry for developer
+testing and builds the three declared developer tools. This is development
+capacity, not a license to expose multiple Loupe products to release users.

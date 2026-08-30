@@ -13,9 +13,9 @@
       "LOUPE_BUILD_QUICK_SHELL_SMOKE": false,
       "LOUPE_BUILD_CANVAS_BENCHMARK": false,
       "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE": false,
-      "LOUPE_BUILD_CODE_GENERATOR": true,
-      "LOUPE_BUILD_JBIG2_VIEWER": true,
-      "LOUPE_BUILD_EXAMPLE_GENERATOR": true,
+      "LOUPE_BUILD_CODE_GENERATOR": false,
+      "LOUPE_BUILD_JBIG2_VIEWER": false,
+      "LOUPE_BUILD_EXAMPLE_GENERATOR": false,
       "LOUPE_BUILD_VIEWER": false,
       "LOUPE_BUILD_PAGEMASTER": false,
       "LOUPE_BUILD_DIFF": false,
@@ -153,11 +153,11 @@
       "id": "CodeGenerator",
       "kind": "executable",
       "cmake": "CodeGenerator/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_CODE_GENERATOR=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_CODE_GENERATOR=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "Qt6::Core",
@@ -194,11 +194,11 @@
       "id": "JBIG2_VIEWER",
       "kind": "executable",
       "cmake": "JBIG2_Viewer/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_JBIG2_VIEWER=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_JBIG2_VIEWER=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "Qt6::Core",
@@ -281,9 +281,9 @@
       "cmake": "LoupeEditor/CMakeLists.txt",
       "profile_enabled": true,
       "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY",
-      "install_rule": true,
-      "installed_in_profile": true,
-      "build_only_in_profile": false,
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": true,
       "direct_links": [
         "LoupeLibCore",
         "LoupeLibInteraction",
@@ -567,11 +567,11 @@
       "id": "PdfExampleGenerator",
       "kind": "executable",
       "cmake": "PdfExampleGenerator/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_EXAMPLE_GENERATOR=ON in the loupe-release profile",
+      "profile_enabled": false,
+      "profile_condition": "LOUPE_BUILD_EXAMPLE_GENERATOR=OFF in the loupe-release profile",
       "install_rule": false,
       "installed_in_profile": false,
-      "build_only_in_profile": true,
+      "build_only_in_profile": false,
       "direct_links": [
         "LoupeLibCore",
         "Qt6::Core",
@@ -2802,7 +2802,7 @@
     {
       "target": "CodeGenerator",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "CodeGenerator/CMakeLists.txt"
@@ -2810,7 +2810,7 @@
     {
       "target": "JBIG2_VIEWER",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "JBIG2_Viewer/CMakeLists.txt"
@@ -2818,7 +2818,7 @@
     {
       "target": "PdfExampleGenerator",
       "kind": "executable",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "cmake": "PdfExampleGenerator/CMakeLists.txt"
@@ -2857,7 +2857,7 @@
       "kind": "developer-tool",
       "target": "CodeGenerator",
       "cmake": "CodeGenerator/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -2867,7 +2867,7 @@
       "kind": "developer-tool",
       "target": "JBIG2_VIEWER",
       "cmake": "JBIG2_Viewer/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -2877,7 +2877,7 @@
       "kind": "developer-tool",
       "target": "PdfExampleGenerator",
       "cmake": "PdfExampleGenerator/CMakeLists.txt",
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "direct",
       "consumers": []
@@ -2888,7 +2888,7 @@
       "path": "CodeGenerator/generatormainwindow.ui",
       "target": "CodeGenerator",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -2901,7 +2901,7 @@
       "path": "JBIG2_Viewer/mainwindow.ui",
       "target": "JBIG2_VIEWER",
       "plugin": null,
-      "profile_enabled": true,
+      "profile_enabled": false,
       "installed_in_profile": false,
       "widgets_linkage": "owned-by-widgets-surface",
       "consumers": [
@@ -2911,8 +2911,8 @@
   ],
   "counts": {
     "targets": 66,
-    "installed_in_profile": 5,
-    "build_only_in_profile": 5,
+    "installed_in_profile": 4,
+    "build_only_in_profile": 3,
     "widgets_surfaces": 4,
     "legacy_executables": 4,
     "plugin_ui_groups": 0,

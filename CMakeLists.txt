@@ -88,8 +88,8 @@ if(LOUPE_ENABLE_SENTRY)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LoupeSentry.cmake)
 endif()
 
-# Loupe release profile: retain the standalone production/developer tools while
-# deferring only explicitly out-of-profile plugins without deleting sources.
+# Loupe release profile: ship the single Quick desktop/CLI product surface.
+# Developer comparison tools stay source-preserved but default out of release.
 option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 
 # Compatibility Widgets executables are build-optional and never installed.
