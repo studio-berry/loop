@@ -13,8 +13,19 @@ Canonical milestone text for [studio-berry/loupe](https://github.com/studio-berr
 | 0.2.0 | Living | 0.0.4 (supersedes retired `0.1.2` title) |
 | 0.3.0 | Living | 0.0.5 (supersedes retired `0.1.3` title) |
 | 0.4.0 | Living | 0.0.6 (supersedes retired `0.1.4` title) |
+| 0.5.0 | Planned (proposed) | — |
+| 0.6.0 | Planned (proposed) | — |
+| 0.7.0 | Planned (proposed) | — |
+| 0.8.0 | Planned (proposed) | — |
+| 0.9.0 | Planned (proposed) | — |
+| 0.10.0 | Planned (proposed) | — |
 
 The living release train is **0.1.1 → 0.2.0 → 0.3.0 → 0.4.0**. Retired `0.1.2`–`0.1.4` GitHub milestone titles are closed by the sync script.
+
+The planned continuation **0.5.0 → 0.6.0 → 0.7.0 → 0.8.0 → 0.9.0 → 0.10.0** is scoped in
+[`docs/ROADMAP_0.5.0-0.10.0.md`](../ROADMAP_0.5.0-0.10.0.md) and remains proposed until the
+canonical Notion roadmap is amended; each planned milestone activates only on its
+predecessor's release acceptance.
 
 ## Sync
 
