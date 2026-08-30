@@ -53,6 +53,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult
     QList<PDFColorInventoryInk> separations;
     QList<PDFColorInventoryInk> spotColors;
     QList<PDFRichBlackInventory> richBlackPages;
+    PDFRenderDiagnostics diagnostics;
 };
 
 struct LOUPELIBCORESHARED_EXPORT PDFColorInventorySettings

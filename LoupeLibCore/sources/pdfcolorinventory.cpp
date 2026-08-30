@@ -153,6 +153,7 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
         renderer.beginPaint(imageSize);
         renderer.processContents();
         renderer.endPaint();
+        result.diagnostics.merge(renderer.getRenderDiagnostics());
 
         const PDFFloatBitmapWithColorSpace bitmap = renderer.getOriginalProcessBitmap();
         const PDFPixelFormat format = bitmap.getPixelFormat();

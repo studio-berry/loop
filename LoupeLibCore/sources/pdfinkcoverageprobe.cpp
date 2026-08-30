@@ -161,6 +161,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     renderer.beginPaint(imageSize);
     renderer.processContents();
     renderer.endPaint();
+    result.diagnostics = renderer.getRenderDiagnostics();
 
     const PDFFloatBitmapWithColorSpace bitmap = renderer.getOriginalProcessBitmap();
     const size_t bitmapWidth = bitmap.getWidth();

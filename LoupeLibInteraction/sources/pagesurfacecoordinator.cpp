@@ -393,6 +393,7 @@ void PageSurfaceCoordinator::finishInFlight(quint64 requestId, SurfaceTerminalSt
     const PageSurfaceKey key = it->key;
     removeInFlight(requestId);
 
+    resetAuthoritativePageAfterFailure(key, state);
     countTerminal(state);
     Q_EMIT surfaceTerminal(key, state);
     scheduleSurfaceRetry();
@@ -608,12 +609,24 @@ void PageSurfaceCoordinator::trimCacheToBudget()
 
 void PageSurfaceCoordinator::resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state)
 {
-    if (state != SurfaceTerminalState::Failed && state != SurfaceTerminalState::BudgetExhausted)
+    if (state != SurfaceTerminalState::Cancelled
+        && state != SurfaceTerminalState::Failed
+        && state != SurfaceTerminalState::BudgetExhausted)
     {
         return;
     }
 
     if (!hasAuthoritativeOverprintMarker(key.colorOutputIdentity) || !m_authoritativePages.contains(key.pageIndex))
+    {
+        return;
+    }
+
+    // A cancellation or failure for an old zoom/revision is expected while the
+    // viewport is superseding demand. Only clear the escalation when this exact
+    // authoritative key is still wanted; otherwise a newer authoritative job
+    // owns the page's state already.
+    const std::optional<PageSurfaceKey> wanted = keyForPage(key.pageIndex);
+    if (!wanted.has_value() || wanted.value() != key)
     {
         return;
     }

@@ -102,6 +102,24 @@ struct PDFRenderDiagnostics
         }
     }
 
+    void merge(const PDFRenderDiagnostics& other)
+    {
+        if (other.fidelity == PDFRenderFidelity::Unsupported
+            || (other.fidelity == PDFRenderFidelity::SupportedWithFallback
+                && fidelity == PDFRenderFidelity::ExactSupported))
+        {
+            fidelity = other.fidelity;
+        }
+
+        for (const QString& reason : other.reasons)
+        {
+            if (!reason.isEmpty() && !reasons.contains(reason))
+            {
+                reasons.push_back(reason);
+            }
+        }
+    }
+
     bool isExact() const { return fidelity == PDFRenderFidelity::ExactSupported; }
 
     /// Builds diagnostics for a page rendered on the standard (approximate)

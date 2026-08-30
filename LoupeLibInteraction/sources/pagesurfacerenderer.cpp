@@ -31,6 +31,7 @@
 #include "pdftransparencyrenderer.h"
 #include "pdfcolorconvertor.h"
 
+#include <QColor>
 #include <QImage>
 #include <QPainter>
 
@@ -111,6 +112,7 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
     inkMapper.createSpotColors(true);
 
     pdf::PDFTransparencyRendererSettings settings;
+    settings.flags.setFlag(pdf::PDFTransparencyRendererSettings::SeparationSimulation, true);
     settings.renderPolicy = pdf::PDFRenderPolicy::forOutputPreview();
 
     const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));
@@ -135,7 +137,12 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
         return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));
     }
 
-    QImage image = renderer.toImage(false, true, pdf::PDFRGB{ 1.0F, 1.0F, 1.0F });
+    const QColor paperColor = session->getCMS()->getPaperColor();
+    QImage image = renderer.toImage(false,
+                                    true,
+                                    pdf::PDFRGB{ static_cast<pdf::PDFColorComponent>(paperColor.redF()),
+                                                 static_cast<pdf::PDFColorComponent>(paperColor.greenF()),
+                                                 static_cast<pdf::PDFColorComponent>(paperColor.blueF()) });
     if (image.isNull())
     {
         return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/render-failed"));

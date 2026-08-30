@@ -58,9 +58,18 @@ Item {
                 id: fidelityLabel
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: root.host
-                      ? qsTr("Approximate render: %1").arg(root.host.pageFidelityReason)
-                      : ""
+                text: {
+                    if (!root.host) {
+                        return ""
+                    }
+                    if (root.host.pageFidelityIsAuthoritative && root.host.pageFidelityIsExact) {
+                        return qsTr("Accurate render")
+                    }
+                    const reason = root.host.pageFidelityReason
+                    return reason.length > 0
+                           ? qsTr("Approximate render: %1").arg(reason)
+                           : qsTr("Approximate render")
+                }
             }
 
             Button {

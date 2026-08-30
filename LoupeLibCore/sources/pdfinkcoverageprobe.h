@@ -25,6 +25,7 @@
 
 #include "pdfglobal.h"
 #include "pdfdocumentsession.h"
+#include "pdftransparencyrenderer.h"
 
 #include <QRectF>
 
@@ -77,6 +78,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFInkCoverageProbeResult
 {
     bool rasterized = false;     // false when rasterization was unavailable or over budget
     bool budgetExceeded = false;
+    PDFRenderDiagnostics diagnostics;
     qreal peakInkCoverage = 0.0; // page-wide max TAC
     qreal overLimitAreaMM2 = 0.0;
     std::vector<PDFInkCoverageRegion> regions;  // sorted by areaMM2, descending
