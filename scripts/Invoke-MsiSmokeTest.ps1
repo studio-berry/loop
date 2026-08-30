@@ -22,10 +22,14 @@
 .PARAMETER InstallDir
     Expected install directory. Defaults to the 64-bit Program Files.
 
-    NOTE: WindowsInstall.yml invokes `candle ... -arch x86` while the payload is x64
-    (--triplet x64-windows, win64_msvc2022_64). If the MSI lands under
-    "Program Files (x86)" this run will fail here -- that is a real finding, not a
-    script bug. Record it on MIC-301 and fix the WiX arch before sign-off.
+.PARAMETER TestPdf
+    External PDF used for packaged PdfTool and Editor smoke checks.
+
+.PARAMETER SourceSha
+    Optional full source SHA to record in the lifecycle smoke transcript.
+
+.PARAMETER LogDir
+    Directory for verbose Windows Installer logs.
 
 .EXAMPLE
     .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_0.1.0.msi
@@ -35,6 +39,7 @@ param(
     [string]$PreviousMsiPath = "",
     [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
     [string]$TestPdf = "",
+    [string]$SourceSha = "",
     [string]$LogDir = "$env:TEMP\loupe-msi-smoke",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar
@@ -42,6 +47,25 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if (-not [string]::IsNullOrWhiteSpace($SourceSha)) {
+    if ($SourceSha -notmatch "^[0-9a-fA-F]{40}$") {
+        throw "SourceSha must be a full 40-character Git SHA."
+    }
+    Write-Host "Package source SHA: $($SourceSha.ToLowerInvariant())"
+}
+
+$programFiles = [Environment]::GetFolderPath("ProgramFiles")
+$programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
+$installParent = [IO.Path]::GetFullPath((Split-Path -Parent $InstallDir)).TrimEnd("\")
+if ([string]::IsNullOrWhiteSpace($programFiles) -or
+    -not $installParent.Equals($programFiles.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "InstallDir must be directly under 64-bit Program Files: $InstallDir"
+}
+if (-not [string]::IsNullOrWhiteSpace($programFilesX86) -and
+    $installParent.Equals($programFilesX86.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "InstallDir resolves to 32-bit Program Files: $InstallDir"
+}
 
 $smokeScript = Join-Path $PSScriptRoot "smoke-test-install.ps1"
 if (-not (Test-Path -LiteralPath $smokeScript)) {
@@ -73,6 +97,7 @@ function Invoke-Smoke {
     Write-Host "--- Smoke test ($Stage) ---"
     $smokeArgs = @{ InstallDir = $InstallDir }
     if (-not [string]::IsNullOrWhiteSpace($TestPdf)) { $smokeArgs.TestPdf = $TestPdf }
+    if (-not [string]::IsNullOrWhiteSpace($SourceSha)) { $smokeArgs.SourceSha = $SourceSha }
     if ($SkipEditorLaunch.IsPresent) { $smokeArgs.SkipEditorLaunch = $true }
     if ($AllowOcrSidecar.IsPresent) { $smokeArgs.AllowOcrSidecar = $true }
 
@@ -104,7 +129,7 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
 Write-Host "=== Uninstalling ==="
 Invoke-Msi -Arguments "/x `"$MsiPath`"" -LogName "uninstall"
 
-# The installer also writes a sibling share\loupe tree under ProgramFilesFolder;
+# The installer also writes a sibling share\loupe tree under ProgramFiles64Folder;
 # checking only $InstallDir would miss profile/schema files left behind.
 $shareLeftoverRoot = Join-Path (Split-Path -Parent $InstallDir) "share\loupe"
 if (Test-Path -LiteralPath $shareLeftoverRoot) {
