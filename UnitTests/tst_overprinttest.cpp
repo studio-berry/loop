@@ -23,6 +23,7 @@
 #include "pdfpagecontentprocessor.h"
 #include "pdftransparencyrenderer.h"
 
+#include <QFile>
 #include <QtTest>
 
 class OverprintTest : public QObject
@@ -34,11 +35,14 @@ private slots:
     void selectBlendOverprintMode_respectsFillStrokeGating();
     void selectBlendOverprintMode_rejectsUnknownMode();
     void renderPolicy_marksOutputPreviewAuthoritative();
+    void renderPolicy_marksPreflightAnalysisAuthoritative();
     void renderDiagnostics_escalatesFallbacksForStrictPolicy();
+    void renderDiagnostics_forApproximateOverprint_reflectsCachedFlag();
     void classifyOverprintFidelity_respectsSupportedBoundary();
     void floatBitmapBlend_mode0_selectsBackdropForInactiveChannels();
     void floatBitmapBlend_mode1_selectsNonOneSourceOrBackdropForSubtractiveChannels();
     void floatBitmapBlend_mode1_selectsNonZeroSourceOrBackdropForAdditiveChannels();
+    void preflightRenderPaths_useAuthoritativePolicy();
 };
 
 void OverprintTest::overprintMode_appliesToContent_respectsFillStrokeFlags()
@@ -113,6 +117,21 @@ void OverprintTest::renderPolicy_marksOutputPreviewAuthoritative()
     QVERIFY(!policy.allowApproximation);
 }
 
+void OverprintTest::renderPolicy_marksPreflightAnalysisAuthoritative()
+{
+    const pdf::PDFRenderPolicy policy = pdf::PDFRenderPolicy::forPreflightAnalysis();
+
+    QCOMPARE(policy.purpose, pdf::PDFRenderPurpose::PreflightAnalysis);
+    QVERIFY(policy.requiresAuthoritativeRenderer());
+    QVERIFY(policy.requireSeparationAccuracy);
+    QVERIFY(policy.requireOverprintAccuracy);
+    QVERIFY(!policy.allowApproximation);
+
+    // Both purposes issue #49 depends on must resolve to an authoritative
+    // renderer, not just one of them.
+    QVERIFY(pdf::PDFRenderPolicy::forOutputPreview().requiresAuthoritativeRenderer());
+}
+
 void OverprintTest::renderDiagnostics_escalatesFallbacksForStrictPolicy()
 {
     pdf::PDFRenderDiagnostics diagnostics;
@@ -123,6 +142,18 @@ void OverprintTest::renderDiagnostics_escalatesFallbacksForStrictPolicy()
     diagnostics.record(pdf::PDFRenderFidelity::Unsupported, QStringLiteral("unsupported"));
     QCOMPARE(diagnostics.fidelity, pdf::PDFRenderFidelity::Unsupported);
     QCOMPARE(diagnostics.reasons.size(), 2);
+}
+
+void OverprintTest::renderDiagnostics_forApproximateOverprint_reflectsCachedFlag()
+{
+    const pdf::PDFRenderDiagnostics clean = pdf::PDFRenderDiagnostics::forApproximateOverprint(false);
+    QVERIFY(clean.isExact());
+    QVERIFY(clean.reasons.isEmpty());
+
+    const pdf::PDFRenderDiagnostics approximated = pdf::PDFRenderDiagnostics::forApproximateOverprint(true);
+    QCOMPARE(approximated.fidelity, pdf::PDFRenderFidelity::SupportedWithFallback);
+    QVERIFY(!approximated.isExact());
+    QCOMPARE(approximated.reasons.size(), 1);
 }
 
 void OverprintTest::classifyOverprintFidelity_respectsSupportedBoundary()
@@ -266,6 +297,31 @@ void OverprintTest::floatBitmapBlend_mode1_selectsNonZeroSourceOrBackdropForAddi
     QCOMPARE(result[0], backdropColor[0]);
     QCOMPARE(result[1], sourceColor[1]);
     QCOMPARE(result[2], sourceColor[2]);
+}
+
+void OverprintTest::preflightRenderPaths_useAuthoritativePolicy()
+{
+    // Regression for issue #49: PDFInkCoverageProbe and PDFColorInventory are
+    // the only production preflight-analysis paths that build a
+    // PDFTransparencyRenderer. Neither exposes the settings it constructed
+    // the renderer with, so this checks the wiring directly rather than
+    // observing pixels -- PDFRenderPolicy only changes what
+    // PDFRenderDiagnostics reports (see recordOverprintDiagnostics), not the
+    // pixels these two callers use, so a pixel-level test could not catch a
+    // regression here. A future change routing either through a fresh
+    // PDFTransparencyRendererSettings without setting renderPolicy silently
+    // reintroduces PDFRenderPolicy::allowApproximation = true, which this
+    // guards against.
+    const QString sourceDir = QStringLiteral(LOUPE_SOURCE_DIR "/LoupeLibCore/sources");
+    const QString marker = QStringLiteral("PDFRenderPolicy::forPreflightAnalysis()");
+
+    for (const QString& fileName : { QStringLiteral("pdfinkcoverageprobe.cpp"), QStringLiteral("pdfcolorinventory.cpp") })
+    {
+        QFile file(sourceDir + QStringLiteral("/") + fileName);
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(QStringLiteral("Could not open %1").arg(file.fileName())));
+        const QString contents = QString::fromUtf8(file.readAll());
+        QVERIFY2(contents.contains(marker), qPrintable(QStringLiteral("%1 no longer sets renderPolicy to an authoritative PDFRenderPolicy").arg(fileName)));
+    }
 }
 
 QTEST_APPLESS_MAIN(OverprintTest)

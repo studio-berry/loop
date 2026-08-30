@@ -57,8 +57,7 @@ namespace pdf
 //  Marked content:             MP, DP, BMC, BDC, EMC
 //  Compatibility:              BX, EX
 
-static constexpr const std::pair<const char*, PDFPageContentProcessor::Operator> operators[] =
-{
+static constexpr const std::pair<const char*, PDFPageContentProcessor::Operator> operators[] = {
     // General graphic state        w, J, j, M, d, ri, i, gs
     { "w", PDFPageContentProcessor::Operator::SetLineWidth },
     { "J", PDFPageContentProcessor::Operator::SetLineCap },
@@ -208,26 +207,26 @@ void PDFPageContentProcessor::initDictionaries(const PDFObject& resourcesObject)
         ProcedureSets newProcSet = EmptyProcSet;
         for (const QByteArray& procedureSetName : procedureSetNames)
         {
-           if (procedureSetName == "PDF")
-           {
-               newProcSet.setFlag(PDF);
-           }
-           else if (procedureSetName == "Text")
-           {
-               newProcSet.setFlag(Text);
-           }
-           else if (procedureSetName == "ImageB")
-           {
-               newProcSet.setFlag(ImageB);
-           }
-           else if (procedureSetName == "ImageC")
-           {
-               newProcSet.setFlag(ImageC);
-           }
-           else if (procedureSetName == "ImageI")
-           {
-               newProcSet.setFlag(ImageI);
-           }
+            if (procedureSetName == "PDF")
+            {
+                newProcSet.setFlag(PDF);
+            }
+            else if (procedureSetName == "Text")
+            {
+                newProcSet.setFlag(Text);
+            }
+            else if (procedureSetName == "ImageB")
+            {
+                newProcSet.setFlag(ImageB);
+            }
+            else if (procedureSetName == "ImageC")
+            {
+                newProcSet.setFlag(ImageC);
+            }
+            else if (procedureSetName == "ImageI")
+            {
+                newProcSet.setFlag(ImageI);
+            }
         }
 
         if (newProcSet)
@@ -421,7 +420,6 @@ bool PDFPageContentProcessor::performPathPaintingUsingShading(const QPainterPath
 
 void PDFPageContentProcessor::performFinishPathPainting()
 {
-
 }
 
 void PDFPageContentProcessor::performClipping(const QPainterPath& path, Qt::FillRule fillRule)
@@ -446,6 +444,13 @@ void PDFPageContentProcessor::performImagePainting(const QImage& image)
 void PDFPageContentProcessor::performMeshPainting(const PDFMesh& mesh)
 {
     Q_UNUSED(mesh);
+}
+
+void PDFPageContentProcessor::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    performMeshPainting(mesh);
 }
 
 void PDFPageContentProcessor::performUpdateGraphicsState(const PDFPageContentProcessorState& state)
@@ -481,7 +486,6 @@ void PDFPageContentProcessor::performMarkedContentBegin(const QByteArray& tag, c
 
 void PDFPageContentProcessor::performMarkedContentEnd()
 {
-
 }
 
 void PDFPageContentProcessor::performSetCharWidth(PDFReal wx, PDFReal wy)
@@ -553,7 +557,8 @@ void PDFPageContentProcessor::setGraphicsState(const PDFPageContentProcessorStat
 
 bool PDFPageContentProcessor::isContentSuppressed() const
 {
-    return std::any_of(m_markedContentStack.cbegin(), m_markedContentStack.cend(), [](const MarkedContentState& state) { return state.contentSuppressed; });
+    return std::any_of(m_markedContentStack.cbegin(), m_markedContentStack.cend(), [](const MarkedContentState& state)
+                       { return state.contentSuppressed; });
 }
 
 PDFPageContentProcessor::PDFTransparencyGroup PDFPageContentProcessor::parseTransparencyGroup(const PDFObject& object)
@@ -597,8 +602,8 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
     if (m_processingBudget)
     {
         budgetDepthScope = std::make_unique<PDFProcessingBudget::DepthScope>(*m_processingBudget,
-                                                                                PDFBudgetKind::RecursiveContentDepth,
-                                                                                PDFTranslationContext::tr("content stream"));
+                                                                             PDFBudgetKind::RecursiveContentDepth,
+                                                                             PDFTranslationContext::tr("content stream"));
     }
 
     // Guard the content stream nesting depth. Forms, tiling patterns and
@@ -662,10 +667,10 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
                         Q_ASSERT(operatorBIPosition <= operatorIDPosition);
 
                         PDFLexicalAnalyzer inlineImageLexicalAnalyzer(content.constBegin() + operatorBIPosition, content.constBegin() + operatorIDPosition);
-                        PDFParser inlineImageParser([&inlineImageLexicalAnalyzer]{ return inlineImageLexicalAnalyzer.fetch(); });
+                        PDFParser inlineImageParser([&inlineImageLexicalAnalyzer]
+                                                    { return inlineImageLexicalAnalyzer.fetch(); });
 
-                        constexpr std::pair<const char*, const char*> replacements[] =
-                        {
+                        constexpr std::pair<const char*, const char*> replacements[] = {
                             { "BPC", "BitsPerComponent" },
                             { "CS", "ColorSpace" },
                             { "D", "Decode" },
@@ -837,7 +842,7 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
             m_operands.clear();
             m_errorList.append(PDFRenderError(RenderErrorType::Error, exception.getMessage()));
         }
-        catch (const PDFRendererException &exception)
+        catch (const PDFRendererException& exception)
         {
             m_operands.clear();
             m_errorList.append(exception.getError());
@@ -1007,7 +1012,7 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
                             }
                             mesh.setBoundingPath(boundingPath);
 
-                            performMeshPainting(mesh);
+                            performMeshPainting(mesh, false, true);
                         }
                     }
                     break;
@@ -1122,7 +1127,7 @@ void PDFPageContentProcessor::processPathPainting(const QPainterPath& path, bool
                             }
                             mesh.setBoundingPath(boundingPath);
 
-                            performMeshPainting(mesh);
+                            performMeshPainting(mesh, true, false);
                         }
                     }
                     break;
@@ -1278,7 +1283,8 @@ void PDFPageContentProcessor::processCommand(const QByteArray& command)
     }
 
     performInterceptInstruction(op, ProcessOrder::BeforeOperation, command);
-    auto callInterceptInstAtEnd = qScopeGuard([&, this](){ performInterceptInstruction(op, ProcessOrder::AfterOperation, command); });
+    auto callInterceptInstAtEnd = qScopeGuard([&, this]()
+                                              { performInterceptInstruction(op, ProcessOrder::AfterOperation, command); });
 
     switch (op)
     {
@@ -2261,7 +2267,7 @@ void PDFPageContentProcessor::operatorAdjustCurrentTransformationMatrix(PDFReal 
     updateGraphicState();
 }
 
-template<>
+template <>
 PDFReal PDFPageContentProcessor::readOperand<PDFReal>(size_t index) const
 {
     if (index < m_operands.size())
@@ -2284,7 +2290,7 @@ PDFReal PDFPageContentProcessor::readOperand<PDFReal>(size_t index) const
     }
 }
 
-template<>
+template <>
 PDFInteger PDFPageContentProcessor::readOperand<PDFInteger>(size_t index) const
 {
     if (index < m_operands.size())
@@ -2306,7 +2312,7 @@ PDFInteger PDFPageContentProcessor::readOperand<PDFInteger>(size_t index) const
     }
 }
 
-template<>
+template <>
 PDFPageContentProcessor::PDFOperandName PDFPageContentProcessor::readOperand<PDFPageContentProcessor::PDFOperandName>(size_t index) const
 {
     if (index < m_operands.size())
@@ -2329,7 +2335,7 @@ PDFPageContentProcessor::PDFOperandName PDFPageContentProcessor::readOperand<PDF
 }
 
 
-template<>
+template <>
 PDFPageContentProcessor::PDFOperandString PDFPageContentProcessor::readOperand<PDFPageContentProcessor::PDFOperandString>(size_t index) const
 {
     if (index < m_operands.size())
@@ -2353,7 +2359,8 @@ PDFPageContentProcessor::PDFOperandString PDFPageContentProcessor::readOperand<P
 
 void PDFPageContentProcessor::operatorMoveCurrentPoint(PDFReal x, PDFReal y)
 {
-    m_currentPath.moveTo(x, y);;
+    m_currentPath.moveTo(x, y);
+    ;
 }
 
 void PDFPageContentProcessor::operatorLineTo(PDFReal x, PDFReal y)
@@ -3274,12 +3281,11 @@ void PDFPageContentProcessor::operatorPaintXObject(PDFOperandName name)
                 }
 
                 auto activeFormGuard = qScopeGuard([this, reference]()
-                {
+                                                   {
                     if (reference.isValid())
                     {
                         m_activeFormReferences.erase(reference);
-                    }
-                });
+                    } });
 
                 processForm(stream);
             }
@@ -3378,7 +3384,7 @@ void PDFPageContentProcessor::drawText(const TextSequence& textSequence)
     {
         const bool isType3Font = m_graphicState.getTextFont()->getFontType() == FontType::Type3;
         const PDFReal fontSize = m_graphicState.getTextFontSize();
-        const PDFReal horizontalScaling = m_graphicState.getTextHorizontalScaling() * 0.01; // Horizontal scaling is in percents
+        const PDFReal horizontalScaling = m_graphicState.getTextHorizontalScaling() * 0.01;   // Horizontal scaling is in percents
         const PDFReal characterSpacing = m_graphicState.getTextCharacterSpacing();
         const PDFReal wordSpacing = m_graphicState.getTextWordSpacing();
         const PDFReal textRise = m_graphicState.getTextRise();
@@ -3624,7 +3630,7 @@ bool PDFPageContentProcessor::isContentSuppressedByOC(PDFObjectReference ocgOrOc
     {
         ocmd = PDFOptionalContentMembershipObject::create(m_document, PDFObject::createReference(ocgOrOcmd));
     }
-    catch (const PDFException &e)
+    catch (const PDFException& e)
     {
         m_errorList.push_back(PDFRenderError(RenderErrorType::Error, e.getMessage()));
     }
@@ -3680,7 +3686,6 @@ PDFPageContentProcessorState::PDFPageContentProcessorState() :
 
 PDFPageContentProcessorState::~PDFPageContentProcessorState()
 {
-
 }
 
 PDFPageContentProcessorState& PDFPageContentProcessorState::operator=(const PDFPageContentProcessorState& other)

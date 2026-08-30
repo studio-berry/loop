@@ -145,12 +145,14 @@ private Q_SLOTS:
 private:
     std::unique_ptr<FakeGeometrySource> m_geometry;
     std::unique_ptr<pdfinteraction::ViewportController> m_viewport;
+    pdfinteraction::RenderPresentationPolicy m_policy;
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     pdfinteraction::InteractionState m_state;
 };
 
 void OverlayFrameTest::init()
 {
+    m_policy = {};
     m_geometry = std::make_unique<FakeGeometrySource>(4);
 
     m_viewport = std::make_unique<pdfinteraction::ViewportController>();
@@ -160,7 +162,7 @@ void OverlayFrameTest::init()
     m_viewport->setPageLayout(pdfinteraction::PageLayout::SinglePage);
     m_viewport->setZoom(1.0);
 
-    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport);
+    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport, m_policy);
 }
 
 void OverlayFrameTest::cleanup()
@@ -386,12 +388,12 @@ void OverlayFrameTest::denyExtraGraphicsSuppressesOverlays()
     m_overlays->setFindings({ makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)) });
     m_overlays->setGuides({ makeTarget(pdfinteraction::InteractionTargetKind::Guide, QStringLiteral("guide-a"), QRectF(5.0, 5.0, 90.0, 90.0)) });
     m_state.setSelected(makeTarget(pdfinteraction::InteractionTargetKind::Finding, QStringLiteral("finding-a"), QRectF(20.0, 20.0, 20.0, 20.0)));
-    m_overlays->setDenyExtraGraphics(true);
+    m_policy.features |= pdf::PDFRenderer::DenyExtraGraphics;
 
     const pdfinteraction::OverlayFrame suppressed = m_overlays->build(m_state, makeToken());
     QVERIFY(suppressed.primitives.isEmpty());
 
-    m_overlays->setDenyExtraGraphics(false);
+    m_policy.features &= ~pdf::PDFRenderer::DenyExtraGraphics;
     const pdfinteraction::OverlayFrame restored = m_overlays->build(m_state, makeToken());
     QVERIFY(restored.primitives.size() >= 2);
 }

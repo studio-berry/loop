@@ -26,6 +26,7 @@
 #include "interactionglobal.h"
 #include "interactionstate.h"
 #include "overlayframe.h"
+#include "renderpresentationpolicy.h"
 #include "viewportcontroller.h"
 
 #include <QHash>
@@ -67,6 +68,9 @@ class OverlayBuilder final
 {
 public:
     explicit OverlayBuilder(const ViewportController& viewport, OverlayBounds bounds = OverlayBounds::conservativeDefaults());
+    OverlayBuilder(const ViewportController& viewport,
+                   const RenderPresentationPolicy& policy,
+                   OverlayBounds bounds = OverlayBounds::conservativeDefaults());
 
     const OverlayBounds& bounds() const noexcept { return m_bounds; }
 
@@ -91,8 +95,12 @@ public:
     void setHiddenFindingIds(QSet<QString> hiddenIds);
 
     /// When true, suppress tool/findings overlay primitives for this frame.
-    void setDenyExtraGraphics(bool deny) noexcept { m_denyExtraGraphics = deny; }
-    bool denyExtraGraphics() const noexcept { return m_denyExtraGraphics; }
+    /// The value is derived from the shared render/presentation policy; it is
+    /// intentionally not independently mutable here.
+    bool denyExtraGraphics() const noexcept
+    {
+        return m_policy->features.testFlag(pdf::PDFRenderer::DenyExtraGraphics);
+    }
 
     /// The finding that currently has keyboard focus, drawn with the focus ring.
     void setFocusedId(QString focusedId);
@@ -110,6 +118,8 @@ private:
     QRectF visiblePageBounds(int pageIndex) const;
 
     const ViewportController* m_viewport = nullptr;
+    RenderPresentationPolicy m_ownedPolicy;
+    const RenderPresentationPolicy* m_policy = &m_ownedPolicy;
     OverlayBounds m_bounds;
 
     QList<InteractionTarget> m_findings;
@@ -118,7 +128,6 @@ private:
     QHash<QString, OverlaySeverity> m_severities;
     QSet<QString> m_hiddenFindingIds;
     QString m_focusedId;
-    bool m_denyExtraGraphics = false;
 };
 
 }   // namespace pdfinteraction

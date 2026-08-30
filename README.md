@@ -25,7 +25,7 @@ A desktop PDF toolkit for editing, inspecting, validating, and automating PDF wo
 
 ## Known limitations
 
-- **Overprint is not simulated in the interactive page view.** The standard page renderer does not composite overprint (`OP`/`op`/OPM in the graphics state); overprint-accurate compositing is only available in **Output Preview**. Preflight only raises a finding for the unsafe white/near-white overprint case — a document using ordinary overprint (spot-over-process, rich black over an image) produces no finding at all. Proof any overprint-sensitive document in Output Preview before it ships to print.
+- **The interactive canvas approximates overprint by default.** The standard page renderer does not composite overprint (`OP`/`op`/OPM in the graphics state). When the current page contains overprint-bearing content, the canvas shows a persistent fidelity indicator naming the reason; one click on it switches that page to an authoritative, overprint-accurate render, and one click returns to the fast approximation. Preflight only raises a finding for the unsafe white/near-white overprint case — a document using ordinary overprint (spot-over-process, rich black over an image) produces no finding at all. Use the canvas indicator to check any overprint-sensitive page before it ships to print.
 
 ## Install
 

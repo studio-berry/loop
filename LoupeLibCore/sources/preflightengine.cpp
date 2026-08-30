@@ -2136,6 +2136,15 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             continue;
         }
 
+        if (!result.diagnostics.isExact())
+        {
+            const QString reason = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
+                                       ? PDFTranslationContext::tr("ink coverage rasterization reported unsupported fidelity")
+                                       : result.diagnostics.reasons.join(QStringLiteral("; "));
+            emitIncomplete(int(pageIndex + 1), reason);
+            continue;
+        }
+
         int regionRank = 0;
         for (const PDFInkCoverageRegion& region : result.regions)
         {
@@ -2625,6 +2634,24 @@ void runColorInventoryCheck(PDFDocumentSession* session,
     PDFColorInventory inventory(session);
     const PDFColorInventoryResult result = inventory.inspect(settings);
 
+    if (!result.diagnostics.isExact())
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("check-incomplete");
+        finding.severity = QStringLiteral("info");
+        finding.checkId = check.id;
+        const QString reason = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
+                                   ? PDFTranslationContext::tr("color inventory rasterization reported unsupported fidelity")
+                                   : result.diagnostics.reasons.join(QStringLiteral("; "));
+        finding.evidence = QJsonObject{
+            { QStringLiteral("reason"), reason },
+            { QStringLiteral("fidelity"), QStringLiteral("unsupported") }
+        };
+        finding.message = PDFTranslationContext::tr("Color inventory skipped: %1").arg(reason);
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    }
+
     auto emitInfo = [&](PreflightFinding finding)
     {
         finding.severity = check.severity;
@@ -2654,18 +2681,21 @@ void runColorInventoryCheck(PDFDocumentSession* session,
         emitInfo(finding);
     }
 
-    for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+    if (result.diagnostics.isExact())
     {
-        PreflightFinding finding;
-        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
-        finding.page = richBlack.page;
-        finding.type = QStringLiteral("rich-black");
-        finding.message = PDFTranslationContext::tr(
-                              "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
-                              .arg(richBlack.page)
-                              .arg(richBlack.areaMM2, 0, 'f', 2)
-                              .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
-        emitInfo(finding);
+        for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+        {
+            PreflightFinding finding;
+            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+            finding.page = richBlack.page;
+            finding.type = QStringLiteral("rich-black");
+            finding.message = PDFTranslationContext::tr(
+                                  "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
+                                  .arg(richBlack.page)
+                                  .arg(richBlack.areaMM2, 0, 'f', 2)
+                                  .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
+            emitInfo(finding);
+        }
     }
 }
 

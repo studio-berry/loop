@@ -28,6 +28,7 @@
 #include "pdffont.h"
 #include "pdfoptionalcontent.h"
 #include "pdfpainter.h"
+#include "pdfprocessingbudget.h"
 
 #include <QColor>
 #include <QPainter>
@@ -212,15 +213,19 @@ QString sideName(PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return QStringLiteral("left");
-        case PDFBleedFixupSide::Right: return QStringLiteral("right");
-        case PDFBleedFixupSide::Top: return QStringLiteral("top");
-        case PDFBleedFixupSide::Bottom: return QStringLiteral("bottom");
+        case PDFBleedFixupSide::Left:
+            return QStringLiteral("left");
+        case PDFBleedFixupSide::Right:
+            return QStringLiteral("right");
+        case PDFBleedFixupSide::Top:
+            return QStringLiteral("top");
+        case PDFBleedFixupSide::Bottom:
+            return QStringLiteral("bottom");
     }
     return QStringLiteral("unknown");
 }
 
-} // namespace
+}   // namespace
 
 namespace PDFBleedFixupMath
 {
@@ -238,8 +243,7 @@ PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
         return plan;
     }
 
-    if (dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height())
-        || !(mediaSize.width() > 0.0) || !(mediaSize.height() > 0.0))
+    if (dpi <= 0 || !std::isfinite(mediaSize.width()) || !std::isfinite(mediaSize.height()) || !(mediaSize.width() > 0.0) || !(mediaSize.height() > 0.0))
     {
         plan.withinBudget = false;
         plan.errorMessage = PDFTranslationContext::tr("Page has an invalid media box size for rasterization.");
@@ -248,8 +252,7 @@ PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
 
     const double widthPxReal = std::ceil(mediaSize.width() * PDF_POINT_TO_INCH * dpi);
     const double heightPxReal = std::ceil(mediaSize.height() * PDF_POINT_TO_INCH * dpi);
-    if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal)
-        || widthPxReal < 1.0 || heightPxReal < 1.0)
+    if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal) || widthPxReal < 1.0 || heightPxReal < 1.0)
     {
         plan.withinBudget = false;
         plan.errorMessage = PDFTranslationContext::tr("Page has invalid raster dimensions.");
@@ -276,7 +279,7 @@ PDFBleedRasterPlan planRaster(const QSizeF& mediaSize,
     {
         plan.withinBudget = false;
         plan.errorMessage = PDFTranslationContext::tr(
-                                    "Page requires a %1 x %2 px raster at %3 DPI for edge sampling, which exceeds the limit of %4 megapixels. Lower --dpi or raise the raster limit.")
+                                "Page requires a %1 x %2 px raster at %3 DPI for edge sampling, which exceeds the limit of %4 megapixels. Lower --dpi or raise the raster limit.")
                                 .arg(qint64(widthPxReal))
                                 .arg(qint64(heightPxReal))
                                 .arg(dpi)
@@ -316,7 +319,8 @@ QRectF targetBleedRect(const QRectF& reference, const QMarginsF& bleedMM)
     return QRectF(reference.left() - left,
                   reference.top() - bottom,
                   reference.width() + left + right,
-                  reference.height() + top + bottom).normalized();
+                  reference.height() + top + bottom)
+        .normalized();
 }
 
 QRectF expandBoxTo(const QRectF& box, const QRectF& target)
@@ -336,10 +340,14 @@ PDFReal sideBleedMM(const QMarginsF& bleedMM, PDFBleedFixupSide side)
 {
     switch (side)
     {
-        case PDFBleedFixupSide::Left: return bleedMM.left();
-        case PDFBleedFixupSide::Right: return bleedMM.right();
-        case PDFBleedFixupSide::Top: return bleedMM.top();
-        case PDFBleedFixupSide::Bottom: return bleedMM.bottom();
+        case PDFBleedFixupSide::Left:
+            return bleedMM.left();
+        case PDFBleedFixupSide::Right:
+            return bleedMM.right();
+        case PDFBleedFixupSide::Top:
+            return bleedMM.top();
+        case PDFBleedFixupSide::Bottom:
+            return bleedMM.bottom();
     }
     return 0.0;
 }
@@ -436,18 +444,17 @@ QRectF cornerStripSourceRect(const QRectF& reference,
                              PDFReal horizontalDepthPt,
                              PDFReal verticalDepthPt)
 {
-    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid()
-        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid() || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
     {
         return QRectF();
     }
 
     const qreal x = (horizontal == PDFBleedFixupSide::Left)
-            ? reference.left()
-            : reference.right() - horizontalDepthPt;
+                        ? reference.left()
+                        : reference.right() - horizontalDepthPt;
     const qreal y = (vertical == PDFBleedFixupSide::Bottom)
-            ? reference.top()
-            : reference.bottom() - verticalDepthPt;
+                        ? reference.top()
+                        : reference.bottom() - verticalDepthPt;
     return QRectF(x, y, horizontalDepthPt, verticalDepthPt);
 }
 
@@ -457,18 +464,17 @@ QRectF cornerStripDestRect(const QRectF& reference,
                            PDFReal horizontalDepthPt,
                            PDFReal verticalDepthPt)
 {
-    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid()
-        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    if (!(horizontalDepthPt > 0.0) || !(verticalDepthPt > 0.0) || !reference.isValid() || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
     {
         return QRectF();
     }
 
     const qreal x = (horizontal == PDFBleedFixupSide::Left)
-            ? reference.left() - horizontalDepthPt
-            : reference.right();
+                        ? reference.left() - horizontalDepthPt
+                        : reference.right();
     const qreal y = (vertical == PDFBleedFixupSide::Bottom)
-            ? reference.top() - verticalDepthPt
-            : reference.bottom();
+                        ? reference.top() - verticalDepthPt
+                        : reference.bottom();
     return QRectF(x, y, horizontalDepthPt, verticalDepthPt);
 }
 
@@ -551,8 +557,7 @@ QImage buildCornerFillImage(const QImage& pageImage,
                             int destWidthPx,
                             int destHeightPx)
 {
-    if (pageImage.isNull() || !sourcePx.isValid() || destWidthPx <= 0 || destHeightPx <= 0
-        || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
+    if (pageImage.isNull() || !sourcePx.isValid() || destWidthPx <= 0 || destHeightPx <= 0 || !isHorizontalBleedSide(horizontal) || !isVerticalBleedSide(vertical))
     {
         return QImage();
     }
@@ -589,7 +594,7 @@ QImage buildCornerFillImage(const QImage& pageImage,
     return QImage();
 }
 
-} // namespace PDFBleedFixupMath
+}   // namespace PDFBleedFixupMath
 
 PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                                         const PDFBleedFixupSettings& settings,
@@ -624,8 +629,7 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         return PDFTranslationContext::tr("Sample pixel count must be positive.");
     }
 
-    if (settings.bleedMM.left() < 0.0 || settings.bleedMM.top() < 0.0
-        || settings.bleedMM.right() < 0.0 || settings.bleedMM.bottom() < 0.0)
+    if (settings.bleedMM.left() < 0.0 || settings.bleedMM.top() < 0.0 || settings.bleedMM.right() < 0.0 || settings.bleedMM.bottom() < 0.0)
     {
         return PDFTranslationContext::tr("Bleed margins must be non-negative.");
     }
@@ -658,6 +662,14 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
     PDFRenderer renderer(document, &fontCache, cms.get(), &optionalContentActivity, features, meshQualitySettings);
     PDFRasterizer rasterizer(nullptr);
     rasterizer.reset(RendererEngine::QPainter);
+
+    // Issue #38 (bug-hunt finding F-04): settings.maxRasterPixels already caps
+    // any single page's strip probe, but nothing charged the shared,
+    // document-scoped pdf::PDFProcessingBudget that every other rendering and
+    // decode path in this codebase reports through (docs/RESOURCE_BUDGETS.md).
+    // A conservative budget here bounds the *cumulative* raster cost across
+    // every page this call touches, not just the largest single page.
+    PDFProcessingBudget rasterBudget;
 
     PDFDocumentModifier modifier(document);
     PDFDocumentBuilder* builder = modifier.getBuilder();
@@ -695,10 +707,10 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         }
 
         const QMarginsF effectiveBleedMM(
-                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Left) ? settings.bleedMM.left() : 0.0,
-                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Top) ? settings.bleedMM.top() : 0.0,
-                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Right) ? settings.bleedMM.right() : 0.0,
-                isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Bottom) ? settings.bleedMM.bottom() : 0.0);
+            isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Left) ? settings.bleedMM.left() : 0.0,
+            isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Top) ? settings.bleedMM.top() : 0.0,
+            isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Right) ? settings.bleedMM.right() : 0.0,
+            isBleedFixupSideEnabled(settings.sides, PDFBleedFixupSide::Bottom) ? settings.bleedMM.bottom() : 0.0);
         const QRectF targetBleed = PDFBleedFixupMath::targetBleedRect(reference, effectiveBleedMM);
         if (!targetBleed.isValid() || targetBleed.isEmpty())
         {
@@ -732,12 +744,12 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                 PDFBleedFixupMath::sideAlreadyBleeding(reference, page->getBleedBox(), side, depthPt))
             {
                 pageReport.skipReasons.append(PDFTranslationContext::tr("Skipped %1: BleedBox already sufficient.")
-                                              .arg(sideName(side)));
+                                                  .arg(sideName(side)));
                 continue;
             }
 
             pageReport.sidesEligible |= bleedFixupSideBit(side);
-            sidesToApply.push_back(SideWork{side, depthPt});
+            sidesToApply.push_back(SideWork{ side, depthPt });
         }
 
         QRectF newBleed = page->getBleedBox();
@@ -776,11 +788,10 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         const PDFReal translateY = -newMedia.top();
         // Default policy keeps TrimBox fixed; only re-anchor the page origin when trim
         // itself is being expanded and the enlarged media box would use negative coords.
-        const bool reanchorOrigin = settings.expandTrimBox
-                && (!qFuzzyIsNull(translateX) || !qFuzzyIsNull(translateY));
+        const bool reanchorOrigin = settings.expandTrimBox && (!qFuzzyIsNull(translateX) || !qFuzzyIsNull(translateY));
         const QRectF outputMedia = reanchorOrigin
-                ? QRectF(0.0, 0.0, newMedia.width(), newMedia.height())
-                : newMedia;
+                                       ? QRectF(0.0, 0.0, newMedia.width(), newMedia.height())
+                                       : newMedia;
 
         auto mapOutputRect = [reanchorOrigin, translateX, translateY](const QRectF& rect) -> QRectF
         {
@@ -794,11 +805,11 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         QImage pageImage;
         QTransform pageToDevice;
         const PDFBleedFixupMath::PDFBleedRasterPlan rasterPlan = PDFBleedFixupMath::planRaster(
-                page->getRotatedMediaBox().size(),
-                settings.dpi,
-                settings.maxRasterPixels,
-                settings.analyzeOnly,
-                !sidesToApply.empty());
+            page->getRotatedMediaBox().size(),
+            settings.dpi,
+            settings.maxRasterPixels,
+            settings.analyzeOnly,
+            !sidesToApply.empty());
         if (!rasterPlan.withinBudget)
         {
             return PDFTranslationContext::tr("Page %1: %2").arg(pageIndex + 1).arg(rasterPlan.errorMessage);
@@ -807,6 +818,16 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
         if (rasterPlan.rasterRequired)
         {
             const QSize imageSize = rasterPlan.imageSize;
+
+            try
+            {
+                rasterBudget.chargeRenderPixels(static_cast<std::uint64_t>(rasterPlan.pixelCount),
+                                                PDFTranslationContext::tr("bleed edge-sample raster"));
+            }
+            catch (const PDFException& exception)
+            {
+                return PDFTranslationContext::tr("Page %1: %2").arg(pageIndex + 1).arg(exception.getMessage());
+            }
 
             PDFPrecompiledPage compiledPage;
             renderer.compile(&compiledPage, static_cast<size_t>(pageIndex));
@@ -882,8 +903,8 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
             for (const SideWork& work : sidesToApply)
             {
                 const PDFReal sampleDepthPt = (settings.mode == PDFBleedFixupMode::Mirror)
-                        ? work.depthPt
-                        : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
+                                                  ? work.depthPt
+                                                  : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
 
                 const QRectF sourcePageRect = PDFBleedFixupMath::edgeStripSourceRect(reference, work.side, sampleDepthPt);
                 const QRectF destPageRect = PDFBleedFixupMath::edgeStripDestRect(reference, work.side, work.depthPt);
@@ -912,13 +933,14 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                 PDFBleedFixupSide vertical = PDFBleedFixupSide::Bottom;
             };
             const CornerWork corners[4] = {
-                {PDFBleedFixupSide::Left, PDFBleedFixupSide::Bottom},
-                {PDFBleedFixupSide::Right, PDFBleedFixupSide::Bottom},
-                {PDFBleedFixupSide::Left, PDFBleedFixupSide::Top},
-                {PDFBleedFixupSide::Right, PDFBleedFixupSide::Top}
+                { PDFBleedFixupSide::Left, PDFBleedFixupSide::Bottom },
+                { PDFBleedFixupSide::Right, PDFBleedFixupSide::Bottom },
+                { PDFBleedFixupSide::Left, PDFBleedFixupSide::Top },
+                { PDFBleedFixupSide::Right, PDFBleedFixupSide::Top }
             };
 
-            auto depthPtFor = [&sidesToApply](PDFBleedFixupSide side) -> PDFReal {
+            auto depthPtFor = [&sidesToApply](PDFBleedFixupSide side) -> PDFReal
+            {
                 for (const SideWork& work : sidesToApply)
                 {
                     if (work.side == side)
@@ -939,16 +961,16 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
                 }
 
                 const PDFReal sampleHorizontalPt = (settings.mode == PDFBleedFixupMode::Mirror)
-                        ? horizontalDepthPt
-                        : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
+                                                       ? horizontalDepthPt
+                                                       : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
                 const PDFReal sampleVerticalPt = (settings.mode == PDFBleedFixupMode::Mirror)
-                        ? verticalDepthPt
-                        : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
+                                                     ? verticalDepthPt
+                                                     : (72.0 / PDFReal(settings.dpi)) * PDFReal(settings.samplePixels);
 
                 const QRectF sourcePageRect = PDFBleedFixupMath::cornerStripSourceRect(
-                        reference, corner.horizontal, corner.vertical, sampleHorizontalPt, sampleVerticalPt);
+                    reference, corner.horizontal, corner.vertical, sampleHorizontalPt, sampleVerticalPt);
                 const QRectF destPageRect = PDFBleedFixupMath::cornerStripDestRect(
-                        reference, corner.horizontal, corner.vertical, horizontalDepthPt, verticalDepthPt);
+                    reference, corner.horizontal, corner.vertical, horizontalDepthPt, verticalDepthPt);
                 if (!sourcePageRect.isValid() || !destPageRect.isValid())
                 {
                     continue;
@@ -1009,4 +1031,4 @@ PDFOperationResult PDFBleedFixup::apply(PDFDocument* document,
     return true;
 }
 
-} // namespace pdf
+}   // namespace pdf
