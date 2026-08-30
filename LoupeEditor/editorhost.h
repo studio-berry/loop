@@ -151,6 +151,15 @@ public:
     Q_INVOKABLE void openInitialPath(const QString& path);
     Q_INVOKABLE QString shortcutForCommand(const QString& commandId) const;
 
+    // Test-only accessor for large-document shell stress parity (gh-363).
+    // Exposes the privately owned DocumentViewSession so headless shell tests
+    // can observe revision fencing (revisionSource), viewport generation
+    // (viewport().requestGeneration()), surface demand (surfaces()->counters())
+    // and interaction overlay fencing (interaction()->overlayFrameChanged())
+    // without breaking QML encapsulation. Not part of the QML API.
+    DocumentViewSession* sessionForTest() noexcept { return m_session.get(); }
+    const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
+
 signals:
     void presentationChanged();
     void commandEpochChanged();
