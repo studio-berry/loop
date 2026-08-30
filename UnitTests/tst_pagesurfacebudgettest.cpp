@@ -238,10 +238,11 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     bounds.maxNearViewportRequests = 1;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
-    coordinator.setCacheLimit(total);
+    coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
     QCOMPARE(coordinator.cacheLimit(), total);
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
              static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(total)));
+    QCOMPARE(coordinator.sharedPageCacheBudget(), session->getSharedPageCacheBudget());
     coordinator.setDocumentKey(QStringLiteral("doc-1"));
     coordinator.requestSurfaces();
     QCoreApplication::processEvents();
@@ -253,7 +254,16 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     QVERIFY(session->compiledCacheBytes() <= session->compiledCacheByteLimit());
     QVERIFY(coordinator.counters().admittedBytes <= coordinator.bounds().maxAdmittedBytes);
     QVERIFY(coordinator.counters().admittedBytesHighWater <= coordinator.bounds().maxAdmittedBytes);
+    QCOMPARE(session->getPageCacheBudget()->residentBytes(),
+             session->compiledCacheBytes() + coordinator.counters().admittedBytes);
+    QVERIFY(session->getPageCacheBudget()->residentBytes() <= total);
     QVERIFY(session->compiledCacheBytes() + coordinator.counters().admittedBytes <= total);
+
+    pdf::PDFPageCacheBudget combinedBudget(100);
+    QVERIFY(combinedBudget.tryReserve(pdf::PDFPageCacheBudget::Pool::CompiledPages, 50));
+    QVERIFY(combinedBudget.tryReserve(pdf::PDFPageCacheBudget::Pool::PageSurfaces, 50));
+    QVERIFY(!combinedBudget.tryReserve(pdf::PDFPageCacheBudget::Pool::CompiledPages, 1));
+    QCOMPARE(combinedBudget.residentBytes(), qsizetype(100));
 }
 
 void PageSurfaceBudgetTest::compiledCacheEvictsByByteLimit()

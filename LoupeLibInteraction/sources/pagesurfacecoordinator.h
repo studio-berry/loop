@@ -71,10 +71,9 @@ struct PageSurfaceBounds
     /// Estimated bytes of the renders in flight.
     qint64 maxInFlightBytes = 64ll * 1024 * 1024;
 
-    /// Bytes of admitted surfaces held for reuse. Derived from the unified
-    /// total cache budget via pdf::PDFPageCacheBudget::pageSurfaces(); the
-    /// production total is owned by DocumentViewSession and this field is
-    /// updated when the coordinator receives that total through setCacheLimit().
+    /// Bytes of admitted surfaces held for reuse. In production this is a
+    /// diagnostic projection of the shared PDFPageCacheBudget; standalone
+    /// coordinators may still use it as their local fallback bound.
     qint64 maxAdmittedBytes = 128ll * 1024 * 1024;
 
     static PageSurfaceBounds conservativeDefaults() { return PageSurfaceBounds(); }
@@ -151,16 +150,19 @@ public:
 
     const PageSurfaceBounds& bounds() const noexcept { return m_bounds; }
 
-    /// Receives the production total cache budget. The surface share is derived
-    /// via pdf::PDFPageCacheBudget::pageSurfaces() and written into
-    /// m_bounds.maxAdmittedBytes; the compiled-page share is applied by
-    /// pdf::PDFDocumentSession through DocumentViewSession::setCacheLimit().
+    /// Receives the production total cache budget. The shared object is the
+    /// authority for both compiled pages and admitted surfaces.
     void setCacheLimit(qsizetype totalBytes);
-    qsizetype cacheLimit() const noexcept { return m_cacheLimit; }
+    qsizetype cacheLimit() const noexcept
+    {
+        return m_pageCacheBudget ? m_pageCacheBudget->total() : m_cacheLimit;
+    }
 
-    /// bounds() is derived from the total via PDFPageCacheBudget partition;
-    /// prefer cacheLimit()/setCacheLimit() as the authority and treat
-    /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
+    void setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget);
+    std::shared_ptr<pdf::PDFPageCacheBudget> sharedPageCacheBudget() const noexcept { return m_pageCacheBudget; }
+    /// Refreshes the diagnostic surface projection and trims after the shared
+    /// authority's total changes.
+    void refreshPageCacheBudget();
 
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
@@ -246,6 +248,7 @@ private:
     std::optional<PageSurfaceKey> keyForPage(int pageIndex) const;
     bool insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels);
     void trimCacheToBudget();
+    void clearCache();
     qint64 inFlightBytes() const;
     int inFlightCount(pdf::PDFJobPriority priority) const;
     void rebuildSnapshot();
@@ -259,6 +262,7 @@ private:
 
     PageSurfaceBounds m_bounds;
     qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
+    std::shared_ptr<pdf::PDFPageCacheBudget> m_pageCacheBudget;
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
 

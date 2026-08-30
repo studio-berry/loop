@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfglobal.h"
+#include "pdfpagecachebudget.h"
 
 #include <QObject>
 
@@ -91,6 +92,8 @@ public:
     PDFDocumentIdentity getDocumentIdentity() const { return m_documentIdentity; }
     PDFRevisionIdentity getRevision() const;
     PDFDocumentSession* getSession() const { return m_session.get(); }
+    PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
+    std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
     /// Returns whether a cache or job result belongs to the active revision.
     bool isCurrent(const PDFRevisionIdentity& revision) const { return revision == getRevision(); }
@@ -122,6 +125,7 @@ private:
     DocumentRevision m_documentRevision = 0;
     quint64 m_cacheGeneration = 0;
     QString m_effectiveProfileIdentity;
+    std::shared_ptr<PDFPageCacheBudget> m_pageCacheBudget;
     std::unique_ptr<PDFDocumentSession> m_session;
 };
 
