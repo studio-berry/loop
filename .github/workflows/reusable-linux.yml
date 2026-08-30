@@ -162,7 +162,8 @@ jobs:
           python3 scripts/verify-widgets-free-release-profile.py --configure \
             --build-dir build-widgets-free-verify -- \
             -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
-            -DCMAKE_VCPKG_BUILD_TYPE=Release
+            -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR
 
       - name: Prepare Widgets-absent Qt prefix
         if: ${{ !inputs.fast }}
@@ -191,6 +192,7 @@ jobs:
             -- \
             -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
             -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON \
             -DLOUPE_BUILD_QUICK_CANVAS=ON \
             -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON \
@@ -209,6 +211,7 @@ jobs:
             -- \
             -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR=$VCPKG_INSTALLED_DIR \
             -DLOUPE_BUILD_CODE_GENERATOR=ON
 
       - name: Build Widgets-absent release profile

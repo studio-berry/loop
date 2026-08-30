@@ -61,6 +61,15 @@ class ContractError(ValueError):
     pass
 
 
+def _truncate_command_output(detail: str, limit: int = 800) -> str:
+    detail = detail.strip()
+    if len(detail) <= limit:
+        return detail
+    head = limit // 2
+    tail = limit - head - len(" ... [truncated] ... ")
+    return f"{detail[:head]} ... [truncated] ... {detail[-tail:]}"
+
+
 def validate_cmake_release_profile() -> None:
     text = CMAKE.read_text(encoding="utf-8")
     if "set(_LOUPE_REQUIRES_WIDGETS OFF)" not in text:
@@ -181,12 +190,12 @@ def run_release_profile_configure(
         if "widgets" not in detail.casefold() and "qt6widgets" not in detail.casefold():
             raise ContractError(
                 "Widgets-bound configure failed for an unrelated reason; expected a Widgets discovery error: "
-                f"{detail[:800]}"
+                f"{_truncate_command_output(detail)}"
             )
         return
 
     if completed.returncode != 0:
-        raise ContractError(f"release-profile configure failed: {detail[:800]}")
+        raise ContractError(f"release-profile configure failed: {_truncate_command_output(detail)}")
 
     validate_cmake_cache(build_dir / "CMakeCache.txt", qt_prefix)
 
