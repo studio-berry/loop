@@ -91,16 +91,16 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
     settings.features = features;
     m_surfaces->setRenderSettings(settings);
+    m_overlays->setDenyExtraGraphics(features.testFlag(pdf::PDFRenderer::DenyExtraGraphics));
 }
 
 void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
-
-    if (pdf::PDFDocumentSession* session = m_context.getSession())
-    {
-        session->setCacheLimit(normalized);
-    }
+    // Route through the renderer so the eviction inside setCacheLimit cannot
+    // race a worker thread that holds m_renderer.m_mutex and is using a
+    // compilePage pointer.
+    m_renderer.setCacheLimit(normalized);
     if (m_surfaces)
     {
         m_surfaces->refreshPageCacheBudget();

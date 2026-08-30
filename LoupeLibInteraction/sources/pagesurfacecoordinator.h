@@ -247,7 +247,7 @@ private:
 
     std::optional<PageSurfaceKey> keyForPage(int pageIndex) const;
     bool insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels);
-    void trimCacheToBudget();
+    bool trimCacheToBudget();
     void clearCache();
     qint64 inFlightBytes() const;
     int inFlightCount(pdf::PDFJobPriority priority) const;
