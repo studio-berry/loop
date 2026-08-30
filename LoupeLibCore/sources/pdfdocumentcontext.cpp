@@ -183,4 +183,4 @@ void PDFDocumentContext::emitRevisionChanged(const PDFRevisionIdentity& previous
     Q_EMIT revisionChanged(previous, getRevision());
 }
 
-} // namespace pdf
+}   // namespace pdf
