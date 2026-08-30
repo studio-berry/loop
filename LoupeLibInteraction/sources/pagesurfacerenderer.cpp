@@ -28,6 +28,7 @@
 #include "pdfpainter.h"
 #include "pdfprocessingbudget.h"
 #include "pdfrenderer.h"
+#include "pdftransparencyrenderer.h"
 
 #include <QImage>
 #include <QPainter>
@@ -48,6 +49,65 @@ PageSurfaceResult makeTerminal(const PageSurfaceRequest& request, SurfaceTermina
     result.token = request.token;
     result.state = state;
     result.typedError = std::move(typedError);
+    return result;
+}
+
+/// Renders one page through PDFTransparencyRenderer with
+/// PDFRenderPolicy::forOutputPreview(), for a page the caller has marked (via
+/// withAuthoritativeOverprintMarker) as wanting an authoritative,
+/// overprint-accurate render instead of the fast approximate one. Mirrors the
+/// construction pattern used by PDFInkCoverageProbe and PDFColorInventory,
+/// the other production callers of this renderer.
+PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request,
+                                               const pdf::PDFPage* page,
+                                               const pdf::PDFDocument* document,
+                                               pdf::PDFDocumentSession* session,
+                                               QSize pixelSize)
+{
+    pdf::PDFInkMapper inkMapper(nullptr, document);
+    inkMapper.createSpotColors(true);
+
+    pdf::PDFTransparencyRendererSettings settings;
+    settings.renderPolicy = pdf::PDFRenderPolicy::forOutputPreview();
+
+    const QRectF deviceRect(QPointF(0.0, 0.0), QSizeF(pixelSize));
+    const QTransform pagePointToDevice = pdf::PDFRenderer::createPagePointToDevicePointMatrix(page, deviceRect, request.key.rotation);
+
+    pdf::PDFTransparencyRenderer renderer(page,
+                                          document,
+                                          session->getFontCache(),
+                                          session->getCMS(),
+                                          session->getOptionalContentActivity(),
+                                          &inkMapper,
+                                          settings,
+                                          pagePointToDevice);
+
+    renderer.beginPaint(pixelSize);
+    renderer.processContents();
+    renderer.endPaint();
+
+    QImage image = renderer.toImage(false, true, pdf::PDFRGB{ 1.0f, 1.0f, 1.0f });
+    if (image.isNull())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/render-failed"));
+    }
+
+    image.setDevicePixelRatio(request.key.devicePixelRatio1000 / 1000.0);
+
+    PageSurfaceResult result;
+    result.key = request.key;
+    result.token = request.token;
+    result.state = SurfaceTerminalState::Complete;
+    result.pixels = makeSurfaceBuffer(std::move(image));
+    result.pixelSize = pixelSize;
+    result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+    result.diagnostics = renderer.getRenderDiagnostics();
+
+    if (!result.pixels)
+    {
+        return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/empty-surface"));
+    }
+
     return result;
 }
 
@@ -147,6 +207,14 @@ PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest
         // exactly this work.
         jobContext.processingBudget().chargeRenderPixels(static_cast<std::uint64_t>(pixelSize.width()) * static_cast<std::uint64_t>(pixelSize.height()), QStringLiteral("page surface"));
 
+        if (hasAuthoritativeOverprintMarker(request.key.colorOutputIdentity))
+        {
+            // The one-page authoritative escalation from issue #49: a full
+            // PDFTransparencyRenderer pass instead of the fast QPainter path
+            // below, for exactly the page the caller marked.
+            return renderAuthoritativeOverprint(request, page, document, session, pixelSize);
+        }
+
         // Renderer features are session configuration and changing them here would
         // call PDFDocumentContext::invalidateCaches() from a worker, advancing the
         // cache generation and making every in-flight key -- including this one --
@@ -196,6 +264,7 @@ PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest
         result.pixels = makeSurfaceBuffer(std::move(image));
         result.pixelSize = pixelSize;
         result.byteSize = result.pixels ? result.pixels->byteSize : 0;
+        result.diagnostics = pdf::PDFRenderDiagnostics::forApproximateOverprint(compiledPage->containsOverprint());
 
         if (!result.pixels)
         {

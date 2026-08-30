@@ -108,6 +108,8 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
 
     target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_compile_definitions(UnitTestsPageSurface PRIVATE
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
     set_target_properties(UnitTestsPageSurface PROPERTIES
         WIN32_EXECUTABLE OFF

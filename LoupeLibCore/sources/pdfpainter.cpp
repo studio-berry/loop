@@ -46,7 +46,6 @@ PDFPainterBase::PDFPainterBase(PDFRenderer::Features features,
     BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
     m_features(features)
 {
-
 }
 
 void PDFPainterBase::performUpdateGraphicsState(const PDFPageContentProcessorState& state)
@@ -175,7 +174,8 @@ bool PDFPainterBase::canSetBlendMode(BlendMode mode) const
     // or compatible. It should work.
 
     Q_UNUSED(mode);
-    return std::all_of(m_transparencyGroupDataStack.cbegin(), m_transparencyGroupDataStack.cend(), [](const PDFTransparencyGroupPainterData& group) { return group.blendMode == BlendMode::Normal || group.blendMode == BlendMode::Compatible; });
+    return std::all_of(m_transparencyGroupDataStack.cbegin(), m_transparencyGroupDataStack.cend(), [](const PDFTransparencyGroupPainterData& group)
+                       { return group.blendMode == BlendMode::Normal || group.blendMode == BlendMode::Compatible; });
 }
 
 void PDFPainterBase::performBeginTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup)
@@ -435,6 +435,11 @@ void PDFPrecompiledPageGenerator::performPathPainting(const QPainterPath& path, 
     Q_ASSERT(stroke || fill);
     Q_ASSERT(path.fillRule() == fillRule);
 
+    if (!m_precompiledPage->containsOverprint() && getGraphicState()->getOverprintMode().appliesToContent(fill, stroke))
+    {
+        m_precompiledPage->markOverprintContent();
+    }
+
     QPen pen = stroke ? getCurrentPen() : QPen(Qt::NoPen);
     QBrush brush = fill ? getCurrentBrush() : QBrush(Qt::NoBrush);
     m_precompiledPage->addPath(qMove(pen), qMove(brush), path, text);
@@ -463,7 +468,8 @@ void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
                            matrix.map(QPointF(1.0, 1.0)),
                            matrix.map(QPointF(0.0, 1.0)),
                            matrix.map(QPointF(0.5, 0.5)),
-                       }, image);
+                       },
+                       image);
 
     if (isTransparencyGroupActive())
     {

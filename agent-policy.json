@@ -73,6 +73,7 @@
         "UnitTestsLifecycle",
         "UnitTestsOperationHistory",
         "UnitTestsOperationImpact",
+        "UnitTestsOverprint",
         "UnitTestsOverprintRender",
         "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",

@@ -53,16 +53,23 @@ struct PDFRenderPolicy
 
     bool requiresAuthoritativeRenderer() const
     {
-        return requireSeparationAccuracy
-            || requireOverprintAccuracy
-            || purpose == PDFRenderPurpose::PreflightAnalysis
-            || purpose == PDFRenderPurpose::SeparationPreview;
+        return requireSeparationAccuracy || requireOverprintAccuracy || purpose == PDFRenderPurpose::PreflightAnalysis || purpose == PDFRenderPurpose::SeparationPreview;
     }
 
     static PDFRenderPolicy forOutputPreview()
     {
         PDFRenderPolicy policy;
         policy.purpose = PDFRenderPurpose::SeparationPreview;
+        policy.requireSeparationAccuracy = true;
+        policy.requireOverprintAccuracy = true;
+        policy.allowApproximation = false;
+        return policy;
+    }
+
+    static PDFRenderPolicy forPreflightAnalysis()
+    {
+        PDFRenderPolicy policy;
+        policy.purpose = PDFRenderPurpose::PreflightAnalysis;
         policy.requireSeparationAccuracy = true;
         policy.requireOverprintAccuracy = true;
         policy.allowApproximation = false;
@@ -84,9 +91,7 @@ struct PDFRenderDiagnostics
 
     void record(PDFRenderFidelity newFidelity, const QString& reason)
     {
-        if (newFidelity == PDFRenderFidelity::Unsupported
-            || (newFidelity == PDFRenderFidelity::SupportedWithFallback
-                && fidelity == PDFRenderFidelity::ExactSupported))
+        if (newFidelity == PDFRenderFidelity::Unsupported || (newFidelity == PDFRenderFidelity::SupportedWithFallback && fidelity == PDFRenderFidelity::ExactSupported))
         {
             fidelity = newFidelity;
         }
@@ -98,6 +103,21 @@ struct PDFRenderDiagnostics
     }
 
     bool isExact() const { return fidelity == PDFRenderFidelity::ExactSupported; }
+
+    /// Builds diagnostics for a page rendered on the standard (approximate)
+    /// path, which never performs overprint compositing at all. \p
+    /// pageContainsOverprint is the cached PDFPrecompiledPage::containsOverprint()
+    /// flag for the page being rendered; no content walk happens here.
+    static PDFRenderDiagnostics forApproximateOverprint(bool pageContainsOverprint)
+    {
+        PDFRenderDiagnostics diagnostics;
+        if (pageContainsOverprint)
+        {
+            diagnostics.record(PDFRenderFidelity::SupportedWithFallback,
+                               PDFTranslationContext::tr("Overprint is not simulated on the fast preview path."));
+        }
+        return diagnostics;
+    }
 };
 
 /// Pixel format, describes color channels, both process colors (for example,
@@ -201,7 +221,6 @@ private:
         m_spotColors(spotColors),
         m_flags(flags)
     {
-
     }
 
     constexpr static uint8_t FLAG_HAS_SHAPE_CHANNEL = 0x01;
@@ -342,7 +361,7 @@ public:
 
     enum class OverprintMode
     {
-        NoOveprint,         ///< No oveprint performed
+        NoOveprint,   ///< No oveprint performed
         Overprint_Mode_0,   ///< Overprint performed (either backdrop or source color is selected)
         Overprint_Mode_1,   ///< Overprint performed (only nonzero source color is selected, otherwise backdrop)
     };
@@ -450,7 +469,11 @@ struct PDFInkMapping
 {
     inline bool isValid() const { return !mapping.empty(); }
     inline void reserve(size_t size) { mapping.reserve(size); }
-    inline void map(uint8_t source, uint8_t target) { mapping.emplace_back(Mapping{ source, target, Pass}); activeChannels |= (static_cast<uint32_t>(1u) << target); }
+    inline void map(uint8_t source, uint8_t target)
+    {
+        mapping.emplace_back(Mapping{ source, target, Pass });
+        activeChannels |= (static_cast<uint32_t>(1u) << target);
+    }
 
     enum Type
     {
@@ -478,13 +501,13 @@ public:
     {
         QByteArray name;
         QString textName;
-        uint32_t spotColorIndex = 0; ///< Index of this spot color
-        uint32_t colorSpaceIndex = 0; ///< Index into DeviceN color space (index of colorant)
+        uint32_t spotColorIndex = 0;   ///< Index of this spot color
+        uint32_t colorSpaceIndex = 0;   ///< Index into DeviceN color space (index of colorant)
         PDFColorSpacePointer colorSpace;
-        bool canBeActive = false; ///< Can spot color be activated?
-        bool active = false; ///< Is spot color active?
+        bool canBeActive = false;   ///< Can spot color be activated?
+        bool active = false;   ///< Is spot color active?
         bool isSpot = true;
-        QColor color; ///< Spot/process color transformed to RGB color space
+        QColor color;   ///< Spot/process color transformed to RGB color space
         PDFAbstractColorSpace::ColorSpace colorSpaceType = PDFAbstractColorSpace::ColorSpace::Invalid;
     };
 
@@ -552,7 +575,7 @@ private:
     const PDFCMSManager* m_cmsManager;
     const PDFDocument* m_document;
     std::vector<ColorInfo> m_spotColors;
-    std::vector<ColorInfo> m_deviceColors; ///< Device color space separations
+    std::vector<ColorInfo> m_deviceColors;   ///< Device color space separations
     size_t m_activeSpotColors = 0;
 };
 
@@ -610,46 +633,46 @@ struct PDFTransparencyRendererSettings
 
     enum Flag
     {
-        None               = 0x0000,
+        None = 0x0000,
 
         /// Reserved for backward compatibility. Path sampler is no longer used.
-        PrecisePathSampler          = 0x0001,
+        PrecisePathSampler = 0x0001,
 
         /// Use multithreading when rasterized path/image/shading tiles are processed?
-        MultithreadedPathSampler    = 0x0002,
+        MultithreadedPathSampler = 0x0002,
 
         /// When using CMYK process color space, transfer spot
         /// colors to the CMYK color space.
-        SeparationSimulation        = 0x0004,
+        SeparationSimulation = 0x0004,
 
         /// Use active color mask (so we can clear channels,
         /// which are not active)
-        ActiveColorMask             = 0x0008,
+        ActiveColorMask = 0x0008,
 
         /// Use smooth image transform, if it is possible. For
         /// images, which doesn't have Interpolate set to true,
         /// fast image transformation is used.
-        SmoothImageTransformation   = 0x0010,
+        SmoothImageTransformation = 0x0010,
 
         /// Display images (if this flag is false, images aren't processed)
-        DisplayImages               = 0x0020,
+        DisplayImages = 0x0020,
 
         /// Display text (if this flag is false, text isnn't processed)
-        DisplayText                 = 0x0040,
+        DisplayText = 0x0040,
 
         /// Display vector graphics (if this flag is false, vector graphics isn't processed)
-        DisplayVectorGraphics       = 0x0080,
+        DisplayVectorGraphics = 0x0080,
 
         /// Display shading patterns (if this flag is false, shading patterns aren't processed)
-        DisplayShadings             = 0x0100,
+        DisplayShadings = 0x0100,
 
         /// Display tiling patterns (if this flag is false, tiling patterns aren't processed)
-        DisplayTilingPatterns       = 0x0200,
+        DisplayTilingPatterns = 0x0200,
 
         /// Saves process image before it is transformed into device space
         /// and before separation simulation is applied. Active color mask
         /// is still applied to this image.
-        SaveOriginalProcessImage    = 0x0400,
+        SaveOriginalProcessImage = 0x0400,
     };
 
     Q_DECLARE_FLAGS(Flags, Flag)
@@ -750,7 +773,6 @@ public:
     virtual void performMeshPainting(const PDFMesh& mesh) override;
 
 private:
-
     struct PDFRasterMask;
 
     PDFReal getShapeStroking() const;
@@ -767,7 +789,6 @@ private:
             isOpaque(isOpaque),
             softMask(qMove(softMask))
         {
-
         }
 
         bool isOpaque = false;
@@ -802,8 +823,8 @@ private:
         BlackPointCompensationMode blackPointCompensationMode = BlackPointCompensationMode::Default;
         RenderingIntent renderingIntent = RenderingIntent::RelativeColorimetric;
         PDFFloatBitmapWithColorSpace initialBackdrop;   ///< Initial backdrop
-        PDFFloatBitmapWithColorSpace immediateBackdrop; ///< Immediate backdrop
-        PDFTransparencySoftMask softMask; ///< Soft mask for this group
+        PDFFloatBitmapWithColorSpace immediateBackdrop;   ///< Immediate backdrop
+        PDFTransparencySoftMask softMask;   ///< Soft mask for this group
         PDFColorSpacePointer blendColorSpace;
         bool filterColorsUsingMask = false;
         uint32_t activeColorMask = PDFPixelFormat::getAllColorsMask();
@@ -816,7 +837,7 @@ private:
 
     struct PDFTransparencyPainterState
     {
-        QPainterPath clipPath; ///< Clipping path in device state coordinates
+        QPainterPath clipPath;   ///< Clipping path in device state coordinates
         PDFTransparencySoftMask softMask;
     };
 
@@ -830,7 +851,7 @@ private:
     {
         QRect rect;
         PDFColorComponent defaultValue = 0.0f;
-        std::vector<uint8_t> alphaCoverage; ///< 0..255 per pixel, row-major
+        std::vector<uint8_t> alphaCoverage;   ///< 0..255 per pixel, row-major
 
         bool isConstant() const { return alphaCoverage.empty(); }
         PDFColorComponent sample(int x, int y) const
@@ -982,7 +1003,7 @@ private:
     static void createPaperBitmap(PDFFloatBitmap& bitmap, const PDFRGB& paperColor);
     static void createOpaqueSoftMask(PDFFloatBitmap& softMask, size_t width, size_t height) { softMask = PDFFloatBitmap::createOpaqueSoftMask(width, height); }
 
-    PDFColorSpacePointer m_deviceColorSpace;    ///< Device color space (color space for final result)
+    PDFColorSpacePointer m_deviceColorSpace;   ///< Device color space (color space for final result)
     PDFColorSpacePointer m_processColorSpace;   ///< Process color space (color space, in which is page graphic's blended)
     std::unique_ptr<PDFTransparencyGroupGuard> m_pageTransparencyGroupGuard;
     std::unique_ptr<PDFTransparencyGroupGuard> m_textTransparencyGroupGuard;
@@ -1065,4 +1086,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFTRANSPARENCYRENDERER_H
+#endif   // PDFTRANSPARENCYRENDERER_H

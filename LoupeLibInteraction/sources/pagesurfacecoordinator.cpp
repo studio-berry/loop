@@ -123,7 +123,51 @@ std::optional<PageSurfaceKey> PageSurfaceCoordinator::keyForPage(int pageIndex) 
     const qreal devicePixelRatio = m_viewport->devicePixelRatio();
     const QSize targetPixelSize(qRound(placedRect.width() * devicePixelRatio), qRound(placedRect.height() * devicePixelRatio));
 
-    return makePageSurfaceKey(revision, pageIndex, m_viewport->rotation(), m_settings.features, m_settings.colorOutputIdentity, m_viewport->zoom(), targetPixelSize, devicePixelRatio);
+    const QString colorOutputIdentity = m_authoritativePages.contains(pageIndex)
+                                            ? withAuthoritativeOverprintMarker(m_settings.colorOutputIdentity)
+                                            : m_settings.colorOutputIdentity;
+
+    return makePageSurfaceKey(revision, pageIndex, m_viewport->rotation(), m_settings.features, colorOutputIdentity, m_viewport->zoom(), targetPixelSize, devicePixelRatio);
+}
+
+void PageSurfaceCoordinator::setPageAuthoritativeOverprint(int pageIndex, bool enabled)
+{
+    if (m_authoritativePages.contains(pageIndex) == enabled)
+    {
+        return;
+    }
+
+    if (enabled)
+    {
+        m_authoritativePages.insert(pageIndex);
+    }
+    else
+    {
+        m_authoritativePages.remove(pageIndex);
+    }
+
+    // keyForPage(pageIndex) now returns a different key, so requestSurfaces()'s
+    // own coalescing already cancels this page's stale in-flight request (its
+    // key no longer matches anything in fresh demand) -- unlike
+    // setRenderSettings, nothing else needs to be cancelled by hand.
+    requestSurfaces();
+}
+
+std::optional<pdf::PDFRenderDiagnostics> PageSurfaceCoordinator::diagnosticsForPage(int pageIndex) const
+{
+    const std::optional<PageSurfaceKey> wanted = keyForPage(pageIndex);
+    if (!wanted.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto it = m_cache.find(wanted.value());
+    if (it == m_cache.end())
+    {
+        return std::nullopt;
+    }
+
+    return it->second.diagnostics;
 }
 
 void PageSurfaceCoordinator::requestSurfaces()
@@ -475,7 +519,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
         return;
     }
 
-    if (!insertIntoCache(result.key, result.pixels))
+    if (!insertIntoCache(result.key, result.pixels, result.diagnostics))
     {
         ++m_counters.rejectedOversize;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Failed);
@@ -487,7 +531,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId, PageSurfaceResult result)
     rebuildSnapshot();
 }
 
-bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels)
+bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels, pdf::PDFRenderDiagnostics diagnostics)
 {
     if (!pixels || pixels->byteSize <= 0)
     {
@@ -512,6 +556,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
 
     CacheEntry entry;
     entry.pixels = std::move(pixels);
+    entry.diagnostics = std::move(diagnostics);
     entry.cost = entry.pixels->byteSize;
     entry.accessSequence = ++m_accessSequence;
 
@@ -591,6 +636,13 @@ pdf::PDFRevisionIdentity PageSurfaceCoordinator::currentRevision() const
 void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
 {
     cancelInFlight();
+
+    // Both production call sites (DocumentViewSession::prepareDocumentView,
+    // ::clearDocumentView) are document open/close boundaries, never a
+    // same-document edit -- so a page index toggled authoritative in one
+    // document must not silently carry over onto the same page index in
+    // whatever opens next.
+    m_authoritativePages.clear();
 
     // Revision-selective rather than a blanket clear: surfaces rendered for the
     // state that is still current stay usable, and only they do.
