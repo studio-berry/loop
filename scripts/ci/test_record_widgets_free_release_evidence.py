@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,17 +85,18 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
                 capture_output=True,
             )
 
-            evidence = module.record_evidence(
-                fake_repo,
-                filtered,
-                manifest,
-                build,
-                "linux",
-                "6.11.1",
-                "passed",
-                "passed",
-                "passed",
-            )
+            with patch.dict("os.environ", {"GITHUB_SHA": ""}, clear=False):
+                evidence = module.record_evidence(
+                    fake_repo,
+                    filtered,
+                    manifest,
+                    build,
+                    "linux",
+                    "6.11.1",
+                    "passed",
+                    "passed",
+                    "passed",
+                )
 
             self.assertEqual(evidence["status"], "passed")
             self.assertEqual(evidence["platform"], "linux")
