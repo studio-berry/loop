@@ -28,6 +28,7 @@
 #include "jobrelay.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
+#include "renderpresentationpolicy.h"
 #include "viewportcontroller.h"
 
 #include <QHash>
@@ -45,18 +46,7 @@
 namespace pdfinteraction
 {
 
-/// What the render path is configured to produce. Set by the owner, never
-/// derived here: the coordinator must not reconfigure the session (see
-/// PDFSessionPageSurfaceRenderer::render for why a worker changing renderer
-/// features invalidates every in-flight key).
-struct PageSurfaceRenderSettings
-{
-    pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
-
-    /// Identity of the colour-managed output path in force. Opaque to the
-    /// coordinator; it only has to change whenever the pixels would.
-    QString colorOutputIdentity;
-};
+using PageSurfaceRenderSettings = RenderPresentationPolicy;
 
 /// Hard limits, pre-registered rather than discovered under load.
 struct PageSurfaceBounds

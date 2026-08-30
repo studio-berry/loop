@@ -64,6 +64,7 @@ add_library(LoupeLibInteraction STATIC
     sources/canvassnapshot.h
     sources/pagesurfacecoordinator.cpp
     sources/pagesurfacecoordinator.h
+    sources/renderpresentationpolicy.h
     sources/inputintent.cpp
     sources/inputintent.h
     sources/interactiontarget.cpp

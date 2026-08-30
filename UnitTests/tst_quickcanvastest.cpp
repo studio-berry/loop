@@ -243,6 +243,7 @@ private:
     std::unique_ptr<FakeRevisionSource> m_revisions;
     std::unique_ptr<pdfinteraction::ViewportController> m_viewport;
     std::unique_ptr<pdfinteraction::HitTestDispatcher> m_hitTest;
+    pdfinteraction::RenderPresentationPolicy m_policy;
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
@@ -256,6 +257,7 @@ private:
 
 void QuickCanvasTest::init()
 {
+    m_policy = {};
     m_geometry = std::make_unique<FakeGeometrySource>(2);
     m_revisions = std::make_unique<FakeRevisionSource>();
 
@@ -271,7 +273,7 @@ void QuickCanvasTest::init()
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
     m_hitTest->addSource(m_source.get());
 
-    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport);
+    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport, m_policy);
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
@@ -939,7 +941,7 @@ void QuickCanvasTest::denyExtraGraphicsSuppressesOverlaysOnCanvas()
     const int rendersBefore = m_renderer->renderCount;
     const int requestedBefore = m_surfaces->counters().requested;
 
-    m_overlays->setDenyExtraGraphics(true);
+    m_policy.features |= pdf::PDFRenderer::DenyExtraGraphics;
     m_controller->refreshOverlay();
     renderFrame();
 
@@ -948,7 +950,7 @@ void QuickCanvasTest::denyExtraGraphicsSuppressesOverlaysOnCanvas()
     QCOMPARE(m_renderer->renderCount, rendersBefore);
     QCOMPARE(m_surfaces->counters().requested, requestedBefore);
 
-    m_overlays->setDenyExtraGraphics(false);
+    m_policy.features &= ~pdf::PDFRenderer::DenyExtraGraphics;
     m_controller->refreshOverlay();
     renderFrame();
     QVERIFY(m_item->frameStats().overlayPrimitives > 0);
