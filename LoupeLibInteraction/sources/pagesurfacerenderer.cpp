@@ -29,6 +29,7 @@
 #include "pdfprocessingbudget.h"
 #include "pdfrenderer.h"
 #include "pdftransparencyrenderer.h"
+#include "pdfcolorconvertor.h"
 
 #include <QImage>
 #include <QPainter>
@@ -52,6 +53,41 @@ PageSurfaceResult makeTerminal(const PageSurfaceRequest& request, SurfaceTermina
     return result;
 }
 
+QImage applySurfaceFeatures(QImage image,
+                            const pdf::PDFPage* page,
+                            const QTransform& pagePointToDevice,
+                            pdf::PDFRenderer::Features features,
+                            const pdf::PDFCMS* cms)
+{
+    pdf::PDFColorConvertor convertor = cms->getColorConvertor();
+    pdf::PDFRenderer::applyFeaturesToColorConvertor(features, convertor);
+    if (convertor.isActive())
+    {
+        image = convertor.convert(image);
+    }
+
+    if (features.testFlag(pdf::PDFRenderer::ClipToCropBox))
+    {
+        const QRectF cropBox = page->getCropBox();
+        if (cropBox.isValid())
+        {
+            QImage clipped(image.size(), QImage::Format_ARGB32_Premultiplied);
+            clipped.fill(cms->getPaperColor());
+
+            QPainter painter(&clipped);
+            QPainterPath path;
+            path.addPolygon(pagePointToDevice.map(cropBox));
+            painter.setClipPath(path);
+            painter.drawImage(0, 0, image);
+            painter.end();
+
+            image = std::move(clipped);
+        }
+    }
+
+    return image;
+}
+
 /// Renders one page through PDFTransparencyRenderer with
 /// PDFRenderPolicy::forOutputPreview(), for a page the caller has marked (via
 /// withAuthoritativeOverprintMarker) as wanting an authoritative,
@@ -62,8 +98,15 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
                                                const pdf::PDFPage* page,
                                                const pdf::PDFDocument* document,
                                                pdf::PDFDocumentSession* session,
-                                               QSize pixelSize)
+                                               pdf::PDFJobContext& jobContext,
+                                               QSize pixelSize,
+                                               pdf::PDFRenderer::Features features)
 {
+    if (jobContext.isCancellationRequested())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));
+    }
+
     pdf::PDFInkMapper inkMapper(nullptr, document);
     inkMapper.createSpotColors(true);
 
@@ -81,16 +124,24 @@ PageSurfaceResult renderAuthoritativeOverprint(const PageSurfaceRequest& request
                                           &inkMapper,
                                           settings,
                                           pagePointToDevice);
+    renderer.setOperationControl(jobContext.operationControl());
 
     renderer.beginPaint(pixelSize);
     renderer.processContents();
     renderer.endPaint();
 
-    QImage image = renderer.toImage(false, true, pdf::PDFRGB{ 1.0f, 1.0f, 1.0f });
+    if (jobContext.isCancellationRequested())
+    {
+        return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));
+    }
+
+    QImage image = renderer.toImage(false, true, pdf::PDFRGB{ 1.0F, 1.0F, 1.0F });
     if (image.isNull())
     {
         return makeTerminal(request, SurfaceTerminalState::Failed, QStringLiteral("page-surface/render-failed"));
     }
+
+    image = applySurfaceFeatures(std::move(image), page, pagePointToDevice, features, session->getCMS());
 
     image.setDevicePixelRatio(request.key.devicePixelRatio1000 / 1000.0);
 
@@ -212,7 +263,7 @@ PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest
             // The one-page authoritative escalation from issue #49: a full
             // PDFTransparencyRenderer pass instead of the fast QPainter path
             // below, for exactly the page the caller marked.
-            return renderAuthoritativeOverprint(request, page, document, session, pixelSize);
+            return renderAuthoritativeOverprint(request, page, document, session, jobContext, pixelSize, features);
         }
 
         // Renderer features are session configuration and changing them here would

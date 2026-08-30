@@ -406,6 +406,8 @@ protected:
     virtual void setCompositionMode(QPainter::CompositionMode mode) override;
 
 private:
+    void noteOverprintForPaint(bool fill, bool stroke);
+
     PDFPrecompiledPage* m_precompiledPage;
 };
 

@@ -44,7 +44,8 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         padding: 8
-        visible: root.host && root.host.hasDocument && !root.host.pageFidelityIsExact
+        visible: root.host && root.host.hasDocument
+                 && (!root.host.pageFidelityIsExact || root.host.pageFidelityIsAuthoritative)
 
         Accessible.role: Accessible.StatusBar
         Accessible.name: qsTr("Render fidelity status")

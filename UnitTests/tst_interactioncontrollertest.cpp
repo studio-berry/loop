@@ -663,23 +663,29 @@ void InteractionControllerTest::rapidZoomReversalAndPageSwitchSettleWithinTraceB
     {
         recorder.beginFrame();
         zoomIn.stamp.sequence = sequence++;
+        zoomIn.stamp.monotonicNs = clock.nowNs();
         m_controller->handleWheel(zoomIn);
         clock.advanceMs(FrameMs);
         recorder.endFrame();
 
         recorder.beginFrame();
-        m_controller->handleKey(makeKey(Qt::Key_PageDown, sequence++));
+        pdfinteraction::KeyIntent pageDown = makeKey(Qt::Key_PageDown, sequence++);
+        pageDown.stamp.monotonicNs = clock.nowNs();
+        m_controller->handleKey(pageDown);
         clock.advanceMs(FrameMs);
         recorder.endFrame();
 
         recorder.beginFrame();
         zoomOut.stamp.sequence = sequence++;
+        zoomOut.stamp.monotonicNs = clock.nowNs();
         m_controller->handleWheel(zoomOut);
         clock.advanceMs(FrameMs);
         recorder.endFrame();
 
         recorder.beginFrame();
-        m_controller->handleKey(makeKey(Qt::Key_PageUp, sequence++));
+        pdfinteraction::KeyIntent pageUp = makeKey(Qt::Key_PageUp, sequence++);
+        pageUp.stamp.monotonicNs = clock.nowNs();
+        m_controller->handleKey(pageUp);
         clock.advanceMs(FrameMs);
         recorder.endFrame();
     }

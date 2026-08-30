@@ -430,15 +430,20 @@ PDFPrecompiledPageGenerator::PDFPrecompiledPageGenerator(PDFPrecompiledPage* pre
     m_precompiledPage->getSnapInfo()->addPageMediaBox(page->getRotatedMediaBox());
 }
 
+void PDFPrecompiledPageGenerator::noteOverprintForPaint(bool fill, bool stroke)
+{
+    if (!m_precompiledPage->containsOverprint() && getGraphicState()->getOverprintMode().appliesToContent(fill, stroke))
+    {
+        m_precompiledPage->markOverprintContent();
+    }
+}
+
 void PDFPrecompiledPageGenerator::performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule)
 {
     Q_ASSERT(stroke || fill);
     Q_ASSERT(path.fillRule() == fillRule);
 
-    if (!m_precompiledPage->containsOverprint() && getGraphicState()->getOverprintMode().appliesToContent(fill, stroke))
-    {
-        m_precompiledPage->markOverprintContent();
-    }
+    noteOverprintForPaint(fill, stroke);
 
     QPen pen = stroke ? getCurrentPen() : QPen(Qt::NoPen);
     QBrush brush = fill ? getCurrentBrush() : QBrush(Qt::NoBrush);
@@ -453,6 +458,8 @@ void PDFPrecompiledPageGenerator::performClipping(const QPainterPath& path, Qt::
 
 void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
 {
+    noteOverprintForPaint(true, false);
+
     if (isContentSuppressed())
     {
         // Content is suppressed, do not paint anything
@@ -497,6 +504,8 @@ void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
 
 void PDFPrecompiledPageGenerator::performMeshPainting(const PDFMesh& mesh)
 {
+    noteOverprintForPaint(true, false);
+
     m_precompiledPage->addMesh(mesh, getEffectiveFillingAlpha());
 }
 
