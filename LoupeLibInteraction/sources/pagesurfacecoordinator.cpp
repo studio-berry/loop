@@ -336,8 +336,8 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
     {
         const qsizetype bytes = static_cast<qsizetype>(estimatedBytes(request.key));
         const pdf::PDFResourcePriority priority = request.priority == pdf::PDFJobPriority::NearViewport
-                                                       ? pdf::PDFResourcePriority::Prefetch
-                                                       : pdf::PDFResourcePriority::Visible;
+                                                      ? pdf::PDFResourcePriority::Prefetch
+                                                      : pdf::PDFResourcePriority::Visible;
         if (bytes > 0 && !m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
                                                        bytes,
                                                        priority,
@@ -357,8 +357,8 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
         if (bytes > 0)
         {
             resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
-                                                                                   pdf::PDFResourcePool::RasterTileCache,
-                                                                                   bytes);
+                                                                                pdf::PDFResourcePool::RasterTileCache,
+                                                                                bytes);
         }
     }
 
@@ -372,7 +372,7 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
 
     const QString jobId = m_submitter->submit(
         spec,
-        [this, relay, renderer, request, requestId, workStarted](pdf::PDFJobContext& jobContext)
+        [this, relay, renderer, request, requestId, workStarted, resourceReservation](pdf::PDFJobContext& jobContext)
         {
             workStarted->store(true, std::memory_order_release);
 
@@ -380,7 +380,10 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
 
             // The relay is always queued, so this runs after submit() returned and
             // registered the request, even when the submitter ran the work inline.
-            relay->post([this, requestId, result = std::move(result)]() mutable
+            // resourceReservation is captured so the in-flight bytes stay reserved
+            // for the whole duration of the render, not just until admit() removes
+            // the InFlight entry.
+            relay->post([this, requestId, result = std::move(result), resourceReservation]() mutable
                         { admit(requestId, std::move(result)); });
         });
 
@@ -618,21 +621,8 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
         resourceReservation.reset();
     }
 
-    if (m_resourceBudget && !resourceReservation)
-    {
-        if (!m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
-                                          pixels->byteSize,
-                                          pdf::PDFResourcePriority::Visible,
-                                          QStringLiteral("admitted page surface")))
-        {
-            m_resourceBudget->recordShed(pdf::PDFResourcePool::RasterTileCache);
-            return false;
-        }
-        resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
-                                                                              pdf::PDFResourcePool::RasterTileCache,
-                                                                              pixels->byteSize);
-    }
-
+    // Evict the stale same-key entry first: its resource reservation is released
+    // immediately, making bytes available before the new one is checked in.
     const auto existing = m_cache.find(key);
     if (existing != m_cache.end())
     {
@@ -675,6 +665,8 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
         return true;
     };
 
+    // Run the LRU eviction loop before the resource-budget check so that freed
+    // bytes from evicted entries are visible when tryReserve runs.
     if (m_pageCacheBudget)
     {
         while (!m_pageCacheBudget->tryReserve(pdf::PDFPageCacheBudget::Pool::PageSurfaces, pixels->byteSize))
@@ -684,6 +676,26 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
                 return false;
             }
         }
+    }
+
+    if (m_resourceBudget && !resourceReservation)
+    {
+        if (!m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
+                                          pixels->byteSize,
+                                          pdf::PDFResourcePriority::Visible,
+                                          QStringLiteral("admitted page surface")))
+        {
+            // Release the pageCacheBudget reservation we just made above.
+            if (m_pageCacheBudget)
+            {
+                m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, pixels->byteSize);
+            }
+            m_resourceBudget->recordShed(pdf::PDFResourcePool::RasterTileCache);
+            return false;
+        }
+        resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
+                                                                            pdf::PDFResourcePool::RasterTileCache,
+                                                                            pixels->byteSize);
     }
 
     CacheEntry entry;

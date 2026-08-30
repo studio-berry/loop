@@ -83,13 +83,13 @@ struct LOUPELIBCORESHARED_EXPORT PDFResourceBudgetConfig
     /// resident ceiling is reached; active model and a visible request remain
     /// hard admission boundaries.
     std::array<qsizetype, PDFResourcePoolCount> poolLimits = {
-        256 * MiB, // active document model
-        128 * MiB, // compiled/evidence cache
-        128 * MiB, // raster/tile cache
-        128 * MiB, // GPU/texture accounted proxy
-        256 * MiB, // decoded stream/image cache
-        256 * MiB, // undo history
-        2 * GiB    // durable rollback storage
+        256 * MiB,   // active document model
+        128 * MiB,   // compiled/evidence cache
+        128 * MiB,   // raster/tile cache
+        128 * MiB,   // GPU/texture accounted proxy
+        256 * MiB,   // decoded stream/image cache
+        256 * MiB,   // undo history
+        2 * GiB   // durable rollback storage
     };
 
     static PDFResourceBudgetConfig conservativeDefaults();
@@ -187,9 +187,16 @@ public:
                     PDFResourcePriority priority = PDFResourcePriority::Background,
                     QString context = {});
     PDFResourceReservation reserve(PDFResourcePool pool,
-                                    qsizetype bytes,
-                                    PDFResourcePriority priority = PDFResourcePriority::Background,
-                                    QString context = {});
+                                   qsizetype bytes,
+                                   PDFResourcePriority priority = PDFResourcePriority::Background,
+                                   QString context = {});
+    /// Like reserve(), but the returned reservation holds a shared_ptr to this
+    /// budget so the caller's shared ownership keeps the budget alive.
+    PDFResourceReservation reserveShared(std::shared_ptr<PDFResourceBudget> self,
+                                         PDFResourcePool pool,
+                                         qsizetype bytes,
+                                         PDFResourcePriority priority = PDFResourcePriority::Background,
+                                         QString context = {});
     void release(PDFResourcePool pool, qsizetype bytes) noexcept;
 
     void recordEviction(PDFResourcePool pool, qsizetype bytes = 0) noexcept;
@@ -200,6 +207,9 @@ public:
     qsizetype residentBytes() const;
     qsizetype residentHighWaterBytes() const;
     PDFResourcePressure pressure() const;
+    /// Sum of shed increments caused exclusively by Prefetch-priority failures
+    /// across all pools. Background and Visible failures are excluded.
+    qint64 prefetchShedTotal() const;
     QJsonObject toJson() const;
 
 private:
@@ -217,6 +227,7 @@ private:
     std::array<qsizetype, PDFResourcePoolCount> m_highWater{};
     std::array<qint64, PDFResourcePoolCount> m_evictions{};
     std::array<qint64, PDFResourcePoolCount> m_shed{};
+    std::array<qint64, PDFResourcePoolCount> m_prefetchShed{};
     qsizetype m_residentBytes = 0;
     qsizetype m_residentHighWaterBytes = 0;
 };

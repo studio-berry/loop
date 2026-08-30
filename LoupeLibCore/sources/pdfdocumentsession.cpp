@@ -38,10 +38,7 @@
 namespace pdf
 {
 
-namespace
-{
-
-qsizetype estimateDocumentModelBytes(const PDFDocument* document)
+qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* document)
 {
     if (!document)
     {
@@ -172,14 +169,25 @@ qsizetype estimateDocumentModelBytes(const PDFDocument* document)
     const PDFCatalog* catalog = document->getCatalog();
     if (catalog)
     {
+        addBytes(sizeof(PDFCatalog));
         addProduct(static_cast<quint64>(catalog->getPageCount()), sizeof(PDFPage));
+
+        const auto& namedDests = catalog->getNamedDestinations();
+        addProduct(static_cast<quint64>(namedDests.size()),
+                   static_cast<quint64>(sizeof(QByteArray) + sizeof(PDFDestination) + 3 * sizeof(void*)));
+
+        if (catalog->getOutlineRootPtr())
+        {
+            // Outline tree: account for at least the root node.
+            addBytes(sizeof(PDFOutlineItem));
+        }
+
+        addBytes(sizeof(PDFOptionalContentProperties));
     }
     return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
                ? std::numeric_limits<qsizetype>::max()
                : static_cast<qsizetype>(total);
 }
-
-}   // namespace
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                        PDFDocumentContext* context,
@@ -203,10 +211,11 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
     const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
     if (modelBytes > 0)
     {
-        m_documentModelReservation = m_resourceBudget->reserve(PDFResourcePool::ActiveDocumentModel,
-                                                               modelBytes,
-                                                               PDFResourcePriority::Interaction,
-                                                               QStringLiteral("active document model"));
+        m_documentModelReservation = m_resourceBudget->reserveShared(m_resourceBudget,
+                                                                     PDFResourcePool::ActiveDocumentModel,
+                                                                     modelBytes,
+                                                                     PDFResourcePriority::Interaction,
+                                                                     QStringLiteral("active document model"));
     }
     initializeRendering();
 }
@@ -339,7 +348,6 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
     m_compiledCachePressureLimit = qMin(m_compiledCachePressureLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
     m_streamCacheByteLimit = qMin(m_streamCacheByteLimit, 16 * PDFResourceBudgetConfig::MiB);
-    m_resourceBudget->setLimit(PDFResourcePool::DecodedStreamImageCache, m_streamCacheByteLimit);
     trimCachesToLimits();
 }
 

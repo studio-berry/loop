@@ -169,7 +169,19 @@ void PDFDocumentContext::invalidateCaches()
 void PDFDocumentContext::replaceDocument(PDFDocument* document, PDFDocumentPointer owner)
 {
     const PDFRevisionIdentity previous = getRevision();
-    std::unique_ptr<PDFDocumentSession> nextSession = std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget);
+
+    std::unique_ptr<PDFDocumentSession> nextSession;
+    try
+    {
+        nextSession = std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget);
+    }
+    catch (const PDFResourceBudgetExceededException&)
+    {
+        // The new document's model does not fit in the resource budget; leave
+        // the existing session and document intact so the caller can report the
+        // failure without crashing the application.
+        throw;
+    }
 
     m_documentPointer = std::move(owner);
     m_document = document;
@@ -185,4 +197,4 @@ void PDFDocumentContext::emitRevisionChanged(const PDFRevisionIdentity& previous
     Q_EMIT revisionChanged(previous, getRevision());
 }
 
-} // namespace pdf
+}   // namespace pdf

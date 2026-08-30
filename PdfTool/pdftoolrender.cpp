@@ -22,6 +22,7 @@
 
 #include "pdftoolrender.h"
 #include "pdftoolcancel.h"
+#include "pdfdocumentsession.h"
 #include "pdffont.h"
 #include "pdfconstants.h"
 #include "pdfsafefilewriter.h"
@@ -209,14 +210,16 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
             const bool cancelled = isCancelRequested();
             envelope.status = cancelled
                                   ? QStringLiteral("cancelled")
-                                  : m_resourceBudgetExhausted ? QStringLiteral("budget-exceeded") : QStringLiteral("incomplete");
+                              : m_resourceBudgetExhausted ? QStringLiteral("budget-exceeded")
+                                                          : QStringLiteral("incomplete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
             envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
             envelope.elapsedMs = m_wallTime;
             envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
             envelope.incompleteReason = cancelled
                                             ? QStringLiteral("operation-cancelled")
-                                            : m_resourceBudgetExhausted ? QStringLiteral("resource-budget-exceeded") : QStringLiteral("preflight-measurement-unavailable");
+                                        : m_resourceBudgetExhausted ? QStringLiteral("resource-budget-exceeded")
+                                                                    : QStringLiteral("preflight-measurement-unavailable");
             qint64 pagesMaterialized = 0;
             for (const PageInfo& page : m_pageInfo)
             {
@@ -248,6 +251,17 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
     if (!readDocument(options, document, nullptr, false))
     {
         return PDFToolExitCode::InputError;
+    }
+
+    // Reserve the loaded document model so the envelope reflects real resident bytes.
+    const qsizetype modelBytes = pdf::PDFDocumentSession::estimateDocumentModelBytes(&document);
+    pdf::PDFResourceReservation documentModelReservation;
+    if (modelBytes > 0)
+    {
+        documentModelReservation = m_resourceBudget->reserve(pdf::PDFResourcePool::ActiveDocumentModel,
+                                                             modelBytes,
+                                                             pdf::PDFResourcePriority::Interaction,
+                                                             QStringLiteral("active document model"));
     }
 
     QString parseError;

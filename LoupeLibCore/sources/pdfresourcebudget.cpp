@@ -323,12 +323,19 @@ bool PDFResourceBudget::tryReserve(PDFResourcePool pool,
     std::lock_guard lock(m_mutex);
     PDFResourceBudgetExceeded detail;
     const bool result = tryReserveLocked(pool, normalized(bytes), priority, context, &detail);
-    if (!result && (priority == PDFResourcePriority::Prefetch || priority == PDFResourcePriority::Background))
+    if (!result)
     {
         const std::size_t i = index(pool);
         if (i < PDFResourcePoolCount)
         {
-            ++m_shed[i];
+            if (priority == PDFResourcePriority::Prefetch || priority == PDFResourcePriority::Background)
+            {
+                ++m_shed[i];
+            }
+            if (priority == PDFResourcePriority::Prefetch)
+            {
+                ++m_prefetchShed[i];
+            }
         }
     }
     return result;
@@ -347,6 +354,22 @@ PDFResourceReservation PDFResourceBudget::reserve(PDFResourcePool pool,
         throw PDFResourceBudgetExceededException(std::move(detail));
     }
     return PDFResourceReservation(this, pool, normalizedBytes);
+}
+
+PDFResourceReservation PDFResourceBudget::reserveShared(std::shared_ptr<PDFResourceBudget> self,
+                                                        PDFResourcePool pool,
+                                                        qsizetype bytes,
+                                                        PDFResourcePriority priority,
+                                                        QString context)
+{
+    std::lock_guard lock(m_mutex);
+    PDFResourceBudgetExceeded detail;
+    const qsizetype normalizedBytes = normalized(bytes);
+    if (!tryReserveLocked(pool, normalizedBytes, priority, context, &detail))
+    {
+        throw PDFResourceBudgetExceededException(std::move(detail));
+    }
+    return PDFResourceReservation(std::move(self), pool, normalizedBytes);
 }
 
 void PDFResourceBudget::release(PDFResourcePool pool, qsizetype bytes) noexcept
@@ -425,6 +448,17 @@ qsizetype PDFResourceBudget::residentHighWaterBytes() const
 {
     std::lock_guard lock(m_mutex);
     return m_residentHighWaterBytes;
+}
+
+qint64 PDFResourceBudget::prefetchShedTotal() const
+{
+    std::lock_guard lock(m_mutex);
+    qint64 total = 0;
+    for (const qint64 n : m_prefetchShed)
+    {
+        total += n;
+    }
+    return total;
 }
 
 PDFResourcePressure PDFResourceBudget::pressure() const
