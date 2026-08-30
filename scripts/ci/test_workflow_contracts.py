@@ -37,6 +37,22 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("-Profile loupe-release", workflow)
         self.assertNotIn("-Profile developer", workflow)
 
+    def test_linux_release_gate_qualifies_without_widgets(self):
+        workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
+        self.assertIn("prepare_widgets_free_qt.py", workflow)
+        self.assertIn("--qt-prefix", workflow)
+        self.assertIn("--expect-configure-failure", workflow)
+        self.assertIn("Build Widgets-absent release profile", workflow)
+        self.assertIn("record_widgets_free_release_evidence.py", workflow)
+
+    def test_windows_release_gate_qualifies_without_widgets(self):
+        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("prepare_widgets_free_qt.py", workflow)
+        self.assertIn("--qt-prefix", workflow)
+        self.assertIn("--expect-configure-failure", workflow)
+        self.assertIn("Build Widgets-absent release profile", workflow)
+        self.assertIn("record_widgets_free_release_evidence.py", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
