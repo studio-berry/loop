@@ -474,7 +474,11 @@ def _install_manifest_entries(path: Path, install_dir: Path) -> set[str]:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as exc:
         raise ContractError(f"cannot read install manifest {path}: {exc}") from exc
-    install_root = install_dir.resolve()
+    # Do not resolve the final candidate path: CMake may list an installed
+    # symlink, and resolving it changes the manifest's entry name to its target.
+    # Normalize the lexical paths for containment while preserving that final
+    # filesystem name.
+    install_root = Path(os.path.abspath(os.fspath(install_dir)))
     entries: set[str] = set()
     for line in lines:
         raw = line.strip()
@@ -483,8 +487,9 @@ def _install_manifest_entries(path: Path, install_dir: Path) -> set[str]:
         candidate = Path(raw)
         if not candidate.is_absolute():
             candidate = path.parent / candidate
+        candidate = Path(os.path.abspath(os.fspath(candidate)))
         try:
-            relative = candidate.resolve().relative_to(install_root).as_posix()
+            relative = candidate.relative_to(install_root).as_posix()
         except ValueError:
             continue
         entries.add(relative)

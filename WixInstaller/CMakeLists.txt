@@ -97,6 +97,92 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
         endif()
     endif()
 
+    # cmake --install stages the complete Qt QML tree below qml/. WiX only
+    # packages files named in Product.wxs, so harvest the same tree at
+    # configure time and keep every generated component tied to its relative
+    # source path. The deterministic UUIDs keep upgrades stable across runs.
+    set(LOUPE_WIX_QML_DIRECTORY_REFS "")
+    set(LOUPE_WIX_QML_COMPONENTS "")
+    if(LOUPE_INSTALL_QT_DEPENDENCIES AND NOT "${LOUPE_QT_ROOT}" STREQUAL "")
+        set(_loupe_qml_root "${LOUPE_QT_ROOT}/qml")
+        if(IS_DIRECTORY "${_loupe_qml_root}")
+            set(LOUPE_WIX_QML_DIRECTORY_REFS [=[
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dir_qml" Name="qml" />
+    </DirectoryRef>
+  </Fragment>
+]=])
+            file(GLOB_RECURSE _loupe_qml_files LIST_DIRECTORIES false "${_loupe_qml_root}/*")
+            list(SORT _loupe_qml_files)
+            set(_loupe_qml_dirs "")
+            foreach(_loupe_qml_file IN LISTS _loupe_qml_files)
+                file(RELATIVE_PATH _loupe_qml_relative "${_loupe_qml_root}" "${_loupe_qml_file}")
+                get_filename_component(_loupe_qml_dir "${_loupe_qml_relative}" DIRECTORY)
+                while(NOT "${_loupe_qml_dir}" STREQUAL "" AND NOT "${_loupe_qml_dir}" STREQUAL ".")
+                    list(FIND _loupe_qml_dirs "${_loupe_qml_dir}" _loupe_qml_dir_index)
+                    if(_loupe_qml_dir_index EQUAL -1)
+                        list(APPEND _loupe_qml_dirs "${_loupe_qml_dir}")
+                    endif()
+                    get_filename_component(_loupe_qml_dir "${_loupe_qml_dir}" DIRECTORY)
+                endwhile()
+            endforeach()
+
+            list(SORT _loupe_qml_dirs)
+            foreach(_loupe_qml_dir IN LISTS _loupe_qml_dirs)
+                string(MD5 _loupe_qml_dir_hash "${_loupe_qml_dir}")
+                string(SUBSTRING "${_loupe_qml_dir_hash}" 0 16 _loupe_qml_dir_hash)
+                set(_loupe_qml_dir_id "dirQml${_loupe_qml_dir_hash}")
+                get_filename_component(_loupe_qml_dir_name "${_loupe_qml_dir}" NAME)
+                string(REPLACE "&" "&amp;" _loupe_qml_dir_name "${_loupe_qml_dir_name}")
+                string(REPLACE "<" "&lt;" _loupe_qml_dir_name "${_loupe_qml_dir_name}")
+                string(REPLACE ">" "&gt;" _loupe_qml_dir_name "${_loupe_qml_dir_name}")
+                get_filename_component(_loupe_qml_parent "${_loupe_qml_dir}" DIRECTORY)
+                if("${_loupe_qml_parent}" STREQUAL "")
+                    set(_loupe_qml_parent_id "dir_qml")
+                else()
+                    string(MD5 _loupe_qml_parent_hash "${_loupe_qml_parent}")
+                    string(SUBSTRING "${_loupe_qml_parent_hash}" 0 16 _loupe_qml_parent_hash)
+                    set(_loupe_qml_parent_id "dirQml${_loupe_qml_parent_hash}")
+                endif()
+                string(APPEND LOUPE_WIX_QML_DIRECTORY_REFS
+                    "  <Fragment>\n"
+                    "    <DirectoryRef Id=\"${_loupe_qml_parent_id}\">\n"
+                    "      <Directory Id=\"${_loupe_qml_dir_id}\" Name=\"${_loupe_qml_dir_name}\" />\n"
+                    "    </DirectoryRef>\n"
+                    "  </Fragment>\n")
+            endforeach()
+
+            foreach(_loupe_qml_file IN LISTS _loupe_qml_files)
+                file(RELATIVE_PATH _loupe_qml_relative "${_loupe_qml_root}" "${_loupe_qml_file}")
+                get_filename_component(_loupe_qml_dir "${_loupe_qml_relative}" DIRECTORY)
+                if("${_loupe_qml_dir}" STREQUAL "")
+                    set(_loupe_qml_dir_id "dir_qml")
+                else()
+                    string(MD5 _loupe_qml_dir_hash "${_loupe_qml_dir}")
+                    string(SUBSTRING "${_loupe_qml_dir_hash}" 0 16 _loupe_qml_dir_hash)
+                    set(_loupe_qml_dir_id "dirQml${_loupe_qml_dir_hash}")
+                endif()
+                string(MD5 _loupe_qml_file_hash "${_loupe_qml_relative}")
+                string(SUBSTRING "${_loupe_qml_file_hash}" 0 16 _loupe_qml_file_hash)
+                string(UUID _loupe_qml_guid
+                       NAMESPACE "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+                       NAME "loupe-wix-qml-${_loupe_qml_relative}" TYPE SHA1 UPPER)
+                string(REPLACE "&" "&amp;" _loupe_qml_source "${_loupe_qml_relative}")
+                string(REPLACE "<" "&lt;" _loupe_qml_source "${_loupe_qml_source}")
+                string(REPLACE ">" "&gt;" _loupe_qml_source "${_loupe_qml_source}")
+                string(APPEND LOUPE_WIX_QML_COMPONENTS
+                    "      <Component Id=\"cmpQml${_loupe_qml_file_hash}\" Directory=\"${_loupe_qml_dir_id}\" Guid=\"{${_loupe_qml_guid}}\">\n"
+                    "        <File Id=\"filQml${_loupe_qml_file_hash}\" KeyPath=\"yes\" Source=\"$(var.MyInstallDir)/qml/${_loupe_qml_source}\" />\n"
+                    "      </Component>\n")
+            endforeach()
+            list(LENGTH _loupe_qml_files _loupe_qml_file_count)
+            message(STATUS "WiX will package ${_loupe_qml_file_count} Qt QML file(s) from ${_loupe_qml_root}")
+        else()
+            message(WARNING "Qt QML root does not exist at ${_loupe_qml_root}; MSI will not contain QML modules")
+        endif()
+    endif()
+
     configure_file(LOUPE.sln.in LOUPE.sln)
     configure_file(LOUPE.wixproj.in LOUPE.wixproj)
     configure_file(Product.wxs.in Product.wxs)

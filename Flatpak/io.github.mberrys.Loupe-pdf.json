@@ -138,7 +138,7 @@
             "sources": [
                 {
                     "type": "git",
-                    "url": "https://github.com/studio-berry/loop.git",
+                    "url": "https://github.com/studio-berry/loupe.git",
                     "commit": "LOUPE_LAST_COMMIT"
                 }
             ]

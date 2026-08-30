@@ -100,6 +100,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
                 <File Id="filQt6Xml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Xml.dll" />
       </Component>
 ${LOUPE_WIX_ICU_COMPONENTS}
+${LOUPE_WIX_QML_COMPONENTS}
       <Component Id="cmpqoffscreen" Directory="dir_platforms" Guid="{A1B2C3D4-E5F6-4789-A012-3456789ABCDE}">
         <File Id="filqoffscreen" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qoffscreen.dll" />
       </Component>
@@ -274,6 +275,7 @@ ${LOUPE_WIX_ICU_COMPONENTS}
   </Fragment>
 
 ${LOUPE_WIX_FRAGMENT_OCR_SERVICE}
+${LOUPE_WIX_QML_DIRECTORY_REFS}
 
   <Fragment>
     <ComponentGroup Id="LOUPE_Loupe_Data">

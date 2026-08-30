@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.product_surface import (
     PROFILES,
+    _install_manifest_entries,
     load_json,
     load_manifest,
     validate_cli,
@@ -94,6 +96,22 @@ class ProductSurfaceContractTests(unittest.TestCase):
         (install / "unexpected.txt").write_text("fixture", encoding="utf-8")
         errors = validate_install(install, self.manifest, "loupe-release", install_manifest)
         self.assertTrue(any("absent from CMake install manifest" in error for error in errors))
+
+    def test_install_manifest_preserves_final_symlink_name(self):
+        install = self._make_install_tree()
+        real = install / "real.dll"
+        alias = install / "alias.dll"
+        real.write_bytes(b"fixture")
+        try:
+            os.symlink(real, alias)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symbolic links unavailable: {exc}")
+
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        install_manifest = Path(temporary.name) / "install_manifest.txt"
+        install_manifest.write_text(str(alias) + "\n", encoding="utf-8")
+        self.assertEqual(_install_manifest_entries(install_manifest, install), {"alias.dll"})
 
     def _discovery_file(self, commands: list[dict[str, object]]) -> Path:
         temporary = tempfile.TemporaryDirectory()
