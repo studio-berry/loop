@@ -489,15 +489,17 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/styles/
-            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/styles/
-            FILES_MATCHING
-            PATTERN "*.dll"
-            PATTERN "*.so"
-            PATTERN "*.dylib"
-            REGEX "d\\..*" EXCLUDE
-            PATTERN "*.pdb" EXCLUDE
-        )
+        if(NOT LOUPE_LOUPE_DISTRIBUTION)
+            install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/styles/
+                RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/styles/
+                FILES_MATCHING
+                PATTERN "*.dll"
+                PATTERN "*.so"
+                PATTERN "*.dylib"
+                REGEX "d\\..*" EXCLUDE
+                PATTERN "*.pdb" EXCLUDE
+            )
+        endif()
 
         install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/texttospeech/
             RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/texttospeech/

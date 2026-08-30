@@ -52,6 +52,8 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
         set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
         set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT "")
         set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY "")
+        set(LOUPE_WIX_QT_STYLES_COMPONENT "")
+        set(LOUPE_WIX_QT_STYLES_DIRECTORY "")
     else()
         set(LOUPE_WIX_QT_WIDGETS_COMPONENT [=[
       <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
@@ -67,6 +69,18 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
       <Directory Id="dir_printsupport" Name="printsupport" />
+    </DirectoryRef>
+  </Fragment>
+]=])
+        set(LOUPE_WIX_QT_STYLES_COMPONENT [=[
+      <Component Id="cmpqmodernwindowsstyle" Directory="dir_styles" Guid="{1A418DAB-7A24-4695-A773-4DC161926350}">
+        <File Id="filqmodernwindowsstyle" KeyPath="yes" Source="$(var.MyInstallDir)\styles\qmodernwindowsstyle.dll" />
+      </Component>
+]=])
+        set(LOUPE_WIX_QT_STYLES_DIRECTORY [=[
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dir_styles" Name="styles" />
     </DirectoryRef>
   </Fragment>
 ]=])

@@ -124,9 +124,7 @@ ${LOUPE_WIX_ICU_COMPONENTS}
       <Component Id="cmpqwindows" Directory="dir_platforms" Guid="{8A574FB6-B003-45E6-80F2-0989BEE14A63}">
         <File Id="filqwindows" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qwindows.dll" />
       </Component>
-      <Component Id="cmpqmodernwindowsstyle" Directory="dir_styles" Guid="{1A418DAB-7A24-4695-A773-4DC161926350}">
-        <File Id="filqmodernwindowsstyle" KeyPath="yes" Source="$(var.MyInstallDir)\styles\qmodernwindowsstyle.dll" />
-      </Component>
+${LOUPE_WIX_QT_STYLES_COMPONENT}
       <Component Id="cmpqtexttospeech_sapi" Directory="dir_texttospeech" Guid="{305900CC-4483-4E0F-B611-C32FD9E01021}">
         <File Id="filqtexttospeech_sapi" KeyPath="yes" Source="$(var.MyInstallDir)\texttospeech\qtexttospeech_sapi.dll" />
       </Component>
@@ -300,11 +298,7 @@ ${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
     </DirectoryRef>
   </Fragment>
 
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_styles" Name="styles" />
-    </DirectoryRef>
-  </Fragment>
+${LOUPE_WIX_QT_STYLES_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
