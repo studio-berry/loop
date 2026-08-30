@@ -87,7 +87,7 @@ void PageSurfaceCoordinator::setDocumentKey(QString documentKey)
     m_documentKey = std::move(documentKey);
 }
 
-void PageSurfaceCoordinator::setResourceBudget(pdf::PDFResourceBudget* budget)
+void PageSurfaceCoordinator::setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget)
 {
     if (m_resourceBudget == budget)
     {
@@ -102,7 +102,7 @@ void PageSurfaceCoordinator::setResourceBudget(pdf::PDFResourceBudget* budget)
         m_counters.admittedBytes = 0;
     }
 
-    m_resourceBudget = budget;
+    m_resourceBudget = std::move(budget);
     rebuildSnapshot();
 }
 
@@ -312,7 +312,10 @@ void PageSurfaceCoordinator::submit(const PageSurfaceRequest& request)
                                                        priority,
                                                        QStringLiteral("page surface in flight")))
         {
-            m_resourceBudget->recordShed(pdf::PDFResourcePool::RasterTileCache);
+            if (priority == pdf::PDFResourcePriority::Visible)
+            {
+                m_resourceBudget->recordShed(pdf::PDFResourcePool::RasterTileCache);
+            }
             ++m_counters.shed;
             ++m_counters.budgetExhausted;
             m_renderer->shedPrefetchAndQuality();

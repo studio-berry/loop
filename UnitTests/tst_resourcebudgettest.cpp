@@ -14,6 +14,7 @@ class ResourceBudgetTest final : public QObject
 private slots:
     void conservativeDefaultsExposeAllPools();
     void reservationTracksResidentAndHighWater();
+    void sharedReservationKeepsBudgetAlive();
     void poolAndResidentLimitsRejectWithDetails();
     void lowPriorityRejectionIsCountedAsShed();
     void jsonContainsPoolUsageAndPressure();
@@ -53,6 +54,24 @@ void ResourceBudgetTest::reservationTracksResidentAndHighWater()
     QCOMPARE(budget.residentBytes(), 0);
     QCOMPARE(budget.residentHighWaterBytes(), 40);
     QCOMPARE(budget.usage(pdf::PDFResourcePool::RasterTileCache).currentBytes, 0);
+}
+
+void ResourceBudgetTest::sharedReservationKeepsBudgetAlive()
+{
+    pdf::PDFResourceBudgetConfig config;
+    config.residentLimitBytes = 100;
+    config.setLimit(pdf::PDFResourcePool::RasterTileCache, 100);
+    auto budget = std::make_shared<pdf::PDFResourceBudget>(config);
+    const std::weak_ptr<pdf::PDFResourceBudget> weakBudget = budget;
+
+    QVERIFY(budget->tryReserve(pdf::PDFResourcePool::RasterTileCache, 40, pdf::PDFResourcePriority::Visible));
+    pdf::PDFResourceReservation reservation(budget, pdf::PDFResourcePool::RasterTileCache, 40);
+    budget.reset();
+
+    QVERIFY(!weakBudget.expired());
+    QCOMPARE(reservation.bytes(), qsizetype(40));
+    reservation.release();
+    QVERIFY(weakBudget.expired());
 }
 
 void ResourceBudgetTest::poolAndResidentLimitsRejectWithDetails()

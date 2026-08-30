@@ -31,6 +31,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 
 namespace pdf
@@ -143,6 +144,7 @@ class LOUPELIBCORESHARED_EXPORT PDFResourceReservation final
 public:
     PDFResourceReservation() = default;
     PDFResourceReservation(PDFResourceBudget* budget, PDFResourcePool pool, qsizetype bytes);
+    PDFResourceReservation(std::shared_ptr<PDFResourceBudget> budget, PDFResourcePool pool, qsizetype bytes);
     ~PDFResourceReservation();
 
     PDFResourceReservation(const PDFResourceReservation&) = delete;
@@ -157,6 +159,7 @@ public:
     void release() noexcept;
 
 private:
+    std::shared_ptr<PDFResourceBudget> m_budgetOwner;
     PDFResourceBudget* m_budget = nullptr;
     PDFResourcePool m_pool = PDFResourcePool::ActiveDocumentModel;
     qsizetype m_bytes = 0;

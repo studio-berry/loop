@@ -162,8 +162,9 @@ public:
     /// Attaches the document session's shared resource authority. Existing
     /// admitted surfaces are dropped when the authority changes so the new
     /// authority never starts with an unaccounted resident cache.
-    void setResourceBudget(pdf::PDFResourceBudget* budget);
-    pdf::PDFResourceBudget* resourceBudget() const noexcept { return m_resourceBudget; }
+    void setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget);
+    pdf::PDFResourceBudget* resourceBudget() const noexcept { return m_resourceBudget.get(); }
+    std::shared_ptr<pdf::PDFResourceBudget> sharedResourceBudget() const noexcept { return m_resourceBudget; }
 
     /// bounds() is derived from the total via PDFPageCacheBudget partition;
     /// prefer cacheLimit()/setCacheLimit() as the authority and treat
@@ -272,7 +273,7 @@ private:
     qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
-    pdf::PDFResourceBudget* m_resourceBudget = nullptr;
+    std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
 
     std::shared_ptr<JobRelay> m_relay;
 

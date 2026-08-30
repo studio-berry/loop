@@ -87,7 +87,7 @@ public:
     /// a source-image proxy for GPU bytes because Qt Quick does not expose the
     /// backend allocation; a missing authority leaves the legacy diagnostic
     /// counters usable for standalone scene-graph tests.
-    void setResourceBudget(pdf::PDFResourceBudget* budget);
+    void setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget);
 
     void setPalette(const CanvasPalette& palette);
     const CanvasPalette& palette() const noexcept { return m_palette; }
@@ -184,7 +184,7 @@ private:
     static void destroyOverlayNode(OverlayNode& entry);
 
     QQuickWindow* m_window = nullptr;
-    pdf::PDFResourceBudget* m_resourceBudget = nullptr;
+    std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
     CanvasPalette m_palette = CanvasPalette::standard();
 
     std::map<pdfinteraction::PageSurfaceKey, TileNode> m_tiles;

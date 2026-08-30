@@ -167,12 +167,14 @@ void PDFDocumentContext::invalidateCaches()
 void PDFDocumentContext::replaceDocument(PDFDocument* document, PDFDocumentPointer owner)
 {
     const PDFRevisionIdentity previous = getRevision();
+    std::unique_ptr<PDFDocumentSession> nextSession = std::make_unique<PDFDocumentSession>(document, this);
+
     m_documentPointer = std::move(owner);
     m_document = document;
     m_documentIdentity = PDFDocumentIdentity::fromDocument(document);
     ++m_documentRevision;
     ++m_cacheGeneration;
-    m_session = std::make_unique<PDFDocumentSession>(m_document, this);
+    m_session = std::move(nextSession);
     emitRevisionChanged(previous);
 }
 

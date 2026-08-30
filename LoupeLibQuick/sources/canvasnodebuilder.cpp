@@ -213,7 +213,7 @@ void CanvasNodeBuilder::setWindow(QQuickWindow* window)
     forget();
 }
 
-void CanvasNodeBuilder::setResourceBudget(pdf::PDFResourceBudget* budget)
+void CanvasNodeBuilder::setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget)
 {
     if (m_resourceBudget == budget)
     {
@@ -228,7 +228,7 @@ void CanvasNodeBuilder::setResourceBudget(pdf::PDFResourceBudget* budget)
     {
         tile.second.resourceReservation.reset();
     }
-    m_resourceBudget = budget;
+    m_resourceBudget = std::move(budget);
 }
 
 void CanvasNodeBuilder::setPalette(const CanvasPalette& palette)

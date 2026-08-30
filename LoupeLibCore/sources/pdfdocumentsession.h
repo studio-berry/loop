@@ -99,6 +99,7 @@ public:
 
     PDFProcessingBudget* getProcessingBudget() const;
     PDFResourceBudget* getResourceBudget() const;
+    std::shared_ptr<PDFResourceBudget> getSharedResourceBudget() const;
     const PDFProcessingLimits& getProcessingLimits() const;
     void setProcessingLimits(const PDFProcessingLimits& limits);
     void resetProcessingBudget();
@@ -187,7 +188,7 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
-    std::unique_ptr<PDFResourceBudget> m_resourceBudget;
+    std::shared_ptr<PDFResourceBudget> m_resourceBudget;
     PDFResourceReservation m_documentModelReservation;
     size_t m_compileCacheLimit = CompileCacheLimit;
     size_t m_streamCacheLimit = StreamCacheLimit;

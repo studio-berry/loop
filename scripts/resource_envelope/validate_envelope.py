@@ -120,6 +120,9 @@ def validate_envelope(record: dict[str, Any], budgets: dict[str, Any], workload:
         if isinstance(usage.get("high_water_bytes"), int) and isinstance(usage.get("current_bytes"), int):
             if usage["high_water_bytes"] < usage["current_bytes"]:
                 errors.append(f"high-water usage is below current usage: {pool}")
+        if isinstance(usage.get("high_water_bytes"), int) and isinstance(usage.get("limit_bytes"), int):
+            if usage["high_water_bytes"] > usage["limit_bytes"]:
+                errors.append(f"high-water usage exceeds limit: {pool}")
 
     resident = resources.get("resident_bytes")
     resident_high_water = resources.get("resident_high_water_bytes")

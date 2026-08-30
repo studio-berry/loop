@@ -170,12 +170,23 @@ PDFResourceReservation::PDFResourceReservation(PDFResourceBudget* budget, PDFRes
 {
 }
 
+PDFResourceReservation::PDFResourceReservation(std::shared_ptr<PDFResourceBudget> budget,
+                                               PDFResourcePool pool,
+                                               qsizetype bytes) :
+    m_budgetOwner(std::move(budget)),
+    m_budget(m_budgetOwner.get()),
+    m_pool(pool),
+    m_bytes(bytes)
+{
+}
+
 PDFResourceReservation::~PDFResourceReservation()
 {
     release();
 }
 
 PDFResourceReservation::PDFResourceReservation(PDFResourceReservation&& other) noexcept :
+    m_budgetOwner(std::move(other.m_budgetOwner)),
     m_budget(other.m_budget),
     m_pool(other.m_pool),
     m_bytes(other.m_bytes)
@@ -189,6 +200,7 @@ PDFResourceReservation& PDFResourceReservation::operator=(PDFResourceReservation
     if (this != &other)
     {
         release();
+        m_budgetOwner = std::move(other.m_budgetOwner);
         m_budget = other.m_budget;
         m_pool = other.m_pool;
         m_bytes = other.m_bytes;
@@ -206,6 +218,7 @@ void PDFResourceReservation::release() noexcept
     }
     m_budget = nullptr;
     m_bytes = 0;
+    m_budgetOwner.reset();
 }
 
 PDFResourceBudget::PDFResourceBudget(PDFResourceBudgetConfig config) :

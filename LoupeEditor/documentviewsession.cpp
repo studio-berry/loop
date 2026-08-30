@@ -75,7 +75,7 @@ void DocumentViewSession::prepareDocumentView()
 
     if (pdf::PDFDocumentSession* session = m_context.getSession())
     {
-        m_surfaces->setResourceBudget(session->getResourceBudget());
+        m_surfaces->setResourceBudget(session->getSharedResourceBudget());
     }
 
     // PDFDocumentContext creates a fresh PDFDocumentSession for a replacement
@@ -109,7 +109,7 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
     {
         if (m_surfaces)
         {
-            m_surfaces->setResourceBudget(session->getResourceBudget());
+            m_surfaces->setResourceBudget(session->getSharedResourceBudget());
         }
         session->setCacheLimit(normalized);
     }

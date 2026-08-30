@@ -56,6 +56,12 @@ class ValidateEnvelopeTest(unittest.TestCase):
         value["resources"]["pools"][POOL_NAMES[1]]["limit_bytes"] = 64
         self.assertEqual(validate_envelope(value, policy()), [])
 
+    def test_high_water_above_limit_is_rejected(self) -> None:
+        value = copy.deepcopy(record())
+        value["resources"]["pools"][POOL_NAMES[0]]["high_water_bytes"] = 101
+        self.assertIn("high-water usage exceeds limit: active-document-model",
+                      validate_envelope(value, policy()))
+
     def test_complete_record_requires_preflight_measurement(self) -> None:
         value = copy.deepcopy(record())
         value["preflight_high_water_bytes"] = -1

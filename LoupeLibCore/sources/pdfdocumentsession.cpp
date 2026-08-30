@@ -32,7 +32,9 @@
 #include <tuple>
 #include <QtGlobal>
 
+#include <functional>
 #include <limits>
+#include <unordered_set>
 
 namespace pdf
 {
@@ -47,12 +49,132 @@ qsizetype estimateDocumentModelBytes(const PDFDocument* document)
         return 0;
     }
 
-    const quint64 objectBytes = static_cast<quint64>(document->getStorage().getObjects().size()) * sizeof(PDFObjectStorage::Entry);
+    quint64 total = sizeof(PDFDocument);
+    const PDFObjectStorage::PDFObjects& objects = document->getStorage().getObjects();
+
+    std::unordered_set<const PDFObjectContent*> visitedContents;
+
+    const auto addProduct = [&total](quint64 count, quint64 size)
+    {
+        if (count > 0 && size > std::numeric_limits<quint64>::max() / count)
+        {
+            total = std::numeric_limits<quint64>::max();
+            return;
+        }
+
+        const quint64 product = count * size;
+        if (product > std::numeric_limits<quint64>::max() - total)
+        {
+            total = std::numeric_limits<quint64>::max();
+        }
+        else
+        {
+            total += product;
+        }
+    };
+
+    const auto addBytes = [&total](quint64 bytes)
+    {
+        if (bytes > std::numeric_limits<quint64>::max() - total)
+        {
+            total = std::numeric_limits<quint64>::max();
+        }
+        else
+        {
+            total += bytes;
+        }
+    };
+
+    std::function<void(const PDFObject&)> estimateObject;
+    std::function<void(const PDFDictionary*, bool)> estimateDictionary;
+
+    estimateDictionary = [&](const PDFDictionary* dictionary, bool includeObject)
+    {
+        if (!dictionary || !visitedContents.insert(dictionary).second)
+        {
+            return;
+        }
+
+        if (includeObject)
+        {
+            addBytes(sizeof(PDFDictionary));
+        }
+        addProduct(static_cast<quint64>(dictionary->getCapacity()), sizeof(PDFDictionary::DictionaryEntry));
+
+        for (size_t i = 0; i < dictionary->getCount(); ++i)
+        {
+            const QByteArray key = dictionary->getKey(i).getString();
+            if (!dictionary->getKey(i).isInplace())
+            {
+                addBytes(static_cast<quint64>(key.capacity()));
+            }
+            estimateObject(dictionary->getValue(i));
+        }
+    };
+
+    estimateObject = [&](const PDFObject& object)
+    {
+        switch (object.getType())
+        {
+            case PDFObject::Type::String:
+            case PDFObject::Type::Name:
+            {
+                const PDFStringRef string = object.getStringObject();
+                if (string.memoryString && visitedContents.insert(string.memoryString).second)
+                {
+                    addBytes(sizeof(PDFString));
+                    addBytes(static_cast<quint64>(string.memoryString->getString().capacity()));
+                }
+                break;
+            }
+            case PDFObject::Type::Array:
+            {
+                const PDFArray* array = object.getArray();
+                if (!array || !visitedContents.insert(array).second)
+                {
+                    break;
+                }
+                addBytes(sizeof(PDFArray));
+                addProduct(static_cast<quint64>(array->getCapacity()), sizeof(PDFObject));
+                for (size_t i = 0; i < array->getCount(); ++i)
+                {
+                    estimateObject(array->getItem(i));
+                }
+                break;
+            }
+            case PDFObject::Type::Dictionary:
+                estimateDictionary(object.getDictionary(), true);
+                break;
+            case PDFObject::Type::Stream:
+            {
+                const PDFStream* stream = object.getStream();
+                if (!stream || !visitedContents.insert(stream).second)
+                {
+                    break;
+                }
+                addBytes(sizeof(PDFStream));
+                addBytes(static_cast<quint64>(stream->getContent()->capacity()));
+                estimateDictionary(stream->getDictionary(), false);
+                break;
+            }
+            default:
+                break;
+        }
+    };
+
+    addProduct(static_cast<quint64>(objects.capacity()), sizeof(PDFObjectStorage::Entry));
+
+    for (const PDFObjectStorage::Entry& entry : objects)
+    {
+        estimateObject(entry.object);
+    }
+    estimateObject(document->getStorage().getTrailerDictionary());
+
     const PDFCatalog* catalog = document->getCatalog();
-    const quint64 pageBytes = catalog
-                                  ? static_cast<quint64>(catalog->getPageCount()) * sizeof(PDFPage)
-                                  : 0;
-    const quint64 total = sizeof(PDFDocument) + objectBytes + pageBytes;
+    if (catalog)
+    {
+        addProduct(static_cast<quint64>(catalog->getPageCount()), sizeof(PDFPage));
+    }
     return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
                ? std::numeric_limits<qsizetype>::max()
                : static_cast<qsizetype>(total);
@@ -66,7 +188,7 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>()),
-    m_resourceBudget(std::make_unique<PDFResourceBudget>()),
+    m_resourceBudget(std::make_shared<PDFResourceBudget>()),
     m_compiledCacheByteLimit(CompiledCacheByteLimitDefault),
     m_compiledCacheBytes(0),
     m_cacheLimit(CompiledCacheByteLimitDefault * 2)
@@ -75,18 +197,12 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext
     m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
 
     const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
-    if (modelBytes > 0 && m_resourceBudget->tryReserve(PDFResourcePool::ActiveDocumentModel,
-                                                       modelBytes,
-                                                       PDFResourcePriority::Interaction,
-                                                       QStringLiteral("active document model")))
+    if (modelBytes > 0)
     {
-        m_documentModelReservation = PDFResourceReservation(m_resourceBudget.get(),
-                                                             PDFResourcePool::ActiveDocumentModel,
-                                                             modelBytes);
-    }
-    else if (modelBytes > 0)
-    {
-        m_resourceBudget->recordShed(PDFResourcePool::ActiveDocumentModel);
+        m_documentModelReservation = m_resourceBudget->reserve(PDFResourcePool::ActiveDocumentModel,
+                                                               modelBytes,
+                                                               PDFResourcePriority::Interaction,
+                                                               QStringLiteral("active document model"));
     }
     initializeRendering();
 }
@@ -166,6 +282,11 @@ PDFProcessingBudget* PDFDocumentSession::getProcessingBudget() const
 PDFResourceBudget* PDFDocumentSession::getResourceBudget() const
 {
     return m_resourceBudget.get();
+}
+
+std::shared_ptr<PDFResourceBudget> PDFDocumentSession::getSharedResourceBudget() const
+{
+    return m_resourceBudget;
 }
 
 const PDFProcessingLimits& PDFDocumentSession::getProcessingLimits() const
