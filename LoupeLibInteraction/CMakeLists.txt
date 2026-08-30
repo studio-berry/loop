@@ -72,6 +72,8 @@ add_library(LoupeLibInteraction STATIC
     sources/interactionstate.h
     sources/hittestsource.cpp
     sources/hittestsource.h
+    sources/pagespatialindex.cpp
+    sources/pagespatialindex.h
     sources/overlayframe.cpp
     sources/overlayframe.h
     sources/overlaybuilder.cpp
