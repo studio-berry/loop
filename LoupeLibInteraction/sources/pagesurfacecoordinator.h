@@ -251,7 +251,9 @@ private:
 
     void onDemandChanged();
     void submit(const PageSurfaceRequest& request);
-    void admit(quint64 requestId, PageSurfaceResult result);
+    void admit(quint64 requestId,
+               PageSurfaceResult result,
+               std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
     void requestCancellation(quint64 requestId);
     void cancelAndDrop(quint64 requestId);
     void resolveCancellation(quint64 requestId, std::shared_ptr<std::atomic_bool> workStarted);
@@ -262,6 +264,8 @@ private:
     bool insertIntoCache(const PageSurfaceKey& key,
                          SurfaceBufferPointer pixels,
                          std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
+    bool evictOldestCacheEntry();
+    void trimCacheForIncoming(qsizetype bytes);
     void trimCacheToBudget();
     void clearCache();
     qint64 inFlightBytes() const;

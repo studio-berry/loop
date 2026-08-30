@@ -17,6 +17,7 @@ private slots:
     void sharedReservationKeepsBudgetAlive();
     void poolAndResidentLimitsRejectWithDetails();
     void lowPriorityRejectionIsCountedAsShed();
+    void prefetchSignalOnlyTracksPrefetchSheds();
     void jsonContainsPoolUsageAndPressure();
 };
 
@@ -121,6 +122,24 @@ void ResourceBudgetTest::lowPriorityRejectionIsCountedAsShed()
                                pdf::PDFResourcePriority::Prefetch,
                                QStringLiteral("prefetch")));
     QCOMPARE(budget.usage(pdf::PDFResourcePool::RasterTileCache).shed, qint64(1));
+}
+
+void ResourceBudgetTest::prefetchSignalOnlyTracksPrefetchSheds()
+{
+    pdf::PDFResourceBudgetConfig config;
+    config.setLimit(pdf::PDFResourcePool::RasterTileCache, 10);
+    pdf::PDFResourceBudget budget(config);
+
+    QVERIFY(budget.tryReserve(pdf::PDFResourcePool::RasterTileCache,
+                              10,
+                              pdf::PDFResourcePriority::Visible));
+    budget.recordShed(pdf::PDFResourcePool::RasterTileCache);
+    QCOMPARE(budget.prefetchShedCount(), qint64(0));
+
+    QVERIFY(!budget.tryReserve(pdf::PDFResourcePool::RasterTileCache,
+                               1,
+                               pdf::PDFResourcePriority::Prefetch));
+    QCOMPARE(budget.prefetchShedCount(), qint64(1));
 }
 
 void ResourceBudgetTest::jsonContainsPoolUsageAndPressure()

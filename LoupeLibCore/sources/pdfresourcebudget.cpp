@@ -334,7 +334,7 @@ bool PDFResourceBudget::tryReserve(PDFResourcePool pool,
             }
             if (priority == PDFResourcePriority::Prefetch)
             {
-                ++m_prefetchShed[i];
+                ++m_prefetchShed;
             }
         }
     }
@@ -399,14 +399,24 @@ void PDFResourceBudget::recordEviction(PDFResourcePool pool, qsizetype) noexcept
     }
 }
 
-void PDFResourceBudget::recordShed(PDFResourcePool pool) noexcept
+void PDFResourceBudget::recordShed(PDFResourcePool pool, PDFResourcePriority priority) noexcept
 {
     std::lock_guard lock(m_mutex);
     const std::size_t i = index(pool);
     if (i < PDFResourcePoolCount)
     {
         ++m_shed[i];
+        if (priority == PDFResourcePriority::Prefetch)
+        {
+            ++m_prefetchShed;
+        }
     }
+}
+
+qint64 PDFResourceBudget::prefetchShedCount() const noexcept
+{
+    std::lock_guard lock(m_mutex);
+    return m_prefetchShed;
 }
 
 PDFResourceUsage PDFResourceBudget::usage(PDFResourcePool pool) const
@@ -453,12 +463,7 @@ qsizetype PDFResourceBudget::residentHighWaterBytes() const
 qint64 PDFResourceBudget::prefetchShedTotal() const
 {
     std::lock_guard lock(m_mutex);
-    qint64 total = 0;
-    for (const qint64 n : m_prefetchShed)
-    {
-        total += n;
-    }
-    return total;
+    return m_prefetchShed;
 }
 
 PDFResourcePressure PDFResourceBudget::pressure() const

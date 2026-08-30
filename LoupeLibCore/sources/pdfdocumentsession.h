@@ -74,6 +74,11 @@ public:
                                 std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
     ~PDFDocumentSession();
 
+    /// Estimates the resident model owned by a parsed document, including raw
+    /// object content and parsed catalog containers. The same estimate is used
+    /// by editor admission and unattended PdfTool qualification.
+    static qsizetype estimateDocumentModelBytes(const PDFDocument* document);
+
     PDFDocumentSession(const PDFDocumentSession&) = delete;
     PDFDocumentSession& operator=(const PDFDocumentSession&) = delete;
 

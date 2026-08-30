@@ -38,7 +38,10 @@
 namespace pdf
 {
 
-qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* document)
+namespace
+{
+
+qsizetype estimateDocumentModelBytesImpl(const PDFDocument* document)
 {
     if (!document)
     {
@@ -169,24 +172,18 @@ qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* docu
     const PDFCatalog* catalog = document->getCatalog();
     if (catalog)
     {
-        addBytes(sizeof(PDFCatalog));
-        addProduct(static_cast<quint64>(catalog->getPageCount()), sizeof(PDFPage));
-
-        const auto& namedDests = catalog->getNamedDestinations();
-        addProduct(static_cast<quint64>(namedDests.size()),
-                   static_cast<quint64>(sizeof(QByteArray) + sizeof(PDFDestination) + 3 * sizeof(void*)));
-
-        if (catalog->getOutlineRootPtr())
-        {
-            // Outline tree: account for at least the root node.
-            addBytes(sizeof(PDFOutlineItem));
-        }
-
-        addBytes(sizeof(PDFOptionalContentProperties));
+        addBytes(static_cast<quint64>(catalog->getMemoryConsumptionEstimate()));
     }
     return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
                ? std::numeric_limits<qsizetype>::max()
                : static_cast<qsizetype>(total);
+}
+
+}   // namespace
+
+qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* document)
+{
+    return estimateDocumentModelBytesImpl(document);
 }
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
@@ -564,7 +561,7 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
     const qsizetype decodedBytes = decoded.size();
     if (m_streamCacheLimit == 0 || decodedBytes > m_streamCacheByteLimit)
     {
-        m_resourceBudget->recordShed(PDFResourcePool::DecodedStreamImageCache);
+        m_resourceBudget->recordShed(PDFResourcePool::DecodedStreamImageCache, PDFResourcePriority::Background);
         return decoded;
     }
 

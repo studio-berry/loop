@@ -726,6 +726,11 @@ public:
     /// then exception is thrown.
     static PDFCatalog parse(const PDFObject& catalog, const PDFDocument* document);
 
+    /// Estimates heap storage owned by the parsed catalog model. Object-content
+    /// storage is measured by PDFDocumentSession; this covers the catalog's
+    /// parsed containers and their duplicated keys/strings.
+    qsizetype getMemoryConsumptionEstimate() const;
+
 private:
 
     enum MarkInfoFlag : uint8_t

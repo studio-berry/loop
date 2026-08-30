@@ -246,6 +246,10 @@ void PDFToolBenchmark::onPageRendered(const PDFToolOptions& options, pdf::PDFRen
 PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
+    // Release the previous invocation before replacing its budget. The
+    // reservation is intentionally declared after the budget member, so it
+    // also releases before the budget during destruction.
+    m_documentModelReservation.release();
     m_resourceBudget = std::make_unique<pdf::PDFResourceBudget>();
     m_resourceBudgetExhausted = false;
     if (!readDocument(options, document, nullptr, false))
@@ -253,15 +257,25 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InputError;
     }
 
-    // Reserve the loaded document model so the envelope reflects real resident bytes.
     const qsizetype modelBytes = pdf::PDFDocumentSession::estimateDocumentModelBytes(&document);
-    pdf::PDFResourceReservation documentModelReservation;
     if (modelBytes > 0)
     {
-        documentModelReservation = m_resourceBudget->reserve(pdf::PDFResourcePool::ActiveDocumentModel,
-                                                             modelBytes,
-                                                             pdf::PDFResourcePriority::Interaction,
-                                                             QStringLiteral("active document model"));
+        try
+        {
+            m_documentModelReservation = m_resourceBudget->reserve(pdf::PDFResourcePool::ActiveDocumentModel,
+                                                                   modelBytes,
+                                                                   pdf::PDFResourcePriority::Interaction,
+                                                                   QStringLiteral("active document model"));
+        }
+        catch (const pdf::PDFResourceBudgetExceededException&)
+        {
+            m_resourceBudgetExhausted = true;
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("resource/budget-exceeded"),
+                             PDFToolTranslationContext::tr("The document exceeds the active model resource budget."));
+            return PDFToolExitCode::ProcessingFailure;
+        }
     }
 
     QString parseError;
