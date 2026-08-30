@@ -1,7 +1,7 @@
 # Editor crash/session recovery
 
 Loupe protects unsaved Editor work with a private, bounded recovery store. The
-store is owned by `PDFRecoveryManager` in `LoupeLibGui` and is attached to the
+store is owned by `PDFRecoveryManager` in the Editor/Core recovery boundary and is attached to the
 single-document Editor session.
 
 ## Safety contract
