@@ -22,8 +22,8 @@
 
 #include "editorhost.h"
 
+#include "pdfapplicationidentity.h"
 #include "pdfapplicationtranslator.h"
-#include "pdfconstants.h"
 #include "pdflogger.h"
 #include "pdfsentry.h"
 #include "pdfsecurityhandler.h"
@@ -85,10 +85,7 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
         Dark = 2
     };
 
-    QSettings settings(QSettings::IniFormat,
-                       QSettings::UserScope,
-                       QStringLiteral("MelkaJ"),
-                       QStringLiteral("LOOP Editor"));
+    QSettings settings;
     settings.beginGroup(QStringLiteral("ColorScheme"));
     const SavedColorScheme savedScheme = static_cast<SavedColorScheme>(
         settings.value(QStringLiteral("colorScheme"), int(SavedColorScheme::Auto)).toInt());
@@ -192,9 +189,7 @@ int main(int argc, char* argv[])
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
 
-    QCoreApplication::setOrganizationName(QStringLiteral("MelkaJ"));
-    QCoreApplication::setApplicationName(QStringLiteral("Loop"));
-    QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
@@ -208,7 +203,7 @@ int main(int argc, char* argv[])
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QCoreApplication::applicationName());
+    parser.setApplicationDescription(QCoreApplication::applicationDisplayName());
     parser.addOption(noDrm);
     parser.addOption(lightGui);
     parser.addOption(darkGui);
@@ -219,6 +214,7 @@ int main(int argc, char* argv[])
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The PDF file to open."));
     parser.process(application);
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
+    pdf::PDFSettings::migrateLegacySettings();
 
     const pdf::PDFLogSession logSession(QStringLiteral("editor"));
 

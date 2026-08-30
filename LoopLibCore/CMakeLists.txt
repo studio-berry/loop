@@ -244,6 +244,8 @@ add_library(LoopLibCore SHARED
     sources/pdfeditorfallbackfont.cpp
     sources/pdfapplicationtranslator.h
     sources/pdfapplicationtranslator.cpp
+    sources/pdfapplicationidentity.h
+    sources/pdfapplicationidentity.cpp
     sources/pdfsettings.h
     sources/pdfsettings.cpp
     sources/pdfsentry.h
@@ -291,7 +293,7 @@ if(MINGW)
 endif()
 
 if(WIN32)
-    target_link_libraries(LoopLibCore PRIVATE Psapi)
+    target_link_libraries(LoopLibCore PRIVATE Psapi shell32)
 endif()
 
 target_include_directories(LoopLibCore INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)

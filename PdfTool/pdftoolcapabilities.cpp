@@ -227,7 +227,7 @@ PDFToolExitCode PDFToolCapabilitiesApplication::execute(const PDFToolOptions& op
         options.executionContext->setData(QJsonObject{
             { QStringLiteral("discovery_schema_version"), 1 },
             { QStringLiteral("product"), QJsonObject{
-                { QStringLiteral("name"), QStringLiteral("PdfTool") },
+                { QStringLiteral("name"), QCoreApplication::applicationName() },
                 { QStringLiteral("version"), QCoreApplication::applicationVersion() }
             } },
             { QStringLiteral("output_contract"), QJsonObject{

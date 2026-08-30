@@ -20,30 +20,49 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#ifndef PDFSETTINGS_H
-#define PDFSETTINGS_H
+#ifndef PDFAPPLICATIONIDENTITY_H
+#define PDFAPPLICATIONIDENTITY_H
 
 #include "pdfglobal.h"
 
-#include <QCommandLineOption>
 #include <QString>
-
-class QCommandLineParser;
 
 namespace pdf
 {
 
-class LOOPLIBCORESHARED_EXPORT PDFSettings
+enum class PDFApplicationSurface
 {
-public:
-    static QCommandLineOption getConfigPathOption();
-    static void applyCommandLineSettingsPath(const QCommandLineParser& parser);
-    /// Copy compatible settings from the pre-Loop organization once.
-    static void migrateLegacySettings();
-    static void setSettingsPath(const QString& path);
-    static QString getSettingsPath();
+    LoopEditor,
+    PdfTool,
+    CodeGenerator,
+    Jbig2Viewer,
+    PdfExampleGenerator,
+    LoopPreflightFixtureGenerator,
+    QuickShellSmoke,
+    ProductQuickAccessibilitySmoke,
+    CanvasBenchmark,
 };
 
-}   // namespace
+struct LOOPLIBCORESHARED_EXPORT PDFApplicationIdentity final
+{
+    QString productName;
+    QString organizationName;
+    QString organizationDomain;
+    QString applicationName;
+    QString displayName;
+    QString packageId;
+    QString appUserModelId;
+    QString version;
+};
 
-#endif // PDFSETTINGS_H
+/// Return the complete identity for one executable or qualification surface.
+LOOPLIBCORESHARED_EXPORT PDFApplicationIdentity getApplicationIdentity(PDFApplicationSurface surface);
+
+/// Apply the identity to the current QCoreApplication and, on Windows, to the
+/// process AppUserModelID. The caller must invoke this after constructing the
+/// application object and before opening QSettings or creating UI objects.
+LOOPLIBCORESHARED_EXPORT void initializeApplicationIdentity(PDFApplicationSurface surface);
+
+}   // namespace pdf
+
+#endif // PDFAPPLICATIONIDENTITY_H

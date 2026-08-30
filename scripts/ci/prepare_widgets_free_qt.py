@@ -128,7 +128,7 @@ def stage_prefix(source: Path, destination: Path) -> dict[str, object]:
 
     return {
         "schema_version": 1,
-        "kind": "loupe-widgets-free-qt-prefix",
+        "kind": "loop-widgets-free-qt-prefix",
         "source_prefix": str(source),
         "destination_prefix": str(destination),
         "forbidden_name_prefixes": list(FORBIDDEN_NAME_PREFIXES),

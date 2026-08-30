@@ -798,6 +798,18 @@ set_target_properties(UnitTestsIdentitySeparation PROPERTIES
 )
 add_test(UnitTestsIdentitySeparation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsIdentitySeparation")
 
+add_executable(UnitTestsApplicationIdentity
+    tst_applicationidentitytest.cpp
+)
+target_link_libraries(UnitTestsApplicationIdentity PRIVATE LoopLibCore Qt6::Core Qt6::Test)
+set_target_properties(UnitTestsApplicationIdentity PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsApplicationIdentity "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsApplicationIdentity")
+
 add_executable(UnitTestsBudgetExhaustion
     tst_budgetexhaustiontest.cpp
 )

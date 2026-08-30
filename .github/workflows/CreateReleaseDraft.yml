@@ -143,8 +143,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p package-evidence/linux package-evidence/windows
-          gh run download "$linux_run_id" --name loupe-package-boundary-linux-evidence -D package-evidence/linux
-          gh run download "$windows_run_id" --name loupe-package-boundary-windows-evidence -D package-evidence/windows
+          gh run download "$linux_run_id" --name loop-package-boundary-linux-evidence -D package-evidence/linux
+          gh run download "$windows_run_id" --name loop-package-boundary-windows-evidence -D package-evidence/windows
           python3 scripts/ci/compare_package_boundary_evidence.py \
             --linux package-evidence/linux/evidence.json \
             --windows package-evidence/windows/evidence.json \
@@ -157,7 +157,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: loupe-package-boundary-pair-evidence
+          name: loop-package-boundary-pair-evidence
           path: package-evidence
           if-no-files-found: warn
           retention-days: 30
@@ -165,7 +165,7 @@ jobs:
 
       - name: Exclude CI evidence from release assets
         run: |
-          for evidence_dir in artifacts/loupe-package-boundary-linux-evidence artifacts/loupe-package-boundary-windows-evidence; do
+          for evidence_dir in artifacts/loop-package-boundary-linux-evidence artifacts/loop-package-boundary-windows-evidence; do
             if [ -e "$evidence_dir" ]; then
               rm -rf "$evidence_dir"
             fi

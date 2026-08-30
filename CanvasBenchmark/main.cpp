@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+#include "pdfapplicationidentity.h"
+
 #include <QApplication>
 #include <QAccessible>
 #include <QColor>
@@ -470,6 +472,7 @@ QJsonObject runFocusBridgeProbe()
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::CanvasBenchmark);
     QString requested = QStringLiteral("all");
     for (int index = 1; index < argc; ++index)
     {

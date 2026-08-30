@@ -81,7 +81,7 @@ Publish draft only after smoke tests pass.
 
 **No database migrations or feature flags** — rollback is binary replacement.
 
-**User data:** Settings live in `%APPDATA%/MelkaJ/` (Windows) or `~/.config/MelkaJ/` (Linux). Rollback does not erase settings.
+**User data:** Settings live under the canonical `Loop` organization (`%APPDATA%/Loop/` on Windows or `~/.config/Loop/` on Linux). The first launch migrates compatible settings from the legacy `MelkaJ` locations; rollback does not erase settings.
 
 ---
 
@@ -143,10 +143,10 @@ Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via
 
 | Platform | Default log directory |
 |----------|------------------------|
-| Windows | `%LOCALAPPDATA%\MelkaJ\<AppName>\logs\` |
-| Linux | `~/.local/share/MelkaJ/<AppName>/logs/` |
+| Windows | `%LOCALAPPDATA%\Loop\<AppName>\logs\` |
+| Linux | `~/.local/share/Loop/<AppName>/logs/` |
 
-`<AppName>` is `PdfTool` or `LOOP Editor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
+`<AppName>` is `PdfTool` or `LoopEditor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
 
 **Rotation:** `<applicationId>.log` (`pdftool.log` / `editor.log`), rolling to `.log.1` at 2 MiB, keeping 3 files total (`.log`, `.log.1`, `.log.2`). Bounded footprint, no unbounded growth.
 

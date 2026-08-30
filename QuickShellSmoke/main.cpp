@@ -1,3 +1,5 @@
+#include "pdfapplicationidentity.h"
+
 #include <QCoreApplication>
 #include <QDebug>
 #include <QGuiApplication>
@@ -47,6 +49,7 @@ QString environmentValue(const char* name)
 int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::QuickShellSmoke);
     QQmlApplicationEngine engine;
 
     const QUrl qmlUrl(QStringLiteral("qrc:/qt/qml/Loop/QuickShellSmoke/QuickShellSmoke.qml"));

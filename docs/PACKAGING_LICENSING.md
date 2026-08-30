@@ -63,8 +63,9 @@ Loop/
 └─ VERSION.json
 ```
 
-User profiles (overrides): `%APPDATA%/Loop` or MelkaJ org settings (Windows),
-`~/.config/loop` / MelkaJ (Linux), plus bundled defaults under `profiles/`.
+User profiles (overrides): `%APPDATA%/Loop` (Windows) or `~/.config/Loop` (Linux),
+plus bundled defaults under `profiles/`. The first Loop launch migrates compatible
+settings from the legacy `MelkaJ` organization.
 See [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md).
 
 ### Optional validator pack

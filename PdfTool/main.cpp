@@ -23,9 +23,10 @@
 #include "pdftoolabstractapplication.h"
 #include "pdftoolcancel.h"
 #include "pdftoolresult.h"
-#include "pdfconstants.h"
+#include "pdfapplicationidentity.h"
 #include "pdflogger.h"
 #include "pdfsentry.h"
+#include "pdfsettings.h"
 
 #include <QDir>
 #include <QGuiApplication>
@@ -168,9 +169,8 @@ int main(int argc, char* argv[])
     QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
 
     QGuiApplication a(argc, argv);
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("PdfTool");
-    QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
+    pdf::PDFSettings::migrateLegacySettings();
 
     const pdf::PDFLogSession logSession(QStringLiteral("pdftool"));
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));

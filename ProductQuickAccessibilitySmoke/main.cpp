@@ -1,5 +1,6 @@
 #include "editorhost.h"
 
+#include "pdfapplicationidentity.h"
 #include "loopcanvasitem.h"
 
 #include <QAccessible>
@@ -82,6 +83,7 @@ bool verifyCanvasAccessibility(QQuickWindow* window)
 int main(int argc, char** argv)
 {
     QGuiApplication application(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::ProductQuickAccessibilitySmoke);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     EditorHost host;

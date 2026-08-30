@@ -14,6 +14,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("if: inputs.fast", workflow)
         self.assertIn("python3 -m unittest scripts.agent.test_check_change -v", workflow)
 
+    def test_source_integrity_runs_loop_identity_contract(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("scripts/ci/test_check_loop_identity.py", workflow)
+        self.assertIn("scripts/ci/check_loop_identity.py", workflow)
+
     def test_windows_installer_verifies_from_its_checkout_root(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn("working-directory: loop", workflow)

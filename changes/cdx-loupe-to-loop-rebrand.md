@@ -1,4 +1,4 @@
 Category: changed
-Audience: developers
+Audience: users, operators, and downstream build integrators
 Breaking-Change: yes
-Summary: Rebases the Loupe-to-Loop product rename onto current dev after Widgets retirement, preserving Phase 5 deletions while restoring PdfTool preflight test headers removed with the plugin pack. Phase 5 evidence generators and Release Gate verifiers now use Loop naming (`loop-release`, `docs/loop-shell.json`, `LOOP_*` CMake options). Phase 4 unit test targets `UnitTestsPageSurfaceBudget` and `UnitTestsDocumentViewSession` now link `LoopLib*` / `LoopEditorQuick` instead of leftover `Loupe*` names. Linux Release Gate now verifies the `loop-release` product-surface profile to match `LOOP_LOOP_DISTRIBUTION=ON` installs. Recomputes `loop-default.json` profile digest after the `loupe-default` → `loop-default` identity rename.
+Summary: Completes the Loop product identity across executable metadata, settings storage, package-boundary evidence, release workflows, smoke tests, and generated installer contracts. Existing settings from the prior product identity are migrated once into the canonical Loop locations, while all active release and CI identifiers use Loop naming.

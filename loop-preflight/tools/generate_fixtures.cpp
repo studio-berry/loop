@@ -27,6 +27,7 @@
 // Usage: generate_fixtures [output-directory]  (defaults to the current directory)
 
 #include "pdfdocumentbuilder.h"
+#include "pdfapplicationidentity.h"
 #include "pdfconstants.h"
 #include "pdfdocumentwriter.h"
 
@@ -700,8 +701,7 @@ void generateThinStrokesHairlineFixture(const QDir& outputDir)
 int main(int argc, char* argv[])
 {
     QGuiApplication application(argc, argv);
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("LoopGenerateFixtures");
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopPreflightFixtureGenerator);
 
     const QStringList arguments = QCoreApplication::arguments();
     const QDir outputDir(arguments.size() > 1 ? arguments.at(1) : QDir::currentPath());

@@ -24,6 +24,10 @@ cmake_minimum_required(VERSION 3.16)
 
 set(LOOP_VERSION 0.2.0)
 set(LOOP_VERSION_PRERELEASE alpha)
+set(LOOP_PRODUCT_NAME "Loop")
+set(LOOP_ORGANIZATION_NAME "Loop")
+set(LOOP_ORGANIZATION_DOMAIN "io.github.mberrys")
+set(LOOP_PACKAGE_ID "io.github.mberrys.Loop-pdf")
 message(STATUS "Build type - CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 
 project(LOOP VERSION ${LOOP_VERSION} LANGUAGES CXX)
@@ -44,6 +48,10 @@ option(LOOP_INSTALL_INCLUDE "Install include headers" ON)
 option(LOOP_FLATPAK_BUILD "Special flag for Flatpak" OFF)
 
 add_compile_definitions(LOOP_PROJECT_VERSION="${LOOP_PROJECT_VERSION}")
+add_compile_definitions(LOOP_PRODUCT_NAME="${LOOP_PRODUCT_NAME}")
+add_compile_definitions(LOOP_ORGANIZATION_NAME="${LOOP_ORGANIZATION_NAME}")
+add_compile_definitions(LOOP_ORGANIZATION_DOMAIN="${LOOP_ORGANIZATION_DOMAIN}")
+add_compile_definitions(LOOP_PACKAGE_ID="${LOOP_PACKAGE_ID}")
 add_compile_definitions(QT_NO_EMIT)
 
 if(LOOP_FLATPAK_BUILD)

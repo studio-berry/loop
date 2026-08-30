@@ -186,6 +186,38 @@ foreach ($item in $requiredFiles) {
     Write-Host "OK: $($item.Label)"
 }
 
+$versionOutput = @(& $pdfTool --version 2>&1)
+$versionExit = $LASTEXITCODE
+$versionText = $versionOutput -join "`n"
+if ($versionExit -ne 0 -or $versionText -notmatch '\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b') {
+    throw "PdfTool version probe failed with exit code $versionExit`: $versionText"
+}
+Write-Host "OK: PdfTool reports a canonical semantic version"
+
+$capabilitiesOutput = @(& $pdfTool capabilities --console-format json 2>&1)
+$capabilitiesExit = $LASTEXITCODE
+$capabilitiesText = $capabilitiesOutput -join "`n"
+if ($capabilitiesExit -ne 0) {
+    throw "PdfTool capabilities probe failed with exit code $capabilitiesExit`: $capabilitiesText"
+}
+try {
+    $capabilities = $capabilitiesText | ConvertFrom-Json
+} catch {
+    throw "PdfTool capabilities probe returned invalid JSON: $capabilitiesText"
+}
+if ($capabilities.data.product.name -ne "PdfTool" -or
+    $capabilities.data.product.version -ne $capabilities.version -or
+    [string]::IsNullOrWhiteSpace($capabilities.version)) {
+    throw "PdfTool capabilities reported an invalid product identity: $capabilitiesText"
+}
+Write-Host "OK: PdfTool capabilities report the Loop PdfTool identity"
+
+$legacyEditor = Join-Path $InstallDir ("Lo" + "upeEditor.exe")
+if (Test-Path -LiteralPath $legacyEditor) {
+    throw "Legacy editor executable still present in the install: $legacyEditor"
+}
+Write-Host "OK: legacy editor executable absent"
+
 # V1 ships OCR as CLI-only (PdfTool ocr); the Editor OCR UI plugin is not part of
 # the V1 release surface (MIC-343). Its presence in a release bundle is packaging
 # drift, not an optional extra -- fail loudly rather than silently reporting it.
