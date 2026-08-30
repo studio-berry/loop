@@ -37,7 +37,7 @@ namespace pdfinteraction
 /// The one command registry.
 ///
 /// Descriptors are loaded from docs/loupe-shell-actions.json, which is also the
-/// Editor action policy verified against LoupeLibGui/pdfeditormainwindow.ui.
+/// Editor action policy verified against the current Quick shell contract.
 /// There is exactly one ID set: a presentation host binds menus, shortcuts, and
 /// controls to descriptors and invokes only through this catalog, so it cannot
 /// grow a private action tree of its own.

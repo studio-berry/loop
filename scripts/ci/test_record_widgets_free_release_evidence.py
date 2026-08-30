@@ -9,7 +9,6 @@ import os
 import subprocess
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -71,7 +70,12 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
 
             fake_repo = root / "repo"
             fake_repo.mkdir()
-            subprocess.run(["git", "init", "--quiet", str(fake_repo)], check=True)
+            git_env = {
+                **os.environ,
+                "GIT_CONFIG_GLOBAL": str(root / "isolated-gitconfig"),
+                "GIT_CONFIG_NOSYSTEM": "1",
+            }
+            subprocess.run(["git", "init", "--quiet", str(fake_repo)], check=True, env=git_env)
             subprocess.run(
                 [
                     "git",
@@ -81,13 +85,14 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
                     "user.name=Test",
                     "-c",
                     "user.email=test@example.invalid",
-                    "commit",
+                "commit",
                     "--allow-empty",
                     "-m",
                     "fixture",
                 ],
                 check=True,
                 capture_output=True,
+                env=git_env,
             )
 
             with patch.dict("os.environ", {"GITHUB_SHA": ""}, clear=False):

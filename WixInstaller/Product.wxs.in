@@ -10,7 +10,7 @@
 
     <WixVariable Id="WixUILicenseRtf" Value="explic.rtf" />
 
-    <Feature Id="feature_LOUPE_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, compatibility tools, and shared PDF services.">
+    <Feature Id="feature_LOUPE_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, and shared PDF services.">
       <ComponentGroupRef Id="LOUPE_Framework" />
       <ComponentRef Id="ProgramMenuDir" />
 
@@ -18,9 +18,6 @@
         <ComponentGroupRef Id="LOUPE_Editor"/>
 ${LOUPE_WIX_EDITOR_PLUGIN_FEATURE}
       </Feature>
-${LOUPE_WIX_FEATURE_VIEWER}
-${LOUPE_WIX_FEATURE_PAGEMASTER}
-${LOUPE_WIX_FEATURE_DIFF}
     </Feature>
 
     <UIRef Id="WixUI_FeatureTree" />
@@ -62,10 +59,10 @@ ${LOUPE_WIX_FEATURE_DIFF}
         <File Id="filLoupeLibCore" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibCore.dll" />
       </Component>
 ${LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS}
+      <!-- LOUPE_WIX_QT_WIDGETS_COMPONENT is intentionally empty for the current product boundary. -->
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
-${LOUPE_WIX_COMPAT_LAUNCHPAD}
 ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Core" Directory="INSTALLFOLDER" Guid="{D8024726-7864-42BE-9E38-DFF782AC5C97}">
         <File Id="filQt6Core" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Core.dll" />
@@ -83,7 +80,6 @@ ${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6TextToSpeech" Directory="INSTALLFOLDER" Guid="{82AAD343-207F-4812-BC7E-0F17D9F6B8CD}">
                 <File Id="filQt6TextToSpeech" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6TextToSpeech.dll" />
       </Component>
-${LOUPE_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Xml" Directory="INSTALLFOLDER" Guid="{686836FB-9324-4849-AEFC-3AC5575BE2EC}">
                 <File Id="filQt6Xml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Xml.dll" />
       </Component>
@@ -259,9 +255,6 @@ ${LOUPE_WIX_QT_STYLES_COMPONENT}
     <Icon Id="LOUPE_VP_Icon.exe" SourceFile="$(var.MyInstallDir)\LoupeEditor.exe"/>
   </Fragment>
 
-${LOUPE_WIX_FRAGMENT_VIEWER}
-${LOUPE_WIX_FRAGMENT_PAGEMASTER}
-${LOUPE_WIX_FRAGMENT_DIFF}
 ${LOUPE_WIX_FRAGMENT_OCR_SERVICE}
 
   <Fragment>

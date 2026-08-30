@@ -128,6 +128,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("Debug|x86", solution)
         self.assertNotIn("Release|x86", solution)
 
+    def test_msi_smoke_scans_current_and_legacy_share_locations(self):
+        smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertIn('(Join-Path $InstallDir "share\\loupe")', smoke)
+        self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loupe")', smoke)
+
 
 if __name__ == "__main__":
     unittest.main()
