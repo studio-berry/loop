@@ -210,6 +210,7 @@ private Q_SLOTS:
     void pointerMoveDoesNotMutateTheDocument();
     void panDoesNotSupersedeSurfaceDemand();
     void wheelZoomSupersedesSurfaceDemand();
+    void rapidZoomReversalAndPageSwitchSettleWithinTraceBudget();
     void hitTestPrecedenceIsOrderIndependent();
     void hitTestBreaksTiesBySmallestAreaThenId();
     void evidenceSourceUsesStableRecordIdentity();
@@ -623,6 +624,86 @@ void InteractionControllerTest::wheelZoomSupersedesSurfaceDemand()
 
     // A zoom does change what a wanted page should look like.
     QVERIFY(m_viewport->requestGeneration() > generationBefore);
+}
+
+void InteractionControllerTest::rapidZoomReversalAndPageSwitchSettleWithinTraceBudget()
+{
+    // Issue #146's scenario list names "rapid zoom reversal and page
+    // switching" as one of the traces the interaction-performance regression
+    // program must cover. Ten equal-and-opposite zoom notches interleaved
+    // with page-forward/page-back, each timed as its own frame, must settle
+    // back to the starting view -- proving reversal does not drift or leave a
+    // stale intermediate state -- and must never leave a frame unbalanced,
+    // which would corrupt every later frame's stage attribution.
+    pdfinteraction::ManualClock clock;
+    pdfinteraction::InteractionTraceRecorder recorder(clock);
+    recorder.setRefreshRateHz(60.0);
+    m_controller->setTraceRecorder(&recorder);
+
+    const qreal zoomBefore = m_viewport->zoom();
+    const int pageBefore = m_viewport->currentPage();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+    quint64 sequence = 1;
+
+    pdfinteraction::WheelIntent zoomIn;
+    zoomIn.positionPx = QPoint(200, 300);
+    zoomIn.angleDelta = QPoint(0, 120);
+    zoomIn.modifiers = Qt::ControlModifier;
+
+    pdfinteraction::WheelIntent zoomOut = zoomIn;
+    zoomOut.angleDelta = QPoint(0, -120);
+
+    // Frame duration and input-to-frame latency are both charged the same
+    // fixed 3 ms here; the point of this trace is settling and balance, not
+    // pinning a specific latency number, so any budget-comfortable constant
+    // proves the harness without coupling the test to a tuned value.
+    constexpr qreal FrameMs = 3.0;
+
+    for (int i = 0; i < 10; ++i)
+    {
+        recorder.beginFrame();
+        zoomIn.stamp.sequence = sequence++;
+        m_controller->handleWheel(zoomIn);
+        clock.advanceMs(FrameMs);
+        recorder.endFrame();
+
+        recorder.beginFrame();
+        m_controller->handleKey(makeKey(Qt::Key_PageDown, sequence++));
+        clock.advanceMs(FrameMs);
+        recorder.endFrame();
+
+        recorder.beginFrame();
+        zoomOut.stamp.sequence = sequence++;
+        m_controller->handleWheel(zoomOut);
+        clock.advanceMs(FrameMs);
+        recorder.endFrame();
+
+        recorder.beginFrame();
+        m_controller->handleKey(makeKey(Qt::Key_PageUp, sequence++));
+        clock.advanceMs(FrameMs);
+        recorder.endFrame();
+    }
+
+    QCOMPARE(m_viewport->currentPage(), pageBefore);
+    QVERIFY(qFuzzyCompare(m_viewport->zoom(), zoomBefore));
+
+    // Each zoom and each page switch is real work the surfaces must react to
+    // (issue #142); a reversal that settled by never actually moving anything
+    // would be a false pass.
+    QVERIFY(m_viewport->requestGeneration() > generationBefore);
+
+    const QJsonObject summary = recorder.summary();
+    QCOMPARE(summary.value(QStringLiteral("counts")).toObject().value(QStringLiteral("unbalanced_frames")).toInt(), 0);
+    QCOMPARE(summary.value(QStringLiteral("counts")).toObject().value(QStringLiteral("frames")).toInt(), 40);
+
+    const QJsonObject frameTime = summary.value(QStringLiteral("frame_time_ms")).toObject();
+    QVERIFY(frameTime.value(QStringLiteral("available")).toBool());
+    const qreal referenceBudgetMs = pdfinteraction::Reference60HzBudgetMs;
+    QVERIFY(frameTime.value(QStringLiteral("p95_ms")).toDouble() <= referenceBudgetMs);
+
+    const QJsonObject inputLatency = summary.value(QStringLiteral("input_to_frame_ms")).toObject();
+    QVERIFY(inputLatency.value(QStringLiteral("available")).toBool());
+    QVERIFY(inputLatency.value(QStringLiteral("p95_ms")).toDouble() <= referenceBudgetMs);
 }
 
 void InteractionControllerTest::hitTestPrecedenceIsOrderIndependent()
