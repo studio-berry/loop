@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,31 @@ FORBIDDEN_OPTION_MARKERS = (
     "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
     "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
+FORBIDDEN_QT_NAME_PREFIXES = (
+    "qt6widgets",
+    "qt6quickwidgets",
+    "qtwidgets",
+    "qtquickwidgets",
+    "libqt6widgets",
+    "libqt6quickwidgets",
+)
+REQUIRED_QT_CONFIGS = (
+    "Qt6/Qt6Config.cmake",
+    "Qt6Core/Qt6CoreConfig.cmake",
+    "Qt6Gui/Qt6GuiConfig.cmake",
+    "Qt6LinguistTools/Qt6LinguistToolsConfig.cmake",
+    "Qt6PrintSupport/Qt6PrintSupportConfig.cmake",
+    "Qt6Svg/Qt6SvgConfig.cmake",
+    "Qt6TextToSpeech/Qt6TextToSpeechConfig.cmake",
+    "Qt6Xml/Qt6XmlConfig.cmake",
+    "Qt6Sql/Qt6SqlConfig.cmake",
+    "Qt6Concurrent/Qt6ConcurrentConfig.cmake",
+    "Qt6Qml/Qt6QmlConfig.cmake",
+    "Qt6Quick/Qt6QuickConfig.cmake",
+    "Qt6QuickControls2/Qt6QuickControls2Config.cmake",
+    "Qt6QuickDialogs2/Qt6QuickDialogs2Config.cmake",
+    "Qt6Test/Qt6TestConfig.cmake",
+)
 
 
 class ContractError(ValueError):
@@ -47,7 +73,39 @@ def validate_cmake_release_profile() -> None:
         raise ContractError("LOUPE_LOUPE_DISTRIBUTION must default developer Widgets tools OFF")
 
 
-def validate_cmake_cache(cache_path: Path) -> None:
+def _is_forbidden_qt_name(name: str) -> bool:
+    return name.casefold().startswith(FORBIDDEN_QT_NAME_PREFIXES)
+
+
+def validate_qt_prefix(qt_prefix: Path) -> None:
+    qt_prefix = qt_prefix.resolve()
+    if not qt_prefix.is_dir():
+        raise ContractError(f"Widgets-free Qt prefix does not exist: {qt_prefix}")
+
+    forbidden: list[str] = []
+    for directory, dirnames, filenames in os.walk(qt_prefix):
+        directory_path = Path(directory)
+        for name in dirnames + filenames:
+            if _is_forbidden_qt_name(name):
+                forbidden.append(str((directory_path / name).relative_to(qt_prefix)))
+    if forbidden:
+        raise ContractError(f"Widgets-free Qt prefix contains forbidden paths: {sorted(forbidden)[:5]}")
+
+    cmake_root = qt_prefix / "lib" / "cmake"
+    missing = [relative for relative in REQUIRED_QT_CONFIGS if not (cmake_root / relative).is_file()]
+    if missing:
+        raise ContractError(f"Widgets-free Qt prefix is missing required Qt configs: {missing[:5]}")
+
+
+def _cache_value(text: str, key: str) -> str | None:
+    prefix = f"{key}:"
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            return line.split("=", 1)[1] if "=" in line else ""
+    return None
+
+
+def validate_cmake_cache(cache_path: Path, qt_prefix: Path | None = None) -> None:
     if not cache_path.is_file():
         raise ContractError(f"CMake cache does not exist: {cache_path}")
 
@@ -64,8 +122,28 @@ def validate_cmake_cache(cache_path: Path) -> None:
         if option in text:
             raise ContractError(f"Widgets-bound qualification target enabled in release probe: {option}")
 
+    if qt_prefix is not None:
+        expected_qt_dir = (qt_prefix.resolve() / "lib" / "cmake" / "Qt6").resolve()
+        actual_qt_dir = _cache_value(text, "Qt6_DIR")
+        if not actual_qt_dir:
+            raise ContractError("release configure cache does not record Qt6_DIR")
+        try:
+            actual_qt_dir_path = Path(actual_qt_dir).resolve()
+        except OSError as exc:
+            raise ContractError(f"invalid Qt6_DIR in release configure cache: {actual_qt_dir}") from exc
+        if os.path.normcase(str(actual_qt_dir_path)) != os.path.normcase(str(expected_qt_dir)):
+            raise ContractError(
+                "release configure did not use the filtered Qt prefix: "
+                f"expected {expected_qt_dir}, got {actual_qt_dir_path}"
+            )
 
-def run_release_profile_configure(build_dir: Path, cmake_args: list[str]) -> None:
+
+def run_release_profile_configure(
+    build_dir: Path,
+    cmake_args: list[str],
+    qt_prefix: Path | None = None,
+    expect_failure: bool = False,
+) -> None:
     build_dir = build_dir.resolve()
     build_dir.mkdir(parents=True, exist_ok=True)
 
@@ -80,6 +158,15 @@ def run_release_profile_configure(build_dir: Path, cmake_args: list[str]) -> Non
         "-DCMAKE_BUILD_TYPE=Release",
         *cmake_args,
     ]
+    if qt_prefix is not None:
+        qt_prefix = qt_prefix.resolve()
+        command.extend(
+            [
+                f"-DCMAKE_PREFIX_PATH={qt_prefix}",
+                f"-DQt6_DIR={qt_prefix / 'lib' / 'cmake' / 'Qt6'}",
+                f"-DLOUPE_QT_ROOT={qt_prefix}",
+            ]
+        )
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -87,11 +174,21 @@ def run_release_profile_configure(build_dir: Path, cmake_args: list[str]) -> Non
         text=True,
         check=False,
     )
+    detail = (completed.stdout + completed.stderr).strip()
+    if expect_failure:
+        if completed.returncode == 0:
+            raise ContractError("Widgets-bound configure unexpectedly succeeded with Widgets unavailable")
+        if "widgets" not in detail.casefold() and "qt6widgets" not in detail.casefold():
+            raise ContractError(
+                "Widgets-bound configure failed for an unrelated reason; expected a Widgets discovery error: "
+                f"{detail[:800]}"
+            )
+        return
+
     if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout).strip()
         raise ContractError(f"release-profile configure failed: {detail[:800]}")
 
-    validate_cmake_cache(build_dir / "CMakeCache.txt")
+    validate_cmake_cache(build_dir / "CMakeCache.txt", qt_prefix)
 
 
 def scan_install_tree(install_root: Path) -> list[str]:
@@ -111,6 +208,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--install-dir", type=Path, default=None, help="Optional installed tree to scan")
+    parser.add_argument("--qt-prefix", type=Path, default=None, help="Widgets-free Qt prefix to validate and use")
     parser.add_argument("--cmake-cache", type=Path, default=None, help="Validate an existing CMakeCache.txt")
     parser.add_argument(
         "--configure",
@@ -122,6 +220,11 @@ def main() -> int:
         type=Path,
         default=None,
         help="Build directory for --configure (default: temporary directory)",
+    )
+    parser.add_argument(
+        "--expect-configure-failure",
+        action="store_true",
+        help="Require --configure to fail specifically while discovering Qt Widgets",
     )
     parser.add_argument(
         "cmake_args",
@@ -136,14 +239,30 @@ def main() -> int:
 
     try:
         validate_cmake_release_profile()
+        if args.qt_prefix is not None:
+            validate_qt_prefix(args.qt_prefix)
         if args.cmake_cache is not None:
-            validate_cmake_cache(args.cmake_cache.resolve())
+            validate_cmake_cache(args.cmake_cache.resolve(), args.qt_prefix)
         if args.configure:
+            if args.expect_configure_failure and args.qt_prefix is None:
+                raise ContractError("--expect-configure-failure requires --qt-prefix")
             if args.build_dir is not None:
-                run_release_profile_configure(args.build_dir.resolve(), cmake_args)
+                run_release_profile_configure(
+                    args.build_dir.resolve(),
+                    cmake_args,
+                    args.qt_prefix,
+                    args.expect_configure_failure,
+                )
             else:
                 with tempfile.TemporaryDirectory(prefix="loupe-widgets-free-") as tmp:
-                    run_release_profile_configure(Path(tmp), cmake_args)
+                    run_release_profile_configure(
+                        Path(tmp),
+                        cmake_args,
+                        args.qt_prefix,
+                        args.expect_configure_failure,
+                    )
+        elif args.expect_configure_failure:
+            raise ContractError("--expect-configure-failure requires --configure")
         if args.install_dir is not None:
             forbidden = scan_install_tree(args.install_dir.resolve())
             if forbidden:
@@ -157,7 +276,12 @@ def main() -> int:
         messages.append(f"cache {args.cmake_cache} contains no Qt6Widgets requirement")
     if args.configure:
         target = args.build_dir if args.build_dir is not None else "<temp>"
-        messages.append(f"configure probe {target} succeeded without Qt6Widgets")
+        if args.expect_configure_failure:
+            messages.append(f"Widgets-bound configure probe {target} failed closed as expected")
+        else:
+            messages.append(f"configure probe {target} succeeded without Qt6Widgets")
+    if args.qt_prefix is not None:
+        messages.append(f"filtered Qt prefix {args.qt_prefix} contains no Qt6Widgets paths")
     if args.install_dir is not None:
         messages.append(f"install tree {args.install_dir} contains no Qt6Widgets artifacts")
     print("; ".join(messages))

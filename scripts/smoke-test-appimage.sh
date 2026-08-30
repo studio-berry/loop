@@ -2,15 +2,15 @@
 # Validates a Loupe-PDF AppImage on a clean machine (MIC-301 Linux half).
 #
 # Usage:
-#   scripts/smoke-test-appimage.sh /path/to/Loupe-pdf-VERSION-x86_64.AppImage [test.pdf]
+#   scripts/smoke-test-appimage.sh /path/to/Loupe-pdf-VERSION-x86_64.AppImage [test.pdf] [--operator]
 #
 # Asserts the shipped layout resolves, runs PdfTool preflight against a fixture,
 # and scans the tree for payloads the default V1 bundle must not ship (MIC-343).
 
 set -euo pipefail
 
-if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 <AppImage> [test.pdf]" >&2
+if [[ $# -lt 1 || $# -gt 3 ]]; then
+    echo "Usage: $0 <AppImage> [test.pdf] [--operator]" >&2
     exit 1
 fi
 
@@ -23,7 +23,22 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-TEST_PDF="${2:-}"
+TEST_PDF=""
+OPERATOR_MODE=""
+for argument in "${@:2}"; do
+    if [[ "$argument" == "--operator" ]]; then
+        if [[ -n "$OPERATOR_MODE" ]]; then
+            echo "The --operator option may be supplied only once" >&2
+            exit 1
+        fi
+        OPERATOR_MODE="--operator"
+    elif [[ -z "$TEST_PDF" ]]; then
+        TEST_PDF="$argument"
+    else
+        echo "Unknown option or duplicate test PDF: $argument" >&2
+        exit 1
+    fi
+done
 if [[ -z "$TEST_PDF" ]]; then
     TEST_PDF="${REPO_ROOT}/loupe-preflight/testdata/fixtures/bleed-adequate.pdf"
 fi
@@ -66,6 +81,13 @@ assert_file() {
 }
 
 echo "Smoke-testing AppImage at ${APPIMAGE_PATH}"
+if [[ -n "${LOUPE_SOURCE_SHA:-}" ]]; then
+    if ! [[ "$LOUPE_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+        echo "LOUPE_SOURCE_SHA must be a full 40-character Git SHA" >&2
+        exit 1
+    fi
+    echo "Package source SHA: ${LOUPE_SOURCE_SHA,,}"
+fi
 
 assert_file "${BIN_DIR}/LoupeEditor" "Editor"
 assert_file "${BIN_DIR}/PdfTool" "PdfTool"
@@ -93,8 +115,14 @@ if [[ "${#OCR_SIDECAR_HITS[@]}" -gt 0 ]]; then
 fi
 echo "OK: LoupeOcrService sidecar absent (V1 CLI-only OCR surface)"
 
+# The package must be self-contained. Remove developer Qt/toolchain search
+# paths before every packaged process and do not inherit LD_LIBRARY_PATH.
+export PATH="/usr/bin:/bin"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
-export LD_LIBRARY_PATH="${LIB_DIR}:${LIB_DIR}/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$LIB_DIR:$LIB_DIR/x86_64-linux-gnu"
+unset QT_PLUGIN_PATH QML2_IMPORT_PATH QML_IMPORT_PATH QT_QPA_PLATFORM_PLUGIN_PATH
+unset QTDIR QT_ROOT_DIR Qt6_DIR LOUPE_QT_ROOT
+unset CMAKE_PREFIX_PATH CMAKE_TOOLCHAIN_FILE VCPKG_ROOT LD_PRELOAD
 
 PDF_TOOL="${BIN_DIR}/PdfTool"
 PROFILE_PATH="${PROFILES_DIR}/loupe-default.json"
@@ -121,6 +149,53 @@ if [[ "$HELP_EXIT" -ne 0 ]]; then
     exit 1
 fi
 echo "OK: PdfTool help"
+
+run_quick_smoke() {
+    local label="$1"
+    local output
+    local exit_code
+    if [[ "$label" == "native" ]]; then
+        unset QT_QUICK_BACKEND
+    else
+        export QT_QUICK_BACKEND=software
+    fi
+    set +e
+    output="$("${BIN_DIR}/LoupeEditor" --quick-smoke 2>&1)"
+    exit_code=$?
+    set -e
+    if [[ "$exit_code" -ne 0 ]]; then
+        echo "LoupeEditor ${label} Quick startup failed with exit code ${exit_code}:" >&2
+        echo "$output" >&2
+        exit 1
+    fi
+    echo "OK: LoupeEditor ${label} Quick startup"
+}
+
+run_quick_smoke native
+run_quick_smoke software
+unset QT_QUICK_BACKEND
+
+if [[ "$OPERATOR_MODE" == "--operator" ]]; then
+    set +e
+    "${BIN_DIR}/LoupeEditor" "$TEST_PDF" >"${EXTRACT_ROOT}/LoupeEditor-operator.log" 2>&1 &
+    EDITOR_PID=$!
+    sleep 5
+    if kill -0 "$EDITOR_PID" 2>/dev/null; then
+        kill "$EDITOR_PID" 2>/dev/null || true
+        wait "$EDITOR_PID" 2>/dev/null || true
+        OPERATOR_EXIT=0
+    else
+        wait "$EDITOR_PID"
+        OPERATOR_EXIT=$?
+    fi
+    set -e
+    if [[ "$OPERATOR_EXIT" -ne 0 ]]; then
+        echo "LoupeEditor operator launch failed with exit code ${OPERATOR_EXIT}:" >&2
+        cat "${EXTRACT_ROOT}/LoupeEditor-operator.log" >&2
+        exit 1
+    fi
+    echo "OK: LoupeEditor operator launch remained alive for 5 seconds"
+fi
 
 # docs/PACKAGING_LICENSING.md: default bundle is C++/Qt only.
 FORBIDDEN_HITS=()
