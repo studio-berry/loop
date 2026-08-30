@@ -564,6 +564,7 @@
         "cert-store-install",
         "color-profiles",
         "decrypt",
+        "diagnostics",
         "diff",
         "dump-page-geometry",
         "encrypt",

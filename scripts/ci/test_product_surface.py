@@ -132,13 +132,17 @@ class ProductSurfaceContractTests(unittest.TestCase):
 
     def test_cli_inventory_is_derived_and_required_commands_cannot_drift(self):
         manifest = copy.deepcopy(self.manifest)
-        manifest["cli"]["command_inventory"]["required_commands"] = ["help"]
+        manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
         discovery = self._discovery_file([{"id": "help"}, {"id": "preflight"}])
         self.assertEqual(validate_cli(manifest, discovery_json=discovery), [])
 
         manifest["cli"]["command_inventory"]["required_commands"] = ["missing"]
         errors = validate_cli(manifest, discovery_json=discovery)
         self.assertTrue(any("manifest CLI command is absent" in error for error in errors))
+
+        manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
+        errors = validate_cli(manifest, discovery_json=self._discovery_file([{"id": "help"}, {"id": "preflight"}, {"id": "diagnostics"}]))
+        self.assertTrue(any("absent from manifest CLI inventory: diagnostics" in error for error in errors))
 
     def test_cli_inventory_must_be_sorted_and_unique(self):
         discovery = self._discovery_file([{"id": "preflight"}, {"id": "help"}, {"id": "help"}])

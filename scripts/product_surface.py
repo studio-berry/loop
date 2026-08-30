@@ -631,9 +631,13 @@ def validate_cli(
         errors.append("CLI command inventory contains duplicate ids")
     if valid_command_ids != sorted(valid_command_ids):
         errors.append("CLI command inventory is not deterministically sorted")
-    for required in inventory["required_commands"]:
+    declared_command_ids = set(inventory["required_commands"])
+    discovered_command_ids = set(valid_command_ids)
+    for required in sorted(declared_command_ids - discovered_command_ids):
         if required not in command_ids:
             errors.append(f"manifest CLI command is absent from PdfTool capabilities: {required}")
+    for unexpected in sorted(discovered_command_ids - declared_command_ids):
+        errors.append(f"PdfTool capability command is absent from manifest CLI inventory: {unexpected}")
     return errors
 
 
