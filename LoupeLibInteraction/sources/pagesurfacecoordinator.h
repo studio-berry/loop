@@ -28,6 +28,7 @@
 #include "jobrelay.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
+#include "pdfpagecachebudget.h"
 #include "viewportcontroller.h"
 
 #include <QHash>
@@ -70,7 +71,11 @@ struct PageSurfaceBounds
     /// Estimated bytes of the renders in flight.
     qint64 maxInFlightBytes = 64ll * 1024 * 1024;
 
-    /// Bytes of admitted surfaces held for reuse.
+    /// Bytes of admitted surfaces held for reuse. Derived from the unified
+    /// total cache budget via pdf::PDFPageCacheBudget::pageSurfaces(); the
+    /// total authority lives in PageSurfaceCoordinator::m_cacheLimit (and
+    /// DocumentViewSession::m_cacheLimit) and this field is updated when
+    /// setCacheLimit() repartitions the budget.
     qint64 maxAdmittedBytes = 128ll * 1024 * 1024;
 
     static PageSurfaceBounds conservativeDefaults() { return PageSurfaceBounds(); }
@@ -146,6 +151,17 @@ public:
     const PageSurfaceRenderSettings& renderSettings() const noexcept { return m_settings; }
 
     const PageSurfaceBounds& bounds() const noexcept { return m_bounds; }
+
+    /// Unified total cache budget that owns the partition. The surface share
+    /// is derived via pdf::PDFPageCacheBudget::pageSurfaces() and written
+    /// into m_bounds.maxAdmittedBytes; the compiled-page share is owned by
+    /// pdf::PDFDocumentSession (via DocumentViewSession::setCacheLimit).
+    void setCacheLimit(qsizetype totalBytes);
+    qsizetype cacheLimit() const noexcept { return m_cacheLimit; }
+
+    /// bounds() is derived from the total via PDFPageCacheBudget partition;
+    /// prefer cacheLimit()/setCacheLimit() as the authority and treat
+    /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
 
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
@@ -243,6 +259,7 @@ private:
     ViewportController* m_viewport = nullptr;
 
     PageSurfaceBounds m_bounds;
+    qsizetype m_cacheLimit = 0;   // total authority; surface share is m_bounds.maxAdmittedBytes
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
 

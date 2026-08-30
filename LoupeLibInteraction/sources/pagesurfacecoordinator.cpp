@@ -22,6 +22,8 @@
 
 #include "pagesurfacecoordinator.h"
 
+#include "pdfpagecachebudget.h"
+
 #include <QtGlobal>
 
 #include <algorithm>
@@ -55,6 +57,7 @@ PageSurfaceCoordinator::PageSurfaceCoordinator(IDocumentRevisionSource& revision
     m_revisions(&revisions),
     m_viewport(&viewport),
     m_bounds(bounds),
+    m_cacheLimit(m_bounds.maxAdmittedBytes * 2),
     m_relay(new JobRelay, [](JobRelay* relay)
             { relay->deleteLater(); })
 {
@@ -96,6 +99,16 @@ void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings setting
     // Different pixels for the same page: every key built before this point is a
     // different key now, so nothing in flight is wanted any more.
     cancelInFlight();
+}
+
+void PageSurfaceCoordinator::setCacheLimit(qsizetype totalBytes)
+{
+    const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+    const qsizetype surfaces = pdf::PDFPageCacheBudget::pageSurfaces(normalized);
+    m_cacheLimit = normalized;
+    m_bounds.maxAdmittedBytes = surfaces;
+    trimCacheToBudget();
+    // Note: compiled side is owned by DocumentViewSession, not here; this class only updates its own bound.
 }
 
 void PageSurfaceCoordinator::onDemandChanged()

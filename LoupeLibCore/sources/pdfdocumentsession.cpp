@@ -26,6 +26,7 @@
 #include "pdfcms.h"
 #include "pdffont.h"
 #include "pdfoptionalcontent.h"
+#include "pdfpagecachebudget.h"
 #include "pdfprocessingbudget.h"
 
 #include <tuple>
@@ -39,7 +40,10 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext
     m_context(context),
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
-    m_processingBudget(std::make_unique<PDFProcessingBudget>())
+    m_processingBudget(std::make_unique<PDFProcessingBudget>()),
+    m_compiledCacheByteLimit(CompiledCacheByteLimitDefault),
+    m_compiledCacheBytes(0),
+    m_cacheLimit(CompiledCacheByteLimitDefault * 2)
 {
     initializeRendering();
 }
@@ -92,6 +96,8 @@ void PDFDocumentSession::setRendererFeatures(PDFRenderer::Features features)
         ++m_localCacheGeneration;
         m_compileCache.clear();
         m_compileCacheOrder.clear();
+        m_compileCacheBytes.clear();
+        m_compiledCacheBytes = 0;
     }
 
     if (m_renderer)
@@ -153,14 +159,56 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_qualityPrefetchShed = true;
     m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
+    m_compiledCacheByteLimit = qMin(m_compiledCacheByteLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
+    m_cacheLimit = qMin(m_cacheLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit * 2));
     trimCachesToLimits();
+}
+
+qsizetype PDFDocumentSession::compiledCacheBytes() const
+{
+    return m_compiledCacheBytes;
+}
+
+qsizetype PDFDocumentSession::compiledCacheByteLimit() const
+{
+    return m_compiledCacheByteLimit;
+}
+
+void PDFDocumentSession::setCompiledCacheByteLimit(qsizetype bytes)
+{
+    bytes = qMax<qsizetype>(0, bytes);
+    m_compiledCacheByteLimit = bytes;
+    // Keep total in sync when compiled limit is set directly: total is at least compiled*2
+    // (odd totals lose one byte when reconstructed, so store even total).
+    m_cacheLimit = m_compiledCacheByteLimit * 2;
+    trimCachesToLimits();
+}
+
+void PDFDocumentSession::setCacheLimit(qsizetype totalBytes)
+{
+    totalBytes = PDFPageCacheBudget::total(totalBytes);
+    m_cacheLimit = totalBytes;
+    m_compiledCacheByteLimit = PDFPageCacheBudget::compiledPages(totalBytes);
+    trimCachesToLimits();
+}
+
+qsizetype PDFDocumentSession::cacheLimit() const
+{
+    return m_cacheLimit;
 }
 
 void PDFDocumentSession::trimCachesToLimits()
 {
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() > m_compileCacheLimit)
+    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() > m_compileCacheLimit || m_compiledCacheBytes > m_compiledCacheByteLimit))
     {
-        m_compileCache.erase(m_compileCacheOrder.front());
+        const PageCacheKey key = m_compileCacheOrder.front();
+        auto bytesIt = m_compileCacheBytes.find(key);
+        if (bytesIt != m_compileCacheBytes.end())
+        {
+            m_compiledCacheBytes -= bytesIt->second;
+            m_compileCacheBytes.erase(bytesIt);
+        }
+        m_compileCache.erase(key);
         m_compileCacheOrder.pop_front();
     }
     while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() > m_streamCacheLimit)
@@ -193,16 +241,35 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
     PDFPrecompiledPage compiledPage;
     m_renderer->compile(&compiledPage, pageIndex);
 
-    // Evict before inserting, so the pointer returned below is never the entry
-    // this call dropped.
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= m_compileCacheLimit)
+    qsizetype estimate = static_cast<qsizetype>(compiledPage.getMemoryConsumptionEstimate());
+    if (estimate <= 0)
     {
-        m_compileCache.erase(m_compileCacheOrder.front());
+        estimate = 256 * 1024;
+    }
+
+    // Evict before inserting, so the pointer returned below is never the entry
+    // this call dropped. Evict by both entry count and byte budget.
+    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() >= m_compileCacheLimit || m_compiledCacheBytes + estimate > m_compiledCacheByteLimit))
+    {
+        const PageCacheKey evictKey = m_compileCacheOrder.front();
+        auto bytesIt = m_compileCacheBytes.find(evictKey);
+        if (bytesIt != m_compileCacheBytes.end())
+        {
+            m_compiledCacheBytes -= bytesIt->second;
+            m_compileCacheBytes.erase(bytesIt);
+        }
+        m_compileCache.erase(evictKey);
         m_compileCacheOrder.pop_front();
     }
 
+    // If the single entry does not fit, allow one oversize entry rather than
+    // refusing to cache and returning a dangling pointer. The byte limit still
+    // applies on the next insertion via the loop above. For truly huge pages
+    // (> limit) the caller still gets a valid pointer until the next compilePage().
     m_compileCacheOrder.push_back(key);
     auto result = m_compileCache.emplace(key, std::move(compiledPage));
+    m_compileCacheBytes[key] = estimate;
+    m_compiledCacheBytes += estimate;
     return &result.first->second;
 }
 
@@ -247,6 +314,8 @@ void PDFDocumentSession::invalidate()
     }
     m_compileCache.clear();
     m_compileCacheOrder.clear();
+    m_compileCacheBytes.clear();
+    m_compiledCacheBytes = 0;
     m_streamCache.clear();
     m_streamCacheOrder.clear();
 }

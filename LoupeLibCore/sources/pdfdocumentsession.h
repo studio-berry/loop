@@ -32,6 +32,7 @@
 #include "pdfprocessingbudget.h"
 
 #include <QByteArray>
+#include <QtGlobal>
 
 #include <deque>
 #include <map>
@@ -110,6 +111,12 @@ public:
     size_t compileCacheLimit() const { return m_compileCacheLimit; }
     size_t streamCacheLimit() const { return m_streamCacheLimit; }
 
+    qsizetype compiledCacheBytes() const;
+    qsizetype compiledCacheByteLimit() const;
+    void setCompiledCacheByteLimit(qsizetype bytes);
+    void setCacheLimit(qsizetype totalBytes);
+    qsizetype cacheLimit() const;
+
     /// Clears all caches. Call this when the underlying document is mutated.
     void invalidate();
 
@@ -127,6 +134,9 @@ public:
     static constexpr size_t ShedCompileCacheLimit = 2;
     static constexpr size_t ShedStreamCacheLimit = 16;
     static constexpr int ShedQualityPercent = 25;
+
+    static constexpr qsizetype CompiledCacheByteLimitDefault = 64 * 1024 * 1024;
+    static constexpr qsizetype ShedCompiledCacheByteLimit = 8 * 1024 * 1024;
 
     /// Low-level access to the renderer and its dependencies. Prefer the
     /// compilePage() helper; these accessors are exposed for tools that need
@@ -174,6 +184,11 @@ private:
     bool m_prefetchEnabled = true;
     int m_qualityPercent = 100;
     bool m_qualityPrefetchShed = false;
+
+    qsizetype m_compiledCacheByteLimit = CompiledCacheByteLimitDefault;
+    qsizetype m_compiledCacheBytes = 0;
+    qsizetype m_cacheLimit = CompiledCacheByteLimitDefault * 2;
+    std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;
