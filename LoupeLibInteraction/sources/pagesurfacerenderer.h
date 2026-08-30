@@ -29,6 +29,7 @@
 #include "pdfjobscheduler.h"
 
 #include <mutex>
+#include <QtGlobal>
 
 namespace pdfinteraction
 {
@@ -83,6 +84,11 @@ public:
     /// but only if the session is idle: shedding is advisory, and waiting on a
     /// worker here would stall the very thread the shedding is meant to protect.
     void shedPrefetchAndQuality() override;
+
+    /// Owner thread. Acquires m_mutex before lowering the session's cache limit so
+    /// the eviction inside setCacheLimit cannot race a worker's use of a compilePage
+    /// pointer. Blocks until any in-flight render returns.
+    void setCacheLimit(qsizetype totalBytes);
 
 private:
     mutable std::mutex m_mutex;
