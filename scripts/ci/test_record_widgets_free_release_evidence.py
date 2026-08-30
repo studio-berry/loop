@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -84,17 +86,18 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
                 capture_output=True,
             )
 
-            evidence = module.record_evidence(
-                fake_repo,
-                filtered,
-                manifest,
-                build,
-                "linux",
-                "6.11.1",
-                "passed",
-                "passed",
-                "passed",
-            )
+            with mock.patch.dict(os.environ, {"GITHUB_SHA": ""}):
+                evidence = module.record_evidence(
+                    fake_repo,
+                    filtered,
+                    manifest,
+                    build,
+                    "linux",
+                    "6.11.1",
+                    "passed",
+                    "passed",
+                    "passed",
+                )
 
             self.assertEqual(evidence["status"], "passed")
             self.assertEqual(evidence["platform"], "linux")
