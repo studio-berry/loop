@@ -25,6 +25,8 @@ FORBIDDEN_NAME_PREFIXES = (
     "qtquickwidgets",
     "libqt6widgets",
     "libqt6quickwidgets",
+    "qt6printsupport",
+    "libqt6printsupport",
 )
 
 REQUIRED_QT_CONFIGS = (
@@ -32,7 +34,6 @@ REQUIRED_QT_CONFIGS = (
     "Qt6Core/Qt6CoreConfig.cmake",
     "Qt6Gui/Qt6GuiConfig.cmake",
     "Qt6LinguistTools/Qt6LinguistToolsConfig.cmake",
-    "Qt6PrintSupport/Qt6PrintSupportConfig.cmake",
     "Qt6Svg/Qt6SvgConfig.cmake",
     "Qt6TextToSpeech/Qt6TextToSpeechConfig.cmake",
     "Qt6Xml/Qt6XmlConfig.cmake",

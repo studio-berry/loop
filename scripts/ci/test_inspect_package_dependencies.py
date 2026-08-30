@@ -22,6 +22,9 @@ class PackageInspectorTests(unittest.TestCase):
         self.assertTrue(INSPECTOR.is_widgets_name("libQt6Widgets.so.6"))
         self.assertTrue(INSPECTOR.is_widgets_name(r"plugins\platforms\Qt6Widgets.dll"))
         self.assertFalse(INSPECTOR.is_widgets_name("Qt6Core.dll"))
+        self.assertTrue(INSPECTOR.is_forbidden_widgets_surface_name("Qt6PrintSupport.dll"))
+        self.assertTrue(INSPECTOR.is_forbidden_widgets_surface_name("libQt6QuickWidgets.so.6"))
+        self.assertFalse(INSPECTOR.is_forbidden_widgets_surface_name("Qt6Quick.dll"))
 
     def test_linux_dependency_parsers_capture_direct_and_unresolved_imports(self):
         readelf = """
@@ -85,7 +88,28 @@ Image has the following dependencies:
             )
             self.assertEqual(evidence["status"], "failed")
             self.assertFalse(evidence["checks"]["qt6widgets_absent"])
+            self.assertFalse(evidence["checks"]["qt6widgets_surface_absent"])
             self.assertTrue(any(item["kind"] == "payload" for item in evidence["forbidden_findings"]))
+
+    def test_printsupport_payload_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "payload"
+            root.mkdir()
+            (root / "Qt6PrintSupport.dll").write_bytes(b"forbidden")
+            package = Path(directory) / "package.msi"
+            package.write_bytes(b"package")
+            evidence = INSPECTOR.build_evidence(
+                "windows",
+                package,
+                root,
+                "f" * 40,
+                [{"name": "dumpbin", "path": "dumpbin.exe", "version": "fixture"}],
+                [],
+                "x64",
+            )
+            self.assertEqual(evidence["status"], "failed")
+            self.assertTrue(evidence["checks"]["qt6widgets_absent"])
+            self.assertFalse(evidence["checks"]["qt6widgets_surface_absent"])
 
     def test_direct_transitive_and_unresolved_dependencies_fail(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -173,6 +197,7 @@ Image has the following dependencies:
             self.assertIn("dependency", kinds)
             self.assertIn("transitive-dependency", kinds)
             self.assertFalse(evidence["checks"]["qt6widgets_absent"])
+            self.assertFalse(evidence["checks"]["qt6widgets_surface_absent"])
 
     def test_missing_architecture_is_uninspected(self):
         with tempfile.TemporaryDirectory() as directory:

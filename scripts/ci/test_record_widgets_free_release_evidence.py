@@ -47,6 +47,9 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
             forbidden = source / "lib" / "cmake" / "Qt6Widgets" / "Qt6WidgetsConfig.cmake"
             forbidden.parent.mkdir(parents=True, exist_ok=True)
             forbidden.write_text("# forbidden\n", encoding="utf-8")
+            print_support = source / "lib" / "cmake" / "Qt6PrintSupport" / "Qt6PrintSupportConfig.cmake"
+            print_support.parent.mkdir(parents=True, exist_ok=True)
+            print_support.write_text("# forbidden\n", encoding="utf-8")
             filtered = root / "filtered"
             manifest = root / "manifest.json"
             manifest_data = prepare.stage_prefix(source, filtered)

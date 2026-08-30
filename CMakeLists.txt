@@ -140,7 +140,10 @@ elseif(_LOUPE_REQUIRES_WIDGETS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 else()
-    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql PrintSupport TextToSpeech Concurrent)
+    # Qt6::PrintSupport is Widgets-bound in the Qt desktop distribution.  No
+    # maintained target in the Widgets-free profile links it, so requesting it
+    # here would make a genuinely Widgets-absent Qt prefix fail at configure.
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql TextToSpeech Concurrent)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 endif()
 set(LOUPE_CONFIGURE_REQUIRES_WIDGETS "${_LOUPE_REQUIRES_WIDGETS}" CACHE INTERNAL "Whether configure required Qt6::Widgets")
@@ -436,7 +439,7 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
 
     if(LOUPE_INSTALL_QT_DEPENDENCIES)
         if(LOUPE_LOUPE_DISTRIBUTION)
-            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
+            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6Svg|Qt6TextToSpeech|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
         else()
             set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
         endif()

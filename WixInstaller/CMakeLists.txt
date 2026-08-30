@@ -50,11 +50,25 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
     # the generated WiX source rather than relying on the staged directory.
     if(LOUPE_LOUPE_DISTRIBUTION)
         set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
+        set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT "")
+        set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY "")
     else()
         set(LOUPE_WIX_QT_WIDGETS_COMPONENT [=[
       <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
                 <File Id="filQt6Widgets" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Widgets.dll" />
       </Component>
+]=])
+        set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT [=[
+      <Component Id="cmpQt6PrintSupport" Directory="INSTALLFOLDER" Guid="{C8045343-5FD3-4349-B4E6-B770F4D28381}">
+                <File Id="filQt6PrintSupport" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6PrintSupport.dll" />
+      </Component>
+]=])
+        set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY [=[
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dir_printsupport" Name="printsupport" />
+    </DirectoryRef>
+  </Fragment>
 ]=])
     endif()
 

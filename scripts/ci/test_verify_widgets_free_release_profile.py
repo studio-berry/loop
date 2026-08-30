@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -105,6 +106,30 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             forbidden.write_text("forbidden\n", encoding="utf-8")
             with self.assertRaises(module.ContractError):
                 module.validate_qt_prefix(prefix)
+
+    def test_filtered_qt_prefix_rejects_printsupport(self) -> None:
+        module = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = self._make_qt_prefix(Path(tmp))
+            forbidden = prefix / "lib" / "Qt6PrintSupport.so.6"
+            forbidden.write_text("forbidden\n", encoding="utf-8")
+            with self.assertRaises(module.ContractError):
+                module.validate_qt_prefix(prefix)
+
+    def test_configure_failure_reports_the_diagnostic_tail(self) -> None:
+        module = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            diagnostic_tail = "vcpkg actionable failure: sentinel-at-end"
+            completed = subprocess.CompletedProcess(
+                args=["cmake"],
+                returncode=1,
+                stdout=("configure transcript\n" + ("x" * 9000) + "\n" + diagnostic_tail),
+                stderr="",
+            )
+            with patch.object(module.subprocess, "run", return_value=completed):
+                with self.assertRaises(module.ContractError) as ctx:
+                    module.run_release_profile_configure(Path(tmp) / "build", [])
+            self.assertIn(diagnostic_tail, str(ctx.exception))
 
     def test_cache_must_use_filtered_qt_prefix(self) -> None:
         module = _load_verifier_module()

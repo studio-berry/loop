@@ -161,7 +161,7 @@ jobs:
         run: |
           python3 scripts/verify-widgets-free-release-profile.py --configure \
             --build-dir build-widgets-free-verify -- \
-            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release
 
       - name: Prepare Widgets-absent Qt prefix
@@ -189,7 +189,7 @@ jobs:
             --configure \
             --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
             -- \
-            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON \
             -DLOUPE_BUILD_QUICK_CANVAS=ON \
@@ -207,7 +207,7 @@ jobs:
             --expect-configure-failure \
             --build-dir "$LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR" \
             -- \
-            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DLOUPE_BUILD_CODE_GENERATOR=ON
 

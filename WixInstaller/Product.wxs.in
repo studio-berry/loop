@@ -76,9 +76,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Network" Directory="INSTALLFOLDER" Guid="{69DD98CF-191F-4E16-9475-7201CF05630D}">
                 <File Id="filQt6Network" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Network.dll" />
       </Component>
-      <Component Id="cmpQt6PrintSupport" Directory="INSTALLFOLDER" Guid="{C8045343-5FD3-4349-B4E6-B770F4D28381}">
-                <File Id="filQt6PrintSupport" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6PrintSupport.dll" />
-      </Component>
+${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6Svg" Directory="INSTALLFOLDER" Guid="{8324FA84-C4A4-47E8-849B-62D5FD5F2B4A}">
                 <File Id="filQt6Svg" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Svg.dll" />
       </Component>
@@ -294,11 +292,7 @@ ${LOUPE_WIX_EDITOR_PLUGINS}
     </DirectoryRef>
   </Fragment>
 
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_printsupport" Name="printsupport" />
-    </DirectoryRef>
-  </Fragment>
+${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
