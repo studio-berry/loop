@@ -28,6 +28,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
+#include "pdfpagecachebudget.h"
 #include "pdfcms.h"
 #include "pdfprocessingbudget.h"
 
@@ -67,7 +68,9 @@ class PDFProcessingBudget;
 class LOUPELIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
-    explicit PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context = nullptr);
+    explicit PDFDocumentSession(PDFDocument* document,
+                                PDFDocumentContext* context = nullptr,
+                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
     ~PDFDocumentSession();
 
     PDFDocumentSession(const PDFDocumentSession&) = delete;
@@ -95,6 +98,9 @@ public:
     /// decoding it on first access and caching the result. Returns an empty
     /// byte array if the reference is invalid or the stream cannot be decoded.
     QByteArray getDecodedStream(PDFObjectReference reference);
+
+    PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
+    std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
     PDFProcessingBudget* getProcessingBudget() const;
     const PDFProcessingLimits& getProcessingLimits() const;
@@ -173,6 +179,7 @@ private:
 
     void initializeRendering();
     void trimCachesToLimits();
+    void clearCompiledCache();
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
@@ -181,15 +188,14 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
+    std::shared_ptr<PDFPageCacheBudget> m_pageCacheBudget;
     size_t m_compileCacheLimit = CompileCacheLimit;
     size_t m_streamCacheLimit = StreamCacheLimit;
     bool m_prefetchEnabled = true;
     int m_qualityPercent = 100;
     bool m_qualityPrefetchShed = false;
 
-    qsizetype m_compiledCacheByteLimit = CompiledCacheByteLimitDefault;
-    qsizetype m_compiledCacheBytes = 0;
-    qsizetype m_cacheLimit = CompiledCacheByteLimitDefault * 2;
+    qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
