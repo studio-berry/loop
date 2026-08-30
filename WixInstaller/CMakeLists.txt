@@ -1,26 +1,14 @@
 # MIT License
 #
-# Copyright (c) 2018-2025 Jakub Melka and Contributors
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# The Windows installer contains only the current LoupeEditor and PdfTool
+# product boundary. Retired Widgets products and plugins are deliberately not
+# represented here, even when a developer build happens to contain old files.
 
 if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
+    if(LOUPE_LOUPE_DISTRIBUTION)
+        # Release packaging is the only supported installer boundary.
+        set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
+    endif()
     if(LOUPE_INSTALL_TO_USR)
         file(TO_NATIVE_PATH "${CMAKE_INSTALL_PREFIX}/usr/bin" WIX_INSTALL_PREFIX)
     else()
@@ -73,7 +61,9 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
 
     # Qt ICU DLLs have versioned filenames. Discover them at configure time so
     # the MSI matches cmake --install when Qt dependencies are staged.
+    set(LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS "")
     set(LOUPE_WIX_ICU_COMPONENTS "")
+
     if(LOUPE_INSTALL_QT_DEPENDENCIES AND NOT "${LOUPE_QT_ROOT}" STREQUAL "")
         file(GLOB _loupe_icu_dlls LIST_DIRECTORIES false "${LOUPE_QT_ROOT}/bin/icu*.dll")
         set(_loupe_icu_index 0)
@@ -86,14 +76,12 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
                    NAME "loupe-wix-icu-${_loupe_icu_name}" TYPE SHA1 UPPER)
             string(APPEND LOUPE_WIX_ICU_COMPONENTS
 "      <Component Id=\"cmp${_loupe_icu_id}\" Directory=\"INSTALLFOLDER\" Guid=\"{${_loupe_icu_guid}}\">
-        <File Id=\"fil${_loupe_icu_id}\" KeyPath=\"yes\" Source=\"$(var.MyInstallDir)\\${_loupe_icu_name}\" />
+        <File Id=\"fil${_loupe_icu_id}\" KeyPath=\"yes\" Source=\"\$(var.MyInstallDir)\\${_loupe_icu_name}\" />
       </Component>
 ")
         endforeach()
         if(_loupe_icu_index EQUAL 0)
-            message(WARNING "LOUPE_INSTALL_QT_DEPENDENCIES is ON but no icu*.dll found under ${LOUPE_QT_ROOT}/bin — MSI may fail at runtime with STATUS_DLL_NOT_FOUND")
-        else()
-            message(STATUS "WiX will package ${_loupe_icu_index} Qt ICU DLL(s) from ${LOUPE_QT_ROOT}/bin")
+            message(WARNING "No icu*.dll found under ${LOUPE_QT_ROOT}/bin")
         endif()
     endif()
 

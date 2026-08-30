@@ -24,6 +24,15 @@ def _load_verifier_module():
 
 
 class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
+    def _make_qt_prefix(self, root: Path) -> Path:
+        module = _load_verifier_module()
+        prefix = root / "qt"
+        for relative in module.REQUIRED_QT_CONFIGS:
+            path = prefix / "lib" / "cmake" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# fixture\n", encoding="utf-8")
+        return prefix
+
     def test_static_contract_passes(self) -> None:
         completed = subprocess.run(
             [sys.executable, str(VERIFIER)],
@@ -86,6 +95,41 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             with self.assertRaises(module.ContractError) as ctx:
                 module.validate_cmake_cache(cache)
             self.assertIn("CANVAS_BENCHMARK", str(ctx.exception))
+
+    def test_filtered_qt_prefix_requires_modules_and_rejects_widgets(self) -> None:
+        module = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = self._make_qt_prefix(Path(tmp))
+            module.validate_qt_prefix(prefix)
+            forbidden = prefix / "lib" / "Qt6Widgets.so"
+            forbidden.write_text("forbidden\n", encoding="utf-8")
+            with self.assertRaises(module.ContractError):
+                module.validate_qt_prefix(prefix)
+
+    def test_cache_must_use_filtered_qt_prefix(self) -> None:
+        module = _load_verifier_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = self._make_qt_prefix(Path(tmp))
+            cache = Path(tmp) / "CMakeCache.txt"
+            cache.write_text(
+                "\n".join(
+                    [
+                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
+                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+                        f"Qt6_DIR:PATH={prefix / 'lib' / 'cmake' / 'Qt6'}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            module.validate_cmake_cache(cache, prefix)
+
+            cache.write_text(
+                cache.read_text(encoding="utf-8").replace(str(prefix), str(Path(tmp) / "other")),
+                encoding="utf-8",
+            )
+            with self.assertRaises(module.ContractError):
+                module.validate_cmake_cache(cache, prefix)
 
 
 if __name__ == "__main__":

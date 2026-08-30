@@ -19,9 +19,9 @@ A desktop PDF toolkit for editing, inspecting, validating, and automating PDF wo
 | --- | --- |
 | **LoupeEditor** | The primary interactive workspace for editing, inspection, and editor plugins. |
 | **PdfTool** | Scripted and batch workflows in CI or from the command line. Run `PdfTool help` for commands. |
-| **LoupePageMaster** | Batch page geometry, assembly, and export. |
-| **LoupeViewer** | Quick, read-only viewing. |
-| **LoupeDiff** | Comparing two PDF documents. |
+| **Pages / Production workspace** | Batch page geometry, assembly, and export through Core and PdfTool. |
+| **Document workspace** | Quick, interactive PDF viewing and inspection in LoupeEditor. |
+| **Compare workspace** | Reserved product workspace over the Core comparison contract. |
 
 ## Known limitations
 

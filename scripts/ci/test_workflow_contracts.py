@@ -23,6 +23,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/ci/validate_product_surface.py", workflow)
+        self.assertIn("python3 scripts/ci/check_phase5_residue.py", workflow)
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
         self.assertIn("python3 scripts/verify_phase5_widgets_contract.py", workflow)
         self.assertIn("python3 scripts/verify-plugin-form-accounting.py", workflow)
@@ -44,6 +45,82 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("LOUPE_LOUPE_DISTRIBUTION=OFF", workflow)
         self.assertIn("-Profile developer", workflow)
         self.assertIn("-InstallManifestPath .\\build\\install_manifest.txt", workflow)
+
+    def test_linux_release_gate_qualifies_without_widgets(self):
+        workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
+        self.assertIn("prepare_widgets_free_qt.py", workflow)
+        self.assertIn("--qt-prefix", workflow)
+        self.assertIn("--expect-configure-failure", workflow)
+        self.assertIn("Build Widgets-absent release profile", workflow)
+        self.assertIn("record_widgets_free_release_evidence.py", workflow)
+
+    def test_windows_release_gate_qualifies_without_widgets(self):
+        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
+        self.assertIn("prepare_widgets_free_qt.py", workflow)
+        self.assertIn("--qt-prefix", workflow)
+        self.assertIn("--expect-configure-failure", workflow)
+        self.assertIn("Build Widgets-absent release profile", workflow)
+        self.assertIn("record_widgets_free_release_evidence.py", workflow)
+
+    def test_package_workflows_require_and_record_exact_source_sha(self):
+        linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
+        windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        for workflow in (linux, windows):
+            self.assertIn("source_sha:", workflow)
+            self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
+            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("Verify exact source SHA", workflow)
+            self.assertIn("LOUPE_SOURCE_SHA", workflow)
+            self.assertIn("inspect_package_dependencies.py", workflow)
+            self.assertIn("source-sha", workflow)
+        self.assertIn("--expected-architecture x86-64", linux)
+        self.assertIn("--expected-architecture x64", windows)
+        self.assertIn("loupe-package-boundary-linux-evidence", linux)
+        self.assertIn("loupe-package-boundary-windows-evidence", windows)
+
+    def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn('Platform=x64', workflow)
+        self.assertIn('-arch x64', workflow)
+        self.assertNotIn('Platform=x86', workflow)
+        self.assertNotIn('-arch x86', workflow)
+        self.assertNotIn('ProgramFilesX86', workflow)
+        self.assertIn('GetFolderPath("ProgramFiles")', workflow)
+
+    def test_release_draft_pairs_evidence_and_keeps_it_out_of_assets(self):
+        workflow = (ROOT / ".github/workflows/CreateReleaseDraft.yml").read_text(encoding="utf-8")
+        self.assertIn("source_sha:", workflow)
+        self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+        self.assertIn("compare_package_boundary_evidence.py", workflow)
+        self.assertIn("loupe-package-boundary-linux-evidence", workflow)
+        self.assertIn("loupe-package-boundary-windows-evidence", workflow)
+        self.assertIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
+        self.assertIn("Exclude CI evidence from release assets", workflow)
+        self.assertIn("source_sha", workflow)
+
+    def test_release_wix_template_does_not_unconditionally_ship_widgets(self):
+        product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
+        cmake = (ROOT / "WixInstaller/CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertNotIn('Component Id="cmpQt6Widgets"', product)
+        self.assertIn("LOUPE_WIX_QT_WIDGETS_COMPONENT", product)
+        self.assertIn("if(LOUPE_LOUPE_DISTRIBUTION)", cmake)
+
+    def test_wix_package_uses_the_64_bit_program_files_directory(self):
+        product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
+        self.assertIn('Platform="x64"', product)
+        self.assertIn('Directory Id="ProgramFiles64Folder"', product)
+
+    def test_wix_solution_declares_only_x64_configurations(self):
+        solution = (ROOT / "WixInstaller/LOUPE.sln.in").read_text(encoding="utf-8")
+        self.assertIn("Debug|x64 = Debug|x64", solution)
+        self.assertIn("Release|x64 = Release|x64", solution)
+        self.assertNotIn("Debug|x86", solution)
+        self.assertNotIn("Release|x86", solution)
+
+    def test_msi_smoke_scans_current_and_legacy_share_locations(self):
+        smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertIn('(Join-Path $InstallDir "share\\loupe")', smoke)
+        self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loupe")', smoke)
 
 
 if __name__ == "__main__":

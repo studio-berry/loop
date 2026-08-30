@@ -22,6 +22,9 @@ deleted and absent from both supported profiles. Their dispositions remain in
 `docs/product-surface.json` so an accidental upstream reintroduction fails
 verification.
 
+Developer and qualification tools are not product surfaces. They do not
+receive a separate Loupe desktop entry, AppX application, or product identity.
+
 ## Workspace boundaries
 
 | Workspace | Owns | Drives | Explicitly does not own |
@@ -32,7 +35,7 @@ verification.
 | Pages / Production | Multi-document assembly, page geometry, crop, regrouping, bleed, optimization, and export | `PDFPageMasterExport`, ADR-003 stage order, ADR-004 batch manifest | A copied PageMaster engine or a reordered export pipeline |
 | Inspect | Contextual page, image, object, dimension, color, and evidence inspection | Core inspection APIs and the Quick shell contract | A standalone inspector application |
 | Fix | Deterministic, bounded corrective operations with preview, approval, output, and revalidation | Core repair operations and `PdfTool repair` | Silent mutation, GUI-only business logic, or implicit approval |
-| Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of `LoupeDiff` while the decision is `OPEN` |
+| Compare | Proposed PDF comparison and production-proof evidence | Core `PDFDiff` contract if the product boundary is approved | An automatic replacement of the retired comparison product |
 
 The shell issue (#193) may model these as stateful workspaces, but switching
 workspace must preserve the open document and preflight revision. A workspace
@@ -43,8 +46,10 @@ is not a new executable and must not own a duplicate Core semantic path.
 `LoupePageMaster` is recorded as **CLI-ONLY** and its source is deleted. Its
 historical UI action inventory maps to the Pages / Production workspace later,
 while `PDFPageMasterExport` and its ADR-003/ADR-004 contracts remain the single
-source of truth. The following action map is retained as product intent; it does
-not imply that a standalone executable or UI file is still shipped.
+source of truth. The retained capability inventory is assigned a destination or
+an explicit compatibility disposition. The following action map is retained as
+product intent; it does not imply that a standalone executable or UI file is
+still shipped.
 
 | PageMaster action IDs | Disposition | Destination / contract |
 | --- | --- | --- |
@@ -87,11 +92,12 @@ must have:
 - one Linux desktop entry, `io.github.mberrys.Loupe-pdf.desktop`, launching
   `LoupeEditor` with `application/pdf` association;
 - one AppX application, `LoupeEditor`, with the same PDF association;
-- no Viewer, PageMaster, Diff, or LaunchPad desktop/AppX entry; and
+- no Viewer, PageMaster, Diff, LaunchPad, or other retired product desktop/AppX
+  entry; and
 - only the manifest-declared `LoupeEditor`, `PdfTool`, `LoupeLibCore`, and
   `LoupeLibQuick` first-party artifacts; deleted compatibility/plugin artifacts
   are forbidden.
 
 The full developer profile adds the explicit Editor desktop entry for developer
-testing and builds the three declared developer tools. This is development
-capacity, not a license to expose multiple Loupe products to release users.
+testing and builds the three declared developer tools. Developer-only tools
+remain opt-in build targets and are not packaging surfaces.
