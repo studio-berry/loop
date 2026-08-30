@@ -6,28 +6,15 @@
   "profile": {
     "id": "loupe-release",
     "options": {
-      "LOUPE_LOUPE_DISTRIBUTION": true,
-      "LOUPE_BUILD_ONLY_CORE_LIBRARY": false,
-      "LOUPE_BUILD_QUICK_CANVAS": true,
-      "LOUPE_BUILD_TESTS": false,
-      "LOUPE_BUILD_FUZZERS": false,
-      "LOUPE_BUILD_QUICK_SHELL_SMOKE": false,
-      "LOUPE_BUILD_CANVAS_BENCHMARK": false,
-      "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE": false,
       "LOUPE_BUILD_CODE_GENERATOR": false,
-      "LOUPE_BUILD_JBIG2_VIEWER": false,
       "LOUPE_BUILD_EXAMPLE_GENERATOR": false,
-      "LOUPE_BUILD_VIEWER": false,
-      "LOUPE_BUILD_PAGEMASTER": false,
-      "LOUPE_BUILD_DIFF": false,
-      "LOUPE_BUILD_LAUNCHPAD": false,
-      "LOUPE_PLUGIN_AUDIOBOOK": false,
-      "LOUPE_PLUGIN_OCR": false,
-      "LOUPE_PLUGIN_SCANNER": false
+      "LOUPE_BUILD_JBIG2_VIEWER": false,
+      "LOUPE_BUILD_QUICK_CANVAS": true,
+      "LOUPE_LOUPE_DISTRIBUTION": true
     },
-    "configuration_mode": "source-static",
+    "configuration_mode": "manifest-derived-source",
     "configured_build_dir": null,
-    "configuration_note": "Static CMake/file evidence is used when a qualified build directory is unavailable; no build qualification is implied."
+    "configuration_note": "Profile expectations come from docs/product-surface.json; a configured CMake cache and install tree are required for qualification."
   },
   "inputs": {
     "inventory": "docs/generated/phase5-widgets-inventory.json",
