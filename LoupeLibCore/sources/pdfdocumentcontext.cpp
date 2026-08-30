@@ -63,7 +63,8 @@ PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent) :
     QObject(parent),
     m_document(document),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(document)),
-    m_session(std::make_unique<PDFDocumentSession>(document, this))
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>()),
+    m_session(std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget))
 {
 }
 
@@ -72,7 +73,8 @@ PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* par
     m_documentPointer(std::move(document)),
     m_document(m_documentPointer.data()),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(m_document)),
-    m_session(std::make_unique<PDFDocumentSession>(m_document, this))
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>()),
+    m_session(std::make_unique<PDFDocumentSession>(m_document, this, m_pageCacheBudget))
 {
 }
 
@@ -167,7 +169,7 @@ void PDFDocumentContext::invalidateCaches()
 void PDFDocumentContext::replaceDocument(PDFDocument* document, PDFDocumentPointer owner)
 {
     const PDFRevisionIdentity previous = getRevision();
-    std::unique_ptr<PDFDocumentSession> nextSession = std::make_unique<PDFDocumentSession>(document, this);
+    std::unique_ptr<PDFDocumentSession> nextSession = std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget);
 
     m_documentPointer = std::move(owner);
     m_document = document;

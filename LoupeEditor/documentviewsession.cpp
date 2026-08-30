@@ -40,7 +40,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
-    setCacheLimit(m_cacheLimit);
+    m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
+    setCacheLimit(DefaultCacheLimit);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     if (QScreen* screen = QGuiApplication::primaryScreen())
@@ -71,16 +72,16 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
-    m_surfaces->invalidate(m_facade->currentRevision());
 
     if (pdf::PDFDocumentSession* session = m_context.getSession())
     {
         m_surfaces->setResourceBudget(session->getSharedResourceBudget());
     }
 
-    // PDFDocumentContext creates a fresh PDFDocumentSession for a replacement
-    // document. Reapply the session-owned total before requesting new surfaces.
-    setCacheLimit(m_cacheLimit);
+    // The context keeps the shared page-cache budget across document-session
+    // replacement; the resource envelope is refreshed from the new session.
+    m_surfaces->refreshPageCacheBudget();
+    m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
 }
 
@@ -97,13 +98,11 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
     settings.features = features;
     m_surfaces->setRenderSettings(settings);
-    syncOverlaySuppressionFromRenderFeatures(features);
 }
 
 void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
-    m_cacheLimit = normalized;
 
     if (pdf::PDFDocumentSession* session = m_context.getSession())
     {
@@ -115,11 +114,15 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
     }
     if (m_surfaces)
     {
-        m_surfaces->setCacheLimit(normalized);
+        m_surfaces->refreshPageCacheBudget();
     }
 }
 
-void DocumentViewSession::syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features)
+qsizetype DocumentViewSession::cacheLimit() const noexcept
 {
-    m_overlays->setDenyExtraGraphics(features.testFlag(pdf::PDFRenderer::DenyExtraGraphics));
+    if (const pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        return session->cacheLimit();
+    }
+    return 0;
 }

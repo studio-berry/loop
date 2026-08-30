@@ -29,12 +29,11 @@
 #include "pdfpagecachebudget.h"
 #include "pdfprocessingbudget.h"
 
-#include <tuple>
-#include <QtGlobal>
-
 #include <functional>
 #include <limits>
+#include <tuple>
 #include <unordered_set>
+#include <QtGlobal>
 
 namespace pdf
 {
@@ -182,18 +181,23 @@ qsizetype estimateDocumentModelBytes(const PDFDocument* document)
 
 }   // namespace
 
-PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context) :
+PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
+                                       PDFDocumentContext* context,
+                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget) :
     m_document(document),
     m_context(context),
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>()),
     m_resourceBudget(std::make_shared<PDFResourceBudget>()),
-    m_compiledCacheByteLimit(CompiledCacheByteLimitDefault),
-    m_compiledCacheBytes(0),
-    m_cacheLimit(CompiledCacheByteLimitDefault * 2)
+    m_pageCacheBudget(pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>()),
+    m_compiledCachePressureLimit(m_pageCacheBudget->compiledLimit())
 {
-    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_compiledCacheByteLimit);
+    // The page-cache budget is the authority for the combined compiled-page
+    // and surface ceiling. The broader resource envelope still records those
+    // bytes alongside document and stream resources, but its matching pool
+    // limit follows the authoritative page-cache partition.
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
     m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
 
     const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
@@ -207,7 +211,15 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext
     initializeRendering();
 }
 
-PDFDocumentSession::~PDFDocumentSession() = default;
+PDFDocumentSession::~PDFDocumentSession()
+{
+    // The session can be replaced while its shared budget remains owned by the
+    // document context. Release every compiled-page reservation before the old
+    // cache storage disappears, otherwise the replacement inherits phantom
+    // resident bytes and eventually refuses valid work.
+    clearCompiledCache();
+    clearDecodedStreamCache();
+}
 
 PDFDocument* PDFDocumentSession::getDocument() const
 {
@@ -325,21 +337,20 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_qualityPrefetchShed = true;
     m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
-    m_compiledCacheByteLimit = qMin(m_compiledCacheByteLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
+    m_compiledCachePressureLimit = qMin(m_compiledCachePressureLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
     m_streamCacheByteLimit = qMin(m_streamCacheByteLimit, 16 * PDFResourceBudgetConfig::MiB);
-    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_compiledCacheByteLimit);
     m_resourceBudget->setLimit(PDFResourcePool::DecodedStreamImageCache, m_streamCacheByteLimit);
     trimCachesToLimits();
 }
 
 qsizetype PDFDocumentSession::compiledCacheBytes() const
 {
-    return m_compiledCacheBytes;
+    return m_pageCacheBudget->usage(PDFPageCacheBudget::Pool::CompiledPages);
 }
 
 qsizetype PDFDocumentSession::compiledCacheByteLimit() const
 {
-    return m_compiledCacheByteLimit;
+    return qMin(m_pageCacheBudget->compiledLimit(), m_compiledCachePressureLimit);
 }
 
 qsizetype PDFDocumentSession::decodedStreamCacheBytes() const
@@ -355,38 +366,37 @@ qsizetype PDFDocumentSession::decodedStreamCacheByteLimit() const
 void PDFDocumentSession::setCompiledCacheByteLimit(qsizetype bytes)
 {
     bytes = qMax<qsizetype>(0, bytes);
-    m_compiledCacheByteLimit = bytes;
-    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, bytes);
-    // Keep total in sync when compiled limit is set directly: total is at least compiled*2
-    // (odd totals lose one byte when reconstructed, so store even total).
-    m_cacheLimit = m_compiledCacheByteLimit * 2;
+    const qsizetype maximum = std::numeric_limits<qsizetype>::max();
+    const qsizetype total = bytes > maximum / 2 ? maximum : bytes * 2;
+    m_pageCacheBudget->setTotal(total);
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
+    m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
     trimCachesToLimits();
 }
 
 void PDFDocumentSession::setCacheLimit(qsizetype totalBytes)
 {
-    totalBytes = PDFPageCacheBudget::total(totalBytes);
-    m_cacheLimit = totalBytes;
-    m_compiledCacheByteLimit = PDFPageCacheBudget::compiledPages(totalBytes);
-    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_compiledCacheByteLimit);
+    m_pageCacheBudget->setTotal(PDFPageCacheBudget::total(totalBytes));
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
+    m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
     trimCachesToLimits();
 }
 
 qsizetype PDFDocumentSession::cacheLimit() const
 {
-    return m_cacheLimit;
+    return m_pageCacheBudget->total();
 }
 
 void PDFDocumentSession::trimCachesToLimits()
 {
-    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() > m_compileCacheLimit || m_compiledCacheBytes > m_compiledCacheByteLimit))
+    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() > m_compileCacheLimit || compiledCacheBytes() > compiledCacheByteLimit()))
     {
         const PageCacheKey key = m_compileCacheOrder.front();
         auto bytesIt = m_compileCacheBytes.find(key);
         if (bytesIt != m_compileCacheBytes.end())
         {
             const qsizetype bytes = bytesIt->second;
-            m_compiledCacheBytes -= bytes;
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
             m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_resourceBudget->recordEviction(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_compileCacheBytes.erase(bytesIt);
@@ -417,12 +427,12 @@ void PDFDocumentSession::clearCompiledCache()
     for (const auto& [key, bytes] : m_compileCacheBytes)
     {
         Q_UNUSED(key);
+        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
         m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
     }
     m_compileCache.clear();
     m_compileCacheOrder.clear();
     m_compileCacheBytes.clear();
-    m_compiledCacheBytes = 0;
 }
 
 void PDFDocumentSession::clearDecodedStreamCache()
@@ -468,7 +478,8 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         return nullptr;
     }
 
-    if (m_compileCacheLimit == 0 || estimate > m_compiledCacheByteLimit)
+    const qsizetype compiledLimit = compiledCacheByteLimit();
+    if (m_compileCacheLimit == 0 || estimate > compiledLimit)
     {
         // An entry larger than its entire partition cannot be made resident
         // without violating the shared byte cap. Returning nullptr is safe for
@@ -480,14 +491,14 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
     // this call dropped. Evict by both entry count and byte budget.
     while (!m_compileCacheOrder.empty() &&
            (m_compileCacheOrder.size() >= m_compileCacheLimit ||
-            m_compiledCacheBytes > m_compiledCacheByteLimit - estimate))
+            compiledCacheBytes() > compiledLimit - estimate))
     {
         const PageCacheKey evictKey = m_compileCacheOrder.front();
         auto bytesIt = m_compileCacheBytes.find(evictKey);
         if (bytesIt != m_compileCacheBytes.end())
         {
             const qsizetype bytes = bytesIt->second;
-            m_compiledCacheBytes -= bytes;
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
             m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_resourceBudget->recordEviction(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_compileCacheBytes.erase(bytesIt);
@@ -496,11 +507,20 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         m_compileCacheOrder.pop_front();
     }
 
+    if (!m_pageCacheBudget->tryReserve(PDFPageCacheBudget::Pool::CompiledPages, estimate))
+    {
+        // The shared authority may also account for admitted page surfaces. A
+        // failed reservation is therefore a real combined-budget refusal, not
+        // a reason to insert an unaccounted compiled page.
+        return nullptr;
+    }
+
     if (!m_resourceBudget->tryReserve(PDFResourcePool::CompiledEvidenceCache,
                                       estimate,
                                       PDFResourcePriority::Visible,
                                       QStringLiteral("compiled page cache")))
     {
+        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, estimate);
         m_resourceBudget->recordShed(PDFResourcePool::CompiledEvidenceCache);
         return nullptr;
     }
@@ -508,7 +528,6 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
     m_compileCacheOrder.push_back(key);
     auto result = m_compileCache.emplace(key, std::move(compiledPage));
     m_compileCacheBytes[key] = estimate;
-    m_compiledCacheBytes += estimate;
     return &result.first->second;
 }
 
