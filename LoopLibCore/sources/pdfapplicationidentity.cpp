@@ -25,6 +25,7 @@
 #include "pdfconstants.h"
 
 #include <QCoreApplication>
+#include <QGuiApplication>
 
 #include <string>
 
@@ -117,7 +118,10 @@ void initializeApplicationIdentity(PDFApplicationSurface surface)
     QCoreApplication::setOrganizationName(identity.organizationName);
     QCoreApplication::setOrganizationDomain(identity.organizationDomain);
     QCoreApplication::setApplicationName(identity.applicationName);
-    QCoreApplication::setApplicationDisplayName(identity.displayName);
+    if (qobject_cast<QGuiApplication*>(QCoreApplication::instance()) != nullptr)
+    {
+        QGuiApplication::setApplicationDisplayName(identity.displayName);
+    }
     QCoreApplication::setApplicationVersion(identity.version);
 
 #ifdef Q_OS_WIN

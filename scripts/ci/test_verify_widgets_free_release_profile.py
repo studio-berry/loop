@@ -156,6 +156,15 @@ class VerifyWidgetsFreeReleaseProfileTest(unittest.TestCase):
             with self.assertRaises(module.ContractError):
                 module.validate_cmake_cache(cache, prefix)
 
+    def test_command_output_truncation_keeps_tail(self) -> None:
+        module = _load_verifier_module()
+        detail = "HEAD-" + ("x" * 900) + "-TAIL"
+        truncated = module._truncate_command_output(detail, limit=80)
+        self.assertIn("HEAD-", truncated)
+        self.assertIn("-TAIL", truncated)
+        self.assertIn("[truncated]", truncated)
+        self.assertLessEqual(len(truncated), 80)
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())
