@@ -166,7 +166,7 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
 {
     pdf::PDFRunIdentity identity = pdf::PDFRunIdentity::capture();
     identity.fixtureDigest = pdf::PDFRunIdentity::digestFile(options.document);
-    identity.operationVersion = QStringLiteral("benchmark-render");
+    identity.operationVersion = QStringLiteral("resource-envelope-v2");
     identity.renderer = QStringLiteral("loupe");
 
     PDFOutputFormatter formatter(options.outputStyle);
@@ -207,12 +207,23 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
             envelope.identity = identity;
             envelope.family = QStringLiteral("benchmark-render");
             const bool cancelled = isCancelRequested();
-            envelope.status = cancelled ? QStringLiteral("cancelled") : QStringLiteral("complete");
+            envelope.status = cancelled
+                                  ? QStringLiteral("cancelled")
+                                  : m_resourceBudgetExhausted ? QStringLiteral("budget-exceeded") : QStringLiteral("incomplete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
             envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
             envelope.elapsedMs = m_wallTime;
             envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
-            envelope.incompleteReason = cancelled ? QStringLiteral("operation-cancelled") : QString();
+            envelope.incompleteReason = cancelled
+                                            ? QStringLiteral("operation-cancelled")
+                                            : m_resourceBudgetExhausted ? QStringLiteral("resource-budget-exceeded") : QStringLiteral("preflight-measurement-unavailable");
+            qint64 pagesMaterialized = 0;
+            for (const PageInfo& page : m_pageInfo)
+            {
+                pagesMaterialized += page.isRendered ? 1 : 0;
+            }
+            envelope.pagesMaterialized = pagesMaterialized;
+            envelope.recordResources(*m_resourceBudget);
             data.insert(QStringLiteral("workload_envelope"), envelope.toJson());
             options.executionContext->setData(data);
         }
@@ -232,8 +243,9 @@ void PDFToolBenchmark::onPageRendered(const PDFToolOptions& options, pdf::PDFRen
 PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
 {
     pdf::PDFDocument document;
-    QByteArray sourceData;
-    if (!readDocument(options, document, &sourceData, false))
+    m_resourceBudget = std::make_unique<pdf::PDFResourceBudget>();
+    m_resourceBudgetExhausted = false;
+    if (!readDocument(options, document, nullptr, false))
     {
         return PDFToolExitCode::InputError;
     }
@@ -288,6 +300,7 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
                                           &optionalContentActivity, options.renderFeatures, meshQualitySettings,
                                           pdf::PDFRasterizerPool::getCorrectedRasterizerCount(options.renderRasterizerCount),
                                           options.renderUseSoftwareRendering ? pdf::RendererEngine::QPainter : pdf::RendererEngine::Blend2D_SingleThread, nullptr);
+    rasterizerPool.setResourceBudget(m_resourceBudget.get());
 
     auto onRenderError = [this](pdf::PDFInteger pageIndex, pdf::PDFRenderError error)
     {
@@ -334,6 +347,7 @@ PDFToolExitCode PDFToolRenderBase::execute(const PDFToolOptions& options)
     rasterizerPool.render(pageIndices, imageSizeGetter, std::bind(&PDFToolRenderBase::onPageRendered, this, options, std::placeholders::_1), nullptr);
 
     m_wallTime = timer.elapsed();
+    m_resourceBudgetExhausted = rasterizerPool.resourceBudgetExhausted();
 
     fontCache.setCacheShrinkEnabled(nullptr, true);
 

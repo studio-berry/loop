@@ -29,6 +29,7 @@
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
 #include "pdfpagecachebudget.h"
+#include "pdfresourcebudget.h"
 #include "viewportcontroller.h"
 
 #include <QHash>
@@ -158,6 +159,12 @@ public:
     void setCacheLimit(qsizetype totalBytes);
     qsizetype cacheLimit() const noexcept { return m_cacheLimit; }
 
+    /// Attaches the document session's shared resource authority. Existing
+    /// admitted surfaces are dropped when the authority changes so the new
+    /// authority never starts with an unaccounted resident cache.
+    void setResourceBudget(pdf::PDFResourceBudget* budget);
+    pdf::PDFResourceBudget* resourceBudget() const noexcept { return m_resourceBudget; }
+
     /// bounds() is derived from the total via PDFPageCacheBudget partition;
     /// prefer cacheLimit()/setCacheLimit() as the authority and treat
     /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
@@ -207,11 +214,13 @@ private:
         RevisionFencedToken token;
         pdf::PDFJobPriority priority = pdf::PDFJobPriority::VisiblePage;
         std::shared_ptr<std::atomic_bool> workStarted;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
     };
 
     struct CacheEntry
     {
         SurfaceBufferPointer pixels;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
         qint64 cost = 0;
         quint64 accessSequence = 0;
         std::list<PageSurfaceKey>::iterator lru;
@@ -244,7 +253,9 @@ private:
     void finishInFlight(quint64 requestId, SurfaceTerminalState state);
 
     std::optional<PageSurfaceKey> keyForPage(int pageIndex) const;
-    bool insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels);
+    bool insertIntoCache(const PageSurfaceKey& key,
+                         SurfaceBufferPointer pixels,
+                         std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
     void trimCacheToBudget();
     qint64 inFlightBytes() const;
     int inFlightCount(pdf::PDFJobPriority priority) const;
@@ -261,6 +272,7 @@ private:
     qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
+    pdf::PDFResourceBudget* m_resourceBudget = nullptr;
 
     std::shared_ptr<JobRelay> m_relay;
 

@@ -71,10 +71,16 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
+    m_surfaces->invalidate(m_facade->currentRevision());
+
+    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        m_surfaces->setResourceBudget(session->getResourceBudget());
+    }
+
     // PDFDocumentContext creates a fresh PDFDocumentSession for a replacement
     // document. Reapply the session-owned total before requesting new surfaces.
     setCacheLimit(m_cacheLimit);
-    m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
 }
 
@@ -101,6 +107,10 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 
     if (pdf::PDFDocumentSession* session = m_context.getSession())
     {
+        if (m_surfaces)
+        {
+            m_surfaces->setResourceBudget(session->getResourceBudget());
+        }
         session->setCacheLimit(normalized);
     }
     if (m_surfaces)

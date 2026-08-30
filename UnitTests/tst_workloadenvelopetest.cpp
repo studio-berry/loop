@@ -109,19 +109,23 @@ void WorkloadEnvelopeTest::pageHeavyEnvelopeRecordsIdentity()
     envelope.identity = pdf::PDFRunIdentity::capture();
     envelope.identity.fixtureDigest = pdf::PDFRunIdentity::digestBytes(QByteArrayLiteral("page-heavy-24"));
     envelope.family = QStringLiteral("page-heavy");
-    envelope.status = QStringLiteral("complete");
+    envelope.status = QStringLiteral("incomplete");
+    envelope.incompleteReason = QStringLiteral("preflight-measurement-unavailable");
     envelope.pageCount = pageCount;
     envelope.openToFirstViewMs = 4;
     envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
     envelope.cacheHighWaterBytes = 2048;
+    envelope.preflightHighWaterBytes = -1;
+    envelope.pagesMaterialized = pageCount;
     envelope.elapsedMs = timer.elapsed();
     envelope.pressureShedCount = 1;
     envelope.prefetchShed = session.qualityPrefetchShed();
     envelope.interactionSlotHeld = true;
+    envelope.recordResources(*session.getResourceBudget());
 
     const QJsonObject json = envelope.toJson();
     QCOMPARE(json.value(QStringLiteral("family")).toString(), QStringLiteral("page-heavy"));
-    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("complete"));
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("incomplete"));
     QCOMPARE(json.value(QStringLiteral("open_to_first_view_ms")).toInt(), 4);
     QCOMPARE(json.value(QStringLiteral("cache_high_water_bytes")).toInt(), 2048);
     QCOMPARE(json.value(QStringLiteral("pressure_shed_count")).toInt(), 1);
@@ -131,6 +135,8 @@ void WorkloadEnvelopeTest::pageHeavyEnvelopeRecordsIdentity()
     QVERIFY(!json.value(QStringLiteral("identity")).toObject().value(QStringLiteral("fixture_digest")).toString().isEmpty());
     QVERIFY(json.value(QStringLiteral("prefetch_shed")).toBool());
     QVERIFY(json.value(QStringLiteral("interaction_slot_held")).toBool());
+    QVERIFY(json.value(QStringLiteral("resources")).toObject().contains(QStringLiteral("pools")));
+    QCOMPARE(json.value(QStringLiteral("pages_materialized")).toInt(), pageCount);
     QVERIFY(json.value(QStringLiteral("page_count")).toInt() == pageCount);
 }
 

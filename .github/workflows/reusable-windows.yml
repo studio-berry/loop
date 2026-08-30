@@ -78,6 +78,15 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_version_policy.py
+      - name: Verify resource-envelope contracts
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload -v
+          python scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
+          python scripts/resource_envelope/pathological_workload.py `
+            --output "$env:RUNNER_TEMP\loupe-pathological-vector.pdf" `
+            --page-count 256 --operations 256 --family pathological-vector
 
       - name: Prepare vcpkg directories
         shell: pwsh

@@ -213,6 +213,24 @@ void CanvasNodeBuilder::setWindow(QQuickWindow* window)
     forget();
 }
 
+void CanvasNodeBuilder::setResourceBudget(pdf::PDFResourceBudget* budget)
+{
+    if (m_resourceBudget == budget)
+    {
+        return;
+    }
+
+    // A builder can survive a scene-graph recovery while its document session
+    // changes. Release reservations from the old authority now; syncTiles()
+    // will re-admit each retained source image against the new one before it
+    // can be drawn again.
+    for (auto& tile : m_tiles)
+    {
+        tile.second.resourceReservation.reset();
+    }
+    m_resourceBudget = budget;
+}
+
 void CanvasNodeBuilder::setPalette(const CanvasPalette& palette)
 {
     m_palette = palette;
@@ -284,11 +302,52 @@ void CanvasNodeBuilder::syncTiles(QSGNode* parent, const CanvasSnapshot& snapsho
         // visible page.
         if (entry.pixels != tile.pixels)
         {
+            entry.resourceReservation.reset();
             const QQuickWindow::CreateTextureOptions options = tile.pixels->image.hasAlphaChannel()
                                                                    ? QQuickWindow::TextureHasAlphaChannel
                                                                    : QQuickWindow::TextureIsOpaque;
+            if (m_resourceBudget)
+            {
+                const qsizetype bytes = tile.pixels->image.sizeInBytes();
+                if (bytes <= 0 || !m_resourceBudget->tryReserve(pdf::PDFResourcePool::GpuTextureCache,
+                                                                bytes,
+                                                                pdf::PDFResourcePriority::Visible,
+                                                                QStringLiteral("scene graph texture proxy")))
+                {
+                    if (bytes > 0)
+                    {
+                        m_resourceBudget->recordShed(pdf::PDFResourcePool::GpuTextureCache);
+                    }
+                    delete entry.node;
+                    entry.node = nullptr;
+                    continue;
+                }
+                entry.resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
+                                                                                              pdf::PDFResourcePool::GpuTextureCache,
+                                                                                              bytes);
+            }
             entry.node->setTexture(m_window->createTextureFromImage(tile.pixels->image, options));
             entry.pixels = tile.pixels;
+        }
+        else if (m_resourceBudget && !entry.resourceReservation)
+        {
+            const qsizetype bytes = tile.pixels->image.sizeInBytes();
+            if (bytes <= 0 || !m_resourceBudget->tryReserve(pdf::PDFResourcePool::GpuTextureCache,
+                                                            bytes,
+                                                            pdf::PDFResourcePriority::Visible,
+                                                            QStringLiteral("scene graph texture proxy")))
+            {
+                if (bytes > 0)
+                {
+                    m_resourceBudget->recordShed(pdf::PDFResourcePool::GpuTextureCache);
+                }
+                delete entry.node;
+                entry.node = nullptr;
+                continue;
+            }
+            entry.resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
+                                                                                          pdf::PDFResourcePool::GpuTextureCache,
+                                                                                          bytes);
         }
 
         entry.placedRect = tile.placedRect;

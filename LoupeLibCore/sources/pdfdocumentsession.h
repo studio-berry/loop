@@ -30,6 +30,7 @@
 #include "pdfpainter.h"
 #include "pdfcms.h"
 #include "pdfprocessingbudget.h"
+#include "pdfresourcebudget.h"
 
 #include <QByteArray>
 #include <QtGlobal>
@@ -97,6 +98,7 @@ public:
     QByteArray getDecodedStream(PDFObjectReference reference);
 
     PDFProcessingBudget* getProcessingBudget() const;
+    PDFResourceBudget* getResourceBudget() const;
     const PDFProcessingLimits& getProcessingLimits() const;
     void setProcessingLimits(const PDFProcessingLimits& limits);
     void resetProcessingBudget();
@@ -113,6 +115,8 @@ public:
 
     qsizetype compiledCacheBytes() const;
     qsizetype compiledCacheByteLimit() const;
+    qsizetype decodedStreamCacheBytes() const;
+    qsizetype decodedStreamCacheByteLimit() const;
     void setCompiledCacheByteLimit(qsizetype bytes);
     void setCacheLimit(qsizetype totalBytes);
     qsizetype cacheLimit() const;
@@ -173,6 +177,8 @@ private:
 
     void initializeRendering();
     void trimCachesToLimits();
+    void clearCompiledCache();
+    void clearDecodedStreamCache();
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
@@ -181,6 +187,8 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
+    std::unique_ptr<PDFResourceBudget> m_resourceBudget;
+    PDFResourceReservation m_documentModelReservation;
     size_t m_compileCacheLimit = CompileCacheLimit;
     size_t m_streamCacheLimit = StreamCacheLimit;
     bool m_prefetchEnabled = true;
@@ -190,6 +198,8 @@ private:
     qsizetype m_compiledCacheByteLimit = CompiledCacheByteLimitDefault;
     qsizetype m_compiledCacheBytes = 0;
     qsizetype m_cacheLimit = CompiledCacheByteLimitDefault * 2;
+    qsizetype m_streamCacheByteLimit = 256 * PDFResourceBudgetConfig::MiB;
+    qsizetype m_streamCacheBytes = 0;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;

@@ -43,6 +43,7 @@ QSGNode* LoupeCanvasItem::prepareSceneGraph(QSGNode* oldNode, QQuickWindow* host
         m_overlaysDirty = true;
     }
     m_builder.setWindow(hostWindow);
+    m_builder.setResourceBudget(m_surfaces ? m_surfaces->resourceBudget() : nullptr);
 
     QSGNode* root = oldNode;
     if (!root)

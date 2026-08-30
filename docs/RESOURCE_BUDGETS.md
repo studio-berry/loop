@@ -13,6 +13,30 @@ records. Named `undo` and `rollback` pools exist with charge APIs; history
 and artifact stores do not call them yet. The existing hard stream-filter
 ceilings remain active as a second line of defense.
 
+## Shared resident resource envelope
+
+`pdf::PDFResourceBudget` is the Core-owned resident authority shared by a
+document session, the page-surface coordinator, Qt Quick's scene-graph bridge,
+and PdfTool's transient render workers. It is independent of Widgets and uses
+the following conservative defaults:
+
+| Pool | Limit | Admission rule |
+|------|-------|----------------|
+| active document model | 256 MiB | interaction-priority hard boundary |
+| compiled/evidence cache | 128 MiB | insertion-order eviction, then reject |
+| raster/tile cache | 128 MiB | prefetch shed, then visible admission reject |
+| GPU texture cache | 128 MiB | source-image byte proxy; physical GPU bytes are unavailable (`-1`) |
+| decoded stream/image cache | 256 MiB | byte- and entry-bounded eviction |
+| undo history | 256 MiB | reserved for the undo adapter |
+| durable rollback storage | 2 GiB | durable and excluded from resident RSS ceiling |
+
+The combined resident ceiling is 768 MiB. A failed low-priority reservation is
+counted as `shed`; a visible failure carries a typed budget-exhausted outcome.
+Every pool reports configured limit, current bytes, high-water bytes,
+evictions, and shed count in `PDFWorkloadEnvelope.resources`. The source-pixel
+GPU value is deliberately a conservative accounting proxy rather than a claim
+about backend allocation.
+
 ## Named pools
 
 Each exhaustion reports the exact `budget.kind` and its pool. A budget
@@ -40,8 +64,8 @@ Under memory pressure, `PDFDocumentSession::shedPrefetchAndQuality()`
 shrinks compile and stream cache caps. The Quick `DocumentViewSession` owns a
 256 MiB unified page-cache total, partitioned into compiled-page and admitted-surface
 shares; compiled pages are charged by `getMemoryConsumptionEstimate()` and oversized
-entries are refused. Decoded streams remain outside that shared page-cache budget. The
-job scheduler still reserves
+entries are refused. Decoded streams remain outside that shared page-cache budget but
+are now part of the document's shared resident resource envelope. The job scheduler still reserves
 an interaction slot when background work is saturated.
 
 ## Reader and session behavior

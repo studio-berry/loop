@@ -81,6 +81,8 @@ add_library(LoupeLibCore SHARED
     sources/pdfocrreport.cpp
     sources/pdfocrreport.h
     sources/pdfpagecachebudget.h
+    sources/pdfresourcebudget.cpp
+    sources/pdfresourcebudget.h
     sources/pdfdocumentsession.cpp
     sources/pdfdocumentsession.h
     sources/pdfworkloadenvelope.cpp
