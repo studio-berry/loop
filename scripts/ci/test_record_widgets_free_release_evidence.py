@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,7 +93,7 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
                 env=git_env,
             )
 
-            with patch.dict(os.environ, {"GITHUB_SHA": module.git_head(fake_repo)}):
+            with patch.dict("os.environ", {"GITHUB_SHA": ""}, clear=False):
                 evidence = module.record_evidence(
                     fake_repo,
                     filtered,
