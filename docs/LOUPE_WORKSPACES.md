@@ -43,7 +43,7 @@ is not a new executable and must not own a duplicate Core semantic path.
 
 ## PageMaster disposition and capability crosswalk
 
-`LoupePageMaster` is recorded as **CLI-ONLY** and its source is deleted. Its
+PageMaster is recorded as **CLI-ONLY** and its source is deleted. Its
 historical UI action inventory maps to the Pages / Production workspace later,
 while `PDFPageMasterExport` and its ADR-003/ADR-004 contracts remain the single
 source of truth. The retained capability inventory is assigned a destination or
@@ -75,8 +75,8 @@ rollback behavior unchanged.
 ## Compare disposition
 
 Compare is **OPEN**, not implicitly absorbed. The Core `PDFDiff` contract is
-retained while `LoupeDiff` is absent from both profiles because its source was
-already deleted. The owner is `m.berry`; #193 is the follow-up for the shell
+retained while the Diff executable is absent from both profiles because its
+source was already deleted. The owner is `m.berry`; #193 is the follow-up for the shell
 boundary and #197 is the release exit gate. No new UI replacement or product
 commitment is authorized by this document.
 
