@@ -203,7 +203,7 @@ int main(int argc, char* argv[])
     QCommandLineOption configPath = pdf::PDFSettings::getConfigPathOption();
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QCoreApplication::applicationDisplayName());
+    parser.setApplicationDescription(QGuiApplication::applicationDisplayName());
     parser.addOption(noDrm);
     parser.addOption(lightGui);
     parser.addOption(darkGui);
