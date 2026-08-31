@@ -27,7 +27,7 @@ ${LOOP_WIX_FEATURE_OCR_SERVICE}
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="LOUPE" />
+        <Directory Id="INSTALLFOLDER" Name="LOOP" />
         <Directory Id="dir_share_root" Name="share">
           <Directory Id="dir_loop" Name="loop">
             <Directory Id="dir_loop_profiles" Name="profiles">

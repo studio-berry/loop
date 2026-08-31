@@ -286,7 +286,7 @@ Signals: % of JobSpec fields extracted then confirmed without edit; intake time 
 
 **Entry gate.** 0.5.0 released and accepted (candidate specs need a spine to land in).
 Locked EasyOCR V1 design ([OCR_EASYOCR_PLAN.md](OCR_EASYOCR_PLAN.md)) and the
-`loupe-ocr/` sidecar reconciled against current truth, including the V1 "CLI-only, no
+`loop-ocr/` sidecar reconciled against current truth, including the V1 "CLI-only, no
 bundled sidecar" product decision that this milestone supersedes deliberately.
 
 **Architecture.**
@@ -318,7 +318,7 @@ learning behavior.
 
 | Session | Type | Delivers | Depends on | Exit evidence |
 |---------|------|----------|------------|---------------|
-| S00 | reconcile | State of `loupe-ocr/`, sidecar packaging, MIC-343 CLI-only decision, 0.4.0 boundary reuse points | 0.6.0 entry gate | Reconciliation table; issues authored |
+| S00 | reconcile | State of `loop-ocr/`, sidecar packaging, MIC-343 CLI-only decision, 0.4.0 boundary reuse points | 0.6.0 entry gate | Reconciliation table; issues authored |
 | S01 | contract | OCR-evidence schema kind; live-text precedence; confidence semantics | S00 | Fixture round-trip; precedence tests |
 | S02 | core | Page-gate hardening: classification classes, budgets, corpus | S01 | Golden classification corpus green; INCOMPLETE attribution tested |
 | S03 | persistence | Sidecar lifecycle + packaging qualification (models, exit codes, clean machine) | S00 | Clean-machine smoke; absent-sidecar fail-closed test |

@@ -35,7 +35,7 @@
     this is off by default and the scan fails when it is found.
 #>
 param(
-    [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
+    [string]$InstallDir = "${env:ProgramFiles}\LOOP",
     [string]$ProfilesDir = "",
     [string]$TestPdf = "",
     [string]$SourceSha = "",

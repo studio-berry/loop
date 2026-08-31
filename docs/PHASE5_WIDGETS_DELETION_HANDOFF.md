@@ -7,9 +7,9 @@
 ## Current source/manifest reconciliation (Issue #191)
 
 The checked-in `docs/product-surface.json` is now the authoritative profile
-inventory for the post-Session-05 source tree. `LoupeEditor`, `PdfTool`,
-`LoupeLibCore`, and `LoupeLibQuick` are the installed first-party artifacts in
-both developer and `loupe-release` profiles. CodeGenerator, JBIG2 Viewer, and
+inventory for the post-Session-05 source tree. `LoopEditor`, `PdfTool`,
+`LoopLibCore`, and `LoopLibQuick` are the installed first-party artifacts in
+both developer and `loop-release` profiles. CodeGenerator, JBIG2 Viewer, and
 PdfExampleGenerator are developer-only build tools. The former secondary
 executables and all former Editor plugin artifacts are deleted and absent from
 both profiles; their historical dispositions remain recorded in the manifest.

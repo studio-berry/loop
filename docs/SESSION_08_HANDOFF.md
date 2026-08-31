@@ -32,5 +32,5 @@ release evidence remain separate acceptance records.
 ## Next-session entry condition
 
 Session 09 may start only from this branch’s accepted exact SHA after Issues
-LOUPE-25, LOUPE-26, and LOUPE-27 and the Session 08 exit gate are updated from
+issues 25, 26, and 27 and the Session 08 exit gate are updated from
 the final evidence record.

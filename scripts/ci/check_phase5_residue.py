@@ -21,7 +21,7 @@ MAINTAINED_PREFIXES = (
     "LoupeLibInteraction/",
     "LoupeLibQuick/",
     "PdfTool/",
-    "loupe-ocr/",
+    "loop-ocr/",
     "scripts/",
     "UnitTests/",
 )

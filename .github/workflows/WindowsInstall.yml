@@ -366,8 +366,8 @@ jobs:
         working-directory: loop\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
-          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOUPE.sln" -d"SolutionName=LOUPE" -d"SolutionPath=LOUPE.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOUPE.wixproj" -d"ProjectName=LOUPE" -d"ProjectPath=LOUPE.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOUPE" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOUPE.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOUPE.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOUPE.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOUPE.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOUPE.wixproj obj\Release\Product.wixobj
+          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj
 
       - name: Sign MSI Package
         shell: pwsh
@@ -400,7 +400,7 @@ jobs:
           # The full editor operator launch is skipped on the hosted runner; the
           # packaged native/software Quick startup is exercised by the smoke script.
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
-          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOUPE"
+          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
           & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `

@@ -37,7 +37,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,
     [string]$PreviousMsiPath = "",
-    [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
+    [string]$InstallDir = "${env:ProgramFiles}\LOOP",
     [string]$TestPdf = "",
     [string]$SourceSha = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",

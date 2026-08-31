@@ -92,11 +92,11 @@ external DIV2K corpus:
 
 ```powershell
 python scripts/resource_envelope/pathological_workload.py `
-  --output C:\temp\loupe-pathological-vector.pdf `
+  --output C:\temp\loop-pathological-vector.pdf `
   --page-count 256 --operations 512 --family pathological-vector
 
 python scripts/resource_envelope/pathological_workload.py `
-  --output C:\temp\loupe-transparency-spots.pdf `
+  --output C:\temp\loop-transparency-spots.pdf `
   --page-count 256 --operations 256 --family transparency-spots
 ```
 

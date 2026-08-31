@@ -7,7 +7,7 @@
     "qt": "6.11.1",
     "cpu": "unspecified",
     "gpu": "unavailable",
-    "renderer": "loupe",
+    "renderer": "loop",
     "fixture_digest": "synthetic-huge-envelope-40",
     "profile_version": "resource-envelope-v2",
     "operation_version": "resource-envelope-v2",
