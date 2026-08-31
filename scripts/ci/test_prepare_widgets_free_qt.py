@@ -37,10 +37,15 @@ class PrepareWidgetsFreeQtTest(unittest.TestCase):
         (prefix / "lib" / "cmake" / "Qt6Widgets" / "Qt6WidgetsConfig.cmake").write_text(
             "# forbidden\n", encoding="utf-8"
         )
+        (prefix / "lib" / "cmake" / "Qt6PrintSupport").mkdir(parents=True, exist_ok=True)
+        (prefix / "lib" / "cmake" / "Qt6PrintSupport" / "Qt6PrintSupportConfig.cmake").write_text(
+            "# forbidden\n", encoding="utf-8"
+        )
         (prefix / "include" / "QtWidgets").mkdir(parents=True, exist_ok=True)
         (prefix / "include" / "QtWidgets" / "qwidget.h").write_text("// forbidden\n", encoding="utf-8")
         (prefix / "bin").mkdir(parents=True, exist_ok=True)
         (prefix / "bin" / "Qt6Widgets.dll").write_text("forbidden\n", encoding="utf-8")
+        (prefix / "bin" / "Qt6PrintSupport.dll").write_text("forbidden\n", encoding="utf-8")
         return prefix
 
     def test_stage_excludes_widgets_and_retains_required_modules(self) -> None:
@@ -53,8 +58,15 @@ class PrepareWidgetsFreeQtTest(unittest.TestCase):
 
             self.assertFalse((destination / "include" / "QtWidgets").exists())
             self.assertFalse((destination / "bin" / "Qt6Widgets.dll").exists())
+            self.assertFalse((destination / "bin" / "Qt6PrintSupport.dll").exists())
             self.assertFalse((destination / "lib" / "cmake" / "Qt6Widgets").exists())
+            self.assertFalse((destination / "lib" / "cmake" / "Qt6PrintSupport").exists())
             self.assertTrue((destination / "lib" / "libQt6Core.so").is_file())
+            self.assertIn("qt6printsupport", manifest["forbidden_name_prefixes"])
+            self.assertNotIn(
+                "Qt6PrintSupport/Qt6PrintSupportConfig.cmake",
+                manifest["required_qt_configs"],
+            )
             self.assertGreaterEqual(len(manifest["excluded_paths"]), 3)
             module.validate_prefix(destination)
 

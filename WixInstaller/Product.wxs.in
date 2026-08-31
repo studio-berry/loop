@@ -76,6 +76,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Network" Directory="INSTALLFOLDER" Guid="{69DD98CF-191F-4E16-9475-7201CF05630D}">
                 <File Id="filQt6Network" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Network.dll" />
       </Component>
+${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6Qml" Directory="INSTALLFOLDER" Guid="{7A6C5B4D-3E2F-41D0-9C8B-7A6E5D4C3B2A}">
         <File Id="filQt6Qml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Qml.dll" />
       </Component>
@@ -88,9 +89,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6QuickDialogs2" Directory="INSTALLFOLDER" Guid="{AD9F8E70-6152-4403-CFBE-AD91807F6E5D}">
         <File Id="filQt6QuickDialogs2" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6QuickDialogs2.dll" />
       </Component>
-      <Component Id="cmpQt6PrintSupport" Directory="INSTALLFOLDER" Guid="{C8045343-5FD3-4349-B4E6-B770F4D28381}">
-                <File Id="filQt6PrintSupport" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6PrintSupport.dll" />
-      </Component>
+${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6Svg" Directory="INSTALLFOLDER" Guid="{8324FA84-C4A4-47E8-849B-62D5FD5F2B4A}">
                 <File Id="filQt6Svg" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Svg.dll" />
       </Component>
@@ -138,9 +137,7 @@ ${LOUPE_WIX_QML_COMPONENTS}
       <Component Id="cmpqwindows" Directory="dir_platforms" Guid="{8A574FB6-B003-45E6-80F2-0989BEE14A63}">
         <File Id="filqwindows" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qwindows.dll" />
       </Component>
-      <Component Id="cmpqmodernwindowsstyle" Directory="dir_styles" Guid="{1A418DAB-7A24-4695-A773-4DC161926350}">
-        <File Id="filqmodernwindowsstyle" KeyPath="yes" Source="$(var.MyInstallDir)\styles\qmodernwindowsstyle.dll" />
-      </Component>
+${LOUPE_WIX_QT_STYLES_COMPONENT}
       <Component Id="cmpqtexttospeech_sapi" Directory="dir_texttospeech" Guid="{305900CC-4483-4E0F-B611-C32FD9E01021}">
         <File Id="filqtexttospeech_sapi" KeyPath="yes" Source="$(var.MyInstallDir)\texttospeech\qtexttospeech_sapi.dll" />
       </Component>
@@ -298,17 +295,15 @@ ${LOUPE_WIX_QML_DIRECTORY_REFS}
     </DirectoryRef>
   </Fragment>
 
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_printsupport" Name="printsupport" />
-    </DirectoryRef>
-  </Fragment>
+${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_styles" Name="styles" />
+      <Directory Id="dir_pdfplugins" Name="pdfplugins" />
     </DirectoryRef>
   </Fragment>
+
+${LOUPE_WIX_QT_STYLES_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">

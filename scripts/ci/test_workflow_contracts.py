@@ -53,6 +53,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn(
+            "-DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake",
+            workflow,
+        )
         self.assertIn('-DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"', workflow)
 
     def test_windows_release_gate_qualifies_without_widgets(self):
@@ -104,8 +108,22 @@ class WorkflowContractTests(unittest.TestCase):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
         cmake = (ROOT / "WixInstaller/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertNotIn('Component Id="cmpQt6Widgets"', product)
+        self.assertNotIn('Component Id="cmpQt6PrintSupport"', product)
         self.assertIn("LOUPE_WIX_QT_WIDGETS_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY", product)
+        self.assertNotIn('Component Id="cmpqmodernwindowsstyle"', product)
+        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", product)
         self.assertIn("if(LOUPE_LOUPE_DISTRIBUTION)", cmake)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", cmake)
+        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", cmake)
+        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", cmake)
+
+    def test_release_profile_does_not_stage_qt_style_plugins(self):
+        root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("if(NOT LOUPE_LOUPE_DISTRIBUTION)", root)
+        self.assertIn("plugins/styles/", root)
 
     def test_wix_package_uses_the_64_bit_program_files_directory(self):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
