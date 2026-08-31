@@ -21,27 +21,7 @@ from typing import Iterable
 QUALIFIED_BASELINE_SHA = "d7f39224ad22f26c5f67dcd000383d6239acfff4"
 INVENTORY_PATH = Path("docs/generated/phase5-widgets-inventory.json")
 DISPOSITION_PATH = Path("docs/generated/phase5-widgets-disposition.json")
-
-PROFILE_OPTIONS = {
-    "LOUPE_LOUPE_DISTRIBUTION": True,
-    "LOUPE_BUILD_ONLY_CORE_LIBRARY": False,
-    "LOUPE_BUILD_QUICK_CANVAS": True,
-    "LOUPE_BUILD_TESTS": False,
-    "LOUPE_BUILD_FUZZERS": False,
-    "LOUPE_BUILD_QUICK_SHELL_SMOKE": False,
-    "LOUPE_BUILD_CANVAS_BENCHMARK": False,
-    "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE": False,
-    "LOUPE_BUILD_CODE_GENERATOR": True,
-    "LOUPE_BUILD_JBIG2_VIEWER": True,
-    "LOUPE_BUILD_EXAMPLE_GENERATOR": True,
-    "LOUPE_BUILD_VIEWER": False,
-    "LOUPE_BUILD_PAGEMASTER": False,
-    "LOUPE_BUILD_DIFF": False,
-    "LOUPE_BUILD_LAUNCHPAD": False,
-    "LOUPE_PLUGIN_AUDIOBOOK": False,
-    "LOUPE_PLUGIN_OCR": False,
-    "LOUPE_PLUGIN_SCANNER": False,
-}
+PROFILE_ID = "loupe-release"
 
 TARGET_COMMANDS = {"add_library", "add_executable", "qt_add_library", "qt_add_executable"}
 VISIBILITY = {"PRIVATE", "PUBLIC", "INTERFACE"}
@@ -220,41 +200,61 @@ def _installed_targets(root: Path) -> set[str]:
     return installed
 
 
-def _profile_for_target(name: str, cmake: str) -> tuple[bool, str]:
+def _profile_options(product: dict, profile: str) -> dict[str, bool]:
+    """Derive profile options from the product manifest.
+
+    The manifest owns the expected profile state. CMake configuration evidence
+    is checked separately by the product-surface verifier; this generator must
+    not maintain a second hand-written table that can silently disagree with it.
+    """
+
+    options: dict[str, bool] = {"LOUPE_LOUPE_DISTRIBUTION": profile == PROFILE_ID}
+    for row in product.get("surfaces", []):
+        option = row.get("build_option")
+        state = row.get("profiles", {}).get(profile)
+        if not option or state not in {"present", "absent"}:
+            continue
+        value = state == "present"
+        previous = options.get(option)
+        if previous is not None and previous != value:
+            raise EvidenceError(f"manifest has conflicting profile state for build option {option}")
+        options[option] = value
+    return dict(sorted(options.items()))
+
+
+def _profile_for_target(
+    name: str,
+    cmake: str,
+    product_targets: dict[str, dict],
+    profile_options: dict[str, bool],
+) -> tuple[bool, str]:
+    manifest_row = product_targets.get(name)
+    if manifest_row is not None:
+        state = manifest_row.get("profiles", {}).get(PROFILE_ID)
+        option = manifest_row.get("build_option")
+        if state not in {"present", "absent"}:
+            raise EvidenceError(f"manifest target {name} has no {PROFILE_ID} state")
+        enabled = state == "present"
+        if option:
+            if option not in profile_options:
+                raise EvidenceError(f"manifest target {name} references an unprojected build option {option}")
+            if profile_options[option] != enabled:
+                raise EvidenceError(f"manifest target {name} disagrees with its build option {option}")
+            return enabled, f"{option}={'ON' if enabled else 'OFF'} from docs/product-surface.json"
+        return enabled, f"{manifest_row['id']}={state} in docs/product-surface.json"
+
     normalized = cmake.replace("\\", "/")
     if normalized.startswith("UnitTests/"):
-        return False, "LOUPE_BUILD_TESTS=OFF in the loupe-release profile"
+        return False, "qualification target excluded from the product-surface manifest"
     if normalized.startswith("Fuzz/"):
-        return False, "LOUPE_BUILD_FUZZERS=OFF in the loupe-release profile"
+        return False, "qualification target excluded from the product-surface manifest"
     if normalized.startswith("QuickShellSmoke/"):
-        return False, "LOUPE_BUILD_QUICK_SHELL_SMOKE=OFF in the loupe-release profile"
+        return False, "qualification target excluded from the product-surface manifest"
     if normalized.startswith("CanvasBenchmark/"):
-        return False, "LOUPE_BUILD_CANVAS_BENCHMARK=OFF in the loupe-release profile"
+        return False, "qualification target excluded from the product-surface manifest"
     if normalized.startswith("ProductQuickAccessibilitySmoke/"):
-        return False, "LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=OFF in the loupe-release profile"
-    plugin_options = {
-        "AudioBookPlugin": "LOUPE_PLUGIN_AUDIOBOOK",
-        "OcrPlugin": "LOUPE_PLUGIN_OCR",
-        "ScannerPlugin": "LOUPE_PLUGIN_SCANNER",
-    }
-    for plugin, option in plugin_options.items():
-        if f"LoupeEditorPlugins/{plugin}/" in f"{normalized}/":
-            return PROFILE_OPTIONS[option], f"{option}={'ON' if PROFILE_OPTIONS[option] else 'OFF'} in the loupe-release profile"
-    option_by_directory = {
-        "CodeGenerator/": "LOUPE_BUILD_CODE_GENERATOR",
-        "JBIG2_Viewer/": "LOUPE_BUILD_JBIG2_VIEWER",
-        "PdfExampleGenerator/": "LOUPE_BUILD_EXAMPLE_GENERATOR",
-    }
-    for directory, option in option_by_directory.items():
-        if normalized.startswith(directory):
-            return PROFILE_OPTIONS[option], f"{option}={'ON' if PROFILE_OPTIONS[option] else 'OFF'} in the loupe-release profile"
-    if normalized.startswith("LoupeEditor/"):
-        return True, "LOUPE_BUILD_QUICK_CANVAS=ON and not LOUPE_BUILD_ONLY_CORE_LIBRARY"
-    if normalized.startswith("LoupeLibQuick/"):
-        return True, "LOUPE_BUILD_QUICK_CANVAS=ON"
-    if normalized.startswith(("LoupeLibInteraction/", "PdfTool/", "loupe-preflight/", "loupe-ocr/")):
-        return True, "not LOUPE_BUILD_ONLY_CORE_LIBRARY"
-    return True, "always reachable from the loupe-release GUI build"
+        return False, "qualification target excluded from the product-surface manifest"
+    return True, "target is reachable from the maintained product graph"
 
 
 def _closure(name: str, links: dict[str, list[str]], known: set[str]) -> set[str]:
@@ -318,12 +318,15 @@ def _is_widgets_surface(target: dict) -> bool:
 
 
 def build_inventory(root: Path) -> dict:
+    product = _load_json(root, "docs/product-surface.json")
+    product_targets = _product_target_map(product)
+    profile_options = _profile_options(product, PROFILE_ID)
     target_map, by_cmake = _target_declarations(root)
     links = _target_links(root)
     installed = _installed_targets(root)
     known = set(target_map)
     for name, target in target_map.items():
-        profile_enabled, profile_condition = _profile_for_target(name, target["cmake"])
+        profile_enabled, profile_condition = _profile_for_target(name, target["cmake"], product_targets, profile_options)
         direct_links = sorted(links.get(name, []))
         direct_qt = sorted(link.removeprefix("Qt6::") for link in direct_links if link.startswith("Qt6::"))
         transitive = _closure(name, links, known)
@@ -450,11 +453,11 @@ def build_inventory(root: Path) -> dict:
         "evidence_kind": "phase5-widgets-qualified-graph",
         "qualified_baseline_sha": QUALIFIED_BASELINE_SHA,
         "profile": {
-            "id": "loupe-release",
-            "options": PROFILE_OPTIONS,
-            "configuration_mode": "source-static",
+            "id": PROFILE_ID,
+            "options": profile_options,
+            "configuration_mode": "manifest-derived-source",
             "configured_build_dir": None,
-            "configuration_note": "Static CMake/file evidence is used when a qualified build directory is unavailable; no build qualification is implied.",
+            "configuration_note": "Profile expectations come from docs/product-surface.json; a configured CMake cache and install tree are required for qualification.",
         },
         "inputs": {
             "cmake_files": sorted(target["cmake"] for target in target_rows),

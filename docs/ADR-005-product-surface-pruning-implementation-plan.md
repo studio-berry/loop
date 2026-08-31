@@ -1,10 +1,11 @@
 # ADR-005 Implementation Plan: Product Surface Pruning
 
-**Branch:** `product-pruning`
+**Branch:** `cdx/issue-191-product-surface`
 **Source decision:** [ADR-005: Product surface pruning classification](https://app.notion.com/p/3b69cb079ddb813492a8cb6f84f23d14?pvs=204)
-**Status:** 0.2B transitional packaging implemented; #192 establishes the
-workspace boundary and authoritative product-surface contract; Editor workspace
-integration remains planned for #193 / 0.0.1B.
+**Status:** The Issue #191 product-surface contract is implemented. The checked-in
+manifest, source/package verifier, and profile-specific CI checks now describe the
+current post-Session-05 tree; Editor workspace integration remains planned for
+#193 / 0.0.1B.
 
 ## 0.2B transitional surface contract
 
@@ -17,22 +18,22 @@ The release package presents two product surfaces:
   executable, command names, machine-readable contracts, and automation
   compatibility remain unchanged.
 
-The release profile keeps the following targets buildable and installed for
-compatibility/direct invocation: `LoupeViewer`, `LoupePageMaster`,
-`LoupeDiff`, and `LoupeLaunchPad`. CodeGenerator, JBIG2 Viewer,
-PdfExampleGenerator, and the Scanner plugin remain retained by the release
-build profile. None of these compatibility surfaces receives a separate Loupe
-desktop or AppX product entry.
+The release profile contains `LoupeEditor`, `PdfTool`, `LoupeLibCore`, and
+`LoupeLibQuick`. CodeGenerator, JBIG2 Viewer, and PdfExampleGenerator remain
+available only in the full developer build. The former Viewer, PageMaster, Diff,
+LaunchPad, and editor-plugin sources are deleted and absent from both profiles;
+they are recorded as historical dispositions so an upstream reintroduction is
+detected rather than silently shipped.
 
 The Editor-facing Pages / Production and Compare seams must reuse the existing
 Core/PageMaster export and Core Diff contracts. This 0.2B slice does not move
 their visible UI into Editor; that workspace integration is a 0.3 deliverable.
 
-Issue #192 records the boundary in [LOUPE_WORKSPACES.md](LOUPE_WORKSPACES.md)
-and the profile-aware inventory in [product-surface.json](product-surface.json),
-validated by `scripts/verify-loupe-surface.ps1`. The manifest is the executable
-inventory for developer and `loupe-release` packaging profiles; this plan and
-ADR-005 remain the decision record.
+Issue #192 records the boundary in [LOUPE_WORKSPACES.md](LOUPE_WORKSPACES.md).
+Issue #191 makes [product-surface.json](product-surface.json) the executable
+inventory for developer and `loupe-release` packaging profiles. Both
+`scripts/verify_product_surface.py` and the PowerShell compatibility entry point
+consume it; this plan and ADR-005 remain the decision record.
 
 ## Objective
 
@@ -57,8 +58,8 @@ The implementation must follow the ADR-005 order:
 - Loupe CLI, currently `PdfTool`, as the headless/automation surface.
 - First-class product groupings for Document, Preflight, Production Preview,
   Pages, Inspect, Fix, and Compare.
-- Release-profile gating for Viewer, Diff, PageMaster, LaunchPad, developer
-  utilities, and non-primary plugins.
+- Release-profile gating for developer utilities and the absence of deleted
+  Viewer, Diff, PageMaster, LaunchPad, and plugin artifacts.
 - Linux desktop entries, Flatpak, Windows/WiX feature selection, and release
   artifact verification.
 - Editor menu and plugin-surface reorganization after the product IA is locked.
@@ -78,14 +79,13 @@ The implementation must follow the ADR-005 order:
 
 | Concern | Current anchor | Planning implication |
 | --- | --- | --- |
-| Distribution switch | `CMakeLists.txt:68-107` | Reuse `LOUPE_LOUPE_DISTRIBUTION`; do not introduce per-surface flags until a real exception needs one. |
-| Conditional application targets | `CMakeLists.txt:250-274` | Keep source directories and gate targets through the release profile. |
-| Linux install surface | `CMakeLists.txt:344-368` | Make `.desktop`, icon, and metainfo installation follow the same product profile as binaries. |
-| Windows packaging | `WixInstaller/CMakeLists.txt` and `WixInstaller/Product.wxs.in` | Preserve conditional Viewer/PageMaster/Diff features; verify file associations resolve to Loupe when those features are absent. |
-| Editor menus | `LoupeLibGui/pdfeditormainwindow.ui` and `pdfeditormainwindow.cpp` | Reorganize or hide inherited menus through the Editor shell; avoid deleting action implementations prematurely. |
-| Plugin registry/build | `LoupeEditorPlugins/CMakeLists.txt` and `pdfprogramcontroller.cpp` | Separate retained production plugins from optional/deferred plugins without changing shared action contracts. |
-| LaunchPad | `LoupeLaunchPad/` and `Desktop/io.github.mberrys.Loupe-pdf.desktop` | Compatibility target remains available for direct invocation; the release desktop entry launches Editor, and the developer profile may retain compatibility entries. |
-| Product manifest | `docs/product-surface.json` and `docs/schemas/product-surface.schema.json` | The profile-aware manifest is the executable inventory; ADR-005 remains the decision source and implementation status links both records. |
+| Distribution switch | `CMakeLists.txt:58-113` | Reuse `LOUPE_LOUPE_DISTRIBUTION`; the manifest records its developer/release consequences. |
+| Conditional application targets | `CMakeLists.txt:284-320` | Keep maintained developer tools opt-in to the release profile and fail on unmanifested install targets. |
+| Linux install surface | `CMakeLists.txt:374-420` | Keep the manifest desktop inventory aligned with profile-selected `.desktop`, icon, and metainfo installation. |
+| Windows packaging | `WixInstaller/CMakeLists.txt` and `WixInstaller/Product.wxs.in` | Package Editor, PdfTool, Core, and Quick without stale compatibility/plugin features or Qt Widgets. |
+| Editor shell | `LoupeEditor/` and `docs/loupe-shell.json` | Keep the Quick shell contract as the UI authority; future workspace wiring remains a separate issue. |
+| Plugin registry/build | `docs/generated/phase5-widgets-disposition.json` | Deleted editor-plugin sources remain absent; the manifest records their historical disposition and follow-up ownership. |
+| Product manifest | `docs/product-surface.json`, `docs/schemas/product-surface.schema.json`, and `scripts/product_surface.py` | The manifest is the executable inventory; source, install, package, and CLI checks derive from it. |
 
 ## Implementation phases
 
@@ -93,18 +93,18 @@ The implementation must follow the ADR-005 order:
 
 **Goal:** Prevent implementation from silently changing the accepted ADR.
 
-- [ ] Keep the ADR-005 manifest unchanged except for explicit status/evidence
-      updates.
+- [x] Reconcile the ADR-005 snapshot with the current source tree through the
+      profile-aware manifest and explicit `source_status` fields.
 - [ ] Resolve the redaction decision against GitHub #66 before changing the
       Editor plugin or the supported CLI surface.
-- [ ] Decide whether Compare is a supported Loupe workspace or remains
-      deferred; do not remove `LoupeDiff` while this is `OPEN`.
+- [x] Preserve Compare as `OPEN` with owner `m.berry` and follow-up #193 while
+      recording the already-deleted `LoupeDiff` as absent.
 - [ ] Decide whether developer-menu visibility is a build flag, a release
       setting, or both. The existing `m_allowDeveloperMode` setting is a useful
       compatibility mechanism.
-- [ ] Define the release artifact contract: expected executables, plugins,
-      desktop entries, file associations, and CLI commands for each supported
-      platform.
+- [x] Define the release artifact contract: expected executables, libraries,
+      desktop entries, AppX/Flatpak/WiX entrypoints, file associations, and the
+      live PdfTool command inventory.
 
 **Deliverable:** approved implementation checklist and a release-profile
 artifact inventory.
@@ -113,25 +113,23 @@ artifact inventory.
 
 **Goal:** Produce a slim Loupe build without deleting upstream-syncable sources.
 
-- [ ] Keep `LOUPE_LOUPE_DISTRIBUTION` as the top-level release switch and make
-      release/packaging workflows pass it explicitly rather than relying on a
-      developer default.
-- [ ] Verify that the profile disables Viewer, PageMaster, Diff, LaunchPad,
-      CodeGenerator, JBIG2 viewer, ExampleGenerator, AudioBook, and Scanner,
-      while retaining Editor, PdfTool, Core libraries, LoupePreflight, and the
-      production inspection plugins.
-- [ ] Keep OCR explicitly CLI-only in release packaging; do not disable
-      `PdfTool ocr` when disabling the Editor OCR plugin.
+- [x] Keep `LOUPE_LOUPE_DISTRIBUTION` as the top-level release switch and make
+      release/packaging workflows pass it explicitly.
+- [x] Verify that the release profile contains only the installed Editor, PdfTool,
+      Core, and Quick product artifacts; developer tools remain developer-only.
+- [x] Record deleted Viewer, PageMaster, Diff, LaunchPad, and editor-plugin
+      artifacts as absent from every profile.
+- [x] Keep OCR in the PdfTool capability contract; no retired Editor plugin may
+      reappear without an explicit manifest change.
 - [x] Enforce the OCR CLI-only surface with a release-profile CMake guard and
       artifact-level plugin/sidecar/CLI checks (issue #41).
-- [ ] Add a static release-profile check that fails if a pruned target or
-      plugin is built, installed, or packaged unexpectedly.
-- [ ] Keep a full developer configuration available for upstream comparison and
+- [x] Add a static/source and installed-tree check that fails if an unmanifested
+      target, artifact, plugin, or CLI command appears.
+- [x] Keep a full developer configuration available for upstream comparison and
       development workflows.
 
-**Primary files:** `CMakeLists.txt`, `LoupeEditorPlugins/CMakeLists.txt`, CI
-workflow configure commands, and a new narrow packaging-surface verification
-script if existing checks cannot express the inventory.
+**Primary files:** `CMakeLists.txt`, `LoupeEditor/CMakeLists.txt`, `WixInstaller/`,
+CI workflow configure commands, and the manifest-backed verification scripts.
 
 **Deliverable:** two inspectable configurations: full developer build and slim
 Loupe release build.
@@ -140,17 +138,19 @@ Loupe release build.
 
 **Goal:** Make installed artifacts communicate one Loupe desktop product.
 
-- [ ] Gate Linux `.desktop`, icon, and metainfo installation on the release
+- [x] Gate Linux `.desktop`, icon, and metainfo installation on the release
       surface; retain source assets for developer/full builds.
-- [ ] Make the primary Loupe desktop entry launch `LoupeEditor` directly in
+- [x] Make the primary Loupe desktop entry launch `LoupeEditor` directly in
       the slim profile instead of exposing LaunchPad as the product shell.
-- [ ] Remove Viewer, Diff, and PageMaster desktop entries from slim Linux
-      artifacts while retaining them in the full developer profile.
-- [ ] Confirm Flatpak continues to launch Editor, retains the CLI policy, and
-      does not accidentally expose disabled plugin/application artifacts.
-- [ ] Preserve WiX conditional feature generation, then verify that slim
-      installers contain Editor, PdfTool, and retained plugins only.
-- [ ] Verify PDF file association behavior when Viewer is disabled; Editor must
+- [x] Remove Viewer, Diff, and PageMaster desktop entries from slim Linux
+      artifacts while keeping only the manifest-declared Editor entries in the
+      developer/release packaging profiles.
+- [x] Confirm Flatpak continues to launch Editor, retains the CLI policy, and
+      does not accidentally expose deleted plugin/application artifacts.
+- [x] Simplify WiX to Editor, PdfTool, Core, Quick, and explicitly configured
+      runtime services; remove stale compatibility/plugin feature fragments and
+      Qt Widgets. Preserve WiX dependency injection for staged runtime DLLs.
+- [x] Verify PDF file association behavior when Viewer is disabled; Editor must
       remain the supported open target.
 
 **Primary files:** root `CMakeLists.txt`, `Desktop/`, `Flatpak/`,
@@ -226,21 +226,17 @@ evidence; no broad cleanup commit.
 
 ## Validation matrix
 
-Do not run builds or reconfigure CMake as part of the planning pass. When
-implementation begins, validate in this order:
+The source-only contract and focused negative tests run on every change. When a
+build is available, validate the installed tree in this order:
 
-1. Static configuration review: full versus slim option values and target
-   graph.
-2. Target/build inventory: expected executables and plugin libraries for each
-   profile.
-3. Install/package inventory: Linux desktop entries/icons, Flatpak contents,
-   and WiX feature/file-association behavior.
-4. Editor action inventory: release-visible versus developer-visible menus and
-   plugin actions.
-5. Targeted build of touched targets, then relevant Qt tests; do not claim
-   clean-machine, installer, or CI validation from local static checks.
-6. Full developer configuration and upstream-sync comparison after slim-profile
-   changes.
+1. Validate `docs/product-surface.json` against its schema and derive both
+   profile target/package inventories from source.
+2. Run the verifier against the CMake install manifest and installed tree.
+3. Invoke the installed `PdfTool capabilities --console-format json` command
+   and compare its complete sorted command inventory.
+4. Run targeted builds/tests and hosted packaging jobs; do not claim
+   clean-machine or CI validation from local static checks.
+5. Re-run the full developer configuration after upstream synchronization.
 
 ## Risks and mitigations
 
@@ -248,7 +244,7 @@ implementation begins, validate in this order:
 | --- | --- | --- |
 | Upstream sync reintroduces pruned targets | Release surface regresses silently | Flag-gate first; add post-sync target/artifact inventory checks. |
 | Linux and Windows packaging diverge | Users see different products by platform | Validate both install manifests against one expected surface table. |
-| Removing Viewer/PageMaster/Diff before replacement | Supported workflow disappears | Keep source and developer builds; require workspace/Compare decisions first. |
+| Removing Viewer/PageMaster/Diff before replacement | Supported workflow disappears | Preserve Core/PdfTool contracts, keep Compare `OPEN`, and record deleted compatibility artifacts explicitly. |
 | Redaction status is guessed | Security or product commitment becomes inconsistent | Leave `OPEN` and block redaction-surface changes on #66. |
 | UI-only pruning misses plugin actions | Generic upstream UI leaks back into Loupe | Audit `pdfprogramcontroller` and plugin registration, not only `.ui` files. |
 | Release default breaks developer/CI workflows | Contributors lose useful upstream comparison tools | Use explicit release-profile configuration and preserve the full matrix. |
@@ -257,12 +253,12 @@ implementation begins, validate in this order:
 
 - [ ] ADR-005 classification remains the source of truth and its `OPEN` items
       are not silently resolved.
-- [ ] Slim release configuration builds and packages only the supported Loupe
-      desktop/CLI surface and retained production plugins.
-- [ ] Full developer configuration still builds the upstream-comparison
-      surfaces.
-- [ ] No stale Viewer, Diff, PageMaster, or LaunchPad entry remains in slim
-      release artifacts.
+- [x] Slim release configuration builds and packages only the supported Loupe
+      desktop/CLI surface and maintained Core/Quick libraries.
+- [x] Full developer configuration still builds the upstream-comparison
+      developer tools.
+- [x] No stale Viewer, Diff, PageMaster, LaunchPad, or editor-plugin artifact
+      remains in either manifest profile.
 - [ ] Editor release menus expose the focused Loupe workflow while developer
       diagnostics remain available through an explicit path.
 - [ ] PdfTool and shared Core semantics remain available independently of GUI
@@ -274,12 +270,14 @@ implementation begins, validate in this order:
 
 ## Status
 
-- Phase 0: Partial — release artifact contract implemented; OPEN product decisions remain
-- Phase 1: Implemented — slim release flag is explicit in release CI/Flatpak and inherited targets remain source-preserved
-- Phase 2: Implemented — primary desktop/AppX surfaces and staged artifact checks are aligned; runtime packaging validation pending
+- Phase 0: Implemented for Issue #191 — release artifact contract and OPEN rows are explicit
+- Phase 1: Implemented — slim release flag is explicit and developer tools remain outside the release profile
+- Phase 2: Implemented — desktop/AppX/Flatpak/WiX sources and staged artifact checks derive from the manifest
 - Phase 3: Partial — release-only Developer menu gating is implemented; full Loupe information architecture remains follow-up work
 - Phase 4: Boundary recorded; Editor workspace wiring remains deferred to #193
 - Phase 5: Deferred until level-3 removals are explicitly approved
 
-**Overall:** Initial implementation slice complete on `product-pruning`; build,
-package, and runtime validation are pending an explicit build/test pass.
+**Overall:** Issue #191 implementation is complete on
+`cdx/issue-191-product-surface`; local source and focused contract checks pass.
+Build, package, and runtime evidence remains the responsibility of the hosted
+profile jobs when this branch is validated.
