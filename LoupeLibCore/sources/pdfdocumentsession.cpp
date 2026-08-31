@@ -38,6 +38,14 @@
 namespace pdf
 {
 
+constexpr size_t PDFDocumentSession::CompileCacheLimit;
+constexpr size_t PDFDocumentSession::StreamCacheLimit;
+constexpr size_t PDFDocumentSession::ShedCompileCacheLimit;
+constexpr size_t PDFDocumentSession::ShedStreamCacheLimit;
+constexpr int PDFDocumentSession::ShedQualityPercent;
+constexpr qsizetype PDFDocumentSession::CompiledCacheByteLimitDefault;
+constexpr qsizetype PDFDocumentSession::ShedCompiledCacheByteLimit;
+
 namespace
 {
 

@@ -618,7 +618,14 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
         catch (const PDFException& exception)
         {
             QMutexLocker lock(&m_mutex);
-            m_result = Result::Failed;
+#if defined(LOUPE_COMPILER_GCC) && !defined(LOUPE_COMPILER_CLANG)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+            m_result.store(Result::Failed);
+#if defined(LOUPE_COMPILER_GCC) && !defined(LOUPE_COMPILER_CLANG)
+#pragma GCC diagnostic pop
+#endif
             m_errorMessage = exception.getMessage();
         }
     };

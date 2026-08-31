@@ -101,6 +101,8 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
 {
     pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
     settings.features = features;
+    // OverlayBuilder reads denyExtraGraphics() straight out of the shared
+    // RenderPresentationPolicy this call just mutated, so there is nothing to push.
     m_surfaces->setRenderSettings(settings);
 }
 

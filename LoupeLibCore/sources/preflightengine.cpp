@@ -92,13 +92,13 @@ QString PreflightFinding::stableId() const
 {
     QCryptographicHash hash(QCryptographicHash::Sha256);
     hash.addData(checkId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(scope.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(QByteArray::number(page));
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(objectId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(type.toUtf8());
     return QString::fromLatin1(hash.result().toHex().left(16));
 }
@@ -2681,21 +2681,26 @@ void runColorInventoryCheck(PDFDocumentSession* session,
         emitInfo(finding);
     }
 
-    if (result.diagnostics.isExact())
+    // Gate per page: one approximated page must not discard the rich-black
+    // findings measured exactly on every other page. The document-scope
+    // "Color inventory skipped" note above still reports the degraded pages.
+    for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
     {
-        for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+        if (!richBlack.diagnostics.isExact())
         {
-            PreflightFinding finding;
-            finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
-            finding.page = richBlack.page;
-            finding.type = QStringLiteral("rich-black");
-            finding.message = PDFTranslationContext::tr(
-                                  "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
-                                  .arg(richBlack.page)
-                                  .arg(richBlack.areaMM2, 0, 'f', 2)
-                                  .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
-            emitInfo(finding);
+            continue;
         }
+
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
+        finding.page = richBlack.page;
+        finding.type = QStringLiteral("rich-black");
+        finding.message = PDFTranslationContext::tr(
+                              "Rich black detected on page %1 (approximately %2 mm²; K > %3%).")
+                              .arg(richBlack.page)
+                              .arg(richBlack.areaMM2, 0, 'f', 2)
+                              .arg(check.richBlackKThreshold * 100.0, 0, 'f', 0);
+        emitInfo(finding);
     }
 }
 

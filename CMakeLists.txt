@@ -127,6 +127,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
+# Qt Quick can use Vulkan when the SDK headers are available.  Keep that
+# optional discovery quiet in environments that qualify D3D11/software only;
+# Qt's GUI package otherwise emits a warning while probing its wrapper.
+find_package(Vulkan QUIET)
+if(NOT Vulkan_FOUND)
+    set(CMAKE_DISABLE_FIND_PACKAGE_WrapVulkanHeaders TRUE)
+endif()
+
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
 set(_LOUPE_REQUIRES_WIDGETS OFF)
@@ -175,6 +183,12 @@ if(LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
 
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    # QTP0004 is provided by Qt Qml.  The fuzz configuration intentionally
+    # builds only LoupeLibCore and therefore does not discover that module.
+    qt_policy(SET QTP0004 NEW)
+endif()
+set(QT_NO_MISSING_CATALOG_LANGUAGE_WARNING ON)
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
 
 find_package(OpenSSL REQUIRED)

@@ -28,7 +28,7 @@
 namespace pdf
 {
 
-enum class LOUPELIBCORESHARED_EXPORT PreflightVerdictState
+enum class PreflightVerdictState
 {
     Pass,
     Fail,

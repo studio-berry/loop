@@ -340,7 +340,7 @@ bool pdf::PDFSignatureFactory::signImpl_Win(const pdf::PDFCertificateEntry& cert
 #ifdef Q_OS_WIN
     Q_UNUSED(password);
 
-    HCERTSTORE certStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL, CERT_SYSTEM_STORE_CURRENT_USER, L"MY");
+    HCERTSTORE certStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, HCRYPTPROV_LEGACY{}, CERT_SYSTEM_STORE_CURRENT_USER, L"MY");
     if (certStore)
     {
         PCCERT_CONTEXT pCertContext = nullptr;

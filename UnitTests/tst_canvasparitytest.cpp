@@ -190,7 +190,7 @@ struct ParityFixture
         item->bind(&viewport, controller.get(), surfaces.get());
 
         window->show();
-        QTest::qWaitForWindowExposed(window.get());
+        static_cast<void>(QTest::qWaitForWindowExposed(window.get()));
 
         surfaces->requestSurfaces();
         QCoreApplication::processEvents();

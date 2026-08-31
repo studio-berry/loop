@@ -66,6 +66,7 @@ qt_add_library(LoupeLibQuick SHARED
 qt_add_qml_module(LoupeLibQuick
     URI Loupe.Canvas
     VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loupe/Canvas"
     DEPENDENCIES QtQuick
 )
 

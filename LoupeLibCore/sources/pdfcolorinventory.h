@@ -46,6 +46,11 @@ struct LOUPELIBCORESHARED_EXPORT PDFRichBlackInventory
 {
     int page = 0;
     qreal areaMM2 = 0.0;
+
+    /// Fidelity of the render this row was measured from. Consumers gate on
+    /// this per page: one approximated page must not suppress the rows that
+    /// were measured exactly on every other page.
+    PDFRenderDiagnostics diagnostics;
 };
 
 struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult

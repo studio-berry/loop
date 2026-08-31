@@ -31,7 +31,7 @@
 namespace pdf
 {
 
-enum class LOUPELIBCORESHARED_EXPORT PDFSaveMode
+enum class PDFSaveMode
 {
     IncrementalAppend,
     FullRewrite,
