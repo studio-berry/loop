@@ -34,6 +34,7 @@ add_library(LoupeEditorQuick STATIC
 qt_add_qml_module(LoupeEditorQuick
     URI Loupe.Quick
     VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loupe/Quick"
     QML_FILES
         qml/Main.qml
         qml/Workspace.qml

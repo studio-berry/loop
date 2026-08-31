@@ -38,7 +38,7 @@ namespace pdf
 
 class PDFDocumentSession;
 
-enum class LOUPELIBCORESHARED_EXPORT PDFEvidenceDomain
+enum class PDFEvidenceDomain
 {
     Images = 1 << 0,
     Colorants = 1 << 1,

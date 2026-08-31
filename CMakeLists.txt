@@ -127,6 +127,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
+# Qt Quick can use Vulkan when the SDK headers are available.  Keep that
+# optional discovery quiet in environments that qualify D3D11/software only;
+# Qt's GUI package otherwise emits a warning while probing its wrapper.
+find_package(Vulkan QUIET)
+if(NOT Vulkan_FOUND)
+    set(CMAKE_DISABLE_FIND_PACKAGE_WrapVulkanHeaders TRUE)
+endif()
+
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
 
 set(_LOUPE_REQUIRES_WIDGETS OFF)
@@ -175,6 +183,8 @@ if(LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
 
+qt_policy(SET QTP0004 NEW)
+set(QT_NO_MISSING_CATALOG_LANGUAGE_WARNING ON)
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
 
 find_package(OpenSSL REQUIRED)

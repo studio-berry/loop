@@ -32,7 +32,7 @@
 namespace pdf
 {
 
-enum class LOUPELIBCORESHARED_EXPORT PDFSchemaKind
+enum class PDFSchemaKind
 {
     Unknown,
     PreflightReport,
@@ -52,7 +52,7 @@ enum class LOUPELIBCORESHARED_EXPORT PDFSchemaKind
     PreflightDecisions
 };
 
-enum class LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility
+enum class PDFSchemaCompatibility
 {
     Compatible,
     UnsupportedMajor,

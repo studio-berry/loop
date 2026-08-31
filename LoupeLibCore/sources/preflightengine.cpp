@@ -92,13 +92,13 @@ QString PreflightFinding::stableId() const
 {
     QCryptographicHash hash(QCryptographicHash::Sha256);
     hash.addData(checkId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(scope.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(QByteArray::number(page));
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(objectId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(type.toUtf8());
     return QString::fromLatin1(hash.result().toHex().left(16));
 }

@@ -606,7 +606,6 @@ static QByteArray encodeJPEG2000(const PreparedImageData& data,
     {
         std::memset(&component, 0, sizeof(component));
         component.prec = data.bitsPerComponent;
-        component.bpp = data.bitsPerComponent;
         component.sgnd = 0;
         component.dx = 1;
         component.dy = 1;
@@ -630,7 +629,6 @@ static QByteArray encodeJPEG2000(const PreparedImageData& data,
     for (int comp = 0; comp < data.components; ++comp)
     {
         image->comps[comp].prec = data.bitsPerComponent;
-        image->comps[comp].bpp = data.bitsPerComponent;
         image->comps[comp].sgnd = 0;
         image->comps[comp].dx = 1;
         image->comps[comp].dy = 1;

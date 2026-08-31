@@ -201,7 +201,7 @@ bool rotateLogFiles(LogState& state)
         if (!QFile::remove(rotatedLogFilePath(baseLogFilePath, 3)))
         {
             state.file.setFileName(baseLogFilePath);
-            state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+            static_cast<void>(state.file.open(QIODevice::Append | QIODevice::WriteOnly));
             return false;
         }
     }
@@ -209,21 +209,21 @@ bool rotateLogFiles(LogState& state)
         && !QFile::remove(rotatedLogFilePath(baseLogFilePath, 2)))
     {
         state.file.setFileName(baseLogFilePath);
-        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        static_cast<void>(state.file.open(QIODevice::Append | QIODevice::WriteOnly));
         return false;
     }
     if (QFileInfo::exists(rotatedLogFilePath(baseLogFilePath, 1))
         && !QFile::rename(rotatedLogFilePath(baseLogFilePath, 1), rotatedLogFilePath(baseLogFilePath, 2)))
     {
         state.file.setFileName(baseLogFilePath);
-        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        static_cast<void>(state.file.open(QIODevice::Append | QIODevice::WriteOnly));
         return false;
     }
     if (QFileInfo::exists(baseLogFilePath)
         && !QFile::rename(baseLogFilePath, rotatedLogFilePath(baseLogFilePath, 1)))
     {
         state.file.setFileName(baseLogFilePath);
-        state.file.open(QIODevice::Append | QIODevice::WriteOnly);
+        static_cast<void>(state.file.open(QIODevice::Append | QIODevice::WriteOnly));
         return false;
     }
 

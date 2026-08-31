@@ -55,7 +55,7 @@ struct PDFJobStringHash
     }
 };
 
-enum class LOUPELIBCORESHARED_EXPORT PDFJobPriority
+enum class PDFJobPriority
 {
     Interaction = 0,
     VisiblePage = 1,
@@ -65,7 +65,7 @@ enum class LOUPELIBCORESHARED_EXPORT PDFJobPriority
     Agent = 5
 };
 
-enum class LOUPELIBCORESHARED_EXPORT PDFJobKind
+enum class PDFJobKind
 {
     Rendering,
     Preflight,
@@ -77,7 +77,7 @@ enum class LOUPELIBCORESHARED_EXPORT PDFJobKind
     Other
 };
 
-enum class LOUPELIBCORESHARED_EXPORT PDFJobStatus
+enum class PDFJobStatus
 {
     Queued,
     Running,
@@ -87,7 +87,7 @@ enum class LOUPELIBCORESHARED_EXPORT PDFJobStatus
     Stale
 };
 
-enum class LOUPELIBCORESHARED_EXPORT PDFJobStaleResultPolicy
+enum class PDFJobStaleResultPolicy
 {
     Discard,
     Deliver
