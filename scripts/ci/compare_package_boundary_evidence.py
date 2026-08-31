@@ -37,6 +37,7 @@ def load(path: Path, expected_platform: str) -> dict[str, Any]:
         "all_binary_files_inspected",
         "target_architecture_matches",
         "qt6widgets_absent",
+        "qt6widgets_surface_absent",
         "unresolved_non_system_dependencies_absent",
     )
     if not isinstance(checks, dict) or any(checks.get(name) is not True for name in required_checks):

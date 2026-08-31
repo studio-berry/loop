@@ -29,6 +29,7 @@ def evidence(platform: str, source_sha: str, status: str = "passed") -> dict:
             "all_binary_files_inspected": True,
             "target_architecture_matches": True,
             "qt6widgets_absent": True,
+            "qt6widgets_surface_absent": True,
             "unresolved_non_system_dependencies_absent": True,
         },
         "package": {

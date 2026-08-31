@@ -55,7 +55,8 @@
         "LoupeLibCore/**",
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
-        "UnitTests/tst_incrementalsavetest.cpp"
+        "UnitTests/tst_incrementalsavetest.cpp",
+        "UnitTests/tst_overprinttest.cpp"
       ],
       "targets": ["LoupeLibCore"],
       "tests": [

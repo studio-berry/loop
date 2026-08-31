@@ -22,6 +22,18 @@ FORBIDDEN_CACHE_MARKERS = (
     "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
     "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
+REQUIRED_FORBIDDEN_QT_PREFIXES = {
+    "qt6widgets",
+    "qt6quickwidgets",
+    "qtwidgets",
+    "qtquickwidgets",
+    "libqt6widgets",
+    "libqt6quickwidgets",
+    "qt6printsupport",
+    "qtprintsupport",
+    "libqt6printsupport",
+    "libqtprintsupport",
+}
 
 
 class EvidenceError(ValueError):
@@ -85,6 +97,18 @@ def record_evidence(
         raise EvidenceError("manifest does not record excluded Widgets paths")
     if Path(str(manifest_data.get("destination_prefix"))).resolve() != qt_prefix:
         raise EvidenceError("manifest destination does not match the tested Qt prefix")
+    manifest_prefixes = {
+        str(prefix).casefold() for prefix in manifest_data.get("forbidden_name_prefixes", [])
+    }
+    missing_prefixes = sorted(REQUIRED_FORBIDDEN_QT_PREFIXES - manifest_prefixes)
+    if missing_prefixes:
+        raise EvidenceError(
+            "manifest does not exclude the complete Widgets-bound Qt surface: "
+            f"{missing_prefixes}"
+        )
+    required_configs = {str(config).casefold() for config in manifest_data.get("required_qt_configs", [])}
+    if any("printsupport" in config for config in required_configs):
+        raise EvidenceError("manifest incorrectly treats Qt6PrintSupport as required in the Widgets-free prefix")
 
     cache_text = cache.read_text(encoding="utf-8", errors="replace")
     missing = [marker for marker in REQUIRED_CACHE_MARKERS if marker not in cache_text]
@@ -134,6 +158,7 @@ def record_evidence(
             "LOUPE_BUILD_EXAMPLE_GENERATOR": False,
         },
         "excluded_widgets_paths": manifest_data["excluded_paths"],
+        "excluded_widgets_bound_qt_paths": manifest_data["excluded_paths"],
     }
 
 

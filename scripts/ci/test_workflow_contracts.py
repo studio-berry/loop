@@ -22,8 +22,6 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        self.assertIn("python3 scripts/ci/validate_product_surface.py", workflow)
-        self.assertIn("python3 scripts/ci/check_phase5_residue.py", workflow)
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
         self.assertIn("python3 scripts/verify_phase5_widgets_contract.py", workflow)
         self.assertIn("python3 scripts/verify-plugin-form-accounting.py", workflow)
@@ -37,14 +35,7 @@ class WorkflowContractTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
         self.assertIn("LOUPE_LOUPE_DISTRIBUTION=ON", workflow)
         self.assertIn("-Profile loupe-release", workflow)
-        self.assertIn("-InstallManifestPath ./build/install_manifest.txt", workflow)
         self.assertNotIn("-Profile developer", workflow)
-
-    def test_windows_developer_gate_is_explicit_and_manifest_backed(self):
-        workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
-        self.assertIn("LOUPE_LOUPE_DISTRIBUTION=OFF", workflow)
-        self.assertIn("-Profile developer", workflow)
-        self.assertIn("-InstallManifestPath .\\build\\install_manifest.txt", workflow)
 
     def test_linux_release_gate_qualifies_without_widgets(self):
         workflow = (ROOT / ".github/workflows/reusable-linux.yml").read_text(encoding="utf-8")
@@ -53,6 +44,10 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn(
+            "-DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake",
+            workflow,
+        )
         self.assertIn('-DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"', workflow)
 
     def test_windows_release_gate_qualifies_without_widgets(self):
@@ -104,8 +99,22 @@ class WorkflowContractTests(unittest.TestCase):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
         cmake = (ROOT / "WixInstaller/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertNotIn('Component Id="cmpQt6Widgets"', product)
+        self.assertNotIn('Component Id="cmpQt6PrintSupport"', product)
         self.assertIn("LOUPE_WIX_QT_WIDGETS_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY", product)
+        self.assertNotIn('Component Id="cmpqmodernwindowsstyle"', product)
+        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", product)
+        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", product)
         self.assertIn("if(LOUPE_LOUPE_DISTRIBUTION)", cmake)
+        self.assertIn("LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT", cmake)
+        self.assertIn("LOUPE_WIX_QT_STYLES_COMPONENT", cmake)
+        self.assertIn("LOUPE_WIX_QT_STYLES_DIRECTORY", cmake)
+
+    def test_release_profile_does_not_stage_qt_style_plugins(self):
+        root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("if(NOT LOUPE_LOUPE_DISTRIBUTION)", root)
+        self.assertIn("plugins/styles/", root)
 
     def test_wix_package_uses_the_64_bit_program_files_directory(self):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")

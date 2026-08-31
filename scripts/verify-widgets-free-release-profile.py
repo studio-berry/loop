@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,11 +14,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CMAKE = ROOT / "CMakeLists.txt"
-FORBIDDEN_WIDGETS_ARTIFACTS = (
-    "Qt6Widgets.dll",
-    "libQt6Widgets.so",
-    "libQt6Widgets.so.6",
-    "Qt6Widgets.dylib",
+FORBIDDEN_QT_NAME_PREFIXES = (
+    "qt6widgets",
+    "qt6quickwidgets",
+    "qtwidgets",
+    "qtquickwidgets",
+    "libqt6widgets",
+    "libqt6quickwidgets",
+    "qt6printsupport",
+    "qtprintsupport",
+    "libqt6printsupport",
+    "libqtprintsupport",
 )
 FORBIDDEN_CACHE_MARKERS = ()
 REQUIRED_CACHE_MARKERS = (
@@ -30,20 +37,11 @@ FORBIDDEN_OPTION_MARKERS = (
     "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
     "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
-FORBIDDEN_QT_NAME_PREFIXES = (
-    "qt6widgets",
-    "qt6quickwidgets",
-    "qtwidgets",
-    "qtquickwidgets",
-    "libqt6widgets",
-    "libqt6quickwidgets",
-)
 REQUIRED_QT_CONFIGS = (
     "Qt6/Qt6Config.cmake",
     "Qt6Core/Qt6CoreConfig.cmake",
     "Qt6Gui/Qt6GuiConfig.cmake",
     "Qt6LinguistTools/Qt6LinguistToolsConfig.cmake",
-    "Qt6PrintSupport/Qt6PrintSupportConfig.cmake",
     "Qt6Svg/Qt6SvgConfig.cmake",
     "Qt6TextToSpeech/Qt6TextToSpeechConfig.cmake",
     "Qt6Xml/Qt6XmlConfig.cmake",
@@ -67,8 +65,17 @@ def validate_cmake_release_profile() -> None:
         raise ContractError("CMake must define _LOUPE_REQUIRES_WIDGETS gating")
     if "elseif(_LOUPE_REQUIRES_WIDGETS)" not in text:
         raise ContractError("CMake must gate find_package(Qt6 Widgets) behind _LOUPE_REQUIRES_WIDGETS")
-    if "LOUPE_LOUPE_DISTRIBUTION" not in text or "Qt6Widgets" not in text:
-        raise ContractError("CMake must omit Qt6Widgets from release-profile Qt install regex")
+    if "REQUIRED COMPONENTS Core Gui Svg Xml Sql TextToSpeech Concurrent" not in text:
+        raise ContractError("Widgets-free configure must not request Qt6::PrintSupport")
+    release_regex = re.search(
+        r"if\(LOUPE_LOUPE_DISTRIBUTION\)\s*"
+        r"set\(_LOUPE_QT_DLL_REGEX \"([^\"]+)\"",
+        text,
+    )
+    if release_regex is None:
+        raise ContractError("CMake must define a release-profile Qt install regex")
+    if "Qt6Widgets" in release_regex.group(1) or "Qt6PrintSupport" in release_regex.group(1):
+        raise ContractError("release-profile Qt install regex must omit Widgets-bound Qt modules")
     if "set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT OFF)" not in text:
         raise ContractError("LOUPE_LOUPE_DISTRIBUTION must default developer Widgets tools OFF")
 
@@ -175,18 +182,30 @@ def run_release_profile_configure(
         check=False,
     )
     detail = (completed.stdout + completed.stderr).strip()
+
+    def diagnostic() -> str:
+        # CMake/vcpkg often puts the actionable error at the end of a long
+        # configure transcript.  Keep both ends so CI failures are useful
+        # without requiring privileged access to the runner log archive.
+        limit = 8000
+        if len(detail) <= limit:
+            return detail
+        head = detail[:1500]
+        tail = detail[-(limit - len(head) - 80) :]
+        return f"{head}\n... [configure output truncated] ...\n{tail}"
+
     if expect_failure:
         if completed.returncode == 0:
             raise ContractError("Widgets-bound configure unexpectedly succeeded with Widgets unavailable")
         if "widgets" not in detail.casefold() and "qt6widgets" not in detail.casefold():
             raise ContractError(
                 "Widgets-bound configure failed for an unrelated reason; expected a Widgets discovery error: "
-                f"{detail[:800]}"
+                f"{diagnostic()}"
             )
         return
 
     if completed.returncode != 0:
-        raise ContractError(f"release-profile configure failed: {detail[:800]}")
+        raise ContractError(f"release-profile configure failed:\n{diagnostic()}")
 
     validate_cmake_cache(build_dir / "CMakeCache.txt", qt_prefix)
 
@@ -199,7 +218,7 @@ def scan_install_tree(install_root: Path) -> list[str]:
         if not path.is_file():
             continue
         name = path.name
-        if name in FORBIDDEN_WIDGETS_ARTIFACTS or name.startswith("Qt6Widgets."):
+        if _is_forbidden_qt_name(name):
             hits.append(str(path))
     return hits
 
@@ -266,24 +285,24 @@ def main() -> int:
         if args.install_dir is not None:
             forbidden = scan_install_tree(args.install_dir.resolve())
             if forbidden:
-                raise ContractError(f"forbidden Qt6Widgets artifacts: {forbidden[:5]}")
+                raise ContractError(f"forbidden Widgets-bound Qt artifacts: {forbidden[:5]}")
     except (ContractError, OSError) as exc:
         print(f"Widgets-free release profile FAILED: {exc}", file=sys.stderr)
         return 1
 
-    messages = ["Widgets-free release profile verified: CMake gates Qt6::Widgets for loupe-release"]
+    messages = ["Widgets-free release profile verified: CMake omits Widgets-bound Qt modules for loupe-release"]
     if args.cmake_cache is not None:
-        messages.append(f"cache {args.cmake_cache} contains no Qt6Widgets requirement")
+        messages.append(f"cache {args.cmake_cache} contains no Widgets requirement")
     if args.configure:
         target = args.build_dir if args.build_dir is not None else "<temp>"
         if args.expect_configure_failure:
             messages.append(f"Widgets-bound configure probe {target} failed closed as expected")
         else:
-            messages.append(f"configure probe {target} succeeded without Qt6Widgets")
+            messages.append(f"configure probe {target} succeeded without Widgets-bound Qt modules")
     if args.qt_prefix is not None:
-        messages.append(f"filtered Qt prefix {args.qt_prefix} contains no Qt6Widgets paths")
+        messages.append(f"filtered Qt prefix {args.qt_prefix} contains no Widgets-bound Qt paths")
     if args.install_dir is not None:
-        messages.append(f"install tree {args.install_dir} contains no Qt6Widgets artifacts")
+        messages.append(f"install tree {args.install_dir} contains no Widgets-bound Qt artifacts")
     print("; ".join(messages))
     return 0
 

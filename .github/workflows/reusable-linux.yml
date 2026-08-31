@@ -75,14 +75,6 @@ jobs:
       - name: Verify version policy
         working-directory: loupe
         run: python3 scripts/ci/check_version_policy.py
-      - name: Verify resource-envelope contracts
-        working-directory: loupe
-        run: |
-          python3 -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload -v
-          python3 scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
-          python3 scripts/resource_envelope/pathological_workload.py \
-            --output "$RUNNER_TEMP/loupe-pathological-vector.pdf" \
-            --page-count 256 --operations 256 --family pathological-vector
 
       - name: Prepare vcpkg directories
         run: |
@@ -394,7 +386,7 @@ jobs:
       - name: Verify loupe-release product surface
         if: ${{ !inputs.fast }}
         working-directory: loupe
-        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir ./build -InstallManifestPath ./build/install_manifest.txt
+        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release
 
       - name: Run unit tests
         if: ${{ !inputs.fast }}

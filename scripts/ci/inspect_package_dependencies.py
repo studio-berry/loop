@@ -24,6 +24,10 @@ from typing import Any, Iterable, Sequence
 
 FULL_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 FORBIDDEN_WIDGETS = re.compile(r"^(?:lib)?qt6widgets(?:[.\\-]|$)", re.IGNORECASE)
+FORBIDDEN_WIDGETS_SURFACE = re.compile(
+    r"^(?:lib)?qt6(?:widgets|quickwidgets|printsupport)(?:[.\\-]|$)",
+    re.IGNORECASE,
+)
 ELF_SUFFIX = re.compile(r"(?:\.so(?:\..*)?|\.elf)$", re.IGNORECASE)
 PE_SUFFIX = re.compile(r"\.(?:dll|drv|exe|ocx|sys)$", re.IGNORECASE)
 
@@ -78,6 +82,12 @@ def is_widgets_name(name: str) -> bool:
     normalized = name.replace("\\", "/")
     basename = normalized.rsplit("/", 1)[-1]
     return bool(FORBIDDEN_WIDGETS.search(basename))
+
+
+def is_forbidden_widgets_surface_name(name: str) -> bool:
+    normalized = name.replace("\\", "/")
+    basename = normalized.rsplit("/", 1)[-1]
+    return bool(FORBIDDEN_WIDGETS_SURFACE.search(basename))
 
 
 def parse_readelf_needed(output: str) -> list[str]:
@@ -553,8 +563,10 @@ def build_evidence(
             "format": fmt or "file",
         }
         files.append(file_row)
-        if is_widgets_name(relative):
-            forbidden.append({"kind": "payload", "path": relative, "reason": "Qt6Widgets filename"})
+        if is_forbidden_widgets_surface_name(relative):
+            forbidden.append(
+                {"kind": "payload", "path": relative, "reason": "Widgets-bound Qt module filename"}
+            )
         if fmt is None and looks_like_binary(path):
             forbidden.append({"kind": "uninspected-binary", "path": relative, "reason": "unknown binary format"})
 
@@ -572,26 +584,60 @@ def build_evidence(
                     "reason": "binary architecture does not match package target",
                 }
             )
-        if is_widgets_name(str(row["path"])):
-            forbidden.append({"kind": "payload", "path": str(row["path"]), "reason": "Qt6Widgets binary filename"})
+        if is_forbidden_widgets_surface_name(str(row["path"])):
+            forbidden.append(
+                {
+                    "kind": "payload",
+                    "path": str(row["path"]),
+                    "reason": "Widgets-bound Qt module binary filename",
+                }
+            )
         for dependency in row.get("direct_dependencies", []):
-            if is_widgets_name(str(dependency)):
-                forbidden.append({"kind": "dependency", "path": str(row["path"]), "dependency": str(dependency), "reason": "direct Qt6Widgets dependency"})
+            if is_forbidden_widgets_surface_name(str(dependency)):
+                forbidden.append(
+                    {
+                        "kind": "dependency",
+                        "path": str(row["path"]),
+                        "dependency": str(dependency),
+                        "reason": "direct Widgets-bound Qt module dependency",
+                    }
+                )
         for dependency in row.get("resolved_dependencies", []):
             name = str(dependency.get("name", ""))
             resolved_path = str(dependency.get("path", ""))
-            if is_widgets_name(name) or is_widgets_name(resolved_path):
-                forbidden.append({"kind": "runtime-dependency", "path": str(row["path"]), "dependency": name, "reason": "resolved Qt6Widgets dependency"})
+            if is_forbidden_widgets_surface_name(name) or is_forbidden_widgets_surface_name(resolved_path):
+                forbidden.append(
+                    {
+                        "kind": "runtime-dependency",
+                        "path": str(row["path"]),
+                        "dependency": name,
+                        "reason": "resolved Widgets-bound Qt module dependency",
+                    }
+                )
         for unresolved in row.get("unresolved_dependencies", []):
-            if is_widgets_name(str(unresolved)):
-                forbidden.append({"kind": "unresolved-dependency", "path": str(row["path"]), "dependency": str(unresolved), "reason": "unresolved Qt6Widgets dependency"})
+            if is_forbidden_widgets_surface_name(str(unresolved)):
+                forbidden.append(
+                    {
+                        "kind": "unresolved-dependency",
+                        "path": str(row["path"]),
+                        "dependency": str(unresolved),
+                        "reason": "unresolved Widgets-bound Qt module dependency",
+                    }
+                )
             else:
                 forbidden.append({"kind": "unresolved-dependency", "path": str(row["path"]), "dependency": str(unresolved), "reason": "non-system dependency was not resolved"})
         for dependency in row.get("dependency_rows", []):
             if dependency.get("kind") == "external":
                 name = str(dependency.get("name", ""))
-                if is_widgets_name(name):
-                    forbidden.append({"kind": "dependency", "path": str(row["path"]), "dependency": name, "reason": "external Qt6Widgets dependency"})
+                if is_forbidden_widgets_surface_name(name):
+                    forbidden.append(
+                        {
+                            "kind": "dependency",
+                            "path": str(row["path"]),
+                            "dependency": name,
+                            "reason": "external Widgets-bound Qt module dependency",
+                        }
+                    )
                 else:
                     forbidden.append(
                         {
@@ -602,13 +648,13 @@ def build_evidence(
                         }
                     )
         for dependency in row.get("package_dependency_closure", []):
-            if is_widgets_name(str(dependency)):
+            if is_forbidden_widgets_surface_name(str(dependency)):
                 forbidden.append(
                     {
                         "kind": "transitive-dependency",
                         "path": str(row["path"]),
                         "dependency": str(dependency),
-                        "reason": "transitive Qt6Widgets dependency",
+                        "reason": "transitive Widgets-bound Qt module dependency",
                     }
                 )
 
@@ -634,6 +680,12 @@ def build_evidence(
     ]
     def finding_mentions_widgets(finding: dict[str, str]) -> bool:
         return any(is_widgets_name(str(finding.get(key, ""))) for key in ("path", "dependency"))
+
+    def finding_mentions_widgets_surface(finding: dict[str, str]) -> bool:
+        return any(
+            is_forbidden_widgets_surface_name(str(finding.get(key, "")))
+            for key in ("path", "dependency")
+        )
 
     status = "passed" if not unique_findings else "failed"
     return {
@@ -662,6 +714,9 @@ def build_evidence(
             "all_binary_files_inspected": not any(item["kind"] == "uninspected-binary" for item in unique_findings),
             "target_architecture_matches": not any(item["kind"] == "architecture" for item in unique_findings),
             "qt6widgets_absent": not any(finding_mentions_widgets(item) for item in unique_findings),
+            "qt6widgets_surface_absent": not any(
+                finding_mentions_widgets_surface(item) for item in unique_findings
+            ),
             "unresolved_non_system_dependencies_absent": not any(item["kind"] == "unresolved-dependency" for item in unique_findings),
         },
         "status": status,

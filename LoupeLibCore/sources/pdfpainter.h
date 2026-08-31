@@ -261,6 +261,12 @@ public:
     PDFSnapInfo* getSnapInfo() { return &m_snapInfo; }
     const PDFSnapInfo* getSnapInfo() const { return &m_snapInfo; }
 
+    /// Returns true if the page content processor encountered an active overprint mode
+    /// while compiling this page. This is a cached content fact: the standard renderer
+    /// does not simulate overprint, so callers can use this to record an approximation.
+    bool containsOverprint() const { return m_containsOverprint; }
+    void markContainsOverprint() { m_containsOverprint = true; }
+
     /// Mark this precompiled page as accessed at a current time
     void markAccessed() { m_expirationTimer.start(); }
 
@@ -365,6 +371,7 @@ private:
 
     qint64 m_compilingTimeNS = 0;
     qint64 m_memoryConsumptionEstimate = 0;
+    bool m_containsOverprint = false;
     QColor m_paperColor = QColor(Qt::white);
     bool m_containsOverprint = false;
     std::vector<Instruction> m_instructions;
