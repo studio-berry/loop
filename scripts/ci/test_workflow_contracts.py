@@ -44,6 +44,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn('-DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"', workflow)
 
     def test_windows_release_gate_qualifies_without_widgets(self):
         workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
@@ -52,6 +53,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn('"-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR"', workflow)
 
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
