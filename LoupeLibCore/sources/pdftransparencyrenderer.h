@@ -81,7 +81,6 @@ struct PDFRenderPolicy
         return forOutputPreview();
     }
 };
-};
 
 enum class PDFRenderFidelity
 {

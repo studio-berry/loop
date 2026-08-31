@@ -206,7 +206,7 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: |
-          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --target all release_translations --config Release -j6
+          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --target ALL_BUILD release_translations --config Release -j6
           if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release build failed with exit code $LASTEXITCODE" }
 
       - name: Smoke Widgets-absent Qt Quick backends
