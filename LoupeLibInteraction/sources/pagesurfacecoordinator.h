@@ -148,6 +148,9 @@ public:
     void setRenderSettings(PageSurfaceRenderSettings settings);
     const PageSurfaceRenderSettings& renderSettings() const noexcept { return m_settings; }
 
+    /// Diagnostic projection of the current budget partition. Prefer
+    /// cacheLimit()/setCacheLimit() as the authority; maxAdmittedBytes is
+    /// derived from the total via pdf::PDFPageCacheBudget::pageSurfaces().
     const PageSurfaceBounds& bounds() const noexcept { return m_bounds; }
 
     /// Receives the production total cache budget. The shared object is the

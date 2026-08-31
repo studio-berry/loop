@@ -94,6 +94,7 @@ private:
     std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
     pdfinteraction::ViewportCommandBridge m_commandBridge;
     pdfinteraction::PageBoxHitTestSource m_pageBoxSource;
+    qsizetype m_cacheLimit = DefaultCacheLimit;   // total authority (partitioned via PDFPageCacheBudget)
 };
 
 #endif

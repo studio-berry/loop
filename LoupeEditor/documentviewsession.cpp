@@ -24,7 +24,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                               this)),
     m_renderer(m_context),
     m_commandBridge(m_catalog, *m_facade, m_viewport, this),
-    m_pageBoxSource(&m_context)
+    m_pageBoxSource(&m_context),
+    m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
@@ -97,6 +98,7 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
 void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+    m_cacheLimit = normalized;
     // Route through the renderer so the eviction inside setCacheLimit cannot
     // race a worker thread that holds m_renderer.m_mutex and is using a
     // compilePage pointer.
@@ -113,5 +115,5 @@ qsizetype DocumentViewSession::cacheLimit() const noexcept
     {
         return session->cacheLimit();
     }
-    return 0;
+    return m_cacheLimit;
 }
