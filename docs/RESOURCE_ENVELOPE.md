@@ -78,3 +78,27 @@ measurement for the cancellation-latency field. Cache, pressure-shedding, and
 recovery fields remain unmeasured. A benchmark
 result is non-qualifying when the workload is unavailable, cancelled,
 unsupported, budget-exceeded, or incomplete.
+
+## Resource record contract
+
+The envelope is schema version 2. `resources` is produced by the shared
+`PDFResourceBudget` authority and contains the resident ceiling plus all seven
+named pool records. `pages_materialized` reports pages actually processed by a
+runner; it is not the catalog page count. `preflight_high_water_bytes` remains
+`-1` until a run includes the preflight phase, and such a record is explicitly
+`incomplete` rather than being promoted to a passing result. The deterministic
+pathological and transparency/spot fixtures can be generated without the
+external DIV2K corpus:
+
+```powershell
+python scripts/resource_envelope/pathological_workload.py `
+  --output C:\temp\loupe-pathological-vector.pdf `
+  --page-count 256 --operations 512 --family pathological-vector
+
+python scripts/resource_envelope/pathological_workload.py `
+  --output C:\temp\loupe-transparency-spots.pdf `
+  --page-count 256 --operations 256 --family transparency-spots
+```
+
+Use `scripts/resource_envelope/validate_envelope.py` to validate a record
+against the checked-in limits before attaching it to a qualification dossier.

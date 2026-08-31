@@ -16,6 +16,7 @@
 #include "pdfrenderer.h"
 
 #include <QObject>
+#include <QtGlobal>
 #include <memory>
 
 namespace pdfinteraction
@@ -63,12 +64,17 @@ public:
     pdfinteraction::ViewportCommandBridge& commandBridge() noexcept { return m_commandBridge; }
     pdfinteraction::PageBoxHitTestSource& pageBoxSource() noexcept { return m_pageBoxSource; }
 
+    /// Total resident budget for compiled pages and admitted page surfaces.
+    /// The compiled/surface shares are derived by PDFPageCacheBudget.
+    static constexpr qsizetype DefaultCacheLimit = 256ll * 1024 * 1024;
+    void setCacheLimit(qsizetype totalBytes);
+    qsizetype cacheLimit() const noexcept;
+
     void prepareDocumentView();
     void clearDocumentView();
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
 private:
-    void syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features);
     // Reset explicitly in the destructor so every worker is joined while the
     // loader, writer, and renderer captured by jobs are still alive.
     std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
@@ -88,6 +94,7 @@ private:
     std::unique_ptr<pdfinteraction::InteractionController> m_interaction;
     pdfinteraction::ViewportCommandBridge m_commandBridge;
     pdfinteraction::PageBoxHitTestSource m_pageBoxSource;
+    qsizetype m_cacheLimit = DefaultCacheLimit;   // total authority (partitioned via PDFPageCacheBudget)
 };
 
 #endif

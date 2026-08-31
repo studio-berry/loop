@@ -201,6 +201,20 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
     return -1;
 }
 
+void PDFWorkloadEnvelope::recordResources(const PDFResourceBudget& budget)
+{
+    resources = budget.toJson();
+    cacheHighWaterBytes = qMax(cacheHighWaterBytes, static_cast<qint64>(budget.residentHighWaterBytes()));
+
+    qint64 shed = 0;
+    for (const PDFResourceUsage& usage : budget.usages())
+    {
+        shed += usage.shed;
+    }
+    pressureShedCount = qMax(pressureShedCount, shed);
+    prefetchShed = prefetchShed || budget.prefetchShedTotal() > 0;
+}
+
 QJsonObject PDFWorkloadEnvelope::toJson() const
 {
     QJsonObject object;
@@ -212,12 +226,15 @@ QJsonObject PDFWorkloadEnvelope::toJson() const
     object.insert(QStringLiteral("open_to_first_view_ms"), openToFirstViewMs);
     object.insert(QStringLiteral("rss_high_water_bytes"), rssHighWaterBytes);
     object.insert(QStringLiteral("cache_high_water_bytes"), cacheHighWaterBytes);
+    object.insert(QStringLiteral("preflight_high_water_bytes"), preflightHighWaterBytes);
+    object.insert(QStringLiteral("pages_materialized"), pagesMaterialized);
     object.insert(QStringLiteral("elapsed_ms"), elapsedMs);
     object.insert(QStringLiteral("cancellation_latency_ms"), cancellationLatencyMs);
     object.insert(QStringLiteral("recovery_ms"), recoveryMs);
     object.insert(QStringLiteral("pressure_shed_count"), pressureShedCount);
     object.insert(QStringLiteral("prefetch_shed"), prefetchShed);
     object.insert(QStringLiteral("interaction_slot_held"), interactionSlotHeld);
+    object.insert(QStringLiteral("resources"), resources);
     return object;
 }
 

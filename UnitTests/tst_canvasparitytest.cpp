@@ -178,7 +178,7 @@ struct ParityFixture
         surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(revisions, submitter, renderer, viewport);
         surfaces->setDocumentKey(QStringLiteral("canvas-parity"));
 
-        overlays = std::make_unique<pdfinteraction::OverlayBuilder>(viewport);
+        overlays = std::make_unique<pdfinteraction::OverlayBuilder>(viewport, policy);
         controller = std::make_unique<pdfinteraction::InteractionController>(revisions, viewport, hitTest, *overlays);
 
         window = std::make_unique<QQuickWindow>();
@@ -246,6 +246,7 @@ struct ParityFixture
     InlineJobSubmitter submitter;
     pdfinteraction::PDFSessionPageSurfaceRenderer renderer;
     pdfinteraction::HitTestDispatcher hitTest;
+    pdfinteraction::RenderPresentationPolicy policy;
 
     std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> surfaces;
     std::unique_ptr<pdfinteraction::OverlayBuilder> overlays;

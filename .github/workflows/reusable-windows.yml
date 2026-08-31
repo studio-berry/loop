@@ -78,6 +78,15 @@ jobs:
         shell: pwsh
         run: |
           python scripts\ci\check_version_policy.py
+      - name: Verify resource-envelope contracts
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload -v
+          python scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
+          python scripts/resource_envelope/pathological_workload.py `
+            --output "$env:RUNNER_TEMP\loupe-pathological-vector.pdf" `
+            --page-count 256 --operations 256 --family pathological-vector
 
       - name: Prepare vcpkg directories
         shell: pwsh
@@ -262,7 +271,7 @@ jobs:
           # which read like a Windows install race instead of the build error it was.
           # Check $LASTEXITCODE after each cmake invocation so a real failure stops
           # the step immediately, at the command that actually failed.
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_LOUPE_DISTRIBUTION=OFF -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
 
           cmake --build build --target release_translations --config Release -j6
@@ -362,7 +371,7 @@ jobs:
       - name: Verify developer product surface
         working-directory: loupe
         shell: pwsh
-        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile developer
+        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile developer -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 
       - name: Run unit tests
         working-directory: loupe/build

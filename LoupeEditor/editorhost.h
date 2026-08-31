@@ -93,6 +93,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
     Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
     Q_PROPERTY(bool highContrast READ highContrast NOTIFY presentationChanged)
+    Q_PROPERTY(bool pageFidelityIsExact READ pageFidelityIsExact NOTIFY presentationChanged)
+    Q_PROPERTY(QString pageFidelityReason READ pageFidelityReason NOTIFY presentationChanged)
+    Q_PROPERTY(bool pageFidelityIsAuthoritative READ pageFidelityIsAuthoritative NOTIFY presentationChanged)
 
 public:
     explicit EditorHost(QObject* parent = nullptr);
@@ -125,8 +128,27 @@ public:
     bool preferReducedMotion() const;
     bool highContrast() const;
 
+    /// Overprint render fidelity for the currently displayed page (issue #49).
+    /// True (and pageFidelityReason empty) when the page has no overprint
+    /// content, or none is known yet. Separate from the document-wide
+    /// PreviewStateModel exposed as `preview`: this is per-page and driven by
+    /// the cached PDFPrecompiledPage::containsOverprint() flag / the
+    /// authoritative renderer's own diagnostics, not a static message.
+    bool pageFidelityIsExact() const;
+    QString pageFidelityReason() const;
+
+    /// True while the current page is showing the escalated
+    /// PDFRenderPolicy::forOutputPreview() render instead of the fast
+    /// approximate one.
+    bool pageFidelityIsAuthoritative() const;
+
     Q_INVOKABLE void selectFinding(const QString& findingId);
     Q_INVOKABLE void announceDocumentState(const QString& message);
+
+    /// Toggles the current page between the fast approximate render and the
+    /// authoritative overprint-accurate one. Re-renders only that page;
+    /// the document stays open.
+    Q_INVOKABLE void toggleCurrentPageFidelity();
 
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
@@ -151,6 +173,15 @@ public:
     Q_INVOKABLE void openInitialPath(const QString& path);
     Q_INVOKABLE QString shortcutForCommand(const QString& commandId) const;
 
+    // Test-only accessor for large-document shell stress parity (gh-363).
+    // Exposes the privately owned DocumentViewSession so headless shell tests
+    // can observe revision fencing (revisionSource), viewport generation
+    // (viewport().requestGeneration()), surface demand (surfaces()->counters())
+    // and interaction overlay fencing (interaction()->overlayFrameChanged())
+    // without breaking QML encapsulation. Not part of the QML API.
+    DocumentViewSession* sessionForTest() noexcept { return m_session.get(); }
+    const DocumentViewSession* sessionForTest() const noexcept { return m_session.get(); }
+
 signals:
     void presentationChanged();
     void commandEpochChanged();
@@ -160,6 +191,7 @@ private:
     void connectViewport();
     void connectCatalog();
     void connectInteraction();
+    void connectSurfaces();
     void registerShellHandlers();
     void refreshHitTestSources();
     void bumpPresentation();

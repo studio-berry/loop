@@ -6,6 +6,7 @@ import copy
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -30,7 +31,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
 
     def test_current_evidence_is_valid_and_complete(self):
         self.assertEqual(validate_contract(ROOT, self.inventory, self.disposition), [])
-        self.assertEqual(self.inventory["counts"]["targets"], 66)
+        self.assertEqual(self.inventory["counts"]["targets"], 67)
         self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 4)
         self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
         self.assertEqual(len(self.inventory["plugin_ui"]), 0)
@@ -87,14 +88,37 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         inventory_ids = {row["id"] for row in self.inventory["targets"]}
         for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
             self.assertNotIn(name, inventory_ids, name)
-        options = self.inventory["profile"]["options"]
-        for option in (
-            "LOUPE_BUILD_VIEWER",
-            "LOUPE_BUILD_PAGEMASTER",
-            "LOUPE_BUILD_DIFF",
-            "LOUPE_BUILD_LAUNCHPAD",
-        ):
-            self.assertFalse(options[option], option)
+        for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
+            target = next((row for row in self.inventory["targets"] if row["id"] == name), None)
+            self.assertIsNone(target, name)
+
+    def test_profile_options_are_derived_from_product_manifest(self):
+        product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))
+        expected = {"LOUPE_LOUPE_DISTRIBUTION": True}
+        for row in product["surfaces"]:
+            option = row.get("build_option")
+            if option:
+                expected[option] = row["profiles"]["loupe-release"] == "present"
+        self.assertEqual(self.inventory["profile"]["options"], dict(sorted(expected.items())))
+
+    def test_configured_cmake_cache_is_checked_against_manifest_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            build_dir = Path(temporary)
+            (build_dir / "CMakeCache.txt").write_text(
+                "\n".join(
+                    [
+                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
+                        "LOUPE_BUILD_QUICK_CANVAS:BOOL=ON",
+                        "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
+                        "LOUPE_BUILD_JBIG2_VIEWER:BOOL=OFF",
+                        "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=OFF",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            errors = validate_contract(ROOT, self.inventory, self.disposition, build_dir=build_dir)
+        self.assertTrue(any("CMake cache LOUPE_BUILD_CODE_GENERATOR" in error for error in errors))
 
     def test_widgets_plugins_are_absent_after_issue_17(self):
         product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))

@@ -164,7 +164,7 @@ jobs:
           cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
           cmake --build build --target all release_translations -j6
           cmake --install build
-          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install"
+          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loupe
