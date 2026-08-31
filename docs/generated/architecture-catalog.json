@@ -210,10 +210,16 @@
   "branch_policy": {
     "default": "stable",
     "integration": "dev",
-    "protected": [
+    "promotion_chain": [
       "dev",
+      "unstable",
       "stable"
     ],
+    "protected": [
+      "stable",
+      "unstable"
+    ],
+    "qualification": "unstable",
     "release": "stable",
     "topic_patterns": [
       "chore/*",
@@ -453,15 +459,18 @@
   "workflow_branches": {
     ".github/workflows/ci.yml": [
       "dev",
-      "stable"
+      "stable",
+      "unstable"
     ],
     ".github/workflows/codeql.yml": [
       "dev",
-      "stable"
+      "stable",
+      "unstable"
     ],
     ".github/workflows/documentation.yml": [
       "dev",
-      "stable"
+      "stable",
+      "unstable"
     ],
     ".github/workflows/release-gate.yml": [
       "stable"

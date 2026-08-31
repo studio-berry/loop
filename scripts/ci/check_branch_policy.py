@@ -22,6 +22,7 @@ GITHUB_API = "https://api.github.com"
 
 DOCUMENTED_CI_BRANCHES = re.compile(r"^[-*]\s+CI branches:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_PROTECTED_BRANCHES = re.compile(r"^[-*]\s+Protected branches:\s*(.+)$", re.MULTILINE)
+DOCUMENTED_PROMOTION_CHAIN = re.compile(r"^[-*]\s+Promotion chain:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required check:\s*`([^`]+)`$", re.MULTILINE)
 DOCUMENTED_INTEGRATION_REQUIRED_CHECK = re.compile(r"^[-*]\s+Required integration check:\s*`([^`]+)`$", re.MULTILINE)
 DOCUMENTED_REQUIRED_CHECK_APP = re.compile(r"^[-*]\s+Required check app:\s*(.+)$", re.MULTILINE)
@@ -46,6 +47,7 @@ DOCUMENTED_INTEGRATION_PR_BRANCHES = re.compile(
 class DocumentedPolicy:
     ci_branches: tuple[str, ...]
     protected_branches: tuple[str, ...]
+    promotion_chain: tuple[str, ...]
     required_check: str
     integration_required_check: str
     required_check_app: str
@@ -90,6 +92,9 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
     protected = _branch_names(required(DOCUMENTED_PROTECTED_BRANCHES, "Protected branches:"))
     if not protected:
         raise ValueError("policy declares no protected branches")
+    promotion_chain = _branch_names(required(DOCUMENTED_PROMOTION_CHAIN, "Promotion chain:"))
+    if not promotion_chain:
+        raise ValueError("policy declares no promotion chain")
     required_check = required(DOCUMENTED_REQUIRED_CHECK, "Required check:")
     integration_required_check = required(
         DOCUMENTED_INTEGRATION_REQUIRED_CHECK, "Required integration check:"
@@ -113,6 +118,7 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
     return DocumentedPolicy(
         ci_branches=ci_branches,
         protected_branches=protected,
+        promotion_chain=promotion_chain,
         required_check=required_check,
         integration_required_check=integration_required_check,
         required_check_app=required_app,
@@ -376,6 +382,7 @@ def _validate_required_check(
 def validate_live_protection(
     *,
     stable_protection: dict[str, Any] | None,
+    unstable_protection: dict[str, Any] | None,
     dev_protection: dict[str, Any] | None,
     policy: DocumentedPolicy,
 ) -> list[str]:
@@ -390,16 +397,23 @@ def validate_live_protection(
                 required_check_app=policy.required_check_app,
             )
         )
-    if "dev" in policy.protected_branches:
+    if "unstable" in policy.protected_branches:
         violations.extend(
             _validate_required_check(
-                branch="dev",
-                protection=dev_protection,
+                branch="unstable",
+                protection=unstable_protection,
                 expected=policy.integration_required_check,
                 required_check_app=policy.required_check_app,
             )
         )
-    elif isinstance(dev_protection, dict):
+    elif isinstance(unstable_protection, dict):
+        contexts = [str(item.get("context")) for item in _required_check_entries(unstable_protection)]
+        if contexts:
+            violations.append(
+                "live protection: unstable must not require status checks, "
+                f"got {contexts}"
+            )
+    if "dev" not in policy.protected_branches and isinstance(dev_protection, dict):
         contexts = [str(item.get("context")) for item in _required_check_entries(dev_protection)]
         if contexts:
             violations.append(
@@ -496,8 +510,9 @@ def validate_repository(
             )
         else:
             stable, stable_error = fetch_branch_protection(repo_name, "stable", auth)
+            unstable, unstable_error = fetch_branch_protection(repo_name, "unstable", auth)
             dev, dev_error = fetch_branch_protection(repo_name, "dev", auth)
-            if stable_error == "403" or dev_error == "403":
+            if stable_error == "403" or unstable_error == "403" or dev_error == "403":
                 print(
                     "WARNING: live branch protection is not readable with this token; "
                     "file-based policy checks still ran.",
@@ -508,6 +523,10 @@ def validate_repository(
                     violations.append(
                         f"live protection: failed to read stable rules ({stable_error})"
                     )
+                if unstable_error and unstable_error != "404":
+                    violations.append(
+                        f"live protection: failed to read unstable rules ({unstable_error})"
+                    )
                 if dev_error and dev_error != "404":
                     violations.append(
                         f"live protection: failed to read dev rules ({dev_error})"
@@ -516,6 +535,7 @@ def validate_repository(
                     violations.extend(
                         validate_live_protection(
                             stable_protection=stable,
+                            unstable_protection=unstable if unstable_error != "404" else {},
                             dev_protection=dev if dev_error != "404" else {},
                             policy=policy,
                         )
@@ -538,7 +558,7 @@ def main() -> int:
         return 1
     print(
         "Branch policy passed: workflow triggers match the documented "
-        "dev/stable contract."
+        "dev/unstable/stable contract."
     )
     return 0
 

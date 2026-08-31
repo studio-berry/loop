@@ -56,23 +56,24 @@ def load_policy() -> dict:
 def render(policy: dict, adapter: str) -> str:
     if adapter == "docs/branch-policy.json":
         branches = policy["branches"]
-        return json.dumps(
-            {
-                "generated_by": "scripts/agent/generate-adapters.py",
-                "default_branch": branches["default"],
-                "release_branch": branches["release"],
-                "integration_branch": branches["integration"],
-                "topic_branch_source": branches["topic_source"],
-                "topic_branch_patterns": branches["topic_branch_patterns"],
-                "protected_branches": branches["protected"]
-            },
-            indent=2,
-        ) + "\n"
+        payload = {
+            "generated_by": "scripts/agent/generate-adapters.py",
+            "default_branch": branches["default"],
+            "release_branch": branches["release"],
+            "integration_branch": branches["integration"],
+            "qualification_branch": branches["qualification"],
+            "topic_branch_source": branches["topic_source"],
+            "topic_branch_patterns": branches["topic_branch_patterns"],
+            "promotion_chain": branches["promotion_chain"],
+            "protected_branches": branches["protected"],
+        }
+        return json.dumps(payload, indent=2) + "\n"
     branches = policy["branches"]
     autonomy = policy["autonomy"]
     changelog = policy["changelog"]
     version, prerelease = load_version_policy()
     display_version = format_product_version(version, prerelease)
+    promotion = " → ".join(f"`{branch}`" for branch in branches["promotion_chain"])
     lines = [
         "<!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->",
         "# Loupe agent policy adapter",
@@ -81,7 +82,7 @@ def render(policy: dict, adapter: str) -> str:
         "",
         "## Branches and safety",
         "",
-        f"- Integration: `{branches['integration']}`; release/default: `{branches['release']}`; topic branches start from `{branches['topic_source']}`.",
+        f"- Integration: `{branches['integration']}`; qualification: `{branches['qualification']}`; release/default: `{branches['release']}`; topic branches start from `{branches['topic_source']}`. Promotion: {promotion}.",
         f"- Protected branches: {', '.join(f'`{branch}`' for branch in branches['protected'])}. Do not commit, push, merge, force-push, or rewrite history without approval.",
         "- Keep private data, credentials, logs, scratch plans, and build artifacts outside the repository. Do not edit vendored dependencies unless explicitly scoped.",
         "",
