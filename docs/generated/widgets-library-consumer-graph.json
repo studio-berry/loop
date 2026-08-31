@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "widgets-library-consumer-graph",
+  "issue": 17,
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "profile": {
+    "id": "loupe-release",
+    "options": {
+      "LOUPE_BUILD_CODE_GENERATOR": false,
+      "LOUPE_BUILD_EXAMPLE_GENERATOR": false,
+      "LOUPE_BUILD_JBIG2_VIEWER": false,
+      "LOUPE_BUILD_QUICK_CANVAS": true,
+      "LOUPE_LOUPE_DISTRIBUTION": true
+    },
+    "configuration_mode": "manifest-derived-source",
+    "configured_build_dir": null,
+    "configuration_note": "Profile expectations come from docs/product-surface.json; a configured CMake cache and install tree are required for qualification."
+  },
+  "inputs": {
+    "inventory": "docs/generated/phase5-widgets-inventory.json",
+    "disposition": "docs/generated/phase5-widgets-disposition.json",
+    "product_ledger": "docs/product-surface.json"
+  },
+  "libraries": [
+    {
+      "target": "LoupeLibWidgets",
+      "status": "deleted-not-in-profile",
+      "installed_in_profile": false,
+      "direct_consumers": [],
+      "transitive_consumers": [],
+      "deletion_blocked": false
+    },
+    {
+      "target": "LoupeLibGui",
+      "status": "deleted-not-in-profile",
+      "installed_in_profile": false,
+      "direct_consumers": [],
+      "transitive_consumers": [],
+      "deletion_blocked": false
+    }
+  ],
+  "consumers": [],
+  "neutral_code": [],
+  "acceptance": {
+    "unknown_product_consumers": [],
+    "unclassified_neutral_code": [],
+    "installed_product_blockers": [],
+    "deletion_safe": true,
+    "issue_17_prerequisite": "Issue 17 deleted LoupeLibWidgets and Widgets-bound LoupeLibGui from the maintained loupe-release graph."
+  },
+  "counts": {
+    "libraries": 2,
+    "consumers": 0,
+    "neutral_code": 0,
+    "neutral_relocatable": 0,
+    "widgets_bound": 0,
+    "installed_product_blockers": 0
+  }
+}

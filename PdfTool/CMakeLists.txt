@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-add_executable(PdfTool
+set(_loupe_pdftool_sources
     main.cpp
     pdfoutputformatter.cpp
     pdftoolabstractapplication.cpp
@@ -28,7 +28,6 @@ add_executable(PdfTool
     pdftoolcapabilities.h
     pdftoolresult.cpp
     pdftoolattachments.cpp
-    pdftoolaudiobook.cpp
     pdftoolcertstore.cpp
     pdftoolcolorprofiles.cpp
     pdftooldecrypt.cpp
@@ -89,9 +88,15 @@ add_executable(PdfTool
     pdftoolactionlist.h
 )
 
+if(NOT LOUPE_LOUPE_DISTRIBUTION)
+    list(APPEND _loupe_pdftool_sources pdftoolaudiobook.cpp)
+endif()
+
+add_executable(PdfTool ${_loupe_pdftool_sources})
+
 target_link_libraries(PdfTool PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Xml)
 
-if(MINGW)
+if(MINGW AND NOT LOUPE_LOUPE_DISTRIBUTION)
     target_link_libraries(PdfTool PRIVATE ole32 sapi)
 endif()
 
@@ -103,6 +108,17 @@ set_target_properties(PdfTool PROPERTIES
 )
 
 install(TARGETS PdfTool RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR})
+
+# Preflight profiles are ship-critical data consumed by PdfTool preflight and the
+# release smoke (Resolve-ProfilesDir). The former LoupePreflightPlugin owned
+# these install() rules; that plugin is now deleted and PdfTool is the surviving
+# headless owner that guarantees the staged share tree (see WixInstaller
+# LOUPE_Loupe_Data and LinuxInstall/WindowsInstall smokes).
+set(LOUPE_PREFLIGHT_PROFILES_DIR ${LOUPE_INSTALL_SHARE_DIR}/loupe/profiles)
+install(FILES ${CMAKE_SOURCE_DIR}/loupe-preflight/profiles/loupe-default.json
+        DESTINATION ${LOUPE_PREFLIGHT_PROFILES_DIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/loupe-preflight/schemas/
+        DESTINATION ${LOUPE_PREFLIGHT_PROFILES_DIR}/schemas)
 
 # Headless corpus/CI sets QT_QPA_PLATFORM=offscreen; windeployqt often only ships qwindows.
 # Copy qoffscreen next to PdfTool so PdfTool help/preflight do not hang on missing plugin.

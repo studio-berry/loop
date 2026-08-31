@@ -46,6 +46,11 @@ struct LOUPELIBCORESHARED_EXPORT PDFRichBlackInventory
 {
     int page = 0;
     qreal areaMM2 = 0.0;
+
+    /// Fidelity of the render this row was measured from. Consumers gate on
+    /// this per page: one approximated page must not suppress the rows that
+    /// were measured exactly on every other page.
+    PDFRenderDiagnostics diagnostics;
 };
 
 struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult
@@ -53,6 +58,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult
     QList<PDFColorInventoryInk> separations;
     QList<PDFColorInventoryInk> spotColors;
     QList<PDFRichBlackInventory> richBlackPages;
+    PDFRenderDiagnostics diagnostics;
 };
 
 struct LOUPELIBCORESHARED_EXPORT PDFColorInventorySettings
@@ -63,8 +69,8 @@ struct LOUPELIBCORESHARED_EXPORT PDFColorInventorySettings
 
 /// Shared rich-black predicate used by preflight and Output Preview.
 LOUPELIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
-                                                 const PDFPixelFormat& format,
-                                                 PDFColorComponent kThreshold);
+                                                const PDFPixelFormat& format,
+                                                PDFColorComponent kThreshold);
 
 class LOUPELIBCORESHARED_EXPORT PDFColorInventory
 {
@@ -77,6 +83,6 @@ private:
     PDFDocumentSession* m_session = nullptr;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFCOLORINVENTORY_H
+#endif   // PDFCOLORINVENTORY_H

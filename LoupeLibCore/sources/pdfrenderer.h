@@ -35,6 +35,8 @@
 #include <QImageWriter>
 #include <QImage>
 
+#include <atomic>
+
 class QPainter;
 
 namespace pdf
@@ -47,6 +49,7 @@ class PDFPrecompiledPage;
 class PDFAnnotationManager;
 class PDFOptionalContentActivity;
 class PDFProcessingBudget;
+class PDFResourceBudget;
 
 /// Renders the PDF page on the painter, or onto an image.
 class LOUPELIBCORESHARED_EXPORT PDFRenderer
@@ -257,6 +260,12 @@ public:
                 const ProcessImageMethod& processImage,
                 PDFProgress* progress);
 
+    /// Accounts transient compiled pages and rendered images against the
+    /// shared envelope. The pool does not own the authority and the pointer
+    /// must remain valid for the duration of render().
+    void setResourceBudget(PDFResourceBudget* budget) noexcept { m_resourceBudget = budget; }
+    bool resourceBudgetExhausted() const noexcept { return m_resourceBudgetExhausted.load(std::memory_order_acquire); }
+
     /// Returns default rasterizer count
     static int getDefaultRasterizerCount();
 
@@ -281,6 +290,8 @@ private:
     QSemaphore m_semaphore;
     QMutex m_mutex;
     std::vector<PDFRasterizer*> m_rasterizers;
+    PDFResourceBudget* m_resourceBudget = nullptr;
+    std::atomic_bool m_resourceBudgetExhausted{ false };
 };
 
 /// Settings object for image writer

@@ -1,6 +1,0 @@
-<RCC>
-    <qresource prefix="/pdfplugins/objectinspector">
-        <file>object-inspector.svg</file>
-        <file>object-statistics.svg</file>
-    </qresource>
-</RCC>

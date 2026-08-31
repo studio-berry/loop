@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Verify installed LoupeEditor links the Quick product graph only (W-01)."""
+"""Verify installed LoupeEditor is the Quick product graph and sole interactive install."""
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -10,6 +11,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EDITOR_CMAKE = ROOT / "LoupeEditor" / "CMakeLists.txt"
+RETIRED_PLUGINS = frozenset(
+    {
+        "ActionListPlugin",
+        "AudioBookPlugin",
+        "DimensionsPlugin",
+        "EditorPlugin",
+        "LoupePreflightPlugin",
+        "ObjectInspectorPlugin",
+        "OcrPlugin",
+        "OutputPreviewPlugin",
+        "RedactPlugin",
+        "ScannerPlugin",
+        "SignaturePlugin",
+        "SoftProofingPlugin",
+    }
+)
 
 FORBIDDEN_EDITOR_LIBS = frozenset(
     {
@@ -26,7 +43,6 @@ REQUIRED_EDITOR_LIBS = frozenset(
         "Qt6::QuickControls2",
     }
 )
-ORACLE_TARGET = "LoupeEditorWidgetsOracle"
 
 
 class ContractError(ValueError):
@@ -49,6 +65,45 @@ def linked_libraries(link_block: str) -> set[str]:
     return {token.strip() for token in tokens if token.strip() and token not in {"PRIVATE", "PUBLIC", "INTERFACE"}}
 
 
+def validate_sole_interactive_product(root: Path) -> None:
+    product = json.loads((root / "docs" / "product-surface.json").read_text(encoding="utf-8"))
+    installed_apps = [
+        row
+        for row in product.get("surfaces", [])
+        if row.get("kind") == "application" and row.get("artifact_scope") == "install"
+    ]
+    keep = [row.get("artifact") for row in installed_apps if row.get("disposition") == "KEEP"]
+    if keep != ["LoupeEditor"]:
+        raise ContractError(f"installed KEEP applications must be only LoupeEditor, found {keep}")
+    cli = [row.get("artifact") for row in installed_apps if row.get("disposition") == "CLI-ONLY"]
+    if cli != ["PdfTool"]:
+        raise ContractError(f"installed CLI-ONLY applications must be only PdfTool, found {cli}")
+
+    plugin_rows = {
+        row["artifact"]: row
+        for row in product.get("surfaces", [])
+        if row.get("kind") == "plugin" and row.get("artifact")
+    }
+    for name in RETIRED_PLUGINS:
+        row = plugin_rows[name]
+        if row.get("artifact_scope") != "build":
+            raise ContractError(f"{name} must be build-only in the product ledger")
+        if row.get("profiles", {}).get("loupe-release") != "absent":
+            raise ContractError(f"{name} must be absent from the loupe-release profile")
+        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
+        if cmake.is_file() and re.search(
+            rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b",
+            cmake.read_text(encoding="utf-8"),
+        ):
+            raise ContractError(f"{name} still has an install() rule")
+
+    packaging = product["packaging"]
+    for profile in ("developer", "loupe-release"):
+        apps = list(packaging["appx_applications"][profile])
+        if apps != ["LoupeEditor"]:
+            raise ContractError(f"{profile} AppX applications must be only LoupeEditor, found {apps}")
+
+
 def main() -> int:
     try:
         cmake_text = EDITOR_CMAKE.read_text(encoding="utf-8")
@@ -62,22 +117,18 @@ def main() -> int:
         if missing:
             raise ContractError(f"LoupeEditor missing required Quick links: {', '.join(missing)}")
 
-        if re.search(rf"install\s*\([^)]*\b{ORACLE_TARGET}\b", cmake_text, re.DOTALL):
-            raise ContractError(f"{ORACLE_TARGET} must not be installed")
-
         if not re.search(r"install\s*\([^)]*\bLoupeEditor\b", cmake_text, re.DOTALL):
             raise ContractError("LoupeEditor must remain an installed product target")
 
-        if ORACLE_TARGET not in cmake_text:
-            raise ContractError(f"{ORACLE_TARGET} oracle target is missing from LoupeEditor/CMakeLists.txt")
+        validate_sole_interactive_product(ROOT)
 
-    except (ContractError, OSError) as exc:
+    except (ContractError, OSError, KeyError, json.JSONDecodeError) as exc:
         print(f"Installed product graph FAILED: {exc}", file=sys.stderr)
         return 1
 
     print(
-        "Installed product graph verified: LoupeEditor=Quick-only; "
-        f"oracle={ORACLE_TARGET} non-installed"
+        "Installed product graph verified: LoupeEditor=Quick-only sole interactive install; "
+        "PdfTool remains the installed CLI"
     )
     return 0
 

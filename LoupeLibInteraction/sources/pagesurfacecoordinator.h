@@ -28,10 +28,14 @@
 #include "jobrelay.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
+#include "pdfpagecachebudget.h"
+#include "pdfresourcebudget.h"
+#include "renderpresentationpolicy.h"
 #include "viewportcontroller.h"
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include <atomic>
@@ -44,18 +48,7 @@
 namespace pdfinteraction
 {
 
-/// What the render path is configured to produce. Set by the owner, never
-/// derived here: the coordinator must not reconfigure the session (see
-/// PDFSessionPageSurfaceRenderer::render for why a worker changing renderer
-/// features invalidates every in-flight key).
-struct PageSurfaceRenderSettings
-{
-    pdf::PDFRenderer::Features features = pdf::PDFRenderer::getDefaultFeatures();
-
-    /// Identity of the colour-managed output path in force. Opaque to the
-    /// coordinator; it only has to change whenever the pixels would.
-    QString colorOutputIdentity;
-};
+using PageSurfaceRenderSettings = RenderPresentationPolicy;
 
 /// Hard limits, pre-registered rather than discovered under load.
 struct PageSurfaceBounds
@@ -68,10 +61,12 @@ struct PageSurfaceBounds
     int maxNearViewportRequests = 2;
 
     /// Estimated bytes of the renders in flight.
-    qint64 maxInFlightBytes = 64ll * 1024 * 1024;
+    qint64 maxInFlightBytes = 64LL * 1024 * 1024;
 
-    /// Bytes of admitted surfaces held for reuse.
-    qint64 maxAdmittedBytes = 128ll * 1024 * 1024;
+    /// Bytes of admitted surfaces held for reuse. In production this is a
+    /// diagnostic projection of the shared PDFPageCacheBudget; standalone
+    /// coordinators may still use it as their local fallback bound.
+    qint64 maxAdmittedBytes = 128LL * 1024 * 1024;
 
     static PageSurfaceBounds conservativeDefaults() { return PageSurfaceBounds(); }
 };
@@ -145,7 +140,48 @@ public:
     void setRenderSettings(PageSurfaceRenderSettings settings);
     const PageSurfaceRenderSettings& renderSettings() const noexcept { return m_settings; }
 
+    /// Diagnostic projection of the current budget partition. Prefer
+    /// cacheLimit()/setCacheLimit() as the authority; maxAdmittedBytes is
+    /// derived from the total via pdf::PDFPageCacheBudget::pageSurfaces().
+    /// Requests (or releases) the authoritative, overprint-accurate render of
+    /// one page instead of the fast approximate one. Idempotent. The page gets
+    /// its own cache slot (see withAuthoritativeOverprintMarker), so toggling
+    /// it neither invalidates nor is served by the approximate surface already
+    /// cached for the same page.
+    void setPageAuthoritativeOverprint(int pageIndex, bool enabled);
+    bool isPageAuthoritativeOverprint(int pageIndex) const { return m_authoritativePages.contains(pageIndex); }
+
+    /// Diagnostics for the surface currently admitted for \p pageIndex, if any.
+    /// Reflects whichever render path actually produced that surface -- the
+    /// standard path's cached-flag approximation, or the authoritative
+    /// renderer's own verdict.
+    std::optional<pdf::PDFRenderDiagnostics> diagnosticsForPage(int pageIndex) const;
+
     const PageSurfaceBounds& bounds() const noexcept { return m_bounds; }
+
+    /// Receives the production total cache budget. The shared object is the
+    /// authority for both compiled pages and admitted surfaces.
+    void setCacheLimit(qsizetype totalBytes);
+    qsizetype cacheLimit() const noexcept
+    {
+        return m_pageCacheBudget ? m_pageCacheBudget->total() : m_cacheLimit;
+    }
+
+    /// Attaches the document session's shared resource authority. Existing
+    /// admitted surfaces are dropped when the authority changes so the new
+    /// authority never starts with an unaccounted resident cache.
+    void setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget);
+    pdf::PDFResourceBudget* resourceBudget() const noexcept { return m_resourceBudget.get(); }
+    std::shared_ptr<pdf::PDFResourceBudget> sharedResourceBudget() const noexcept { return m_resourceBudget; }
+
+    /// bounds() is derived from the total via PDFPageCacheBudget partition;
+    /// prefer cacheLimit()/setCacheLimit() as the authority and treat
+    /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
+    void setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget);
+    std::shared_ptr<pdf::PDFPageCacheBudget> sharedPageCacheBudget() const noexcept { return m_pageCacheBudget; }
+    /// Refreshes the diagnostic surface projection and trims after the shared
+    /// authority's total changes.
+    void refreshPageCacheBudget();
 
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
@@ -192,14 +228,17 @@ private:
         RevisionFencedToken token;
         pdf::PDFJobPriority priority = pdf::PDFJobPriority::VisiblePage;
         std::shared_ptr<std::atomic_bool> workStarted;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
     };
 
     struct CacheEntry
     {
         SurfaceBufferPointer pixels;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
+        pdf::PDFRenderDiagnostics diagnostics{};
         qint64 cost = 0;
         quint64 accessSequence = 0;
-        std::list<PageSurfaceKey>::iterator lru;
+        std::list<PageSurfaceKey>::iterator lru{};
     };
 
     struct PageSurfaceKeyHash
@@ -207,21 +246,23 @@ private:
         size_t operator()(const PageSurfaceKey& key) const noexcept
         {
             size_t hash = qHash(key.revision.toString());
-            hash = hash * 31u + qHash(key.pageIndex);
-            hash = hash * 31u + qHash(static_cast<int>(key.rotation));
-            hash = hash * 31u + qHash(key.featureBits);
-            hash = hash * 31u + qHash(key.colorOutputIdentity);
-            hash = hash * 31u + qHash(key.zoomBucket);
-            hash = hash * 31u + qHash(key.targetPixelSize.width());
-            hash = hash * 31u + qHash(key.targetPixelSize.height());
-            hash = hash * 31u + qHash(key.devicePixelRatio1000);
+            hash = hash * 31U + qHash(key.pageIndex);
+            hash = hash * 31U + qHash(static_cast<int>(key.rotation));
+            hash = hash * 31U + qHash(key.featureBits);
+            hash = hash * 31U + qHash(key.colorOutputIdentity);
+            hash = hash * 31U + qHash(key.zoomBucket);
+            hash = hash * 31U + qHash(key.targetPixelSize.width());
+            hash = hash * 31U + qHash(key.targetPixelSize.height());
+            hash = hash * 31U + qHash(key.devicePixelRatio1000);
             return hash;
         }
     };
 
     void onDemandChanged();
     void submit(const PageSurfaceRequest& request);
-    void admit(quint64 requestId, PageSurfaceResult result);
+    void admit(quint64 requestId,
+               PageSurfaceResult result,
+               std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
     void requestCancellation(quint64 requestId);
     void cancelAndDrop(quint64 requestId);
     void resolveCancellation(quint64 requestId, std::shared_ptr<std::atomic_bool> workStarted);
@@ -229,13 +270,20 @@ private:
     void finishInFlight(quint64 requestId, SurfaceTerminalState state);
 
     std::optional<PageSurfaceKey> keyForPage(int pageIndex) const;
-    bool insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels);
-    void trimCacheToBudget();
+    bool insertIntoCache(const PageSurfaceKey& key,
+                         SurfaceBufferPointer pixels,
+                         std::shared_ptr<pdf::PDFResourceReservation> resourceReservation,
+                         pdf::PDFRenderDiagnostics diagnostics);
+    bool evictOldestCacheEntry();
+    void trimCacheForIncoming(qsizetype bytes);
+    bool trimCacheToBudget();
+    void clearCache();
     qint64 inFlightBytes() const;
     int inFlightCount(pdf::PDFJobPriority priority) const;
     void rebuildSnapshot();
     void countTerminal(SurfaceTerminalState state);
     void scheduleSurfaceRetry();
+    void resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state);
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;
@@ -243,8 +291,12 @@ private:
     ViewportController* m_viewport = nullptr;
 
     PageSurfaceBounds m_bounds;
+    qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
+    std::shared_ptr<pdf::PDFPageCacheBudget> m_pageCacheBudget;
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
+    std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
+    QSet<int> m_authoritativePages;
 
     std::shared_ptr<JobRelay> m_relay;
 

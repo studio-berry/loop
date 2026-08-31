@@ -92,13 +92,13 @@ QString PreflightFinding::stableId() const
 {
     QCryptographicHash hash(QCryptographicHash::Sha256);
     hash.addData(checkId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(scope.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(QByteArray::number(page));
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(objectId.toUtf8());
-    hash.addData("\x1f", 1);
+    hash.addData(QByteArrayLiteral("\x1f"));
     hash.addData(type.toUtf8());
     return QString::fromLatin1(hash.result().toHex().left(16));
 }
@@ -2136,6 +2136,15 @@ void runInkCoverageCheck(PDFDocumentSession* session,
             continue;
         }
 
+        if (!result.diagnostics.isExact())
+        {
+            const QString reason = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
+                                       ? PDFTranslationContext::tr("ink coverage rasterization reported unsupported fidelity")
+                                       : result.diagnostics.reasons.join(QStringLiteral("; "));
+            emitIncomplete(int(pageIndex + 1), reason);
+            continue;
+        }
+
         int regionRank = 0;
         for (const PDFInkCoverageRegion& region : result.regions)
         {
@@ -2625,6 +2634,24 @@ void runColorInventoryCheck(PDFDocumentSession* session,
     PDFColorInventory inventory(session);
     const PDFColorInventoryResult result = inventory.inspect(settings);
 
+    if (!result.diagnostics.isExact())
+    {
+        PreflightFinding finding;
+        finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_DOCUMENT);
+        finding.type = QStringLiteral("check-incomplete");
+        finding.severity = QStringLiteral("info");
+        finding.checkId = check.id;
+        const QString reason = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
+                                   ? PDFTranslationContext::tr("color inventory rasterization reported unsupported fidelity")
+                                   : result.diagnostics.reasons.join(QStringLiteral("; "));
+        finding.evidence = QJsonObject{
+            { QStringLiteral("reason"), reason },
+            { QStringLiteral("fidelity"), QStringLiteral("unsupported") }
+        };
+        finding.message = PDFTranslationContext::tr("Color inventory skipped: %1").arg(reason);
+        pushPreflightFinding(finding, finding.severity, errors, warnings);
+    }
+
     auto emitInfo = [&](PreflightFinding finding)
     {
         finding.severity = check.severity;
@@ -2654,8 +2681,16 @@ void runColorInventoryCheck(PDFDocumentSession* session,
         emitInfo(finding);
     }
 
+    // Gate per page: one approximated page must not discard the rich-black
+    // findings measured exactly on every other page. The document-scope
+    // "Color inventory skipped" note above still reports the degraded pages.
     for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
     {
+        if (!richBlack.diagnostics.isExact())
+        {
+            continue;
+        }
+
         PreflightFinding finding;
         finding.scope = QString::fromLatin1(PREFLIGHT_FINDING_SCOPE_PAGE);
         finding.page = richBlack.page;

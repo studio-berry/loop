@@ -598,7 +598,7 @@ pdf::PDFCertificateEntries pdf::PDFCertificateStore::getPersonalCertificates()
     PDFCertificateEntries result;
 
 #ifdef Q_OS_WIN
-    HCERTSTORE certStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL, CERT_SYSTEM_STORE_CURRENT_USER, L"MY");
+    HCERTSTORE certStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, HCRYPTPROV_LEGACY{}, CERT_SYSTEM_STORE_CURRENT_USER, L"MY");
     PCCERT_CONTEXT context = nullptr;
     if (certStore)
     {

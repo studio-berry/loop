@@ -88,6 +88,7 @@ public:
         const QString jobId = spec.jobId.isEmpty()
                                   ? QStringLiteral("job-%1").arg(++m_sequence)
                                   : spec.jobId;
+        submittedSpecs.append(spec);
         auto token = std::make_shared<pdf::PDFJobCancellationToken>();
         pdf::PDFJobContext context(token,
                                    pdf::PDFProcessingLimits::conservativeDefaults(),
@@ -123,6 +124,7 @@ public:
 
     QStringList cancelledJobs;
     QHash<QString, pdf::PDFRevisionIdentity> publishedRevisions;
+    QList<pdf::PDFJobSpec> submittedSpecs;
 
 private:
     quint64 m_sequence = 0;

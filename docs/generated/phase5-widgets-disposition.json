@@ -1,0 +1,380 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "phase5-widgets-disposition",
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "inventory": "docs/generated/phase5-widgets-inventory.json",
+  "policy_inputs": [
+    "docs/loupe-shell.json",
+    "docs/product-surface.json"
+  ],
+  "allowed_dispositions": [
+    "DELETE",
+    "HEADLESS-REPLACE",
+    "RETAIN-NON-PRODUCT",
+    "BLOCKED"
+  ],
+  "rows": [
+    {
+      "id": "target:CanvasBenchmark",
+      "kind": "developer-tool",
+      "target": "CanvasBenchmark",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "Qualification-only benchmark harness",
+      "rationale": "CanvasBenchmark is explicitly non-installed qualification infrastructure.",
+      "testable_condition": "Retain only outside the supported installed interactive product and keep its qualification-only build option explicit.",
+      "source": "phase5-special-target-policy"
+    },
+    {
+      "id": "target:CodeGenerator",
+      "kind": "developer-tool",
+      "target": "CodeGenerator",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "developer-only surface",
+      "rationale": "Retained for developer and upstream comparison workflows; not a Loupe operator product entry and not part of the release profile.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": null,
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:JBIG2_VIEWER",
+      "kind": "developer-tool",
+      "target": "JBIG2_VIEWER",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "loupe-inspect",
+      "rationale": "Retained for developer and upstream comparison workflows; no separate Loupe product entry and not part of the release profile.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": "loupe-inspect",
+      "follow_up_issue": null
+    },
+    {
+      "id": "target:PdfExampleGenerator",
+      "kind": "developer-tool",
+      "target": "PdfExampleGenerator",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "consumer": "developer-only surface",
+      "rationale": "Retained for deterministic fixture generation and developer workflows, not shipped as a user surface or release artifact.",
+      "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
+      "source_disposition": "ADVANCED",
+      "source": "docs/product-surface.json",
+      "replacement_target": null,
+      "follow_up_issue": null
+    },
+    {
+      "id": "ui:CodeGenerator/generatormainwindow.ui",
+      "kind": "ui-form",
+      "path": "CodeGenerator/generatormainwindow.ui",
+      "owner_target": "CodeGenerator",
+      "consumer": "loupe-cli",
+      "rationale": "Developer fixture generator; not a product surface.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for CodeGenerator/generatormainwindow.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-cli"
+    },
+    {
+      "id": "ui:JBIG2_Viewer/mainwindow.ui",
+      "kind": "ui-form",
+      "path": "JBIG2_Viewer/mainwindow.ui",
+      "owner_target": "JBIG2_VIEWER",
+      "consumer": "loupe-inspect",
+      "rationale": "Developer JBIG2 probe; not a product surface.",
+      "disposition": "RETAIN-NON-PRODUCT",
+      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for JBIG2_Viewer/mainwindow.ui.",
+      "source_disposition": "HEADLESS",
+      "source": "docs/loupe-shell.json:legacy_surface_disposition",
+      "replacement_target": "loupe-inspect"
+    }
+  ],
+  "crosswalk": {
+    "product_surface": [
+      {
+        "id": "loupe-editor",
+        "artifact": "LoupeEditor",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-cli",
+        "artifact": "PdfTool",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-lib-core",
+        "artifact": "LoupeLibCore",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-lib-quick",
+        "artifact": "LoupeLibQuick",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-editor-quick",
+        "artifact": "LoupeEditorQuick",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-viewer",
+        "artifact": "LoupeViewer",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-pagemaster",
+        "artifact": "LoupePageMaster",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-diff",
+        "artifact": "LoupeDiff",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-launchpad",
+        "artifact": "LoupeLaunchPad",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "code-generator",
+        "artifact": "CodeGenerator",
+        "status": "matched"
+      },
+      {
+        "id": "jbig2-viewer",
+        "artifact": "JBIG2_VIEWER",
+        "status": "matched"
+      },
+      {
+        "id": "pdf-example-generator",
+        "artifact": "PdfExampleGenerator",
+        "status": "matched"
+      },
+      {
+        "id": "dimensions-plugin",
+        "artifact": "DimensionsPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "object-inspector-plugin",
+        "artifact": "ObjectInspectorPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "output-preview-plugin",
+        "artifact": "OutputPreviewPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "soft-proofing-plugin",
+        "artifact": "SoftProofingPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "redact-plugin",
+        "artifact": "RedactPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "signature-plugin",
+        "artifact": "SignaturePlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "editor-plugin",
+        "artifact": "EditorPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-preflight-plugin",
+        "artifact": "LoupePreflightPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "action-list-plugin",
+        "artifact": "ActionListPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "scanner-plugin",
+        "artifact": "ScannerPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "audiobook-plugin",
+        "artifact": "AudioBookPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "ocr-plugin",
+        "artifact": "OcrPlugin",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-document",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-preflight",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-production-preview",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-pages-production",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-inspect",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-fix",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      },
+      {
+        "id": "loupe-compare",
+        "status": "explained-policy-only",
+        "explanation": "Workspace policy is not a maintained Widgets target; it names the surviving product boundary."
+      }
+    ],
+    "plugin_action_policy": [
+      {
+        "plugin": "ActionListPlugin",
+        "surface_id": "target:ActionListPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "AudioBookPlugin",
+        "surface_id": "target:AudioBookPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "STOP-SHIPPING",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "DimensionsPlugin",
+        "surface_id": "target:DimensionsPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "EditorPlugin",
+        "surface_id": "target:EditorPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "LoupePreflightPlugin",
+        "surface_id": "target:LoupePreflightPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "ObjectInspectorPlugin",
+        "surface_id": "target:ObjectInspectorPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ADVANCED",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "OcrPlugin",
+        "surface_id": "target:OcrPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "STOP-SHIPPING",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "OutputPreviewPlugin",
+        "surface_id": "target:OutputPreviewPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "RedactPlugin",
+        "surface_id": "target:RedactPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "OPEN",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "ScannerPlugin",
+        "surface_id": "target:ScannerPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ADVANCED",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "SignaturePlugin",
+        "surface_id": "target:SignaturePlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ADVANCED",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      },
+      {
+        "plugin": "SoftProofingPlugin",
+        "surface_id": "target:SoftProofingPlugin",
+        "status": "explained-plugin-source-deleted",
+        "shell_disposition": "ABSORB",
+        "explanation": "Plugin sources deleted in Phase 5 Issue 17; product ledger records build-only loupe-release absence."
+      }
+    ],
+    "legacy_surface_disposition": [
+      {
+        "path": "CodeGenerator/generatormainwindow.ui",
+        "surface_id": "ui:CodeGenerator/generatormainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      },
+      {
+        "path": "JBIG2_Viewer/mainwindow.ui",
+        "surface_id": "ui:JBIG2_Viewer/mainwindow.ui",
+        "status": "matched",
+        "shell_disposition": "HEADLESS"
+      }
+    ]
+  },
+  "counts": {
+    "rows": 6,
+    "delete": 0,
+    "headless_replace": 0,
+    "retain_non_product": 6,
+    "blocked": 0
+  }
+}

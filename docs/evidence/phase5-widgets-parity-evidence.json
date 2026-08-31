@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "phase5-widgets-parity-retirement",
+  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "comparison_source_sha": "fcabced047ee490e09fbd671939b3deecc1edba5",
+  "description": "SHA-attributed record of the migration parity claims preserved by the Quick-native canvas contract before removal of the Widgets comparison target and layout probe.",
+  "claim_map": [
+    {
+      "claim": "One-column page placement and inter-page spacing",
+      "quick_native_test": "CanvasParityTest::singleColumnLayoutMatchesTheContract",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    },
+    {
+      "claim": "Two-column page pairing and horizontal spacing",
+      "quick_native_test": "CanvasParityTest::twoColumnLayoutMatchesTheContract",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    },
+    {
+      "claim": "Viewer rotation transposes page geometry",
+      "quick_native_test": "CanvasParityTest::rotationMatchesTheContract",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    },
+    {
+      "claim": "Media-box placement remains aligned with Core rendering while CropBox clips content",
+      "quick_native_test": "CanvasParityTest::cropBoxDoesNotChangeMediaLayout",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    },
+    {
+      "claim": "Viewport/page coordinate mapping round trips within one device pixel",
+      "quick_native_test": "CanvasParityTest::interactionCoordinateMappingRoundTrips",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    },
+    {
+      "claim": "Presented pixels match the admitted Core-rendered surface, including alpha",
+      "quick_native_test": "CanvasParityTest::presentedPixelsMatchTheRenderedSurface and CanvasParityTest::alphaBlendedPageMatchesTheRenderedSurface",
+      "source": "UnitTests/tst_canvasparitytest.cpp",
+      "status": "covered"
+    }
+  ],
+  "geometry_measurements_mm": {
+    "points_to_mm": 0.35277777777777775,
+    "layout-one-column": [
+      [-35.27777777777778, 0.0, 70.55555555555556, 105.0],
+      [-35.27777777777778, 110.0, 70.55555555555556, 105.0],
+      [-35.27777777777778, 220.0, 70.55555555555556, 105.0]
+    ],
+    "layout-two-column-left": [
+      [-71.05555555555556, 0.0, 70.55555555555556, 105.0],
+      [0.5, 0.0, 70.55555555555556, 105.0],
+      [-71.05555555555556, 110.0, 70.55555555555556, 105.0],
+      [0.5, 110.0, 70.55555555555556, 105.0]
+    ],
+    "layout-rotate-90": [
+      [-52.5, 0.0, 105.0, 70.55555555555556],
+      [-52.5, 75.55555555555556, 105.0, 70.55555555555556]
+    ],
+    "layout-crop-box": [
+      [-35.27777777777778, 0.0, 70.55555555555556, 105.0],
+      [-35.27777777777778, 110.0, 70.55555555555556, 105.0]
+    ]
+  },
+  "pixel_budgets": {
+    "pixels-flat": {
+      "max_channel_delta_budget": 2,
+      "differing_pixel_budget": 64
+    },
+    "pixels-alpha": {
+      "max_channel_delta_budget": 2,
+      "differing_pixel_budget": 64
+    }
+  },
+  "archived_inputs": {
+    "measurement_table": "UnitTests/testdata/canvas-parity/budgets.json",
+    "claim_implementation": "UnitTests/tst_canvasparitytest.cpp",
+    "runtime_output_policy": "Test output is transient beside the test binary and is not a mutable golden.",
+    "baseline_images": "No committed image goldens exist; pixel claims compare a Quick frame with the same-run Core surface.",
+    "probe_output": "The former layout-probe output is represented by the explicit geometry measurements above and the Quick-native test cases.",
+    "run_metadata": "The producing source identity is comparison_source_sha; this repository checkout had no configured build directory, so no build qualification claim is made."
+  },
+  "retired_components": [
+    "LoupeEditor/widgets_oracle_main.cpp",
+    "LoupeLibWidgets/sources/pdfdrawspacelayoutprobe.h",
+    "LoupeLibWidgets/sources/pdfdrawspacelayoutprobe.cpp"
+  ]
+}

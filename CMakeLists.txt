@@ -88,98 +88,29 @@ if(LOUPE_ENABLE_SENTRY)
     include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/LoupeSentry.cmake)
 endif()
 
-# Loupe release profile: retain the standalone production/developer tools while
-# deferring only explicitly out-of-profile plugins without deleting sources.
+# Loupe release profile: ship the single Quick desktop/CLI product surface.
+# Developer comparison tools stay source-preserved but default out of release.
 option(LOUPE_LOUPE_DISTRIBUTION "Loupe release profile" OFF)
 
-# 0.2B keeps compatibility executables in the install tree but presents one
-# desktop product. Full developer packages retain the inherited application
-# registrations for direct testing and upstream comparison.
-if(LOUPE_LOUPE_DISTRIBUTION)
-    set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
-else()
-    set(LOUPE_LOUPE_COMPAT_APPLICATIONS [=[
-	<Application Id="LoupeViewer" Executable="LoupeViewer.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe Viewer"
-						  Description="View and navigate PDF documents."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeViewer.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeViewer.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupePageMaster" Executable="LoupePageMaster.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe PageMaster"
-						  Description="Organize, merge, split, and duplicate PDF pages."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupePageMaster.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupePageMaster.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupeDiff" Executable="LoupeDiff.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe Diff"
-						  Description="Compare PDF documents."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeDiff.png"
-						  Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeDiff.png">
-      </uap:VisualElements>
-    </Application>
-	<Application Id="LoupeLaunchPad" Executable="LoupeLaunchPad.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe LaunchPad"
-						  Description="Launch Loupe applications."
-						  BackgroundColor="transparent"
-						  Square150x150Logo="assets\logo.png"
-						  Square44x44Logo="assets\logo.png">
-      </uap:VisualElements>
-    </Application>]=])
-endif()
+# Compatibility Widgets executables are build-optional and never installed.
+# LoupeEditor is the only interactive application in either packaging profile.
+set(LOUPE_LOUPE_COMPAT_APPLICATIONS "")
 
 if(LOUPE_LOUPE_DISTRIBUTION)
-    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
-    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
-    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT OFF)
-    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
-    set(_LOUPE_PLUGIN_OCR_DEFAULT OFF)
+    # Release profile builds the installed Quick product only; Widgets-bound
+    # developer tools stay opt-in so configure never requires Qt6::Widgets.
+    set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT OFF)
+    set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT OFF)
+    set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT OFF)
 else()
     set(_LOUPE_BUILD_CODE_GENERATOR_DEFAULT ON)
     set(_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT ON)
     set(_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT ON)
-    set(_LOUPE_BUILD_VIEWER_DEFAULT ON)
-    set(_LOUPE_BUILD_PAGEMASTER_DEFAULT ON)
-    set(_LOUPE_BUILD_DIFF_DEFAULT ON)
-    set(_LOUPE_BUILD_LAUNCHPAD_DEFAULT ON)
-    set(_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT ON)
-    set(_LOUPE_PLUGIN_SCANNER_DEFAULT ON)
-    set(_LOUPE_PLUGIN_OCR_DEFAULT ON)
 endif()
 
 option(LOUPE_BUILD_CODE_GENERATOR "Build CodeGenerator developer tool" ${_LOUPE_BUILD_CODE_GENERATOR_DEFAULT})
 option(LOUPE_BUILD_JBIG2_VIEWER "Build JBIG2_Viewer developer tool" ${_LOUPE_BUILD_JBIG2_VIEWER_DEFAULT})
 option(LOUPE_BUILD_EXAMPLE_GENERATOR "Build PdfExampleGenerator developer tool" ${_LOUPE_BUILD_EXAMPLE_GENERATOR_DEFAULT})
-option(LOUPE_BUILD_VIEWER "Build LoupeViewer application" ${_LOUPE_BUILD_VIEWER_DEFAULT})
-option(LOUPE_BUILD_PAGEMASTER "Build LoupePageMaster application" ${_LOUPE_BUILD_PAGEMASTER_DEFAULT})
-option(LOUPE_BUILD_DIFF "Build LoupeDiff application" ${_LOUPE_BUILD_DIFF_DEFAULT})
-option(LOUPE_BUILD_LAUNCHPAD "Build LoupeLaunchPad application" ${_LOUPE_BUILD_LAUNCHPAD_DEFAULT})
-option(LOUPE_PLUGIN_AUDIOBOOK "Build AudioBook editor plugin" ${_LOUPE_PLUGIN_AUDIOBOOK_DEFAULT})
-option(LOUPE_PLUGIN_SCANNER "Build Scanner editor plugin" ${_LOUPE_PLUGIN_SCANNER_DEFAULT})
-
-# V1 ships OCR as CLI-only (PdfTool ocr) per the 2026-07-25 product decision (MIC-343).
-# The Editor OCR UI plugin is not part of the V1 release surface, but stays buildable
-# for local/developer use. Release packaging workflows pass -DLOUPE_PLUGIN_OCR=OFF
-# explicitly; PdfTool's OCR subcommand is unaffected. (LOUPE_BUNDLE_OCR_SERVICE, the
-# other half of the V1 CLI-only OCR surface, is declared in loupe-ocr/tools/CMakeLists.txt.)
-option(LOUPE_PLUGIN_OCR "Build the OCR editor plugin (UI)" ${_LOUPE_PLUGIN_OCR_DEFAULT})
-
-if(LOUPE_LOUPE_DISTRIBUTION AND LOUPE_PLUGIN_OCR)
-    message(FATAL_ERROR
-        "LOUPE_PLUGIN_OCR=ON is incompatible with the Loupe release profile: "
-        "OCR is CLI-only in V1 (see issue #41 and ADR-005).")
-endif()
-
 if(LOUPE_ENABLE_SANITIZERS OR LOUPE_BUILD_FUZZERS)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)
@@ -196,14 +127,34 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(GNUInstallDirs)
 
+# Qt Quick can use Vulkan when the SDK headers are available.  Keep that
+# optional discovery quiet in environments that qualify D3D11/software only;
+# Qt's GUI package otherwise emits a warning while probing its wrapper.
+find_package(Vulkan QUIET)
+if(NOT Vulkan_FOUND)
+    set(CMAKE_DISABLE_FIND_PACKAGE_WrapVulkanHeaders TRUE)
+endif()
+
 find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core LinguistTools)
+
+set(_LOUPE_REQUIRES_WIDGETS OFF)
+if(LOUPE_BUILD_CODE_GENERATOR OR LOUPE_BUILD_JBIG2_VIEWER OR LOUPE_BUILD_EXAMPLE_GENERATOR OR LOUPE_BUILD_CANVAS_BENCHMARK)
+    set(_LOUPE_REQUIRES_WIDGETS ON)
+endif()
 
 if(LOUPE_BUILD_ONLY_CORE_LIBRARY)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql)
-else()
+elseif(_LOUPE_REQUIRES_WIDGETS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Widgets Svg Xml Sql PrintSupport TextToSpeech Concurrent)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
+else()
+    # Qt6::PrintSupport is Widgets-bound in the Qt desktop distribution.  No
+    # maintained target in the Widgets-free profile links it, so requesting it
+    # here would make a genuinely Widgets-absent Qt prefix fail at configure.
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Core Gui Svg Xml Sql TextToSpeech Concurrent)
+    find_package(Qt6 6.11.1 REQUIRED COMPONENTS Qml Quick QuickControls2 QuickDialogs2)
 endif()
+set(LOUPE_CONFIGURE_REQUIRES_WIDGETS "${_LOUPE_REQUIRES_WIDGETS}" CACHE INTERNAL "Whether configure required Qt6::Widgets")
 
 if(LOUPE_BUILD_TESTS)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS Test)
@@ -232,6 +183,12 @@ if(LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
 
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    # QTP0004 is provided by Qt Qml.  The fuzz configuration intentionally
+    # builds only LoupeLibCore and therefore does not discover that module.
+    qt_policy(SET QTP0004 NEW)
+endif()
+set(QT_NO_MISSING_CATALOG_LANGUAGE_WARNING ON)
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
 
 find_package(OpenSSL REQUIRED)
@@ -339,14 +296,6 @@ if(LOUPE_INSTALL_INCLUDE)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibcore_export.h
             DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibCore)
 
-    # Install public headers from LoupeLibWidgets/include
-    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/LoupeLibWidgets/sources/
-            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets
-            FILES_MATCHING PATTERN "*.h")
-
-    # Install generated export header
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/loupelibwidgets_export.h
-            DESTINATION ${LOUPE_INSTALL_INCLUDE_DIR}/LoupeLibWidgets)
 endif()
 
 if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
@@ -361,7 +310,6 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         add_subdirectory(LoupeLibQuick)
     endif()
 
-    add_subdirectory(LoupeLibWidgets)
     if(LOUPE_BUILD_CODE_GENERATOR)
         add_subdirectory(CodeGenerator)
     endif()
@@ -380,25 +328,11 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     if(LOUPE_BUILD_CANVAS_BENCHMARK)
         add_subdirectory(CanvasBenchmark)
     endif()
-    add_subdirectory(LoupeLibGui)
-    add_subdirectory(LoupeEditorPlugins)
     if(LOUPE_BUILD_QUICK_CANVAS)
         add_subdirectory(LoupeEditor)
         if(LOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE)
             add_subdirectory(ProductQuickAccessibilitySmoke)
         endif()
-    endif()
-    if(LOUPE_BUILD_VIEWER)
-        add_subdirectory(LoupeViewer)
-    endif()
-    if(LOUPE_BUILD_PAGEMASTER)
-        add_subdirectory(LoupePageMaster)
-    endif()
-    if(LOUPE_BUILD_DIFF)
-        add_subdirectory(LoupeDiff)
-    endif()
-    if(LOUPE_BUILD_LAUNCHPAD)
-        add_subdirectory(LoupeLaunchPad)
     endif()
     add_subdirectory(WixInstaller)
 endif()
@@ -422,7 +356,7 @@ message("LOUPE_TRANSLATION_TS_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_TS_OUTPUT_DI
 message("LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY" ${LOUPE_TRANSLATION_QM_OUTPUT_DIRECTORY})
 
 # Only add translation targets for targets that actually exist in this build.
-foreach(_tgt LoupeEditor LoupeViewer LoupePageMaster LoupeDiff PdfTool)
+foreach(_tgt LoupeEditor PdfTool)
     if(TARGET ${_tgt})
         list(APPEND _existing_translation_targets ${_tgt})
     endif()
@@ -483,21 +417,12 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         else()
             set(_LOUPE_DESKTOP_ENTRIES
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.desktop
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.desktop
                 Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.desktop
                 Desktop/io.github.mberrys.Loupe-pdf.desktop)
             set(_LOUPE_DESKTOP_ICONS
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeDiff.svg
-                Desktop/io.github.mberrys.Loupe-pdf.LoupePageMaster.svg
-                Desktop/io.github.mberrys.Loupe-pdf.LoupeViewer.svg
                 Desktop/io.github.mberrys.Loupe-pdf.LoupeEditor.svg
                 Desktop/io.github.mberrys.Loupe-pdf.svg)
             set(_LOUPE_DESKTOP_PNGS
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeDiff.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupePageMaster.png
-                Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeViewer.png
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.LoupeEditor.png
                 Desktop/128x128/io.github.mberrys.Loupe-pdf.png)
         endif()
@@ -527,10 +452,15 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     endif()
 
     if(LOUPE_INSTALL_QT_DEPENDENCIES)
+        if(LOUPE_LOUPE_DISTRIBUTION)
+            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6Svg|Qt6TextToSpeech|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
+        else()
+            set(_LOUPE_QT_DLL_REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*")
+        endif()
         install(DIRECTORY ${LOUPE_QT_ROOT}/bin/
             RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/
             FILES_MATCHING
-            REGEX "(Qt6Core|Qt6Gui|Qt6PrintSupport|Qt6Svg|Qt6TextToSpeech|Qt6Widgets|Qt6Xml|Qt6Multimedia|Qt6Network|Qt6Qml|Qt6Quick|Qt6QuickControls2|Qt6QuickDialogs2)\\..*"
+            REGEX "${_LOUPE_QT_DLL_REGEX}"
             PATTERN "Debug" EXCLUDE
             PATTERN "*.pdb" EXCLUDE
         )
@@ -573,15 +503,17 @@ if(LOUPE_INSTALL_DEPENDENCIES AND NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
             PATTERN "*.pdb" EXCLUDE
         )
 
-        install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/styles/
-            RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/styles/
-            FILES_MATCHING
-            PATTERN "*.dll"
-            PATTERN "*.so"
-            PATTERN "*.dylib"
-            REGEX "d\\..*" EXCLUDE
-            PATTERN "*.pdb" EXCLUDE
-        )
+        if(NOT LOUPE_LOUPE_DISTRIBUTION)
+            install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/styles/
+                RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/styles/
+                FILES_MATCHING
+                PATTERN "*.dll"
+                PATTERN "*.so"
+                PATTERN "*.dylib"
+                REGEX "d\\..*" EXCLUDE
+                PATTERN "*.pdb" EXCLUDE
+            )
+        endif()
 
         install(DIRECTORY ${LOUPE_QT_ROOT}/plugins/texttospeech/
             RUNTIME DESTINATION ${LOUPE_INSTALL_LIB_DIR}/texttospeech/

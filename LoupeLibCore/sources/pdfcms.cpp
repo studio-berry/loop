@@ -148,6 +148,10 @@ static HPROFILE openWindowsColorProfile(const QString& profileName)
 
 static PDFColorProfileIdentifier::Type getWindowsColorProfileType(HPROFILE profileHandle)
 {
+    constexpr DWORD spaceGray = 0x47524159u;
+    constexpr DWORD spaceRgb = 0x52474220u;
+    constexpr DWORD spaceCmyk = 0x434d594bu;
+
     PROFILEHEADER header = { };
     if (!GetColorProfileHeader(profileHandle, &header))
     {
@@ -156,13 +160,13 @@ static PDFColorProfileIdentifier::Type getWindowsColorProfileType(HPROFILE profi
 
     switch (header.phDataColorSpace)
     {
-        case SPACE_GRAY:
+        case spaceGray:
             return PDFColorProfileIdentifier::Type::WindowsSystemGray;
 
-        case SPACE_RGB:
+        case spaceRgb:
             return PDFColorProfileIdentifier::Type::WindowsSystemRGB;
 
-        case SPACE_CMYK:
+        case spaceCmyk:
             return PDFColorProfileIdentifier::Type::WindowsSystemCMYK;
 
         default:

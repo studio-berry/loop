@@ -53,6 +53,10 @@
 #include <functional>
 #include <thread>
 #include <utility>
+
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+#include <process.h>
+#endif
 #include <vector>
 
 class PageMasterExportTest : public QObject
@@ -233,7 +237,11 @@ int runCrashHarness(const QStringList& arguments)
         {
             // Simulate process death after the atomic PDF commit and before its
             // manifest update. The parent verifies the final path remains valid.
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+            ::_exit(91);
+#else
             std::quick_exit(91);
+#endif
         }
 
         // Real persistence, mirroring PDFPageMasterExport::run()'s internal

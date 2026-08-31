@@ -3,29 +3,22 @@
   <?define MyInstallDir="${WIX_INSTALL_PREFIX}" ?>
 
   <Product Id="*" Name="Loupe" Language="1033" Version="${LOUPE_VERSION}" Manufacturer="Michael Berry" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
-    <Package Id="*" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
+    <Package Id="*" Platform="x64" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of Loupe is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <WixVariable Id="WixUILicenseRtf" Value="explic.rtf" />
 
-    <Feature Id="feature_LOUPE_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, compatibility tools, and shared PDF services.">
+    <Feature Id="feature_LOUPE_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, and shared PDF services.">
       <ComponentGroupRef Id="LOUPE_Framework" />
       <ComponentRef Id="ProgramMenuDir" />
 
-      <Feature Id="feature_LOUPE_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="Advanced PDF viewer/editor with many functions, such as annotation editing, form filling, signature verification, and many optional plugins.">
+      <Feature Id="feature_LOUPE_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="LoupeEditor Quick shell for interactive PDF inspection and preparation.">
         <ComponentGroupRef Id="LOUPE_Editor"/>
-
-        <Feature Id="feature_LOUPE_Editor_Plugins" Absent="allow" AllowAdvertise="no" Title="Plugin Pack" Level="1" Description="${LOUPE_WIX_PLUGIN_PACK_DESCRIPTION}">
-          <ComponentGroupRef Id="LOUPE_Editor_Plugins"/>
-          <ComponentGroupRef Id="LOUPE_Loupe_Data"/>
+${LOUPE_WIX_EDITOR_DATA_REF}
 ${LOUPE_WIX_FEATURE_OCR_SERVICE}
-        </Feature>
       </Feature>
-${LOUPE_WIX_FEATURE_VIEWER}
-${LOUPE_WIX_FEATURE_PAGEMASTER}
-${LOUPE_WIX_FEATURE_DIFF}
     </Feature>
 
     <UIRef Id="WixUI_FeatureTree" />
@@ -33,7 +26,7 @@ ${LOUPE_WIX_FEATURE_DIFF}
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
+      <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="LOUPE" />
         <Directory Id="dir_share_root" Name="share">
           <Directory Id="dir_loupe" Name="loupe">
@@ -66,16 +59,12 @@ ${LOUPE_WIX_FEATURE_DIFF}
       <Component Id="cmpLoupeLibCore" Directory="INSTALLFOLDER" Guid="{C8CFFAE9-F913-4103-BD46-A8299E42938E}">
         <File Id="filLoupeLibCore" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibCore.dll" />
       </Component>
-      <Component Id="cmpLoupeLibWidgets" Directory="INSTALLFOLDER" Guid="{40A714A4-3F2A-41BE-9C70-216FAB048061}">
-        <File Id="filLoupeLibWidgets" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibWidgets.dll" />
-      </Component>
-      <Component Id="cmpLoupeLibGui" Directory="INSTALLFOLDER" Guid="{A6399A6E-EF73-4699-A723-E72529C248DB}">
-        <File Id="filLoupeLibGui" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibGui.dll" />
+      <Component Id="cmpLoupeLibQuick" Directory="INSTALLFOLDER" Guid="{F8E1B0D4-4B37-4A6C-9D2E-7F3A5C8B1D90}">
+        <File Id="filLoupeLibQuick" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibQuick.dll" />
       </Component>
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
-${LOUPE_WIX_COMPAT_LAUNCHPAD}
 ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Core" Directory="INSTALLFOLDER" Guid="{D8024726-7864-42BE-9E38-DFF782AC5C97}">
         <File Id="filQt6Core" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Core.dll" />
@@ -86,22 +75,31 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Network" Directory="INSTALLFOLDER" Guid="{69DD98CF-191F-4E16-9475-7201CF05630D}">
                 <File Id="filQt6Network" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Network.dll" />
       </Component>
-      <Component Id="cmpQt6PrintSupport" Directory="INSTALLFOLDER" Guid="{C8045343-5FD3-4349-B4E6-B770F4D28381}">
-                <File Id="filQt6PrintSupport" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6PrintSupport.dll" />
+${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
+      <Component Id="cmpQt6Qml" Directory="INSTALLFOLDER" Guid="{7A6C5B4D-3E2F-41D0-9C8B-7A6E5D4C3B2A}">
+        <File Id="filQt6Qml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Qml.dll" />
       </Component>
+      <Component Id="cmpQt6Quick" Directory="INSTALLFOLDER" Guid="{8B7D6C5E-4F30-42E1-AD9C-8B7F6E5D4C3B}">
+        <File Id="filQt6Quick" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Quick.dll" />
+      </Component>
+      <Component Id="cmpQt6QuickControls2" Directory="INSTALLFOLDER" Guid="{9C8E7D6F-5041-43F2-BEAD-9C807F6E5D4C}">
+        <File Id="filQt6QuickControls2" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6QuickControls2.dll" />
+      </Component>
+      <Component Id="cmpQt6QuickDialogs2" Directory="INSTALLFOLDER" Guid="{AD9F8E70-6152-4403-CFBE-AD91807F6E5D}">
+        <File Id="filQt6QuickDialogs2" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6QuickDialogs2.dll" />
+      </Component>
+${LOUPE_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Svg" Directory="INSTALLFOLDER" Guid="{8324FA84-C4A4-47E8-849B-62D5FD5F2B4A}">
                 <File Id="filQt6Svg" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Svg.dll" />
       </Component>
       <Component Id="cmpQt6TextToSpeech" Directory="INSTALLFOLDER" Guid="{82AAD343-207F-4812-BC7E-0F17D9F6B8CD}">
                 <File Id="filQt6TextToSpeech" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6TextToSpeech.dll" />
       </Component>
-      <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
-                <File Id="filQt6Widgets" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Widgets.dll" />
-      </Component>
       <Component Id="cmpQt6Xml" Directory="INSTALLFOLDER" Guid="{686836FB-9324-4849-AEFC-3AC5575BE2EC}">
                 <File Id="filQt6Xml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Xml.dll" />
       </Component>
 ${LOUPE_WIX_ICU_COMPONENTS}
+${LOUPE_WIX_QML_COMPONENTS}
       <Component Id="cmpqoffscreen" Directory="dir_platforms" Guid="{A1B2C3D4-E5F6-4789-A012-3456789ABCDE}">
         <File Id="filqoffscreen" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qoffscreen.dll" />
       </Component>
@@ -138,9 +136,7 @@ ${LOUPE_WIX_ICU_COMPONENTS}
       <Component Id="cmpqwindows" Directory="dir_platforms" Guid="{8A574FB6-B003-45E6-80F2-0989BEE14A63}">
         <File Id="filqwindows" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qwindows.dll" />
       </Component>
-      <Component Id="cmpqmodernwindowsstyle" Directory="dir_styles" Guid="{1A418DAB-7A24-4695-A773-4DC161926350}">
-        <File Id="filqmodernwindowsstyle" KeyPath="yes" Source="$(var.MyInstallDir)\styles\qmodernwindowsstyle.dll" />
-      </Component>
+${LOUPE_WIX_QT_STYLES_COMPONENT}
       <Component Id="cmpqtexttospeech_sapi" Directory="dir_texttospeech" Guid="{305900CC-4483-4E0F-B611-C32FD9E01021}">
         <File Id="filqtexttospeech_sapi" KeyPath="yes" Source="$(var.MyInstallDir)\texttospeech\qtexttospeech_sapi.dll" />
       </Component>
@@ -275,42 +271,8 @@ ${LOUPE_WIX_ICU_COMPONENTS}
     <Icon Id="LOUPE_VP_Icon.exe" SourceFile="$(var.MyInstallDir)\LoupeEditor.exe"/>
   </Fragment>
 
-${LOUPE_WIX_FRAGMENT_VIEWER}
-${LOUPE_WIX_FRAGMENT_PAGEMASTER}
-${LOUPE_WIX_FRAGMENT_DIFF}
 ${LOUPE_WIX_FRAGMENT_OCR_SERVICE}
-
-  <Fragment>
-    <ComponentGroup Id="LOUPE_Editor_Plugins">
-${LOUPE_WIX_PLUGIN_AUDIOBOOK}
-      <Component Id="cmpDimensionsPlugin" Directory="dir_pdfplugins" Guid="{0D422903-CBDD-47CF-B7A9-6C829BD64717}">
-        <File Id="filDimensionsPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\DimensionsPlugin.dll" />
-      </Component>
-      <Component Id="cmpObjectInspectorPlugin" Directory="dir_pdfplugins" Guid="{9058F5AB-6248-406D-8634-5657552DA6D2}">
-        <File Id="filObjectInspectorPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\ObjectInspectorPlugin.dll" />
-      </Component>
-      <Component Id="cmpOutputPreviewPlugin" Directory="dir_pdfplugins" Guid="{054CE9AB-A1FA-45E2-A75E-1D4DDE76D156}">
-        <File Id="filOutputPreviewPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\OutputPreviewPlugin.dll" />
-      </Component>
-      <Component Id="cmpRedactPlugin" Directory="dir_pdfplugins" Guid="{2B85C746-062F-4D93-9978-0E1206FF20C4}">
-        <File Id="filRedactPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\RedactPlugin.dll" />
-      </Component>
-      <Component Id="cmpSoftProofingPlugin" Directory="dir_pdfplugins" Guid="{421A01AF-BB7F-467C-A3C6-ED9F41BABC02}">
-        <File Id="filSoftProofingPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\SoftProofingPlugin.dll" />
-      </Component>
-      <Component Id="cmpSignaturePlugin" Directory="dir_pdfplugins" Guid="{BC0EA59D-3E89-402C-BB0A-93869214AB19}">
-        <File Id="filSignaturePlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\SignaturePlugin.dll" />
-      </Component>
-      <Component Id="cmpEditorPlugin" Directory="dir_pdfplugins" Guid="{FE5DC1D1-3320-43A7-BD4F-DCFB2A9DE039}">
-        <File Id="filEditorPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\EditorPlugin.dll" />
-      </Component>
-      <Component Id="cmpLoupePreflightPlugin" Directory="dir_pdfplugins" Guid="{A4E8C2F1-9B3D-4E71-A5C6-8F2D1E0B7A94}">
-        <File Id="filLoupePreflightPlugin" KeyPath="yes" Source="$(var.MyInstallDir)\pdfplugins\LoupePreflightPlugin.dll" />
-      </Component>
-${LOUPE_WIX_PLUGIN_OCR}
-${LOUPE_WIX_PLUGIN_SCANNER}
-    </ComponentGroup>
-  </Fragment>
+${LOUPE_WIX_QML_DIRECTORY_REFS}
 
   <Fragment>
     <ComponentGroup Id="LOUPE_Loupe_Data">
@@ -332,11 +294,7 @@ ${LOUPE_WIX_PLUGIN_SCANNER}
     </DirectoryRef>
   </Fragment>
 
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_printsupport" Name="printsupport" />
-    </DirectoryRef>
-  </Fragment>
+${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
@@ -344,11 +302,7 @@ ${LOUPE_WIX_PLUGIN_SCANNER}
     </DirectoryRef>
   </Fragment>
 
-  <Fragment>
-    <DirectoryRef Id="INSTALLFOLDER">
-      <Directory Id="dir_styles" Name="styles" />
-    </DirectoryRef>
-  </Fragment>
+${LOUPE_WIX_QT_STYLES_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">

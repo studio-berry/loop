@@ -142,6 +142,7 @@ protected:
     virtual void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override;
     virtual void performImagePainting(const QImage& image) override;
     virtual void performMeshPainting(const PDFMesh& mesh) override;
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill) override;
     virtual void performSaveGraphicState(ProcessOrder order) override;
     virtual void performRestoreGraphicState(ProcessOrder order) override;
     virtual void setWorldMatrix(const QTransform& matrix) override;
@@ -185,7 +186,6 @@ public:
             type(type),
             dataIndex(dataIndex)
         {
-
         }
 
         InstructionType type = InstructionType::Invalid;
@@ -246,6 +246,18 @@ public:
     QColor getPaperColor() const { return m_paperColor; }
     void setPaperColor(QColor paperColor) { m_paperColor = paperColor; }
 
+    /// Returns true if any fill or stroke on this page has overprint enabled
+    /// for the corresponding paint operation. The standard (approximate)
+    /// render path does not simulate overprint compositing, so this flag is
+    /// how a caller learns its render of this page is an approximation.
+    /// Computed once during compilation and cached with the rest of the
+    /// precompiled page -- never recomputed per draw.
+    bool containsOverprint() const { return m_containsOverprint; }
+
+    /// Marks this page as containing overprint-bearing content. Latches: once
+    /// set, stays set for the lifetime of this precompiled page.
+    void markOverprintContent() { m_containsOverprint = true; }
+
     PDFSnapInfo* getSnapInfo() { return &m_snapInfo; }
     const PDFSnapInfo* getSnapInfo() const { return &m_snapInfo; }
 
@@ -282,8 +294,8 @@ public:
 
         Type type = Type::Unknown;
         QRectF boundingRect;
-        std::array<uint8_t, 64> hash = { }; ///< Hash of all data
-        std::array<uint8_t, 64> imageHash = { }; ///< Hash of the image only
+        std::array<uint8_t, 64> hash = {};   ///< Hash of all data
+        std::array<uint8_t, 64> imageHash = {};   ///< Hash of the image only
         QPainterPath pagePath;
     };
 
@@ -308,7 +320,6 @@ private:
             path(qMove(path)),
             isText(isText)
         {
-
         }
 
         QPen pen;
@@ -323,7 +334,6 @@ private:
         inline ClipData(QPainterPath path) :
             clipPath(qMove(path))
         {
-
         }
 
         QPainterPath clipPath;
@@ -335,7 +345,6 @@ private:
         inline ImageData(QImage image) :
             image(qMove(image))
         {
-
         }
 
         QImage image;
@@ -348,7 +357,6 @@ private:
             mesh(qMove(mesh)),
             alpha(alpha)
         {
-
         }
 
         PDFMesh mesh;
@@ -357,6 +365,7 @@ private:
 
     qint64 m_compilingTimeNS = 0;
     qint64 m_memoryConsumptionEstimate = 0;
+    bool m_containsOverprint = false;
     QColor m_paperColor = QColor(Qt::white);
     std::vector<Instruction> m_instructions;
     std::vector<PathPaintData> m_paths;
@@ -392,15 +401,18 @@ protected:
     virtual void performClipping(const QPainterPath& path, Qt::FillRule fillRule) override;
     virtual void performImagePainting(const QImage& image) override;
     virtual void performMeshPainting(const PDFMesh& mesh) override;
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill) override;
     virtual void performSaveGraphicState(ProcessOrder order) override;
     virtual void performRestoreGraphicState(ProcessOrder order) override;
     virtual void setWorldMatrix(const QTransform& matrix) override;
     virtual void setCompositionMode(QPainter::CompositionMode mode) override;
 
 private:
+    void noteOverprintForPaint(bool fill, bool stroke);
+
     PDFPrecompiledPage* m_precompiledPage;
 };
 
 }   // namespace pdf
 
-#endif // PDFPAINTER_H
+#endif   // PDFPAINTER_H

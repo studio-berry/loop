@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -13,12 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PRODUCT_SURFACE_PATH = ROOT / "docs" / "product-surface.json"
 SHELL_PATH = ROOT / "docs" / "loupe-shell.json"
 ACTION_POLICY_PATH = ROOT / "docs" / "loupe-shell-actions.json"
-EDITOR_UI_PATH = ROOT / "LoupeLibGui" / "pdfeditormainwindow.ui"
 
 VALID_DISPOSITIONS = frozenset({"KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"})
 VALID_TARGETS = frozenset({"Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"})
 VALID_LEGACY = frozenset({"MIGRATE", "CONSOLIDATE", "HEADLESS", "RETIRE"})
-ALLOWED_GUI = frozenset({"gated-by-quick-admission", "quick-admitted"})
 PLUGIN_FIELDS = ("owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition")
 LEGACY_FIELDS = (
     "path",
@@ -30,6 +27,7 @@ LEGACY_FIELDS = (
     "deletion_condition",
     "rationale",
 )
+EXPECTED_LEGACY_UI_COUNT = 2
 
 
 class ContractError(ValueError):
@@ -50,13 +48,12 @@ def main() -> int:
     product_surface = load_json(PRODUCT_SURFACE_PATH)
     shell = load_json(SHELL_PATH)
     action_policy = load_json(ACTION_POLICY_PATH)
-    editor_ui = EDITOR_UI_PATH.read_text(encoding="utf-8")
 
     if product_surface.get("shell_contract") != "docs/loupe-shell.json":
         raise ContractError("product-surface manifest is not linked to loupe-shell.json")
     if shell.get("schema_version") != 1 or shell.get("issue") != 193:
         raise ContractError("unsupported shell contract version or issue")
-    if shell.get("gui_status") not in ALLOWED_GUI:
+    if shell.get("gui_status") not in frozenset({"gated-by-quick-admission", "quick-admitted"}):
         raise ContractError(f"unsupported gui_status: {shell.get('gui_status')}")
     if shell.get("shell_surface") != "LoupeEditor":
         raise ContractError("shell_surface must be LoupeEditor")
@@ -85,12 +82,11 @@ def main() -> int:
     policy_ids = [action["id"] for action in actions]
     if len(policy_ids) != len(set(policy_ids)):
         raise ContractError("duplicate editor action ids")
-
-    ui_ids = sorted(set(re.findall(r"<action name=\"([^\"]+)\"", editor_ui)))
-    missing = sorted(set(ui_ids) - set(policy_ids))
-    extra = sorted(set(policy_ids) - set(ui_ids))
-    if missing or extra:
-        raise ContractError(f"action policy mismatch missing={missing} extra={extra}")
+    expected_count = int(action_policy.get("expected_action_count", 0))
+    if expected_count != len(actions):
+        raise ContractError(
+            f"Editor action count mismatch: expected_action_count={expected_count}, policy={len(actions)}"
+        )
 
     plugin_surfaces = {
         surface["artifact"]: surface
@@ -137,8 +133,10 @@ def main() -> int:
         if not (ROOT / path).is_file():
             raise ContractError(f"missing legacy ui file: {path}")
 
-    if len(legacy) != 48:
-        raise ContractError(f"legacy_surface_disposition must contain 48 entries, found {len(legacy)}")
+    if len(legacy) != EXPECTED_LEGACY_UI_COUNT:
+        raise ContractError(
+            f"legacy_surface_disposition must contain {EXPECTED_LEGACY_UI_COUNT} entries, found {len(legacy)}"
+        )
 
     repo_ui = sorted(
         str(p.relative_to(ROOT)).replace("\\", "/")
@@ -157,7 +155,7 @@ def main() -> int:
     )
     print(
         f"Loupe shell contract verified: {len(shell['workspaces'])} workspaces, "
-        f"{len(ui_ids)} Editor actions, {len(shell['plugin_action_policy'])} plugin policies, "
+        f"{len(actions)} Editor actions, {len(shell['plugin_action_policy'])} plugin policies, "
         f"{len(legacy)} legacy UI dispositions; {gui_message}"
     )
     return 0

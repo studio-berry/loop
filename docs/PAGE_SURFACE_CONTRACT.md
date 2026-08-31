@@ -2,13 +2,16 @@
 
 Status: P4-S3 (0.2.0 Phase 4). Types live in `LoupeLibInteraction/sources/pagesurfacekey.h`,
 `pagesurfacerenderer.h`, `pagesurfacecoordinator.h`, and `canvassnapshot.h`.
-Architecture invariant **I23**; test targets `UnitTestsViewportController` and `UnitTestsPageSurface`.
+Architecture invariant **I23**; test targets `UnitTestsViewportController`,
+`UnitTestsPageSurface`, `UnitTestsPageSurfaceBudget`, and `UnitTestsDocumentViewSession`.
 
 The host-neutral render path is `ViewportController` → `PageSurfaceCoordinator` →
 `pdf::PDFJobScheduler` → `IPageSurfaceRenderer` → owner-thread admission → `CanvasSnapshot`.
 Nothing in it owns a document, a scheduler, a renderer, or a presentation host.
 `pdf::PDFDocumentContext` stays the revision fence, `pdf::PDFJobScheduler` stays the only
-scheduler, and `pdf::PDFDocumentSession` stays the only compile cache.
+scheduler, and `pdf::PDFDocumentSession` stays the only compile cache. In the production
+Quick path, `DocumentViewSession` is the single page-cache authority: its default total is
+256 MiB, split into 128 MiB for compiled pages and 128 MiB for admitted surfaces.
 
 ## The key
 
@@ -76,6 +79,22 @@ is not forwarded to a presentation host.
 
 Recovery needs no rebuild: when pressure clears, the next `requestSurfaces()` re-renders what
 was evicted.
+
+`pdf::PDFPageCacheBudget` normalizes negative totals to zero and gives an odd total's extra
+byte to surfaces. `DocumentViewSession::setCacheLimit()` forwards the same normalized total
+to `pdf::PDFDocumentSession` and `PageSurfaceCoordinator`; a replacement document session
+receives the configured total again before new surface demand is submitted. Compiled-page
+residency is charged with `PDFPrecompiledPage::getMemoryConsumptionEstimate()`, and a page
+larger than the compiled share is rejected rather than temporarily exceeding the total.
+The compiled and admitted counters therefore satisfy the shared resident-cost invariant:
+
+```text
+compiled-page bytes + admitted-surface bytes <= configured total
+```
+
+The decoded-stream cache remains a separate bounded entry-count cache. Its bytes are not
+part of this compiled-page-plus-surface budget, although stream-cache shedding still occurs
+under the existing pressure policy.
 
 ## Session access
 

@@ -29,12 +29,33 @@ jobs:
         run: python3 -m unittest scripts.ci.test_workflow_contracts -v
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
+      - name: Verify authoritative product-surface contract
+        run: python3 scripts/ci/validate_product_surface.py
+      - name: Verify Phase 5 maintained-tree residue
+        run: |
+          python3 scripts/ci/test_check_phase5_residue.py
+          python3 scripts/ci/check_phase5_residue.py
       - name: Verify unmanaged async launch allowlist
         run: python3 scripts/ci/check_unmanaged_async.py
       - name: Verify semantic-trust source boundaries
         run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
+      - name: Verify Phase 5 Widgets evidence is current
+        run: python3 scripts/generate_phase5_widgets_evidence.py --check
+      - name: Verify Phase 5 Widgets completeness contract
+        run: python3 scripts/verify_phase5_widgets_contract.py
+      - name: Verify plugin and legacy form accounting
+        run: |
+          python3 scripts/verify-plugin-form-accounting.py
+          python3 -m unittest scripts.ci.test_verify_plugin_form_accounting -q
+      - name: Verify Widgets library consumer graph
+        run: |
+          python3 scripts/generate_widgets_library_consumer_graph.py --check
+          python3 scripts/verify-widgets-library-consumer-graph.py
+          python3 scripts/verify-widgets-free-release-profile.py
+          python3 -m unittest scripts.ci.test_verify_widgets_library_consumer_graph -q
+          python3 -m unittest scripts.ci.test_verify_widgets_free_release_profile -q
 
   agent-fast:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'

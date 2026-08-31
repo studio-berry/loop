@@ -20,6 +20,10 @@
     the layouts CMake can produce (see Resolve-ProfilesDir) and reports which one
     matched -- that resolution is itself a MIC-301 finding worth recording.
 
+.PARAMETER SourceSha
+    Optional full source SHA to record in the smoke transcript. Package workflows
+    pass the required exact SHA; clean-VM runs should pass it as well.
+
 .PARAMETER AllowOcrSidecar
     Permit the LoupeOcrService bundle (which carries a Python runtime) to be
     present. docs/PACKAGING_LICENSING.md requires the *default* bundle to be
@@ -34,6 +38,7 @@ param(
     [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
     [string]$ProfilesDir = "",
     [string]$TestPdf = "",
+    [string]$SourceSha = "",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar,
     [switch]$AllowOcrPlugin
@@ -41,6 +46,13 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if (-not [string]::IsNullOrWhiteSpace($SourceSha)) {
+    if ($SourceSha -notmatch "^[0-9a-fA-F]{40}$") {
+        throw "SourceSha must be a full 40-character Git SHA."
+    }
+    Write-Host "Package source SHA: $($SourceSha.ToLowerInvariant())"
+}
 
 function Assert-FileExists {
     param([string]$Path, [string]$Label)
@@ -95,7 +107,12 @@ function Test-ForbiddenPayload {
     $rules = @(
         @{ Label = "Ghostscript"; Patterns = @("gswin*.exe", "gsdll*.dll", "gs.exe") },
         @{ Label = "Java runtime"; Patterns = @("java.exe", "javaw.exe", "jvm.dll", "*.jar") },
-        @{ Label = "Python runtime"; Patterns = @("python*.exe", "python3*.dll", "*.whl") }
+        @{ Label = "Python runtime"; Patterns = @("python*.exe", "python3*.dll", "*.whl") },
+        @{ Label = "Widgets-bound Qt"; Patterns = @(
+            "Qt6Widgets.dll", "Qt6Widgets*.dll",
+            "Qt6QuickWidgets.dll", "Qt6QuickWidgets*.dll",
+            "Qt6PrintSupport.dll", "Qt6PrintSupport*.dll"
+        ) }
     )
 
     # The installer lays files down in more than one place: binaries under
@@ -145,7 +162,7 @@ function Test-ForbiddenPayload {
         throw $message
     }
 
-    Write-Host "OK: no Ghostscript / JRE / Python payload in the default bundle (scanned: $($scanned -join ', '))"
+    Write-Host "OK: no Ghostscript / JRE / Python / Widgets-bound Qt payload in the default bundle (scanned: $($scanned -join ', '))"
 }
 
 $pluginsDir = Join-Path $InstallDir "pdfplugins"
@@ -159,7 +176,6 @@ Write-Host "Resolved preflight profiles to $ProfilesDir"
 $requiredFiles = @(
     @{ Path = (Join-Path $InstallDir "LoupeEditor.exe"); Label = "Editor" },
     @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
-    @{ Path = (Join-Path $pluginsDir "LoupePreflightPlugin.dll"); Label = "Loupe preflight plugin" },
     @{ Path = (Join-Path $ProfilesDir "loupe-default.json"); Label = "Default preflight profile" },
     @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
     @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
@@ -201,6 +217,7 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
 
 $profilePath = Join-Path $ProfilesDir "loupe-default.json"
 $pdfTool = Join-Path $InstallDir "PdfTool.exe"
+$editor = Join-Path $InstallDir "LoupeEditor.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
 $qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOUPE_QT_ROOT) |
@@ -217,16 +234,50 @@ $pathParts = @($env:PATH -split ';' | Where-Object {
 $savedPath = $env:PATH
 $savedPluginPath = $env:QT_PLUGIN_PATH
 $savedQmlPath = $env:QML2_IMPORT_PATH
+$savedQmlImportPath = $env:QML_IMPORT_PATH
+$savedQpaPluginPath = $env:QT_QPA_PLATFORM_PLUGIN_PATH
+$savedQtdir = $env:QTDIR
+$savedQtRootDir = $env:QT_ROOT_DIR
+$savedQt6Dir = $env:Qt6_DIR
+$savedLoupeQtRoot = $env:LOUPE_QT_ROOT
+$savedQuickBackend = $env:QT_QUICK_BACKEND
 $env:PATH = ($pathParts -join ';')
 Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:QML_IMPORT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:QTDIR -ErrorAction SilentlyContinue
+Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:LOUPE_QT_ROOT -ErrorAction SilentlyContinue
 try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format text 2>&1
     $preflightExit = $LASTEXITCODE
+    Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    $nativeOutput = @(& $editor --quick-smoke 2>&1)
+    $nativeExit = $LASTEXITCODE
+    if ($nativeExit -ne 0) {
+        throw "LoupeEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+    }
+    Write-Host "OK: LoupeEditor native Quick startup"
+    $env:QT_QUICK_BACKEND = "software"
+    $softwareOutput = @(& $editor --quick-smoke 2>&1)
+    $softwareExit = $LASTEXITCODE
+    if ($softwareExit -ne 0) {
+        throw "LoupeEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
+    }
+    Write-Host "OK: LoupeEditor software Quick startup"
 } finally {
     $env:PATH = $savedPath
-    if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath }
-    if ($null -ne $savedQmlPath) { $env:QML2_IMPORT_PATH = $savedQmlPath }
+    if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQmlPath) { $env:QML2_IMPORT_PATH = $savedQmlPath } else { Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQmlImportPath) { $env:QML_IMPORT_PATH = $savedQmlImportPath } else { Remove-Item Env:QML_IMPORT_PATH -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQpaPluginPath) { $env:QT_QPA_PLATFORM_PLUGIN_PATH = $savedQpaPluginPath } else { Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQtdir) { $env:QTDIR = $savedQtdir } else { Remove-Item Env:QTDIR -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQtRootDir) { $env:QT_ROOT_DIR = $savedQtRootDir } else { Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQt6Dir) { $env:Qt6_DIR = $savedQt6Dir } else { Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue }
+    if ($null -ne $savedLoupeQtRoot) { $env:LOUPE_QT_ROOT = $savedLoupeQtRoot } else { Remove-Item Env:LOUPE_QT_ROOT -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQuickBackend) { $env:QT_QUICK_BACKEND = $savedQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
 }
 if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
     throw "PdfTool preflight failed with unexpected exit code $preflightExit`: $preflightOutput"

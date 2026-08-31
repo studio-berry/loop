@@ -33,7 +33,7 @@ Additional stress fixtures (`ai-art-*.pdf`) are exercised by `UnitTestsBleedStre
 
 ## Manual operator checklist (Editor)
 
-Run on a supported Windows or Linux machine with a release or dev build that bundles `PdfTool`, `LoupePreflightPlugin`, and `share/loupe/profiles/loupe-default.json` (see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)).
+Run on a supported Windows or Linux machine with a release or dev build that bundles `PdfTool` and `share/loupe/profiles/loupe-default.json` (see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)).
 
 ### Open and preflight
 

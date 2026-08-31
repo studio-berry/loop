@@ -340,6 +340,7 @@ public:
 
     const std::vector<PDFObjectReference>& getAllOptionalContentGroups() const { return m_allOptionalContentGroups; }
     const PDFOptionalContentConfiguration& getDefaultConfiguration() const { return m_defaultConfiguration; }
+    const std::vector<PDFOptionalContentConfiguration>& getConfigurations() const { return m_configurations; }
     const PDFOptionalContentGroup& getOptionalContentGroup(PDFObjectReference reference) const { return m_optionalContentGroups.at(reference); }
 
     /// Returns true, if optional content group exists

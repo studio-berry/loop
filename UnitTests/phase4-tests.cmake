@@ -108,6 +108,8 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
 
     target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_compile_definitions(UnitTestsPageSurface PRIVATE
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
     set_target_properties(UnitTestsPageSurface PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -116,6 +118,34 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsPageSurface "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurface")
+
+    add_executable(UnitTestsPageSurfaceBudget
+        tst_pagesurfacebudgettest.cpp
+    )
+
+    target_link_libraries(UnitTestsPageSurfaceBudget PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsPageSurfaceBudget PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsPageSurfaceBudget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurfaceBudget")
+
+    add_executable(UnitTestsDocumentViewSession
+        tst_documentviewsessiontest.cpp
+    )
+
+    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoupeEditorQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsDocumentViewSession PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsDocumentViewSession "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDocumentViewSession")
 
     # Architecture invariant I24, interaction half. Same load-bearing link line:
     # transient state, hit testing, cancellation and the interaction trace must be
@@ -135,6 +165,23 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsInteractionController "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionController")
 
+    # Issue #145: the spatial index used by EvidenceHitTestSource and
+    # FindingListHitTestSource, and their hit-testing/precedence contracts
+    # once queries are index-backed instead of a linear scan.
+    add_executable(UnitTestsHitTestSource
+        tst_hittestsourcetest.cpp
+    )
+
+    target_link_libraries(UnitTestsHitTestSource PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsHitTestSource PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsHitTestSource "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsHitTestSource")
+
     # Architecture invariant I24, overlay half: deterministic z-order, page-space
     # geometry aligned with the page surfaces, and invalidation independent of
     # them.
@@ -151,27 +198,6 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsOverlayFrame "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOverlayFrame")
-
-    add_executable(UnitTestsPreflightInteraction
-        tst_preflightinteraction.cpp
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
-    )
-
-    target_link_libraries(UnitTestsPreflightInteraction PRIVATE LoupeLibInteraction LoupeLibCore LoupeLibWidgets Qt6::Core Qt6::Gui Qt6::Test)
-    target_include_directories(UnitTestsPreflightInteraction PRIVATE
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
-        ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
-        ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
-        ${CMAKE_BINARY_DIR})
-
-    set_target_properties(UnitTestsPreflightInteraction PROPERTIES
-        WIN32_EXECUTABLE OFF
-        MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-    )
-    add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
 
     add_executable(UnitTestsP4S9Interaction
         tst_p4s9interaction.cpp
@@ -257,22 +283,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         # is what makes node and texture lifetime deterministic.
         set_tests_properties(UnitTestsQuickCanvas PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 
-        # Architecture invariant I26, and the only target in the tree that links
-        # both canvases.
-        #
-        # The Widgets link is the Phase 4 migration oracle the 0.2.0 plan of
-        # record authorises, and it is narrow on purpose: the only thing this
-        # target calls is pdf::PDFDrawSpaceLayoutProbe, which hands back page
-        # rectangles in millimetres. No QWidget is constructed and
-        # PDFDrawWidgetProxy, QQuickWidget and WindowContainer are unreachable.
-        # ADR-009's prohibition is intact -- UnitTestsQuickCanvas above is still
-        # Widgets-free and is still what pins I25. This target is not installed
-        # and Phase 5 deletes it with the library it compares against.
+        # Architecture invariant I26. This target carries the retained
+        # Quick-native geometry, interaction, and presentation checks. Its
+        # expected geometry is explicit in the test cases; it has no dependency
+        # on the retired Widgets host or a second rendering implementation.
         add_executable(UnitTestsCanvasParity
             tst_canvasparitytest.cpp
         )
 
-        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibWidgets LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_compile_definitions(UnitTestsCanvasParity PRIVATE
             LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"

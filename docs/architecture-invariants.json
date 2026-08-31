@@ -49,7 +49,7 @@
     {
       "id": "I10",
       "title": "Recovered or unapproved output is not certified",
-      "test_targets": ["UnitTestsLifecycle", "UnitTestsRecovery"]
+      "test_targets": ["UnitTestsLifecycle"]
     },
     {
       "id": "I11",

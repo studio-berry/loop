@@ -24,6 +24,7 @@
 #define PDFWORKLOADENVELOPE_H
 
 #include "pdfglobal.h"
+#include "pdfresourcebudget.h"
 
 #include <QJsonObject>
 #include <QString>
@@ -66,14 +67,18 @@ struct LOUPELIBCORESHARED_EXPORT PDFWorkloadEnvelope
     // intentionally distinct from zero so unavailable evidence cannot pass.
     qint64 rssHighWaterBytes = -1;
     qint64 cacheHighWaterBytes = -1;
+    qint64 preflightHighWaterBytes = -1;
+    qint64 pagesMaterialized = -1;
     qint64 elapsedMs = 0;
     qint64 cancellationLatencyMs = -1;
     qint64 recoveryMs = -1;
     qint64 pressureShedCount = 0;
     bool prefetchShed = false;
     bool interactionSlotHeld = false;
+    QJsonObject resources;
 
     static qint64 currentRssHighWaterBytes();
+    void recordResources(const PDFResourceBudget& budget);
     QJsonObject toJson() const;
 };
 

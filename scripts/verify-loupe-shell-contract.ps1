@@ -6,23 +6,23 @@
 .DESCRIPTION
     This check intentionally does not build or launch the GUI. It verifies the
     state/workspace contract, the #192 product-surface linkage, plugin routing,
-  legacy surface disposition inventory, and complete action coverage before GUI
+    legacy surface disposition inventory, and complete action coverage before GUI
     wiring is allowed.
 #>
 param(
     [string]$RepoRoot = (Join-Path $PSScriptRoot ".."),
     [string]$ProductSurfacePath = (Join-Path $PSScriptRoot "..\docs\product-surface.json"),
     [string]$ShellContractPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell.json"),
-    [string]$ActionPolicyPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell-actions.json"),
-    [string]$EditorUiPath = (Join-Path $PSScriptRoot "..\LoupeLibGui\pdfeditormainwindow.ui")
+    [string]$ActionPolicyPath = (Join-Path $PSScriptRoot "..\docs\loupe-shell-actions.json")
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+$ExpectedLegacyUiCount = 2
 
-foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, $EditorUiPath)) {
+foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Required shell contract input is missing: $path"
     }
@@ -31,7 +31,6 @@ foreach ($path in @($ProductSurfacePath, $ShellContractPath, $ActionPolicyPath, 
 $productSurface = Get-Content -LiteralPath $ProductSurfacePath -Raw | ConvertFrom-Json
 $shell = Get-Content -LiteralPath $ShellContractPath -Raw | ConvertFrom-Json
 $actionPolicy = Get-Content -LiteralPath $ActionPolicyPath -Raw | ConvertFrom-Json
-$editorUi = Get-Content -LiteralPath $EditorUiPath -Raw
 
 if ($productSurface.shell_contract -ne "docs/loupe-shell.json") {
     throw "Product-surface manifest is not linked to the #193 shell contract."
@@ -74,9 +73,6 @@ $policyActions = @($actionPolicy.actions)
 if ($actionPolicy.schema_version -ne 1 -or $actionPolicy.issue -ne 193) {
     throw "Unsupported Editor action policy version or issue number."
 }
-if ($actionPolicy.source_ui -ne "LoupeLibGui/pdfeditormainwindow.ui") {
-    throw "Editor action policy points to an unexpected source UI."
-}
 $policyIds = @($policyActions | ForEach-Object id)
 $duplicateIds = @($policyIds | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
 if ($duplicateIds.Count -gt 0) {
@@ -90,15 +86,8 @@ foreach ($action in $policyActions) {
         throw "Invalid target for Editor action $($action.id): $($action.target)"
     }
 }
-
-$uiIds = @([regex]::Matches($editorUi, '<action name="([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
-$missingActions = @($uiIds | Where-Object { $policyIds -notcontains $_ })
-$extraActions = @($policyIds | Where-Object { $uiIds -notcontains $_ })
-if ($missingActions.Count -gt 0 -or $extraActions.Count -gt 0) {
-    throw "Editor action policy mismatch. Missing: $($missingActions -join ', '); extra: $($extraActions -join ', ')"
-}
-if ([int]$actionPolicy.expected_action_count -ne $uiIds.Count -or $policyActions.Count -ne $uiIds.Count) {
-    throw "Editor action count mismatch. UI=$($uiIds.Count), policy=$($policyActions.Count), expected=$($actionPolicy.expected_action_count)"
+if ([int]$actionPolicy.expected_action_count -ne $policyActions.Count) {
+    throw "Editor action count mismatch. policy=$($policyActions.Count), expected=$($actionPolicy.expected_action_count)"
 }
 
 $pluginPolicyFields = @("owner", "replacement_target", "required_test", "evidence_artifact", "deletion_condition")
@@ -152,8 +141,8 @@ foreach ($entry in $legacyLedger) {
     $legacyPaths += $entry.path
 }
 
-if ($legacyLedger.Count -ne 48) {
-    throw "legacy_surface_disposition must contain exactly 48 tracked .ui forms, found $($legacyLedger.Count)"
+if ($legacyLedger.Count -ne $ExpectedLegacyUiCount) {
+    throw "legacy_surface_disposition must contain exactly $ExpectedLegacyUiCount tracked .ui forms, found $($legacyLedger.Count)"
 }
 
 $repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | ForEach-Object {
@@ -171,4 +160,4 @@ $guiMessage = if ($shell.gui_status -eq "quick-admitted") {
     "product GUI remains gated by S21/S22 Quick admission."
 }
 
-Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($uiIds.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies, $($legacyLedger.Count) legacy UI dispositions; $guiMessage"
+Write-Output "Loupe shell contract verified: $($shell.workspaces.Count) workspaces, $($policyActions.Count) Editor actions, $($shell.plugin_action_policy.Count) plugin policies, $($legacyLedger.Count) legacy UI dispositions; $guiMessage"

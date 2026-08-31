@@ -47,18 +47,18 @@ struct OverlayStyle
     /// than a separate `filled` flag so the node builder has one code path.
     QColor fill;
 
-    float strokeWidthPx = 1.0f;
+    float strokeWidthPx = 1.0F;
 
     /// Half-extent of a Marker or Handle. Markers and handles have no page-space
     /// size of their own -- they are points -- so their size is presentation.
-    float pointRadiusPx = 4.0f;
+    float pointRadiusPx = 4.0F;
 
     /// Drawn in addition to the stroke, outside it, when the primitive carries
     /// keyboard focus. Focus and selection are separate states in OverlayFrame
     /// and stay separate here.
     bool focusRing = false;
-    float focusRingWidthPx = 2.0f;
-    float focusRingOffsetPx = 2.0f;
+    float focusRingWidthPx = 2.0F;
+    float focusRingOffsetPx = 2.0F;
 };
 
 /// The canvas half of the provisional Quick design tokens.

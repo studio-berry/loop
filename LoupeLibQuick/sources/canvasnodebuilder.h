@@ -30,6 +30,7 @@
 #include "canvassnapshot.h"
 #include "overlayframe.h"
 #include "pagesurfacekey.h"
+#include "pdfresourcebudget.h"
 
 #include <QHash>
 #include <QPolygonF>
@@ -81,6 +82,12 @@ public:
     /// The window owning the scene graph. Textures belong to it, so changing it
     /// drops every retained node: a texture outliving its window is a crash.
     void setWindow(QQuickWindow* window);
+
+    /// Shares the document session's resource authority. The builder only has
+    /// a source-image proxy for GPU bytes because Qt Quick does not expose the
+    /// backend allocation; a missing authority leaves the legacy diagnostic
+    /// counters usable for standalone scene-graph tests.
+    void setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget);
 
     void setPalette(const CanvasPalette& palette);
     const CanvasPalette& palette() const noexcept { return m_palette; }
@@ -151,6 +158,7 @@ private:
         /// identity: SurfaceBuffer is immutable and shared, so an unchanged
         /// pointer means unchanged pixels and no re-upload.
         pdfinteraction::SurfaceBufferPointer pixels;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
 
         QRect placedRect;
         bool exact = true;
@@ -176,6 +184,7 @@ private:
     static void destroyOverlayNode(OverlayNode& entry);
 
     QQuickWindow* m_window = nullptr;
+    std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
     CanvasPalette m_palette = CanvasPalette::standard();
 
     std::map<pdfinteraction::PageSurfaceKey, TileNode> m_tiles;

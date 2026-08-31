@@ -25,6 +25,9 @@
 
 #include "pdftoolabstractapplication.h"
 #include "pdfexception.h"
+#include "pdfresourcebudget.h"
+
+#include <memory>
 
 namespace pdftool
 {
@@ -58,6 +61,9 @@ protected:
 
     std::vector<PageInfo> m_pageInfo;
     qint64 m_wallTime = 0;
+    std::unique_ptr<pdf::PDFResourceBudget> m_resourceBudget;
+    pdf::PDFResourceReservation m_documentModelReservation;
+    bool m_resourceBudgetExhausted = false;
 };
 
 class PDFToolRender : public PDFToolRenderBase

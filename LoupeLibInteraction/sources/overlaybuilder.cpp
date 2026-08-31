@@ -49,6 +49,15 @@ OverlayBuilder::OverlayBuilder(const ViewportController& viewport, OverlayBounds
 {
 }
 
+OverlayBuilder::OverlayBuilder(const ViewportController& viewport,
+                               const RenderPresentationPolicy& policy,
+                               OverlayBounds bounds) :
+    m_viewport(&viewport),
+    m_policy(&policy),
+    m_bounds(bounds)
+{
+}
+
 void OverlayBuilder::setFindings(QList<InteractionTarget> findings)
 {
     m_findings = std::move(findings);
@@ -122,6 +131,8 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     }
 
     frame.token = token;
+
+    const bool suppressExtraGraphics = denyExtraGraphics();
 
     // Resolved once. ViewportController::visiblePages() rebuilds a list on every
     // call, and asking it per primitive is how a frame with a few thousand
@@ -215,7 +226,7 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
 
     for (const InteractionTarget& guide : m_guides)
     {
-        if (!isVisiblePage(guide.pageIndex))
+        if (suppressExtraGraphics || !isVisiblePage(guide.pageIndex))
         {
             continue;
         }
@@ -226,7 +237,7 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
 
     for (const InteractionTarget& finding : m_findings)
     {
-        if (!isVisiblePage(finding.pageIndex) || m_hiddenFindingIds.contains(finding.id))
+        if (suppressExtraGraphics || !isVisiblePage(finding.pageIndex) || m_hiddenFindingIds.contains(finding.id))
         {
             continue;
         }
@@ -242,26 +253,28 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
     }
 
     const InteractionTarget& hovered = state.hovered();
-    if (hovered.isValid() && isVisiblePage(hovered.pageIndex))
+    if (!suppressExtraGraphics && hovered.isValid() && isVisiblePage(hovered.pageIndex))
     {
         emitPrimitive(hovered, hovered.id + QStringLiteral("#hover"), hovered.pageBounds, OverlayLayer::Hover, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
     }
 
     const InteractionTarget& selected = state.selected();
-    if (selected.isValid() && isVisiblePage(selected.pageIndex))
+    if (!suppressExtraGraphics && selected.isValid() && isVisiblePage(selected.pageIndex))
     {
         emitPrimitive(selected, selected.id + QStringLiteral("#selection"), selected.pageBounds, OverlayLayer::Selection, OverlayPrimitiveKind::Rectangle, OverlaySeverity::None);
     }
 
     for (const InteractionTarget& handle : m_handles)
     {
-        if (isVisiblePage(handle.pageIndex))
+        if (suppressExtraGraphics || !isVisiblePage(handle.pageIndex))
         {
-            emitPrimitive(handle, handle.id, handle.pageBounds, OverlayLayer::DragHandles, OverlayPrimitiveKind::Handle, OverlaySeverity::None);
+            continue;
         }
+
+        emitPrimitive(handle, handle.id, handle.pageBounds, OverlayLayer::DragHandles, OverlayPrimitiveKind::Handle, OverlaySeverity::None);
     }
 
-    if (state.drag().has_value())
+    if (!suppressExtraGraphics && state.drag().has_value())
     {
         const DragSession& drag = *state.drag();
         if (drag.exceededThreshold && isVisiblePage(drag.target.pageIndex))

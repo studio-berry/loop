@@ -25,6 +25,7 @@
 
 #include "interactionglobal.h"
 #include "interactiontarget.h"
+#include "pagespatialindex.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfevidencegraph.h"
@@ -93,7 +94,14 @@ private:
     void indexGraph();
 
     pdf::PDFEvidenceGraph m_graph;
-    QList<InteractionTarget> m_targets;
+    /// Targets grouped by page, so both the spatial index and targetsForPage
+    /// can address a page's entries by position without re-filtering the
+    /// whole graph. Rebuilt wholesale on setGraph -- issue #145 AC6 requires
+    /// the index be safe under revision changes, and a graph replacement is
+    /// exactly that: there is no incremental add/remove to support here since
+    /// setGraph always supplies a complete, revision-bound graph.
+    QHash<int, QList<InteractionTarget>> m_targetsByPage;
+    QHash<int, PageSpatialIndex> m_indexByPage;
     int m_unrenderableRecords = 0;
 };
 
@@ -107,7 +115,8 @@ public:
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
 
 private:
-    QList<InteractionTarget> m_targets;
+    QHash<int, QList<InteractionTarget>> m_targetsByPage;
+    QHash<int, PageSpatialIndex> m_indexByPage;
 };
 
 /// Hit-tests the page boxes: media, crop, bleed, trim, art.

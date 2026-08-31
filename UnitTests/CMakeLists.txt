@@ -48,59 +48,6 @@ set_target_properties(UnitTestsIncrementalSave PROPERTIES
 )
 add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
 
-add_executable(UnitTestsRecovery
-    tst_recoverytest.cpp
-)
-
-target_link_libraries(UnitTestsRecovery PRIVATE
-    LoupeLibCore
-    LoupeLibGui
-    LoupeLibWidgets
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Test
-)
-
-target_include_directories(UnitTestsRecovery PRIVATE
-    ${CMAKE_SOURCE_DIR}/LoupeLibGui
-    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
-)
-
-set_target_properties(UnitTestsRecovery PROPERTIES
-    WIN32_EXECUTABLE OFF
-    MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-)
-add_test(UnitTestsRecovery "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRecovery")
-
-add_executable(UnitTestsUndoRedoManager
-    tst_undoredomanagertest.cpp
-)
-
-target_link_libraries(UnitTestsUndoRedoManager PRIVATE
-    LoupeLibCore
-    LoupeLibGui
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Test
-)
-
-target_include_directories(UnitTestsUndoRedoManager PRIVATE
-    ${CMAKE_SOURCE_DIR}/LoupeLibGui
-    ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
-)
-
-set_target_properties(UnitTestsUndoRedoManager PROPERTIES
-    WIN32_EXECUTABLE OFF
-    MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-)
-add_test(UnitTestsUndoRedoManager "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsUndoRedoManager")
-
 add_executable(UnitTestsProcessingBudget
     tst_processingbudgettest.cpp
 )
@@ -114,26 +61,7 @@ set_target_properties(UnitTestsProcessingBudget PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 
-add_executable(UnitTestsAccessibility
-    tst_accessibilitytest.cpp
-)
-
-target_link_libraries(UnitTestsAccessibility PRIVATE
-    LoupeLibWidgets
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets
-    Qt6::Test
-)
-
-set_target_properties(UnitTestsAccessibility PROPERTIES
-    WIN32_EXECUTABLE OFF
-    MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-)
 add_test(UnitTestsProcessingBudget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsProcessingBudget")
-add_test(UnitTestsAccessibility "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsAccessibility")
 
 add_executable(UnitTestsJobScheduler
     tst_jobschedulertest.cpp
@@ -552,8 +480,7 @@ add_executable(UnitTestsOcrContract
 
 target_link_libraries(UnitTestsOcrContract PRIVATE Qt6::Core Qt6::Test)
 target_include_directories(UnitTestsOcrContract PRIVATE
-    ${CMAKE_SOURCE_DIR}/PdfTool
-    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/OcrPlugin)
+    ${CMAKE_SOURCE_DIR}/PdfTool)
 
 set_target_properties(UnitTestsOcrContract PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -618,6 +545,8 @@ add_executable(UnitTestsOverprint
 )
 
 target_link_libraries(UnitTestsOverprint PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsOverprint PRIVATE
+    LOUPE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 set_target_properties(UnitTestsOverprint PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -747,20 +676,6 @@ set_target_properties(UnitTestsRedactVerifier PROPERTIES
 )
 add_test(UnitTestsRedactVerifier "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRedactVerifier")
 
-add_executable(UnitTestsThumbnailsRenderer
-	tst_thumbnailsrenderertest.cpp
-)
-
-target_link_libraries(UnitTestsThumbnailsRenderer PRIVATE LoupeLibWidgets LoupeLibCore Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
-
-set_target_properties(UnitTestsThumbnailsRenderer PROPERTIES
-    WIN32_EXECUTABLE OFF
-    MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-)
-add_test(UnitTestsThumbnailsRenderer "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsThumbnailsRenderer")
-
 # Pure geometry math for the preflight custom checks (bleed / trim / page-size).
 # Header-only, so it only needs the PdfTool include dir - no Core or PdfTool link.
 add_executable(UnitTestsPreflightChecks
@@ -779,30 +694,6 @@ set_target_properties(UnitTestsPreflightChecks PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsPreflightChecks  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightChecks")
-
-# Locks the Editor plugin's pure sidecar path, exit-code, and report-contract helpers.
-add_executable(UnitTestsPreflightPlugin
-    tst_preflightplugintest.cpp
-    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin/preflightreportmodel.cpp
-)
-
-target_link_libraries(UnitTestsPreflightPlugin PRIVATE Qt6::Core Qt6::Gui Qt6::Test LoupeLibCore LoupeLibWidgets)
-target_include_directories(UnitTestsPreflightPlugin PRIVATE
-    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
-    ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
-    ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
-    ${CMAKE_SOURCE_DIR}/LoupeLibWidgets/sources
-    ${CMAKE_BINARY_DIR})
-target_compile_definitions(UnitTestsPreflightPlugin PRIVATE
-    LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
-
-set_target_properties(UnitTestsPreflightPlugin PROPERTIES
-    WIN32_EXECUTABLE OFF
-    MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
-)
-add_test(UnitTestsPreflightPlugin  "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPreflightPlugin")
 
 # Drives `PdfTool preflight` against the loupe-preflight golden corpus, so it needs
 # the PdfTool executable, which is not built in LOUPE_BUILD_ONLY_CORE_LIBRARY mode.
@@ -856,9 +747,8 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
     )
     target_include_directories(UnitTestsOperatorAcceptance PRIVATE
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins/LoupePreflightPlugin
-        ${CMAKE_SOURCE_DIR}/LoupeEditorPlugins
         ${CMAKE_SOURCE_DIR}/LoupeLibCore/sources
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight
         ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR})
 
     set_target_properties(UnitTestsOperatorAcceptance PROPERTIES
@@ -919,6 +809,18 @@ set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsBudgetExhaustion "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsBudgetExhaustion")
+
+add_executable(UnitTestsResourceBudget
+    tst_resourcebudgettest.cpp
+)
+target_link_libraries(UnitTestsResourceBudget PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(UnitTestsResourceBudget PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsResourceBudget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsResourceBudget")
 
 add_executable(UnitTestsWorkloadEnvelope
     tst_workloadenvelopetest.cpp

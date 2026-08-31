@@ -36,8 +36,8 @@ namespace pdfinteraction
 ///
 /// These are the only input types that cross into the interaction layer. A
 /// QMouseEvent, a QWheelEvent, a QKeyEvent and a QQuickItem's event handlers all
-/// reduce to the same three values, so a Widgets oracle, a Quick canvas and a
-/// test drive identical code. That is what makes a recorded session replayable:
+/// reduce to the same three values, so the Quick canvas and its tests drive
+/// identical code. That is what makes a recorded session replayable:
 /// a QEvent cannot be constructed from a trace file with its timestamp intact,
 /// and a value can.
 enum class PointerAction
