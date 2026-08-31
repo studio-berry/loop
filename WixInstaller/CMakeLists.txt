@@ -5,14 +5,6 @@
 # represented here, even when a developer build happens to contain old files.
 
 if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
-    if(LOUPE_LOUPE_DISTRIBUTION)
-        # Release packaging is the only supported installer boundary.
-        set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
-        set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT "")
-        set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY "")
-        set(LOUPE_WIX_QT_STYLES_COMPONENT "")
-        set(LOUPE_WIX_QT_STYLES_DIRECTORY "")
-    endif()
     if(LOUPE_INSTALL_TO_USR)
         file(TO_NATIVE_PATH "${CMAKE_INSTALL_PREFIX}/usr/bin" WIX_INSTALL_PREFIX)
     else()
@@ -66,6 +58,50 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
     # Qt ICU DLLs have versioned filenames. Discover them at configure time so
     # the MSI matches cmake --install when Qt dependencies are staged.
     set(LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS "")
+    set(LOUPE_WIX_EDITOR_PLUGINS "")
+
+    # The release product is Quick-only and must not ship or reference the
+    # Widgets runtime. Keep the legacy component available for developer
+    # installer experiments, but make the distribution decision explicit in
+    # the generated WiX source rather than relying on the staged directory.
+    if(LOUPE_LOUPE_DISTRIBUTION)
+        set(LOUPE_WIX_QT_WIDGETS_COMPONENT "")
+        set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT "")
+        set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY "")
+        set(LOUPE_WIX_QT_STYLES_COMPONENT "")
+        set(LOUPE_WIX_QT_STYLES_DIRECTORY "")
+    else()
+        set(LOUPE_WIX_QT_WIDGETS_COMPONENT [=[
+      <Component Id="cmpQt6Widgets" Directory="INSTALLFOLDER" Guid="{C686E727-51FF-4A40-A7FE-E1A2130FDAAF}">
+                <File Id="filQt6Widgets" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Widgets.dll" />
+      </Component>
+]=])
+        set(LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT [=[
+      <Component Id="cmpQt6PrintSupport" Directory="INSTALLFOLDER" Guid="{C8045343-5FD3-4349-B4E6-B770F4D28381}">
+                <File Id="filQt6PrintSupport" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6PrintSupport.dll" />
+      </Component>
+]=])
+        set(LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY [=[
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dir_printsupport" Name="printsupport" />
+    </DirectoryRef>
+  </Fragment>
+]=])
+        set(LOUPE_WIX_QT_STYLES_COMPONENT [=[
+      <Component Id="cmpqmodernwindowsstyle" Directory="dir_styles" Guid="{1A418DAB-7A24-4695-A773-4DC161926350}">
+        <File Id="filqmodernwindowsstyle" KeyPath="yes" Source="$(var.MyInstallDir)\styles\qmodernwindowsstyle.dll" />
+      </Component>
+]=])
+        set(LOUPE_WIX_QT_STYLES_DIRECTORY [=[
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Directory Id="dir_styles" Name="styles" />
+    </DirectoryRef>
+  </Fragment>
+]=])
+    endif()
+
     set(LOUPE_WIX_ICU_COMPONENTS "")
 
     if(LOUPE_INSTALL_QT_DEPENDENCIES AND NOT "${LOUPE_QT_ROOT}" STREQUAL "")

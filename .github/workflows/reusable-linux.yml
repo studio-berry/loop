@@ -190,7 +190,7 @@ jobs:
             --configure \
             --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
             -- \
-            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
             -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON \
@@ -209,7 +209,7 @@ jobs:
             --expect-configure-failure \
             --build-dir "$LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR" \
             -- \
-            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
             -DLOUPE_BUILD_CODE_GENERATOR=ON
