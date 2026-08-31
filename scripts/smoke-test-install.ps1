@@ -176,7 +176,6 @@ Write-Host "Resolved preflight profiles to $ProfilesDir"
 $requiredFiles = @(
     @{ Path = (Join-Path $InstallDir "LoupeEditor.exe"); Label = "Editor" },
     @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
-    @{ Path = (Join-Path $pluginsDir "LoupePreflightPlugin.dll"); Label = "Loupe preflight plugin" },
     @{ Path = (Join-Path $ProfilesDir "loupe-default.json"); Label = "Default preflight profile" },
     @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
     @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }

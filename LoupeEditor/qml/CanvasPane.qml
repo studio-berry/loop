@@ -8,6 +8,7 @@ Item {
     id: root
 
     property var host: editorHost
+    property alias canvasItem: canvas
 
     signal viewportGeometryChanged()
 

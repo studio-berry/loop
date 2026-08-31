@@ -17,6 +17,10 @@ jobs:
   build_windows:
     runs-on: windows-2022
     env:
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\loupe\vcpkg\overlays\general
       QT_QPA_PLATFORM: offscreen
       SENTRY_DSN: off
 
@@ -156,6 +160,11 @@ jobs:
           # Sync certificates
           smctl windows certsync
 
+      - name: Prepare vcpkg directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+
       - name: 'VCPKG: Set up VCPKG'
         run: |
           $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\vcpkg-configuration.json" | ConvertFrom-Json
@@ -186,12 +195,14 @@ jobs:
             ./vcpkg/packages
             ./vcpkg/installed
             ./vcpkg/archives
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
-
+          key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-v2-
 
       - name: 'VCPKG: Install project dependencies'
         run: |
-          .\vcpkg install tbb openssl lcms zlib openjpeg freetype libjpeg-turbo libpng blend2d brotli bzip2 hwloc vcpkg-cmake vcpkg-cmake-config vcpkg-cmake-get-vars --triplet x64-windows
+          $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loupe'
+          .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt

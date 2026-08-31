@@ -686,6 +686,10 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
     if (existing != m_cache.end())
     {
         m_counters.admittedBytes -= existing->second.cost;
+        if (m_resourceBudget)
+        {
+            m_resourceBudget->recordEviction(pdf::PDFResourcePool::RasterTileCache, existing->second.cost);
+        }
         if (m_pageCacheBudget)
         {
             m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, existing->second.cost);

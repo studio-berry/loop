@@ -454,6 +454,12 @@ void EditorHost::openInitialPath(const QString& path)
         return;
     }
 
+    const QUrl url = QUrl::fromUserInput(path);
+    if (!url.isValid() || (!url.scheme().isEmpty() && url.scheme() != QStringLiteral("file")))
+    {
+        return;
+    }
+
     QVariantMap parameters;
     parameters.insert(QStringLiteral("path"), path);
     invokeCommand(pdfinteraction::DocumentFacade::OpenCommandId, parameters);

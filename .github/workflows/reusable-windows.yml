@@ -123,9 +123,9 @@ jobs:
             ./vcpkg/packages
             ./vcpkg/installed
             ./vcpkg/archives
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
+          key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
-            ${{ runner.os }}-vcpkg-
+            ${{ runner.os }}-vcpkg-v2-
 
       - name: 'VCPKG: Install project dependencies'
         run: |

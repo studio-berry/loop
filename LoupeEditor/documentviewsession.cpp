@@ -71,6 +71,7 @@ DocumentViewSession::~DocumentViewSession()
 
 void DocumentViewSession::prepareDocumentView()
 {
+    m_interaction->invalidate();
     m_geometry = std::make_unique<pdfinteraction::PDFDocumentPageGeometrySource>(&m_context);
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();

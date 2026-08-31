@@ -87,5 +87,5 @@ Item {
         }
     }
 
-    KeyNavigation.tab: canvasPane
+    KeyNavigation.tab: canvasPane.canvasItem
 }

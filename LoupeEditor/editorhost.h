@@ -169,8 +169,8 @@ public:
     /// Legacy geometry hook for headless tests without a LoupeCanvas item.
     Q_INVOKABLE void setViewportGeometry(qreal pixelPerMM, qreal devicePixelRatio, int widthPx, int heightPx);
 
-    /// Opens a positional CLI path after the shell is loaded.
-    Q_INVOKABLE void openInitialPath(const QString& path);
+    /// Opens a positional CLI path after the shell is loaded (C++-only).
+    void openInitialPath(const QString& path);
     Q_INVOKABLE QString shortcutForCommand(const QString& commandId) const;
 
     // Test-only accessor for large-document shell stress parity (gh-363).

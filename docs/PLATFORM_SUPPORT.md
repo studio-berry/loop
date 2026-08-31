@@ -42,15 +42,15 @@ Flatpak packaging uses the bounded `--filesystem=home` permission; see
 `docs/FLATPAK_SANDBOX.md` for named-path overrides and the portal-only
 evaluation record.
 
-Editor must resolve **PdfTool** and **LoupePreflightPlugin** without a
+Editor must resolve **PdfTool** and `loupe-default.json` without a
 developer toolchain on PATH.
 
 The profile directory is set by `LOUPE_PREFLIGHT_PROFILES_DIR` in
-`LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt`, derived from
-`LOUPE_INSTALL_SHARE_DIR`. Note that `-DLOUPE_INSTALL_TO_USR=ON` (used by the
-Windows CI and MSI builds) prefixes that with `usr/`, so the shipped path is
-`usr/share/loupe/profiles/`. Any smoke test must derive this from the install
-prefix rather than assuming a fixed absolute location.
+`PdfTool/CMakeLists.txt`, derived from `${LOUPE_INSTALL_SHARE_DIR}`. Note that
+`-DLOUPE_INSTALL_TO_USR=ON` (used by the Windows CI and MSI builds) prefixes
+that with `usr/`, so the shipped path is `usr/share/loupe/profiles/`. Any
+smoke test must derive this from the install prefix rather than assuming a
+fixed absolute location.
 
 ## V1 slim distribution
 
@@ -70,7 +70,7 @@ bundling** and **installer packaging** for modules that are already complete.
 | LoupeLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
 | LoupeLibQuick / LoupeLibCore | Yes | ☐ | ☐ | Plugin relative path; settings paths |
 | PdfTool (`preflight`, `add-bleed`, …) | Yes | ☐ | ☐ | Bundled next to Editor; working directory; offscreen CI |
-| LoupePreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `loupe-default.json`; `.dll` / `.so` |
+| Preflight profiles (`loupe-default.json`) | Yes | ☐ | ☐ | `PdfTool` preflight finds `loupe-default.json` at the installed share path |
 | LoupeEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
 | Other Editor plugins | Yes | ☐ | ☐ | Present in intended bundle set; load without system Qt |
 | Page production export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
@@ -87,7 +87,7 @@ bundling** and **installer packaging** for modules that are already complete.
 ### Bundling rules (all OS)
 
 1. Ship Qt runtime and required Qt plugins (`platforms`, `imageformats`, …) inside the package — do not require a system Qt install.
-2. Co-locate PdfTool, LoupePreflightPlugin, and `loupe-default.json` per the layout table.
+2. Co-locate PdfTool and `loupe-default.json` per the layout table.
 3. Keep the default bundle C++/Qt only (see `docs/PACKAGING_LICENSING.md`); scan for forbidden Ghostscript / JRE / Python payloads.
 4. **V1 ships unsigned** on Windows (no Authenticode). Publish `SHA256SUMS.txt` and disclose SmartScreen (MIC-342). Code signing is post-V1 / paid-distribution (MIC-345) — not a V1 bundling gate.
 5. Document upgrade, uninstall, and binary rollback (no cloud DB).

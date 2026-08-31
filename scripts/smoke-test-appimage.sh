@@ -91,7 +91,6 @@ fi
 
 assert_file "${BIN_DIR}/LoupeEditor" "Editor"
 assert_file "${BIN_DIR}/PdfTool" "PdfTool"
-assert_file "${PLUGINS_DIR}/libLoupePreflightPlugin.so" "Loupe preflight plugin"
 assert_file "${PROFILES_DIR}/loupe-default.json" "Default preflight profile"
 assert_file "${PROFILES_DIR}/schemas/profile.schema.json" "Profile schema"
 assert_file "${PROFILES_DIR}/schemas/report.schema.json" "Report schema"
