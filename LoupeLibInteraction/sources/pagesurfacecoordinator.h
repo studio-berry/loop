@@ -61,12 +61,12 @@ struct PageSurfaceBounds
     int maxNearViewportRequests = 2;
 
     /// Estimated bytes of the renders in flight.
-    qint64 maxInFlightBytes = 64ll * 1024 * 1024;
+    qint64 maxInFlightBytes = 64LL * 1024 * 1024;
 
     /// Bytes of admitted surfaces held for reuse. In production this is a
     /// diagnostic projection of the shared PDFPageCacheBudget; standalone
     /// coordinators may still use it as their local fallback bound.
-    qint64 maxAdmittedBytes = 128ll * 1024 * 1024;
+    qint64 maxAdmittedBytes = 128LL * 1024 * 1024;
 
     static PageSurfaceBounds conservativeDefaults() { return PageSurfaceBounds(); }
 };
@@ -235,10 +235,10 @@ private:
     {
         SurfaceBufferPointer pixels;
         std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
-        pdf::PDFRenderDiagnostics diagnostics;
+        pdf::PDFRenderDiagnostics diagnostics{};
         qint64 cost = 0;
         quint64 accessSequence = 0;
-        std::list<PageSurfaceKey>::iterator lru;
+        std::list<PageSurfaceKey>::iterator lru{};
     };
 
     struct PageSurfaceKeyHash
@@ -246,14 +246,14 @@ private:
         size_t operator()(const PageSurfaceKey& key) const noexcept
         {
             size_t hash = qHash(key.revision.toString());
-            hash = hash * 31u + qHash(key.pageIndex);
-            hash = hash * 31u + qHash(static_cast<int>(key.rotation));
-            hash = hash * 31u + qHash(key.featureBits);
-            hash = hash * 31u + qHash(key.colorOutputIdentity);
-            hash = hash * 31u + qHash(key.zoomBucket);
-            hash = hash * 31u + qHash(key.targetPixelSize.width());
-            hash = hash * 31u + qHash(key.targetPixelSize.height());
-            hash = hash * 31u + qHash(key.devicePixelRatio1000);
+            hash = hash * 31U + qHash(key.pageIndex);
+            hash = hash * 31U + qHash(static_cast<int>(key.rotation));
+            hash = hash * 31U + qHash(key.featureBits);
+            hash = hash * 31U + qHash(key.colorOutputIdentity);
+            hash = hash * 31U + qHash(key.zoomBucket);
+            hash = hash * 31U + qHash(key.targetPixelSize.width());
+            hash = hash * 31U + qHash(key.targetPixelSize.height());
+            hash = hash * 31U + qHash(key.devicePixelRatio1000);
             return hash;
         }
     };
