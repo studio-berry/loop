@@ -62,7 +62,6 @@ ${LOUPE_WIX_FEATURE_OCR_SERVICE}
       <Component Id="cmpLoupeLibQuick" Directory="INSTALLFOLDER" Guid="{F8E1B0D4-4B37-4A6C-9D2E-7F3A5C8B1D90}">
         <File Id="filLoupeLibQuick" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibQuick.dll" />
       </Component>
-      <!-- LOUPE_WIX_QT_WIDGETS_COMPONENT is intentionally empty for the current product boundary. -->
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
@@ -89,7 +88,7 @@ ${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6QuickDialogs2" Directory="INSTALLFOLDER" Guid="{AD9F8E70-6152-4403-CFBE-AD91807F6E5D}">
         <File Id="filQt6QuickDialogs2" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6QuickDialogs2.dll" />
       </Component>
-${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
+${LOUPE_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Svg" Directory="INSTALLFOLDER" Guid="{8324FA84-C4A4-47E8-849B-62D5FD5F2B4A}">
                 <File Id="filQt6Svg" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Svg.dll" />
       </Component>

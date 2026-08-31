@@ -1260,20 +1260,24 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
     {
         appendInk(ink, QStringLiteral("separation"), ink.isSpot);
     }
-    if (result.diagnostics.isExact())
+    // Gate per page, for the same reason as the preflight rich-black check:
+    // an approximated page must not drop the other pages' evidence records.
+    for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
     {
-        for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+        if (!richBlack.diagnostics.isExact())
         {
-            PDFEvidenceRecord record = makeRecord(graph, PDFEvidenceDomain::Colorants, richBlack.page, QStringLiteral("rich-black"));
-            record.coverageMethod = QStringLiteral("color-inventory");
-            record.fidelity = QStringLiteral("sampled");
-            record.observedValue = richBlack.areaMM2;
-            record.units = QStringLiteral("mm2");
-            record.extra.insert(QStringLiteral("area_mm2"), richBlack.areaMM2);
-            record.extra.insert(QStringLiteral("k_threshold"), settings.richBlackKThreshold);
-            record.id = QStringLiteral("rich-black:%1").arg(richBlack.page);
-            appendEvidenceRecord(graph, record, budget);
+            continue;
         }
+
+        PDFEvidenceRecord record = makeRecord(graph, PDFEvidenceDomain::Colorants, richBlack.page, QStringLiteral("rich-black"));
+        record.coverageMethod = QStringLiteral("color-inventory");
+        record.fidelity = QStringLiteral("sampled");
+        record.observedValue = richBlack.areaMM2;
+        record.units = QStringLiteral("mm2");
+        record.extra.insert(QStringLiteral("area_mm2"), richBlack.areaMM2);
+        record.extra.insert(QStringLiteral("k_threshold"), settings.richBlackKThreshold);
+        record.id = QStringLiteral("rich-black:%1").arg(richBlack.page);
+        appendEvidenceRecord(graph, record, budget);
     }
 }
 
