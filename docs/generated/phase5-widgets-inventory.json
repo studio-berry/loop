@@ -101,6 +101,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -118,7 +119,9 @@
         "QuickWidgets",
         "Widgets"
       ],
-      "transitive_targets": [],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
       "transitive_qt_modules": [],
       "qt_modules": [
         "Core",
@@ -403,6 +406,7 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": [
+        "CanvasBenchmark",
         "CodeGenerator",
         "JBIG2_VIEWER",
         "LoopEditor",
@@ -413,6 +417,7 @@
         "PdfExampleGenerator",
         "PdfTool",
         "ProductQuickAccessibilitySmoke",
+        "QuickShellSmoke",
         "UnitTests",
         "UnitTestsActionList",
         "UnitTestsApplicationIdentity",
@@ -707,6 +712,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -720,14 +726,23 @@
         "Quick",
         "QuickControls2"
       ],
-      "transitive_targets": [],
-      "transitive_qt_modules": [],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
         "Gui",
         "Qml",
         "Quick",
-        "QuickControls2"
+        "QuickControls2",
+        "Sql",
+        "Svg",
+        "Xml"
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
