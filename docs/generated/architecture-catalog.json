@@ -432,6 +432,7 @@
     "UnitTestsRepairDiff",
     "UnitTestsRepairOperation",
     "UnitTestsRepairOperatorAcceptance",
+    "UnitTestsResourceBudget",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",

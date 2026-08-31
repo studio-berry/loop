@@ -29,12 +29,162 @@
 #include "pdfpagecachebudget.h"
 #include "pdfprocessingbudget.h"
 
+#include <functional>
 #include <limits>
 #include <tuple>
+#include <unordered_set>
 #include <QtGlobal>
 
 namespace pdf
 {
+
+namespace
+{
+
+qsizetype estimateDocumentModelBytesImpl(const PDFDocument* document)
+{
+    if (!document)
+    {
+        return 0;
+    }
+
+    quint64 total = sizeof(PDFDocument);
+    const PDFObjectStorage::PDFObjects& objects = document->getStorage().getObjects();
+
+    std::unordered_set<const PDFObjectContent*> visitedContents;
+
+    const auto addProduct = [&total](quint64 count, quint64 size)
+    {
+        if (count > 0 && size > std::numeric_limits<quint64>::max() / count)
+        {
+            total = std::numeric_limits<quint64>::max();
+            return;
+        }
+
+        const quint64 product = count * size;
+        if (product > std::numeric_limits<quint64>::max() - total)
+        {
+            total = std::numeric_limits<quint64>::max();
+        }
+        else
+        {
+            total += product;
+        }
+    };
+
+    const auto addBytes = [&total](quint64 bytes)
+    {
+        if (bytes > std::numeric_limits<quint64>::max() - total)
+        {
+            total = std::numeric_limits<quint64>::max();
+        }
+        else
+        {
+            total += bytes;
+        }
+    };
+
+    std::function<void(const PDFObject&)> estimateObject;
+    std::function<void(const PDFDictionary*, bool)> estimateDictionary;
+
+    estimateDictionary = [&](const PDFDictionary* dictionary, bool includeObject)
+    {
+        if (!dictionary || !visitedContents.insert(dictionary).second)
+        {
+            return;
+        }
+
+        if (includeObject)
+        {
+            addBytes(sizeof(PDFDictionary));
+        }
+        addProduct(static_cast<quint64>(dictionary->getCapacity()), sizeof(PDFDictionary::DictionaryEntry));
+
+        for (size_t i = 0; i < dictionary->getCount(); ++i)
+        {
+            const QByteArray key = dictionary->getKey(i).getString();
+            if (!dictionary->getKey(i).isInplace())
+            {
+                addBytes(static_cast<quint64>(key.capacity()));
+            }
+            estimateObject(dictionary->getValue(i));
+        }
+    };
+
+    estimateObject = [&](const PDFObject& object)
+    {
+        switch (object.getType())
+        {
+            case PDFObject::Type::String:
+            case PDFObject::Type::Name:
+            {
+                const PDFStringRef string = object.getStringObject();
+                if (string.memoryString && visitedContents.insert(string.memoryString).second)
+                {
+                    addBytes(sizeof(PDFString));
+                    addBytes(static_cast<quint64>(string.memoryString->getString().capacity()));
+                }
+                break;
+            }
+            case PDFObject::Type::Array:
+            {
+                const PDFArray* array = object.getArray();
+                if (!array || !visitedContents.insert(array).second)
+                {
+                    break;
+                }
+                addBytes(sizeof(PDFArray));
+                addProduct(static_cast<quint64>(array->getCapacity()), sizeof(PDFObject));
+                for (size_t i = 0; i < array->getCount(); ++i)
+                {
+                    estimateObject(array->getItem(i));
+                }
+                break;
+            }
+            case PDFObject::Type::Dictionary:
+                estimateDictionary(object.getDictionary(), true);
+                break;
+            case PDFObject::Type::Stream:
+            {
+                const PDFStream* stream = object.getStream();
+                if (!stream || !visitedContents.insert(stream).second)
+                {
+                    break;
+                }
+                addBytes(sizeof(PDFStream));
+                addBytes(static_cast<quint64>(stream->getContent()->capacity()));
+                estimateDictionary(stream->getDictionary(), false);
+                break;
+            }
+            default:
+                break;
+        }
+    };
+
+    addProduct(static_cast<quint64>(objects.capacity()), sizeof(PDFObjectStorage::Entry));
+
+    for (const PDFObjectStorage::Entry& entry : objects)
+    {
+        estimateObject(entry.object);
+    }
+    estimateObject(document->getStorage().getTrailerDictionary());
+
+    const PDFCatalog* catalog = document->getCatalog();
+    if (catalog)
+    {
+        addBytes(static_cast<quint64>(catalog->getMemoryConsumptionEstimate()));
+    }
+    return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
+               ? std::numeric_limits<qsizetype>::max()
+               : static_cast<qsizetype>(total);
+}
+
+}   // namespace
+
+qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* document)
+{
+    return estimateDocumentModelBytesImpl(document);
+}
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                        PDFDocumentContext* context,
@@ -44,9 +194,26 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>()),
+    m_resourceBudget(std::make_shared<PDFResourceBudget>()),
     m_pageCacheBudget(pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>()),
     m_compiledCachePressureLimit(m_pageCacheBudget->compiledLimit())
 {
+    // The page-cache budget is the authority for the combined compiled-page
+    // and surface ceiling. The broader resource envelope still records those
+    // bytes alongside document and stream resources, but its matching pool
+    // limit follows the authoritative page-cache partition.
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
+    m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
+
+    const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
+    if (modelBytes > 0)
+    {
+        m_documentModelReservation = m_resourceBudget->reserveShared(m_resourceBudget,
+                                                                     PDFResourcePool::ActiveDocumentModel,
+                                                                     modelBytes,
+                                                                     PDFResourcePriority::Interaction,
+                                                                     QStringLiteral("active document model"));
+    }
     initializeRendering();
 }
 
@@ -57,6 +224,7 @@ PDFDocumentSession::~PDFDocumentSession()
     // cache storage disappears, otherwise the replacement inherits phantom
     // resident bytes and eventually refuses valid work.
     clearCompiledCache();
+    clearDecodedStreamCache();
 }
 
 PDFDocument* PDFDocumentSession::getDocument() const
@@ -129,6 +297,16 @@ PDFProcessingBudget* PDFDocumentSession::getProcessingBudget() const
     return m_processingBudget.get();
 }
 
+PDFResourceBudget* PDFDocumentSession::getResourceBudget() const
+{
+    return m_resourceBudget.get();
+}
+
+std::shared_ptr<PDFResourceBudget> PDFDocumentSession::getSharedResourceBudget() const
+{
+    return m_resourceBudget;
+}
+
 const PDFProcessingLimits& PDFDocumentSession::getProcessingLimits() const
 {
     return m_processingBudget->limits();
@@ -166,6 +344,7 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
     m_compiledCachePressureLimit = qMin(m_compiledCachePressureLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
+    m_streamCacheByteLimit = qMin(m_streamCacheByteLimit, 16 * PDFResourceBudgetConfig::MiB);
     trimCachesToLimits();
 }
 
@@ -179,12 +358,23 @@ qsizetype PDFDocumentSession::compiledCacheByteLimit() const
     return qMin(m_pageCacheBudget->compiledLimit(), m_compiledCachePressureLimit);
 }
 
+qsizetype PDFDocumentSession::decodedStreamCacheBytes() const
+{
+    return m_streamCacheBytes;
+}
+
+qsizetype PDFDocumentSession::decodedStreamCacheByteLimit() const
+{
+    return m_streamCacheByteLimit;
+}
+
 void PDFDocumentSession::setCompiledCacheByteLimit(qsizetype bytes)
 {
     bytes = qMax<qsizetype>(0, bytes);
     const qsizetype maximum = std::numeric_limits<qsizetype>::max();
     const qsizetype total = bytes > maximum / 2 ? maximum : bytes * 2;
     m_pageCacheBudget->setTotal(total);
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
     m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
     trimCachesToLimits();
 }
@@ -192,6 +382,7 @@ void PDFDocumentSession::setCompiledCacheByteLimit(qsizetype bytes)
 void PDFDocumentSession::setCacheLimit(qsizetype totalBytes)
 {
     m_pageCacheBudget->setTotal(PDFPageCacheBudget::total(totalBytes));
+    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
     m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
     trimCachesToLimits();
 }
@@ -209,17 +400,56 @@ void PDFDocumentSession::trimCachesToLimits()
         auto bytesIt = m_compileCacheBytes.find(key);
         if (bytesIt != m_compileCacheBytes.end())
         {
-            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytesIt->second);
+            const qsizetype bytes = bytesIt->second;
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
+            m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
+            m_resourceBudget->recordEviction(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_compileCacheBytes.erase(bytesIt);
         }
         m_compileCache.erase(key);
         m_compileCacheOrder.pop_front();
     }
-    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() > m_streamCacheLimit)
+    while (!m_streamCacheOrder.empty() &&
+           (m_streamCacheOrder.size() > m_streamCacheLimit ||
+            m_streamCacheBytes > m_streamCacheByteLimit))
     {
-        m_streamCache.erase(m_streamCacheOrder.front());
+        const StreamCacheKey key = m_streamCacheOrder.front();
+        auto it = m_streamCache.find(key);
+        if (it != m_streamCache.end())
+        {
+            const qsizetype bytes = it->second.size();
+            m_streamCacheBytes -= bytes;
+            m_resourceBudget->release(PDFResourcePool::DecodedStreamImageCache, bytes);
+            m_resourceBudget->recordEviction(PDFResourcePool::DecodedStreamImageCache, bytes);
+            m_streamCache.erase(it);
+        }
         m_streamCacheOrder.pop_front();
     }
+}
+
+void PDFDocumentSession::clearCompiledCache()
+{
+    for (const auto& [key, bytes] : m_compileCacheBytes)
+    {
+        Q_UNUSED(key);
+        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
+        m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
+    }
+    m_compileCache.clear();
+    m_compileCacheOrder.clear();
+    m_compileCacheBytes.clear();
+}
+
+void PDFDocumentSession::clearDecodedStreamCache()
+{
+    for (const auto& [key, decoded] : m_streamCache)
+    {
+        Q_UNUSED(key);
+        m_resourceBudget->release(PDFResourcePool::DecodedStreamImageCache, decoded.size());
+    }
+    m_streamCache.clear();
+    m_streamCacheOrder.clear();
+    m_streamCacheBytes = 0;
 }
 
 const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
@@ -272,7 +502,10 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         auto bytesIt = m_compileCacheBytes.find(evictKey);
         if (bytesIt != m_compileCacheBytes.end())
         {
-            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytesIt->second);
+            const qsizetype bytes = bytesIt->second;
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
+            m_resourceBudget->release(PDFResourcePool::CompiledEvidenceCache, bytes);
+            m_resourceBudget->recordEviction(PDFResourcePool::CompiledEvidenceCache, bytes);
             m_compileCacheBytes.erase(bytesIt);
         }
         m_compileCache.erase(evictKey);
@@ -284,6 +517,16 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         // The shared authority may also account for admitted page surfaces. A
         // failed reservation is therefore a real combined-budget refusal, not
         // a reason to insert an unaccounted compiled page.
+        return nullptr;
+    }
+
+    if (!m_resourceBudget->tryReserve(PDFResourcePool::CompiledEvidenceCache,
+                                      estimate,
+                                      PDFResourcePriority::Visible,
+                                      QStringLiteral("compiled page cache")))
+    {
+        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, estimate);
+        m_resourceBudget->recordShed(PDFResourcePool::CompiledEvidenceCache);
         return nullptr;
     }
 
@@ -315,14 +558,41 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
 
     QByteArray decoded = m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
 
-    while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() >= m_streamCacheLimit)
+    const qsizetype decodedBytes = decoded.size();
+    if (m_streamCacheLimit == 0 || decodedBytes > m_streamCacheByteLimit)
     {
-        m_streamCache.erase(m_streamCacheOrder.front());
+        m_resourceBudget->recordShed(PDFResourcePool::DecodedStreamImageCache, PDFResourcePriority::Background);
+        return decoded;
+    }
+
+    while (!m_streamCacheOrder.empty() &&
+           (m_streamCacheOrder.size() >= m_streamCacheLimit ||
+            m_streamCacheBytes > m_streamCacheByteLimit - decodedBytes))
+    {
+        const StreamCacheKey evictKey = m_streamCacheOrder.front();
+        auto evictIt = m_streamCache.find(evictKey);
+        if (evictIt != m_streamCache.end())
+        {
+            const qsizetype bytes = evictIt->second.size();
+            m_streamCacheBytes -= bytes;
+            m_resourceBudget->release(PDFResourcePool::DecodedStreamImageCache, bytes);
+            m_resourceBudget->recordEviction(PDFResourcePool::DecodedStreamImageCache, bytes);
+            m_streamCache.erase(evictIt);
+        }
         m_streamCacheOrder.pop_front();
+    }
+
+    if (!m_resourceBudget->tryReserve(PDFResourcePool::DecodedStreamImageCache,
+                                      decodedBytes,
+                                      PDFResourcePriority::Background,
+                                      QStringLiteral("decoded stream cache")))
+    {
+        return decoded;
     }
 
     m_streamCacheOrder.push_back(key);
     auto result = m_streamCache.emplace(key, std::move(decoded));
+    m_streamCacheBytes += decodedBytes;
     return result.first->second;
 }
 
@@ -333,20 +603,7 @@ void PDFDocumentSession::invalidate()
         ++m_localCacheGeneration;
     }
     clearCompiledCache();
-    m_streamCache.clear();
-    m_streamCacheOrder.clear();
-}
-
-void PDFDocumentSession::clearCompiledCache()
-{
-    for (const auto& [key, bytes] : m_compileCacheBytes)
-    {
-        Q_UNUSED(key);
-        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
-    }
-    m_compileCache.clear();
-    m_compileCacheOrder.clear();
-    m_compileCacheBytes.clear();
+    clearDecodedStreamCache();
 }
 
 PDFRenderer* PDFDocumentSession::getRenderer() const

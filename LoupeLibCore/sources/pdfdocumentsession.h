@@ -31,6 +31,7 @@
 #include "pdfpagecachebudget.h"
 #include "pdfcms.h"
 #include "pdfprocessingbudget.h"
+#include "pdfresourcebudget.h"
 
 #include <QByteArray>
 #include <QtGlobal>
@@ -73,6 +74,11 @@ public:
                                 std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
     ~PDFDocumentSession();
 
+    /// Estimates the resident model owned by a parsed document, including raw
+    /// object content and parsed catalog containers. The same estimate is used
+    /// by editor admission and unattended PdfTool qualification.
+    static qsizetype estimateDocumentModelBytes(const PDFDocument* document);
+
     PDFDocumentSession(const PDFDocumentSession&) = delete;
     PDFDocumentSession& operator=(const PDFDocumentSession&) = delete;
 
@@ -103,6 +109,8 @@ public:
     std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
     PDFProcessingBudget* getProcessingBudget() const;
+    PDFResourceBudget* getResourceBudget() const;
+    std::shared_ptr<PDFResourceBudget> getSharedResourceBudget() const;
     const PDFProcessingLimits& getProcessingLimits() const;
     void setProcessingLimits(const PDFProcessingLimits& limits);
     void resetProcessingBudget();
@@ -119,6 +127,8 @@ public:
 
     qsizetype compiledCacheBytes() const;
     qsizetype compiledCacheByteLimit() const;
+    qsizetype decodedStreamCacheBytes() const;
+    qsizetype decodedStreamCacheByteLimit() const;
     void setCompiledCacheByteLimit(qsizetype bytes);
     void setCacheLimit(qsizetype totalBytes);
     qsizetype cacheLimit() const;
@@ -150,6 +160,7 @@ public:
     /// compilePage() helper; these accessors are exposed for tools that need
     /// direct rasterization control.
     PDFRenderer* getRenderer() const;
+
     PDFFontCache* getFontCache() const;
     PDFCMS* getCMS() const;
     PDFOptionalContentActivity* getOptionalContentActivity() const;
@@ -180,6 +191,7 @@ private:
     void initializeRendering();
     void trimCachesToLimits();
     void clearCompiledCache();
+    void clearDecodedStreamCache();
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
@@ -188,6 +200,8 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
+    std::shared_ptr<PDFResourceBudget> m_resourceBudget;
+    PDFResourceReservation m_documentModelReservation;
     std::shared_ptr<PDFPageCacheBudget> m_pageCacheBudget;
     size_t m_compileCacheLimit = CompileCacheLimit;
     size_t m_streamCacheLimit = StreamCacheLimit;
@@ -195,6 +209,8 @@ private:
     int m_qualityPercent = 100;
     bool m_qualityPrefetchShed = false;
 
+    qsizetype m_streamCacheByteLimit = 256 * PDFResourceBudgetConfig::MiB;
+    qsizetype m_streamCacheBytes = 0;
     qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 

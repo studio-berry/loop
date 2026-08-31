@@ -75,6 +75,14 @@ jobs:
       - name: Verify version policy
         working-directory: loupe
         run: python3 scripts/ci/check_version_policy.py
+      - name: Verify resource-envelope contracts
+        working-directory: loupe
+        run: |
+          python3 -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload -v
+          python3 scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
+          python3 scripts/resource_envelope/pathological_workload.py \
+            --output "$RUNNER_TEMP/loupe-pathological-vector.pdf" \
+            --page-count 256 --operations 256 --family pathological-vector
 
       - name: Prepare vcpkg directories
         run: |

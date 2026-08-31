@@ -22,6 +22,8 @@
 
 #include "documentfacade.h"
 
+#include "pdfresourcebudget.h"
+
 #include <QVariant>
 
 #include <utility>
@@ -449,7 +451,31 @@ void DocumentFacade::admitLoadResult(CommandInvocationId invocation,
     {
         case DocumentLoadOutcome::Loaded:
         {
-            documentContext->setDocument(result.document, pdf::PDFModifiedDocument::Reset);
+            try
+            {
+                documentContext->setDocument(result.document, pdf::PDFModifiedDocument::Reset);
+            }
+            catch (const pdf::PDFResourceBudgetExceededException&)
+            {
+                // Session construction is the document admission boundary.
+                // Keep the exception out of the queued GUI callback and expose
+                // only the stable, content-independent load error.
+                m_typedError = QStringLiteral("document/resource-budget-exceeded");
+                setFacets({});
+                setState(DocumentState::Error);
+                finishPending(invocation, CommandTerminalState::Failed, m_typedError);
+                updateAvailability();
+                return;
+            }
+            catch (const pdf::PDFException&)
+            {
+                m_typedError = QStringLiteral("document/admission-failed");
+                setFacets({});
+                setState(DocumentState::Error);
+                finishPending(invocation, CommandTerminalState::Failed, m_typedError);
+                updateAvailability();
+                return;
+            }
 
             m_publishedKey = m_revisionSource.documentKey();
             if (!m_publishedKey.isEmpty())

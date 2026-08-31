@@ -28,10 +28,14 @@
 #include "pdfannotation.h"
 #include "pdfblpainter.h"
 #include "pdfprocessingbudget.h"
+#include "pdfresourcebudget.h"
 
 #include <QDir>
 #include <QElapsedTimer>
 #include <QtMath>
+
+#include <limits>
+#include <optional>
 
 #include "pdfdbgheap.h"
 
@@ -354,6 +358,8 @@ void PDFRasterizerPool::render(const std::vector<PDFInteger>& pageIndices,
     Q_ASSERT(imageSizeGetter);
     Q_ASSERT(processImage);
 
+    m_resourceBudgetExhausted.store(false, std::memory_order_release);
+
     QElapsedTimer timer;
     timer.start();
 
@@ -392,6 +398,32 @@ void PDFRasterizerPool::render(const std::vector<PDFInteger>& pageIndices,
         PDFRenderer renderer(m_document, m_fontCache, cms.data(), m_optionalContentActivity, m_features, m_meshQualitySettings);
         renderer.compile(&precompiledPage, pageIndex);
 
+        std::optional<PDFResourceReservation> compiledReservation;
+        if (m_resourceBudget)
+        {
+            const qsizetype bytes = static_cast<qsizetype>(precompiledPage.getMemoryConsumptionEstimate());
+            if (bytes > 0 && !m_resourceBudget->tryReserve(PDFResourcePool::CompiledEvidenceCache,
+                                                           bytes,
+                                                           PDFResourcePriority::Visible,
+                                                           QStringLiteral("benchmark compiled page")))
+            {
+                m_resourceBudget->recordShed(PDFResourcePool::CompiledEvidenceCache);
+                m_resourceBudgetExhausted.store(true, std::memory_order_release);
+                Q_EMIT renderError(pageIndex,
+                                   PDFRenderError(RenderErrorType::Error,
+                                                  PDFTranslationContext::tr("Resource budget exceeded for the compiled page cache.")));
+                if (progress)
+                {
+                    progress->step();
+                }
+                return;
+            }
+            if (bytes > 0)
+            {
+                compiledReservation.emplace(m_resourceBudget, PDFResourcePool::CompiledEvidenceCache, bytes);
+            }
+        }
+
         qint64 pageCompileTime = pageTimer.restart();
 
         for (const PDFRenderError& error : precompiledPage.getErrors())
@@ -411,7 +443,38 @@ void PDFRasterizerPool::render(const std::vector<PDFInteger>& pageIndices,
         pageTimer.restart();
         PDFRasterizer* rasterizer = acquire();
         qint64 pageWaitTime = pageTimer.restart();
-        QImage image = rasterizer->render(pageIndex, page, &precompiledPage, imageSizeGetter(page), m_features, &annotationManager, cms.data(), PageRotation::None);
+        const QSize imageSize = imageSizeGetter(page);
+        const bool validImageSize = imageSize.width() > 0 && imageSize.height() > 0;
+        const qint64 imageBytes = !validImageSize
+                                       ? 0
+                                       : static_cast<qint64>(imageSize.width()) <= std::numeric_limits<qint64>::max() / imageSize.height() / 4
+                                             ? static_cast<qint64>(imageSize.width()) * imageSize.height() * 4
+                                             : std::numeric_limits<qint64>::max();
+        std::optional<PDFResourceReservation> imageReservation;
+        if (m_resourceBudget && imageBytes > 0 &&
+            !m_resourceBudget->tryReserve(PDFResourcePool::RasterTileCache,
+                                           imageBytes,
+                                           PDFResourcePriority::Visible,
+                                           QStringLiteral("benchmark raster image")))
+        {
+            m_resourceBudget->recordShed(PDFResourcePool::RasterTileCache);
+            m_resourceBudgetExhausted.store(true, std::memory_order_release);
+            release(rasterizer);
+            Q_EMIT renderError(pageIndex,
+                               PDFRenderError(RenderErrorType::Error,
+                                              PDFTranslationContext::tr("Resource budget exceeded for the raster tile cache.")));
+            if (progress)
+            {
+                progress->step();
+            }
+            return;
+        }
+        if (m_resourceBudget && imageBytes > 0)
+        {
+            imageReservation.emplace(m_resourceBudget, PDFResourcePool::RasterTileCache, imageBytes);
+        }
+
+        QImage image = rasterizer->render(pageIndex, page, &precompiledPage, imageSize, m_features, &annotationManager, cms.data(), PageRotation::None);
         qint64 pageRenderTime = pageTimer.elapsed();
         release(rasterizer);
 

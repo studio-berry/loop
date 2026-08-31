@@ -29,6 +29,7 @@
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
 #include "pdfpagecachebudget.h"
+#include "pdfresourcebudget.h"
 #include "renderpresentationpolicy.h"
 #include "viewportcontroller.h"
 
@@ -166,6 +167,16 @@ public:
         return m_pageCacheBudget ? m_pageCacheBudget->total() : m_cacheLimit;
     }
 
+    /// Attaches the document session's shared resource authority. Existing
+    /// admitted surfaces are dropped when the authority changes so the new
+    /// authority never starts with an unaccounted resident cache.
+    void setResourceBudget(std::shared_ptr<pdf::PDFResourceBudget> budget);
+    pdf::PDFResourceBudget* resourceBudget() const noexcept { return m_resourceBudget.get(); }
+    std::shared_ptr<pdf::PDFResourceBudget> sharedResourceBudget() const noexcept { return m_resourceBudget; }
+
+    /// bounds() is derived from the total via PDFPageCacheBudget partition;
+    /// prefer cacheLimit()/setCacheLimit() as the authority and treat
+    /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
     void setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget);
     std::shared_ptr<pdf::PDFPageCacheBudget> sharedPageCacheBudget() const noexcept { return m_pageCacheBudget; }
     /// Refreshes the diagnostic surface projection and trims after the shared
@@ -217,11 +228,13 @@ private:
         RevisionFencedToken token;
         pdf::PDFJobPriority priority = pdf::PDFJobPriority::VisiblePage;
         std::shared_ptr<std::atomic_bool> workStarted;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
     };
 
     struct CacheEntry
     {
         SurfaceBufferPointer pixels;
+        std::shared_ptr<pdf::PDFResourceReservation> resourceReservation;
         pdf::PDFRenderDiagnostics diagnostics;
         qint64 cost = 0;
         quint64 accessSequence = 0;
@@ -247,7 +260,9 @@ private:
 
     void onDemandChanged();
     void submit(const PageSurfaceRequest& request);
-    void admit(quint64 requestId, PageSurfaceResult result);
+    void admit(quint64 requestId,
+               PageSurfaceResult result,
+               std::shared_ptr<pdf::PDFResourceReservation> resourceReservation);
     void requestCancellation(quint64 requestId);
     void cancelAndDrop(quint64 requestId);
     void resolveCancellation(quint64 requestId, std::shared_ptr<std::atomic_bool> workStarted);
@@ -255,7 +270,12 @@ private:
     void finishInFlight(quint64 requestId, SurfaceTerminalState state);
 
     std::optional<PageSurfaceKey> keyForPage(int pageIndex) const;
-    bool insertIntoCache(const PageSurfaceKey& key, SurfaceBufferPointer pixels, pdf::PDFRenderDiagnostics diagnostics);
+    bool insertIntoCache(const PageSurfaceKey& key,
+                         SurfaceBufferPointer pixels,
+                         std::shared_ptr<pdf::PDFResourceReservation> resourceReservation,
+                         pdf::PDFRenderDiagnostics diagnostics);
+    bool evictOldestCacheEntry();
+    void trimCacheForIncoming(qsizetype bytes);
     bool trimCacheToBudget();
     void clearCache();
     qint64 inFlightBytes() const;
@@ -275,6 +295,7 @@ private:
     std::shared_ptr<pdf::PDFPageCacheBudget> m_pageCacheBudget;
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
+    std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
     QSet<int> m_authoritativePages;
 
     std::shared_ptr<JobRelay> m_relay;

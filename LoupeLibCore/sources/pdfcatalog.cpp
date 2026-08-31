@@ -28,6 +28,11 @@
 #include "pdfencoding.h"
 #include "pdfdbgheap.h"
 
+#include <functional>
+#include <limits>
+#include <type_traits>
+#include <variant>
+
 namespace pdf
 {
 
@@ -347,6 +352,377 @@ PDFCatalog PDFCatalog::parse(const PDFObject& catalog, const PDFDocument* docume
     catalogObject.m_documentPartRoot = catalogDictionary->get("DPartRoot");
 
     return catalogObject;
+}
+
+qsizetype PDFCatalog::getMemoryConsumptionEstimate() const
+{
+    quint64 total = 0;
+
+    const auto addBytes = [&total](quint64 bytes)
+    {
+        if (bytes > std::numeric_limits<quint64>::max() - total)
+        {
+            total = std::numeric_limits<quint64>::max();
+        }
+        else
+        {
+            total += bytes;
+        }
+    };
+
+    const auto addProduct = [&addBytes](quint64 count, quint64 size)
+    {
+        if (count > 0 && size > std::numeric_limits<quint64>::max() / count)
+        {
+            addBytes(std::numeric_limits<quint64>::max());
+        }
+        else
+        {
+            addBytes(count * size);
+        }
+    };
+
+    const auto addByteArray = [&addBytes](const QByteArray& value)
+    {
+        addBytes(static_cast<quint64>(qMax(0, value.capacity())));
+    };
+
+    const auto addString = [&addBytes](const QString& value)
+    {
+        addBytes(static_cast<quint64>(qMax<qsizetype>(0, value.capacity())) * sizeof(QChar));
+    };
+
+    const auto addVector = [&addProduct](const auto& values)
+    {
+        using Value = typename std::decay_t<decltype(values)>::value_type;
+        addProduct(static_cast<quint64>(values.capacity()), sizeof(Value));
+    };
+
+    const auto addMap = [&addBytes, &addProduct, &addByteArray](const auto& values)
+    {
+        using Entry = typename std::decay_t<decltype(values)>::value_type;
+        // std::map::value_type omits the tree links and color bookkeeping.
+        addProduct(static_cast<quint64>(values.size()), sizeof(Entry) + 3 * sizeof(void*));
+        for (const auto& item : values)
+        {
+            addByteArray(item.first);
+        }
+    };
+
+    const auto addDestination = [&addByteArray](const PDFDestination& destination)
+    {
+        addByteArray(destination.getName());
+    };
+
+    const auto addFileSpecification = [&addBytes, &addByteArray, &addString, &addMap, &addVector](const PDFFileSpecification& specification)
+    {
+        addByteArray(specification.getFileSystem());
+        addByteArray(specification.getF());
+        addString(specification.getUF());
+        addByteArray(specification.getDOS());
+        addByteArray(specification.getMac());
+        addByteArray(specification.getUnix());
+        addByteArray(specification.getFileIdentifier().getPermanentIdentifier());
+        addByteArray(specification.getFileIdentifier().getChangingIdentifier());
+        addString(specification.getDescription());
+
+        addMap(specification.getEmbeddedFiles());
+        for (const auto& item : specification.getEmbeddedFiles())
+        {
+            addByteArray(item.second.getSubtype());
+            addByteArray(item.second.getChecksum());
+        }
+
+        addMap(specification.getRelatedFiles());
+        for (const auto& item : specification.getRelatedFiles())
+        {
+            addVector(item.second);
+            for (const PDFFileSpecification::RelatedFile& related : item.second)
+            {
+                addByteArray(related.name);
+            }
+        }
+    };
+
+    const auto addAction = [&addBytes, &addProduct, &addByteArray, &addString, &addDestination, &addFileSpecification, &addVector](const PDFAction* action)
+    {
+        if (!action)
+        {
+            return;
+        }
+
+        // getActionList() includes the complete Next chain. Count the
+        // polymorphic nodes and the dynamic payloads exposed by each action.
+        const std::vector<const PDFAction*> actions = action->getActionList();
+        addProduct(static_cast<quint64>(actions.size()), sizeof(PDFAction) + 3 * sizeof(void*));
+        for (const PDFAction* item : actions)
+        {
+            addProduct(static_cast<quint64>(item->getNextActions().capacity()), sizeof(PDFActionPtr));
+
+            if (const auto* typed = dynamic_cast<const PDFActionGoTo*>(item))
+            {
+                addDestination(typed->getDestination());
+                addDestination(typed->getStructureDestination());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionGoToR*>(item))
+            {
+                addDestination(typed->getDestination());
+                addDestination(typed->getStructureDestination());
+                addFileSpecification(typed->getFileSpecification());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionGoToE*>(item))
+            {
+                addDestination(typed->getDestination());
+                addFileSpecification(typed->getFileSpecification());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionLaunch*>(item))
+            {
+                addFileSpecification(typed->getFileSpecification());
+                addByteArray(typed->getWinSpecification().file);
+                addByteArray(typed->getWinSpecification().directory);
+                addByteArray(typed->getWinSpecification().operation);
+                addByteArray(typed->getWinSpecification().parameters);
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionThread*>(item))
+            {
+                addFileSpecification(typed->getFileSpecification());
+                if (const QString* thread = std::get_if<QString>(&typed->getThread()))
+                {
+                    addString(*thread);
+                }
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionURI*>(item))
+            {
+                addByteArray(typed->getURI());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionMovie*>(item))
+            {
+                addString(typed->getTitle());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionHide*>(item))
+            {
+                addVector(typed->getAnnotations());
+                addVector(typed->getFieldNames());
+                for (const QString& name : typed->getFieldNames())
+                {
+                    addString(name);
+                }
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionNamed*>(item))
+            {
+                addByteArray(typed->getCustomNamedAction());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionSetOCGState*>(item))
+            {
+                addVector(typed->getStateChangeItems());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionRendition*>(item))
+            {
+                addString(typed->getJavaScript());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionGoTo3DView*>(item))
+            {
+                Q_UNUSED(typed);
+                addBytes(2 * sizeof(PDFObject));
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionJavaScript*>(item))
+            {
+                addString(typed->getJavaScript());
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionRichMediaExecute*>(item))
+            {
+                addString(typed->getCommand());
+                addBytes(sizeof(PDFObject));
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionSubmitForm*>(item))
+            {
+                addFileSpecification(typed->getUrl());
+                addByteArray(typed->getCharset());
+                addVector(typed->getFieldList().fieldReferences);
+                for (const QString& name : typed->getFieldList().qualifiedNames)
+                {
+                    addString(name);
+                }
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionResetForm*>(item))
+            {
+                addVector(typed->getFieldList().fieldReferences);
+                for (const QString& name : typed->getFieldList().qualifiedNames)
+                {
+                    addString(name);
+                }
+            }
+            else if (const auto* typed = dynamic_cast<const PDFActionImportDataForm*>(item))
+            {
+                addFileSpecification(typed->getFile());
+            }
+        }
+    };
+
+    addByteArray(m_version);
+    addVector(m_pages);
+    for (const PDFPage& page : m_pages)
+    {
+        addVector(page.getAnnotations());
+        addVector(page.getBeads());
+        addByteArray(page.getWebCaptureContentSetId());
+        addByteArray(page.getTemplateName());
+    }
+
+    addVector(m_pageLabels);
+    for (const PDFPageLabel& label : m_pageLabels)
+    {
+        addString(label.getPrefix());
+    }
+
+    addVector(m_outputIntents);
+    for (const PDFOutputIntent& intent : m_outputIntents)
+    {
+        addByteArray(intent.getSubtype());
+        addString(intent.getOutputCondition());
+        addString(intent.getOutputConditionIdentifier());
+        addString(intent.getRegistryName());
+        addString(intent.getInfo());
+        addByteArray(intent.getOutputProfileInfo().getChecksum());
+        addByteArray(intent.getOutputProfileInfo().getIccVersion());
+        addString(intent.getOutputProfileInfo().getProfileName());
+        for (const QByteArray& colorant : intent.getOutputProfileInfo().getColorants())
+        {
+            addByteArray(colorant);
+        }
+    }
+
+    addVector(m_threads);
+    for (const PDFArticleThread& thread : m_threads)
+    {
+        addVector(thread.getBeads());
+        const PDFDocumentInfo& info = thread.getInformation();
+        addString(info.title);
+        addString(info.author);
+        addString(info.subject);
+        addString(info.keywords);
+        addString(info.creator);
+        addString(info.producer);
+        addMap(info.extra);
+    }
+
+    addString(m_language);
+    addByteArray(m_baseURI);
+    addMap(m_namedDestinations);
+    for (const auto& item : m_namedDestinations)
+    {
+        addDestination(item.second);
+    }
+    addMap(m_namedAppearanceStreams);
+    addMap(m_namedPages);
+    addMap(m_namedTemplates);
+    addMap(m_namedDigitalIdentifiers);
+    addMap(m_namedUniformResourceLocators);
+    addMap(m_namedAlternateRepresentations);
+    addMap(m_namedRenditions);
+    addMap(m_namedEmbeddedFiles);
+    for (const auto& item : m_namedEmbeddedFiles)
+    {
+        addFileSpecification(item.second);
+    }
+
+    addAction(m_openAction.data());
+    for (const PDFActionPtr& action : m_documentActions)
+    {
+        addAction(action.data());
+    }
+    addMap(m_namedJavaScriptActions);
+    for (const auto& item : m_namedJavaScriptActions)
+    {
+        addAction(item.second.data());
+    }
+
+    const PDFOptionalContentProperties& optionalContent = m_optionalContentProperties;
+    addVector(optionalContent.getAllOptionalContentGroups());
+    const auto addConfiguration = [&addBytes, &addProduct, &addByteArray, &addString, &addVector](const PDFOptionalContentConfiguration& configuration)
+    {
+        addString(configuration.getName());
+        addString(configuration.getCreator());
+        addVector(configuration.getOnArray());
+        addVector(configuration.getOffArray());
+        addVector(configuration.getIntents());
+        for (const QByteArray& intent : configuration.getIntents())
+        {
+            addByteArray(intent);
+        }
+        addVector(configuration.getUsageApplications());
+        for (const PDFOptionalContentConfiguration::UsageApplication& application : configuration.getUsageApplications())
+        {
+            addByteArray(application.event);
+            addVector(application.optionalContentGroups);
+            addVector(application.categories);
+            for (const QByteArray& category : application.categories)
+            {
+                addByteArray(category);
+            }
+        }
+        addVector(configuration.getRadioButtonGroups());
+        for (const auto& group : configuration.getRadioButtonGroups())
+        {
+            addVector(group);
+        }
+        addVector(configuration.getLocked());
+    };
+    addConfiguration(optionalContent.getDefaultConfiguration());
+    addVector(optionalContent.getConfigurations());
+    for (const PDFOptionalContentConfiguration& configuration : optionalContent.getConfigurations())
+    {
+        addConfiguration(configuration);
+    }
+    for (const PDFObjectReference& reference : optionalContent.getAllOptionalContentGroups())
+    {
+        if (!optionalContent.hasOptionalContentGroup(reference))
+        {
+            continue;
+        }
+        const PDFOptionalContentGroup& group = optionalContent.getOptionalContentGroup(reference);
+        addBytes(sizeof(PDFObjectReference) + sizeof(PDFOptionalContentGroup) + 3 * sizeof(void*));
+        addString(group.getName());
+        addVector(group.getIntents());
+        for (const QByteArray& intent : group.getIntents())
+        {
+            addByteArray(intent);
+        }
+        addString(group.getCreator());
+        addByteArray(group.getSubtype());
+        addByteArray(group.getUsageType());
+        addString(group.getLanguage());
+        addByteArray(group.getUserType());
+        addProduct(static_cast<quint64>(group.getUserNames().size()), sizeof(QString) + sizeof(void*));
+        for (const QString& name : group.getUserNames())
+        {
+            addString(name);
+        }
+    }
+
+    if (m_outlineRoot)
+    {
+        std::function<void(const PDFOutlineItem*)> addOutline = [&](const PDFOutlineItem* item)
+        {
+            if (!item)
+            {
+                return;
+            }
+            addBytes(sizeof(PDFOutlineItem));
+            addString(item->getTitle());
+            addProduct(static_cast<quint64>(item->getChildCount()), sizeof(QSharedPointer<PDFOutlineItem>));
+            addAction(item->getAction());
+            for (size_t i = 0; i < item->getChildCount(); ++i)
+            {
+                addOutline(item->getChild(i));
+            }
+        };
+        addOutline(m_outlineRoot.data());
+    }
+
+    return total > static_cast<quint64>(std::numeric_limits<qsizetype>::max())
+               ? std::numeric_limits<qsizetype>::max()
+               : static_cast<qsizetype>(total);
 }
 
 PDFViewerPreferences PDFViewerPreferences::parse(const PDFObject& catalogDictionary, const PDFDocument* document)

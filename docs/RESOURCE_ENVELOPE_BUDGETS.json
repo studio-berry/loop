@@ -1,9 +1,23 @@
 {
   "schema_kind": "loupe-resource-envelope-budgets",
-  "schema_version": 1,
+  "schema_version": 2,
   "policy": "two-tier",
   "description": "Checked-in safety caps are blocking. Baseline deltas are reported until both platform baselines exist.",
   "measurement_status": ["complete", "cancelled", "incomplete", "unavailable", "unsupported", "budget-exceeded"],
+  "resource_budget": {
+    "resident_limit_bytes": 805306368,
+    "pool_limits_bytes": {
+      "active-document-model": 268435456,
+      "compiled-evidence-cache": 134217728,
+      "raster-tile-cache": 134217728,
+      "gpu-texture-cache": 134217728,
+      "decoded-stream-image-cache": 268435456,
+      "undo-history": 268435456,
+      "rollback-storage": 2147483648
+    },
+    "gpu_accounting": "conservative-source-pixel-proxy",
+    "unavailable_gpu_bytes": -1
+  },
   "workloads": {
     "div2k-image-heavy": {
       "page_count": 10000,

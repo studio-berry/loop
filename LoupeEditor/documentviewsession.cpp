@@ -75,7 +75,14 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
-    // The context keeps the shared budget across document-session replacement.
+
+    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        m_surfaces->setResourceBudget(session->getSharedResourceBudget());
+    }
+
+    // The context keeps the shared page-cache budget across document-session
+    // replacement; the resource envelope is refreshed from the new session.
     m_surfaces->refreshPageCacheBudget();
     m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
@@ -101,6 +108,13 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
     m_cacheLimit = normalized;
+    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        if (m_surfaces)
+        {
+            m_surfaces->setResourceBudget(session->getSharedResourceBudget());
+        }
+    }
     // Route through the renderer so the eviction inside setCacheLimit cannot
     // race a worker thread that holds m_renderer.m_mutex and is using a
     // compilePage pointer.
