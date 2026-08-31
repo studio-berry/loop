@@ -16,6 +16,8 @@ from generate_phase5_widgets_evidence import (
     EvidenceError,
     generate,
 )
+from product_surface import ContractError as ProductSurfaceError
+from product_surface import load_manifest, run_verification
 
 
 ALLOWED_DISPOSITIONS = frozenset({"DELETE", "HEADLESS-REPLACE", "RETAIN-NON-PRODUCT", "BLOCKED"})
@@ -160,7 +162,17 @@ def validate_disposition(inventory: dict, disposition: dict, root: Path) -> list
     return errors
 
 
-def validate_contract(root: Path, inventory: dict | None = None, disposition: dict | None = None) -> list[str]:
+def validate_contract(
+    root: Path,
+    inventory: dict | None = None,
+    disposition: dict | None = None,
+    *,
+    build_dir: Path | None = None,
+    install_dir: Path | None = None,
+    install_manifest_path: Path | None = None,
+    pdf_tool: Path | None = None,
+    discovery_json: Path | None = None,
+) -> list[str]:
     inventory = inventory or _load(root, INVENTORY_PATH.as_posix())
     disposition = disposition or _load(root, DISPOSITION_PATH.as_posix())
     errors = validate_inventory(inventory, root)
@@ -177,15 +189,44 @@ def validate_contract(root: Path, inventory: dict | None = None, disposition: di
         second_inventory, second_disposition = generate(root)
         if (expected_inventory, expected_disposition) != (second_inventory, second_disposition):
             errors.append("Phase 5 evidence generation is not deterministic")
+    try:
+        manifest = load_manifest(root)
+        errors.extend(
+            run_verification(
+                root,
+                manifest,
+                "loupe-release",
+                build_dir=build_dir,
+                install_dir=install_dir,
+                install_manifest_path=install_manifest_path,
+                pdf_tool=pdf_tool,
+                discovery_json=discovery_json,
+            )
+        )
+    except ProductSurfaceError as exc:
+        errors.append(f"product-surface verification failed: {exc}")
     return errors
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--build-dir", type=Path, help="Use a configured CMake cache as release-profile evidence")
+    parser.add_argument("--install-dir", type=Path, help="Use an installed tree as release-profile evidence")
+    parser.add_argument("--install-manifest", type=Path, help="Compare the installed tree with CMake's install manifest")
+    parser.add_argument("--pdf-tool", type=Path, help="PdfTool binary used for command inventory verification")
+    parser.add_argument("--discovery-json", type=Path, help="Captured PdfTool capabilities JSON")
     args = parser.parse_args()
     root = args.root.resolve()
-    errors = validate_contract(root)
+    resolve = lambda path: None if path is None else (path if path.is_absolute() else root / path)
+    errors = validate_contract(
+        root,
+        build_dir=resolve(args.build_dir),
+        install_dir=resolve(args.install_dir),
+        install_manifest_path=resolve(args.install_manifest),
+        pdf_tool=resolve(args.pdf_tool),
+        discovery_json=resolve(args.discovery_json),
+    )
     if errors:
         for error in errors:
             print(f"Phase 5 Widgets contract FAILED: {error}", file=sys.stderr)

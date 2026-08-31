@@ -30,7 +30,7 @@
       "target": "CodeGenerator",
       "disposition": "RETAIN-NON-PRODUCT",
       "consumer": "developer-only surface",
-      "rationale": "Retained for developer/upstream comparison workflows; not a Loupe operator product entry.",
+      "rationale": "Retained for developer and upstream comparison workflows; not a Loupe operator product entry and not part of the release profile.",
       "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
       "source_disposition": "ADVANCED",
       "source": "docs/product-surface.json",
@@ -43,7 +43,7 @@
       "target": "JBIG2_VIEWER",
       "disposition": "RETAIN-NON-PRODUCT",
       "consumer": "loupe-inspect",
-      "rationale": "Retained for developer/upstream comparison workflows; no separate Loupe product entry.",
+      "rationale": "Retained for developer and upstream comparison workflows; no separate Loupe product entry and not part of the release profile.",
       "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
       "source_disposition": "ADVANCED",
       "source": "docs/product-surface.json",
@@ -56,7 +56,7 @@
       "target": "PdfExampleGenerator",
       "disposition": "RETAIN-NON-PRODUCT",
       "consumer": "developer-only surface",
-      "rationale": "Retained for deterministic fixture generation and developer workflows, not shipped as a user surface.",
+      "rationale": "Retained for deterministic fixture generation and developer workflows, not shipped as a user surface or release artifact.",
       "testable_condition": "Retain only outside the supported installed interactive product; keep the developer/compatibility boundary explicit.",
       "source_disposition": "ADVANCED",
       "source": "docs/product-surface.json",
@@ -101,6 +101,24 @@
       {
         "id": "loupe-cli",
         "artifact": "PdfTool",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-lib-core",
+        "artifact": "LoupeLibCore",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-lib-quick",
+        "artifact": "LoupeLibQuick",
+        "status": "explained-non-widgets-boundary",
+        "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
+      },
+      {
+        "id": "loupe-editor-quick",
+        "artifact": "LoupeEditorQuick",
         "status": "explained-non-widgets-boundary",
         "explanation": "The ledger row is a maintained non-Widgets product boundary and is represented in inventory.targets with widgets_linkage=none."
       },

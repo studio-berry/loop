@@ -9,7 +9,12 @@
     evidence and policy implementation.
 #>
 param(
-    [string]$RepoRoot = (Join-Path $PSScriptRoot "..")
+    [string]$RepoRoot = (Join-Path $PSScriptRoot ".."),
+    [string]$BuildDir = "",
+    [string]$InstallDir = "",
+    [string]$InstallManifestPath = "",
+    [string]$PdfToolPath = "",
+    [string]$DiscoveryJson = ""
 )
 
 Set-StrictMode -Version Latest
@@ -40,7 +45,14 @@ if (-not $pythonPath) {
     throw "Python interpreter is required to run the Phase 5 Widgets verifier."
 }
 
-& $pythonPath $verifier --root $RepoRoot
+$arguments = @($verifier, "--root", $RepoRoot)
+if ($BuildDir) { $arguments += @("--build-dir", $BuildDir) }
+if ($InstallDir) { $arguments += @("--install-dir", $InstallDir) }
+if ($InstallManifestPath) { $arguments += @("--install-manifest", $InstallManifestPath) }
+if ($PdfToolPath) { $arguments += @("--pdf-tool", $PdfToolPath) }
+if ($DiscoveryJson) { $arguments += @("--discovery-json", $DiscoveryJson) }
+
+& $pythonPath @arguments
 if ($LASTEXITCODE -ne 0) {
     throw "Phase 5 Widgets contract failed with exit code $LASTEXITCODE"
 }

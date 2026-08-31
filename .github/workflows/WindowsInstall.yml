@@ -244,7 +244,7 @@ jobs:
           cmake --build build --config Release -j6
           ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
-          .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin"
+          .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile loupe-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}

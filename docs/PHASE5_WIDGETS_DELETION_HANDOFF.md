@@ -4,6 +4,22 @@
 **Owner:** 0.2.0 Phase 5
 **Updated:** 2026-08-24
 
+## Current source/manifest reconciliation (Issue #191)
+
+The checked-in `docs/product-surface.json` is now the authoritative profile
+inventory for the post-Session-05 source tree. `LoupeEditor`, `PdfTool`,
+`LoupeLibCore`, and `LoupeLibQuick` are the installed first-party artifacts in
+both developer and `loupe-release` profiles. CodeGenerator, JBIG2 Viewer, and
+PdfExampleGenerator are developer-only build tools. The former secondary
+executables and all former Editor plugin artifacts are deleted and absent from
+both profiles; their historical dispositions remain recorded in the manifest.
+
+The generated Phase 5 evidence is refreshed from the current CMake graph, and
+`scripts/ci/validate_product_surface.py` plus
+`scripts/verify_product_surface.py` fail closed on source, install, packaging,
+or CLI drift. This supersedes any earlier handoff wording below that describes
+retired targets or plugins as still buildable or installed.
+
 ## Session 01 qualified inventory and disposition baseline
 
 Session 01 is anchored to qualified `dev` SHA
