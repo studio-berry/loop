@@ -8,6 +8,10 @@ on:
         required: true
         type: boolean
         default: false
+      source_sha:
+        description: 'Accepted source commit used by both package workflows'
+        required: true
+        type: string
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo; release creation and
 # all gh calls use the MY_GITHUB_TOKEN PAT explicitly.
@@ -21,6 +25,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact release source SHA
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::source_sha must be a full 40-character Git SHA"
+            exit 1
+          fi
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "${actual_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
+            echo "::error::Checkout SHA $actual_sha does not match source_sha $EXPECTED_SOURCE_SHA"
+            exit 1
+          fi
 
       - name: Install tools
         run: |
@@ -54,51 +75,51 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
-      # Both installer workflows are workflow_dispatch-only and can be run on any
-      # branch. Without a branch filter and a head-SHA check this job would happily
-      # attach binaries built from unrelated code to the release tag -- and then
-      # publish SHA256SUMS.txt for them.
+      # Both installer workflows are workflow_dispatch-only. The commit filter and
+      # head-SHA check keep unrelated artifacts out of the release tag.
       - name: Get latest run ID for Linux_AppImage
         id: get_linux_run_id
         run: |
           set -euo pipefail
           latest_run=$(gh run list --workflow=Linux_AppImage \
-            --branch "${GITHUB_REF_NAME}" --status success \
+            --commit "$EXPECTED_SOURCE_SHA" --status success \
             --json databaseId,headSha --jq '.[0] // empty')
           if [ -z "$latest_run" ]; then
-            echo "::error::No successful Linux_AppImage run found on branch ${GITHUB_REF_NAME}."
+            echo "::error::No successful Linux_AppImage run found for source SHA ${EXPECTED_SOURCE_SHA}."
             exit 1
           fi
           run_sha=$(echo "$latest_run" | jq -r .headSha)
-          if [ "$run_sha" != "${GITHUB_SHA}" ]; then
-            echo "::error::Linux_AppImage artifacts were built from ${run_sha}, but this release is being cut from ${GITHUB_SHA}."
-            echo "::error::Re-run Linux_AppImage on this exact commit before creating the release draft."
+          if [ "${run_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
+            echo "::error::Linux_AppImage artifacts were built from ${run_sha}, but source_sha is ${EXPECTED_SOURCE_SHA}."
+            echo "::error::Re-run Linux_AppImage on this exact source commit before creating the release draft."
             exit 1
           fi
           echo "linux_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
 
       - name: Get latest run ID for Windows_MSI
         id: get_windows_run_id
         run: |
           set -euo pipefail
           latest_run=$(gh run list --workflow=Windows_MSI \
-            --branch "${GITHUB_REF_NAME}" --status success \
+            --commit "$EXPECTED_SOURCE_SHA" --status success \
             --json databaseId,headSha --jq '.[0] // empty')
           if [ -z "$latest_run" ]; then
-            echo "::error::No successful Windows_MSI run found on branch ${GITHUB_REF_NAME}."
+            echo "::error::No successful Windows_MSI run found for source SHA ${EXPECTED_SOURCE_SHA}."
             exit 1
           fi
           run_sha=$(echo "$latest_run" | jq -r .headSha)
-          if [ "$run_sha" != "${GITHUB_SHA}" ]; then
-            echo "::error::Windows_MSI artifacts were built from ${run_sha}, but this release is being cut from ${GITHUB_SHA}."
-            echo "::error::Re-run Windows_MSI on this exact commit before creating the release draft."
+          if [ "${run_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
+            echo "::error::Windows_MSI artifacts were built from ${run_sha}, but source_sha is ${EXPECTED_SOURCE_SHA}."
+            echo "::error::Re-run Windows_MSI on this exact source commit before creating the release draft."
             exit 1
           fi
           echo "windows_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
 
       - name: Download Linux_AppImage artifact
         run: |
@@ -117,6 +138,38 @@ jobs:
           echo "Artifacts downloaded to artifacts directory."
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+
+      - name: Download and validate package boundary evidence
+        run: |
+          set -euo pipefail
+          mkdir -p package-evidence/linux package-evidence/windows
+          gh run download "$linux_run_id" --name loupe-package-boundary-linux-evidence -D package-evidence/linux
+          gh run download "$windows_run_id" --name loupe-package-boundary-windows-evidence -D package-evidence/windows
+          python3 scripts/ci/compare_package_boundary_evidence.py \
+            --linux package-evidence/linux/evidence.json \
+            --windows package-evidence/windows/evidence.json \
+            --source-sha "${{ inputs.source_sha }}" \
+            --output package-evidence/pair.json 2>&1 | tee package-evidence/pair.txt
+        env:
+          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+
+      - name: Upload package boundary pair evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: loupe-package-boundary-pair-evidence
+          path: package-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0
+
+      - name: Exclude CI evidence from release assets
+        run: |
+          for evidence_dir in artifacts/loupe-package-boundary-linux-evidence artifacts/loupe-package-boundary-windows-evidence; do
+            if [ -e "$evidence_dir" ]; then
+              rm -rf "$evidence_dir"
+            fi
+          done
 
       - name: Rezip zip file
         id: rezip_zip_file

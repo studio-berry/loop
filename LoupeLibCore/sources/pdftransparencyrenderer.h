@@ -70,6 +70,7 @@ struct PDFRenderPolicy
     {
         PDFRenderPolicy policy;
         policy.purpose = PDFRenderPurpose::PreflightAnalysis;
+        policy.requireSeparationAccuracy = true;
         policy.requireOverprintAccuracy = true;
         policy.allowApproximation = false;
         return policy;
@@ -79,6 +80,7 @@ struct PDFRenderPolicy
     {
         return forOutputPreview();
     }
+};
 };
 
 enum class PDFRenderFidelity
@@ -106,6 +108,22 @@ struct PDFRenderDiagnostics
         }
     }
 
+    void merge(const PDFRenderDiagnostics& other)
+    {
+        if (other.fidelity == PDFRenderFidelity::Unsupported || (other.fidelity == PDFRenderFidelity::SupportedWithFallback && fidelity == PDFRenderFidelity::ExactSupported))
+        {
+            fidelity = other.fidelity;
+        }
+
+        for (const QString& reason : other.reasons)
+        {
+            if (!reason.isEmpty() && !reasons.contains(reason))
+            {
+                reasons.push_back(reason);
+            }
+        }
+    }
+
     bool isExact() const { return fidelity == PDFRenderFidelity::ExactSupported; }
 
     /// Records the deliberate limitation of the fast renderer. Callers pass a
@@ -118,6 +136,21 @@ struct PDFRenderDiagnostics
             record(PDFRenderFidelity::SupportedWithFallback,
                    QStringLiteral("Overprint is approximated by the standard renderer."));
         }
+    }
+
+    /// Builds diagnostics for a page rendered on the standard (approximate)
+    /// path, which never performs overprint compositing at all. \p
+    /// pageContainsOverprint is the cached PDFPrecompiledPage::containsOverprint()
+    /// flag for the page being rendered; no content walk happens here.
+    static PDFRenderDiagnostics forApproximateOverprint(bool pageContainsOverprint)
+    {
+        PDFRenderDiagnostics diagnostics;
+        if (pageContainsOverprint)
+        {
+            diagnostics.record(PDFRenderFidelity::SupportedWithFallback,
+                               PDFTranslationContext::tr("Overprint is not simulated on the fast preview path."));
+        }
+        return diagnostics;
     }
 };
 

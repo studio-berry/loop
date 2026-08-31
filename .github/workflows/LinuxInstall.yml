@@ -2,6 +2,11 @@ name: Linux_AppImage
 
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Accepted Session 06 source commit to package"
+        required: true
+        type: string
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo and artifacts are
 # uploaded via the job token.
@@ -27,6 +32,25 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loupe
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact source SHA
+        working-directory: loupe
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::source_sha must be a full 40-character Git SHA"
+            exit 1
+          fi
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "${actual_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
+            echo "::error::Checkout SHA $actual_sha does not match source_sha $EXPECTED_SOURCE_SHA"
+            exit 1
+          fi
+          echo "LOUPE_SOURCE_SHA=$actual_sha" >> "$GITHUB_ENV"
+          echo "Packaging source SHA: $actual_sha"
 
       - name: Verify supply-chain pins
         working-directory: loupe
@@ -137,10 +161,28 @@ jobs:
       - name: Build Project
         working-directory: loupe
         run: |
-          cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF
+          cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
           cmake --build build --target all release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install"
+
+      - name: Run product Quick accessibility qualification harness (native)
+        working-directory: loupe
+        run: |
+          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          mkdir -p "$evidence_dir"
+          set -o pipefail
+          echo "source_sha=$LOUPE_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
+          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+
+      - name: Run product Quick accessibility qualification harness (software)
+        working-directory: loupe
+        run: |
+          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          mkdir -p "$evidence_dir"
+          set -o pipefail
+          echo "source_sha=$LOUPE_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-software.txt"
+          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend software 2>&1 | tee -a "$evidence_dir/quick-a11y-software.txt"
 
       - name: Read version
         id: get_version
@@ -222,7 +264,35 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           chmod +x "build/${{ env.appimagefilename }}"
-          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}"
+          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          mkdir -p "$evidence_dir"
+          set -o pipefail
+          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loupe-preflight/testdata/fixtures/bleed-adequate.pdf" 2>&1 | tee "$evidence_dir/appimage-smoke.txt"
+
+      - name: Inspect AppImage package boundary
+        working-directory: loupe
+        run: |
+          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          mkdir -p "$evidence_dir"
+          set -o pipefail
+          python3 scripts/ci/inspect_package_dependencies.py \
+            --platform linux \
+            --package "build/${{ env.appimagefilename }}" \
+            --source-sha "$LOUPE_SOURCE_SHA" \
+            --expected-architecture x86-64 \
+            --work-dir "$RUNNER_TEMP/loupe-package-boundary-linux-work" \
+            --output "$evidence_dir/evidence.json" \
+            --report "$evidence_dir/inspection.txt" 2>&1 | tee "$evidence_dir/inspector.txt"
+
+      - name: Upload Linux package boundary evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: loupe-package-boundary-linux-evidence
+          path: ${{ runner.temp }}/loupe-package-boundary-linux
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
       - name: Upload AppImage Package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4

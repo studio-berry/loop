@@ -123,6 +123,16 @@ graph rendering. Until those artifacts and tests are attached to the release
 record, packaging must not claim Qt Quick support or silently add Quick
 runtime files.
 
+Session 07 makes the package-boundary evidence format explicit for the two
+in-scope artifacts: Linux x86_64 AppImage and Windows x64 MSI. Each workflow
+checks out and verifies a required full `source_sha`, inventories and hashes the
+extracted payload, inspects every ELF/PE image with the platform tools, records
+package-contained transitive dependencies, external system dependencies, and
+runtime plugin candidates, and fails closed on `Qt6Widgets`, uninspected binaries,
+or unresolved non-system dependencies. The Linux and Windows evidence documents
+are paired by `scripts/ci/compare_package_boundary_evidence.py`; evidence remains
+qualification data and is not copied into release assets.
+
 ### veraPDF optional pack
 
 Dual-licensed GPLv3+ or MPL 2.0+. Select **MPL 2.0** in the optional pack and document that election. Distributors must tell recipients where to obtain corresponding MPL-covered source.
@@ -162,6 +172,9 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 
 - [ ] Pin every source commit, binary version, download URL, and SHA-256 hash
 - [ ] Produce SPDX or CycloneDX SBOM from the **final packaged artifact** — not only the source tree
+- [ ] For the Linux AppImage and Windows MSI, archive versioned package-boundary evidence containing the exact source SHA, package digest, complete file inventory, ELF/PE dependency graph, external system dependencies, runtime plugin candidates, inspection-tool versions, and smoke transcripts
+- [ ] Pair the Linux and Windows evidence documents by one identical accepted `source_sha`; keep the pair/evidence outside release asset publication
+- [ ] Fail the package boundary if any `Qt6Widgets` payload, direct import, transitive package dependency, runtime plugin, uninspected binary, or unresolved non-system dependency is present
 - [ ] Scan installer/archive for undeclared executables, shared libraries, JARs, Python wheels, fonts, ICC profiles, and data files
 - [ ] Generate `THIRD_PARTY_NOTICES.txt` from resolved manifest; manual review
 - [ ] Archive every license and NOTICE file exactly as shipped
@@ -184,6 +197,7 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 - [ ] Optional veraPDF/Temurin pack has pinned version pair, license bundle, source-location record, checksums, and smoke tests
 - [ ] SBOM and third-party notices generated from final artifact
 - [ ] Clean-machine install, upgrade, rollback, and uninstall pass without system Java or other prerequisites
+- [ ] Session 07 clean-VM proof passes on disposable Ubuntu 24.04 and Windows Server 2022 machines: install, launch, external-PDF operator flow, preflight state/findings, Quick/accessibility checklist, clean exit, and uninstall
 - [ ] Final legal review complete before commercial ship
 
 ## Suggested Linear issue rewrite
