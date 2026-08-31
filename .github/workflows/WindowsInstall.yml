@@ -256,6 +256,27 @@ jobs:
           ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
           .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile loupe-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
+
+      - name: Deploy Qt runtime closure to staged install tree
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          $installBin = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\usr\bin"
+          $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
+          if (-not (Test-Path -LiteralPath $windeployqt)) {
+            throw "Qt deployment tool was not found: $windeployqt"
+          }
+
+          foreach ($name in @("LoupeEditor.exe", "PdfTool.exe")) {
+            $target = Join-Path $installBin $name
+            if (-not (Test-Path -LiteralPath $target)) {
+              throw "Expected staged executable was not found: $target"
+            }
+            & $windeployqt --release --no-compiler-runtime --no-translations --dir $installBin $target 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              throw "windeployqt failed for $name with exit code $LASTEXITCODE"
+            }
+          }
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}

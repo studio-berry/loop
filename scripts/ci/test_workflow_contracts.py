@@ -62,6 +62,12 @@ class WorkflowContractTests(unittest.TestCase):
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn("./vcpkg/vcpkg integrate install", linux)
+        self.assertNotIn("./vcpkg integrate install", linux)
+        self.assertIn("Deploy Qt runtime closure to staged install tree", windows)
+        self.assertIn("windeployqt.exe", windows)
+        self.assertIn("--no-compiler-runtime", windows)
+        self.assertIn("LoupeEditor.exe", windows)
         for workflow in (linux, windows):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
