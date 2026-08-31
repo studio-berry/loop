@@ -170,7 +170,110 @@ jobs:
           python3 scripts/verify-widgets-free-release-profile.py --configure \
             --build-dir build-widgets-free-verify -- \
             -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
-            -DCMAKE_VCPKG_BUILD_TYPE=Release
+            -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"
+
+      - name: Prepare Widgets-absent Qt prefix
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          test -n "${QT_ROOT_DIR:-}" || {
+            echo "::error::install-qt-action did not provide QT_ROOT_DIR"
+            exit 1
+          }
+          python3 scripts/ci/prepare_widgets_free_qt.py \
+            --source "$QT_ROOT_DIR" \
+            --destination "$RUNNER_TEMP/loupe-qt-without-widgets" \
+            --manifest "$RUNNER_TEMP/loupe-widgets-free-qt.json"
+          echo "LOUPE_WIDGETS_FREE_QT_PREFIX=$RUNNER_TEMP/loupe-qt-without-widgets" >> "$GITHUB_ENV"
+          echo "LOUPE_WIDGETS_FREE_BUILD_DIR=$RUNNER_TEMP/loupe-widgets-free-build" >> "$GITHUB_ENV"
+          echo "LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR=$RUNNER_TEMP/loupe-widgets-free-negative" >> "$GITHUB_ENV"
+
+      - name: Verify Widgets-absent release configure
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          python3 scripts/verify-widgets-free-release-profile.py \
+            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
+            --configure \
+            --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
+            -- \
+            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
+            -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON \
+            -DLOUPE_BUILD_QUICK_CANVAS=ON \
+            -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON \
+            -DLOUPE_BUILD_CANVAS_BENCHMARK=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Verify Widgets-bound target fails closed
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          python3 scripts/verify-widgets-free-release-profile.py \
+            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
+            --configure \
+            --expect-configure-failure \
+            --build-dir "$LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR" \
+            -- \
+            -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DCMAKE_VCPKG_BUILD_TYPE=Release \
+            -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
+            -DLOUPE_BUILD_CODE_GENERATOR=ON
+
+      - name: Build Widgets-absent release profile
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          cmake --build "$LOUPE_WIDGETS_FREE_BUILD_DIR" --target all release_translations --config Release -j6
+
+      - name: Smoke Widgets-absent Qt Quick backends
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Mode native
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Mode software -ExpectedGraphicsApi software
+
+      - name: Smoke Widgets-absent product accessibility
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Backend native
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Backend software
+
+      - name: Test Widgets-absent release profile
+        if: ${{ !inputs.fast }}
+        run: ctest --test-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" --output-on-failure
+
+      - name: Record Linux Widgets-free release evidence
+        if: ${{ !inputs.fast }}
+        working-directory: loupe
+        run: |
+          python3 scripts/ci/record_widgets_free_release_evidence.py \
+            --root . \
+            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
+            --manifest "$RUNNER_TEMP/loupe-widgets-free-qt.json" \
+            --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
+            --platform linux \
+            --qt-version 6.11.1 \
+            --build-status passed \
+            --test-status passed \
+            --negative-configure-status passed \
+            --output "$RUNNER_TEMP/loupe-widgets-free-release-evidence.json"
+
+      - name: Upload Linux Widgets-free release evidence
+        if: ${{ !inputs.fast }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: loupe-widgets-free-linux-evidence
+          path: |
+            ${{ runner.temp }}/loupe-widgets-free-qt.json
+            ${{ runner.temp }}/loupe-widgets-free-release-evidence.json
+            ${{ runner.temp }}/loupe-widgets-free-build/CMakeCache.txt
+          if-no-files-found: error
 
       - name: Build project
         working-directory: loupe
@@ -291,7 +394,7 @@ jobs:
       - name: Verify loupe-release product surface
         if: ${{ !inputs.fast }}
         working-directory: loupe
-        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release
+        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir ./build -InstallManifestPath ./build/install_manifest.txt
 
       - name: Run unit tests
         if: ${{ !inputs.fast }}

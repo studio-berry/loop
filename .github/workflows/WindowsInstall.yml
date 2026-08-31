@@ -2,6 +2,11 @@ name: Windows_MSI
 
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Accepted Session 06 source commit to package"
+        required: true
+        type: string
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo, artifacts are uploaded
 # via the job token, and signing uses the DigiCert SM_* secrets rather than this token.
@@ -20,6 +25,25 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loupe
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact source SHA
+        working-directory: loupe
+        shell: pwsh
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if ($env:EXPECTED_SOURCE_SHA -notmatch "^[0-9a-fA-F]{40}$") {
+            throw "source_sha must be a full 40-character Git SHA"
+          }
+          $actualSha = (git rev-parse HEAD).Trim()
+          $expectedSha = ([string]$env:EXPECTED_SOURCE_SHA).ToLowerInvariant()
+          if ($actualSha.ToLowerInvariant() -ne $expectedSha) {
+            throw "Checkout SHA $actualSha does not match source_sha $env:EXPECTED_SOURCE_SHA"
+          }
+          "LOUPE_SOURCE_SHA=$actualSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Packaging source SHA: $actualSha"
 
       - name: Verify supply-chain pins
         working-directory: loupe
@@ -215,12 +239,12 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUNDLE_OCR_SERVICE=OFF
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUNDLE_OCR_SERVICE=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
           cmake --build build --target release_translations --config Release -j6
           cmake --build build --config Release -j6
           ctest --test-dir build -C Release --output-on-failure
           cmake --install build --config Release
-          .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin"
+          .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile loupe-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
@@ -242,6 +266,24 @@ jobs:
         run: |
           .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loupe\build"
 
+      - name: Run product Quick accessibility qualification harness (native)
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+          "source_sha=$env:LOUPE_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-native.txt")
+          & ".\loupe\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loupe\build" -Backend native 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
+          if ($LASTEXITCODE -ne 0) { throw "Native product Quick accessibility qualification harness failed." }
+
+      - name: Run product Quick accessibility qualification harness (software)
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+          "source_sha=$env:LOUPE_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-software.txt")
+          & ".\loupe\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loupe\build" -Backend software 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-software.txt") -Append
+          if ($LASTEXITCODE -ne 0) { throw "Software product Quick accessibility qualification harness failed." }
+
       - name: Validate staged install tree
         shell: pwsh
         run: |
@@ -252,6 +294,7 @@ jobs:
           # Editor launch is skipped: no interactive desktop on the runner.
           .\loupe\scripts\smoke-test-install.ps1 `
             -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" `
+            -SourceSha $env:LOUPE_SOURCE_SHA `
             -SkipEditorLaunch
 
       - name: Generate third-party notices
@@ -312,7 +355,7 @@ jobs:
         working-directory: loupe\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
-          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOUPE.sln" -d"SolutionName=LOUPE" -d"SolutionPath=LOUPE.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x86" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOUPE.wixproj" -d"ProjectName=LOUPE" -d"ProjectPath=LOUPE.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOUPE" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x86 -ext $env:wixuiextpath Product.wxs
+          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOUPE.sln" -d"SolutionName=LOUPE" -d"SolutionPath=LOUPE.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOUPE.wixproj" -d"ProjectName=LOUPE" -d"ProjectPath=LOUPE.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOUPE" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
           & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOUPE.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOUPE.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOUPE.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOUPE.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOUPE.wixproj obj\Release\Product.wixobj
 
       - name: Sign MSI Package
@@ -322,17 +365,47 @@ jobs:
           signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
           signtool.exe verify /v /pa "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
 
+      - name: Inspect MSI package boundary
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\${{ env.msipackagefilename }}"
+          $inspectorOutput = @(& python ".\loupe\scripts\ci\inspect_package_dependencies.py" `
+            --platform windows `
+            --package $msiPath `
+            --source-sha $env:LOUPE_SOURCE_SHA `
+            --expected-architecture x64 `
+            --work-dir (Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows-work") `
+            --output (Join-Path $evidenceDir "evidence.json") `
+            --report (Join-Path $evidenceDir "inspection.txt") 2>&1)
+          $inspectorOutput | Tee-Object -FilePath (Join-Path $evidenceDir "inspector.txt")
+          if ($LASTEXITCODE -ne 0) { throw "MSI package boundary inspection failed." }
+
       - name: Run MSI lifecycle smoke test
         shell: pwsh
         run: |
-          # WiX is invoked with -arch x86, so INSTALLFOLDER resolves under ProgramFilesX86.
-          # Editor launch is skipped: no interactive desktop on the runner.
+          # The release MSI is x64 and must install beneath 64-bit Program Files.
+          # The full editor operator launch is skipped on the hosted runner; the
+          # packaged native/software Quick startup is exercised by the smoke script.
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\${{ env.msipackagefilename }}"
-          $installDir = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'LOUPE'
+          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOUPE"
           & "${env:GITHUB_WORKSPACE}\loupe\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
+            -SourceSha $env:LOUPE_SOURCE_SHA `
             -SkipEditorLaunch
+
+
+      - name: Upload Windows package boundary evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: loupe-package-boundary-windows-evidence
+          path: ${{ runner.temp }}\loupe-package-boundary-windows
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
 
       - name: Create MSIX Package
         run: |

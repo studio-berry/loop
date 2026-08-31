@@ -545,6 +545,8 @@ add_executable(UnitTestsOverprint
 )
 
 target_link_libraries(UnitTestsOverprint PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsOverprint PRIVATE
+    LOUPE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 set_target_properties(UnitTestsOverprint PROPERTIES
     WIN32_EXECUTABLE OFF

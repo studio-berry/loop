@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-add_executable(PdfTool
+set(_loupe_pdftool_sources
     main.cpp
     pdfoutputformatter.cpp
     pdftoolabstractapplication.cpp
@@ -28,7 +28,6 @@ add_executable(PdfTool
     pdftoolcapabilities.h
     pdftoolresult.cpp
     pdftoolattachments.cpp
-    pdftoolaudiobook.cpp
     pdftoolcertstore.cpp
     pdftoolcolorprofiles.cpp
     pdftooldecrypt.cpp
@@ -89,9 +88,15 @@ add_executable(PdfTool
     pdftoolactionlist.h
 )
 
+if(NOT LOUPE_LOUPE_DISTRIBUTION)
+    list(APPEND _loupe_pdftool_sources pdftoolaudiobook.cpp)
+endif()
+
+add_executable(PdfTool ${_loupe_pdftool_sources})
+
 target_link_libraries(PdfTool PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Xml)
 
-if(MINGW)
+if(MINGW AND NOT LOUPE_LOUPE_DISTRIBUTION)
     target_link_libraries(PdfTool PRIVATE ole32 sapi)
 endif()
 

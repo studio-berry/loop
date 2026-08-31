@@ -149,6 +149,117 @@ jobs:
           # Pin PR #1000 merge until aqtinstall >3.3.0 ships with that fix.
           aqtsource: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
 
+      - name: Prepare Widgets-absent Qt prefix
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:QT_ROOT_DIR)) {
+            throw "install-qt-action did not provide QT_ROOT_DIR"
+          }
+          $destination = Join-Path $env:RUNNER_TEMP "loupe-qt-without-widgets"
+          $manifest = Join-Path $env:RUNNER_TEMP "loupe-widgets-free-qt.json"
+          python scripts\ci\prepare_widgets_free_qt.py `
+            --source $env:QT_ROOT_DIR `
+            --destination $destination `
+            --manifest $manifest
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-free Qt preparation failed with exit code $LASTEXITCODE" }
+          "LOUPE_WIDGETS_FREE_QT_PREFIX=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LOUPE_WIDGETS_FREE_BUILD_DIR=$(Join-Path $env:RUNNER_TEMP 'loupe-widgets-free-build')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR=$(Join-Path $env:RUNNER_TEMP 'loupe-widgets-free-negative')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify Widgets-absent release configure
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python scripts\verify-widgets-free-release-profile.py `
+            --qt-prefix $env:LOUPE_WIDGETS_FREE_QT_PREFIX `
+            --configure `
+            --build-dir $env:LOUPE_WIDGETS_FREE_BUILD_DIR `
+            -- `
+            "-DCMAKE_TOOLCHAIN_FILE=$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DCMAKE_VCPKG_BUILD_TYPE=Release `
+            "-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR" `
+            -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON `
+            -DLOUPE_BUILD_QUICK_CANVAS=ON `
+            -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON `
+            -DLOUPE_BUILD_CANVAS_BENCHMARK=OFF `
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release configure failed with exit code $LASTEXITCODE" }
+
+      - name: Verify Widgets-bound target fails closed
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          python scripts\verify-widgets-free-release-profile.py `
+            --qt-prefix $env:LOUPE_WIDGETS_FREE_QT_PREFIX `
+            --configure `
+            --expect-configure-failure `
+            --build-dir $env:LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR `
+            -- `
+            "-DCMAKE_TOOLCHAIN_FILE=$env:GITHUB_WORKSPACE\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DCMAKE_VCPKG_BUILD_TYPE=Release `
+            "-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR" `
+            -DLOUPE_BUILD_CODE_GENERATOR=ON
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-bound configure did not fail closed as expected" }
+
+      - name: Build Widgets-absent release profile
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --target all release_translations --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release build failed with exit code $LASTEXITCODE" }
+
+      - name: Smoke Widgets-absent Qt Quick backends
+        working-directory: loupe
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: windows
+        run: |
+          .\scripts\run-quick-backend-smoke.ps1 -BuildDir $env:LOUPE_WIDGETS_FREE_BUILD_DIR -Mode native -ExpectedGraphicsApi d3d11
+          .\scripts\run-quick-backend-smoke.ps1 -BuildDir $env:LOUPE_WIDGETS_FREE_BUILD_DIR -Mode software -ExpectedGraphicsApi software
+
+      - name: Smoke Widgets-absent product accessibility
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          .\scripts\run-product-quick-a11y-smoke.ps1 -BuildDir $env:LOUPE_WIDGETS_FREE_BUILD_DIR -Backend native
+          .\scripts\run-product-quick-a11y-smoke.ps1 -BuildDir $env:LOUPE_WIDGETS_FREE_BUILD_DIR -Backend software
+
+      - name: Test Widgets-absent release profile
+        shell: pwsh
+        run: |
+          ctest --test-dir $env:LOUPE_WIDGETS_FREE_BUILD_DIR -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release tests failed with exit code $LASTEXITCODE" }
+
+      - name: Record Windows Widgets-free release evidence
+        working-directory: loupe
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP "loupe-widgets-free-release-evidence.json"
+          $manifest = Join-Path $env:RUNNER_TEMP "loupe-widgets-free-qt.json"
+          python scripts\ci\record_widgets_free_release_evidence.py `
+            --root . `
+            --qt-prefix $env:LOUPE_WIDGETS_FREE_QT_PREFIX `
+            --manifest $manifest `
+            --build-dir $env:LOUPE_WIDGETS_FREE_BUILD_DIR `
+            --platform windows `
+            --qt-version 6.11.1 `
+            --build-status passed `
+            --test-status passed `
+            --negative-configure-status passed `
+            --output $evidence
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-free evidence recording failed with exit code $LASTEXITCODE" }
+
+      - name: Upload Windows Widgets-free release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: loupe-widgets-free-windows-evidence
+          path: |
+            ${{ runner.temp }}\loupe-widgets-free-qt.json
+            ${{ runner.temp }}\loupe-widgets-free-release-evidence.json
+            ${{ runner.temp }}\loupe-widgets-free-build\CMakeCache.txt
+          if-no-files-found: error
+
       - name: Build project
         working-directory: loupe
         shell: pwsh
@@ -160,7 +271,7 @@ jobs:
           # which read like a Windows install race instead of the build error it was.
           # Check $LASTEXITCODE after each cmake invocation so a real failure stops
           # the step immediately, at the command that actually failed.
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_LOUPE_DISTRIBUTION=OFF -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
 
           cmake --build build --target release_translations --config Release -j6
@@ -260,7 +371,7 @@ jobs:
       - name: Verify developer product surface
         working-directory: loupe
         shell: pwsh
-        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile developer
+        run: .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile developer -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 
       - name: Run unit tests
         working-directory: loupe/build

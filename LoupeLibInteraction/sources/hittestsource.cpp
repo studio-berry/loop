@@ -82,9 +82,9 @@ void EvidenceHitTestSource::setGraph(pdf::PDFEvidenceGraph graph)
 
 void EvidenceHitTestSource::indexGraph()
 {
-    m_targets.clear();
+    m_targetsByPage.clear();
+    m_indexByPage.clear();
     m_unrenderableRecords = 0;
-    m_targets.reserve(m_graph.records.size());
 
     for (const pdf::PDFEvidenceRecord& record : m_graph.records)
     {
@@ -104,7 +104,23 @@ void EvidenceHitTestSource::indexGraph()
         target.pageIndex = pageIndex;
         target.id = record.id;
         target.pageBounds = record.geometry.normalized();
-        m_targets.push_back(target);
+        m_targetsByPage[pageIndex].push_back(target);
+    }
+
+    // Issue #145 AC1: build one spatial index per page so a pointer move
+    // queries a grid cell instead of scanning every record on the page. The
+    // index is keyed on position within that page's target list, which is
+    // stable for the lifetime of this graph (rebuilt wholesale, never
+    // mutated in place).
+    for (auto it = m_targetsByPage.constBegin(); it != m_targetsByPage.constEnd(); ++it)
+    {
+        QList<QRectF> bounds;
+        bounds.reserve(it.value().size());
+        for (const InteractionTarget& target : it.value())
+        {
+            bounds.push_back(target.pageBounds);
+        }
+        m_indexByPage[it.key()].build(bounds);
     }
 }
 
@@ -112,9 +128,17 @@ QList<InteractionTarget> EvidenceHitTestSource::hitTest(int pageIndex, QPointF p
 {
     QList<InteractionTarget> hits;
 
-    for (const InteractionTarget& target : m_targets)
+    const auto pageTargets = m_targetsByPage.constFind(pageIndex);
+    const auto pageIndexEntry = m_indexByPage.constFind(pageIndex);
+    if (pageTargets == m_targetsByPage.constEnd() || pageIndexEntry == m_indexByPage.constEnd())
     {
-        if (target.pageIndex == pageIndex && target.pageBounds.contains(pagePoint))
+        return hits;
+    }
+
+    for (int candidate : pageIndexEntry.value().query(pagePoint))
+    {
+        const InteractionTarget& target = pageTargets.value().at(candidate);
+        if (target.pageBounds.contains(pagePoint))
         {
             hits.push_back(target);
         }
@@ -125,34 +149,54 @@ QList<InteractionTarget> EvidenceHitTestSource::hitTest(int pageIndex, QPointF p
 
 QList<InteractionTarget> EvidenceHitTestSource::targetsForPage(int pageIndex) const
 {
-    QList<InteractionTarget> targets;
-
-    for (const InteractionTarget& target : m_targets)
-    {
-        if (target.pageIndex == pageIndex)
-        {
-            targets.push_back(target);
-        }
-    }
-
-    return targets;
+    return m_targetsByPage.value(pageIndex);
 }
 
 void FindingListHitTestSource::setTargets(QList<InteractionTarget> targets)
 {
-    m_targets = std::move(targets);
+    m_targetsByPage.clear();
+    m_indexByPage.clear();
+
+    for (const InteractionTarget& target : targets)
+    {
+        m_targetsByPage[target.pageIndex].push_back(target);
+    }
+
+    // Issue #145 AC1: same grid-index treatment as EvidenceHitTestSource, so
+    // a finding source populated directly (rather than from an evidence
+    // graph) gets the same sub-linear candidate selection.
+    for (auto it = m_targetsByPage.constBegin(); it != m_targetsByPage.constEnd(); ++it)
+    {
+        QList<QRectF> bounds;
+        bounds.reserve(it.value().size());
+        for (const InteractionTarget& target : it.value())
+        {
+            bounds.push_back(target.pageBounds);
+        }
+        m_indexByPage[it.key()].build(bounds);
+    }
 }
 
 QList<InteractionTarget> FindingListHitTestSource::hitTest(int pageIndex, QPointF pagePoint) const
 {
     QList<InteractionTarget> hits;
-    for (const InteractionTarget& target : m_targets)
+
+    const auto pageTargets = m_targetsByPage.constFind(pageIndex);
+    const auto pageIndexEntry = m_indexByPage.constFind(pageIndex);
+    if (pageTargets == m_targetsByPage.constEnd() || pageIndexEntry == m_indexByPage.constEnd())
     {
-        if (target.pageIndex == pageIndex && target.pageBounds.contains(pagePoint))
+        return hits;
+    }
+
+    for (int candidate : pageIndexEntry.value().query(pagePoint))
+    {
+        const InteractionTarget& target = pageTargets.value().at(candidate);
+        if (target.pageBounds.contains(pagePoint))
         {
             hits.push_back(target);
         }
     }
+
     return hits;
 }
 

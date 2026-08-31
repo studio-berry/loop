@@ -25,6 +25,7 @@ and re-run the mapped tests. A clean merge is not verification.
 | Plugin ABI | Manifest ABI/capabilities inspected before `QPluginLoader::instance()`; packaged plugin dir only | Loads any plugin after `load()` | `UnitTestsPluginAbi` | #269 |
 | Revision fence | `PDFRevisionIdentity` discards stale async/cache results | Viewer caches are not revision-fenced | `UnitTestsDocumentSession`, `UnitTestsJobScheduler` | #236 |
 | Incremental save | Source digest mismatch refuses a silent rewrite | Writer may overwrite | `UnitTestsIncrementalSave` | #239 |
+| Render fidelity | Standard rendering reports cached overprint content as an explicit approximation; preflight and separation policies prohibit approximation | Standard renderer has no fidelity diagnostic | `UnitTestsOverprint` | #49 / #52 |
 
 Rows are added when Loupe changes parser, xref/writer, or raster
 behavior relative to upstream. Empty product-only work stays out.

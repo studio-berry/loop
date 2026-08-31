@@ -143,6 +143,7 @@ void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings setting
     // Different pixels for the same page: every key built before this point is a
     // different key now, so nothing in flight is wanted any more.
     cancelInFlight();
+    rebuildSnapshot();
 }
 
 void PageSurfaceCoordinator::setCacheLimit(qsizetype totalBytes)
@@ -189,7 +190,52 @@ std::optional<PageSurfaceKey> PageSurfaceCoordinator::keyForPage(int pageIndex) 
     const qreal devicePixelRatio = m_viewport->devicePixelRatio();
     const QSize targetPixelSize(qRound(placedRect.width() * devicePixelRatio), qRound(placedRect.height() * devicePixelRatio));
 
-    return makePageSurfaceKey(revision, pageIndex, m_viewport->rotation(), m_settings.features, m_settings.colorOutputIdentity, m_viewport->zoom(), targetPixelSize, devicePixelRatio);
+    const QString colorOutputIdentity = m_authoritativePages.contains(pageIndex)
+                                            ? withAuthoritativeOverprintMarker(m_settings.colorOutputIdentity)
+                                            : m_settings.colorOutputIdentity;
+
+    return makePageSurfaceKey(revision, pageIndex, m_viewport->rotation(), m_settings.features, colorOutputIdentity, m_viewport->zoom(), targetPixelSize, devicePixelRatio);
+}
+
+void PageSurfaceCoordinator::setPageAuthoritativeOverprint(int pageIndex, bool enabled)
+{
+    if (m_authoritativePages.contains(pageIndex) == enabled)
+    {
+        return;
+    }
+
+    if (enabled)
+    {
+        m_authoritativePages.insert(pageIndex);
+    }
+    else
+    {
+        m_authoritativePages.remove(pageIndex);
+    }
+
+    // keyForPage(pageIndex) now returns a different key, so requestSurfaces()'s
+    // own coalescing cancels this page's stale in-flight request. Rebuild first
+    // so an approximate snapshot is not presented as authoritative while the
+    // accurate surface is pending (or vice versa when toggling back).
+    rebuildSnapshot();
+    requestSurfaces();
+}
+
+std::optional<pdf::PDFRenderDiagnostics> PageSurfaceCoordinator::diagnosticsForPage(int pageIndex) const
+{
+    const std::optional<PageSurfaceKey> wanted = keyForPage(pageIndex);
+    if (!wanted.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto it = m_cache.find(wanted.value());
+    if (it == m_cache.end())
+    {
+        return std::nullopt;
+    }
+
+    return it->second.diagnostics;
 }
 
 void PageSurfaceCoordinator::requestSurfaces()
@@ -456,6 +502,7 @@ void PageSurfaceCoordinator::finishInFlight(quint64 requestId, SurfaceTerminalSt
     const PageSurfaceKey key = it->key;
     removeInFlight(requestId);
 
+    resetAuthoritativePageAfterFailure(key, state);
     countTerminal(state);
     Q_EMIT surfaceTerminal(key, state);
     scheduleSurfaceRetry();
@@ -554,6 +601,7 @@ void PageSurfaceCoordinator::admit(quint64 requestId,
 
     if (result.state != SurfaceTerminalState::Complete)
     {
+        resetAuthoritativePageAfterFailure(result.key, result.state);
         countTerminal(result.state);
         Q_EMIT surfaceTerminal(result.key, result.state);
         return;
@@ -587,13 +635,15 @@ void PageSurfaceCoordinator::admit(quint64 requestId,
 
     if (!result.pixels || result.pixels->byteSize <= 0)
     {
+        resetAuthoritativePageAfterFailure(result.key, SurfaceTerminalState::Failed);
         ++m_counters.failed;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Failed);
         return;
     }
 
-    if (!insertIntoCache(result.key, result.pixels, std::move(resourceReservation)))
+    if (!insertIntoCache(result.key, result.pixels, std::move(resourceReservation), result.diagnostics))
     {
+        resetAuthoritativePageAfterFailure(result.key, SurfaceTerminalState::Failed);
         ++m_counters.rejectedOversize;
         Q_EMIT surfaceTerminal(result.key, SurfaceTerminalState::Failed);
         return;
@@ -606,7 +656,8 @@ void PageSurfaceCoordinator::admit(quint64 requestId,
 
 bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
                                              SurfaceBufferPointer pixels,
-                                             std::shared_ptr<pdf::PDFResourceReservation> resourceReservation)
+                                             std::shared_ptr<pdf::PDFResourceReservation> resourceReservation,
+                                             pdf::PDFRenderDiagnostics diagnostics)
 {
     if (!pixels || pixels->byteSize <= 0)
     {
@@ -696,6 +747,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
     CacheEntry entry;
     entry.pixels = std::move(pixels);
     entry.resourceReservation = std::move(resourceReservation);
+    entry.diagnostics = std::move(diagnostics);
     entry.cost = entry.pixels->byteSize;
     entry.accessSequence = ++m_accessSequence;
 
@@ -794,6 +846,14 @@ bool PageSurfaceCoordinator::trimCacheToBudget()
         }
         trimmed = true;
     }
+
+    if (trimmed)
+    {
+        // CacheEntry owns the immutable pixel buffer shared by the snapshot.
+        // Rebuild immediately so the snapshot cannot keep presenting an entry
+        // that admission has already released from the cache budget.
+        rebuildSnapshot();
+    }
     return trimmed;
 }
 
@@ -810,6 +870,36 @@ void PageSurfaceCoordinator::clearCache()
     m_cache.clear();
     m_lru.clear();
     m_counters.admittedBytes = 0;
+}
+
+void PageSurfaceCoordinator::resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state)
+{
+    if (state != SurfaceTerminalState::Cancelled && state != SurfaceTerminalState::Failed && state != SurfaceTerminalState::BudgetExhausted)
+    {
+        return;
+    }
+
+    if (!hasAuthoritativeOverprintMarker(key.colorOutputIdentity) || !m_authoritativePages.contains(key.pageIndex))
+    {
+        return;
+    }
+
+    // A cancellation or failure for an old zoom/revision is expected while the
+    // viewport is superseding demand. Only clear the escalation when this exact
+    // authoritative key is still wanted; otherwise a newer authoritative job
+    // owns the page's state already.
+    const std::optional<PageSurfaceKey> wanted = keyForPage(key.pageIndex);
+    if (!wanted.has_value() || wanted.value() != key)
+    {
+        return;
+    }
+
+    // The accurate request is terminally unsuccessful. Drop the intent and
+    // return to the cached fast surface, if one exists, instead of claiming
+    // that an approximation is authoritative.
+    m_authoritativePages.remove(key.pageIndex);
+    rebuildSnapshot();
+    requestSurfaces();
 }
 
 qint64 PageSurfaceCoordinator::inFlightBytes() const
@@ -857,6 +947,13 @@ pdf::PDFRevisionIdentity PageSurfaceCoordinator::currentRevision() const
 void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
 {
     cancelInFlight();
+
+    // Both production call sites (DocumentViewSession::prepareDocumentView,
+    // ::clearDocumentView) are document open/close boundaries, never a
+    // same-document edit -- so a page index toggled authoritative in one
+    // document must not silently carry over onto the same page index in
+    // whatever opens next.
+    m_authoritativePages.clear();
 
     // Revision-selective rather than a blanket clear: surfaces rendered for the
     // state that is still current stay usable, and only they do.

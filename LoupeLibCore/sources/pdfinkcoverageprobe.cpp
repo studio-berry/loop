@@ -41,13 +41,7 @@ namespace
 
 bool isUsableBox(const QRectF& box)
 {
-    return box.isValid()
-        && std::isfinite(box.left())
-        && std::isfinite(box.top())
-        && std::isfinite(box.width())
-        && std::isfinite(box.height())
-        && box.width() > 0.0
-        && box.height() > 0.0;
+    return box.isValid() && std::isfinite(box.left()) && std::isfinite(box.top()) && std::isfinite(box.width()) && std::isfinite(box.height()) && box.width() > 0.0 && box.height() > 0.0;
 }
 
 QRectF resolveAnalysisBox(const PDFPage* page, PDFInkCoverageAnalysisBox requested)
@@ -89,7 +83,7 @@ QRectF resolveAnalysisBox(const PDFPage* page, PDFInkCoverageAnalysisBox request
     return media;
 }
 
-} // namespace
+}   // namespace
 
 PDFInkCoverageProbe::PDFInkCoverageProbe(PDFDocumentSession* session) :
     m_session(session)
@@ -97,8 +91,8 @@ PDFInkCoverageProbe::PDFInkCoverageProbe(PDFDocumentSession* session) :
 }
 
 PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
-                                                      size_t pageIndex,
-                                                      const PDFInkCoverageProbeSettings& settings)
+                                                     size_t pageIndex,
+                                                     const PDFInkCoverageProbeSettings& settings)
 {
     PDFInkCoverageProbeResult result;
     Q_UNUSED(pageIndex);
@@ -127,10 +121,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     const double widthReal = std::ceil(mediaSize.width() * pointToPixel);
     const double heightReal = std::ceil(mediaSize.height() * pointToPixel);
 
-    if (!std::isfinite(widthReal) || !std::isfinite(heightReal)
-        || widthReal <= 0.0 || heightReal <= 0.0
-        || widthReal > static_cast<double>(std::numeric_limits<int>::max())
-        || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
+    if (!std::isfinite(widthReal) || !std::isfinite(heightReal) || widthReal <= 0.0 || heightReal <= 0.0 || widthReal > static_cast<double>(std::numeric_limits<int>::max()) || heightReal > static_cast<double>(std::numeric_limits<int>::max()))
     {
         return result;
     }
@@ -149,6 +140,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::ActiveColorMask, false);
     rendererSettings.flags.setFlag(PDFTransparencyRendererSettings::SeparationSimulation, true);
     rendererSettings.activeColorMask = PDFPixelFormat::getAllColorsMask();
+    rendererSettings.renderPolicy = PDFRenderPolicy::forPreflightAnalysis();
 
     const QSize imageSize(width, height);
     const QTransform pagePointToDevice = PDFRenderer::createMediaBoxToDevicePointMatrix(
@@ -169,6 +161,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     renderer.beginPaint(imageSize);
     renderer.processContents();
     renderer.endPaint();
+    result.diagnostics = renderer.getRenderDiagnostics();
 
     const PDFFloatBitmapWithColorSpace bitmap = renderer.getOriginalProcessBitmap();
     const size_t bitmapWidth = bitmap.getWidth();
@@ -249,9 +242,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
                 {
                     const int neighborX = point.x() + direction[0];
                     const int neighborY = point.y() + direction[1];
-                    if (neighborX < 0 || neighborY < 0
-                        || neighborX >= static_cast<int>(bitmapWidth)
-                        || neighborY >= static_cast<int>(bitmapHeight))
+                    if (neighborX < 0 || neighborY < 0 || neighborX >= static_cast<int>(bitmapWidth) || neighborY >= static_cast<int>(bitmapHeight))
                     {
                         continue;
                     }
@@ -284,7 +275,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     }
 
     std::sort(deviceRegions.begin(), deviceRegions.end(), [](const DeviceRegion& lhs, const DeviceRegion& rhs)
-    {
+              {
         if (lhs.pixelCount != rhs.pixelCount)
         {
             return lhs.pixelCount > rhs.pixelCount;
@@ -293,8 +284,7 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         {
             return lhs.top < rhs.top;
         }
-        return lhs.left < rhs.left;
-    });
+        return lhs.left < rhs.left; });
 
     if (settings.maxRegionsPerPage >= 0 && static_cast<int>(deviceRegions.size()) > settings.maxRegionsPerPage)
     {
@@ -308,7 +298,8 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
         coverageRegion.bbox = deviceToPage.mapRect(QRectF(region.left,
                                                           region.top,
                                                           region.right - region.left + 1,
-                                                          region.bottom - region.top + 1)).normalized();
+                                                          region.bottom - region.top + 1))
+                                  .normalized();
         coverageRegion.areaMM2 = static_cast<qreal>(region.pixelCount) * pixelAreaMM2;
         coverageRegion.peakInkCoverage = region.peakInkCoverage;
         result.regions.push_back(qMove(coverageRegion));
@@ -317,4 +308,4 @@ PDFInkCoverageProbeResult PDFInkCoverageProbe::probe(const PDFPage* page,
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf
