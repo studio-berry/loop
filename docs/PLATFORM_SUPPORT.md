@@ -68,13 +68,13 @@ bundling** and **installer packaging** for modules that are already complete.
 | Module / surface | Already complete? | Win | Linux | What to verify |
 |------------------|-------------------|:--:|:-----:|----------------|
 | LoupeLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
-| LoupeLibWidgets / LoupeLibGui | Yes | ☐ | ☐ | Plugin relative path; settings paths |
+| LoupeLibQuick / LoupeLibCore | Yes | ☐ | ☐ | Plugin relative path; settings paths |
 | PdfTool (`preflight`, `add-bleed`, …) | Yes | ☐ | ☐ | Bundled next to Editor; working directory; offscreen CI |
 | LoupePreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `loupe-default.json`; `.dll` / `.so` |
 | LoupeEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
 | Other Editor plugins | Yes | ☐ | ☐ | Present in intended bundle set; load without system Qt |
-| LoupePageMaster export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
-| LoupeViewer / Diff / LaunchPad | Adjacent | ☐ | ☐ | Build in CI; optional in slim package |
+| Page production export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
+| Retired secondary product identities | No | N/A | N/A | Replaced by LoupeEditor, PdfTool, and in-app workspaces |
 | loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
 | UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
 | Windows MSI | Session 07 exact-SHA package boundary | ☐ | — | x64 WiX package, dependency evidence, clean VM operator/a11y loop; **V1 ships unsigned** (MIC-342 / MIC-345) |

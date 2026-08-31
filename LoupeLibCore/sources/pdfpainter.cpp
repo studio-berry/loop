@@ -46,7 +46,6 @@ PDFPainterBase::PDFPainterBase(PDFRenderer::Features features,
     BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
     m_features(features)
 {
-
 }
 
 void PDFPainterBase::performUpdateGraphicsState(const PDFPageContentProcessorState& state)
@@ -175,7 +174,8 @@ bool PDFPainterBase::canSetBlendMode(BlendMode mode) const
     // or compatible. It should work.
 
     Q_UNUSED(mode);
-    return std::all_of(m_transparencyGroupDataStack.cbegin(), m_transparencyGroupDataStack.cend(), [](const PDFTransparencyGroupPainterData& group) { return group.blendMode == BlendMode::Normal || group.blendMode == BlendMode::Compatible; });
+    return std::all_of(m_transparencyGroupDataStack.cbegin(), m_transparencyGroupDataStack.cend(), [](const PDFTransparencyGroupPainterData& group)
+                       { return group.blendMode == BlendMode::Normal || group.blendMode == BlendMode::Compatible; });
 }
 
 void PDFPainterBase::performBeginTransparencyGroup(ProcessOrder order, const PDFTransparencyGroup& transparencyGroup)
@@ -388,6 +388,13 @@ void PDFPainter::performMeshPainting(const PDFMesh& mesh)
     m_painter->restore();
 }
 
+void PDFPainter::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    Q_UNUSED(stroke);
+    Q_UNUSED(fill);
+    performMeshPainting(mesh);
+}
+
 void PDFPainter::performSaveGraphicState(ProcessOrder order)
 {
     if (order == ProcessOrder::AfterOperation)
@@ -430,10 +437,20 @@ PDFPrecompiledPageGenerator::PDFPrecompiledPageGenerator(PDFPrecompiledPage* pre
     m_precompiledPage->getSnapInfo()->addPageMediaBox(page->getRotatedMediaBox());
 }
 
+void PDFPrecompiledPageGenerator::noteOverprintForPaint(bool fill, bool stroke)
+{
+    if (!m_precompiledPage->containsOverprint() && getGraphicState()->getOverprintMode().appliesToContent(fill, stroke))
+    {
+        m_precompiledPage->markOverprintContent();
+    }
+}
+
 void PDFPrecompiledPageGenerator::performPathPainting(const QPainterPath& path, bool stroke, bool fill, bool text, Qt::FillRule fillRule)
 {
     Q_ASSERT(stroke || fill);
     Q_ASSERT(path.fillRule() == fillRule);
+
+    noteOverprintForPaint(fill, stroke);
 
     QPen pen = stroke ? getCurrentPen() : QPen(Qt::NoPen);
     QBrush brush = fill ? getCurrentBrush() : QBrush(Qt::NoBrush);
@@ -454,6 +471,8 @@ void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
         return;
     }
 
+    noteOverprintForPaint(true, false);
+
     // Add snap info for image to the snapper
     QTransform matrix = getCurrentWorldMatrix();
     PDFSnapInfo* snapInfo = m_precompiledPage->getSnapInfo();
@@ -463,7 +482,8 @@ void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
                            matrix.map(QPointF(1.0, 1.0)),
                            matrix.map(QPointF(0.0, 1.0)),
                            matrix.map(QPointF(0.5, 0.5)),
-                       }, image);
+                       },
+                       image);
 
     if (isTransparencyGroupActive())
     {
@@ -491,6 +511,14 @@ void PDFPrecompiledPageGenerator::performImagePainting(const QImage& image)
 
 void PDFPrecompiledPageGenerator::performMeshPainting(const PDFMesh& mesh)
 {
+    noteOverprintForPaint(true, false);
+
+    m_precompiledPage->addMesh(mesh, getEffectiveFillingAlpha());
+}
+
+void PDFPrecompiledPageGenerator::performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill)
+{
+    noteOverprintForPaint(fill, stroke);
     m_precompiledPage->addMesh(mesh, getEffectiveFillingAlpha());
 }
 

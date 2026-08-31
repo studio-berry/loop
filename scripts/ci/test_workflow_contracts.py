@@ -44,6 +44,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn('-DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR"', workflow)
 
     def test_windows_release_gate_qualifies_without_widgets(self):
         workflow = (ROOT / ".github/workflows/reusable-windows.yml").read_text(encoding="utf-8")
@@ -52,6 +53,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expect-configure-failure", workflow)
         self.assertIn("Build Widgets-absent release profile", workflow)
         self.assertIn("record_widgets_free_release_evidence.py", workflow)
+        self.assertIn('"-DVCPKG_INSTALLED_DIR=$env:VCPKG_INSTALLED_DIR"', workflow)
 
     def test_package_workflows_require_and_record_exact_source_sha(self):
         linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
@@ -107,6 +109,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("Release|x64 = Release|x64", solution)
         self.assertNotIn("Debug|x86", solution)
         self.assertNotIn("Release|x86", solution)
+
+    def test_msi_smoke_scans_current_and_legacy_share_locations(self):
+        smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertIn('(Join-Path $InstallDir "share\\loupe")', smoke)
+        self.assertIn('(Join-Path (Split-Path -Parent $InstallDir) "share\\loupe")', smoke)
 
 
 if __name__ == "__main__":

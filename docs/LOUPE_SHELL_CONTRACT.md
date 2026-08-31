@@ -104,10 +104,10 @@ is the only implementation and `UnitTestsDocumentFacade` pins the whole table.
 
 ## Action and plugin policy
 
-Every action declared in the current Editor `.ui` is listed in
+Every action in the current Quick shell policy is listed in
 `loupe-shell-actions.json` with a disposition and target group. The verifier
-compares the policy against the 107 action IDs in
-`LoupeLibGui/pdfeditormainwindow.ui`; missing or extra IDs fail the check.
+compares the policy against the current shell action IDs; missing or extra IDs
+fail the check.
 This keeps the future shell from silently inventing routes.
 
 Plugin actions follow the same policy. Their target group is determined by what
@@ -143,10 +143,8 @@ that is not in the contract is reported as a routing error rather than ignored.
 against `PDFActionManager::initActions` so the catalog cannot become a second
 command truth wearing the first one's ID set.
 
-**Phase 5 note:** this file derives its ID set from
-`LoupeLibGui/pdfeditormainwindow.ui`. When Phase 5 deletes that form, the parity
-check in `verify-loupe-shell-contract.ps1` loses its source and this file must
-become self-authoritative.
+The Quick shell policy is self-authoritative; the retired Widgets form is not a
+runtime or documentation dependency.
 
 ## UI foundation gate
 

@@ -42,6 +42,13 @@ constexpr double ZoomBucketsPerDoubling = 16.0;
 /// Below this, zoom is not a meaningful ratio and every value shares bucket zero.
 constexpr double MinimumBucketedZoom = 1e-6;
 
+/// Appended to (never merged into) a colorOutputIdentity; withAuthoritativeOverprintMarker
+/// is the only writer and hasAuthoritativeOverprintMarker only checks the
+/// suffix, so a base identity that happened to already end this way would be
+/// indistinguishable from a marked one. No current caller produces such an
+/// identity.
+const QString AuthoritativeOverprintMarker = QStringLiteral("|overprint-authoritative");
+
 }   // namespace
 
 int zoomBucketFor(qreal zoom)
@@ -115,6 +122,16 @@ PageSurfaceKey makePageSurfaceKey(const pdf::PDFRevisionIdentity& revision,
     key.pageTileBounds = pageTileBounds.isEmpty() ? QRectF() : pageTileBounds.normalized();
 
     return key;
+}
+
+QString withAuthoritativeOverprintMarker(const QString& colorOutputIdentity)
+{
+    return colorOutputIdentity + AuthoritativeOverprintMarker;
+}
+
+bool hasAuthoritativeOverprintMarker(const QString& colorOutputIdentity)
+{
+    return colorOutputIdentity.endsWith(AuthoritativeOverprintMarker);
 }
 
 const char* getSurfaceTerminalStateName(SurfaceTerminalState state)

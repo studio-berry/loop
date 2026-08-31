@@ -129,16 +129,22 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
 Write-Host "=== Uninstalling ==="
 Invoke-Msi -Arguments "/x `"$MsiPath`"" -LogName "uninstall"
 
-# The installer also writes a sibling share\loupe tree under ProgramFiles64Folder;
-# checking only $InstallDir would miss profile/schema files left behind.
-$shareLeftoverRoot = Join-Path (Split-Path -Parent $InstallDir) "share\loupe"
-if (Test-Path -LiteralPath $shareLeftoverRoot) {
-    $shareLeftovers = @(Get-ChildItem -LiteralPath $shareLeftoverRoot -Recurse -File -ErrorAction SilentlyContinue)
-    if ($shareLeftovers.Count -gt 0) {
-        throw ("Uninstall left $($shareLeftovers.Count) file(s) behind in $shareLeftoverRoot`:`n  " +
-               (($shareLeftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
+# The current WiX tree places share\loupe below INSTALLFOLDER. Keep the
+# historical sibling location in the scan as well so an upgrade from an older
+# MSI cannot leave files behind unnoticed.
+$shareLeftoverRoots = @(
+    (Join-Path $InstallDir "share\loupe"),
+    (Join-Path (Split-Path -Parent $InstallDir) "share\loupe")
+)
+foreach ($shareLeftoverRoot in $shareLeftoverRoots | Select-Object -Unique) {
+    if (Test-Path -LiteralPath $shareLeftoverRoot) {
+        $shareLeftovers = @(Get-ChildItem -LiteralPath $shareLeftoverRoot -Recurse -File -ErrorAction SilentlyContinue)
+        if ($shareLeftovers.Count -gt 0) {
+            throw ("Uninstall left $($shareLeftovers.Count) file(s) behind in $shareLeftoverRoot`:`n  " +
+                   (($shareLeftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
+        }
+        Write-Host "INFO: $shareLeftoverRoot remains as an empty directory after uninstall"
     }
-    Write-Host "INFO: $shareLeftoverRoot remains as an empty directory after uninstall"
 }
 
 if (Test-Path -LiteralPath $InstallDir) {

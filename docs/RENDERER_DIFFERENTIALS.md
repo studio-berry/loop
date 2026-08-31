@@ -17,4 +17,12 @@ A drift beyond those budgets fails the named test. Refresh goldens only with
 
 **Disclosed limitation:** page-view overprint (the ordinary viewer paint path)
 is not this measurement renderer and must not be cited as proof of separation
-or overprint correctness.
+or overprint correctness. The canvas surfaces this: when the current page's
+cached `PDFPrecompiledPage::containsOverprint()` flag is set, it shows a
+persistent fidelity indicator and lets the operator escalate that one page to
+the authoritative `PDFTransparencyRenderer` path
+(`PDFRenderPolicy::forOutputPreview()`), without reopening the document.
+`UnitTestsPageSurface::sessionRendererEscalatesToAuthoritativeOverprintMatchingGoldenBaseline`
+asserts that escalated render matches `overprint-cmyk-mode1-on.png`, the same
+baseline `UnitTestsOverprintRender` checks — so canvas escalation and this
+measurement renderer are proven to agree, not just independently plausible.

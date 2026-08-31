@@ -20,6 +20,7 @@ EXCLUDED_DIRECTORIES = {
     ".docker-vcpkg",
     ".worktrees",
     "build",
+    "loop",
     "node_modules",
     "vcpkg",
     "vcpkg_installed",

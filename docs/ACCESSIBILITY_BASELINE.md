@@ -8,7 +8,7 @@ workspaces such as Preflight.
 
 ## Shared policy
 
-`LoupeLibWidgets/sources/pdfaccessibility.*` is the shared policy and test
+`LoupeLibQuick` is the shared product accessibility boundary and test
 surface. It provides:
 
 - widget-tree findings for controls that require explicit names or descriptions;

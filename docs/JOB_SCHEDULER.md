@@ -59,12 +59,12 @@ with document-revision binding. Inventory:
 
 | Work | Existing owner | Scheduler kind | Default priority | Status |
 | --- | --- | --- | --- | --- |
-| Page and overlay rendering | `LoupeLibGui`, `LoupeLibWidgets` | `Rendering` | `VisiblePage` | **page compile and text layout migrated**; remaining overlay tiles stay on `PDFExecutionPolicy` |
+| Page and overlay rendering | `LoupeLibQuick`, `LoupeLibCore` | `Rendering` | `VisiblePage` | **page compile and text layout migrated**; remaining overlay tiles stay on `PDFExecutionPolicy` |
 | Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` | **PdfTool `preflight` and Editor preflight migrated** |
 | OCR and indexing | Editor plugins / Core | `OCR` | `Background` | remaining (out of S05 scope) |
-| PageMaster export | `LoupePageMaster` | `Export` | `Operator` | **migrated** |
-| Thumbnail generation | `LoupeLibWidgets` | `Thumbnail` | `NearViewport` | **migrated** |
-| PageMaster preview | `LoupePageMaster` | `Rendering` | `NearViewport` | **migrated** (revision-fenced via `PDFJobScheduler`) |
+| PageMaster export | `PdfTool`, `LoupeLibCore` | `Export` | `Operator` | **migrated** |
+| Thumbnail generation | `LoupeLibQuick`, `LoupeLibCore` | `Thumbnail` | `NearViewport` | **migrated** |
+| PageMaster preview | `PdfTool`, `LoupeLibCore` | `Rendering` | `NearViewport` | **migrated** (revision-fenced via `PDFJobScheduler`) |
 | Batch analysis | PageMaster / PdfTool | `Batch` | `Background` | remaining (out of S05 scope) |
 | Agent context work | future agent surface | `Agent` | `Agent` | remaining |
 

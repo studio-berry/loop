@@ -29,6 +29,7 @@
 #include "pdfjobscheduler.h"
 #include "pdfpage.h"
 #include "pdfrenderer.h"
+#include "pdftransparencyrenderer.h"
 
 #include <QImage>
 #include <QRectF>
@@ -130,6 +131,19 @@ PageSurfaceKey makePageSurfaceKey(const pdf::PDFRevisionIdentity& revision,
                                   qreal devicePixelRatio,
                                   QRectF pageTileBounds = QRectF());
 
+/// Joins the authoritative-overprint marker onto a colorOutputIdentity. This is
+/// the P4-S9 join point documented on PageSurfaceRenderSettings::colorOutputIdentity:
+/// an authoritative, overprint-accurate render of one page is requested by
+/// giving that page's key a distinct colorOutputIdentity rather than adding a
+/// key field, so it naturally gets its own cache slot and its own admission.
+/// PDFSessionPageSurfaceRenderer::render reads the marker back with
+/// hasAuthoritativeOverprintMarker to choose PDFTransparencyRenderer with
+/// PDFRenderPolicy::forOutputPreview() over the standard QPainter path.
+QString withAuthoritativeOverprintMarker(const QString& colorOutputIdentity);
+
+/// True if \p colorOutputIdentity was produced by withAuthoritativeOverprintMarker.
+bool hasAuthoritativeOverprintMarker(const QString& colorOutputIdentity);
+
 /// The zoom quantizer used by makePageSurfaceKey, exposed so a test can pin it
 /// rather than re-derive it.
 int zoomBucketFor(qreal zoom);
@@ -184,6 +198,13 @@ struct PageSurfaceResult
     SurfaceBufferPointer pixels;
     QSize pixelSize;
     qint64 byteSize = 0;
+
+    /// Overprint render fidelity for this surface: exact when the page has no
+    /// overprint-bearing content, SupportedWithFallback when the standard path
+    /// approximated it, or the transparency renderer's own verdict when this
+    /// result came from the authoritative render path. Default-constructed
+    /// (exact, no reasons) for a result that never touched overprint at all.
+    pdf::PDFRenderDiagnostics diagnostics;
 
     /// A <domain>/<kebab-reason> code, never a path or document content.
     QString typedError;

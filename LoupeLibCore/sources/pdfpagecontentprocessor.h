@@ -126,46 +126,46 @@ public:
 
     enum StateFlag : uint64_t
     {
-        StateUnchanged                      = 0x0000000000000000,
-        StateCurrentTransformationMatrix    = 0x0000000000000001,
-        StateStrokeColorSpace               = 0x0000000000000002,
-        StateFillColorSpace                 = 0x0000000000000004,
-        StateStrokeColor                    = 0x0000000000000008,
-        StateFillColor                      = 0x0000000000000010,
-        StateLineWidth                      = 0x0000000000000020,
-        StateLineCapStyle                   = 0x0000000000000040,
-        StateLineJoinStyle                  = 0x0000000000000080,
-        StateMitterLimit                    = 0x0000000000000100,
-        StateLineDashPattern                = 0x0000000000000200,
-        StateRenderingIntentName            = 0x0000000000000400,
-        StateFlatness                       = 0x0000000000000800,
-        StateSmoothness                     = 0x0000000000001000,
-        StateTextMatrix                     = 0x0000000000002000,
-        StateTextLineMatrix                 = 0x0000000000004000,
-        StateTextCharacterSpacing           = 0x0000000000008000,
-        StateTextWordSpacing                = 0x0000000000010000,
-        StateTextHorizontalScaling          = 0x0000000000020000,
-        StateTextLeading                    = 0x0000000000040000,
-        StateTextFont                       = 0x0000000000080000,
-        StateTextFontSize                   = 0x0000000000100000,
-        StateTextRenderingMode              = 0x0000000000200000,
-        StateTextRise                       = 0x0000000000400000,
-        StateTextKnockout                   = 0x0000000000800000,
-        StateAlphaStroking                  = 0x0000000001000000,
-        StateAlphaFilling                   = 0x0000000002000000,
-        StateBlendMode                      = 0x0000000004000000,
-        StateRenderingIntent                = 0x0000000008000000,
-        StateOverprint                      = 0x0000000010000000,
-        StateAlphaIsShape                   = 0x0000000020000000,
-        StateStrokeAdjustment               = 0x0000000040000000,
-        StateSoftMask                       = 0x0000000080000000,
-        StateBlackPointCompensation         = 0x0000000100000000,
-        StateBlackGenerationFunction        = 0x0000000200000000,
-        StateUndercolorRemovalFunction      = 0x0000000400000000,
-        StateTransferFunction               = 0x0000000800000000,
-        StateHalftone                       = 0x0000001000000000,
-        StateHalftoneOrigin                 = 0x0000002000000000,
-        StateAll                            = 0xFFFFFFFFFFFFFFFF
+        StateUnchanged = 0x0000000000000000,
+        StateCurrentTransformationMatrix = 0x0000000000000001,
+        StateStrokeColorSpace = 0x0000000000000002,
+        StateFillColorSpace = 0x0000000000000004,
+        StateStrokeColor = 0x0000000000000008,
+        StateFillColor = 0x0000000000000010,
+        StateLineWidth = 0x0000000000000020,
+        StateLineCapStyle = 0x0000000000000040,
+        StateLineJoinStyle = 0x0000000000000080,
+        StateMitterLimit = 0x0000000000000100,
+        StateLineDashPattern = 0x0000000000000200,
+        StateRenderingIntentName = 0x0000000000000400,
+        StateFlatness = 0x0000000000000800,
+        StateSmoothness = 0x0000000000001000,
+        StateTextMatrix = 0x0000000000002000,
+        StateTextLineMatrix = 0x0000000000004000,
+        StateTextCharacterSpacing = 0x0000000000008000,
+        StateTextWordSpacing = 0x0000000000010000,
+        StateTextHorizontalScaling = 0x0000000000020000,
+        StateTextLeading = 0x0000000000040000,
+        StateTextFont = 0x0000000000080000,
+        StateTextFontSize = 0x0000000000100000,
+        StateTextRenderingMode = 0x0000000000200000,
+        StateTextRise = 0x0000000000400000,
+        StateTextKnockout = 0x0000000000800000,
+        StateAlphaStroking = 0x0000000001000000,
+        StateAlphaFilling = 0x0000000002000000,
+        StateBlendMode = 0x0000000004000000,
+        StateRenderingIntent = 0x0000000008000000,
+        StateOverprint = 0x0000000010000000,
+        StateAlphaIsShape = 0x0000000020000000,
+        StateStrokeAdjustment = 0x0000000040000000,
+        StateSoftMask = 0x0000000080000000,
+        StateBlackPointCompensation = 0x0000000100000000,
+        StateBlackGenerationFunction = 0x0000000200000000,
+        StateUndercolorRemovalFunction = 0x0000000400000000,
+        StateTransferFunction = 0x0000000800000000,
+        StateHalftone = 0x0000001000000000,
+        StateHalftoneOrigin = 0x0000002000000000,
+        StateAll = 0xFFFFFFFFFFFFFFFF
     };
 
     using StateFlags = PDFFlags<StateFlag>;
@@ -313,14 +313,14 @@ private:
     QByteArray m_renderingIntentName;
     PDFReal m_flatness;
     PDFReal m_smoothness;
-    PDFReal m_textCharacterSpacing; // T_c
-    PDFReal m_textWordSpacing;  // T_w
-    PDFReal m_textHorizontalScaling; // T_h, percentage
-    PDFReal m_textLeading; // T_l
-    PDFFontPointer m_textFont; // Text font
-    PDFReal m_textFontSize; // T_fs
-    TextRenderingMode m_textRenderingMode; // Text rendering mode
-    PDFReal m_textRise; // T_rise
+    PDFReal m_textCharacterSpacing;   // T_c
+    PDFReal m_textWordSpacing;   // T_w
+    PDFReal m_textHorizontalScaling;   // T_h, percentage
+    PDFReal m_textLeading;   // T_l
+    PDFFontPointer m_textFont;   // Text font
+    PDFReal m_textFontSize;   // T_fs
+    TextRenderingMode m_textRenderingMode;   // Text rendering mode
+    PDFReal m_textRise;   // T_rise
     bool m_textKnockout;
     QTransform m_textMatrix;
     QTransform m_textLineMatrix;
@@ -378,121 +378,121 @@ public:
     enum class Operator
     {
         // General graphic state        w, J, j, M, d, ri, i, gs
-        SetLineWidth,                       ///< w, sets the line width
-        SetLineCap,                         ///< J, sets the line cap
-        SetLineJoin,                        ///< j, sets the line join
-        SetMitterLimit,                     ///< M, sets the mitter limit
-        SetLineDashPattern,                 ///< d, sets the line dash pattern
-        SetRenderingIntent,                 ///< ri, sets the rendering intent
-        SetFlatness,                        ///< i, sets the flattness (number in range from 0 to 100)
-        SetGraphicState,                    ///< gs, sets the whole graphic state (stored in resource dictionary)
+        SetLineWidth,   ///< w, sets the line width
+        SetLineCap,   ///< J, sets the line cap
+        SetLineJoin,   ///< j, sets the line join
+        SetMitterLimit,   ///< M, sets the mitter limit
+        SetLineDashPattern,   ///< d, sets the line dash pattern
+        SetRenderingIntent,   ///< ri, sets the rendering intent
+        SetFlatness,   ///< i, sets the flattness (number in range from 0 to 100)
+        SetGraphicState,   ///< gs, sets the whole graphic state (stored in resource dictionary)
 
         // Special graphic state:       q, Q, cm
-        SaveGraphicState,                   ///< q, saves the graphic state
-        RestoreGraphicState,                ///< Q, restores the graphic state
-        AdjustCurrentTransformationMatrix,  ///< cm, modify the current transformation matrix by matrix multiplication
+        SaveGraphicState,   ///< q, saves the graphic state
+        RestoreGraphicState,   ///< Q, restores the graphic state
+        AdjustCurrentTransformationMatrix,   ///< cm, modify the current transformation matrix by matrix multiplication
 
         // Path construction:           m, l, c, v, y, h, re
-        MoveCurrentPoint,                   ///< m, begin a new subpath by moving to the desired point
-        LineTo,                             ///< l, appends a straight line segment to the subpath
-        Bezier123To,                        ///< c, appends a Bézier curve with control points 1, 2, 3
-        Bezier23To,                         ///< v, appends a Bézier curve with control points 2, 3
-        Bezier13To,                         ///< y, appends a Bézier curve with control points 1, 3
-        EndSubpath,                         ///< h, ends current subpath by adding straight line segment from the last point to the beginning
-        Rectangle,                          ///< re, adds rectangle
+        MoveCurrentPoint,   ///< m, begin a new subpath by moving to the desired point
+        LineTo,   ///< l, appends a straight line segment to the subpath
+        Bezier123To,   ///< c, appends a Bézier curve with control points 1, 2, 3
+        Bezier23To,   ///< v, appends a Bézier curve with control points 2, 3
+        Bezier13To,   ///< y, appends a Bézier curve with control points 1, 3
+        EndSubpath,   ///< h, ends current subpath by adding straight line segment from the last point to the beginning
+        Rectangle,   ///< re, adds rectangle
 
         // Path painting:               S, s, f, F, f*, B, B*, b, b*, n
-        PathStroke,                         ///< S, Stroke
-        PathCloseStroke,                    ///< s, Close, Stroke (equivalent of operators h S)
-        PathFillWinding,                    ///< f, Fill, Winding
-        PathFillWinding2,                   ///< F, same as previous, see PDF Reference 1.7, Table 4.10
-        PathFillEvenOdd,                    ///< f*, Fill, Even-Odd
-        PathFillStrokeWinding,              ///< B, Fill, Stroke, Winding
-        PathFillStrokeEvenOdd,              ///< B*, Fill, Stroke, Even-Odd
-        PathCloseFillStrokeWinding,         ///< b, Close, Fill, Stroke, Winding (equivalent of operators h B)
-        PathCloseFillStrokeEvenOdd,         ///< b*, Close, Fill, Stroke, Even-Odd (equivalent of operators h B*)
-        PathClear,                          ///< n, clear path (close current) path, "no-operation", used with clipping
+        PathStroke,   ///< S, Stroke
+        PathCloseStroke,   ///< s, Close, Stroke (equivalent of operators h S)
+        PathFillWinding,   ///< f, Fill, Winding
+        PathFillWinding2,   ///< F, same as previous, see PDF Reference 1.7, Table 4.10
+        PathFillEvenOdd,   ///< f*, Fill, Even-Odd
+        PathFillStrokeWinding,   ///< B, Fill, Stroke, Winding
+        PathFillStrokeEvenOdd,   ///< B*, Fill, Stroke, Even-Odd
+        PathCloseFillStrokeWinding,   ///< b, Close, Fill, Stroke, Winding (equivalent of operators h B)
+        PathCloseFillStrokeEvenOdd,   ///< b*, Close, Fill, Stroke, Even-Odd (equivalent of operators h B*)
+        PathClear,   ///< n, clear path (close current) path, "no-operation", used with clipping
 
         // Clipping paths:             W, W*
-        ClipWinding,                        ///< W, modify current clipping path by intersecting it with current path using "Non zero winding number rule"
-        ClipEvenOdd,                        ///< W*, modify current clipping path by intersecting it with current path using "Even-odd rule"
+        ClipWinding,   ///< W, modify current clipping path by intersecting it with current path using "Non zero winding number rule"
+        ClipEvenOdd,   ///< W*, modify current clipping path by intersecting it with current path using "Even-odd rule"
 
         // Text object:                BT, ET
-        TextBegin,                          ///< BT, begin text object, initialize text matrices, cannot be nested
-        TextEnd,                            ///< ET, end text object, cannot be nested
+        TextBegin,   ///< BT, begin text object, initialize text matrices, cannot be nested
+        TextEnd,   ///< ET, end text object, cannot be nested
 
         // Text state:                 Tc, Tw, Tz, TL, Tf, Tr, Ts
-        TextSetCharacterSpacing,            ///< Tc, set text character spacing
-        TextSetWordSpacing,                 ///< Tw, set text word spacing
-        TextSetHorizontalScale,             ///< Tz, set text horizontal scaling (in percents, 100% = normal scaling)
-        TextSetLeading,                     ///< TL, set text leading
-        TextSetFontAndFontSize,             ///< Tf, set text font (name from dictionary) and its size
-        TextSetRenderMode,                  ///< Tr, set text render mode
-        TextSetRise,                        ///< Ts, set text rise
+        TextSetCharacterSpacing,   ///< Tc, set text character spacing
+        TextSetWordSpacing,   ///< Tw, set text word spacing
+        TextSetHorizontalScale,   ///< Tz, set text horizontal scaling (in percents, 100% = normal scaling)
+        TextSetLeading,   ///< TL, set text leading
+        TextSetFontAndFontSize,   ///< Tf, set text font (name from dictionary) and its size
+        TextSetRenderMode,   ///< Tr, set text render mode
+        TextSetRise,   ///< Ts, set text rise
 
         // Text positioning:           Td, TD, Tm, T*
-        TextMoveByOffset,                   ///< Td, move by offset
-        TextSetLeadingAndMoveByOffset,      ///< TD, sets text leading and moves by offset, x y TD is equivalent to sequence -y TL x y Td
-        TextSetMatrix,                      ///< Tm, set text matrix
-        TextMoveByLeading,                  ///< T*, moves text by leading, equivalent to 0 leading Td
+        TextMoveByOffset,   ///< Td, move by offset
+        TextSetLeadingAndMoveByOffset,   ///< TD, sets text leading and moves by offset, x y TD is equivalent to sequence -y TL x y Td
+        TextSetMatrix,   ///< Tm, set text matrix
+        TextMoveByLeading,   ///< T*, moves text by leading, equivalent to 0 leading Td
 
         // Text showing:               Tj, TJ, ', "
-        TextShowTextString,                 ///< Tj, show text string
-        TextShowTextIndividualSpacing,      ///< TJ, show text, allow individual text spacing
-        TextNextLineShowText,               ///< ', move to the next line and show text ("string '" is equivalent to "T* string Tj")
-        TextSetSpacingAndShowText,          ///< ", move to the next line, set spacing and show text (equivalent to sequence "w1 Tw w2 Tc string '")
+        TextShowTextString,   ///< Tj, show text string
+        TextShowTextIndividualSpacing,   ///< TJ, show text, allow individual text spacing
+        TextNextLineShowText,   ///< ', move to the next line and show text ("string '" is equivalent to "T* string Tj")
+        TextSetSpacingAndShowText,   ///< ", move to the next line, set spacing and show text (equivalent to sequence "w1 Tw w2 Tc string '")
 
         // Type 3 font:                d0, d1
-        Type3FontSetOffset,                 ///< d0, set width information, see PDF 1.7 Reference, Table 5.10
-        Type3FontSetOffsetAndBB,            ///< d1, set offset and glyph bounding box
+        Type3FontSetOffset,   ///< d0, set width information, see PDF 1.7 Reference, Table 5.10
+        Type3FontSetOffsetAndBB,   ///< d1, set offset and glyph bounding box
 
         // Color:                      CS, cs, SC, SCN, sc, scn, G, g, RG, rg, K, k
-        ColorSetStrokingColorSpace,         ///< CS, set current color space for stroking operations
-        ColorSetFillingColorSpace,          ///< cs, set current color space for filling operations
-        ColorSetStrokingColor,              ///< SC, set current stroking color
-        ColorSetStrokingColorN,             ///< SCN, same as SC, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
-        ColorSetFillingColor,               ///< sc, set current filling color
-        ColorSetFillingColorN,              ///< scn, same as sc, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
-        ColorSetDeviceGrayStroking,         ///< G, set DeviceGray color space for stroking color and set color
-        ColorSetDeviceGrayFilling,          ///< g, set DeviceGray color space for filling color and set color
-        ColorSetDeviceRGBStroking,          ///< RG, set DeviceRGB color space for stroking color and set color
-        ColorSetDeviceRGBFilling,           ///< rg, set DeviceRGB color space for filling color and set color
-        ColorSetDeviceCMYKStroking,         ///< K, set DeviceCMYK color space for stroking color and set color
-        ColorSetDeviceCMYKFilling,          ///< k, set DeviceCMYK color space for filling color and set color
+        ColorSetStrokingColorSpace,   ///< CS, set current color space for stroking operations
+        ColorSetFillingColorSpace,   ///< cs, set current color space for filling operations
+        ColorSetStrokingColor,   ///< SC, set current stroking color
+        ColorSetStrokingColorN,   ///< SCN, same as SC, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
+        ColorSetFillingColor,   ///< sc, set current filling color
+        ColorSetFillingColorN,   ///< scn, same as sc, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
+        ColorSetDeviceGrayStroking,   ///< G, set DeviceGray color space for stroking color and set color
+        ColorSetDeviceGrayFilling,   ///< g, set DeviceGray color space for filling color and set color
+        ColorSetDeviceRGBStroking,   ///< RG, set DeviceRGB color space for stroking color and set color
+        ColorSetDeviceRGBFilling,   ///< rg, set DeviceRGB color space for filling color and set color
+        ColorSetDeviceCMYKStroking,   ///< K, set DeviceCMYK color space for stroking color and set color
+        ColorSetDeviceCMYKFilling,   ///< k, set DeviceCMYK color space for filling color and set color
 
         // Shading pattern:            sh
-        ShadingPaintShape,                  ///< sh, paint shape
+        ShadingPaintShape,   ///< sh, paint shape
 
         // Inline images:              BI, ID, EI
-        InlineImageBegin,                   ///< BI, begin inline image
-        InlineImageData,                    ///< ID, inline image data
-        InlineImageEnd,                     ///< EI, end of inline image
+        InlineImageBegin,   ///< BI, begin inline image
+        InlineImageData,   ///< ID, inline image data
+        InlineImageEnd,   ///< EI, end of inline image
 
         // XObject:                    Do
-        PaintXObject,                       ///< Do, paint the X Object (image, form, ...)
+        PaintXObject,   ///< Do, paint the X Object (image, form, ...)
 
         // Marked content:             MP, DP, BMC, BDC, EMC
-        MarkedContentPoint,                 ///< MP, marked content point
+        MarkedContentPoint,   ///< MP, marked content point
         MarkedContentPointWithProperties,   ///< DP, marked content point with properties
-        MarkedContentBegin,                 ///< BMC, begin of sequence of marked content
+        MarkedContentBegin,   ///< BMC, begin of sequence of marked content
         MarkedContentBeginWithProperties,   ///< BDC, begin of sequence of marked content with properties
-        MarkedContentEnd,                   ///< EMC, end of marked content sequence
+        MarkedContentEnd,   ///< EMC, end of marked content sequence
 
         // Compatibility:              BX, EX
-        CompatibilityBegin,                 ///< BX, Compatibility mode begin (unrecognized operators are ignored)
-        CompatibilityEnd,                   ///< EX, Compatibility mode end
-        Invalid                             ///< Invalid operator, use for error reporting
+        CompatibilityBegin,   ///< BX, Compatibility mode begin (unrecognized operators are ignored)
+        CompatibilityEnd,   ///< EX, Compatibility mode end
+        Invalid   ///< Invalid operator, use for error reporting
     };
 
     enum ProcedureSet
     {
-        EmptyProcSet    = 0x0000,
-        NoProcSet       = 0x0001,
-        PDF             = 0x0002,
-        Text            = 0x0004,
-        ImageB          = 0x0008,
-        ImageC          = 0x0010,
-        ImageI          = 0x0020
+        EmptyProcSet = 0x0000,
+        NoProcSet = 0x0001,
+        PDF = 0x0002,
+        Text = 0x0004,
+        ImageB = 0x0008,
+        ImageC = 0x0010,
+        ImageI = 0x0020
     };
     Q_DECLARE_FLAGS(ProcedureSets, ProcedureSet)
 
@@ -560,7 +560,6 @@ public:
 
 
 protected:
-
     struct PDFTransparencyGroup
     {
         PDFColorSpacePointer colorSpacePointer;
@@ -575,7 +574,6 @@ protected:
     class PDFSoftMaskDefinition
     {
     public:
-
         enum class Type
         {
             Invalid,
@@ -670,6 +668,11 @@ protected:
     /// \param mesh Mesh to be drawn
     virtual void performMeshPainting(const PDFMesh& mesh);
 
+    /// Variant retaining whether the source path was filled or stroked. The
+    /// default delegates to the long-standing mesh callback so existing
+    /// renderers do not need to care about the paint operation.
+    virtual void performMeshPainting(const PDFMesh& mesh, bool stroke, bool fill);
+
     /// This function has to be implemented in the client drawing implementation, it should
     /// update the device according to the graphic state change. The flags are set when
     /// the value differs from the previous graphic state.
@@ -728,7 +731,11 @@ protected:
     /// so the caller falls back to the standard path-based glyph painting.
     /// \param info Character, font and text rendering matrix (glyph space to user space, before CTM)
     /// \returns true, if the character was drawn and no further path-based painting is needed
-    virtual bool performTextCharacterDrawing(const PDFRealTextDrawInfo& info) { Q_UNUSED(info); return false; }
+    virtual bool performTextCharacterDrawing(const PDFRealTextDrawInfo& info)
+    {
+        Q_UNUSED(info);
+        return false;
+    }
 
     /// Implement to respond to text begin operator
     virtual void performTextBegin(ProcessOrder order);
@@ -741,12 +748,12 @@ protected:
 
     enum class ContentKind
     {
-        Shapes,     ///< General shapes (they can be also shaded / tiled)
-        Text,       ///< Text outlines (they can be also shaded / tiled)
-        Images,     ///< Images
-        Shading,    ///< Shading
-        Tiling,     ///< Tiling
-        Forms,      ///< Forms
+        Shapes,   ///< General shapes (they can be also shaded / tiled)
+        Text,   ///< Text outlines (they can be also shaded / tiled)
+        Images,   ///< Images
+        Shading,   ///< Shading
+        Tiling,   ///< Tiling
+        Forms,   ///< Forms
     };
 
     /// Override this function to disable particular content type (for example
@@ -883,7 +890,6 @@ private:
             kind(kind),
             contentSuppressed(contentSuppressed)
         {
-
         }
 
         QByteArray tag;
@@ -940,13 +946,13 @@ private:
         QByteArray string;
     };
 
-    template<typename T>
+    template <typename T>
     T readOperand(size_t index) const;
 
-    template<size_t index, typename T>
+    template <size_t index, typename T>
     inline T readOperand() const { return readOperand<T>(index); }
 
-    template<typename Tuple, class F, std::size_t... I>
+    template <typename Tuple, class F, std::size_t... I>
     inline void invokeOperatorImpl(F function, std::index_sequence<I...>)
     {
         (this->*function)(readOperand<I, typename std::tuple_element<I, Tuple>::type>()...);
@@ -956,8 +962,8 @@ private:
     /// templates are used. Basically, for each argument of the function, we need type of the argument,
     /// and its index. To retrieve it, we use std::tuple, variadic template and functionality
     /// analogic to std::apply implementation.
-    template<typename... Operands>
-    inline void invokeOperator(void(PDFPageContentProcessor::* function)(Operands...))
+    template <typename... Operands>
+    inline void invokeOperator(void (PDFPageContentProcessor::*function)(Operands...))
     {
         invokeOperatorImpl<std::tuple<Operands...>>(function, std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<std::tuple<Operands...>>>>{});
     }
@@ -969,7 +975,7 @@ private:
     /// Notifies the updated graphic state. If nothing changed in graphic state, then nothing happens.
     void updateGraphicState();
 
-    template<typename... Operands>
+    template <typename... Operands>
     inline QColor getColorFromColorSpace(const PDFAbstractColorSpace* colorSpace, Operands... operands)
     {
         if (!colorSpace)
@@ -990,19 +996,19 @@ private:
     }
 
     // General graphic state        w, J, j, M, d, ri, i, gs
-    void operatorSetLineWidth(PDFReal lineWidth);           ///< w, sets the line width
-    void operatorSetLineCap(PDFInteger lineCap);            ///< J, sets the line cap
-    void operatorSetLineJoin(PDFInteger lineJoin);          ///< j, sets the line join
-    void operatorSetMitterLimit(PDFReal mitterLimit);       ///< M, sets the mitter limit
-    void operatorSetLineDashPattern();                      ///< d, sets the line dash pattern
-    void operatorSetRenderingIntent(PDFOperandName intent);        ///< ri, sets the rendering intent
-    void operatorSetFlatness(PDFReal flatness);             ///< i, sets the flattness (number in range from 0 to 100)
+    void operatorSetLineWidth(PDFReal lineWidth);   ///< w, sets the line width
+    void operatorSetLineCap(PDFInteger lineCap);   ///< J, sets the line cap
+    void operatorSetLineJoin(PDFInteger lineJoin);   ///< j, sets the line join
+    void operatorSetMitterLimit(PDFReal mitterLimit);   ///< M, sets the mitter limit
+    void operatorSetLineDashPattern();   ///< d, sets the line dash pattern
+    void operatorSetRenderingIntent(PDFOperandName intent);   ///< ri, sets the rendering intent
+    void operatorSetFlatness(PDFReal flatness);   ///< i, sets the flattness (number in range from 0 to 100)
     void operatorSetGraphicState(PDFOperandName dictionaryName);   ///< gs, sets the whole graphic state (stored in resource dictionary)
 
     // Special graphic state:       q, Q, cm
-    void operatorSaveGraphicState();                   ///< q, saves the graphic state
-    void operatorRestoreGraphicState();                ///< Q, restores the graphic state
-    void operatorAdjustCurrentTransformationMatrix(PDFReal a, PDFReal b, PDFReal c, PDFReal d, PDFReal e, PDFReal f);  ///< cm, modify the current transformation matrix by matrix multiplication
+    void operatorSaveGraphicState();   ///< q, saves the graphic state
+    void operatorRestoreGraphicState();   ///< Q, restores the graphic state
+    void operatorAdjustCurrentTransformationMatrix(PDFReal a, PDFReal b, PDFReal c, PDFReal d, PDFReal e, PDFReal f);   ///< cm, modify the current transformation matrix by matrix multiplication
 
     // Path construction operators
     void operatorMoveCurrentPoint(PDFReal x, PDFReal y);
@@ -1025,68 +1031,68 @@ private:
     void operatorPathClear();
 
     // Clipping paths:             W, W*
-    void operatorClipWinding(); ///< W, modify current clipping path by intersecting it with current path using "Non zero winding number rule"
-    void operatorClipEvenOdd(); ///< W*, modify current clipping path by intersecting it with current path using "Even-odd rule"
+    void operatorClipWinding();   ///< W, modify current clipping path by intersecting it with current path using "Non zero winding number rule"
+    void operatorClipEvenOdd();   ///< W*, modify current clipping path by intersecting it with current path using "Even-odd rule"
 
     // Type 3 font:                d0, d1
-    void operatorType3FontSetOffset(PDFReal wx, PDFReal wy);        ///< d0, set width information, see PDF 1.7 Reference, Table 5.10
+    void operatorType3FontSetOffset(PDFReal wx, PDFReal wy);   ///< d0, set width information, see PDF 1.7 Reference, Table 5.10
     void operatorType3FontSetOffsetAndBB(PDFReal wx, PDFReal wy, PDFReal llx, PDFReal lly, PDFReal urx, PDFReal ury);   ///< d1, set offset and glyph bounding box
 
     // Color:                      CS, cs, SC, SCN, sc, scn, G, g, RG, rg, K, k
-    void operatorColorSetStrokingColorSpace(PDFOperandName name);                           ///< CS, set current color space for stroking operations
-    void operatorColorSetFillingColorSpace(PDFOperandName name);                            ///< cs, set current color space for filling operations
-    void operatorColorSetStrokingColor();                                                   ///< SC, set current stroking color
-    void operatorColorSetStrokingColorN();                                                  ///< SCN, same as SC, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
-    void operatorColorSetFillingColor();                                                    ///< sc, set current filling color
-    void operatorColorSetFillingColorN();                                                   ///< scn, same as sc, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
-    void operatorColorSetDeviceGrayStroking(PDFReal gray);                                  ///< G, set DeviceGray color space for stroking color and set color
-    void operatorColorSetDeviceGrayFilling(PDFReal gray);                                   ///< g, set DeviceGray color space for filling color and set color
-    void operatorColorSetDeviceRGBStroking(PDFReal r, PDFReal g, PDFReal b);                ///< RG, set DeviceRGB color space for stroking color and set color
-    void operatorColorSetDeviceRGBFilling(PDFReal r, PDFReal g, PDFReal b);                 ///< rg, set DeviceRGB color space for filling color and set color
-    void operatorColorSetDeviceCMYKStroking(PDFReal c, PDFReal m, PDFReal y, PDFReal k);    ///< K, set DeviceCMYK color space for stroking color and set color
-    void operatorColorSetDeviceCMYKFilling(PDFReal c, PDFReal m, PDFReal y, PDFReal k);     ///< k, set DeviceCMYK color space for filling color and set color
+    void operatorColorSetStrokingColorSpace(PDFOperandName name);   ///< CS, set current color space for stroking operations
+    void operatorColorSetFillingColorSpace(PDFOperandName name);   ///< cs, set current color space for filling operations
+    void operatorColorSetStrokingColor();   ///< SC, set current stroking color
+    void operatorColorSetStrokingColorN();   ///< SCN, same as SC, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
+    void operatorColorSetFillingColor();   ///< sc, set current filling color
+    void operatorColorSetFillingColorN();   ///< scn, same as sc, but also supports Pattern, Separation, DeviceN and ICCBased color spaces
+    void operatorColorSetDeviceGrayStroking(PDFReal gray);   ///< G, set DeviceGray color space for stroking color and set color
+    void operatorColorSetDeviceGrayFilling(PDFReal gray);   ///< g, set DeviceGray color space for filling color and set color
+    void operatorColorSetDeviceRGBStroking(PDFReal r, PDFReal g, PDFReal b);   ///< RG, set DeviceRGB color space for stroking color and set color
+    void operatorColorSetDeviceRGBFilling(PDFReal r, PDFReal g, PDFReal b);   ///< rg, set DeviceRGB color space for filling color and set color
+    void operatorColorSetDeviceCMYKStroking(PDFReal c, PDFReal m, PDFReal y, PDFReal k);   ///< K, set DeviceCMYK color space for stroking color and set color
+    void operatorColorSetDeviceCMYKFilling(PDFReal c, PDFReal m, PDFReal y, PDFReal k);   ///< k, set DeviceCMYK color space for filling color and set color
 
     // Text object:                BT, ET
-    void operatorTextBegin();                          ///< BT, begin text object, initialize text matrices, cannot be nested
-    void operatorTextEnd();                            ///< ET, end text object, cannot be nested
+    void operatorTextBegin();   ///< BT, begin text object, initialize text matrices, cannot be nested
+    void operatorTextEnd();   ///< ET, end text object, cannot be nested
 
     // Text state:                 Tc, Tw, Tz, TL, Tf, Tr, Ts
-    void operatorTextSetCharacterSpacing(PDFReal charSpacing);                  ///< Tc, set text character spacing
-    void operatorTextSetWordSpacing(PDFReal wordSpacing);                       ///< Tw, set text word spacing
-    void operatorTextSetHorizontalScale(PDFReal horizontalScaling);             ///< Tz, set text horizontal scaling (in percents, 100% = normal scaling)
-    void operatorTextSetLeading(PDFReal leading);                               ///< TL, set text leading
-    void operatorTextSetFontAndFontSize(PDFOperandName fontName, PDFReal fontSize);    ///< Tf, set text font (name from dictionary) and its size
-    void operatorTextSetRenderMode(PDFInteger mode);                            ///< Tr, set text render mode
-    void operatorTextSetRise(PDFReal rise);                                     ///< Ts, set text rise
+    void operatorTextSetCharacterSpacing(PDFReal charSpacing);   ///< Tc, set text character spacing
+    void operatorTextSetWordSpacing(PDFReal wordSpacing);   ///< Tw, set text word spacing
+    void operatorTextSetHorizontalScale(PDFReal horizontalScaling);   ///< Tz, set text horizontal scaling (in percents, 100% = normal scaling)
+    void operatorTextSetLeading(PDFReal leading);   ///< TL, set text leading
+    void operatorTextSetFontAndFontSize(PDFOperandName fontName, PDFReal fontSize);   ///< Tf, set text font (name from dictionary) and its size
+    void operatorTextSetRenderMode(PDFInteger mode);   ///< Tr, set text render mode
+    void operatorTextSetRise(PDFReal rise);   ///< Ts, set text rise
 
     // Text positioning:           Td, TD, Tm, T*
-    void operatorTextMoveByOffset(PDFReal t_x, PDFReal t_y);                                        ///< Td, move by offset
-    void operatorTextSetLeadingAndMoveByOffset(PDFReal t_x, PDFReal t_y);                           ///< TD, sets text leading and moves by offset, x y TD is equivalent to sequence -y TL x y Td
+    void operatorTextMoveByOffset(PDFReal t_x, PDFReal t_y);   ///< Td, move by offset
+    void operatorTextSetLeadingAndMoveByOffset(PDFReal t_x, PDFReal t_y);   ///< TD, sets text leading and moves by offset, x y TD is equivalent to sequence -y TL x y Td
     void operatorTextSetMatrix(PDFReal a, PDFReal b, PDFReal c, PDFReal d, PDFReal e, PDFReal f);   ///< Tm, set text matrix
-    void operatorTextMoveByLeading();                                                               ///< T*, moves text by leading, equivalent to 0 leading Td
+    void operatorTextMoveByLeading();   ///< T*, moves text by leading, equivalent to 0 leading Td
 
     // Text showing:               Tj, TJ, ', "
-    void operatorTextShowTextString(PDFOperandString text);                                     ///< Tj, show text string
-    void operatorTextShowTextIndividualSpacing();                                               ///< TJ, show text, allow individual text spacing
-    void operatorTextNextLineShowText(PDFOperandString text);                                   ///< ', move to the next line and show text ("string '" is equivalent to "T* string Tj")
-    void operatorTextSetSpacingAndShowText(PDFReal t_w, PDFReal t_c, PDFOperandString text);    ///< ", move to the next line, set spacing and show text (equivalent to sequence "w1 Tw w2 Tc string '")
+    void operatorTextShowTextString(PDFOperandString text);   ///< Tj, show text string
+    void operatorTextShowTextIndividualSpacing();   ///< TJ, show text, allow individual text spacing
+    void operatorTextNextLineShowText(PDFOperandString text);   ///< ', move to the next line and show text ("string '" is equivalent to "T* string Tj")
+    void operatorTextSetSpacingAndShowText(PDFReal t_w, PDFReal t_c, PDFOperandString text);   ///< ", move to the next line, set spacing and show text (equivalent to sequence "w1 Tw w2 Tc string '")
 
     // Shading pattern:            sh
-    void operatorShadingPaintShape(PDFOperandName name);                  ///< sh, paint shape
+    void operatorShadingPaintShape(PDFOperandName name);   ///< sh, paint shape
 
     // XObject:                    Do
-    void operatorPaintXObject(PDFOperandName name); ///< Do, paint the X Object (image, form, ...)
+    void operatorPaintXObject(PDFOperandName name);   ///< Do, paint the X Object (image, form, ...)
 
     // Marked content:             MP, DP, BMC, BDC, EMC
-    void operatorMarkedContentPoint(PDFOperandName name);                                       ///< MP, marked content point
+    void operatorMarkedContentPoint(PDFOperandName name);   ///< MP, marked content point
     void operatorMarkedContentPointWithProperties(PDFOperandName name, PDFObject properties);   ///< DP, marked content point with properties
-    void operatorMarkedContentBegin(PDFOperandName name);                                       ///< BMC, begin of sequence of marked content
+    void operatorMarkedContentBegin(PDFOperandName name);   ///< BMC, begin of sequence of marked content
     void operatorMarkedContentBeginWithProperties(PDFOperandName name, PDFObject properties);   ///< BDC, begin of sequence of marked content with properties
-    void operatorMarkedContentEnd();                                                            ///< EMC, end of marked content sequence
+    void operatorMarkedContentEnd();   ///< EMC, end of marked content sequence
 
     // Compatibility:              BX, EX
     void operatorCompatibilityBegin();   ///< BX, Compatibility mode begin (unrecognized operators are ignored)
-    void operatorCompatibilityEnd();     ///< EX, Compatibility mode end
+    void operatorCompatibilityEnd();   ///< EX, Compatibility mode end
 
     // Draws the text using the text sequence
     void drawText(const TextSequence& textSequence);
@@ -1208,18 +1214,18 @@ private:
     std::set<PDFObjectReference> m_activeFormReferences;
 };
 
-template<>
+template <>
 PDFReal PDFPageContentProcessor::readOperand<PDFReal>(size_t index) const;
 
-template<>
+template <>
 PDFInteger PDFPageContentProcessor::readOperand<PDFInteger>(size_t index) const;
 
-template<>
+template <>
 PDFPageContentProcessor::PDFOperandName PDFPageContentProcessor::readOperand<PDFPageContentProcessor::PDFOperandName>(size_t index) const;
 
-template<>
+template <>
 PDFPageContentProcessor::PDFOperandString PDFPageContentProcessor::readOperand<PDFPageContentProcessor::PDFOperandString>(size_t index) const;
 
 }   // namespace pdf
 
-#endif // PDFPAGECONTENTPROCESSOR_H
+#endif   // PDFPAGECONTENTPROCESSOR_H
