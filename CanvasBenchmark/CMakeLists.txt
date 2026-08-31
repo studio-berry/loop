@@ -13,6 +13,7 @@ qt_add_qml_module(CanvasBenchmark
 
 target_link_libraries(CanvasBenchmark
     PRIVATE
+        LoopLibCore
         Qt6::Core
         Qt6::Gui
         Qt6::Qml

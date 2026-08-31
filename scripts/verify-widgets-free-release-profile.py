@@ -154,6 +154,21 @@ def validate_cmake_cache(cache_path: Path, qt_prefix: Path | None = None) -> Non
             )
 
 
+def _truncate_command_output(detail: str, *, limit: int = 8000) -> str:
+    if len(detail) <= limit:
+        return detail
+    marker = "\n... [truncated] ...\n"
+    marker_len = len(marker)
+    if limit <= marker_len:
+        return detail[:limit]
+    budget = limit - marker_len
+    head_budget = min(budget // 2, 1500)
+    tail_budget = budget - head_budget
+    head = detail[:head_budget]
+    tail = detail[-tail_budget:] if tail_budget > 0 else ""
+    return f"{head}{marker}{tail}"
+
+
 def run_release_profile_configure(
     build_dir: Path,
     cmake_args: list[str],
@@ -193,15 +208,14 @@ def run_release_profile_configure(
     detail = (completed.stdout + completed.stderr).strip()
 
     def diagnostic() -> str:
-        # CMake/vcpkg often puts the actionable error at the end of a long
-        # configure transcript.  Keep both ends so CI failures are useful
-        # without requiring privileged access to the runner log archive.
-        limit = 8000
-        if len(detail) <= limit:
-            return detail
-        head = detail[:1500]
-        tail = detail[-(limit - len(head) - 80) :]
-        return f"{head}\n... [configure output truncated] ...\n{tail}"
+        return _truncate_command_output(
+            detail,
+            limit=8000,
+        ).replace(
+            "\n... [truncated] ...\n",
+            "\n... [configure output truncated] ...\n",
+            1,
+        )
 
     if expect_failure:
         if completed.returncode == 0:
