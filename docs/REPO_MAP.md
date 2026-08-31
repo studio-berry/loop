@@ -7,7 +7,7 @@ tracking policy.
 
 | Role | Repository | Branch |
 |------|------------|--------|
-| Loupe canonical repository | [studio-berry/loupe](https://github.com/studio-berry/loupe) | `stable` (default/release), `dev` (integration) |
+| Loupe canonical repository | [studio-berry/loupe](https://github.com/studio-berry/loupe) | `stable` (default/release), `unstable` (qualification), `dev` (integration) |
 | Upstream PDF engine source | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) | `master` (upstream only) |
 
 Loupe owns the product decisions, branding, release policy, and downstream
@@ -16,10 +16,12 @@ tooling. Do not infer Loupe branch policy from upstream's `master` branch.
 
 ## Branch policy
 
-- `dev` is the integration branch.
+- `dev` is the first integration branch.
+- `unstable` is the qualification branch; it carries the fast integration gate
+  formerly required on `dev`.
 - `stable` is the release branch and repository default.
 - Topic branches start from `dev`, stay focused, and merge back to `dev`.
-- Releases promote a verified `dev` state to `stable`.
+- Reviewed commits promote along `dev` → `unstable` → `stable`.
 - `master` is not an active Loupe branch.
 
 The reviewed machine-readable policy is

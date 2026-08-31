@@ -7,10 +7,12 @@
   "branches": {
     "default": "stable",
     "integration": "dev",
+    "qualification": "unstable",
     "release": "stable",
     "topic_source": "dev",
     "topic_branch_patterns": ["gh-*", "feature/*", "fix/*", "chore/*", "docs/*"],
-    "protected": ["dev", "stable"]
+    "promotion_chain": ["dev", "unstable", "stable"],
+    "protected": ["unstable", "stable"]
   },
   "autonomy": {
     "allowed": [

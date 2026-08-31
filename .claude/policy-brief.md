@@ -5,8 +5,8 @@ Repository: `studio-berry/loupe`; version: `0.2.0-alpha`; language: `C++20`; min
 
 ## Branches and safety
 
-- Integration: `dev`; release/default: `stable`; topic branches start from `dev`.
-- Protected branches: `dev`, `stable`. Do not commit, push, merge, force-push, or rewrite history without approval.
+- Integration: `dev`; qualification: `unstable`; release/default: `stable`; topic branches start from `dev`. Promotion: `dev` → `unstable` → `stable`.
+- Protected branches: `unstable`, `stable`. Do not commit, push, merge, force-push, or rewrite history without approval.
 - Keep private data, credentials, logs, scratch plans, and build artifacts outside the repository. Do not edit vendored dependencies unless explicitly scoped.
 
 ## Autonomous verification budget
