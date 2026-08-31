@@ -25,7 +25,9 @@
 #include "pdfsettings.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -131,6 +133,9 @@ void ApplicationIdentityTest::corruptLegacySettingsDoNotBlockStartup()
     const QString legacyFileName = legacy.fileName();
     legacy.clear();
     legacy.sync();
+
+    const QFileInfo legacyInfo(legacyFileName);
+    QDir().mkpath(legacyInfo.absolutePath());
 
     QFile corruptSettings(legacyFileName);
     QVERIFY(corruptSettings.open(QIODevice::WriteOnly | QIODevice::Truncate));
