@@ -22,3 +22,10 @@ target_link_libraries(CanvasBenchmark
         Qt6::QuickWidgets
         Qt6::Widgets
 )
+
+set_target_properties(CanvasBenchmark PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)

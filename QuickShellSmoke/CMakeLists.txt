@@ -20,3 +20,10 @@ target_link_libraries(QuickShellSmoke
         Qt6::Quick
         Qt6::QuickControls2
 )
+
+set_target_properties(QuickShellSmoke PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
