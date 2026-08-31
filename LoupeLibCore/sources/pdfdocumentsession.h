@@ -28,10 +28,12 @@
 #include "pdfdocumentcontext.h"
 #include "pdfrenderer.h"
 #include "pdfpainter.h"
+#include "pdfpagecachebudget.h"
 #include "pdfcms.h"
 #include "pdfprocessingbudget.h"
 
 #include <QByteArray>
+#include <QtGlobal>
 
 #include <deque>
 #include <map>
@@ -66,7 +68,9 @@ class PDFProcessingBudget;
 class LOUPELIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
-    explicit PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context = nullptr);
+    explicit PDFDocumentSession(PDFDocument* document,
+                                PDFDocumentContext* context = nullptr,
+                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
     ~PDFDocumentSession();
 
     PDFDocumentSession(const PDFDocumentSession&) = delete;
@@ -95,14 +99,17 @@ public:
     /// byte array if the reference is invalid or the stream cannot be decoded.
     QByteArray getDecodedStream(PDFObjectReference reference);
 
+    PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
+    std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
+
     PDFProcessingBudget* getProcessingBudget() const;
     const PDFProcessingLimits& getProcessingLimits() const;
     void setProcessingLimits(const PDFProcessingLimits& limits);
     void resetProcessingBudget();
 
     /// Under memory or time pressure, drop prefetch and quality work before
-    /// interaction. Compile/stream cache caps shrink; later compilePage calls
-    /// still succeed, they just retain fewer pages.
+    /// interaction. Compile/stream cache caps shrink; a compiled page that is
+    /// larger than the current compiled-page byte share is rejected.
     void shedPrefetchAndQuality();
     bool prefetchEnabled() const { return m_prefetchEnabled; }
     int qualityPercent() const { return m_qualityPercent; }
@@ -110,13 +117,21 @@ public:
     size_t compileCacheLimit() const { return m_compileCacheLimit; }
     size_t streamCacheLimit() const { return m_streamCacheLimit; }
 
+    qsizetype compiledCacheBytes() const;
+    qsizetype compiledCacheByteLimit() const;
+    void setCompiledCacheByteLimit(qsizetype bytes);
+    void setCacheLimit(qsizetype totalBytes);
+    qsizetype cacheLimit() const;
+
     /// Clears all caches. Call this when the underlying document is mutated.
     void invalidate();
 
     /// Cache bounds. Both caches evict in insertion order once full, so a
     /// document-wide sequential pass costs a fixed amount of memory instead of
     /// retaining one compiled page (and every decoded stream) for the lifetime
-    /// of the session.
+    /// of the session. Compiled pages are additionally bounded by their
+    /// getMemoryConsumptionEstimate() values; decoded streams remain an
+    /// independent entry-count cache.
     ///
     /// Eviction happens before insertion, so the pointer returned by
     /// compilePage() is never the entry evicted by that same call. It may be
@@ -127,6 +142,9 @@ public:
     static constexpr size_t ShedCompileCacheLimit = 2;
     static constexpr size_t ShedStreamCacheLimit = 16;
     static constexpr int ShedQualityPercent = 25;
+
+    static constexpr qsizetype CompiledCacheByteLimitDefault = 64 * 1024 * 1024;
+    static constexpr qsizetype ShedCompiledCacheByteLimit = 8 * 1024 * 1024;
 
     /// Low-level access to the renderer and its dependencies. Prefer the
     /// compilePage() helper; these accessors are exposed for tools that need
@@ -161,6 +179,7 @@ private:
 
     void initializeRendering();
     void trimCachesToLimits();
+    void clearCompiledCache();
 
     PDFDocument* m_document;
     PDFDocumentContext* m_context;
@@ -169,11 +188,15 @@ private:
     quint64 m_localCacheGeneration = 0;
     PDFRenderer::Features m_features;
     std::unique_ptr<PDFProcessingBudget> m_processingBudget;
+    std::shared_ptr<PDFPageCacheBudget> m_pageCacheBudget;
     size_t m_compileCacheLimit = CompileCacheLimit;
     size_t m_streamCacheLimit = StreamCacheLimit;
     bool m_prefetchEnabled = true;
     int m_qualityPercent = 100;
     bool m_qualityPrefetchShed = false;
+
+    qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
+    std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;

@@ -22,6 +22,8 @@
 
 #include "pagesurfacecoordinator.h"
 
+#include "pdfpagecachebudget.h"
+
 #include <QtGlobal>
 
 #include <algorithm>
@@ -55,6 +57,7 @@ PageSurfaceCoordinator::PageSurfaceCoordinator(IDocumentRevisionSource& revision
     m_revisions(&revisions),
     m_viewport(&viewport),
     m_bounds(bounds),
+    m_cacheLimit(m_bounds.maxAdmittedBytes * 2),
     m_relay(new JobRelay, [](JobRelay* relay)
             { relay->deleteLater(); })
 {
@@ -77,11 +80,42 @@ PageSurfaceCoordinator::~PageSurfaceCoordinator()
     {
         m_submitter->cancel(entry.jobId);
     }
+    clearCache();
 }
 
 void PageSurfaceCoordinator::setDocumentKey(QString documentKey)
 {
     m_documentKey = std::move(documentKey);
+}
+
+void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget)
+{
+    if (m_pageCacheBudget == budget)
+    {
+        refreshPageCacheBudget();
+        return;
+    }
+
+    cancelInFlight();
+    clearCache();
+    m_pageCacheBudget = std::move(budget);
+    refreshPageCacheBudget();
+    rebuildSnapshot();
+}
+
+void PageSurfaceCoordinator::refreshPageCacheBudget()
+{
+    if (!m_pageCacheBudget)
+    {
+        return;
+    }
+
+    m_cacheLimit = m_pageCacheBudget->total();
+    m_bounds.maxAdmittedBytes = m_pageCacheBudget->pageSurfacesLimit();
+    if (trimCacheToBudget())
+    {
+        rebuildSnapshot();
+    }
 }
 
 void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings settings)
@@ -97,6 +131,25 @@ void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings setting
     // different key now, so nothing in flight is wanted any more.
     cancelInFlight();
     rebuildSnapshot();
+}
+
+void PageSurfaceCoordinator::setCacheLimit(qsizetype totalBytes)
+{
+    const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+
+    if (m_pageCacheBudget)
+    {
+        m_pageCacheBudget->setTotal(normalized);
+        refreshPageCacheBudget();
+        return;
+    }
+
+    const qsizetype surfaces = pdf::PDFPageCacheBudget::pageSurfaces(normalized);
+    m_cacheLimit = normalized;
+    m_bounds.maxAdmittedBytes = surfaces;
+    trimCacheToBudget();
+    // Standalone coordinators have no session to share an authority with. The
+    // production path attaches a PDFPageCacheBudget before setting the total.
 }
 
 void PageSurfaceCoordinator::onDemandChanged()
@@ -544,7 +597,8 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
         return false;
     }
 
-    if (pixels->byteSize > m_bounds.maxAdmittedBytes)
+    const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
+    if (pixels->byteSize > surfaceLimit)
     {
         // An entry that cannot fit is refused outright. Evicting the whole cache
         // to make room for something that still would not leave space is worse
@@ -556,8 +610,49 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     if (existing != m_cache.end())
     {
         m_counters.admittedBytes -= existing->second.cost;
+        if (m_pageCacheBudget)
+        {
+            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, existing->second.cost);
+        }
         m_lru.erase(existing->second.lru);
         m_cache.erase(existing);
+    }
+
+    const auto evictOldest = [this]()
+    {
+        if (m_lru.empty())
+        {
+            return false;
+        }
+
+        const PageSurfaceKey oldestKey = m_lru.back();
+        const auto oldest = m_cache.find(oldestKey);
+        if (oldest == m_cache.end())
+        {
+            m_lru.pop_back();
+            return true;
+        }
+
+        m_counters.admittedBytes -= oldest->second.cost;
+        if (m_pageCacheBudget)
+        {
+            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, oldest->second.cost);
+        }
+        m_cache.erase(oldest);
+        m_lru.pop_back();
+        ++m_counters.evictions;
+        return true;
+    };
+
+    if (m_pageCacheBudget)
+    {
+        while (!m_pageCacheBudget->tryReserve(pdf::PDFPageCacheBudget::Pool::PageSurfaces, pixels->byteSize))
+        {
+            if (!evictOldest())
+            {
+                return false;
+            }
+        }
     }
 
     CacheEntry entry;
@@ -578,10 +673,11 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key, SurfaceB
     return m_cache.find(key) != m_cache.end();
 }
 
-void PageSurfaceCoordinator::trimCacheToBudget()
+bool PageSurfaceCoordinator::trimCacheToBudget()
 {
-    bool snapshotDirty = false;
-    while (m_counters.admittedBytes > m_bounds.maxAdmittedBytes && !m_cache.empty())
+    bool trimmed = false;
+    const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
+    while (m_counters.admittedBytes > surfaceLimit && !m_cache.empty())
     {
         const PageSurfaceKey oldestKey = m_lru.back();
         const auto oldest = m_cache.find(oldestKey);
@@ -592,19 +688,39 @@ void PageSurfaceCoordinator::trimCacheToBudget()
         }
 
         m_counters.admittedBytes -= oldest->second.cost;
+        if (m_pageCacheBudget)
+        {
+            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, oldest->second.cost);
+        }
         m_cache.erase(oldest);
         m_lru.pop_back();
         ++m_counters.evictions;
-        snapshotDirty = true;
+        trimmed = true;
     }
 
-    if (snapshotDirty)
+    if (trimmed)
     {
         // CacheEntry owns the immutable pixel buffer shared by the snapshot.
         // Rebuild immediately so the snapshot cannot keep presenting an entry
         // that admission has already released from the cache budget.
         rebuildSnapshot();
     }
+    return trimmed;
+}
+
+void PageSurfaceCoordinator::clearCache()
+{
+    if (m_pageCacheBudget)
+    {
+        for (const auto& [key, entry] : m_cache)
+        {
+            Q_UNUSED(key);
+            m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, entry.cost);
+        }
+    }
+    m_cache.clear();
+    m_lru.clear();
+    m_counters.admittedBytes = 0;
 }
 
 void PageSurfaceCoordinator::resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state)
@@ -697,6 +813,10 @@ void PageSurfaceCoordinator::invalidate(const pdf::PDFRevisionIdentity& current)
         if (!(it->first.revision == current))
         {
             m_counters.admittedBytes -= it->second.cost;
+            if (m_pageCacheBudget)
+            {
+                m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, it->second.cost);
+            }
             m_lru.erase(it->second.lru);
             it = m_cache.erase(it);
         }

@@ -660,6 +660,7 @@ public:
                       const PDFEvidenceCollectSettings& settings,
                       int pageNumber,
                       QSet<QString>* paintedSpaces,
+                      bool* foundOverprint,
                       bool* foundWhiteOverprint,
                       QSet<QString>* riskyBlendModes,
                       QSet<QString>* mismatchDescriptions) :
@@ -669,6 +670,7 @@ public:
         m_settings(settings),
         m_pageNumber(pageNumber),
         m_paintedSpaces(paintedSpaces),
+        m_foundOverprint(foundOverprint),
         m_foundWhiteOverprint(foundWhiteOverprint),
         m_riskyBlendModes(riskyBlendModes),
         m_mismatchDescriptions(mismatchDescriptions),
@@ -784,6 +786,10 @@ protected:
         if (m_domains.testFlag(PDFEvidenceDomain::OverprintTransparency))
         {
             const PDFOverprintMode overprintMode = state->getOverprintMode();
+            if (m_foundOverprint && overprintMode.appliesToContent(fill, stroke))
+            {
+                *m_foundOverprint = true;
+            }
             if (m_foundWhiteOverprint)
             {
                 if (fill && overprintMode.overprintFilling && isNearWhiteDevicePaint(state->getFillColorSpace(), state->getFillColorOriginal()))
@@ -1049,6 +1055,7 @@ private:
     PDFEvidenceCollectSettings m_settings;
     int m_pageNumber = 1;
     QSet<QString>* m_paintedSpaces = nullptr;
+    bool* m_foundOverprint = nullptr;
     bool* m_foundWhiteOverprint = nullptr;
     QSet<QString>* m_riskyBlendModes = nullptr;
     QSet<QString>* m_mismatchDescriptions = nullptr;
@@ -1334,12 +1341,16 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                     std::set<PDFObjectReference> visitedForms;
                     collectColorSpacesFromResources(document, page->getResources(), &paintedSpaces, visitedForms, 0);
                 }
+                // These are computed once during the evidence walk and become
+                // the per-page cache consumed by presentation renderers. Never
+                // rescan a page from a pan/zoom frame.
+                bool foundOverprint = false;
                 bool foundWhiteOverprint = false;
                 QSet<QString> riskyBlendModes;
                 QSet<QString> mismatchDescriptions;
                 EvidenceProcessor processor(page, document, &fontCache, cms.get(), &ocActivity, meshQuality,
                                             session->getProcessingBudget(), &graph, domains, settings, pageNumber,
-                                            &paintedSpaces, &foundWhiteOverprint, &riskyBlendModes, &mismatchDescriptions);
+                                            &paintedSpaces, &foundOverprint, &foundWhiteOverprint, &riskyBlendModes, &mismatchDescriptions);
                 processor.processContents();
                 processAnnotationAppearanceStreams(document, page, [&](const PDFStream* formStream)
                                                    { processor.processFormStream(formStream); });
@@ -1366,6 +1377,15 @@ PDFEvidenceGraph PDFEvidenceCollector::collect(PDFDocumentSession* session,
                     PDFEvidenceRecord record = makeRecord(&graph, PDFEvidenceDomain::OverprintTransparency, pageNumber, QStringLiteral("white-overprint"));
                     record.observedValue = 1;
                     record.id = QStringLiteral("white-overprint:%1").arg(pageNumber);
+                    appendEvidenceRecord(&graph, record, session->getProcessingBudget());
+                }
+                if (domains.testFlag(PDFEvidenceDomain::OverprintTransparency) && foundOverprint)
+                {
+                    PDFEvidenceRecord record = makeRecord(&graph, PDFEvidenceDomain::OverprintTransparency, pageNumber, QStringLiteral("overprint"));
+                    record.observedValue = 1;
+                    record.coverageMethod = QStringLiteral("content-stream");
+                    record.fidelity = QStringLiteral("exact");
+                    record.id = QStringLiteral("overprint:%1").arg(pageNumber);
                     appendEvidenceRecord(&graph, record, session->getProcessingBudget());
                 }
                 if (domains.testFlag(PDFEvidenceDomain::OverprintTransparency))

@@ -75,6 +75,12 @@ struct PDFRenderPolicy
         policy.allowApproximation = false;
         return policy;
     }
+
+    static PDFRenderPolicy forSeparationPreview()
+    {
+        return forOutputPreview();
+    }
+};
 };
 
 enum class PDFRenderFidelity
@@ -119,6 +125,18 @@ struct PDFRenderDiagnostics
     }
 
     bool isExact() const { return fidelity == PDFRenderFidelity::ExactSupported; }
+
+    /// Records the deliberate limitation of the fast renderer. Callers pass a
+    /// cached page-content fact; this function never scans a content stream.
+    void recordStandardRendererOverprintApproximation(bool pageContainsOverprint,
+                                                      const PDFRenderPolicy& policy)
+    {
+        if (pageContainsOverprint && policy.allowApproximation)
+        {
+            record(PDFRenderFidelity::SupportedWithFallback,
+                   QStringLiteral("Overprint is approximated by the standard renderer."));
+        }
+    }
 
     /// Builds diagnostics for a page rendered on the standard (approximate)
     /// path, which never performs overprint compositing at all. \p

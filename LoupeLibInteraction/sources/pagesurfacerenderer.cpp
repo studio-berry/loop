@@ -203,6 +203,18 @@ void PDFSessionPageSurfaceRenderer::shedPrefetchAndQuality()
     }
 }
 
+void PDFSessionPageSurfaceRenderer::setCacheLimit(qsizetype totalBytes)
+{
+    std::lock_guard lock(m_mutex);
+    if (m_context)
+    {
+        if (pdf::PDFDocumentSession* session = m_context->getSession())
+        {
+            session->setCacheLimit(totalBytes);
+        }
+    }
+}
+
 PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest& request, pdf::PDFJobContext& jobContext)
 {
     if (jobContext.isCancellationRequested())

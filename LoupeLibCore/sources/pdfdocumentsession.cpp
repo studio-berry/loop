@@ -26,25 +26,38 @@
 #include "pdfcms.h"
 #include "pdffont.h"
 #include "pdfoptionalcontent.h"
+#include "pdfpagecachebudget.h"
 #include "pdfprocessingbudget.h"
 
+#include <limits>
 #include <tuple>
 #include <QtGlobal>
 
 namespace pdf
 {
 
-PDFDocumentSession::PDFDocumentSession(PDFDocument* document, PDFDocumentContext* context) :
+PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
+                                       PDFDocumentContext* context,
+                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget) :
     m_document(document),
     m_context(context),
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
-    m_processingBudget(std::make_unique<PDFProcessingBudget>())
+    m_processingBudget(std::make_unique<PDFProcessingBudget>()),
+    m_pageCacheBudget(pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>()),
+    m_compiledCachePressureLimit(m_pageCacheBudget->compiledLimit())
 {
     initializeRendering();
 }
 
-PDFDocumentSession::~PDFDocumentSession() = default;
+PDFDocumentSession::~PDFDocumentSession()
+{
+    // The session can be replaced while its shared budget remains owned by the
+    // document context. Release every compiled-page reservation before the old
+    // cache storage disappears, otherwise the replacement inherits phantom
+    // resident bytes and eventually refuses valid work.
+    clearCompiledCache();
+}
 
 PDFDocument* PDFDocumentSession::getDocument() const
 {
@@ -90,8 +103,7 @@ void PDFDocumentSession::setRendererFeatures(PDFRenderer::Features features)
     else
     {
         ++m_localCacheGeneration;
-        m_compileCache.clear();
-        m_compileCacheOrder.clear();
+        clearCompiledCache();
     }
 
     if (m_renderer)
@@ -153,14 +165,54 @@ void PDFDocumentSession::shedPrefetchAndQuality()
     m_qualityPrefetchShed = true;
     m_compileCacheLimit = qMin(m_compileCacheLimit, ShedCompileCacheLimit);
     m_streamCacheLimit = qMin(m_streamCacheLimit, ShedStreamCacheLimit);
+    m_compiledCachePressureLimit = qMin(m_compiledCachePressureLimit, static_cast<qsizetype>(ShedCompiledCacheByteLimit));
     trimCachesToLimits();
+}
+
+qsizetype PDFDocumentSession::compiledCacheBytes() const
+{
+    return m_pageCacheBudget->usage(PDFPageCacheBudget::Pool::CompiledPages);
+}
+
+qsizetype PDFDocumentSession::compiledCacheByteLimit() const
+{
+    return qMin(m_pageCacheBudget->compiledLimit(), m_compiledCachePressureLimit);
+}
+
+void PDFDocumentSession::setCompiledCacheByteLimit(qsizetype bytes)
+{
+    bytes = qMax<qsizetype>(0, bytes);
+    const qsizetype maximum = std::numeric_limits<qsizetype>::max();
+    const qsizetype total = bytes > maximum / 2 ? maximum : bytes * 2;
+    m_pageCacheBudget->setTotal(total);
+    m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
+    trimCachesToLimits();
+}
+
+void PDFDocumentSession::setCacheLimit(qsizetype totalBytes)
+{
+    m_pageCacheBudget->setTotal(PDFPageCacheBudget::total(totalBytes));
+    m_compiledCachePressureLimit = m_pageCacheBudget->compiledLimit();
+    trimCachesToLimits();
+}
+
+qsizetype PDFDocumentSession::cacheLimit() const
+{
+    return m_pageCacheBudget->total();
 }
 
 void PDFDocumentSession::trimCachesToLimits()
 {
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() > m_compileCacheLimit)
+    while (!m_compileCacheOrder.empty() && (m_compileCacheOrder.size() > m_compileCacheLimit || compiledCacheBytes() > compiledCacheByteLimit()))
     {
-        m_compileCache.erase(m_compileCacheOrder.front());
+        const PageCacheKey key = m_compileCacheOrder.front();
+        auto bytesIt = m_compileCacheBytes.find(key);
+        if (bytesIt != m_compileCacheBytes.end())
+        {
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytesIt->second);
+            m_compileCacheBytes.erase(bytesIt);
+        }
+        m_compileCache.erase(key);
         m_compileCacheOrder.pop_front();
     }
     while (!m_streamCacheOrder.empty() && m_streamCacheOrder.size() > m_streamCacheLimit)
@@ -193,16 +245,51 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
     PDFPrecompiledPage compiledPage;
     m_renderer->compile(&compiledPage, pageIndex);
 
-    // Evict before inserting, so the pointer returned below is never the entry
-    // this call dropped.
-    while (!m_compileCacheOrder.empty() && m_compileCacheOrder.size() >= m_compileCacheLimit)
+    qsizetype estimate = static_cast<qsizetype>(compiledPage.getMemoryConsumptionEstimate());
+    if (estimate <= 0)
     {
-        m_compileCache.erase(m_compileCacheOrder.front());
+        // A finalized precompiled page always reports at least sizeof(*this).
+        // Do not admit an entry whose resident size cannot be accounted for.
+        return nullptr;
+    }
+
+    const qsizetype compiledLimit = compiledCacheByteLimit();
+    if (m_compileCacheLimit == 0 || estimate > compiledLimit)
+    {
+        // An entry larger than its entire partition cannot be made resident
+        // without violating the shared byte cap. Returning nullptr is safe for
+        // callers: no cache entry or dangling pointer is exposed.
+        return nullptr;
+    }
+
+    // Evict before inserting, so the pointer returned below is never the entry
+    // this call dropped. Evict by both entry count and byte budget.
+    while (!m_compileCacheOrder.empty() &&
+           (m_compileCacheOrder.size() >= m_compileCacheLimit ||
+            compiledCacheBytes() > compiledLimit - estimate))
+    {
+        const PageCacheKey evictKey = m_compileCacheOrder.front();
+        auto bytesIt = m_compileCacheBytes.find(evictKey);
+        if (bytesIt != m_compileCacheBytes.end())
+        {
+            m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytesIt->second);
+            m_compileCacheBytes.erase(bytesIt);
+        }
+        m_compileCache.erase(evictKey);
         m_compileCacheOrder.pop_front();
+    }
+
+    if (!m_pageCacheBudget->tryReserve(PDFPageCacheBudget::Pool::CompiledPages, estimate))
+    {
+        // The shared authority may also account for admitted page surfaces. A
+        // failed reservation is therefore a real combined-budget refusal, not
+        // a reason to insert an unaccounted compiled page.
+        return nullptr;
     }
 
     m_compileCacheOrder.push_back(key);
     auto result = m_compileCache.emplace(key, std::move(compiledPage));
+    m_compileCacheBytes[key] = estimate;
     return &result.first->second;
 }
 
@@ -245,10 +332,21 @@ void PDFDocumentSession::invalidate()
     {
         ++m_localCacheGeneration;
     }
-    m_compileCache.clear();
-    m_compileCacheOrder.clear();
+    clearCompiledCache();
     m_streamCache.clear();
     m_streamCacheOrder.clear();
+}
+
+void PDFDocumentSession::clearCompiledCache()
+{
+    for (const auto& [key, bytes] : m_compileCacheBytes)
+    {
+        Q_UNUSED(key);
+        m_pageCacheBudget->release(PDFPageCacheBudget::Pool::CompiledPages, bytes);
+    }
+    m_compileCache.clear();
+    m_compileCacheOrder.clear();
+    m_compileCacheBytes.clear();
 }
 
 PDFRenderer* PDFDocumentSession::getRenderer() const

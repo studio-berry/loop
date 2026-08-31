@@ -5,6 +5,8 @@
 #include "interactioncontroller.h"
 #include "overlaybuilder.h"
 #include "pagesurfacecoordinator.h"
+#include "pdfdocumentsession.h"
+#include "pdfpagecachebudget.h"
 
 #include <QGuiApplication>
 #include <QScreen>
@@ -22,7 +24,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                               this)),
     m_renderer(m_context),
     m_commandBridge(m_catalog, *m_facade, m_viewport, this),
-    m_pageBoxSource(&m_context)
+    m_pageBoxSource(&m_context),
+    m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
@@ -32,6 +35,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
+    m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
+    setCacheLimit(DefaultCacheLimit);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
                                                                             m_viewport,
@@ -70,6 +75,8 @@ void DocumentViewSession::prepareDocumentView()
     m_viewport.setGeometrySource(m_geometry.get());
     m_viewport.invalidateLayout();
     m_surfaces->setDocumentKey(m_revisionSource->documentKey());
+    // The context keeps the shared budget across document-session replacement.
+    m_surfaces->refreshPageCacheBudget();
     m_surfaces->invalidate(m_facade->currentRevision());
     m_surfaces->requestSurfaces();
 }
@@ -87,4 +94,28 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
     settings.features = features;
     m_surfaces->setRenderSettings(settings);
+    m_overlays->setDenyExtraGraphics(features.testFlag(pdf::PDFRenderer::DenyExtraGraphics));
+}
+
+void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
+{
+    const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+    m_cacheLimit = normalized;
+    // Route through the renderer so the eviction inside setCacheLimit cannot
+    // race a worker thread that holds m_renderer.m_mutex and is using a
+    // compilePage pointer.
+    m_renderer.setCacheLimit(normalized);
+    if (m_surfaces)
+    {
+        m_surfaces->refreshPageCacheBudget();
+    }
+}
+
+qsizetype DocumentViewSession::cacheLimit() const noexcept
+{
+    if (const pdf::PDFDocumentSession* session = m_context.getSession())
+    {
+        return session->cacheLimit();
+    }
+    return m_cacheLimit;
 }

@@ -37,7 +37,11 @@ Synthetic exhaustion fixtures are generated in `UnitTestsBudgetExhaustion`
 commit multi-GB binaries.
 
 Under memory pressure, `PDFDocumentSession::shedPrefetchAndQuality()`
-shrinks compile and stream cache caps. The job scheduler still reserves
+shrinks compile and stream cache caps. The Quick `DocumentViewSession` owns a
+256 MiB unified page-cache total, partitioned into compiled-page and admitted-surface
+shares; compiled pages are charged by `getMemoryConsumptionEstimate()` and oversized
+entries are refused. Decoded streams remain outside that shared page-cache budget. The
+job scheduler still reserves
 an interaction slot when background work is saturated.
 
 ## Reader and session behavior
