@@ -728,26 +728,6 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
         }
     }
 
-    if (m_resourceBudget && !resourceReservation)
-    {
-        if (!m_resourceBudget->tryReserve(pdf::PDFResourcePool::RasterTileCache,
-                                          pixels->byteSize,
-                                          pdf::PDFResourcePriority::Visible,
-                                          QStringLiteral("admitted page surface")))
-        {
-            // Release the pageCacheBudget reservation we just made above.
-            if (m_pageCacheBudget)
-            {
-                m_pageCacheBudget->release(pdf::PDFPageCacheBudget::Pool::PageSurfaces, pixels->byteSize);
-            }
-            m_resourceBudget->recordShed(pdf::PDFResourcePool::RasterTileCache);
-            return false;
-        }
-        resourceReservation = std::make_shared<pdf::PDFResourceReservation>(m_resourceBudget,
-                                                                            pdf::PDFResourcePool::RasterTileCache,
-                                                                            pixels->byteSize);
-    }
-
     CacheEntry entry;
     entry.pixels = std::move(pixels);
     entry.resourceReservation = std::move(resourceReservation);

@@ -79,9 +79,15 @@ def violations(root: Path) -> list[tuple[str, int, str]]:
             continue
         file_path = root / raw_path
         try:
-            lines = file_path.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeDecodeError):
+            data = file_path.read_bytes()
+        except OSError:
             continue
+        if b"\x00" in data:
+            # Binary payload, not a source or build instruction. Nothing to scan.
+            continue
+        # Decode leniently: a maintained file saved in a non-UTF-8 encoding must
+        # still be scanned rather than silently skipped, or the gate fails open.
+        lines = data.decode("utf-8", errors="replace").splitlines()
         for line_number, line in enumerate(lines, 1):
             for pattern in FORBIDDEN:
                 if pattern.search(line):

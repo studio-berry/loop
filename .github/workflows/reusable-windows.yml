@@ -206,7 +206,11 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: |
-          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --target ALL_BUILD release_translations --config Release -j6
+          # The Visual Studio generator has no target named "all" (it is ALL_BUILD),
+          # so build the default target and release_translations separately.
+          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --config Release -j6
+          if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release build failed with exit code $LASTEXITCODE" }
+          cmake --build $env:LOUPE_WIDGETS_FREE_BUILD_DIR --target release_translations --config Release -j6
           if ($LASTEXITCODE -ne 0) { throw "Widgets-absent release build failed with exit code $LASTEXITCODE" }
 
       - name: Smoke Widgets-absent Qt Quick backends
