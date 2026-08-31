@@ -1218,6 +1218,21 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
     inventorySettings.richBlackKThreshold = settings.richBlackKThreshold;
     PDFColorInventory inventory(session);
     const PDFColorInventoryResult result = inventory.inspect(inventorySettings);
+    if (!result.diagnostics.isExact())
+    {
+        const QString diagnostic = result.diagnostics.reasons.join(QStringLiteral("; ")).isEmpty()
+                                       ? QStringLiteral("color-inventory-render-unsupported")
+                                       : result.diagnostics.reasons.join(QStringLiteral("; "));
+        graph->complete = false;
+        if (graph->incompleteReason.isEmpty())
+        {
+            graph->incompleteReason = diagnostic;
+        }
+        else if (!graph->incompleteReason.contains(diagnostic))
+        {
+            graph->incompleteReason += QStringLiteral("; ") + diagnostic;
+        }
+    }
     int index = 0;
     const auto appendInk = [&](const PDFColorInventoryInk& ink, const QString& target, bool isSpot)
     {
@@ -1238,17 +1253,20 @@ void collectColorants(PDFDocumentSession* session, PDFEvidenceGraph* graph, cons
     {
         appendInk(ink, QStringLiteral("separation"), ink.isSpot);
     }
-    for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+    if (result.diagnostics.isExact())
     {
-        PDFEvidenceRecord record = makeRecord(graph, PDFEvidenceDomain::Colorants, richBlack.page, QStringLiteral("rich-black"));
-        record.coverageMethod = QStringLiteral("color-inventory");
-        record.fidelity = QStringLiteral("sampled");
-        record.observedValue = richBlack.areaMM2;
-        record.units = QStringLiteral("mm2");
-        record.extra.insert(QStringLiteral("area_mm2"), richBlack.areaMM2);
-        record.extra.insert(QStringLiteral("k_threshold"), settings.richBlackKThreshold);
-        record.id = QStringLiteral("rich-black:%1").arg(richBlack.page);
-        appendEvidenceRecord(graph, record, budget);
+        for (const PDFRichBlackInventory& richBlack : result.richBlackPages)
+        {
+            PDFEvidenceRecord record = makeRecord(graph, PDFEvidenceDomain::Colorants, richBlack.page, QStringLiteral("rich-black"));
+            record.coverageMethod = QStringLiteral("color-inventory");
+            record.fidelity = QStringLiteral("sampled");
+            record.observedValue = richBlack.areaMM2;
+            record.units = QStringLiteral("mm2");
+            record.extra.insert(QStringLiteral("area_mm2"), richBlack.areaMM2);
+            record.extra.insert(QStringLiteral("k_threshold"), settings.richBlackKThreshold);
+            record.id = QStringLiteral("rich-black:%1").arg(richBlack.page);
+            appendEvidenceRecord(graph, record, budget);
+        }
     }
 }
 

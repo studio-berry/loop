@@ -49,6 +49,15 @@ OverlayBuilder::OverlayBuilder(const ViewportController& viewport, OverlayBounds
 {
 }
 
+OverlayBuilder::OverlayBuilder(const ViewportController& viewport,
+                               const RenderPresentationPolicy& policy,
+                               OverlayBounds bounds) :
+    m_viewport(&viewport),
+    m_policy(&policy),
+    m_bounds(bounds)
+{
+}
+
 void OverlayBuilder::setFindings(QList<InteractionTarget> findings)
 {
     m_findings = std::move(findings);
@@ -123,7 +132,7 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
 
     frame.token = token;
 
-    const bool suppressExtraGraphics = m_denyExtraGraphics;
+    const bool suppressExtraGraphics = denyExtraGraphics();
 
     // Resolved once. ViewportController::visiblePages() rebuilds a list on every
     // call, and asking it per primitive is how a frame with a few thousand

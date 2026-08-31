@@ -391,6 +391,7 @@
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
     "UnitTestsFontEncoding",
+    "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
     "UnitTestsIdentitySeparation",
     "UnitTestsImageDownsampleFixup",

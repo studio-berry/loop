@@ -28,10 +28,12 @@
 #include "interactionstate.h"
 #include "interactiontarget.h"
 #include "loupecanvasitem.h"
+#include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
 #include "previewstatemodel.h"
 
 #include "pdfpage.h"
+#include "pdftransparencyrenderer.h"
 
 #include <QAccessible>
 #include <QAccessibleAnnouncementEvent>
@@ -42,6 +44,8 @@
 #include <QMetaEnum>
 #include <QScreen>
 #include <QUrl>
+
+#include <optional>
 
 namespace
 {
@@ -115,6 +119,7 @@ EditorHost::EditorHost(QObject* parent) :
     connectViewport();
     connectCatalog();
     connectInteraction();
+    connectSurfaces();
     registerShellHandlers();
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
@@ -242,6 +247,56 @@ bool EditorHost::highContrast() const
         }
     }
     return false;
+}
+
+bool EditorHost::pageFidelityIsExact() const
+{
+    if (!hasDocument())
+    {
+        return true;
+    }
+
+    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
+    return !diagnostics.has_value() || diagnostics->isExact();
+}
+
+QString EditorHost::pageFidelityReason() const
+{
+    if (!hasDocument())
+    {
+        return QString();
+    }
+
+    const std::optional<pdf::PDFRenderDiagnostics> diagnostics = m_session->surfaces()->diagnosticsForPage(currentPage());
+    if (!diagnostics.has_value() || diagnostics->reasons.isEmpty())
+    {
+        return QString();
+    }
+
+    return diagnostics->reasons.join(QStringLiteral(" "));
+}
+
+bool EditorHost::pageFidelityIsAuthoritative() const
+{
+    if (!hasDocument())
+    {
+        return false;
+    }
+
+    return m_session->surfaces()->isPageAuthoritativeOverprint(currentPage());
+}
+
+void EditorHost::toggleCurrentPageFidelity()
+{
+    if (!hasDocument())
+    {
+        return;
+    }
+
+    const int pageIndex = currentPage();
+    const bool wasAuthoritative = m_session->surfaces()->isPageAuthoritativeOverprint(pageIndex);
+    m_session->surfaces()->setPageAuthoritativeOverprint(pageIndex, !wasAuthoritative);
+    bumpPresentation();
 }
 
 void EditorHost::selectFinding(const QString& findingId)
@@ -475,6 +530,18 @@ void EditorHost::connectInteraction()
             &pdfinteraction::InteractionController::dragCompleted,
             this,
             &EditorHost::onDragCompleted);
+}
+
+void EditorHost::connectSurfaces()
+{
+    // The coordinator outlives every document (see DocumentViewSession), so
+    // this connects once rather than per-document. Both signals mean an
+    // admitted surface -- and so possibly this page's diagnostics -- changed;
+    // bumpPresentation() re-reads pageFidelityIsExact/pageFidelityReason from
+    // whatever is admitted now.
+    connect(m_session->surfaces(), &pdfinteraction::PageSurfaceCoordinator::snapshotChanged, this, &EditorHost::bumpPresentation);
+    connect(m_session->surfaces(), &pdfinteraction::PageSurfaceCoordinator::surfaceTerminal, this, [this](pdfinteraction::PageSurfaceKey, pdfinteraction::SurfaceTerminalState)
+            { bumpPresentation(); });
 }
 
 void EditorHost::registerShellHandlers()

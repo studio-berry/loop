@@ -108,6 +108,8 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
 
     target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_compile_definitions(UnitTestsPageSurface PRIVATE
+        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
 
     set_target_properties(UnitTestsPageSurface PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -162,6 +164,23 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
     )
     add_test(UnitTestsInteractionController "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionController")
+
+    # Issue #145: the spatial index used by EvidenceHitTestSource and
+    # FindingListHitTestSource, and their hit-testing/precedence contracts
+    # once queries are index-backed instead of a linear scan.
+    add_executable(UnitTestsHitTestSource
+        tst_hittestsourcetest.cpp
+    )
+
+    target_link_libraries(UnitTestsHitTestSource PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsHitTestSource PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsHitTestSource "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsHitTestSource")
 
     # Architecture invariant I24, overlay half: deterministic z-order, page-space
     # geometry aligned with the page surfaces, and invalidation independent of

@@ -26,18 +26,18 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
-    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport);
-    m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
-                                                                            m_viewport,
-                                                                            *m_hitTest,
-                                                                            *m_overlays,
-                                                                            this);
     m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
                                                                           m_submitter,
                                                                           m_renderer,
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
+    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
+    m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
+                                                                            m_viewport,
+                                                                            *m_hitTest,
+                                                                            *m_overlays,
+                                                                            this);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     if (QScreen* screen = QGuiApplication::primaryScreen())
@@ -56,6 +56,8 @@ DocumentViewSession::~DocumentViewSession()
     // session object during teardown. The captured adapters remain alive until
     // after reset() has joined every worker.
     m_commandBridge.setCoordinator(nullptr);
+    m_interaction.reset();
+    m_overlays.reset();
     m_surfaces.reset();
     m_facade.reset();
     m_scheduler.reset();
@@ -85,10 +87,4 @@ void DocumentViewSession::setSurfaceRenderFeatures(pdf::PDFRenderer::Features fe
     pdfinteraction::PageSurfaceRenderSettings settings = m_surfaces->renderSettings();
     settings.features = features;
     m_surfaces->setRenderSettings(settings);
-    syncOverlaySuppressionFromRenderFeatures(features);
-}
-
-void DocumentViewSession::syncOverlaySuppressionFromRenderFeatures(pdf::PDFRenderer::Features features)
-{
-    m_overlays->setDenyExtraGraphics(features.testFlag(pdf::PDFRenderer::DenyExtraGraphics));
 }

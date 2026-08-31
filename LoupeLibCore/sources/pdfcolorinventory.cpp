@@ -100,9 +100,7 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
     }
 
     std::sort(spotColors.begin(), spotColors.end(), [](const PDFColorInventoryInk& lhs, const PDFColorInventoryInk& rhs)
-    {
-        return QString::compare(lhs.name, rhs.name, Qt::CaseInsensitive) < 0;
-    });
+              { return QString::compare(lhs.name, rhs.name, Qt::CaseInsensitive) < 0; });
 
     result.spotColors = spotColors;
     result.separations = processColors;
@@ -123,6 +121,7 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
     renderSettings.flags.setFlag(PDFTransparencyRendererSettings::SaveOriginalProcessImage, true);
     renderSettings.flags.setFlag(PDFTransparencyRendererSettings::SeparationSimulation,
                                  inkMapper.getActiveSpotColorCount() > 0);
+    renderSettings.renderPolicy = PDFRenderPolicy::forPreflightAnalysis();
 
     for (PDFInteger pageIndex = 0; pageIndex < pageCount; ++pageIndex)
     {
@@ -135,28 +134,26 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
         const QSizeF mediaSize = page->getRotatedMediaBox().size();
         const double widthPxReal = std::ceil(mediaSize.width() * PDF_POINT_TO_INCH * settings.probeDpi);
         const double heightPxReal = std::ceil(mediaSize.height() * PDF_POINT_TO_INCH * settings.probeDpi);
-        if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal)
-            || widthPxReal <= 0.0 || heightPxReal <= 0.0
-            || widthPxReal > double(std::numeric_limits<int>::max())
-            || heightPxReal > double(std::numeric_limits<int>::max()))
+        if (!std::isfinite(widthPxReal) || !std::isfinite(heightPxReal) || widthPxReal <= 0.0 || heightPxReal <= 0.0 || widthPxReal > double(std::numeric_limits<int>::max()) || heightPxReal > double(std::numeric_limits<int>::max()))
         {
             continue;
         }
 
         const QSize imageSize(qMax(1, int(widthPxReal)), qMax(1, int(heightPxReal)));
         const QTransform pagePointToDevice = PDFRenderer::createPagePointToDevicePointMatrix(
-                page, QRect(QPoint(0, 0), imageSize));
+            page, QRect(QPoint(0, 0), imageSize));
         PDFTransparencyRenderer renderer(page,
-                                          document,
-                                          m_session->getFontCache(),
-                                          m_session->getCMS(),
-                                          m_session->getOptionalContentActivity(),
-                                          &inkMapper,
-                                          renderSettings,
-                                          pagePointToDevice);
+                                         document,
+                                         m_session->getFontCache(),
+                                         m_session->getCMS(),
+                                         m_session->getOptionalContentActivity(),
+                                         &inkMapper,
+                                         renderSettings,
+                                         pagePointToDevice);
         renderer.beginPaint(imageSize);
         renderer.processContents();
         renderer.endPaint();
+        result.diagnostics.merge(renderer.getRenderDiagnostics());
 
         const PDFFloatBitmapWithColorSpace bitmap = renderer.getOriginalProcessBitmap();
         const PDFPixelFormat format = bitmap.getPixelFormat();
@@ -183,15 +180,13 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
         }
 
         const QSizeF pageSizeMM = page->getRotatedMediaBoxMM().size();
-        const qreal pixelArea = (pageSizeMM.width() * pageSizeMM.height())
-                / qreal(bitmap.getWidth() * bitmap.getHeight());
+        const qreal pixelArea = (pageSizeMM.width() * pageSizeMM.height()) / qreal(bitmap.getWidth() * bitmap.getHeight());
         result.richBlackPages.append(PDFRichBlackInventory{
             int(pageIndex + 1),
-            qreal(richBlackPixelCount) * pixelArea
-        });
+            qreal(richBlackPixelCount) * pixelArea });
     }
 
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf
