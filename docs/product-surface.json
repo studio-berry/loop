@@ -536,12 +536,12 @@
       "lib*Plugin*"
     ],
     "ignored_artifact_paths": [
-      "**/qml/**",
-      "**/platforms/**",
-      "**/iconengines/**",
-      "**/imageformats/**",
-      "**/styles/**",
-      "**/texttospeech/**"
+      "qml/*",
+      "platforms/*",
+      "iconengines/*",
+      "imageformats/*",
+      "styles/*",
+      "texttospeech/*"
     ]
   },
   "cli": {
