@@ -183,7 +183,11 @@ if(LOUPE_BUILD_CANVAS_BENCHMARK)
     find_package(Qt6 6.11.1 REQUIRED COMPONENTS QuickWidgets)
 endif()
 
-qt_policy(SET QTP0004 NEW)
+if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+    # QTP0004 is provided by Qt Qml.  The fuzz configuration intentionally
+    # builds only LoupeLibCore and therefore does not discover that module.
+    qt_policy(SET QTP0004 NEW)
+endif()
 set(QT_NO_MISSING_CATALOG_LANGUAGE_WARNING ON)
 qt_standard_project_setup(I18N_TRANSLATED_LANGUAGES en de cs es ko zh_CN zh_TW fr tr ru)
 
