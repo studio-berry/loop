@@ -59,7 +59,7 @@ enum class PDFSchemaCompatibility
     UnknownKind
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFSchemaVersion
+struct LOOPLIBCORESHARED_EXPORT PDFSchemaVersion
 {
     quint16 major = 0;
     quint16 minor = 0;
@@ -71,27 +71,27 @@ struct LOUPELIBCORESHARED_EXPORT PDFSchemaVersion
     QJsonValue toJsonValue() const;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFSchemaEnvelope
+struct LOOPLIBCORESHARED_EXPORT PDFSchemaEnvelope
 {
     PDFSchemaKind kind = PDFSchemaKind::Unknown;
     PDFSchemaVersion version;
 };
 
-LOUPELIBCORESHARED_EXPORT QString pdfSchemaKindToString(PDFSchemaKind kind);
-LOUPELIBCORESHARED_EXPORT PDFSchemaKind pdfSchemaKindFromString(const QString& value);
-LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version);
+LOOPLIBCORESHARED_EXPORT QString pdfSchemaKindToString(PDFSchemaKind kind);
+LOOPLIBCORESHARED_EXPORT PDFSchemaKind pdfSchemaKindFromString(const QString& value);
+LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVersion version);
 /// Evaluates one explicit compatibility matrix. An empty or incomplete matrix
 /// fails closed for known schema kinds; the resource-backed overload below is
 /// the production entry point.
-LOUPELIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
+LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
                                                                                     PDFSchemaVersion version,
                                                                                     const QJsonObject& matrix);
-LOUPELIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
-LOUPELIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
-LOUPELIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
-LOUPELIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);
+LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
+LOOPLIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
+LOOPLIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
+LOOPLIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);
 
-struct LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult
+struct LOOPLIBCORESHARED_EXPORT PDFSchemaMigrationResult
 {
     QJsonObject document;
     bool migrated = false;
@@ -99,7 +99,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult
     PDFSchemaVersion toVersion;
 };
 
-LOUPELIBCORESHARED_EXPORT PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject document);
+LOOPLIBCORESHARED_EXPORT PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject document);
 
 }   // namespace pdf
 

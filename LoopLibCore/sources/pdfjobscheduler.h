@@ -93,11 +93,11 @@ enum class PDFJobStaleResultPolicy
     Deliver
 };
 
-LOUPELIBCORESHARED_EXPORT const char* getPDFJobPriorityName(PDFJobPriority priority);
-LOUPELIBCORESHARED_EXPORT const char* getPDFJobKindName(PDFJobKind kind);
-LOUPELIBCORESHARED_EXPORT const char* getPDFJobStatusName(PDFJobStatus status);
+LOOPLIBCORESHARED_EXPORT const char* getPDFJobPriorityName(PDFJobPriority priority);
+LOOPLIBCORESHARED_EXPORT const char* getPDFJobKindName(PDFJobKind kind);
+LOOPLIBCORESHARED_EXPORT const char* getPDFJobStatusName(PDFJobStatus status);
 
-class LOUPELIBCORESHARED_EXPORT PDFJobCancellationToken final : public PDFOperationControl
+class LOOPLIBCORESHARED_EXPORT PDFJobCancellationToken final : public PDFOperationControl
 {
 public:
     void cancel() noexcept;
@@ -110,7 +110,7 @@ private:
 
 using PDFJobCancellationTokenPtr = std::shared_ptr<PDFJobCancellationToken>;
 
-struct LOUPELIBCORESHARED_EXPORT PDFJobSpec
+struct LOOPLIBCORESHARED_EXPORT PDFJobSpec
 {
     QString jobId;
     PDFJobKind kind = PDFJobKind::Other;
@@ -125,7 +125,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFJobSpec
     PDFJobStaleResultPolicy staleResultPolicy = PDFJobStaleResultPolicy::Discard;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFJobSnapshot
+struct LOOPLIBCORESHARED_EXPORT PDFJobSnapshot
 {
     QString jobId;
     PDFJobKind kind = PDFJobKind::Other;
@@ -150,7 +150,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFJobSnapshot
     QDateTime finishedAtUtc;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFJobTraceEvent
+struct LOOPLIBCORESHARED_EXPORT PDFJobTraceEvent
 {
     QString jobId;
     PDFJobStatus status = PDFJobStatus::Queued;
@@ -162,7 +162,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFJobTraceEvent
     QDateTime timestampUtc;
 };
 
-class LOUPELIBCORESHARED_EXPORT PDFJobContext final
+class LOOPLIBCORESHARED_EXPORT PDFJobContext final
 {
 public:
     using ProgressReporter = std::function<void(int)>;
@@ -193,7 +193,7 @@ private:
 
 using PDFJobWork = std::function<void(PDFJobContext&)>;
 
-class LOUPELIBCORESHARED_EXPORT PDFJobScheduler final : public QObject
+class LOOPLIBCORESHARED_EXPORT PDFJobScheduler final : public QObject
 {
     Q_OBJECT
 

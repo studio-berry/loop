@@ -36,9 +36,9 @@ enum class PreflightVerdictState
     Error
 };
 
-LOUPELIBCORESHARED_EXPORT QString preflightVerdictStateToString(PreflightVerdictState state);
+LOOPLIBCORESHARED_EXPORT QString preflightVerdictStateToString(PreflightVerdictState state);
 
-struct LOUPELIBCORESHARED_EXPORT PreflightVerdict
+struct LOOPLIBCORESHARED_EXPORT PreflightVerdict
 {
     PreflightVerdictState state = PreflightVerdictState::Error;
     QString reasonCode;
@@ -52,7 +52,7 @@ struct LOUPELIBCORESHARED_EXPORT PreflightVerdict
 
 /// Reduces a normalized preflight result to the only operator-facing verdict.
 /// The result's legacy pass field is deliberately ignored.
-LOUPELIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
+LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
                                                                     const PreflightProfileData* effectiveProfile = nullptr);
 
 } // namespace pdf

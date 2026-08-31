@@ -38,7 +38,7 @@ namespace pdf
 /// by the two cache consumers: every successful reservation contributes to the
 /// same resident total and therefore cannot make the combined cache exceed the
 /// configured limit.
-class LOUPELIBCORESHARED_EXPORT PDFPageCacheBudget final
+class LOOPLIBCORESHARED_EXPORT PDFPageCacheBudget final
 {
 public:
     enum class Pool : unsigned char

@@ -38,7 +38,7 @@ enum class PDFSaveMode
     SaveAsNewArtifact
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFOperationSavePolicy
+struct LOOPLIBCORESHARED_EXPORT PDFOperationSavePolicy
 {
     PDFSaveMode mode = PDFSaveMode::IncrementalAppend;
     bool invalidatesSignatures = false;
@@ -52,8 +52,8 @@ struct LOUPELIBCORESHARED_EXPORT PDFOperationSavePolicy
     QJsonObject toJson() const;
 };
 
-LOUPELIBCORESHARED_EXPORT const char* getPDFSaveModeName(PDFSaveMode mode);
-LOUPELIBCORESHARED_EXPORT PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
+LOOPLIBCORESHARED_EXPORT const char* getPDFSaveModeName(PDFSaveMode mode);
+LOOPLIBCORESHARED_EXPORT PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
                                                                          const PDFOperationSavePolicy& second);
 
 } // namespace pdf

@@ -66,7 +66,7 @@ qt_add_library(LoopLibQuick SHARED
 qt_add_qml_module(LoopLibQuick
     URI Loop.Canvas
     VERSION 1.0
-    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loupe/Canvas"
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loop/Canvas"
     DEPENDENCIES QtQuick
 )
 

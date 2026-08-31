@@ -195,7 +195,7 @@ def validate_contract(
             run_verification(
                 root,
                 manifest,
-                "loupe-release",
+                "loop-release",
                 build_dir=build_dir,
                 install_dir=install_dir,
                 install_manifest_path=install_manifest_path,

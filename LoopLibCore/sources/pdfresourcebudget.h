@@ -66,11 +66,11 @@ enum class PDFResourcePressure : std::uint8_t
     Hard
 };
 
-LOUPELIBCORESHARED_EXPORT const char* getPDFResourcePoolName(PDFResourcePool pool);
-LOUPELIBCORESHARED_EXPORT const char* getPDFResourcePriorityName(PDFResourcePriority priority);
-LOUPELIBCORESHARED_EXPORT const char* getPDFResourcePressureName(PDFResourcePressure pressure);
+LOOPLIBCORESHARED_EXPORT const char* getPDFResourcePoolName(PDFResourcePool pool);
+LOOPLIBCORESHARED_EXPORT const char* getPDFResourcePriorityName(PDFResourcePriority priority);
+LOOPLIBCORESHARED_EXPORT const char* getPDFResourcePressureName(PDFResourcePressure pressure);
 
-struct LOUPELIBCORESHARED_EXPORT PDFResourceBudgetConfig
+struct LOOPLIBCORESHARED_EXPORT PDFResourceBudgetConfig
 {
     static constexpr qsizetype MiB = 1024 * 1024;
     static constexpr qsizetype GiB = 1024 * MiB;
@@ -99,7 +99,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFResourceBudgetConfig
     QJsonObject toJson() const;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFResourceUsage
+struct LOOPLIBCORESHARED_EXPORT PDFResourceUsage
 {
     PDFResourcePool pool = PDFResourcePool::ActiveDocumentModel;
     qsizetype limitBytes = 0;
@@ -111,7 +111,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFResourceUsage
     QJsonObject toJson() const;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFResourceBudgetExceeded
+struct LOOPLIBCORESHARED_EXPORT PDFResourceBudgetExceeded
 {
     PDFResourcePool pool = PDFResourcePool::ActiveDocumentModel;
     qsizetype limitBytes = 0;
@@ -123,7 +123,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFResourceBudgetExceeded
     QString context;
 };
 
-class LOUPELIBCORESHARED_EXPORT PDFResourceBudgetExceededException final : public PDFException
+class LOOPLIBCORESHARED_EXPORT PDFResourceBudgetExceededException final : public PDFException
 {
 public:
     explicit PDFResourceBudgetExceededException(PDFResourceBudgetExceeded detail);
@@ -139,7 +139,7 @@ class PDFResourceBudget;
 /// A reservation that releases its bytes on every exit path. Reservations are
 /// intentionally movable but not copyable so cache entries cannot accidentally
 /// double-release a pool.
-class LOUPELIBCORESHARED_EXPORT PDFResourceReservation final
+class LOOPLIBCORESHARED_EXPORT PDFResourceReservation final
 {
 public:
     PDFResourceReservation() = default;
@@ -168,7 +168,7 @@ private:
 /// Thread-safe resident/durable resource accounting shared by sessions and
 /// adapters. It does not depend on Qt Quick or Widgets; consumers decide how
 /// to shed work after observing a failed low-priority reservation.
-class LOUPELIBCORESHARED_EXPORT PDFResourceBudget final
+class LOOPLIBCORESHARED_EXPORT PDFResourceBudget final
 {
 public:
     explicit PDFResourceBudget(PDFResourceBudgetConfig config = PDFResourceBudgetConfig::conservativeDefaults());

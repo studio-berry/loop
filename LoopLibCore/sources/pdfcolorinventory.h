@@ -35,14 +35,14 @@ namespace pdf
 
 class PDFDocumentSession;
 
-struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryInk
+struct LOOPLIBCORESHARED_EXPORT PDFColorInventoryInk
 {
     QString name;
     QColor displayColor;
     bool isSpot = false;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFRichBlackInventory
+struct LOOPLIBCORESHARED_EXPORT PDFRichBlackInventory
 {
     int page = 0;
     qreal areaMM2 = 0.0;
@@ -53,7 +53,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFRichBlackInventory
     PDFRenderDiagnostics diagnostics;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult
+struct LOOPLIBCORESHARED_EXPORT PDFColorInventoryResult
 {
     QList<PDFColorInventoryInk> separations;
     QList<PDFColorInventoryInk> spotColors;
@@ -61,18 +61,18 @@ struct LOUPELIBCORESHARED_EXPORT PDFColorInventoryResult
     PDFRenderDiagnostics diagnostics;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFColorInventorySettings
+struct LOOPLIBCORESHARED_EXPORT PDFColorInventorySettings
 {
     int probeDpi = 150;
     qreal richBlackKThreshold = 0.10;
 };
 
 /// Shared rich-black predicate used by preflight and Output Preview.
-LOUPELIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
+LOOPLIBCORESHARED_EXPORT bool isRichBlackPixel(PDFConstColorBuffer buffer,
                                                 const PDFPixelFormat& format,
                                                 PDFColorComponent kThreshold);
 
-class LOUPELIBCORESHARED_EXPORT PDFColorInventory
+class LOOPLIBCORESHARED_EXPORT PDFColorInventory
 {
 public:
     explicit PDFColorInventory(PDFDocumentSession* session);

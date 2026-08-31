@@ -48,7 +48,7 @@ enum class PDFEvidenceDomain
 };
 Q_DECLARE_FLAGS(PDFEvidenceDomains, PDFEvidenceDomain)
 
-struct LOUPELIBCORESHARED_EXPORT PDFEvidenceRecord
+struct LOOPLIBCORESHARED_EXPORT PDFEvidenceRecord
 {
     QString id;
     QString producer;
@@ -73,7 +73,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFEvidenceRecord
     QJsonObject toJson() const;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFEvidenceGraph
+struct LOOPLIBCORESHARED_EXPORT PDFEvidenceGraph
 {
     QString producer = QStringLiteral("loop-evidence-collector");
     QString producerVersion;
@@ -94,7 +94,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFEvidenceGraph
     QJsonObject toJson() const;
 };
 
-struct LOUPELIBCORESHARED_EXPORT PDFEvidenceCollectSettings
+struct LOOPLIBCORESHARED_EXPORT PDFEvidenceCollectSettings
 {
     int colorProbeDpi = 150;
     qreal richBlackKThreshold = 0.10;
@@ -102,7 +102,7 @@ struct LOUPELIBCORESHARED_EXPORT PDFEvidenceCollectSettings
     qreal zeroWidthEpsilonPt = 1.0e-6;
 };
 
-class LOUPELIBCORESHARED_EXPORT PDFEvidenceCollector
+class LOOPLIBCORESHARED_EXPORT PDFEvidenceCollector
 {
 public:
     static PDFEvidenceGraph collect(PDFDocumentSession* session,
@@ -110,8 +110,8 @@ public:
                                     const PDFEvidenceCollectSettings& settings = {});
 };
 
-LOUPELIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
-LOUPELIBCORESHARED_EXPORT PDFEvidenceDomains pdfEvidenceAllDomains();
+LOOPLIBCORESHARED_EXPORT QString pdfEvidenceDomainToString(PDFEvidenceDomain domain);
+LOOPLIBCORESHARED_EXPORT PDFEvidenceDomains pdfEvidenceAllDomains();
 
 }   // namespace pdf
 

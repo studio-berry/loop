@@ -57,12 +57,12 @@ constexpr QSizeF A4 = QSizeF(210.0, 297.0);
 
 QString overprintFixturesDirectory()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 QString overprintRendersDirectory()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/renders");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/renders");
 }
 
 /// Same tolerance as tst_overprintrendertest.cpp's compareRender: small

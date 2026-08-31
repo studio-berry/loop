@@ -208,7 +208,7 @@ def _profile_options(product: dict, profile: str) -> dict[str, bool]:
     not maintain a second hand-written table that can silently disagree with it.
     """
 
-    options: dict[str, bool] = {"LOUPE_LOUPE_DISTRIBUTION": profile == PROFILE_ID}
+    options: dict[str, bool] = {"LOOP_LOOP_DISTRIBUTION": profile == PROFILE_ID}
     for row in product.get("surfaces", []):
         option = row.get("build_option")
         state = row.get("profiles", {}).get(profile)
@@ -299,11 +299,11 @@ def _surface_kind(name: str, cmake: str) -> str:
     normalized = cmake.replace("\\", "/")
     if normalized.startswith(("UnitTests/", "Fuzz/")):
         return "test"
-    if normalized.startswith("LoupeEditorPlugins/"):
+    if normalized.startswith("LoopEditorPlugins/"):
         return "plugin"
     if name.endswith("Plugin"):
         return "plugin"
-    if name in {"LoupeLibWidgets", "LoupeLibGui"}:
+    if name in {"LoopLibWidgets", "LoopLibGui"}:
         return "library"
     if name in {"CodeGenerator", "JBIG2_VIEWER", "PdfExampleGenerator", "CanvasBenchmark"}:
         return "developer-tool"
@@ -370,8 +370,8 @@ def build_inventory(root: Path) -> dict:
         owner = _ui_owner(root, ui, by_cmake)
         plugin = None
         parts = relative.split("/")
-        if "LoupeEditorPlugins" in parts:
-            index = parts.index("LoupeEditorPlugins")
+        if "LoopEditorPlugins" in parts:
+            index = parts.index("LoopEditorPlugins")
             if len(parts) > index + 1:
                 plugin = parts[index + 1]
         ui_forms.append(
@@ -550,7 +550,7 @@ def _product_testable_condition(row: dict, disposition: str, replacement, proven
     if row.get("kind") == "plugin" and disposition == "DELETE" and replacement is None:
         return (
             "The product/package graph may drop this plugin; "
-            "LoupeEditor is the sole supported installed interactive product."
+            "LoopEditor is the sole supported installed interactive product."
         )
     return {
         "DELETE": "Delete only after the product/package graph contains no maintained reference to this surface and its replacement evidence is green.",

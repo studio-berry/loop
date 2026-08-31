@@ -9,7 +9,7 @@ provenance and negative contract fixtures remain explicitly non-authoritative.
 ## Implementation
 
 - Removed retired secondary desktop entries and icons.
-- Reduced the WiX project to the current x64 LoupeEditor/PdfTool product boundary.
+- Reduced the WiX project to the current x64 LoopEditor/PdfTool product boundary.
 - Updated current workspace, platform, scheduler, recovery, accessibility, and
   repository-map documentation to use the Quick/Core graph.
 - Added `scripts/ci/check_phase5_residue.py`, wired into source-integrity CI,

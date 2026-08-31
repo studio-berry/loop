@@ -86,15 +86,15 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             self.assertEqual(row["profiles"]["developer"], "absent", surface_id)
             self.assertEqual(row["profiles"]["loop-release"], "absent", surface_id)
         inventory_ids = {row["id"] for row in self.inventory["targets"]}
-        for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
+        for name in ("LoopViewer", "LoopPageMaster", "LoopDiff", "LoopLaunchPad"):
             self.assertNotIn(name, inventory_ids, name)
-        for name in ("LoupeViewer", "LoupePageMaster", "LoupeDiff", "LoupeLaunchPad"):
+        for name in ("LoopViewer", "LoopPageMaster", "LoopDiff", "LoopLaunchPad"):
             target = next((row for row in self.inventory["targets"] if row["id"] == name), None)
             self.assertIsNone(target, name)
 
     def test_profile_options_are_derived_from_product_manifest(self):
         product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))
-        expected = {"LOUPE_LOUPE_DISTRIBUTION": True}
+        expected = {"LOOP_LOOP_DISTRIBUTION": True}
         for row in product["surfaces"]:
             option = row.get("build_option")
             if option:
@@ -107,18 +107,18 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             (build_dir / "CMakeCache.txt").write_text(
                 "\n".join(
                     [
-                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "LOUPE_BUILD_QUICK_CANVAS:BOOL=ON",
-                        "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
-                        "LOUPE_BUILD_JBIG2_VIEWER:BOOL=OFF",
-                        "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=OFF",
+                        "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+                        "LOOP_BUILD_QUICK_CANVAS:BOOL=ON",
+                        "LOOP_BUILD_CODE_GENERATOR:BOOL=ON",
+                        "LOOP_BUILD_JBIG2_VIEWER:BOOL=OFF",
+                        "LOOP_BUILD_EXAMPLE_GENERATOR:BOOL=OFF",
                     ]
                 )
                 + "\n",
                 encoding="utf-8",
             )
             errors = validate_contract(ROOT, self.inventory, self.disposition, build_dir=build_dir)
-        self.assertTrue(any("CMake cache LOUPE_BUILD_CODE_GENERATOR" in error for error in errors))
+        self.assertTrue(any("CMake cache LOOP_BUILD_CODE_GENERATOR" in error for error in errors))
 
     def test_widgets_plugins_are_absent_after_issue_17(self):
         product = json.loads((ROOT / "docs/product-surface.json").read_text(encoding="utf-8"))
@@ -136,7 +136,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             "ActionListPlugin",
             "DimensionsPlugin",
             "EditorPlugin",
-            "LoupePreflightPlugin",
+            "LoopPreflightPlugin",
             "ObjectInspectorPlugin",
             "OutputPreviewPlugin",
             "RedactPlugin",
