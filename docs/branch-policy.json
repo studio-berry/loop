@@ -3,6 +3,7 @@
   "default_branch": "stable",
   "release_branch": "stable",
   "integration_branch": "dev",
+  "qualification_branch": "unstable",
   "topic_branch_source": "dev",
   "topic_branch_patterns": [
     "gh-*",
@@ -11,8 +12,13 @@
     "chore/*",
     "docs/*"
   ],
-  "protected_branches": [
+  "promotion_chain": [
     "dev",
+    "unstable",
+    "stable"
+  ],
+  "protected_branches": [
+    "unstable",
     "stable"
   ]
 }

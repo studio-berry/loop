@@ -1,24 +1,25 @@
 # CI and diagnostic artifacts
 
-Pull requests to `dev` run the Linux `agent-fast / build` workflow as the
-required integration gate. It classifies the diff, runs source and contract
-checks, compiles affected targets, and runs focused tests. Pull requests
-require one structured changelog fragment under `changes/` named after the
-head branch. Subsequent `dev` pushes skip that PR-only check so a merged
-topic fragment is not rejected for not being `changes/dev.md`. Stacked topic
-branches may carry their parent fragments, but every added fragment is
-validated. Format and clang-tidy run on added, modified, renamed, or copied
-C/C++ files only; deleted paths still classify modules. These are the fast
-checks for
-the shared integration baseline. The full Linux and Windows build-and-test
-jobs run for release qualification. These are the two platforms Loupe V1
-supports; **macOS** CI is a **post-V1** track under
+Pull requests to `dev` or `unstable` run the Linux `agent-fast / build` workflow.
+Merges into `unstable` require that check. Topic PRs into `dev` still run the
+workflow for signal, but `dev` no longer carries branch-rule status requirements.
+The workflow classifies the diff, runs source and contract checks, compiles
+affected targets, and runs focused tests. Pull requests require one structured
+changelog fragment under `changes/` named after the head branch. Subsequent
+integration-branch pushes skip that PR-only check so a merged topic fragment is
+not rejected for not being `changes/dev.md`. Stacked topic branches may carry
+their parent fragments, but every added fragment is validated. Format and
+clang-tidy run on added, modified, renamed, or copied C/C++ files only; deleted
+paths still classify modules. These are the fast checks for the shared
+integration baseline. The full Linux and Windows build-and-test jobs run for
+release qualification. These are the two platforms Loupe V1 supports; **macOS**
+CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
 produced only for `stable` pushes and manual workflow runs.
 
 The standalone `Documentation truth` workflow runs for the policy branches
-`dev` and `stable` pull requests and pushes. It checks every ADR's verification
+`dev`, `unstable`, and `stable` pull requests and pushes. It checks every ADR's verification
 header and fails when
 [`docs/generated/architecture-catalog.json`](generated/architecture-catalog.json)
 is stale. Product versioning is SemVer 2.0 (`0.2.0-alpha`); CI also runs
@@ -30,7 +31,7 @@ runs and fails when any required dependency failed, was cancelled, was
 skipped, or did not report. Requiring the platform-specific jobs directly
 would create multiple checks for the same gate. The release-gate workflow
 runs for every pull request targeting `stable` and for `merge_group` events;
-it has no path filters. `dev` requires `agent-fast / build` for merging;
+it has no path filters. `unstable` requires `agent-fast / build` for merging;
 `stable` requires `release_ok`.
 
 Hosted fuzzing (`.github/workflows/fuzz.yml`) validates the manifested

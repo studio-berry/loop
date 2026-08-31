@@ -17,7 +17,7 @@ from scripts.ci.check_branch_policy import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
-EXPECTED_BRANCHES = ("dev", "stable")
+EXPECTED_BRANCHES = ("dev", "unstable", "stable")
 
 
 class BranchPolicyTests(unittest.TestCase):
@@ -33,13 +33,14 @@ class BranchPolicyTests(unittest.TestCase):
         self.assertEqual(required_check, "release_ok")
         self.assertEqual(policy.required_check, "release_ok")
         self.assertEqual(policy.required_check_app.lower(), "github actions")
-        self.assertEqual(policy.protected_branches, ("dev", "stable"))
+        self.assertEqual(policy.protected_branches, ("unstable", "stable"))
+        self.assertEqual(policy.promotion_chain, ("dev", "unstable", "stable"))
         self.assertEqual(policy.integration_required_check, "agent-fast / build")
         self.assertEqual(policy.release_gate_workflow, ".github/workflows/release-gate.yml")
         self.assertEqual(policy.release_gate_events, ("pull_request", "merge_group"))
         self.assertEqual(policy.release_gate_pull_request_branches, ("stable",))
         self.assertEqual(policy.integration_workflow, ".github/workflows/ci.yml")
-        self.assertEqual(policy.integration_pull_request_branches, ("dev",))
+        self.assertEqual(policy.integration_pull_request_branches, ("dev", "unstable"))
 
     def test_current_ci_workflow_matches_policy(self):
         policy = parse_documented_policy_full(
@@ -47,7 +48,7 @@ class BranchPolicyTests(unittest.TestCase):
         )
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertEqual(parse_workflow_branch_triggers(workflow)["push"], EXPECTED_BRANCHES)
-        self.assertEqual(parse_workflow_branch_triggers(workflow)["pull_request"], ("dev",))
+        self.assertEqual(parse_workflow_branch_triggers(workflow)["pull_request"], ("dev", "unstable"))
         self.assertEqual(validate_integration_workflow(Path("ci.yml"), workflow, policy), [])
 
     def test_current_release_gate_matches_policy(self):
@@ -76,6 +77,7 @@ class BranchPolicyTests(unittest.TestCase):
   pull_request:
     branches:
       - dev
+      - unstable
       - stable
 """
         violations = validate_workflow_branches(Path("stale.yml"), stale_workflow, EXPECTED_BRANCHES)
@@ -144,9 +146,9 @@ jobs:
         )
         stale = """on:
   push:
-    branches: [dev, stable]
+    branches: [dev, unstable, stable]
   pull_request:
-    branches: [dev]
+    branches: [dev, unstable]
 
 jobs:
   ci_ok:
@@ -161,9 +163,9 @@ jobs:
         )
         stale = """on:
   push:
-    branches: [dev, stable]
+    branches: [dev, unstable, stable]
   pull_request:
-    branches: [dev]
+    branches: [dev, unstable]
   workflow_dispatch:
 
 jobs:
@@ -193,11 +195,12 @@ jobs:
         }
         violations = validate_live_protection(
             stable_protection=stale_stable,
-            dev_protection={
+            unstable_protection={
                 "required_status_checks": {
                     "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
                 }
             },
+            dev_protection={},
             policy=policy,
         )
         self.assertTrue(any("ci_ok" in item for item in violations))
@@ -213,7 +216,7 @@ jobs:
                 "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
             }
         }
-        dev = {
+        unstable = {
             "required_status_checks": {
                 "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
             }
@@ -221,13 +224,36 @@ jobs:
         self.assertEqual(
             validate_live_protection(
                 stable_protection=stable,
-                dev_protection=dev,
+                unstable_protection=unstable,
+                dev_protection={},
                 policy=policy,
             ),
             [],
         )
 
-    def test_live_protection_rejects_mismatched_dev_checks(self):
+    def test_live_protection_rejects_mismatched_unstable_checks(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        stable = {
+            "required_status_checks": {
+                "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
+            }
+        }
+        unstable = {
+            "required_status_checks": {
+                "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
+            }
+        }
+        violations = validate_live_protection(
+            stable_protection=stable,
+            unstable_protection=unstable,
+            dev_protection={},
+            policy=policy,
+        )
+        self.assertTrue(any("unstable required checks" in item for item in violations))
+
+    def test_live_protection_rejects_dev_checks(self):
         policy = parse_documented_policy_full(
             (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
         )
@@ -238,15 +264,20 @@ jobs:
         }
         dev = {
             "required_status_checks": {
-                "checks": [{"context": "release_ok", "app_id": GITHUB_ACTIONS_APP_ID}],
+                "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
             }
         }
         violations = validate_live_protection(
             stable_protection=stable,
+            unstable_protection={
+                "required_status_checks": {
+                    "checks": [{"context": "agent-fast / build", "app_id": GITHUB_ACTIONS_APP_ID}],
+                }
+            },
             dev_protection=dev,
             policy=policy,
         )
-        self.assertTrue(any("dev required checks" in item for item in violations))
+        self.assertTrue(any("dev must not require status checks" in item for item in violations))
 
 
 if __name__ == "__main__":

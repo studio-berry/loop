@@ -22,8 +22,9 @@ SPEC.loader.exec_module(MODULE)
 POLICY_BRANCHES = {
     "default": "stable",
     "integration": "dev",
+    "qualification": "unstable",
     "release": "stable",
-    "protected": ["dev", "stable"],
+    "protected": ["unstable", "stable"],
 }
 
 
@@ -67,6 +68,7 @@ class CheckChangeTests(unittest.TestCase):
         policy = {"branches": POLICY_BRANCHES}
         with patch.dict(os.environ, {"GITHUB_EVENT_NAME": ""}, clear=False):
             self.assertEqual(MODULE.skip_changelog_reason("dev", policy, False), "integration branch")
+            self.assertEqual(MODULE.skip_changelog_reason("unstable", policy, False), "integration branch")
             self.assertEqual(MODULE.skip_changelog_reason("stable", policy, False), "integration branch")
             self.assertIsNone(MODULE.skip_changelog_reason("cdx/foo", policy, False))
             self.assertEqual(MODULE.skip_changelog_reason("cdx/foo", policy, True), "non-PR event")
