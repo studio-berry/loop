@@ -373,6 +373,7 @@
   "test_targets": [
     "UnitTests",
     "UnitTestsActionList",
+    "UnitTestsApplicationIdentity",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
