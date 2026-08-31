@@ -30,7 +30,9 @@ REQUIRED_FORBIDDEN_QT_PREFIXES = {
     "libqt6widgets",
     "libqt6quickwidgets",
     "qt6printsupport",
+    "qtprintsupport",
     "libqt6printsupport",
+    "libqtprintsupport",
 }
 
 

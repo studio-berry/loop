@@ -22,7 +22,9 @@ FORBIDDEN_QT_NAME_PREFIXES = (
     "libqt6widgets",
     "libqt6quickwidgets",
     "qt6printsupport",
+    "qtprintsupport",
     "libqt6printsupport",
+    "libqtprintsupport",
 )
 FORBIDDEN_CACHE_MARKERS = ()
 REQUIRED_CACHE_MARKERS = (
