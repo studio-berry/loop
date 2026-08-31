@@ -83,6 +83,15 @@ class ProductSurfaceContractTests(unittest.TestCase):
         errors = validate_install(install, self.manifest, "developer")
         self.assertTrue(any("unmanifested first-party artifact" in error for error in errors))
 
+    def test_nested_qt_deploy_artifacts_are_ignored(self):
+        install = self._make_install_tree()
+        nested_qml = install / "qml" / "QtQuick" / "VectorImage" / "Helpers" / "qquickvectorimagehelpersplugin.dll"
+        nested_qml.parent.mkdir(parents=True, exist_ok=True)
+        nested_qml.write_bytes(b"fixture")
+        (install / "platforms" / "qwindows.dll").parent.mkdir(parents=True, exist_ok=True)
+        (install / "platforms" / "qwindows.dll").write_bytes(b"fixture")
+        self.assertEqual(validate_install(install, self.manifest, "loupe-release"), [])
+
     def test_install_manifest_drift_fails_closed(self):
         install = self._make_install_tree()
         temporary = tempfile.TemporaryDirectory()
