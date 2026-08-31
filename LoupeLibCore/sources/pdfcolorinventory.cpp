@@ -153,7 +153,8 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
         renderer.beginPaint(imageSize);
         renderer.processContents();
         renderer.endPaint();
-        result.diagnostics.merge(renderer.getRenderDiagnostics());
+        const PDFRenderDiagnostics pageDiagnostics = renderer.getRenderDiagnostics();
+        result.diagnostics.merge(pageDiagnostics);
 
         const PDFFloatBitmapWithColorSpace bitmap = renderer.getOriginalProcessBitmap();
         const PDFPixelFormat format = bitmap.getPixelFormat();
@@ -183,7 +184,8 @@ PDFColorInventoryResult PDFColorInventory::inspect(const PDFColorInventorySettin
         const qreal pixelArea = (pageSizeMM.width() * pageSizeMM.height()) / qreal(bitmap.getWidth() * bitmap.getHeight());
         result.richBlackPages.append(PDFRichBlackInventory{
             int(pageIndex + 1),
-            qreal(richBlackPixelCount) * pixelArea });
+            qreal(richBlackPixelCount) * pixelArea,
+            pageDiagnostics });
     }
 
     return result;

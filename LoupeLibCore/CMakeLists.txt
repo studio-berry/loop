@@ -201,7 +201,6 @@ add_library(LoupeLibCore SHARED
     sources/pdfcolorspaces.h
     sources/pdfrenderer.cpp
     sources/pdfrenderer.h
-    sources/pdfrenderpolicy.h
     sources/pdfpagecontentprocessor.cpp
     sources/pdfpagecontentprocessor.h
     sources/pdfpainter.cpp

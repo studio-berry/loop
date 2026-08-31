@@ -57,8 +57,6 @@ if(WIN32 AND MSVC AND LOUPE_INSTALL_PREPARE_WIX_INSTALLER)
 
     # Qt ICU DLLs have versioned filenames. Discover them at configure time so
     # the MSI matches cmake --install when Qt dependencies are staged.
-    set(LOUPE_WIX_FRAMEWORK_WIDGETS_LIBS "")
-    set(LOUPE_WIX_EDITOR_PLUGINS "")
 
     # The release product is Quick-only and must not ship or reference the
     # Widgets runtime. Keep the legacy component available for developer
