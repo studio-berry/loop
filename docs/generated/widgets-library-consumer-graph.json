@@ -6,28 +6,15 @@
   "profile": {
     "id": "loop-release",
     "options": {
-      "LOOP_LOOP_DISTRIBUTION": true,
-      "LOOP_BUILD_ONLY_CORE_LIBRARY": false,
-      "LOOP_BUILD_QUICK_CANVAS": true,
-      "LOOP_BUILD_TESTS": false,
-      "LOOP_BUILD_FUZZERS": false,
-      "LOOP_BUILD_QUICK_SHELL_SMOKE": false,
-      "LOOP_BUILD_CANVAS_BENCHMARK": false,
-      "LOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE": false,
       "LOOP_BUILD_CODE_GENERATOR": false,
-      "LOOP_BUILD_JBIG2_VIEWER": false,
       "LOOP_BUILD_EXAMPLE_GENERATOR": false,
-      "LOOP_BUILD_VIEWER": false,
-      "LOOP_BUILD_PAGEMASTER": false,
-      "LOOP_BUILD_DIFF": false,
-      "LOOP_BUILD_LAUNCHPAD": false,
-      "LOOP_PLUGIN_AUDIOBOOK": false,
-      "LOOP_PLUGIN_OCR": false,
-      "LOOP_PLUGIN_SCANNER": false
+      "LOOP_BUILD_JBIG2_VIEWER": false,
+      "LOOP_BUILD_QUICK_CANVAS": true,
+      "LOOP_LOOP_DISTRIBUTION": true
     },
-    "configuration_mode": "source-static",
+    "configuration_mode": "manifest-derived-source",
     "configured_build_dir": null,
-    "configuration_note": "Static CMake/file evidence is used when a qualified build directory is unavailable; no build qualification is implied."
+    "configuration_note": "Profile expectations come from docs/product-surface.json; a configured CMake cache and install tree are required for qualification."
   },
   "inputs": {
     "inventory": "docs/generated/phase5-widgets-inventory.json",
