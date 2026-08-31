@@ -204,7 +204,7 @@
       "measures": "White/knockout overprint flags on fills and strokes."
     }
   },
-  "claim": "Loupe does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
   "format_version": 1,
   "generated_by": "scripts/generate-architecture-catalogs.py",
   "gwg_families": [
@@ -214,7 +214,7 @@
     "newspaper",
     "digital"
   ],
-  "matrix_id": "loupe-gwg-pdfx-v1",
+  "matrix_id": "loop-gwg-pdfx-v1",
   "not_covered": [
     "Formal GWG 2022/2024 sheetfed or packaging conformance certificates",
     "PDF/X-5, PDF/VT, and PDF/A-3 conversion claims",

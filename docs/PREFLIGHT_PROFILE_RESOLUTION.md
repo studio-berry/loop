@@ -1,6 +1,6 @@
 # Deterministic preflight profile resolution
 
-Loupe resolves production context into one effective preflight profile before
+Loop resolves production context into one effective preflight profile before
 `PreflightEngine` runs. The engine remains context-blind: it receives the same
 validated JSON policy regardless of whether the caller used an explicit file or
 contextual selection.
@@ -50,7 +50,7 @@ the effective hash, resolver version, and field-level override decisions.
 The existing explicit path remains reproducible:
 
 ```text
-PdfTool preflight artwork.pdf --profile loupe-default.json
+PdfTool preflight artwork.pdf --profile loop-default.json
 ```
 
 Contextual selection uses a local profile store and either direct identifiers

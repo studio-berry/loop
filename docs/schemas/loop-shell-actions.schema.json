@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://studio-berry.github.io/loop/schemas/loop-shell-actions.schema.json",
+  "title": "Loop shell action policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "issue", "source_ui", "expected_action_count", "actions"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "issue": { "type": "integer", "const": 193 },
+    "source_ui": { "type": "string", "minLength": 1 },
+    "expected_action_count": { "type": "integer", "minimum": 1 },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "disposition", "target", "command"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^action[A-Za-z0-9_]+$" },
+          "disposition": { "enum": ["KEEP", "ADVANCED", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING"] },
+          "target": { "enum": ["Document", "Preflight", "Production", "Inspect", "Fix", "Pages", "Compare", "Advanced"] },
+          "command": { "$ref": "#/$defs/command" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "shortcut": {
+      "description": "Either a QKeySequence::StandardKey name or a literal sequence. A `windows` override mirrors the Q_OS_WIN branch of PDFActionManager::initActions.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "standard_key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+        "sequence": { "type": "string", "minLength": 1 },
+        "windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "standard_key": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+            "sequence": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "required"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+        "type": { "enum": ["string", "integer", "number", "boolean"] },
+        "required": { "type": "boolean" }
+      }
+    },
+    "command": {
+      "description": "Host-neutral command descriptor consumed by pdfinteraction::CommandCatalog. This is the single command registry; no parallel action registry may be introduced.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label_key", "parameters", "capability", "cancellable", "availability"],
+      "properties": {
+        "label_key": { "type": "string", "pattern": "^command\\.action[A-Za-z0-9_]+\\.label$" },
+        "shortcut": { "$ref": "#/$defs/shortcut" },
+        "parameters": { "type": "array", "items": { "$ref": "#/$defs/parameter" } },
+        "capability": {
+          "description": "`unclassified` is permitted only while availability is `declared`; promoting a command to `implemented` requires a real capability.",
+          "enum": ["unclassified", "none", "document.read", "document.write", "document.modify", "application"]
+        },
+        "cancellable": { "type": "boolean" },
+        "availability": {
+          "description": "`declared` commands have a descriptor but no handler; invoking one yields the typed NotImplemented terminal state and mutates nothing.",
+          "enum": ["implemented", "declared"]
+        }
+      }
+    }
+  }
+}

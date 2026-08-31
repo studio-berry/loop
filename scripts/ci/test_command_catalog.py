@@ -71,7 +71,7 @@ def declared(action_id: str, shortcut: dict | None = None) -> dict:
 POLICY = {
     "schema_version": 1,
     "issue": 193,
-    "source_ui": "LoupeLibGui/pdfeditormainwindow.ui",
+    "source_ui": "LoopLibGui/pdfeditormainwindow.ui",
     "expected_action_count": 4,
     "actions": [
         {
@@ -130,7 +130,7 @@ class CatalogFixture:
         controller: str = CONTROLLER,
     ):
         self.root = Path(stack.enterContext(tempfile.TemporaryDirectory()))
-        self.policy_path = self.root / "loupe-shell-actions.json"
+        self.policy_path = self.root / "loop-shell-actions.json"
         self.main_window_path = self.root / "pdfeditormainwindow.cpp"
         self.controller_path = self.root / "pdfprogramcontroller.cpp"
         self.write(policy if policy is not None else copy.deepcopy(POLICY))

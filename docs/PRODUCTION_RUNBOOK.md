@@ -1,6 +1,6 @@
-# Loupe PDF — production runbook (V1)
+# Loop PDF — production runbook (V1)
 
-Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** desktop releases. This is not a hosted service runbook — there is no production API or database.
+Operational guide for shipping, monitoring, and supporting **Loop PDF 1.6.x** desktop releases. This is not a hosted service runbook — there is no production API or database.
 
 ---
 
@@ -8,20 +8,20 @@ Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** d
 
 | Platform | Artifact | Workflow | Install location |
 |----------|----------|----------|------------------|
-| Windows | MSI (**unsigned for V1**; signing optional post-V1) | `WindowsInstall.yml` | `C:\Program Files\Loupe PDF\` (WiX) |
+| Windows | MSI (**unsigned for V1**; signing optional post-V1) | `WindowsInstall.yml` | `C:\Program Files\Loop PDF\` (WiX) |
 | Windows | Portable zip | `ci.yml` | User-chosen |
 | Linux | AppImage | `LinuxInstall.yml` | User-chosen |
 | Linux | Flatpak | `LinuxFlatpak.yml` | Flathub-style bundle |
 
 **`.deb` is built but does not work — do not distribute it.** `ci.yml`'s `build_ubuntu` job runs `make-package.sh` (generated from `make-package.sh.in` via CMake `configure_file`) on every push to `master` and uploads a `ubuntu-deb-package` artifact. Verified 2026-08-02 by installing the artifact from a real CI run on a clean Ubuntu 22.04 Docker container: `dpkg -i` succeeds, but the installed binary fails to launch — `libQt6Gui.so.6: cannot open shared object file` — because, unlike the AppImage (which uses `linuxdeployqt`), the `.deb` doesn't bundle the Qt runtime or declare any `Depends:` in its control file. It also has a glibc version mismatch against 22.04 (`GLIBC_2.38' not found`). It is not attached to GitHub releases by `CreateReleaseDraft.yml`. Linux V1 ships AppImage (and, once wired into the release process, Flatpak) only, until this is fixed.
 
-**V1 slim bundle** (`LOUPE_LOUPE_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
+**V1 slim bundle** (`LOOP_LOOP_DISTRIBUTION=ON`): Editor + PdfTool + core plugins only.
 
 **Bundled paths (Linux):**
 
-- Binaries: `usr/bin/LoupeEditor`, `usr/bin/PdfTool`
-- Plugins: `usr/lib/loupe/`
-- Preflight profile: `usr/share/loupe/profiles/loupe-default.json`
+- Binaries: `usr/bin/LoopEditor`, `usr/bin/PdfTool`
+- Plugins: `usr/lib/loop/`
+- Preflight profile: `usr/share/loop/profiles/loop-default.json`
 
 ---
 
@@ -48,10 +48,10 @@ Operational guide for shipping, monitoring, and supporting **Loupe PDF 1.6.x** d
 
 1. Clean Windows 10/11 VM (no Qt/MSVC installed).
 2. Install MSI.
-3. Launch **LoupeEditor**.
-4. Open `loupe-preflight/testdata/fixtures/bleed-missing.pdf`.
-5. **Loupe Preflight → Run Preflight** — expect fail + bleed finding.
-6. Confirm `PdfTool.exe` exists beside Editor and `share/loupe/profiles/loupe-default.json` is present.
+3. Launch **LoopEditor**.
+4. Open `loop-preflight/testdata/fixtures/bleed-missing.pdf`.
+5. **Loop Preflight → Run Preflight** — expect fail + bleed finding.
+6. Confirm `PdfTool.exe` exists beside Editor and `share/loop/profiles/loop-default.json` is present.
 
 ### 2.3 Linux packages
 
@@ -76,12 +76,12 @@ Publish draft only after smoke tests pass.
 |----------|--------|
 | Bad MSI/AppImage shipped | Unpublish GitHub release; re-point download to previous artifact |
 | Regression in Editor only | Ship hotfix build; users reinstall |
-| Bad preflight profile | Replace `loupe-default.json` in `share/loupe/profiles/` and rebuild; profiles are not auto-updated in place |
+| Bad preflight profile | Replace `loop-default.json` in `share/loop/profiles/` and rebuild; profiles are not auto-updated in place |
 | PdfTool CLI break | Same bundle rollback — Editor plugin shells bundled PdfTool |
 
 **No database migrations or feature flags** — rollback is binary replacement.
 
-**User data:** Settings live in `%APPDATA%/MelkaJ/` (Windows) or `~/.config/MelkaJ/` (Linux). Rollback does not erase settings.
+**User data:** Settings live under the canonical `Loop` organization (`%APPDATA%/Loop/` on Windows or `~/.config/Loop/` on Linux). The first launch migrates compatible settings from the legacy `MelkaJ` locations; rollback does not erase settings.
 
 ---
 
@@ -89,13 +89,13 @@ Publish draft only after smoke tests pass.
 
 ### 4.1 CI health
 
-- Watch: https://github.com/studio-berry/loupe/actions
+- Watch: https://github.com/studio-berry/loop/actions
 - Alert on: `release_ok` failure on `stable`, `ci.yml` failure on `dev`, preflight corpus failure, Windows build break.
 
 ### 4.2 Crash telemetry and tracing
 
-Windows builds enable sentry-native by default (`LOUPE_ENABLE_SENTRY`) and
-compile in the `berry-studios/loupe-pdf` EU DSN. Opening Editor (or running
+Windows builds enable sentry-native by default (`LOOP_ENABLE_SENTRY`) and
+compile in the `berry-studios/loop-pdf` EU DSN. Opening Editor (or running
 `PdfTool sentry-verify`) sends a startup trace to
 [Explore → Traces](https://de.sentry.io/explore/traces/?project=4511866328449104).
 Crashes appear under Issues. PDB uploads from CI go to Project Settings →
@@ -111,7 +111,7 @@ Debug Files — they are not Issues or traces.
 
 **Privacy:** Desktop sentry-native 0.15.x does not send default PII (`send_default_pii` is NX-only in that pin). Crashes may still include OS-level paths and PDF bytes in minidumps — set `SENTRY_DSN=off` in high-classification environments. CI sets `SENTRY_DSN=off` so test runs do not flood the project.
 
-**Debug files:** Windows CI uploads Loupe PDBs to `berry-studios/loupe-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
+**Debug files:** Windows CI uploads Loop PDBs to `berry-studios/loop-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
 
 **Verify (Windows, Sentry-enabled build):**
 
@@ -133,24 +133,24 @@ Then open [Issues](https://de.sentry.io/issues/?project=4511866328449104) for th
 
 ### 4.4 Logs
 
-Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via `pdf::PDFLogSession` (`LoupeLibCore/sources/pdflogger.{h,cpp}`), in addition to PdfTool's existing stderr/stdout behavior (unchanged — the log handler chains to it).
+Both PdfTool and the Editor also write a rotating, privacy-scrubbed log file via `pdf::PDFLogSession` (`LoopLibCore/sources/pdflogger.{h,cpp}`), in addition to PdfTool's existing stderr/stdout behavior (unchanged — the log handler chains to it).
 
 **Location** (resolved in this order):
 
-1. `LOUPE_LOG_DIR` environment variable, if set.
+1. `LOOP_LOG_DIR` environment variable, if set.
 2. `<settingsPath>/logs`, when a portable / `--config <dir>` install is in use (Editor only — PdfTool does not support `--config`).
 3. Platform default `AppLocalDataLocation` + `/logs`, falling back to the temp directory if that is empty:
 
 | Platform | Default log directory |
 |----------|------------------------|
-| Windows | `%LOCALAPPDATA%\MelkaJ\<AppName>\logs\` |
-| Linux | `~/.local/share/MelkaJ/<AppName>/logs/` |
+| Windows | `%LOCALAPPDATA%\Loop\<AppName>\logs\` |
+| Linux | `~/.local/share/Loop/<AppName>/logs/` |
 
-`<AppName>` is `PdfTool` or `LOUPE Editor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
+`<AppName>` is `PdfTool` or `LoopEditor`. This is the same base directory the `sentry-native` crash DB uses (`docs/V1_RELEASE_READINESS.md` R-008), just a `logs` sibling instead of `sentry-native`.
 
 **Rotation:** `<applicationId>.log` (`pdftool.log` / `editor.log`), rolling to `.log.1` at 2 MiB, keeping 3 files total (`.log`, `.log.1`, `.log.2`). Bounded footprint, no unbounded growth.
 
-**Level:** default `Warning`. Override with the `LOUPE_LOG_LEVEL` environment variable (`Off|Error|Warning|Info|Debug`), or persistently via Editor → Options → Security → Diagnostics → Log level (stored under the `diagnostics/logLevel` settings key, which PdfTool also reads — no Editor dependency required).
+**Level:** default `Warning`. Override with the `LOOP_LOG_LEVEL` environment variable (`Off|Error|Warning|Info|Debug`), or persistently via Editor → Options → Security → Diagnostics → Log level (stored under the `diagnostics/logLevel` settings key, which PdfTool also reads — no Editor dependency required).
 
 **Privacy:** every line is scrubbed (home/temp directory, login name, host name, other absolute paths — basename dropped, extension kept — email addresses, IPv4/IPv6 literals) before it is written; scrubbing happens in the log sink itself, not at each call site. See `SECURITY.md`.
 
@@ -165,7 +165,7 @@ For a customer-reported failure, prefer a diagnostics bundle over asking for a r
 **CLI:**
 
 ```bash
-PdfTool diagnostics --output <dir>          # writes <dir>/loupe-diagnostics-pdftool-<UTC timestamp>/
+PdfTool diagnostics --output <dir>          # writes <dir>/loop-diagnostics-pdftool-<UTC timestamp>/
 PdfTool diagnostics --output <dir> --no-logs                 # metadata-only bundle
 ```
 
@@ -185,14 +185,14 @@ On any failure (e.g. an unwritable output directory), no partial bundle director
 
 | Symptom | Check |
 |---------|-------|
-| "Could not find PdfTool" | `PdfTool` beside `LoupeEditor` in install prefix |
-| "Could not find profile" | `share/loupe/profiles/loupe-default.json` relative to bin |
+| "Could not find PdfTool" | `PdfTool` beside `LoopEditor` in install prefix |
+| "Could not find profile" | `share/loop/profiles/loop-default.json` relative to bin |
 | Hang | Task Manager for stuck `PdfTool`; kill and retry |
 | Invalid report JSON | stderr buffer overflow (>16 MB stdout) — reduce document complexity |
 
 ### 5.2 Preflight wrong results
 
-1. Confirm profile: bundled `loupe-default.json` version.
+1. Confirm profile: bundled `loop-default.json` version.
 2. Run headless: `PdfTool preflight <file> --profile <path> --console-format json`
 3. Compare with `UnitTestsPreflightCorpus` fixtures.
 
@@ -200,7 +200,7 @@ On any failure (e.g. an unwritable output directory), no partial bundle director
 
 ```bash
 PdfTool add-bleed input.pdf output.pdf --amount-mm 3.175 --mode mirror --force
-PdfTool preflight output.pdf --profile profiles/loupe-default.json
+PdfTool preflight output.pdf --profile profiles/loop-default.json
 ```
 
 Known limitation: mirror seams on high-contrast corners (`docs/bleed-stress-test-results.md`).
@@ -229,7 +229,7 @@ Known limitation: mirror seams on high-contrast corners (`docs/bleed-stress-test
 
 ## 7. Problematic uploads / untrusted PDFs
 
-Loupe is a **local document processor**, not an upload service. Treat all PDFs as untrusted input.
+Loop is a **local document processor**, not an upload service. Treat all PDFs as untrusted input.
 
 | Risk | Mitigation |
 |------|------------|
@@ -252,9 +252,9 @@ Loupe is a **local document processor**, not an upload service. Treat all PDFs a
 | Variable | Component | Purpose |
 |----------|-----------|---------|
 | `SENTRY_DSN` | All GUI apps + PdfTool | Override compile-time DSN, or `off` to disable |
-| `LOUPE_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
+| `LOOP_OCR_SIDECAR` | PdfTool OCR | Path to OCR service executable |
 | `QT_QPA_PLATFORM` | Headless CI | `offscreen` for tests |
-| `LOUPE_*` | Build-time | See `CMakeLists.txt` |
+| `LOOP_*` | Build-time | See `CMakeLists.txt` |
 
 **Settings CLI:** `--config <path>` on all major apps for portable installs.
 
@@ -278,7 +278,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 
 | Ref | Symptom a user will report | Answer |
 |-----|----------------------------|--------|
-| R-002 | "Overprint looks wrong in the page view" | Standard page rendering does not simulate overprint (MIC-320). Use **Output Preview** for overprint-accurate proofing. Preflight still flags white/near-white overprint and the report panel says so. Loupe V1 makes no overprint-safe output claim |
+| R-002 | "Overprint looks wrong in the page view" | Standard page rendering does not simulate overprint (MIC-320). Use **Output Preview** for overprint-accurate proofing. Preflight still flags white/near-white overprint and the report panel says so. Loop V1 makes no overprint-safe output claim |
 | R-016 | "Windows warns the installer is untrusted" | The V1 MSI is unsigned — no code-signing certificate is held yet. Expected SmartScreen behaviour; verify the download against `SHA256SUMS.txt` on the release |
 | R-009 | "Changing the color scheme did nothing" | Settings are read at startup; restart the application |
 | R-004 | "A `PdfTool` process is still running" | Only after the Editor is force-killed (Task Manager) mid-preflight. In-app cancel terminates the child cleanly. End the orphan manually |
@@ -301,7 +301,7 @@ State these up front; each is a documented V1 behaviour, not a regression.
 - [x] README documents unsigned Windows installer, SmartScreen steps, and `SHA256SUMS.txt` integrity check (MIC-342)
 - [ ] `PACKAGING_LICENSING.md` critical items reviewed (full checklist gates *paid* distribution)
 - [ ] `THIRD_PARTY_NOTICES.txt` generated for the release artifact
-- [x] README points to Loupe release artifacts (not upstream packages)
+- [x] README points to Loop release artifacts (not upstream packages)
 - [ ] Draft release artifacts attached with `SHA256SUMS.txt`
 - [ ] Release notes state: unsigned installer, no overprint simulation in page view, Windows + Linux only
 - [ ] `docs/V1_RELEASE_READINESS.md` recommendation reviewed by product owner

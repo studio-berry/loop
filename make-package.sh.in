@@ -4,17 +4,17 @@ mkdir -p install/DEBIAN/
 file="install/DEBIAN/control"
 
 >$file
-echo "Package: Loupe-pdf" >>$file
-echo "Version: ${LOUPE_VERSION}" >>$file
+echo "Package: Loop-pdf" >>$file
+echo "Version: ${LOOP_VERSION}" >>$file
 echo "Section: base" >>$file
 echo "Priority: optional" >>$file
 echo "Architecture: amd64" >>$file
 echo "Maintainer: Michael Berry" >>$file
-echo "Description: Loupe-PDF: PDF editor and toolkit based on PDF4QT (Qt, C++)." >>$file
-echo "Homepage: https://github.com/mberrys/Loupe-pdf" >>$file
-echo "Vcs-Browser: https://github.com/mberrys/Loupe-pdf" >>$file
+echo "Description: Loop-PDF: PDF editor and toolkit based on PDF4QT (Qt, C++)." >>$file
+echo "Homepage: https://github.com/mberrys/Loop-pdf" >>$file
+echo "Vcs-Browser: https://github.com/mberrys/Loop-pdf" >>$file
 
 
 dpkg-deb --build install
 
-mv install.deb Loupe-pdf-${LOUPE_VERSION}.deb
+mv install.deb Loop-pdf-${LOOP_VERSION}.deb

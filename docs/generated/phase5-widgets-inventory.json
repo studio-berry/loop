@@ -3,13 +3,13 @@
   "evidence_kind": "phase5-widgets-qualified-graph",
   "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
   "profile": {
-    "id": "loupe-release",
+    "id": "loop-release",
     "options": {
-      "LOUPE_BUILD_CODE_GENERATOR": false,
-      "LOUPE_BUILD_EXAMPLE_GENERATOR": false,
-      "LOUPE_BUILD_JBIG2_VIEWER": false,
-      "LOUPE_BUILD_QUICK_CANVAS": true,
-      "LOUPE_LOUPE_DISTRIBUTION": true
+      "LOOP_BUILD_CODE_GENERATOR": false,
+      "LOOP_BUILD_EXAMPLE_GENERATOR": false,
+      "LOOP_BUILD_JBIG2_VIEWER": false,
+      "LOOP_BUILD_QUICK_CANVAS": true,
+      "LOOP_LOOP_DISTRIBUTION": true
     },
     "configuration_mode": "manifest-derived-source",
     "configured_build_dir": null,
@@ -20,11 +20,11 @@
       "CanvasBenchmark/CMakeLists.txt",
       "CodeGenerator/CMakeLists.txt",
       "JBIG2_Viewer/CMakeLists.txt",
-      "LoupeEditor/CMakeLists.txt",
-      "LoupeEditor/CMakeLists.txt",
-      "LoupeLibCore/CMakeLists.txt",
-      "LoupeLibInteraction/CMakeLists.txt",
-      "LoupeLibQuick/CMakeLists.txt",
+      "LoopEditor/CMakeLists.txt",
+      "LoopEditor/CMakeLists.txt",
+      "LoopLibCore/CMakeLists.txt",
+      "LoopLibInteraction/CMakeLists.txt",
+      "LoopLibQuick/CMakeLists.txt",
       "PdfExampleGenerator/CMakeLists.txt",
       "PdfTool/CMakeLists.txt",
       "ProductQuickAccessibilitySmoke/CMakeLists.txt",
@@ -83,9 +83,10 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
-      "loupe-preflight/tools/CMakeLists.txt"
+      "UnitTests/CMakeLists.txt",
+      "loop-preflight/tools/CMakeLists.txt"
     ],
-    "shell_ledger": "docs/loupe-shell.json",
+    "shell_ledger": "docs/loop-shell.json",
     "product_ledger": "docs/product-surface.json",
     "ui_glob": "**/*.ui"
   },
@@ -100,6 +101,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -117,7 +119,9 @@
         "QuickWidgets",
         "Widgets"
       ],
-      "transitive_targets": [],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
       "transitive_qt_modules": [],
       "qt_modules": [
         "Core",
@@ -142,12 +146,12 @@
       "kind": "executable",
       "cmake": "CodeGenerator/CMakeLists.txt",
       "profile_enabled": false,
-      "profile_condition": "LOUPE_BUILD_CODE_GENERATOR=OFF from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_CODE_GENERATOR=OFF from docs/product-surface.json",
       "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Widgets",
@@ -160,7 +164,7 @@
         "Xml"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [],
       "qt_modules": [
@@ -183,12 +187,12 @@
       "kind": "executable",
       "cmake": "JBIG2_Viewer/CMakeLists.txt",
       "profile_enabled": false,
-      "profile_condition": "LOUPE_BUILD_JBIG2_VIEWER=OFF from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_JBIG2_VIEWER=OFF from docs/product-surface.json",
       "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Widgets"
@@ -199,7 +203,7 @@
         "Widgets"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [],
       "qt_modules": [
@@ -217,18 +221,18 @@
       "consumers": []
     },
     {
-      "id": "LoupeEditor",
+      "id": "LoopEditor",
       "kind": "executable",
-      "cmake": "LoupeEditor/CMakeLists.txt",
+      "cmake": "LoopEditor/CMakeLists.txt",
       "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
       "install_rule": true,
       "installed_in_profile": true,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeEditorQuick",
-        "LoupeEditorQuickplugin",
-        "LoupeEditorQuickplugin_init",
+        "LoopEditorQuick",
+        "LoopEditorQuickplugin",
+        "LoopEditorQuickplugin_init",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -245,10 +249,10 @@
         "QuickDialogs2"
       ],
       "transitive_targets": [
-        "LoupeEditorQuick",
-        "LoupeLibCore",
-        "LoupeLibInteraction",
-        "LoupeLibQuick"
+        "LoopEditorQuick",
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "LoopLibQuick"
       ],
       "transitive_qt_modules": [],
       "qt_modules": [
@@ -264,18 +268,18 @@
       "consumers": []
     },
     {
-      "id": "LoupeEditorQuick",
+      "id": "LoopEditorQuick",
       "kind": "library",
-      "cmake": "LoupeEditor/CMakeLists.txt",
+      "cmake": "LoopEditor/CMakeLists.txt",
       "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
       "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": true,
       "direct_links": [
-        "LoupeLibCore",
-        "LoupeLibInteraction",
-        "LoupeLibQuick",
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "LoopLibQuick",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -292,9 +296,9 @@
         "QuickDialogs2"
       ],
       "transitive_targets": [
-        "LoupeLibCore",
-        "LoupeLibInteraction",
-        "LoupeLibQuick"
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "LoopLibQuick"
       ],
       "transitive_qt_modules": [],
       "qt_modules": [
@@ -308,14 +312,14 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": [
-        "LoupeEditor",
+        "LoopEditor",
         "ProductQuickAccessibilitySmoke"
       ]
     },
     {
-      "id": "LoupeGenerateFixtures",
+      "id": "LoopGenerateFixtures",
       "kind": "executable",
-      "cmake": "loupe-preflight/tools/CMakeLists.txt",
+      "cmake": "loop-preflight/tools/CMakeLists.txt",
       "profile_enabled": true,
       "profile_condition": "target is reachable from the maintained product graph",
       "install_rule": false,
@@ -323,7 +327,7 @@
       "build_only_in_profile": true,
       "direct_links": [
         "${LCMS2_LIBRARIES}",
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui"
       ],
@@ -332,7 +336,7 @@
         "Gui"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -351,11 +355,11 @@
       "consumers": []
     },
     {
-      "id": "LoupeLibCore",
+      "id": "LoopLibCore",
       "kind": "library",
-      "cmake": "LoupeLibCore/CMakeLists.txt",
+      "cmake": "LoopLibCore/CMakeLists.txt",
       "profile_enabled": true,
-      "profile_condition": "loupe-lib-core=present in docs/product-surface.json",
+      "profile_condition": "loop-lib-core=present in docs/product-surface.json",
       "install_rule": true,
       "installed_in_profile": true,
       "build_only_in_profile": false,
@@ -380,7 +384,8 @@
         "blend2d::blend2d",
         "crypt32",
         "openjp2",
-        "sentry::sentry"
+        "sentry::sentry",
+        "shell32"
       ],
       "direct_qt_modules": [
         "Core",
@@ -401,18 +406,21 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": [
+        "CanvasBenchmark",
         "CodeGenerator",
         "JBIG2_VIEWER",
-        "LoupeEditor",
-        "LoupeEditorQuick",
-        "LoupeGenerateFixtures",
-        "LoupeLibInteraction",
-        "LoupeLibQuick",
+        "LoopEditor",
+        "LoopEditorQuick",
+        "LoopGenerateFixtures",
+        "LoopLibInteraction",
+        "LoopLibQuick",
         "PdfExampleGenerator",
         "PdfTool",
         "ProductQuickAccessibilitySmoke",
+        "QuickShellSmoke",
         "UnitTests",
         "UnitTestsActionList",
+        "UnitTestsApplicationIdentity",
         "UnitTestsAuthorSettings",
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBleedFixup",
@@ -462,16 +470,16 @@
       ]
     },
     {
-      "id": "LoupeLibInteraction",
+      "id": "LoopLibInteraction",
       "kind": "library",
-      "cmake": "LoupeLibInteraction/CMakeLists.txt",
+      "cmake": "LoopLibInteraction/CMakeLists.txt",
       "profile_enabled": true,
       "profile_condition": "target is reachable from the maintained product graph",
       "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": true,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui"
       ],
@@ -480,7 +488,7 @@
         "Gui"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -497,24 +505,24 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": [
-        "LoupeEditor",
-        "LoupeEditorQuick",
-        "LoupeLibQuick",
+        "LoopEditor",
+        "LoopEditorQuick",
+        "LoopLibQuick",
         "ProductQuickAccessibilitySmoke"
       ]
     },
     {
-      "id": "LoupeLibQuick",
+      "id": "LoopLibQuick",
       "kind": "library",
-      "cmake": "LoupeLibQuick/CMakeLists.txt",
+      "cmake": "LoopLibQuick/CMakeLists.txt",
       "profile_enabled": true,
-      "profile_condition": "LOUPE_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
       "install_rule": true,
       "installed_in_profile": true,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
-        "LoupeLibInteraction",
+        "LoopLibCore",
+        "LoopLibInteraction",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -527,8 +535,8 @@
         "Quick"
       ],
       "transitive_targets": [
-        "LoupeLibCore",
-        "LoupeLibInteraction"
+        "LoopLibCore",
+        "LoopLibInteraction"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -547,8 +555,8 @@
       "widgets_linkage": "none",
       "widgets_paths": [],
       "consumers": [
-        "LoupeEditor",
-        "LoupeEditorQuick",
+        "LoopEditor",
+        "LoopEditorQuick",
         "ProductQuickAccessibilitySmoke"
       ]
     },
@@ -557,12 +565,12 @@
       "kind": "executable",
       "cmake": "PdfExampleGenerator/CMakeLists.txt",
       "profile_enabled": false,
-      "profile_condition": "LOUPE_BUILD_EXAMPLE_GENERATOR=OFF from docs/product-surface.json",
+      "profile_condition": "LOOP_BUILD_EXAMPLE_GENERATOR=OFF from docs/product-surface.json",
       "install_rule": false,
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Widgets"
@@ -573,7 +581,7 @@
         "Widgets"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -602,12 +610,12 @@
       "kind": "executable",
       "cmake": "PdfTool/CMakeLists.txt",
       "profile_enabled": true,
-      "profile_condition": "loupe-cli=present in docs/product-surface.json",
+      "profile_condition": "loop-cli=present in docs/product-surface.json",
       "install_rule": true,
       "installed_in_profile": true,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Xml",
@@ -620,7 +628,7 @@
         "Xml"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -647,12 +655,12 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeEditorQuick",
-        "LoupeEditorQuickplugin",
-        "LoupeEditorQuickplugin_init",
-        "LoupeLibCore",
-        "LoupeLibInteraction",
-        "LoupeLibQuick",
+        "LoopEditorQuick",
+        "LoopEditorQuickplugin",
+        "LoopEditorQuickplugin_init",
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "LoopLibQuick",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -669,10 +677,10 @@
         "QuickDialogs2"
       ],
       "transitive_targets": [
-        "LoupeEditorQuick",
-        "LoupeLibCore",
-        "LoupeLibInteraction",
-        "LoupeLibQuick"
+        "LoopEditorQuick",
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "LoopLibQuick"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -704,6 +712,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Qml",
@@ -717,14 +726,23 @@
         "Quick",
         "QuickControls2"
       ],
-      "transitive_targets": [],
-      "transitive_qt_modules": [],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
       "qt_modules": [
         "Core",
         "Gui",
         "Qml",
         "Quick",
-        "QuickControls2"
+        "QuickControls2",
+        "Sql",
+        "Svg",
+        "Xml"
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
@@ -740,7 +758,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -751,7 +769,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -780,7 +798,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -791,9 +809,48 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsApplicationIdentity",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Gui",
         "Sql",
         "Svg",
         "Xml"
@@ -820,7 +877,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -831,7 +888,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -860,7 +917,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -871,7 +928,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -900,7 +957,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -911,7 +968,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -940,7 +997,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -951,7 +1008,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1007,7 +1064,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1018,7 +1075,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1047,7 +1104,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1058,7 +1115,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1087,7 +1144,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1098,7 +1155,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1127,7 +1184,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1138,7 +1195,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1167,7 +1224,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1178,7 +1235,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1207,7 +1264,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1218,7 +1275,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1247,7 +1304,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1258,7 +1315,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1287,7 +1344,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Test"
       ],
@@ -1296,7 +1353,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Gui",
@@ -1326,7 +1383,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1337,7 +1394,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1366,7 +1423,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1377,7 +1434,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1406,7 +1463,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1417,7 +1474,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1446,7 +1503,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1457,7 +1514,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1486,7 +1543,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1497,7 +1554,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1526,7 +1583,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1537,7 +1594,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1566,7 +1623,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1577,7 +1634,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1606,7 +1663,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1617,7 +1674,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1646,7 +1703,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Sql",
@@ -1659,7 +1716,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Svg",
@@ -1741,7 +1798,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1752,7 +1809,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1781,7 +1838,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Sql",
@@ -1794,7 +1851,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Svg",
@@ -1822,7 +1879,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1833,7 +1890,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1862,7 +1919,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1873,7 +1930,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1902,7 +1959,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1913,7 +1970,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1942,7 +1999,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -1953,7 +2010,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -1982,7 +2039,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Concurrent",
         "Qt6::Core",
         "Qt6::Gui",
@@ -1995,7 +2052,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2052,7 +2109,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2063,7 +2120,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2149,7 +2206,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2160,7 +2217,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2189,7 +2246,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2200,7 +2257,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2229,7 +2286,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2240,7 +2297,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2269,7 +2326,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2280,7 +2337,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2309,7 +2366,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2320,7 +2377,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2349,7 +2406,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2360,7 +2417,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2389,7 +2446,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2400,7 +2457,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2429,7 +2486,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2440,7 +2497,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2469,7 +2526,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2480,7 +2537,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2509,7 +2566,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Test"
       ],
@@ -2518,7 +2575,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Gui",
@@ -2548,7 +2605,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2559,7 +2616,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2588,7 +2645,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2599,7 +2656,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2628,7 +2685,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2639,7 +2696,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2668,7 +2725,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2679,7 +2736,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2708,7 +2765,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2719,7 +2776,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2748,7 +2805,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2759,7 +2816,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2788,7 +2845,7 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoupeLibCore",
+        "LoopLibCore",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2799,7 +2856,7 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoupeLibCore"
+        "LoopLibCore"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -2939,7 +2996,7 @@
     }
   ],
   "counts": {
-    "targets": 67,
+    "targets": 68,
     "installed_in_profile": 4,
     "build_only_in_profile": 3,
     "widgets_surfaces": 4,

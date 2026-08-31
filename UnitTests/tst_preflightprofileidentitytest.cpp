@@ -254,7 +254,7 @@ void PreflightProfileIdentityTest::unsupportedRegionFailsClosed()
 
 void PreflightProfileIdentityTest::bundledProfilesHaveMatchingDigests()
 {
-    const QDir directory(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles"));
+    const QDir directory(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles"));
     const QFileInfoList files = directory.entryInfoList({ QStringLiteral("*.json") }, QDir::Files);
     QVERIFY(!files.isEmpty());
     for (const QFileInfo& info : files)
@@ -274,7 +274,7 @@ void PreflightProfileIdentityTest::bundledProfilesHaveMatchingDigests()
 
 void PreflightProfileIdentityTest::bundledDefaultProfileRuns()
 {
-    QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json"));
+    QFile file(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     const QJsonObject profile = QJsonDocument::fromJson(file.readAll()).object();
     pdf::PDFDocument document = emptyPageDocument();
@@ -308,18 +308,18 @@ void PreflightProfileIdentityTest::engineRunAppliesCliBindings()
 
 void PreflightProfileIdentityTest::mergedEffectiveProfileOmitsDigest()
 {
-    QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json"));
+    QFile file(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     const QJsonObject profile = QJsonDocument::fromJson(file.readAll()).object();
     QVERIFY(profile.contains(QStringLiteral("digest")));
-    const pdf::PreflightResolvedProfile resolved = pdf::PreflightProfileResolver().resolveExplicitProfile(profile, QStringLiteral("loupe-default"), QStringLiteral("1.0.0"));
+    const pdf::PreflightResolvedProfile resolved = pdf::PreflightProfileResolver().resolveExplicitProfile(profile, QStringLiteral("loop-default"), QStringLiteral("1.0.0"));
     QVERIFY2(resolved.ok, qPrintable(resolved.errorMessage));
     QVERIFY(!resolved.effectiveProfile.contains(QStringLiteral("digest")));
 }
 
 void PreflightProfileIdentityTest::registryMatchesGeneratedCatalog()
 {
-    QFile file(QStringLiteral(LOUPE_SOURCE_DIR "/docs/generated/preflight-check-catalog.json"));
+    QFile file(QStringLiteral(LOOP_SOURCE_DIR "/docs/generated/preflight-check-catalog.json"));
     QVERIFY2(file.open(QIODevice::ReadOnly), "generated preflight check catalog is missing");
     const QJsonObject catalog = QJsonDocument::fromJson(file.readAll()).object();
     const QJsonObject checks = catalog.value(QStringLiteral("checks")).toObject();

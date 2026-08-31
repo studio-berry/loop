@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 VERIFIER = ROOT / "scripts" / "verify-plugin-form-accounting.py"
-SHELL_PATH = ROOT / "docs" / "loupe-shell.json"
+SHELL_PATH = ROOT / "docs" / "loop-shell.json"
 
 
 class VerifyPluginFormAccountingTest(unittest.TestCase):

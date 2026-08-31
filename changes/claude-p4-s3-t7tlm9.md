@@ -3,7 +3,7 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Put the render path into the P4-S1 seam. LoupeLibInteraction gains ViewportController,
+Summary: Put the render path into the P4-S1 seam. LoopLibInteraction gains ViewportController,
 the PageSurfaceKey/request/result types, PageSurfaceCoordinator over the existing scheduler, a
 serialized PDFDocumentSession access policy, and an immutable CanvasSnapshot. All of it is
 drivable, and tested, without a QWidget, a QScreen, a scrollbar or a QML engine
@@ -50,9 +50,9 @@ state is Failed rather than Error, matching CommandTerminalState and pdf::PDFJob
 
 Also: DocumentJobRelay moves out of documentfacade.{h,cpp} to jobrelay.{h,cpp} as JobRelay,
 unchanged, so the coordinator reuses the one owner-thread marshalling primitive rather than
-reimplementing its detach ordering. No behaviour is removed from LoupeLibWidgets or
-LoupeLibGui, and no installed artifact changes -- LoupeLibInteraction is still STATIC,
-non-installed, and links only LoupeLibCore, Qt6::Core and Qt6::Gui.
+reimplementing its detach ordering. No behaviour is removed from LoopLibWidgets or
+LoopLibGui, and no installed artifact changes -- LoopLibInteraction is still STATIC,
+non-installed, and links only LoopLibCore, Qt6::Core and Qt6::Gui.
 
 Intentionally not delivered: sub-rectangle rendering. The key carries pageTileBounds so a tiled
 canvas will not need a key change, but a non-null tile is refused with

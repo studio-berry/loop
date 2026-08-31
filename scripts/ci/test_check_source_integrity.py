@@ -33,7 +33,7 @@ class ForbiddenPathTests(unittest.TestCase):
     def test_rejects_build_trees(self):
         for path in (
             "build/CMakeFiles/rules.ninja",
-            "build-fuzz-docker/usr/lib/libLoupeLibCore.so.1.6.0.0",
+            "build-fuzz-docker/usr/lib/libLoopLibCore.so.1.6.0.0",
             "build-fuzz-docker/.ninja_log",
             ".docker-vcpkg",
             ".docker-vcpkg/installed/x64-linux/include/zlib.h",
@@ -64,9 +64,9 @@ class ForbiddenPathTests(unittest.TestCase):
             "scripts/hooks/cc-guard-bash.sh",
             "build-notes.md",
             "buildsystem/toolchain.cmake",
-            "LoupeLibCore/sources/pdfdocument.cpp",
+            "LoopLibCore/sources/pdfdocument.cpp",
             "docs/adr/adr-003-pagemaster-export-orchestrator.md",
-            "loupe-preflight/testdata/fixtures/image-dpi-excessive.pdf",
+            "loop-preflight/testdata/fixtures/image-dpi-excessive.pdf",
         ):
             with self.subTest(path=path):
                 self.assertIsNone(forbidden_path_reason(path))
@@ -295,7 +295,7 @@ class RepositoryScanTests(unittest.TestCase):
     def test_reports_unmanifested_preflight_pdf(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            fixtures = root / "loupe-preflight" / "testdata" / "fixtures"
+            fixtures = root / "loop-preflight" / "testdata" / "fixtures"
             fixtures.mkdir(parents=True)
             (fixtures / "manifest.json").write_text(
                 json.dumps(
@@ -303,7 +303,7 @@ class RepositoryScanTests(unittest.TestCase):
                         {
                             "id": "listed",
                             "pdf": "listed.pdf",
-                            "profile": "profiles/loupe-default.json",
+                            "profile": "profiles/loop-default.json",
                             "expect": {"pass": True, "check_ids": []},
                         }
                     ]
@@ -318,10 +318,10 @@ class RepositoryScanTests(unittest.TestCase):
 
             violations = dict(preflight_pdf_violations(root))
             self.assertIn(
-                "loupe-preflight/testdata/fixtures/orphan.pdf", violations
+                "loop-preflight/testdata/fixtures/orphan.pdf", violations
             )
             self.assertNotIn(
-                "loupe-preflight/testdata/fixtures/listed.pdf", violations
+                "loop-preflight/testdata/fixtures/listed.pdf", violations
             )
 
 

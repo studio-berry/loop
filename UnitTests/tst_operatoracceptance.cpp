@@ -22,7 +22,7 @@
 
 // End-to-end operator-loop acceptance for MIC-300 (Phase C).
 // Drives PdfTool preflight + add-bleed via QProcess (same sidecar contract as the
-// Editor plugin) and validates report handling helpers used by LoupePreflightPlugin.
+// Editor plugin) and validates report handling helpers used by LoopPreflightPlugin.
 // GUI navigation/overlay/cancel flows are covered in docs/v1-operator-acceptance.md.
 
 #include "pdftoolenvelopeutils.h"
@@ -507,7 +507,7 @@ void OperatorAcceptanceTest::livePdfToolFlows_writeVerifiableProvenance()
     QCOMPARE(preflightExitCode, 1);
     QVERIFY(pdfplugin::preflight::validateNormalizedReport(preflightReport));
 
-    const QString preflightDatabasePath = sourcePath + QStringLiteral(".loupe-history/history.sqlite3");
+    const QString preflightDatabasePath = sourcePath + QStringLiteral(".loop-history/history.sqlite3");
     QVERIFY(QFileInfo::exists(preflightDatabasePath));
     const QByteArray preflightHistoryBytes = readFileBytes(preflightDatabasePath);
     QVERIFY(preflightHistoryBytes.startsWith("SQLite format 3"));
@@ -527,7 +527,7 @@ void OperatorAcceptanceTest::livePdfToolFlows_writeVerifiableProvenance()
     QVERIFY(QFileInfo::exists(outputPath));
     QCOMPARE(fileSha256(sourcePath), sourceHash);
 
-    const QString repairDatabasePath = outputPath + QStringLiteral(".loupe-history/history.sqlite3");
+    const QString repairDatabasePath = outputPath + QStringLiteral(".loop-history/history.sqlite3");
     QVERIFY(QFileInfo::exists(repairDatabasePath));
     const QByteArray repairHistoryBytes = readFileBytes(repairDatabasePath);
     QVERIFY(repairHistoryBytes.startsWith("SQLite format 3"));
@@ -761,7 +761,7 @@ void OperatorAcceptanceTest::reportContract_rejectsUnsupportedSchema()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 99);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());

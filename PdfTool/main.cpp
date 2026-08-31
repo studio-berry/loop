@@ -23,9 +23,10 @@
 #include "pdftoolabstractapplication.h"
 #include "pdftoolcancel.h"
 #include "pdftoolresult.h"
-#include "pdfconstants.h"
+#include "pdfapplicationidentity.h"
 #include "pdflogger.h"
 #include "pdfsentry.h"
+#include "pdfsettings.h"
 
 #include <QDir>
 #include <QGuiApplication>
@@ -168,9 +169,8 @@ int main(int argc, char* argv[])
     QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
 
     QGuiApplication a(argc, argv);
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("PdfTool");
-    QCoreApplication::setApplicationVersion(pdf::PDF_LIBRARY_VERSION);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
+    pdf::PDFSettings::migrateLegacySettings();
 
     const pdf::PDFLogSession logSession(QStringLiteral("pdftool"));
     const pdf::PDFSentrySession sentrySession(QStringLiteral("pdftool"));
@@ -184,7 +184,7 @@ int main(int argc, char* argv[])
     // Extract the requested command without terminating on unknown options so
     // invalid invocations can be reported through the result contract.
     QCommandLineParser parser;
-    parser.setApplicationDescription("Loupe CLI (PdfTool) - work with PDF documents via command line");
+    parser.setApplicationDescription("Loop CLI (PdfTool) - work with PDF documents via command line");
     parser.addPositionalArgument("command", "Command to execute.");
     parser.parse(arguments);
 

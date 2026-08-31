@@ -57,7 +57,7 @@ bool appendPreflightProvenance(const QString& documentPath,
                                const QJsonObject& summary,
                                QString* error)
 {
-    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    const QString historyDirectory = QFileInfo(documentPath).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore artifacts(historyDirectory);
     const auto imported = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("preflight-input.pdf") });
     if (!imported.success)
@@ -246,8 +246,8 @@ bool hasDirectContext(const PDFToolOptions& options)
 QString defaultProfileStorePath()
 {
     const QStringList candidates = {
-        QDir::current().filePath(QStringLiteral("loupe-preflight/profiles")),
-        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../share/loupe/profiles")),
+        QDir::current().filePath(QStringLiteral("loop-preflight/profiles")),
+        QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("../share/loop/profiles")),
         QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("profiles"))
     };
     for (const QString& candidate : candidates)
@@ -348,7 +348,7 @@ QString PDFToolPreflightApplication::getStandardString(StandardString standardSt
             return PDFToolTranslationContext::tr("Preflight");
 
         case Description:
-            return PDFToolTranslationContext::tr("Run Loupe preflight checks and emit a normalized JSON report.");
+            return PDFToolTranslationContext::tr("Run Loop preflight checks and emit a normalized JSON report.");
 
         default:
             Q_ASSERT(false);

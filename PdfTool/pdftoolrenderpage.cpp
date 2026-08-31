@@ -22,7 +22,7 @@ namespace
 {
 
 static PDFToolRenderPageApplication s_renderPageApplication;
-constexpr const char* COLOR_OUTPUT_IDENTITY = "loupe-default-rgb8";
+constexpr const char* COLOR_OUTPUT_IDENTITY = "loop-default-rgb8";
 
 QJsonArray boxToJson(const QRectF& rect)
 {

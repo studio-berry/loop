@@ -1,20 +1,20 @@
 # Architecture invariant I21. The absent Qt6::Widgets link is load-bearing: Qt
 # scopes its headers per module, so a Widgets or QML include leaking into a
-# public LoupeLibInteraction header breaks this target's compile.
-if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
+# public LoopLibInteraction header breaks this target's compile.
+if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     add_executable(UnitTestsInteractionBoundary
         tst_interactionboundarytest.cpp
     )
 
-    target_link_libraries(UnitTestsInteractionBoundary PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsInteractionBoundary PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsInteractionBoundary PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsInteractionBoundary "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionBoundary")
+    add_test(UnitTestsInteractionBoundary "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsInteractionBoundary")
 
     # Architecture invariant I22. Same load-bearing link line: the document
     # lifecycle and the command path must be drivable with no QWidget and no QML
@@ -23,15 +23,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_documentfacadetest.cpp
     )
 
-    target_link_libraries(UnitTestsDocumentFacade PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsDocumentFacade PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsDocumentFacade PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsDocumentFacade "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDocumentFacade")
+    add_test(UnitTestsDocumentFacade "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDocumentFacade")
 
     # Architecture invariant I23, viewport half. Same load-bearing link line: the
     # viewport, its layout and its transforms must be drivable with no QWidget,
@@ -40,64 +40,64 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_viewportcontrollertest.cpp
     )
 
-    target_link_libraries(UnitTestsViewportController PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsViewportController PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsViewportController PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsViewportController "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsViewportController")
+    add_test(UnitTestsViewportController "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsViewportController")
 
     add_executable(UnitTestsViewportCommands
         tst_viewportcommandbridgetest.cpp
     )
 
-    target_link_libraries(UnitTestsViewportCommands PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsViewportCommands PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsViewportCommands PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsViewportCommands "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsViewportCommands")
+    add_test(UnitTestsViewportCommands "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsViewportCommands")
 
-    if(LOUPE_BUILD_QUICK_CANVAS)
+    if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsEditorHost
             tst_editorhosttest.cpp
         )
 
-        target_link_libraries(UnitTestsEditorHost PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsEditorHost PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         set_target_properties(UnitTestsEditorHost PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsEditorHost")
+        add_test(UnitTestsEditorHost "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsEditorHost")
         set_tests_properties(UnitTestsEditorHost PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
         add_executable(UnitTestsProductOperatorLoop
             tst_productoperatorloop.cpp
         )
 
-        target_link_libraries(UnitTestsProductOperatorLoop PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsProductOperatorLoop PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_compile_definitions(UnitTestsProductOperatorLoop PRIVATE
-            LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-            LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight"
+            LOOP_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+            LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
         )
 
         set_target_properties(UnitTestsProductOperatorLoop PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsProductOperatorLoop "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsProductOperatorLoop")
+        add_test(UnitTestsProductOperatorLoop "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsProductOperatorLoop")
         set_tests_properties(UnitTestsProductOperatorLoop PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endif()
 
@@ -107,45 +107,45 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_pagesurfacetest.cpp
     )
 
-    target_link_libraries(UnitTestsPageSurface PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsPageSurface PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
     target_compile_definitions(UnitTestsPageSurface PRIVATE
-        LOUPE_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loupe-preflight")
+        LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
     set_target_properties(UnitTestsPageSurface PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsPageSurface "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurface")
+    add_test(UnitTestsPageSurface "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPageSurface")
 
     add_executable(UnitTestsPageSurfaceBudget
         tst_pagesurfacebudgettest.cpp
     )
 
-    target_link_libraries(UnitTestsPageSurfaceBudget PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsPageSurfaceBudget PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsPageSurfaceBudget PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsPageSurfaceBudget "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsPageSurfaceBudget")
+    add_test(UnitTestsPageSurfaceBudget "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPageSurfaceBudget")
 
     add_executable(UnitTestsDocumentViewSession
         tst_documentviewsessiontest.cpp
     )
 
-    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoupeEditorQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoopEditorQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsDocumentViewSession PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsDocumentViewSession "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDocumentViewSession")
+    add_test(UnitTestsDocumentViewSession "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDocumentViewSession")
 
     # Architecture invariant I24, interaction half. Same load-bearing link line:
     # transient state, hit testing, cancellation and the interaction trace must be
@@ -155,15 +155,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_interactioncontrollertest.cpp
     )
 
-    target_link_libraries(UnitTestsInteractionController PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsInteractionController PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsInteractionController PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsInteractionController "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsInteractionController")
+    add_test(UnitTestsInteractionController "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsInteractionController")
 
     # Issue #145: the spatial index used by EvidenceHitTestSource and
     # FindingListHitTestSource, and their hit-testing/precedence contracts
@@ -172,15 +172,15 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_hittestsourcetest.cpp
     )
 
-    target_link_libraries(UnitTestsHitTestSource PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsHitTestSource PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsHitTestSource PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsHitTestSource "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsHitTestSource")
+    add_test(UnitTestsHitTestSource "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsHitTestSource")
 
     # Architecture invariant I24, overlay half: deterministic z-order, page-space
     # geometry aligned with the page surfaces, and invalidation independent of
@@ -189,63 +189,63 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
         tst_overlayframetest.cpp
     )
 
-    target_link_libraries(UnitTestsOverlayFrame PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsOverlayFrame PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsOverlayFrame PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsOverlayFrame "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsOverlayFrame")
+    add_test(UnitTestsOverlayFrame "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsOverlayFrame")
 
     add_executable(UnitTestsP4S9Interaction
         tst_p4s9interaction.cpp
     )
 
-    target_link_libraries(UnitTestsP4S9Interaction PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsP4S9Interaction PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsP4S9Interaction PROPERTIES
         WIN32_EXECUTABLE OFF
         MACOSX_BUNDLE OFF
-        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
-    add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
+    add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
 
-    if(LOUPE_BUILD_QUICK_CANVAS)
+    if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsQuickAccessibility
             tst_quickaccessibilitytest.cpp
         )
 
-        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore LoupeEditorQuick LoupeEditorQuickplugin LoupeEditorQuickplugin_init Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore LoopEditorQuick LoopEditorQuickplugin LoopEditorQuickplugin_init Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         set_target_properties(UnitTestsQuickAccessibility PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsQuickAccessibility "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsQuickAccessibility")
+        add_test(UnitTestsQuickAccessibility "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsQuickAccessibility")
         set_tests_properties(UnitTestsQuickAccessibility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
         add_executable(UnitTestsShellKeyboard
             tst_shellkeyboardtest.cpp
         )
 
-        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoupeEditorQuick LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
 
         set_target_properties(UnitTestsShellKeyboard PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsShellKeyboard "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsShellKeyboard")
+        add_test(UnitTestsShellKeyboard "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellKeyboard")
     endif()
 
     # Architecture invariant I25. The inverse of the five targets above: this one
-    # links LoupeLibQuick and therefore Qt6::Quick, because it is the admitted
+    # links LoopLibQuick and therefore Qt6::Quick, because it is the admitted
     # presentation host and has to be able to name a QQuickItem. What it pins is
     # that the host stayed presentation -- Quick events in, neutral intents out,
     # neutral values in, scene-graph geometry out -- and that issue #140's trace
@@ -254,21 +254,21 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     # Qt6::Widgets is still absent, and still deliberately: ADR-009 as amended
     # prohibits QQuickWidget and WindowContainer as product architecture, and a
     # Widgets link here is what would make either reachable.
-    if(LOUPE_BUILD_QUICK_CANVAS)
+    if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsQuickCanvas
             tst_quickcanvastest.cpp
             quickcanvastestfakes.h
         )
 
-        target_link_libraries(UnitTestsQuickCanvas PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsQuickCanvas PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         set_target_properties(UnitTestsQuickCanvas PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsQuickCanvas "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsQuickCanvas")
+        add_test(UnitTestsQuickCanvas "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsQuickCanvas")
 
         # The test constructs QQuickItems and needs a QGuiApplication, but never a
         # visible window. GitHub's Linux runners have no display at all.
@@ -291,19 +291,19 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
             tst_canvasparitytest.cpp
         )
 
-        target_link_libraries(UnitTestsCanvasParity PRIVATE LoupeLibQuick LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsCanvasParity PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_compile_definitions(UnitTestsCanvasParity PRIVATE
-            LOUPE_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+            LOOP_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         )
 
         set_target_properties(UnitTestsCanvasParity PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
-        add_test(UnitTestsCanvasParity "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsCanvasParity")
+        add_test(UnitTestsCanvasParity "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsCanvasParity")
 
         set_tests_properties(UnitTestsCanvasParity PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
     endif()

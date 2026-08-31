@@ -1,14 +1,14 @@
 # Qt Quick canvas contract
 
-Status: P4-S6 (0.2.0 Phase 4). Types live in `LoupeLibQuick/sources/loupecanvasitem.h`,
+Status: P4-S6 (0.2.0 Phase 4). Types live in `LoopLibQuick/sources/loopcanvasitem.h`,
 `canvasnodebuilder.h`, `canvaspalette.h`, `canvaspresentmetrics.h`, `canvastraceoverlay.h`,
-and `loupecanvasaccessible.h`. Architecture invariants **I25**, **I26**, and **I27**; test
+and `loopcanvasaccessible.h`. Architecture invariants **I25**, **I26**, and **I27**; test
 targets `UnitTestsQuickCanvas`, `UnitTestsCanvasParity`, and `UnitTestsQuickAccessibility`.
 Companion to [INTERACTION_CONTRACT.md](INTERACTION_CONTRACT.md), which owns the
 host-neutral half, and [PAGE_SURFACE_CONTRACT.md](PAGE_SURFACE_CONTRACT.md), which owns
 page pixels.
 
-`LoupeLibQuick` is the first and only target in Phase 4 that links `Qt6::Quick`. It closes
+`LoopLibQuick` is the first and only target in Phase 4 that links `Qt6::Quick`. It closes
 the path that P4-S1 through P4-S4 built up to:
 
 ```
@@ -20,7 +20,7 @@ CanvasSnapshot (page pixels) + OverlayFrame (overlays)      →  QSGNode tree
 
 **The Quick layer presents. It decides nothing.**
 
-`LoupeCanvasItem` translates and draws. It performs no hit testing, no gesture recognition,
+`LoopCanvasItem` translates and draws. It performs no hit testing, no gesture recognition,
 no panning arithmetic and no zoom arithmetic, because `InteractionController` and
 `ViewportController` already own all of it. A host that re-derives any of it is a second
 implementation that will disagree with the first, which is what the seam exists to prevent.
@@ -54,17 +54,17 @@ takes the three neutral objects by pointer; none of them is a property, a contex
 or constructible from QML. `SurfaceBuffer` crosses C++ ownership boundaries and nothing
 else — never a QML property, JS value, `QByteArray` context property, or URL.
 
-`LoupeLibQuick` installs with `LoupeEditor` and registers `Loupe.Canvas` from
+`LoopLibQuick` installs with `LoopEditor` and registers `Loop.Canvas` from
 C++ with `QML_NAMED_ELEMENT` and ships no `.qml` of its own. The packaged
-`Loupe.Quick` module (P4-S7) hosts `LoupeCanvas` in `CanvasPane.qml`; wiring
+`Loop.Quick` module (P4-S7) hosts `LoopCanvas` in `CanvasPane.qml`; wiring
 remains C++ `bind()` only.
 
 ## Admitted hosting
 
 ADR-009 as amended admits the direct `QQuickItem` and prohibits `QQuickPaintedItem`,
-`QQuickWidget` and `WindowContainer` as shipped product architecture. `LoupeCanvasItem`
+`QQuickWidget` and `WindowContainer` as shipped product architecture. `LoopCanvasItem`
 builds scene-graph nodes in `updatePaintNode`; there is no `QPainter` anywhere in the page
-pixel or overlay path, and neither `LoupeLibQuick` nor `UnitTestsQuickCanvas` links
+pixel or overlay path, and neither `LoopLibQuick` nor `UnitTestsQuickCanvas` links
 `Qt6::QuickWidgets` or `Qt6::Widgets`.
 
 ## Threads
@@ -253,9 +253,9 @@ The product Quick accessibility runtime remains a Phase-4-exit gate, per ADR-010
 - Native-backend and Windows parity evidence. The differential gate above runs on the
   software backend in the pull-request lane; native and both-OS evidence is an ADR-010
   Phase-4-exit gate and is not closed here.
-- Installation and packaging. `LoupeLibQuick` is built opt-in
-  (`-DLOUPE_BUILD_QUICK_CANVAS=ON`, which CI sets on both platforms) and is not installed,
-  for the same reason `LoupeLibInteraction` is not: ADR-010's packaging and accessibility
+- Installation and packaging. `LoopLibQuick` is built opt-in
+  (`-DLOOP_BUILD_QUICK_CANVAS=ON`, which CI sets on both platforms) and is not installed,
+  for the same reason `LoopLibInteraction` is not: ADR-010's packaging and accessibility
   gates are Phase-4-exit gates, and an install rule here would claim a shipped product Quick
   module exists.
 - A QML shell that hosts the canvas. P4-S5 delivered the item and its contract and P4-S6

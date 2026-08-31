@@ -813,7 +813,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(PreflightProfile))
     {
-        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loupe preflight profile (JSON); bypasses contextual selection."));
+        addDescribedOption(parser, optionDescriptors, QStringLiteral("profile"), QStringLiteral("Explicit Loop preflight profile (JSON); bypasses contextual selection."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("job-context"), QStringLiteral("Structured production context JSON."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("profile-store"), QStringLiteral("Directory containing versioned contextual profile JSON sources."));
         addDescribedOption(parser, optionDescriptors, QStringLiteral("decisions"), QStringLiteral("Standalone operator decision JSON to import."));
@@ -836,7 +836,7 @@ void PDFToolAbstractApplication::initializeCommandLineParser(QCommandLineParser*
 
     if (optionFlags.testFlag(OcrOptions))
     {
-        parser->addOption(QCommandLineOption("sidecar", "Path to LoupeOcrService executable.", "path"));
+        parser->addOption(QCommandLineOption("sidecar", "Path to LoopOcrService executable.", "path"));
         parser->addOption(QCommandLineOption("dpi", "Rasterization DPI for OCR pages.", "dpi", "300"));
         parser->addOption(QCommandLineOption("languages", "Comma-separated EasyOCR language codes.", "codes", "en"));
         parser->addOption(QCommandLineOption("min-text-chars", "Skip OCR when page has at least this many non-whitespace characters.", "n", "20"));

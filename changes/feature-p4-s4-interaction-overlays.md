@@ -3,7 +3,7 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Complete the host-neutral half of the Phase 4 seam. LoupeLibInteraction gains input
+Summary: Complete the host-neutral half of the Phase 4 seam. LoopLibInteraction gains input
 intents, transient InteractionState, a hit-test dispatcher over existing Core geometry, an
 immutable OverlayFrame with a fixed z-order, a deterministic interaction trace with replay,
 and InteractionController tying them together. All of it is drivable, and tested, without a
@@ -64,13 +64,13 @@ PDFInteractionState's kind/cancel-reason shape from cursor/s19b-141-interaction-
 percentile, budget and attribution math from cursor/gh-140-interaction-trace-df6f, and the
 z-order table from cursor/gh-143-overlay-pass-df6f. Their QWidget residency, their
 thread_local current recorder, their environment-variable configuration and their trace widget
-were not. No behaviour is removed from LoupeLibWidgets or LoupeLibGui, which keep working as
-the Phase 4 migration oracle, and no installed artifact changes -- LoupeLibInteraction is still
-STATIC, non-installed, and links only LoupeLibCore, Qt6::Core and Qt6::Gui.
+were not. No behaviour is removed from LoopLibWidgets or LoopLibGui, which keep working as
+the Phase 4 migration oracle, and no installed artifact changes -- LoopLibInteraction is still
+STATIC, non-installed, and links only LoopLibCore, Qt6::Core and Qt6::Gui.
 
 Intentionally not delivered: the developer-facing trace overlay and GPU/present timing from
 #140, which cannot exist in a layer that links no QML and no scene graph and belong to P4-S5
 and P4-S6; text-layout and annotation hit-test sources, which are later implementations of the
 same IHitTestSource seam; and tool gestures beyond the state they occupy in InteractionKind,
 since P4-S9 and P4-S11 decide which tools survive into the Quick product. P4-S5 inherits
-InputIntent, OverlayFrame and InteractionController as the types LoupeCanvasItem binds to.
+InputIntent, OverlayFrame and InteractionController as the types LoopCanvasItem binds to.

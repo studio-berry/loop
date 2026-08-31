@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Keep the one command catalog in parity with the shell it replaces.
 
-docs/loupe-shell-actions.json is the single registry for Editor commands.
-scripts/verify-loupe-shell-contract.ps1 already pins its ID set against the
-<action> entries in LoupeLibGui/pdfeditormainwindow.ui; this check owns the
+docs/loop-shell-actions.json is the single registry for Editor commands.
+scripts/verify-loop-shell-contract.ps1 already pins its ID set against the
+<action> entries in LoopLibGui/pdfeditormainwindow.ui; this check owns the
 `command` block that pdfinteraction::CommandCatalog consumes.
 
 The interesting rule is shortcut parity. Shortcuts are not in the .ui — they are
 assigned in C++ by PDFActionManager::initActions against enum names, which
-LoupeLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
+LoopLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
 disagreed with those assignments would be a second command truth wearing the
 first one's ID set, so both files are parsed and compared here.
 
-See docs/LOUPE_SHELL_CONTRACT.md and architecture invariant I22.
+See docs/LOOP_SHELL_CONTRACT.md and architecture invariant I22.
 """
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / "docs" / "loupe-shell-actions.json"
-MAIN_WINDOW_PATH = ROOT / "LoupeLibGui" / "pdfeditormainwindow.cpp"
-CONTROLLER_PATH = ROOT / "LoupeLibGui" / "pdfprogramcontroller.cpp"
+POLICY_PATH = ROOT / "docs" / "loop-shell-actions.json"
+MAIN_WINDOW_PATH = ROOT / "LoopLibGui" / "pdfeditormainwindow.cpp"
+CONTROLLER_PATH = ROOT / "LoopLibGui" / "pdfprogramcontroller.cpp"
 
-# Commands that have a handler in LoupeLibInteraction (DocumentFacade for
+# Commands that have a handler in LoopLibInteraction (DocumentFacade for
 # document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
 # may only leave this set by being implemented somewhere else, never by being
 # quietly downgraded.
@@ -54,8 +54,8 @@ IMPLEMENTED_COMMANDS = frozenset(
 )
 
 # Commands registered by the Quick shell host (EditorHost) rather than
-# LoupeLibInteraction. Promoting one to implemented still requires a real
-# capability in loupe-shell-actions.json.
+# LoopLibInteraction. Promoting one to implemented still requires a real
+# capability in loop-shell-actions.json.
 SHELL_IMPLEMENTED_COMMANDS = frozenset(
     {
         "actionQuit",

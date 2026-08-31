@@ -1,7 +1,7 @@
 # Bleed Fixup — Implementation Plan
 
 Status: **approved with changes** (Senior Developer + triple review, 2026-07-09).
-Scope: Loupe-pdf 0.1.0-alpha.
+Scope: Loop-pdf 0.1.0-alpha.
 Primary API name: **`PDFBleedFixup`** (`pdfbleedfixup.*`) with mode enum (`Mirror`, `PixelRepeat`, `Stretch`).
 PdfTool command: **`add-bleed --mode ...`**.
 Related: MIC-121 (Mirror / M1), MIC-122 (PixelRepeat + Stretch / M2; blocked by MIC-121 scaffolding).
@@ -121,7 +121,7 @@ PdfTool add-bleed --mode mirror|pixel-repeat|stretch \
 | Boxes | `pdfpage.h` / `pdfdocumentbuilder.h` |
 | Geometry (not solution) | `pdfpagegeometry.*` |
 | Renderer | `pdfrenderer.*` |
-| PageMaster export | `LoupePageMaster/mainwindow.cpp` |
+| PageMaster export | `LoopPageMaster/mainwindow.cpp` |
 | Planning process | `docs/PLANNING.md` |
 | Prepress note | `NOTES.txt` §14.11 |
 

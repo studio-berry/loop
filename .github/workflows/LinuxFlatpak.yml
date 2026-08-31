@@ -73,20 +73,20 @@ jobs:
         run: |
           COMMIT_HASH=$(git rev-parse HEAD)
           echo "Current commit hash: $COMMIT_HASH"
-          sed -i "s/LOUPE_LAST_COMMIT/$COMMIT_HASH/g" ./Flatpak/io.github.mberrys.Loupe-pdf.json
+          sed -i "s/LOOP_LAST_COMMIT/$COMMIT_HASH/g" ./Flatpak/io.github.mberrys.Loop-pdf.json
 
       - name: Build Flatpak
         run: |
-          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.mberrys.Loupe-pdf.json
+          flatpak-builder --repo=repo --sandbox --force-clean  build-dir ./Flatpak/io.github.mberrys.Loop-pdf.json
 
       - name: Build Flatpak Package
         run: |
-          flatpak build-bundle repo io.github.mberrys.Loupe-pdf.flatpak io.github.mberrys.Loupe-pdf
+          flatpak build-bundle repo io.github.mberrys.Loop-pdf.flatpak io.github.mberrys.Loop-pdf
 
       - name: Upload Flatpak Package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: io.github.mberrys.Loupe-pdf.flatpak
-          path: ./io.github.mberrys.Loupe-pdf.flatpak
+          name: io.github.mberrys.Loop-pdf.flatpak
+          path: ./io.github.mberrys.Loop-pdf.flatpak
           retention-days: 30
           compression-level: 0

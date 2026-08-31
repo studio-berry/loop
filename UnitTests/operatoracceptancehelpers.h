@@ -18,16 +18,16 @@
 namespace operatoracceptance
 {
 
-constexpr char DEFAULT_PROFILE_REL[] = "profiles/loupe-default.json";
+constexpr char DEFAULT_PROFILE_REL[] = "profiles/loop-default.json";
 
 inline QString fixturesDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 inline QString sourceDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR);
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR);
 }
 
 inline QString defaultProfilePath()

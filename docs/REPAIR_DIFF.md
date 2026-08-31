@@ -1,9 +1,9 @@
 # Deterministic repair diff
 
-Loupe's repair-diff layer compares a source PDF with a serialized candidate
+Loop's repair-diff layer compares a source PDF with a serialized candidate
 without treating indirect object numbers, xref offsets, compression filters, or
 dictionary ordering as production changes. The Core API lives in
-`LoupeLibCore/sources/pdfrepairdiff.h` and is usable by Editor, PdfTool, and
+`LoopLibCore/sources/pdfrepairdiff.h` and is usable by Editor, PdfTool, and
 future repair transactions.
 
 ## Headless usage
@@ -14,7 +14,7 @@ PdfTool repair-diff before.pdf candidate.pdf --render-dir repair-artifacts
 ```
 
 The command returns the normal PdfTool envelope. `data.report` uses the
-versioned `loupe.repair-diff` schema and includes source/candidate SHA-256
+versioned `loop.repair-diff` schema and includes source/candidate SHA-256
 identities, page metrics, structural changes, warnings, and explicit incomplete
 reasons. Use `--no-visual` for structural-only automation. PNG artifacts are
 written only when `--render-dir` is selected.

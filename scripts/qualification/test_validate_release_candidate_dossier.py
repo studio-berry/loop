@@ -11,7 +11,7 @@ class ReleaseCandidateDossierTest(unittest.TestCase):
     def dossier(self) -> dict:
         return {
             "candidate_sha": self.candidate_sha,
-            "artifacts": [{"name": "Loupe.AppImage", "sha256": "b" * 64, "built_from_sha": self.candidate_sha}],
+            "artifacts": [{"name": "Loop.AppImage", "sha256": "b" * 64, "built_from_sha": self.candidate_sha}],
         }
 
     def test_matching_artifact_provenance_passes(self) -> None:

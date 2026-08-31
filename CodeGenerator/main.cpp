@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "generatormainwindow.h"
+#include "pdfapplicationidentity.h"
+#include "pdfsettings.h"
 
 #include <QHash>
 #include <QApplication>
@@ -30,6 +32,8 @@ int main(int argc, char *argv[])
     QHashSeed::globalSeed().setDeterministicGlobalSeed();
 
     QApplication a(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::CodeGenerator);
+    pdf::PDFSettings::migrateLegacySettings();
     GeneratorMainWindow w;
     w.show();
     return a.exec();

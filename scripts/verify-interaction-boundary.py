@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep the host-neutral interaction layer free of Widgets and QML dependencies.
 
-The compile-time boundary is structural: LoupeLibInteraction links neither
+The compile-time boundary is structural: LoopLibInteraction links neither
 Qt6::Widgets nor Qt6::Qml/Quick, so Qt's per-module include paths are absent and
 a forbidden include fails to build. This check stops the link edge from being
 re-added, which is the only way that structural guarantee can be lost.

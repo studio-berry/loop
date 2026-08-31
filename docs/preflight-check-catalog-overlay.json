@@ -1,7 +1,7 @@
 {
   "format_version": 1,
-  "claim": "Loupe does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
-  "matrix_id": "loupe-gwg-pdfx-v1",
+  "claim": "Loop does not claim formal GWG conformance. Coverage is measured against GWG process families and PDF/X so a clean pass is read as clean against this scope.",
+  "matrix_id": "loop-gwg-pdfx-v1",
   "gwg_families": ["sheetfed-offset", "web-offset", "packaging", "newspaper", "digital"],
   "pdfx_targets": ["PDF/X-1a:2001", "PDF/X-3:2002", "PDF/X-4"],
   "checks": {

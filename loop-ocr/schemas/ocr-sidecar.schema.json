@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loop.app/schemas/ocr-sidecar.schema.json",
+  "title": "Loop OCR sidecar protocol",
+  "oneOf": [
+    {
+      "title": "Request",
+      "type": "object",
+      "required": ["page", "image", "dpi", "languages", "media_box", "rotation"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "image": { "type": "string", "minLength": 1 },
+        "dpi": { "type": "integer", "minimum": 1, "maximum": 1200 },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "media_box": { "$ref": "#/$defs/mediaBox" },
+        "rotation": { "type": "integer", "enum": [0, 90, 180, 270] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Successful response",
+      "type": "object",
+      "required": ["page", "ok", "text", "lines"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "ok": { "const": true },
+        "text": { "type": "string" },
+        "lines": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Failure response",
+      "type": "object",
+      "required": ["page", "ok", "error"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "ok": { "const": false },
+        "error": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "mediaBox": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "bbox": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "line": {
+      "type": "object",
+      "required": ["text", "confidence", "bbox"],
+      "properties": {
+        "text": { "type": "string" },
+        "confidence": { "type": "number" },
+        "bbox": { "$ref": "#/$defs/bbox" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
