@@ -201,6 +201,18 @@ qint64 PDFWorkloadEnvelope::currentRssHighWaterBytes()
     return -1;
 }
 
+qint64 PDFWorkloadEnvelope::currentProcessCommitHighWaterBytes()
+{
+#ifdef Q_OS_WIN
+    PROCESS_MEMORY_COUNTERS counters{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)))
+    {
+        return static_cast<qint64>(counters.PeakPagefileUsage);
+    }
+#endif
+    return -1;
+}
+
 void PDFWorkloadEnvelope::recordResources(const PDFResourceBudget& budget)
 {
     resources = budget.toJson();
@@ -225,6 +237,7 @@ QJsonObject PDFWorkloadEnvelope::toJson() const
     object.insert(QStringLiteral("page_count"), pageCount);
     object.insert(QStringLiteral("open_to_first_view_ms"), openToFirstViewMs);
     object.insert(QStringLiteral("rss_high_water_bytes"), rssHighWaterBytes);
+    object.insert(QStringLiteral("process_commit_high_water_bytes"), processCommitHighWaterBytes);
     object.insert(QStringLiteral("cache_high_water_bytes"), cacheHighWaterBytes);
     object.insert(QStringLiteral("preflight_high_water_bytes"), preflightHighWaterBytes);
     object.insert(QStringLiteral("pages_materialized"), pagesMaterialized);
