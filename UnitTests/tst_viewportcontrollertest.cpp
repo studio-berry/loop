@@ -31,6 +31,8 @@
 
 #include <QtTest>
 
+#include <cmath>
+
 #include <memory>
 
 #include "viewportcontroller.h"
@@ -94,6 +96,9 @@ private slots:
     void oneColumnStacksPagesAndCentresThem();
     void singlePageLayoutIsOneBlockPerPage();
     void zoomAnchorKeepsTheAnchoredPointStill();
+    void zoomAnchorHoldsWithinSubpixelToleranceAcrossZoomRange();
+    void zoomAnchorHoldsOnRotatedPages();
+    void panPreservesZoomAndScale();
     void zoomIsClampedToTheSupportedRange();
     void fitHintsUseTheInjectedViewportSize();
     void rotationTransposesPageExtent();
@@ -171,6 +176,105 @@ void ViewportControllerTest::zoomAnchorKeepsTheAnchoredPointStill()
     // the zoom around the anchor rather than around the origin.
     QCOMPARE(controller.zoom(), 2.0);
     QCOMPARE(controller.offset(), QPoint(-150, -850));
+}
+
+/// The zoom anchor is preserved through an integer pixel offset, so it is
+/// preserved to within one rounding of that offset and no better. Half a pixel
+/// is that rounding; issue #145 AC4 asks for the tolerance to be defined rather
+/// than left to whatever the current arithmetic happens to produce, and a test
+/// that demanded exactness would be pinning the rounding, not the contract.
+static constexpr qreal AnchorTolerancePx = 0.5;
+
+/// Where `anchor` lands after a zoom, predicted from the draw-space point that
+/// was under it beforehand. The invariant setZoom maintains is that
+/// `(offset - anchor) / scale` is unchanged, so re-projecting it with the new
+/// scale must put the anchor back where it was.
+static QPointF anchorAfterZoom(pdfinteraction::ViewportController& controller, QPointF anchor, qreal zoom)
+{
+    const qreal scaleBefore = controller.pageUnitToPixel();
+    const QPointF offsetBefore(controller.offset());
+    const QPointF drawPoint = (offsetBefore - anchor) / scaleBefore;
+
+    controller.setZoom(zoom, anchor);
+
+    return QPointF(controller.offset()) - drawPoint * controller.pageUnitToPixel();
+}
+
+static bool anchorHeld(QPointF actual, QPointF anchor)
+{
+    return std::hypot(actual.x() - anchor.x(), actual.y() - anchor.y()) <= AnchorTolerancePx;
+}
+
+void ViewportControllerTest::zoomAnchorHoldsWithinSubpixelToleranceAcrossZoomRange()
+{
+    FakeGeometrySource geometry(4, A4);
+    pdfinteraction::ViewportController controller;
+    configure(controller, &geometry);
+
+    const QPointF anchor(50.0, 50.0);
+
+    // Zooming in only, from a mid-scroll position. The content stays larger
+    // than the 100x100 viewport throughout, so setOffset never clamps and the
+    // anchor rule is the only thing under test.
+    for (const qreal zoom : { 1.5, 2.0, 4.0, 8.0 })
+    {
+        controller.setZoom(1.0);
+        controller.setOffset((controller.minimumOffset() + controller.maximumOffset()) / 2);
+
+        const QPointF landed = anchorAfterZoom(controller, anchor, zoom);
+        QVERIFY2(anchorHeld(landed, anchor), qPrintable(QStringLiteral("zoom %1 moved the anchor to %2, %3")
+                                                            .arg(zoom)
+                                                            .arg(landed.x())
+                                                            .arg(landed.y())));
+    }
+
+    // And back out again. A reversal that drifted would accumulate over a
+    // wheel, which is the way this fails in the hand rather than in a single
+    // step.
+    controller.setZoom(8.0);
+    controller.setOffset((controller.minimumOffset() + controller.maximumOffset()) / 2);
+    QVERIFY(anchorHeld(anchorAfterZoom(controller, anchor, 2.0), anchor));
+}
+
+void ViewportControllerTest::zoomAnchorHoldsOnRotatedPages()
+{
+    // Issue #145 AC8 names rotated pages, and AC4 asks for the anchor to hold
+    // at every zoom "and rotation". Rotation transposes the placed extent, so
+    // it changes every offset the anchor arithmetic reads.
+    for (const pdf::PageRotation rotation : { pdf::PageRotation::Rotate90,
+                                              pdf::PageRotation::Rotate180,
+                                              pdf::PageRotation::Rotate270 })
+    {
+        FakeGeometrySource geometry(4, A4);
+        pdfinteraction::ViewportController controller;
+        configure(controller, &geometry);
+        controller.setRotation(rotation);
+
+        const QPointF anchor(50.0, 50.0);
+
+        controller.setZoom(1.0);
+        controller.setOffset((controller.minimumOffset() + controller.maximumOffset()) / 2);
+
+        QVERIFY(anchorHeld(anchorAfterZoom(controller, anchor, 3.0), anchor));
+    }
+}
+
+void ViewportControllerTest::panPreservesZoomAndScale()
+{
+    // The pan half of AC4: scrolling changes what is visible and nothing else.
+    FakeGeometrySource geometry(4, A4);
+    pdfinteraction::ViewportController controller;
+    configure(controller, &geometry);
+
+    controller.setZoom(2.0);
+    const qreal scaleBefore = controller.pageUnitToPixel();
+    const QSize placedBefore = controller.placements().at(0).placedRect.size();
+
+    controller.scrollByPixels(QPoint(-13, -21));
+
+    QCOMPARE(controller.zoom(), 2.0);
+    QCOMPARE(controller.pageUnitToPixel(), scaleBefore);
+    QCOMPARE(controller.placements().at(0).placedRect.size(), placedBefore);
 }
 
 void ViewportControllerTest::zoomIsClampedToTheSupportedRange()

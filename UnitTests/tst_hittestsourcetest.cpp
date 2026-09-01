@@ -77,6 +77,8 @@ private slots:
     void spatialIndexNarrowsCandidatesForLargeSpreadObjectCounts();
     void spatialIndexReturnsOverlappingCandidates();
     void spatialIndexBoundsWideRectangleStorage();
+    void toleranceExpandedQueryCrossesCellBoundaries();
+    void toleranceQueryReturnsSpanningItemsOnce();
 
     void evidenceSourceHitTestsIdenticalToLinearScan();
     void evidenceSourceHandlesEmptyPage();
@@ -183,6 +185,55 @@ void HitTestSourceTest::spatialIndexBoundsWideRectangleStorage()
         unique.insert(hit);
     }
     QCOMPARE(unique.size(), bounds.size());
+}
+
+void HitTestSourceTest::toleranceExpandedQueryCrossesCellBoundaries()
+{
+    // Issue #145 AC5: a tolerance is not a point. Four items give a 2x2 grid
+    // over the extent (0, 0, 100, 100), so the vertical cell boundary sits at
+    // x = 50 and item 3 lives just past it.
+    PageSpatialIndex index;
+    index.build({ QRectF(0.0, 0.0, 10.0, 10.0),
+                  QRectF(90.0, 90.0, 10.0, 10.0),
+                  QRectF(0.0, 90.0, 10.0, 10.0),
+                  QRectF(52.0, 0.0, 10.0, 10.0) });
+
+    // A bare point two units short of the boundary sees only its own cell, so
+    // the item four units away on the other side is invisible to it.
+    const QList<int> pointCandidates = index.query(QPointF(48.0, 5.0));
+    QVERIFY(pointCandidates.contains(0));
+    QVERIFY(!pointCandidates.contains(3));
+
+    // The same probe expanded by a five-unit tolerance reaches the next cell,
+    // which is the only reason the rectangle overload exists: without it a
+    // target the user can see is close enough answers "nothing".
+    const QList<int> areaCandidates = index.query(QRectF(43.0, 0.0, 10.0, 10.0));
+    QVERIFY(areaCandidates.contains(0));
+    QVERIFY(areaCandidates.contains(3));
+}
+
+void HitTestSourceTest::toleranceQueryReturnsSpanningItemsOnce()
+{
+    // Item 0 covers the whole extent, so it is a member of all four cells. A
+    // probe spanning those cells collects it once per cell, and a caller that
+    // turned candidates into targets would hit and draw it four times.
+    PageSpatialIndex index;
+    index.build({ QRectF(0.0, 0.0, 100.0, 100.0),
+                  QRectF(0.0, 0.0, 1.0, 1.0),
+                  QRectF(99.0, 99.0, 1.0, 1.0),
+                  QRectF(50.0, 50.0, 1.0, 1.0) });
+
+    const QList<int> candidates = index.query(QRectF(0.0, 0.0, 100.0, 100.0));
+
+    QCOMPARE(candidates.count(0), 1);
+
+    // Every index appears, and each of them once.
+    QSet<int> unique;
+    for (const int candidate : candidates)
+    {
+        unique.insert(candidate);
+    }
+    QCOMPARE(unique.size(), candidates.size());
 }
 
 void HitTestSourceTest::evidenceSourceHitTestsIdenticalToLinearScan()

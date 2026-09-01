@@ -41,6 +41,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfworkloadenvelope.h"
 
+#include "dragsnapper.h"
 #include "hittestsource.h"
 #include "inputintent.h"
 #include "interactioncontroller.h"
@@ -106,6 +107,7 @@ private slots:
     void exposesCatalogDescriptorsWithoutMutating();
     void navigationCommandsStayDisabledUntilOpen();
     void sessionTeardownDrainsWorkersBeforeAdapters();
+    void pageBoxSnapProviderOffersCornersOfTheHittableBoxes();
     void openLargeDocument();
 };
 
@@ -172,6 +174,93 @@ void EditorHostTest::sessionTeardownDrainsWorkersBeforeAdapters()
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     session.reset();
     QVERIFY(adapterReached.load(std::memory_order_acquire));
+}
+
+void EditorHostTest::pageBoxSnapProviderOffersCornersOfTheHittableBoxes()
+{
+    // Issue #145: the one snap provider that ships reads its candidates from
+    // PageBoxHitTestSource, the same source the dispatcher hit-tests. Reading
+    // pdf::PDFPage a second time instead would let a snap target drift away
+    // from the edge the user can actually click.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QRectF mediaBox(0.0, 0.0, 612.0, 792.0);
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(mediaBox);
+
+    const QString path = directory.filePath(QStringLiteral("boxes.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    DocumentViewSession* session = host.sessionForTest();
+    QVERIFY(session != nullptr);
+
+    const pdfinteraction::PageBoxHitTestSource& boxes = session->pageBoxSource();
+    const QList<pdfinteraction::InteractionTarget> targets = boxes.targetsForPage(0);
+    QVERIFY(!targets.isEmpty());
+
+    pdfinteraction::PageBoxSnapProvider provider(&boxes);
+
+    // A probe around one corner of the outermost box returns that corner, named
+    // by the box it came from.
+    const QPointF corner = targets.constFirst().pageBounds.topLeft();
+    const QRectF probe(corner.x() - 5.0, corner.y() - 5.0, 10.0, 10.0);
+
+    const QList<pdfinteraction::SnapCandidate> nearCorner = provider.snapCandidates(0, probe);
+    QVERIFY(!nearCorner.isEmpty());
+
+    bool sawTheCorner = false;
+    for (const pdfinteraction::SnapCandidate& candidate : nearCorner)
+    {
+        QVERIFY(!candidate.sourceId.isEmpty());
+
+        if (candidate.pagePoint == corner && candidate.sourceId == targets.constFirst().id)
+        {
+            sawTheCorner = true;
+        }
+    }
+    QVERIFY(sawTheCorner);
+
+    // Every candidate is a corner of a box the source itself reports; the
+    // provider invents no geometry of its own.
+    for (const pdfinteraction::SnapCandidate& candidate : nearCorner)
+    {
+        bool matched = false;
+
+        for (const pdfinteraction::InteractionTarget& target : targets)
+        {
+            const QRectF bounds = target.pageBounds;
+
+            if (candidate.pagePoint == bounds.topLeft() || candidate.pagePoint == bounds.topRight() ||
+                candidate.pagePoint == bounds.bottomLeft() || candidate.pagePoint == bounds.bottomRight())
+            {
+                matched = true;
+                break;
+            }
+        }
+
+        QVERIFY(matched);
+    }
+
+    // Corners only: the middle of a box edge is not a candidate, because a
+    // point-snap onto a line needs a projection rule this provider does not
+    // claim to have.
+    const QPointF edgeMidpoint(mediaBox.center().x(), mediaBox.top());
+    QVERIFY(provider.snapCandidates(0, QRectF(edgeMidpoint.x() - 5.0, edgeMidpoint.y() - 5.0, 10.0, 10.0)).isEmpty());
+
+    // A page that does not exist yields nothing rather than reaching past the
+    // catalog.
+    QVERIFY(provider.snapCandidates(-1, probe).isEmpty());
+    QVERIFY(provider.snapCandidates(99, probe).isEmpty());
 }
 
 void EditorHostTest::openLargeDocument()

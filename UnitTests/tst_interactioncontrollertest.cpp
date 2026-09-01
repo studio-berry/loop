@@ -242,6 +242,7 @@ private Q_SLOTS:
     void snapSuppressModifierIsSampledPerMove();
     void hitTestToleranceFollowsLiveViewScale();
     void traceRecordsHitTestCandidatesAndPreciseHits();
+    void staleIndexEntryCannotSurviveIntoACommit();
     void hitTestPrecedenceIsOrderIndependent();
     void hitTestBreaksTiesBySmallestAreaThenId();
     void evidenceSourceUsesStableRecordIdentity();
@@ -778,12 +779,20 @@ void InteractionControllerTest::dragContinuesBeyondViewportEdge()
     QVERIFY(session.has_value());
     QVERIFY(session->exceededThreshold);
 
+    // Capture is what makes the gesture survive leaving the viewport at all.
+    QVERIFY(m_controller->state().hasPointerCapture());
+
     const std::optional<QPointF> outsidePagePoint = m_viewport->viewportToPagePoint(farOutside, 0);
     QVERIFY(outsidePagePoint.has_value());
 
     // Same rule as inside the viewport: topLeft is the pointer less the grab
     // offset, with no clamping to the page or to the visible rect.
     QVERIFY(pointsClose(session->previewPageBounds.topLeft(), *outsidePagePoint - session->grabOffset));
+
+    // Released outside the viewport: the gesture ends and the capture with it.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, farOutside, sequence++, Qt::LeftButton));
+    QVERIFY(!m_controller->state().hasPointerCapture());
+    QVERIFY(!m_controller->state().drag().has_value());
 }
 
 void InteractionControllerTest::dragSnapsPreviewOnlyAfterThreshold()
@@ -806,7 +815,10 @@ void InteractionControllerTest::dragSnapsPreviewOnlyAfterThreshold()
 
     QVERIFY(m_controller->state().drag().has_value());
     QVERIFY(!m_controller->state().drag()->exceededThreshold);
-    QVERIFY(m_controller->state().drag()->previewPageBounds.isNull());
+
+    // The preview starts life on the target and has not moved, so there is
+    // nothing yet for a snap to act on.
+    QCOMPARE(m_controller->state().drag()->previewPageBounds, objectTarget().pageBounds);
     QVERIFY(m_controller->state().drag()->snappedTo.isEmpty());
 
     // Past the threshold the preview exists and the candidate two page units
@@ -967,6 +979,53 @@ void InteractionControllerTest::traceRecordsHitTestCandidatesAndPreciseHits()
     QVERIFY(hitTest.value(QStringLiteral("duration_ms")).toObject().contains(QStringLiteral("p50_ms")));
 
     m_controller->setTraceRecorder(nullptr);
+}
+
+void InteractionControllerTest::staleIndexEntryCannotSurviveIntoACommit()
+{
+    // Issue #145 AC6. The index is rebuilt whenever its source changes, and
+    // that alone is not staleness: a drag carries its own copy of the target it
+    // is steering, so re-indexing under it must not cancel a gesture the user
+    // is still making. What makes an entry stale is the revision moving, and
+    // that must refuse the commit.
+    pdfinteraction::FindingListHitTestSource findings;
+    findings.setTargets({ objectTarget() });
+
+    m_dispatcher->clearSources();
+    m_dispatcher->addSource(&findings);
+
+    quint64 sequence = 1;
+    beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+
+    const QPoint movePx = viewportPointFor(*m_viewport, QPointF(58.0, 38.0));
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, sequence++, Qt::NoButton, Qt::LeftButton));
+
+    QSignalSpy dragSpy(m_controller.get(), &pdfinteraction::InteractionController::dragCompleted);
+
+    // The index loses the entry the drag started from, at the same revision.
+    findings.setTargets({});
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, movePx, sequence++, Qt::LeftButton));
+
+    QCOMPARE(dragSpy.size(), 1);
+    QCOMPARE(dragSpy.constFirst().constFirst().value<pdfinteraction::DragSession>().target.id, QStringLiteral("finding-a"));
+
+    // Now the same churn with the revision moved under it. The completion is
+    // refused rather than committed against a document state the gesture was
+    // never steering.
+    findings.setTargets({ objectTarget() });
+    beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, sequence++, Qt::NoButton, Qt::LeftButton));
+
+    QSignalSpy refusedSpy(m_controller.get(), &pdfinteraction::InteractionController::dragCompleted);
+
+    m_revisions->revision = makeRevision(QStringLiteral("doc-1"), 2);
+    findings.setTargets({});
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Release, movePx, sequence++, Qt::LeftButton));
+
+    QCOMPARE(refusedSpy.size(), 0);
+    QVERIFY(!m_controller->state().drag().has_value());
 }
 
 void InteractionControllerTest::hitTestPrecedenceIsOrderIndependent()
