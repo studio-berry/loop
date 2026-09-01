@@ -36,7 +36,7 @@ void QuickDocumentModelTest::searchResultsExposeOnlyValueRoles()
     QuickSearchResultModel model;
     QSignalSpy resetSpy(&model, &QAbstractItemModel::modelReset);
 
-    model.replace({{3, QStringLiteral("match"), QStringLiteral("before match after")}},
+    model.replace({ { 3, QStringLiteral("match"), QStringLiteral("before match after") } },
                   QStringLiteral("match"), QStringLiteral("revision"));
 
     QCOMPARE(resetSpy.count(), 1);
