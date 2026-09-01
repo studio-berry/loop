@@ -8,5 +8,7 @@
   "operation": "charge-undo-snapshots",
   "payload": {
     "snapshots": 4
-  }
+  },
+  "pdf_file": "undo-snapshots.pdf",
+  "pdf_shape": "basic"
 }

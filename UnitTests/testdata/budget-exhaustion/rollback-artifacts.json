@@ -8,5 +8,7 @@
   "operation": "charge-rollback-artifacts",
   "payload": {
     "artifacts": 4
-  }
+  },
+  "pdf_file": "rollback-artifacts.pdf",
+  "pdf_shape": "basic"
 }

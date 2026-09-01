@@ -11,7 +11,9 @@
       "operation": "charge-input-bytes",
       "payload": {
         "source_bytes": 65
-      }
+      },
+      "pdf_file": "input-bytes.pdf",
+      "pdf_shape": "basic"
     },
     {
       "attempted": 65,
@@ -22,8 +24,11 @@
       "limit": 64,
       "operation": "check-decoded-stream-size",
       "payload": {
-        "compressed_bytes": 65
-      }
+        "compressed_bytes": 65,
+        "decoded_bytes": 65
+      },
+      "pdf_file": "single-decoded-stream-bytes.pdf",
+      "pdf_shape": "flate-stream"
     },
     {
       "attempted": 65,
@@ -35,10 +40,12 @@
       "operation": "charge-decoded-bytes",
       "payload": {
         "decoded_bytes": 65
-      }
+      },
+      "pdf_file": "cumulative-decoded-bytes.pdf",
+      "pdf_shape": "many-flate-streams"
     },
     {
-      "attempted": 20,
+      "attempted": 5,
       "budget_kind": "decompression-ratio",
       "budget_pool": "decoded-streams",
       "context": "synthetic/decompression-ratio",
@@ -48,7 +55,9 @@
       "payload": {
         "compressed_bytes": 4,
         "decoded_bytes": 20
-      }
+      },
+      "pdf_file": "decompression-ratio.pdf",
+      "pdf_shape": "flate-stream"
     },
     {
       "attempted": 3,
@@ -60,7 +69,9 @@
       "operation": "enter-depth",
       "payload": {
         "depth": 3
-      }
+      },
+      "pdf_file": "object-depth.pdf",
+      "pdf_shape": "nested-arrays"
     },
     {
       "attempted": 3,
@@ -72,7 +83,9 @@
       "operation": "enter-depth",
       "payload": {
         "depth": 3
-      }
+      },
+      "pdf_file": "recursive-content-depth.pdf",
+      "pdf_shape": "recursive-form"
     },
     {
       "attempted": 4,
@@ -84,7 +97,9 @@
       "operation": "charge-objects",
       "payload": {
         "objects": 4
-      }
+      },
+      "pdf_file": "objects-visited.pdf",
+      "pdf_shape": "many-objects"
     },
     {
       "attempted": 4,
@@ -96,7 +111,9 @@
       "operation": "charge-render-operations",
       "payload": {
         "operations": 4
-      }
+      },
+      "pdf_file": "render-operations.pdf",
+      "pdf_shape": "many-drawing-operations"
     },
     {
       "attempted": 65,
@@ -108,7 +125,9 @@
       "operation": "charge-render-pixels",
       "payload": {
         "pixels": 65
-      }
+      },
+      "pdf_file": "render-pixels.pdf",
+      "pdf_shape": "huge-image"
     },
     {
       "attempted": 2,
@@ -120,7 +139,9 @@
       "operation": "check-elapsed",
       "payload": {
         "elapsed_ms": 2
-      }
+      },
+      "pdf_file": "elapsed-time.pdf",
+      "pdf_shape": "basic"
     },
     {
       "attempted": 4,
@@ -132,7 +153,9 @@
       "operation": "charge-evidence-records",
       "payload": {
         "records": 4
-      }
+      },
+      "pdf_file": "evidence-records.pdf",
+      "pdf_shape": "basic"
     },
     {
       "attempted": 4,
@@ -144,7 +167,9 @@
       "operation": "charge-undo-snapshots",
       "payload": {
         "snapshots": 4
-      }
+      },
+      "pdf_file": "undo-snapshots.pdf",
+      "pdf_shape": "basic"
     },
     {
       "attempted": 4,
@@ -156,10 +181,12 @@
       "operation": "charge-rollback-artifacts",
       "payload": {
         "artifacts": 4
-      }
+      },
+      "pdf_file": "rollback-artifacts.pdf",
+      "pdf_shape": "basic"
     }
   ],
   "generated_by": "scripts/budget_exhaustion/generate_corpus.py",
   "schema_kind": "loupe-processing-budget-exhaustion-corpus",
-  "schema_version": 1
+  "schema_version": 2
 }

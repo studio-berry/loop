@@ -8,5 +8,7 @@
   "operation": "check-elapsed",
   "payload": {
     "elapsed_ms": 2
-  }
+  },
+  "pdf_file": "elapsed-time.pdf",
+  "pdf_shape": "basic"
 }

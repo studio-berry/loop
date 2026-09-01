@@ -1,4 +1,4 @@
 Category: added
 Audience: developers and CI maintainers
 Breaking-Change: no
-Summary: Add a deterministic generated corpus covering every PDF processing-budget dimension, with bounded exhaustion checks that verify exact attribution and fail-closed INCOMPLETE verdicts.
+Summary: Add deterministic minimal PDF fixtures for every PDF processing-budget dimension, inclusive-limit controls, production-reader coverage, fail-closed INCOMPLETE report assertions, and unit-correct decompression-ratio diagnostics.

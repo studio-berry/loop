@@ -8,5 +8,7 @@
   "operation": "charge-input-bytes",
   "payload": {
     "source_bytes": 65
-  }
+  },
+  "pdf_file": "input-bytes.pdf",
+  "pdf_shape": "basic"
 }

@@ -8,5 +8,7 @@
   "operation": "charge-render-operations",
   "payload": {
     "operations": 4
-  }
+  },
+  "pdf_file": "render-operations.pdf",
+  "pdf_shape": "many-drawing-operations"
 }

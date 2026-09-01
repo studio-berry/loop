@@ -8,5 +8,7 @@
   "operation": "charge-objects",
   "payload": {
     "objects": 4
-  }
+  },
+  "pdf_file": "objects-visited.pdf",
+  "pdf_shape": "many-objects"
 }

@@ -8,5 +8,7 @@
   "operation": "enter-depth",
   "payload": {
     "depth": 3
-  }
+  },
+  "pdf_file": "recursive-content-depth.pdf",
+  "pdf_shape": "recursive-form"
 }

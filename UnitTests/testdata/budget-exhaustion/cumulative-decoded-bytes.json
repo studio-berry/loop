@@ -8,5 +8,7 @@
   "operation": "charge-decoded-bytes",
   "payload": {
     "decoded_bytes": 65
-  }
+  },
+  "pdf_file": "cumulative-decoded-bytes.pdf",
+  "pdf_shape": "many-flate-streams"
 }

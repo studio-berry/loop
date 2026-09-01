@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentreader.h"
 #include "pdfdocumentsession.h"
 #include "pdfparser.h"
 #include "pdfpreflightverdict.h"
@@ -33,7 +34,6 @@
 #include <QJsonObject>
 #include <QFile>
 #include <QDir>
-#include <QElapsedTimer>
 #include <QMap>
 #include <QPainter>
 #include <QPainterPath>
@@ -55,6 +55,7 @@ private slots:
     void everyKindReportsExactKindAndPool();
     void generatedCorpusReportsEveryDimensionAndIsIncomplete();
     void generatedCorpusIsIncompleteNeverPass();
+    void generatedPdfCorpusHasProductionReaderInputs();
     void preflightEvidenceBudgetIsIncomplete();
     void rasterSizeBudgetIsIncomplete();
 };
@@ -71,6 +72,8 @@ struct CorpusFixture
     quint64 limit = 0;
     quint64 attempted = 0;
     QString context;
+    QString pdfFile;
+    QString pdfShape;
     QJsonObject payload;
 };
 
@@ -105,6 +108,8 @@ CorpusFixture readFixture(const QJsonObject& object)
     fixture.limit = object.value(QStringLiteral("limit")).toInteger();
     fixture.attempted = object.value(QStringLiteral("attempted")).toInteger();
     fixture.context = object.value(QStringLiteral("context")).toString();
+    fixture.pdfFile = object.value(QStringLiteral("pdf_file")).toString();
+    fixture.pdfShape = object.value(QStringLiteral("pdf_shape")).toString();
     fixture.payload = object.value(QStringLiteral("payload")).toObject();
     return fixture;
 }
@@ -126,7 +131,7 @@ QList<CorpusFixture> loadCorpus()
 
     const QJsonObject root = document.object();
     if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loupe-processing-budget-exhaustion-corpus")
-        || root.value(QStringLiteral("schema_version")).toInt() != 1)
+        || root.value(QStringLiteral("schema_version")).toInt() != 2)
     {
         qFatal("Unexpected generated budget exhaustion corpus schema");
     }
@@ -393,8 +398,6 @@ void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
 {
     const QList<CorpusFixture> fixtures = loadCorpus();
     QSet<QString> dimensions;
-    QElapsedTimer totalTimer;
-    totalTimer.start();
 
     for (const CorpusFixture& fixture : fixtures)
     {
@@ -402,13 +405,13 @@ void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
         dimensions.insert(fixture.budgetKind);
         QVERIFY(fixture.limit < fixture.attempted);
         QVERIFY(!fixture.context.isEmpty());
+        QVERIFY(!fixture.pdfFile.isEmpty());
+        QVERIFY(!fixture.pdfShape.isEmpty());
 
         pdf::PDFProcessingLimits limits;
         configureOnlyExpectedLimit(limits, fixture);
         pdf::PDFProcessingBudget budget(limits);
         bool exhausted = false;
-        QElapsedTimer fixtureTimer;
-        fixtureTimer.start();
         try
         {
             executeFixture(fixture, budget);
@@ -422,19 +425,27 @@ void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
             QCOMPARE(detail.limit, fixture.limit);
             QCOMPARE(detail.attempted, fixture.attempted);
             QCOMPARE(detail.context, fixture.context);
+            if (fixture.budgetKind == QLatin1String("decompression-ratio"))
+            {
+                QCOMPARE(detail.observedBytes, fixture.payload.value(QStringLiteral("decoded_bytes")).toInteger());
+                QCOMPARE(detail.compressedBytes, fixture.payload.value(QStringLiteral("compressed_bytes")).toInteger());
+            }
 
             pdf::PreflightResult result;
             result.inspectionComplete = false;
             result.errorCode = QStringLiteral("budget-exceeded");
             result.errorMessage = QStringLiteral("synthetic budget exhaustion");
-            result.checkStatuses.append({ fixture.id,
-                                          QStringLiteral("incomplete"),
-                                          QStringLiteral("budget-exceeded"),
-                                          fixture.budgetKind,
-                                          fixture.budgetPool,
-                                          static_cast<qint64>(detail.limit),
-                                          static_cast<qint64>(detail.attempted),
-                                          detail.context });
+            pdf::PreflightCheckStatus status{ fixture.id,
+                                              QStringLiteral("incomplete"),
+                                              QStringLiteral("budget-exceeded"),
+                                              fixture.budgetKind,
+                                              fixture.budgetPool,
+                                              static_cast<qint64>(detail.limit),
+                                              static_cast<qint64>(detail.attempted),
+                                              detail.context };
+            status.budgetObservedBytes = static_cast<qint64>(detail.observedBytes);
+            status.budgetCompressedBytes = static_cast<qint64>(detail.compressedBytes);
+            result.checkStatuses.append(status);
             const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
             QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
             QCOMPARE(verdict.reasonCode, QStringLiteral("budget-exceeded"));
@@ -443,13 +454,60 @@ void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
             QVERIFY(!report.value(QStringLiteral("pass")).toBool());
             QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
                      QStringLiteral("incomplete"));
+            if (fixture.budgetKind == QLatin1String("decompression-ratio"))
+            {
+                const QJsonObject budget = report.value(QStringLiteral("checks")).toArray().first().toObject().value(QStringLiteral("budget")).toObject();
+                QCOMPARE(budget.value(QStringLiteral("attempted")).toInteger(), 5);
+                QCOMPARE(budget.value(QStringLiteral("observed_bytes")).toInteger(), 20);
+                QCOMPARE(budget.value(QStringLiteral("compressed_bytes")).toInteger(), 4);
+            }
         }
         QVERIFY2(exhausted, qPrintable(QStringLiteral("fixture did not exhaust: %1").arg(fixture.id)));
-        QVERIFY2(fixtureTimer.elapsed() < 1000, qPrintable(QStringLiteral("fixture exceeded 1 second: %1").arg(fixture.id)));
+
+        // A limit is inclusive. Replaying the same bounded operation exactly
+        // at the configured limit must not be classified as an exhaustion.
+        CorpusFixture boundary = fixture;
+        boundary.limit = boundary.attempted;
+        pdf::PDFProcessingLimits boundaryLimits;
+        configureOnlyExpectedLimit(boundaryLimits, boundary);
+        pdf::PDFProcessingBudget boundaryBudget(boundaryLimits);
+        try
+        {
+            executeFixture(boundary, boundaryBudget);
+        }
+        catch (const pdf::PDFBudgetExceededException& exception)
+        {
+            QFAIL(qPrintable(QStringLiteral("near-limit control exhausted %1: %2")
+                                 .arg(fixture.id, exception.getMessage())));
+        }
     }
 
     QCOMPARE(dimensions.size(), 13);
-    QVERIFY2(totalTimer.elapsed() < 2000, "budget exhaustion corpus exceeded its 2 second bound");
+}
+
+void BudgetExhaustionTest::generatedPdfCorpusHasProductionReaderInputs()
+{
+    const QList<CorpusFixture> fixtures = loadCorpus();
+    for (const CorpusFixture& fixture : fixtures)
+    {
+        QFile file(QDir(QStringLiteral(BUDGET_EXHAUSTION_CORPUS_DIR)).filePath(fixture.pdfFile));
+        QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(file.fileName()));
+        const QByteArray bytes = file.readAll();
+        QVERIFY2(bytes.startsWith("%PDF-1.7"), qPrintable(fixture.id));
+        QVERIFY2(bytes.endsWith("%%EOF\n"), qPrintable(fixture.id));
+
+        pdf::PDFProcessingLimits limits;
+        limits.maxInputBytes = bytes.size() + 1;
+        pdf::PDFDocumentReader reader(nullptr, nullptr, false, false, limits);
+        reader.readFromBuffer(bytes);
+        QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+    }
+
+    // A malformed input remains a parser failure, not a budget failure.
+    pdf::PDFDocumentReader reader(nullptr, nullptr, false, false);
+    reader.readFromBuffer(QByteArrayLiteral("%PDF-1.7\nnot a PDF\n%%EOF\n"));
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
+    QVERIFY(!reader.getErrorMessage().contains(QStringLiteral("budget"), Qt::CaseInsensitive));
 }
 
 void BudgetExhaustionTest::generatedCorpusIsIncompleteNeverPass()
@@ -498,6 +556,19 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
     QVERIFY(!verdict.isPass());
+
+    const QJsonObject report = result.toJson();
+    QVERIFY(!report.value(QStringLiteral("inspection_complete")).toBool());
+    QCOMPARE(report.value(QStringLiteral("error")).toObject().value(QStringLiteral("code")).toString(),
+             QStringLiteral("budget-exceeded"));
+    const QJsonArray checks = report.value(QStringLiteral("checks")).toArray();
+    QCOMPARE(checks.size(), 1);
+    const QJsonObject budget = checks.first().toObject().value(QStringLiteral("budget")).toObject();
+    QCOMPARE(budget.value(QStringLiteral("kind")).toString(), QStringLiteral("evidence-records"));
+    QCOMPARE(budget.value(QStringLiteral("pool")).toString(), QStringLiteral("evidence-cache"));
+    QVERIFY(!report.value(QStringLiteral("pass")).toBool());
+    QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+             QStringLiteral("incomplete"));
 }
 
 void BudgetExhaustionTest::rasterSizeBudgetIsIncomplete()

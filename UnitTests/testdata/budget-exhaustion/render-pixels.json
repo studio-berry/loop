@@ -8,5 +8,7 @@
   "operation": "charge-render-pixels",
   "payload": {
     "pixels": 65
-  }
+  },
+  "pdf_file": "render-pixels.pdf",
+  "pdf_shape": "huge-image"
 }

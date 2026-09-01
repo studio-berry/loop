@@ -8,5 +8,7 @@
   "operation": "charge-evidence-records",
   "payload": {
     "records": 4
-  }
+  },
+  "pdf_file": "evidence-records.pdf",
+  "pdf_shape": "basic"
 }

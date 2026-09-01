@@ -7,6 +7,9 @@
   "limit": 64,
   "operation": "check-decoded-stream-size",
   "payload": {
-    "compressed_bytes": 65
-  }
+    "compressed_bytes": 65,
+    "decoded_bytes": 65
+  },
+  "pdf_file": "single-decoded-stream-bytes.pdf",
+  "pdf_shape": "flate-stream"
 }

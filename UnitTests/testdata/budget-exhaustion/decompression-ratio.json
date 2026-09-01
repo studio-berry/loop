@@ -1,5 +1,5 @@
 {
-  "attempted": 20,
+  "attempted": 5,
   "budget_kind": "decompression-ratio",
   "budget_pool": "decoded-streams",
   "context": "synthetic/decompression-ratio",
@@ -9,5 +9,7 @@
   "payload": {
     "compressed_bytes": 4,
     "decoded_bytes": 20
-  }
+  },
+  "pdf_file": "decompression-ratio.pdf",
+  "pdf_shape": "flate-stream"
 }
