@@ -16,9 +16,9 @@
     <category>Utility</category>
   </categories>
   <developer_name>Michael Berry</developer_name>
-  <url type="homepage">https://github.com/mberrys/Loupe-pdf</url>
-  <url type="bugtracker">https://github.com/mberrys/Loupe-pdf/issues</url>
-  <url type="help">https://github.com/mberrys/Loupe-pdf</url>
+  <url type="homepage">https://github.com/studio-berry/loop</url>
+  <url type="bugtracker">https://github.com/studio-berry/loop/issues</url>
+  <url type="help">https://github.com/studio-berry/loop</url>
   <content_rating type="oars-1.1"/>
   <launchable type="desktop-id">io.github.mberrys.Loupe-pdf.desktop</launchable>
   <releases>
