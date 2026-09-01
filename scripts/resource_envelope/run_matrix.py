@@ -245,8 +245,16 @@ def run_fixture(
 ) -> dict[str, Any]:
     if repetitions < 1 or rasterizers < 1:
         raise ValueError("repetitions and rasterizers must be positive")
+    # Resolve relative paths before the child is launched with cwd=ROOT.
+    # Otherwise a relative fixture or tool path checked against the caller
+    # directory would be looked up again relative to ROOT in the child.
+    pdf_tool = Path(pdf_tool).resolve()
+    fixture_path = Path(fixture_path).resolve()
     spec = FIXTURE_SPECS[fixture_id]
     fixture_details, provenance_errors = _fixture_metadata(fixture_id, fixture_path, metadata, require_provenance)
+    # Pin rasterizers to a fixed value (8) so the same code and fixtures
+    # produce comparable RSS and elapsed time across hosts with different
+    # CPU counts. The value is recorded in the result profile.
     command = [str(pdf_tool), "benchmark", str(fixture_path), "--render-hw-accel", "0", "--render-rasterizers", str(rasterizers), "--console-format", "json"]
     record: dict[str, Any] = {
         "fixture_id": fixture_id,
@@ -388,8 +396,10 @@ def run_matrix(
     cancel_fixture: str | None = None,
     cancel_after_seconds: float | None = None,
 ) -> dict[str, Any]:
+    pdf_tool = Path(pdf_tool).resolve()
     baseline_by_fixture = _baseline_records(baseline) if isinstance(baseline, Path) else (baseline or {})
     identity = _candidate_identity()
+    candidate_sha = identity["candidate_sha"]
     records: list[dict[str, Any]] = []
     for fixture_id, spec in FIXTURE_SPECS.items():
         supplied = fixtures.get(fixture_id)
@@ -400,6 +410,7 @@ def run_matrix(
             continue
         metadata = dict(supplied) if isinstance(supplied, Mapping) else None
         fixture_path = Path(metadata["path"]) if metadata else Path(supplied)
+        fixture_path = fixture_path.resolve()
         if not fixture_path.is_file():
             record = _empty_result(fixture_id, "fixture-not-found")
             record["required"] = spec["required"]
@@ -410,9 +421,16 @@ def run_matrix(
         result = record.get("result")
         if isinstance(result, Mapping):
             result_identity = result.get("identity")
-            if isinstance(result_identity, Mapping) and result_identity.get("commit") and result_identity.get("commit") != identity["candidate_sha"]:
-                record["validation_errors"] = sorted(set(record.get("validation_errors", []) + ["PdfTool identity commit does not match checkout HEAD"]))
-                record["status"] = "failed"
+            if isinstance(result_identity, Mapping):
+                commit = result_identity.get("commit")
+                if commit != candidate_sha:
+                    record["validation_errors"] = sorted(set(record.get("validation_errors", []) + ["PdfTool identity commit does not match checkout HEAD"]))
+                    record["status"] = "failed"
+                expected_digest = record.get("fixture_sha256")
+                fixture_digest = result_identity.get("fixture_digest")
+                if expected_digest and fixture_digest != expected_digest:
+                    record["validation_errors"] = sorted(set(record.get("validation_errors", []) + ["PdfTool identity fixture digest does not match input SHA-256"]))
+                    record["status"] = "failed"
         records.append(record)
 
     failed = sum(record["status"] == "failed" for record in records)

@@ -1,4 +1,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Strengthen resource-envelope qualification with exact external-fixture manifests, repeated cold-process profiles, baseline identity and RSS/time regression checks, controlled cancellation probes, and a separate Windows peak-commit measurement.
+Summary: Add a fixture matrix that runs each PDF in a fresh process, validates the digest and size from the manifest, compares RSS and elapsed time to a baseline, and checks cancel behavior. Rasterizers are pinned to 8 so results stay comparable.
