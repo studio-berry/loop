@@ -83,6 +83,7 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loupe-preflight/tools/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loupe-shell.json",
@@ -417,6 +418,7 @@
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBleedFixup",
         "UnitTestsBleedMarginProbe",
+        "UnitTestsBudgetCorpus",
         "UnitTestsBudgetExhaustion",
         "UnitTestsContentEditor",
         "UnitTestsContentProcessorLimits",
@@ -992,6 +994,46 @@
       "qt_modules": [
         "Core",
         "Test"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsBudgetCorpus",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
@@ -2939,7 +2981,7 @@
     }
   ],
   "counts": {
-    "targets": 67,
+    "targets": 68,
     "installed_in_profile": 4,
     "build_only_in_profile": 3,
     "widgets_surfaces": 4,
