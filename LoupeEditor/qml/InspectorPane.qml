@@ -88,6 +88,18 @@ Pane {
                 Label {
                     text: qsTr("Optional content: %1").arg(root.documentModel && root.documentModel.hasOptionalContent ? qsTr("present") : qsTr("none"))
                 }
+                Label {
+                    text: qsTr("Lifecycle: %1").arg(root.documentModel ? root.documentModel.lifecycleState : "")
+                }
+                Label {
+                    text: qsTr("Document state: %1").arg(root.documentModel && root.documentModel.modified ? qsTr("modified") : qsTr("unchanged"))
+                }
+                Label {
+                    text: qsTr("Security: %1").arg(root.documentModel && root.documentModel.encrypted ? qsTr("encrypted") : qsTr("not encrypted"))
+                }
+                Label {
+                    text: qsTr("Permissions: %1").arg(root.documentModel && root.documentModel.canPrint ? qsTr("printing allowed") : qsTr("printing restricted"))
+                }
             }
         }
     }

@@ -540,6 +540,7 @@ void EditorHost::connectFacade()
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
             {
+                syncDocumentLifecycle();
                 if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
                 {
                     onDocumentGone();
@@ -550,7 +551,10 @@ void EditorHost::connectFacade()
                 bumpCommandEpoch(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
-            { bumpPresentation(); });
+            {
+                syncDocumentLifecycle();
+                bumpPresentation();
+            });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
             {
@@ -704,12 +708,36 @@ void EditorHost::onDocumentReady()
 
     syncRevisionModels();
     m_documentModel.setDocument(&m_session->context());
+    syncDocumentLifecycle();
     m_searchRow = -1;
     refreshHitTestSources();
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
     announceDocumentState(tr("Document ready."));
+}
+
+void EditorHost::syncDocumentLifecycle()
+{
+    const auto& facade = m_session->facade();
+    QString outputState;
+    switch (facade.outputState())
+    {
+        case pdfinteraction::DocumentOutputState::None:
+            outputState = QStringLiteral("none");
+            break;
+        case pdfinteraction::DocumentOutputState::Pending:
+            outputState = QStringLiteral("pending");
+            break;
+        case pdfinteraction::DocumentOutputState::Saved:
+            outputState = QStringLiteral("saved");
+            break;
+    }
+
+    m_documentModel.setLifecycleState(QString::fromLatin1(pdfinteraction::getDocumentStateName(facade.state())),
+                                      facade.facets().testFlag(pdfinteraction::DocumentFacet::Dirty),
+                                      facade.facets().testFlag(pdfinteraction::DocumentFacet::Stale),
+                                      std::move(outputState), facade.typedError());
 }
 
 void EditorHost::onDocumentGone()

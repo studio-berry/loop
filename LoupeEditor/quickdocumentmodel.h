@@ -148,6 +148,24 @@ class QuickDocumentModel final : public QObject
     Q_PROPERTY(bool hasOutline READ hasOutline NOTIFY changed)
     Q_PROPERTY(bool hasAttachments READ hasAttachments NOTIFY changed)
     Q_PROPERTY(bool hasOptionalContent READ hasOptionalContent NOTIFY changed)
+    Q_PROPERTY(bool hasForm READ hasForm NOTIFY changed)
+    Q_PROPERTY(bool hasLogicalStructure READ hasLogicalStructure NOTIFY changed)
+    Q_PROPERTY(bool encrypted READ encrypted NOTIFY changed)
+    Q_PROPERTY(bool canPrint READ canPrint NOTIFY changed)
+    Q_PROPERTY(bool canHighResolutionPrint READ canHighResolutionPrint NOTIFY changed)
+    Q_PROPERTY(bool canCopy READ canCopy NOTIFY changed)
+    Q_PROPERTY(bool canModify READ canModify NOTIFY changed)
+    Q_PROPERTY(bool canComment READ canComment NOTIFY changed)
+    Q_PROPERTY(bool canFillForms READ canFillForms NOTIFY changed)
+    Q_PROPERTY(bool canAssemble READ canAssemble NOTIFY changed)
+    Q_PROPERTY(bool canAccessibility READ canAccessibility NOTIFY changed)
+    Q_PROPERTY(bool modified READ modified NOTIFY changed)
+    Q_PROPERTY(bool stale READ stale NOTIFY changed)
+    Q_PROPERTY(bool outputPending READ outputPending NOTIFY changed)
+    Q_PROPERTY(bool outputSaved READ outputSaved NOTIFY changed)
+    Q_PROPERTY(QString lifecycleState READ lifecycleState NOTIFY changed)
+    Q_PROPERTY(QString outputState READ outputState NOTIFY changed)
+    Q_PROPERTY(QString typedError READ typedError NOTIFY changed)
     Q_PROPERTY(int searchResultCount READ searchResultCount NOTIFY searchChanged)
 
 public:
@@ -167,9 +185,32 @@ public:
     bool hasOutline() const noexcept { return m_hasOutline; }
     bool hasAttachments() const noexcept { return m_hasAttachments; }
     bool hasOptionalContent() const noexcept { return m_hasOptionalContent; }
+    bool hasForm() const noexcept { return m_hasForm; }
+    bool hasLogicalStructure() const noexcept { return m_hasLogicalStructure; }
+    bool encrypted() const noexcept { return m_encrypted; }
+    bool canPrint() const noexcept { return m_canPrint; }
+    bool canHighResolutionPrint() const noexcept { return m_canHighResolutionPrint; }
+    bool canCopy() const noexcept { return m_canCopy; }
+    bool canModify() const noexcept { return m_canModify; }
+    bool canComment() const noexcept { return m_canComment; }
+    bool canFillForms() const noexcept { return m_canFillForms; }
+    bool canAssemble() const noexcept { return m_canAssemble; }
+    bool canAccessibility() const noexcept { return m_canAccessibility; }
+    bool modified() const noexcept { return m_modified; }
+    bool stale() const noexcept { return m_stale; }
+    bool outputPending() const noexcept { return m_outputPending; }
+    bool outputSaved() const noexcept { return m_outputSaved; }
+    QString lifecycleState() const { return m_lifecycleState; }
+    QString outputState() const { return m_outputState; }
+    QString typedError() const { return m_typedError; }
     int searchResultCount() const noexcept { return m_searchResults.rowCount(); }
 
     void setDocument(pdf::PDFDocumentContext* context);
+    void setLifecycleState(QString state,
+                           bool modified,
+                           bool stale,
+                           QString outputState,
+                           QString typedError);
     void clear();
 
     /// Performs a Core text search against a captured document revision. The
@@ -198,6 +239,24 @@ private:
     bool m_hasOutline = false;
     bool m_hasAttachments = false;
     bool m_hasOptionalContent = false;
+    bool m_hasForm = false;
+    bool m_hasLogicalStructure = false;
+    bool m_encrypted = false;
+    bool m_canPrint = false;
+    bool m_canHighResolutionPrint = false;
+    bool m_canCopy = false;
+    bool m_canModify = false;
+    bool m_canComment = false;
+    bool m_canFillForms = false;
+    bool m_canAssemble = false;
+    bool m_canAccessibility = false;
+    bool m_modified = false;
+    bool m_stale = false;
+    bool m_outputPending = false;
+    bool m_outputSaved = false;
+    QString m_lifecycleState;
+    QString m_outputState;
+    QString m_typedError;
 };
 
 #endif

@@ -238,9 +238,48 @@ void QuickDocumentModel::setDocument(pdf::PDFDocumentContext* context)
     m_hasOutline = catalog->getOutlineRootPtr() && catalog->getOutlineRootPtr()->getChildCount() > 0;
     m_hasAttachments = !catalog->getEmbeddedFiles().empty();
     m_hasOptionalContent = !catalog->getOptionalContentProperties()->getAllOptionalContentGroups().empty();
+    m_hasForm = catalog->getFormObject().isValid();
+    m_hasLogicalStructure = catalog->isLogicalStructureMarked();
+
+    const pdf::PDFSecurityHandler* security = document->getStorage().getSecurityHandler();
+    m_encrypted = security && security->getMode() != pdf::EncryptionMode::None;
+    m_canPrint = security && (security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintLowResolution) ||
+                              security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintHighResolution));
+    m_canHighResolutionPrint = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::PrintHighResolution);
+    m_canCopy = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::CopyContent);
+    m_canModify = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::Modify);
+    m_canComment = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::ModifyInteractiveItems);
+    m_canFillForms = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::ModifyFormFields);
+    m_canAssemble = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::Assemble);
+    m_canAccessibility = security && security->isAllowed(pdf::PDFSecurityHandler::Permission::Accessibility);
     m_searchResults.clear();
     Q_EMIT changed();
     Q_EMIT searchChanged();
+}
+
+void QuickDocumentModel::setLifecycleState(QString state,
+                                           bool modified,
+                                           bool stale,
+                                           QString outputState,
+                                           QString typedError)
+{
+    const bool stateChanged = m_lifecycleState != state || m_modified != modified || m_stale != stale ||
+                              m_outputState != outputState || m_typedError != typedError ||
+                              m_outputPending != (outputState == QStringLiteral("pending")) ||
+                              m_outputSaved != (outputState == QStringLiteral("saved"));
+    if (!stateChanged)
+    {
+        return;
+    }
+
+    m_lifecycleState = std::move(state);
+    m_modified = modified;
+    m_stale = stale;
+    m_outputState = std::move(outputState);
+    m_typedError = std::move(typedError);
+    m_outputPending = m_outputState == QStringLiteral("pending");
+    m_outputSaved = m_outputState == QStringLiteral("saved");
+    Q_EMIT changed();
 }
 
 void QuickDocumentModel::clear()
@@ -260,6 +299,24 @@ void QuickDocumentModel::clear()
     m_hasOutline = false;
     m_hasAttachments = false;
     m_hasOptionalContent = false;
+    m_hasForm = false;
+    m_hasLogicalStructure = false;
+    m_encrypted = false;
+    m_canPrint = false;
+    m_canHighResolutionPrint = false;
+    m_canCopy = false;
+    m_canModify = false;
+    m_canComment = false;
+    m_canFillForms = false;
+    m_canAssemble = false;
+    m_canAccessibility = false;
+    m_modified = false;
+    m_stale = false;
+    m_outputPending = false;
+    m_outputSaved = false;
+    m_lifecycleState.clear();
+    m_outputState.clear();
+    m_typedError.clear();
     Q_EMIT changed();
     Q_EMIT searchChanged();
 }

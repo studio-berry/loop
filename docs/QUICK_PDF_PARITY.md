@@ -1,11 +1,12 @@
-# Quick PDF parity
+# Quick competitor parity
 
 The Quick shell owns the interactive PDF surface; `LoupeLibCore` remains the
 owner of PDF objects, document revisions, and persistence. The first parity
 slice is intentionally model-driven:
 
-- `QuickDocumentModel` exposes immutable page, outline, properties, attachment
-  presence, optional-content presence, and revision values to QML.
+- `QuickDocumentModel` exposes immutable page, outline, properties, capability,
+  lifecycle, attachment presence, optional-content presence, and revision values
+  to QML.
 - `QuickSearchResultModel` admits Core text-search results only when the
   captured `PDFRevisionIdentity` is still current.
 - `DocumentPane.qml` provides pages, outline, search, next/previous result

@@ -213,6 +213,7 @@ private:
 
     void onDocumentReady();
     void onDocumentGone();
+    void syncDocumentLifecycle();
     void bindCanvas();
     void unbindCanvas();
     void syncRevisionModels();
