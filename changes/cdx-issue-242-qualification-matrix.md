@@ -1,4 +1,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Add a tracked external-fixture resource-envelope matrix runner that records every benchmark attempt, validates measured envelopes against policy, and flags unavailable measurements and baseline RSS or elapsed-time regressions.
+Summary: Add a fixture matrix that runs each PDF in a fresh process, validates the digest and size from the manifest, compares RSS and elapsed time to a baseline, and checks cancel behavior. Rasterizers are pinned to 8 so results stay comparable.

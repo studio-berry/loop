@@ -26,6 +26,7 @@
     "page_count": { "type": "integer", "minimum": 0 },
     "open_to_first_view_ms": { "type": "integer", "minimum": -1 },
     "rss_high_water_bytes": { "type": "integer", "minimum": -1 },
+    "process_commit_high_water_bytes": { "type": "integer", "minimum": -1 },
     "cache_high_water_bytes": { "type": "integer", "minimum": -1 },
     "preflight_high_water_bytes": { "type": "integer", "minimum": -1 },
     "pages_materialized": { "type": "integer", "minimum": -1 },
