@@ -671,7 +671,11 @@ void EditorHost::moveSearch(int direction)
         return;
     }
 
-    m_searchRow = (m_searchRow + direction + count) % count;
+    if (m_searchRow < 0) {
+        m_searchRow = direction > 0 ? 0 : count - 1;
+    } else {
+        m_searchRow = (m_searchRow + direction + count) % count;
+    }
     goToPage(m_documentModel.searchPageAt(m_searchRow));
 }
 

@@ -66,7 +66,7 @@ Item {
                         }
                     }
 
-                    ListView {
+                    TreeView {
                         id: outlineView
                         clip: true
                         focus: true
@@ -76,8 +76,9 @@ Item {
 
                         delegate: ItemDelegate {
                             width: outlineView.width
-                            text: title
-                            Accessible.name: title
+                            text: model.display !== undefined ? model.display : title
+                            Accessible.name: text
+                            onClicked: if (root.host && model.index !== undefined) root.host.goToOutlineIndex(model.index)
                         }
 
                         Label {
@@ -112,13 +113,13 @@ Item {
                             Layout.fillWidth: true
                             Button {
                                 text: qsTr("Previous")
-                                enabled: root.host && root.host.isCommandEnabled("actionFindPrevious")
+                                enabled: root.host && root.host.commandEpoch >= 0 && root.host.isCommandEnabled("actionFindPrevious")
                                 onClicked: if (root.host)
                                     root.host.invokeCommand("actionFindPrevious")
                             }
                             Button {
                                 text: qsTr("Next")
-                                enabled: root.host && root.host.isCommandEnabled("actionFindNext")
+                                enabled: root.host && root.host.commandEpoch >= 0 && root.host.isCommandEnabled("actionFindNext")
                                 onClicked: if (root.host)
                                     root.host.invokeCommand("actionFindNext")
                             }

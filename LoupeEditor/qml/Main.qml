@@ -67,7 +67,11 @@ ApplicationWindow {
                 window.title = qsTr("Loupe")
             }
             if (host) {
-                window.visibility = host.fullscreenRequested ? Window.FullScreen : Window.Windowed
+                if (host.fullscreenRequested) {
+                    window.visibility = Window.FullScreen
+                } else if (window.visibility === Window.FullScreen) {
+                    window.visibility = Window.Windowed
+                }
             }
         }
     }
