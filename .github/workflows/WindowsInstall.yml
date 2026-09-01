@@ -289,7 +289,7 @@ jobs:
           [Paths]
           Prefix=.
           Plugins=.
-          Qml2Imports=qml
+            Qml2Imports=qml;.
           "@ | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $installBin "qt.conf") -Destination (Join-Path $evidenceDir "qt.conf")
         env:
