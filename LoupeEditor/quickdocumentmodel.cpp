@@ -252,7 +252,7 @@ void QuickDocumentModel::setDocument(pdf::PDFDocumentContext* context)
     m_hasOutline = catalog->getOutlineRootPtr() && catalog->getOutlineRootPtr()->getChildCount() > 0;
     m_hasAttachments = !catalog->getEmbeddedFiles().empty();
     m_hasOptionalContent = !catalog->getOptionalContentProperties()->getAllOptionalContentGroups().empty();
-    m_hasForm = pdf::PDFForm::parse(document, catalog->getFormObject()).getFormType() != pdf::PDFForm::FormType::None;
+    m_hasForm = !catalog->getFormObject().isNull();
     m_hasLogicalStructure = catalog->isLogicalStructureMarked();
 
     const pdf::PDFSecurityHandler* security = document->getStorage().getSecurityHandler();
