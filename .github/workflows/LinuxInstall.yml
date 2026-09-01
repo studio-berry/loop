@@ -109,6 +109,7 @@ jobs:
 
       - name: 'VCPKG: Set up VCPKG'
         run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           VCPKG_COMMIT="$(python3 - <<'PY'
           import json
           with open("loupe/vcpkg-configuration.json", encoding="utf-8") as f:
