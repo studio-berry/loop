@@ -384,6 +384,7 @@
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
+    "UnitTestsBudgetCorpus",
     "UnitTestsBudgetExhaustion",
     "UnitTestsCanvasParity",
     "UnitTestsContentEditor",
