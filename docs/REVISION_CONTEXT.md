@@ -26,3 +26,20 @@ This is the deterministic unit-level form of the hostile-workload stress
 contract: render, preflight, thumbnail, and repair-plan producers may finish
 in any order, but only a result carrying the current revision may cross the
 presentation/cache boundary.
+
+`UnitTestsRevisionStress` runs the concurrent form of the same contract.
+Render, preflight, thumbnail, and repair-plan jobs are in flight together
+while the document is mutated and the effective profile changes at points the
+producers do not observe, and the test asserts the four correctness
+properties: zero stale findings applied, zero stale tiles presented past an
+invalidation boundary, deterministic cancellation (cancelled work is terminal,
+is never success, and publishes nothing), and no cache read returning a result
+for the wrong revision. Zero stale results is a correctness requirement, not a
+percentile, so a single admitted stale result fails the test.
+
+Timing alone cannot prove that the fence was exercised, so the test does not
+rely on it: one phase submits results against the current revision and asserts
+they are admitted and read back as current, and a second phase holds one
+producer per job kind inside its work function, mutates the document underneath
+all of them, and only then releases them - asserting both the consumer-side
+rejection and the scheduler-side `Stale` outcome.

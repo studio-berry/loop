@@ -58,7 +58,8 @@
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
-        "UnitTests/tst_overprinttest.cpp"
+        "UnitTests/tst_overprinttest.cpp",
+        "UnitTests/tst_revisionstresstest.cpp"
       ],
       "targets": ["LoupeLibCore"],
       "tests": [
@@ -83,6 +84,7 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
+        "UnitTestsRevisionStress",
         "UnitTestsSchemaEvolution",
         "UnitTestsStandardOracle",
         "UnitTestsWorkloadEnvelope"

@@ -440,6 +440,7 @@
     "UnitTestsRepairOperation",
     "UnitTestsRepairOperatorAcceptance",
     "UnitTestsResourceBudget",
+    "UnitTestsRevisionStress",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",
