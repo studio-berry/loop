@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -29,9 +30,12 @@ def _policy() -> dict:
     }
 
 
-def _envelope(page_count: int = 256, rss: int = 10, elapsed: int = 10) -> dict:
+def _envelope(page_count: int = 256, rss: int = 10, elapsed: int = 10, commit: str | None = None, fixture_digest: str | None = None) -> dict:
+    identity = {}
+    if commit is not None or fixture_digest is not None:
+        identity = {"commit": commit, "fixture_digest": fixture_digest}
     return {
-        "identity": {},
+        "identity": identity,
         "family": "test",
         "status": "incomplete",
         "page_count": page_count,
@@ -75,12 +79,14 @@ class RunMatrixTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / "fixture.pdf"
             fixture.write_bytes(b"fixture")
-            payload = json.dumps({"data": {"workload_envelope": _envelope()}})
+            import hashlib
+            digest = hashlib.sha256(b"fixture").hexdigest()
+            payload = json.dumps({"data": {"workload_envelope": _envelope(commit="candidate-sha", fixture_digest=digest)}})
 
             def runner(*args, **kwargs):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture))
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture), candidate_sha="candidate-sha")
             self.assertEqual(record["status"], "flagged")
             self.assertEqual(record["result"]["page_count"], 256)
 
@@ -88,30 +94,71 @@ class RunMatrixTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / "fixture.pdf"
             fixture.write_bytes(b"fixture")
-            payload = json.dumps({"workload_envelope": _envelope(rss=50, elapsed=50)})
+            import hashlib
+            digest = hashlib.sha256(b"fixture").hexdigest()
+            payload = json.dumps({"workload_envelope": _envelope(rss=50, elapsed=50, commit="candidate-sha", fixture_digest=digest)})
 
             def runner(*args, **kwargs):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
-            baseline = {"result": _envelope(rss=10, elapsed=10)}
+            baseline = {"result": _envelope(rss=10, elapsed=10, commit="candidate-sha", fixture_digest=digest)}
             metadata = _metadata(fixture)
-            current = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=None, runner=runner, metadata=metadata)
+            current = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=None, runner=runner, metadata=metadata, candidate_sha="candidate-sha")
             baseline["fixture_sha256"] = current["fixture_sha256"]
             baseline["identity"] = current["identity"]
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=baseline, margin=2, runner=runner, metadata=metadata)
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=baseline, margin=2, runner=runner, metadata=metadata, candidate_sha="candidate-sha")
             self.assertEqual(record["status"], "failed")
             self.assertEqual(len(record["regressions"]), 2)
+
+    def test_identity_must_match_candidate_and_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "fixture.pdf"
+            fixture.write_bytes(b"fixture")
+            import hashlib
+            payload = json.dumps(
+                {
+                    "workload_envelope": _envelope(
+                        commit="stale-candidate",
+                        fixture_digest=hashlib.sha256(b"other fixture").hexdigest(),
+                    ),
+                }
+            )
+
+            def runner(*args, **kwargs):
+                return __import__("subprocess").CompletedProcess(args[0], 0, payload, "")
+
+            metadata = _metadata(fixture)
+            record = run_fixture(
+                Path("PdfTool.exe"),
+                "pathological-vector",
+                fixture,
+                _policy(),
+                1,
+                runner=runner,
+                metadata=metadata,
+                candidate_sha="candidate-sha",
+            )
+
+            self.assertEqual(record["status"], "failed")
+            self.assertTrue(
+                any("identity.commit" in error for error in record["validation_errors"])
+            )
+            self.assertTrue(
+                any("identity.fixture_digest" in error for error in record["validation_errors"])
+            )
 
     def test_repetitions_record_conservative_memory_and_median_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = Path(directory) / "fixture.pdf"
             fixture.write_bytes(b"fixture")
-            envelopes = [_envelope(rss=value, elapsed=value) for value in (10, 20, 30)]
+            import hashlib
+            digest = hashlib.sha256(b"fixture").hexdigest()
+            envelopes = [_envelope(rss=value, elapsed=value, commit="candidate-sha", fixture_digest=digest) for value in (10, 20, 30)]
 
             def runner(*args, **kwargs):
                 return subprocess.CompletedProcess(args[0], 0, json.dumps({"workload_envelope": envelopes.pop(0)}), "")
 
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture), repetitions=3)
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture), repetitions=3, candidate_sha="candidate-sha")
             self.assertEqual(record["statistics"]["elapsed_ms"]["median"], 20)
             self.assertEqual(record["result"]["rss_high_water_bytes"], 30)
 
