@@ -55,8 +55,9 @@ fixed absolute location.
 ## V1 slim distribution
 
 When `LOUPE_LOUPE_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
-(LoupePreflight and required inspection plugins). PageMaster / Diff / Viewer /
-LaunchPad may ship in full packages; still build them in CI on both supported OS.
+(LoupePreflight and required inspection plugins). Retired standalone product
+identities are absent from both supported package profiles and are not built by
+the release graph.
 
 ## Cross-platform compatibility pass
 
@@ -76,7 +77,7 @@ bundling** and **installer packaging** for modules that are already complete.
 | Page production export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
 | Retired secondary product identities | No | N/A | N/A | Replaced by LoupeEditor, PdfTool, and in-app workspaces |
 | loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
-| UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
+| UnitTests (operator, corpus, page production) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
 | Windows MSI | Session 07 exact-SHA package boundary | ☐ | — | x64 WiX package, dependency evidence, clean VM operator/a11y loop; **V1 ships unsigned** (MIC-342 / MIC-345) |
 | Linux AppImage | Session 07 exact-SHA package boundary | — | ☐ | x86_64 package, dependency evidence, clean VM operator/a11y loop |
 | Flatpak / MSIX / portable ZIP | Out of Session 07 scope | — | — | Build or sandbox work may exist, but these formats are not release-gate evidence |
@@ -157,7 +158,8 @@ candidate resolved and keep the layout table above synchronized with the VM evid
 macOS is explicitly **out of scope for V1**. The work below is retained as the
 entry criteria for adding it in a later release, not as a V1 checklist.
 
-- Apps already set `MACOSX_BUNDLE ON` for Editor, Viewer, PageMaster, Diff, LaunchPad.
+- The future application bundle must contain the Quick-based `LoupeEditor` only;
+  retired standalone product identities are not macOS bundle targets.
 - CMake today treats non-`LOUPE_LINUX` like Windows for `LOUPE_PLUGINS_DIR` (`pdfplugins`, `CMakeLists.txt:198-201`). That path must be confirmed inside a `.app` bundle or the install rules adjusted.
 - A `macos` job in `ci.yml` with Qt 6.11.1 + vcpkg, mirroring the Ubuntu/Windows `ctest` set, is the minimum bar before any macOS claim is restored.
 - Notarization and staple steps belong in a dedicated `macOSInstall.yml` before attaching artifacts to the release draft. This requires an **Apple Developer Program** enrollment, which is not currently held.
