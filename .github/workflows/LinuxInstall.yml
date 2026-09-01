@@ -205,7 +205,7 @@ jobs:
           evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          loupe_quick_src="$GITHUB_WORKSPACE/loupe/build/Loupe/Quick"
+          loupe_quick_src="$GITHUB_WORKSPACE/loupe/build/LoupeEditor/Loupe/Quick"
           qml_dest="install/usr/lib/qml/Loupe/Quick"
           if [ ! -d "$loupe_quick_src" ]; then
             echo "::error::Built Loupe.Quick QML module was not found: $loupe_quick_src"
