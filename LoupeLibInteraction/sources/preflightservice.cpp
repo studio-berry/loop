@@ -113,8 +113,7 @@ QString SchedulerPreflightService::beginRun(PreflightRunRequest request)
                             // revision. A result for a document state the user
                             // has already moved past is dropped there, which is
                             // why there is no second staleness rule here.
-                            controller->acceptResult(jobId, revision, result);
-                        });
+                            controller->acceptResult(jobId, revision, result); });
         };
 
         if (context.isCancellationRequested())

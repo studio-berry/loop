@@ -202,7 +202,7 @@ static PreparedImageData prepareImageData(const QImage& source,
         if (reporter)
         {
             reporter->reportRenderErrorOnce(RenderErrorType::Warning,
-                PDFTranslationContext::tr("Selected compression does not support 1-bit monochrome images; grayscale encoding will be used instead."));
+                                            PDFTranslationContext::tr("Selected compression does not support 1-bit monochrome images; grayscale encoding will be used instead."));
         }
         resolvedMode = PDFImage::ImageColorMode::Grayscale;
     }
@@ -303,7 +303,7 @@ static PreparedImageData prepareImageData(const QImage& source,
     if (hadTransparency && reporter && options.alphaHandling == PDFImage::AlphaHandling::FlattenToWhite)
     {
         reporter->reportRenderErrorOnce(RenderErrorType::Warning,
-            PDFTranslationContext::tr("Image alpha channel was composited onto white background during encoding."));
+                                        PDFTranslationContext::tr("Image alpha channel was composited onto white background during encoding."));
     }
 
     return prepared;
@@ -390,7 +390,7 @@ struct PDFJPEGDestination
 {
     jpeg_destination_mgr manager;
     QByteArray* buffer = nullptr;
-    std::array<JOCTET, 4096> storage = { };
+    std::array<JOCTET, 4096> storage = {};
 };
 
 static void jpegInitDestination(j_compress_ptr cinfo)
@@ -435,7 +435,7 @@ static QByteArray encodeJPEG(const PreparedImageData& data, int quality)
 
     auto errorExit = [](j_common_ptr ptr)
     {
-        char buffer[JMSG_LENGTH_MAX] = { };
+        char buffer[JMSG_LENGTH_MAX] = {};
         (ptr->err->format_message)(ptr, buffer);
         throw PDFException(PDFTranslationContext::tr("Error writing JPEG image: %1.").arg(QString::fromLatin1(buffer)));
     };
@@ -723,14 +723,14 @@ static QByteArray encodeJPEG2000(const PreparedImageData& data,
         for (const QString& warning : messages.warnings)
         {
             reporter->reportRenderErrorOnce(RenderErrorType::Warning,
-                PDFTranslationContext::tr("JPEG 2000 warning: %1").arg(warning));
+                                            PDFTranslationContext::tr("JPEG 2000 warning: %1").arg(warning));
         }
     }
 
     return result;
 }
 
-} // namespace
+}   // namespace
 
 struct PDFJPEG2000ImageData
 {
@@ -849,7 +849,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
             std::vector<PDFReal> adjustedDecode = softMaskImage.m_imageData.getDecode();
             if (adjustedDecode.size() < 2)
             {
-                adjustedDecode = { 0.0, 1.0};
+                adjustedDecode = { 0.0, 1.0 };
             }
             std::swap(adjustedDecode[0], adjustedDecode[1]);
 
@@ -967,7 +967,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
 
         auto errorMethod = [](j_common_ptr ptr)
         {
-            char buffer[JMSG_LENGTH_MAX] = { };
+            char buffer[JMSG_LENGTH_MAX] = {};
             (ptr->err->format_message)(ptr, buffer);
 
             jpeg_destroy(ptr);
@@ -1002,11 +1002,11 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
 
         source.sourceManager.bytes_in_buffer = 0;
         source.sourceManager.next_input_byte = nullptr;
-        source.sourceManager.init_source = [](j_decompress_ptr) { };
+        source.sourceManager.init_source = [](j_decompress_ptr) {};
         source.sourceManager.fill_input_buffer = fillInputBufferMethod;
         source.sourceManager.skip_input_data = skipInputDataMethod;
         source.sourceManager.resync_to_restart = jpeg_resync_to_restart;
-        source.sourceManager.term_source = [](j_decompress_ptr) { };
+        source.sourceManager.term_source = [](j_decompress_ptr) {};
 
         jpeg_std_error(&errorManager);
         errorManager.error_exit = errorMethod;
@@ -1059,7 +1059,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
             const unsigned int width = codec.output_width;
             const unsigned int height = codec.output_height;
             const unsigned int components = codec.output_components;
-            const unsigned int bitsPerComponent =  8;
+            const unsigned int bitsPerComponent = 8;
             unsigned int bufferSize = 0;
             if (!pdfTryMultiply(rowStride, height, bufferSize))
             {
@@ -1153,7 +1153,6 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                         {
                             if (opj_end_decompress(codec, opjStream))
                             {
-
                             }
                         }
                     }
@@ -1309,7 +1308,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                         {
                             for (unsigned int col = 0; col < w; ++col)
                             {
-                                for (unsigned int componentIndex = 0; componentIndex < components; ++ componentIndex)
+                                for (unsigned int componentIndex = 0; componentIndex < components; ++componentIndex)
                                 {
                                     int index = stride * row + col * components + componentIndex;
                                     Q_ASSERT(index < imageDataBuffer.size());
@@ -1346,7 +1345,7 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                             matte.resize(ordinaryComponentCount, 0.0);
                         }
 
-                        image.m_softMask = PDFImageData(1, bitsPerComponent, width, height, alphaStride, PDFImageData::MaskingType::None, qMove(alphaDataBuffer), { }, { }, qMove(matte));
+                        image.m_softMask = PDFImageData(1, bitsPerComponent, width, height, alphaStride, PDFImageData::MaskingType::None, qMove(alphaDataBuffer), {}, {}, qMove(matte));
                         image.m_imageData.setMaskingType(PDFImageData::MaskingType::SoftMask);
                     }
                 }
@@ -1658,7 +1657,8 @@ bool PDFImage::canBeConvertedToMonochromatic(const QImage& image)
             }
 
             // Zkontrolujte, zda jsou kanály stejné (odstín šedi) a zda jsou pouze 0 (černá) nebo 255 (bílá)
-            if ((red != green || green != blue) || (red != 0 && red != 255)) {
+            if ((red != green || green != blue) || (red != 0 && red != 255))
+            {
                 return false;
             }
         }
@@ -1691,7 +1691,7 @@ OPJ_SIZE_T PDFJPEG2000ImageData::read(void* p_buffer, OPJ_SIZE_T p_nb_bytes, voi
 
     if (length == 0)
     {
-        return (OPJ_SIZE_T) - 1;
+        return (OPJ_SIZE_T)-1;
     }
 
     return length;

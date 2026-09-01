@@ -83,9 +83,9 @@ public:
     /// (or has not been taught one yet) stays correct rather than being forced
     /// to invent one.
     virtual QList<InteractionTarget> hitTest(int pageIndex,
-                                            QPointF pagePoint,
-                                            qreal pageTolerance,
-                                            HitTestCounters* counters) const
+                                             QPointF pagePoint,
+                                             qreal pageTolerance,
+                                             HitTestCounters* counters) const
     {
         Q_UNUSED(pageTolerance);
         const QList<InteractionTarget> hits = hitTest(pageIndex, pagePoint);
@@ -132,9 +132,9 @@ public:
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
     QList<InteractionTarget> hitTest(int pageIndex,
-                                    QPointF pagePoint,
-                                    qreal pageTolerance,
-                                    HitTestCounters* counters) const override;
+                                     QPointF pagePoint,
+                                     qreal pageTolerance,
+                                     HitTestCounters* counters) const override;
 
     /// Every renderable record on a page, for the overlay pass. Same geometry
     /// and same ids as hitTest, so a marker cannot be drawn where nothing is
@@ -165,9 +165,9 @@ public:
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
     QList<InteractionTarget> hitTest(int pageIndex,
-                                    QPointF pagePoint,
-                                    qreal pageTolerance,
-                                    HitTestCounters* counters) const override;
+                                     QPointF pagePoint,
+                                     qreal pageTolerance,
+                                     HitTestCounters* counters) const override;
 
 private:
     QHash<int, QList<InteractionTarget>> m_targetsByPage;
@@ -196,9 +196,9 @@ public:
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
     QList<InteractionTarget> hitTest(int pageIndex,
-                                    QPointF pagePoint,
-                                    qreal pageTolerance,
-                                    HitTestCounters* counters) const override;
+                                     QPointF pagePoint,
+                                     qreal pageTolerance,
+                                     HitTestCounters* counters) const override;
 
     /// Every page box on a page, for the overlay pass.
     QList<InteractionTarget> targetsForPage(int pageIndex) const;

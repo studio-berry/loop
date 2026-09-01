@@ -43,10 +43,7 @@ quint16 readU16(const QByteArray& data, int offset)
 
 quint32 readU32(const QByteArray& data, int offset)
 {
-    return (quint32(uchar(data.at(offset))) << 24)
-        | (quint32(uchar(data.at(offset + 1))) << 16)
-        | (quint32(uchar(data.at(offset + 2))) << 8)
-        | quint32(uchar(data.at(offset + 3)));
+    return (quint32(uchar(data.at(offset))) << 24) | (quint32(uchar(data.at(offset + 1))) << 16) | (quint32(uchar(data.at(offset + 2))) << 8) | quint32(uchar(data.at(offset + 3)));
 }
 
 void inspectTrueType(const QByteArray& program, FontType fontType, QStringList& defects)
@@ -58,8 +55,7 @@ void inspectTrueType(const QByteArray& program, FontType fontType, QStringList& 
     }
 
     const QByteArray magic = program.left(4);
-    if (magic != QByteArrayLiteral("OTTO")
-        && magic != QByteArray::fromHex("00010000"))
+    if (magic != QByteArrayLiteral("OTTO") && magic != QByteArray::fromHex("00010000"))
     {
         defects.append(QStringLiteral("UnreadableTableDirectory"));
         return;
@@ -81,8 +77,7 @@ void inspectTrueType(const QByteArray& program, FontType fontType, QStringList& 
         tables.insert(tag);
         const quint32 length = readU32(program, offset + 12);
         const quint32 tableOffset = readU32(program, offset + 8);
-        if (tableOffset > quint32(program.size())
-            || length > quint32(program.size()) - tableOffset)
+        if (tableOffset > quint32(program.size()) || length > quint32(program.size()) - tableOffset)
         {
             defects.append(QStringLiteral("TruncatedProgram"));
             continue;
@@ -98,14 +93,13 @@ void inspectTrueType(const QByteArray& program, FontType fontType, QStringList& 
         }
     }
 
-    if (fontType == FontType::TrueType && tables.contains(QByteArrayLiteral("glyf"))
-        && !tables.contains(QByteArrayLiteral("loca")))
+    if (fontType == FontType::TrueType && tables.contains(QByteArrayLiteral("glyf")) && !tables.contains(QByteArrayLiteral("loca")))
     {
         defects.append(QStringLiteral("GlyfLocaInconsistent"));
     }
 }
 
-} // namespace
+}   // namespace
 
 PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font)
 {
@@ -137,8 +131,7 @@ PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font)
             break;
         case FontType::Type1:
         case FontType::MMType1:
-            if (!program->startsWith("%!")
-                && !(program->size() >= 2 && uchar(program->at(0)) == 0x80 && uchar(program->at(1)) == 0x01))
+            if (!program->startsWith("%!") && !(program->size() >= 2 && uchar(program->at(0)) == 0x80 && uchar(program->at(1)) == 0x01))
             {
                 result.defects.append(QStringLiteral("UnreadableType1Program"));
             }
@@ -158,4 +151,4 @@ PDFFontIntegrityResult inspectPDFFontIntegrity(const PDFFont& font)
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf

@@ -92,7 +92,8 @@ QString SchedulerOcrService::beginRecognize(QList<OcrPageRequest> pages, Complet
             return;
         }
 
-        relay->post([completion, results = std::move(results)]() { completion(results); });
+        relay->post([completion, results = std::move(results)]()
+                    { completion(results); });
     };
 
     return m_submitter->submit(spec, std::move(work));
