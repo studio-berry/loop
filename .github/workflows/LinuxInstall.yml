@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   build_ubuntu:
-    runs-on: ubuntu-24.04
+    # linuxdeployqt is pinned to a glibc-2.35-compatible build. Keep the
+    # packaging runner aligned with that oldest-supported deployment tool.
+    runs-on: ubuntu-22.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loupe/vcpkg/overlays/linux:${{ github.workspace }}/loupe/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
