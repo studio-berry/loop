@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 libspeechd2 gnupg2 wget appstream libcups2 libcups2-dev
+          sudo apt-get install -y libxcb-cursor0 libspeechd2 libfontconfig1-dev gnupg2 wget appstream libcups2 libcups2-dev
 
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4

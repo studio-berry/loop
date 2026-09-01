@@ -64,6 +64,7 @@ class WorkflowContractTests(unittest.TestCase):
         windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn("./vcpkg/vcpkg integrate install", linux)
         self.assertNotIn("./vcpkg integrate install", linux)
+        self.assertIn("libfontconfig1-dev", linux)
         self.assertIn("Deploy Qt runtime closure to staged install tree", windows)
         self.assertIn("windeployqt.exe", windows)
         self.assertIn("--no-compiler-runtime", windows)
