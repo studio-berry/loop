@@ -12,6 +12,35 @@
       ]
     },
     {
+      "id": "drag-no-snap",
+      "path": "UnitTests/testdata/interaction-traces/drag-no-snap.json",
+      "issue": 146,
+      "sha256": "7148cc4b13ea5a04dc2a7ccb4eb7f0adc9f04f7b6e8a0fdca7a4c71424dfd1c7",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "drag-snap",
+      "path": "UnitTests/testdata/interaction-traces/drag-snap.json",
+      "issue": 146,
+      "sha256": "c352f12024bd91d51bec7d1613c16c6887c6e8406668411459c83d75f93ad46d",
+      "lanes": [
+        "deterministic"
+      ],
+      "blocked_on": "gh-488",
+      "blocked_reason": "DragSnapper and the Alt-suppression rule land in PR #488"
+    },
+    {
+      "id": "hover-dense",
+      "path": "UnitTests/testdata/interaction-traces/hover-dense.json",
+      "issue": 146,
+      "sha256": "0dd807c3ae2f831dfd4db17b04809654edaf0ffd3c910848248078a5c1977ee4",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
       "id": "hover-sparse",
       "path": "UnitTests/testdata/interaction-traces/hover-sparse.json",
       "issue": 146,
@@ -21,10 +50,37 @@
       ]
     },
     {
+      "id": "overlay-dense",
+      "path": "UnitTests/testdata/interaction-traces/overlay-dense.json",
+      "issue": 146,
+      "sha256": "21937d56f2a6b64a314596039061087765b45a604d748f2814e7dd7aec1ed5bf",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
       "id": "pan",
       "path": "UnitTests/testdata/interaction-traces/pan.json",
       "issue": 146,
       "sha256": "007117ede01e0af716967ef7339376936de628d5c8c59dec18b8eecbcfb91c9c",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "zoom-anchored",
+      "path": "UnitTests/testdata/interaction-traces/zoom-anchored.json",
+      "issue": 146,
+      "sha256": "cf31f186276f957a69c3c62614f68659cc805f7fef1ba517d1ce5f141fa05f28",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "zoom-reversal",
+      "path": "UnitTests/testdata/interaction-traces/zoom-reversal.json",
+      "issue": 146,
+      "sha256": "5bde62d81c39852cfbaed28fe45f50fa1c566da78342f38d102229a94d89f459",
       "lanes": [
         "deterministic"
       ]

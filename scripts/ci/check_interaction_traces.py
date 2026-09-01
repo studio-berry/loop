@@ -276,6 +276,17 @@ def validate_corpus(corpus_dir: Path = CORPUS_DIR, root: Path = ROOT) -> list[Vi
             violations.append((label, f"missing required fields: {sorted(missing)}"))
             continue
 
+        blocked_on = entry.get("blocked_on")
+        if blocked_on is not None:
+            # A scenario may be reviewed as data before the harness can run it.
+            # Saying so explicitly is what keeps the coverage check strict for
+            # everything else: without this the check would have to be relaxed
+            # for the whole corpus.
+            if not isinstance(blocked_on, str) or not blocked_on.strip():
+                violations.append((label, "blocked_on must be a non-empty string when present"))
+            if not str(entry.get("blocked_reason", "")).strip():
+                violations.append((label, "a blocked scenario must carry a blocked_reason"))
+
         entry_id = entry["id"]
         if not isinstance(entry_id, str) or not KEBAB_CASE.match(entry_id):
             violations.append((label, f"id must be kebab-case, got {entry_id!r}"))
@@ -329,6 +340,29 @@ def validate_corpus(corpus_dir: Path = CORPUS_DIR, root: Path = ROOT) -> list[Vi
     return violations
 
 
+def runnable_ids(manifest: dict) -> set[str]:
+    """Corpus ids whose harness support has landed.
+
+    A blocked scenario is tracked and validated as data, but nothing can run it
+    yet, so demanding a run for it would report the corpus as broken rather
+    than as ahead of the harness.
+    """
+    return {
+        str(entry["id"])
+        for entry in manifest.get("scenarios", [])
+        if not entry.get("blocked_on")
+    }
+
+
+def blocked_ids(manifest: dict) -> dict[str, str]:
+    """Blocked corpus ids mapped to what they are waiting on."""
+    return {
+        str(entry["id"]): str(entry.get("blocked_on"))
+        for entry in manifest.get("scenarios", [])
+        if entry.get("blocked_on")
+    }
+
+
 def _percentile_keys(block: dict) -> list[str]:
     return [key for key in block if key.startswith("p") and key[1:].split("_")[0].isdigit()]
 
@@ -376,6 +410,7 @@ def validate_report(
     report: dict,
     corpus_ids: set[str] | None = None,
     expected_corpus_digest: str | None = None,
+    known_ids: set[str] | None = None,
 ) -> list[Violation]:
     """Return (subject, reason) for every report violation."""
     violations: list[Violation] = []
@@ -495,9 +530,11 @@ def validate_report(
                 )
 
     if corpus_ids is not None:
+        # corpus_ids are the scenarios that must run; known_ids additionally
+        # covers blocked scenarios, which may run early but need not.
         for missing_id in sorted(corpus_ids - seen):
             violations.append(("report.runs", f"corpus scenario {missing_id!r} has no run"))
-        for extra_id in sorted(seen - corpus_ids):
+        for extra_id in sorted(seen - (known_ids if known_ids is not None else corpus_ids)):
             violations.append(("report.runs", f"run {extra_id!r} is not in the corpus"))
 
     return violations
@@ -568,7 +605,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.corpus_only:
-        print(f"Interaction trace corpus policy passed ({len(load_manifest()['scenarios'])} scenarios).")
+        manifest = load_manifest()
+        blocked = blocked_ids(manifest)
+        print(
+            f"Interaction trace corpus policy passed "
+            f"({len(manifest['scenarios'])} scenarios, {len(blocked)} awaiting harness support)."
+        )
+        for scenario_id, waiting_on in sorted(blocked.items()):
+            print(f"  blocked: {scenario_id} (waiting on {waiting_on})")
         return 0
 
     if not args.report:
@@ -585,8 +629,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     manifest = load_manifest()
-    corpus_ids = {str(entry["id"]) for entry in manifest["scenarios"]}
-    violations = validate_report(report, corpus_ids, corpus_digest(manifest))
+    required = runnable_ids(manifest)
+    known = required | set(blocked_ids(manifest))
+    violations = validate_report(report, required, corpus_digest(manifest), known)
 
     if violations:
         print("ERROR: interaction trace report failed validation:", file=sys.stderr)

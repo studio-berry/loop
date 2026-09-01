@@ -13,8 +13,10 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from scripts.ci.check_interaction_traces import (  # noqa: E402
+    blocked_ids,
     corpus_digest,
     load_manifest,
+    runnable_ids,
     trend_rows,
     validate_corpus,
     validate_percentiles,
@@ -199,6 +201,65 @@ class CorpusTests(unittest.TestCase):
             )
             violations = validate_corpus(corpus, root)
             self.assertTrue(any("missing from manifest" in reason for _, reason in violations))
+
+
+class BlockedScenarioTests(unittest.TestCase):
+    """A scenario may be reviewed as data before the harness can run it."""
+
+    def test_runnable_and_blocked_partition_the_corpus(self):
+        manifest = load_manifest()
+        every_id = {str(entry["id"]) for entry in manifest["scenarios"]}
+        self.assertEqual(runnable_ids(manifest) | set(blocked_ids(manifest)), every_id)
+        self.assertEqual(runnable_ids(manifest) & set(blocked_ids(manifest)), set())
+
+    def test_blocked_scenario_needs_a_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            corpus = root / "UnitTests" / "testdata" / "interaction-traces"
+            corpus.mkdir(parents=True)
+            scenario = minimal_scenario()
+            body = json.dumps(scenario)
+            (corpus / "example.json").write_text(body, encoding="utf-8")
+            import hashlib
+
+            digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+            (corpus / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_kind": "loupe-interaction-corpus",
+                        "schema_version": 1,
+                        "scenarios": [
+                            {
+                                "id": "example",
+                                "path": "UnitTests/testdata/interaction-traces/example.json",
+                                "issue": 146,
+                                "sha256": digest,
+                                "blocked_on": "gh-488",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            violations = validate_corpus(corpus, root)
+            self.assertTrue(any("blocked_reason" in reason for _, reason in violations))
+
+    def test_blocked_scenario_does_not_need_a_run(self):
+        # The coverage check stays strict for everything else.
+        violations = validate_report(
+            minimal_report(),
+            corpus_ids={"example"},
+            known_ids={"example", "drag-snap"},
+        )
+        self.assertEqual(violations, [])
+
+    def test_blocked_scenario_may_still_report_a_run(self):
+        report = minimal_report()
+        report["runs"][0]["scenario_id"] = "drag-snap"
+        violations = validate_report(
+            report, corpus_ids=set(), known_ids={"example", "drag-snap"}
+        )
+        self.assertEqual(violations, [])
 
 
 class ScenarioTests(unittest.TestCase):
