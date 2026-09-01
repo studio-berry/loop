@@ -1,0 +1,33 @@
+{
+  "schema_kind": "loupe-interaction-corpus",
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "click-select-deselect",
+      "path": "UnitTests/testdata/interaction-traces/click-select-deselect.json",
+      "issue": 146,
+      "sha256": "718f433ac5669a93190bce6f02b0a48f8d5859f9ce98346f96d570650c77eda5",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "hover-sparse",
+      "path": "UnitTests/testdata/interaction-traces/hover-sparse.json",
+      "issue": 146,
+      "sha256": "79dc49c89dd6ef1805539ad41ec47920b363c02620b73d0cdea6b5f91efa328a",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "pan",
+      "path": "UnitTests/testdata/interaction-traces/pan.json",
+      "issue": 146,
+      "sha256": "007117ede01e0af716967ef7339376936de628d5c8c59dec18b8eecbcfb91c9c",
+      "lanes": [
+        "deterministic"
+      ]
+    }
+  ]
+}

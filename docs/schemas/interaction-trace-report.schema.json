@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/studio-berry/loupe/schema/interaction-trace-report-v1.json",
+  "title": "Loupe interaction trace regression report",
+  "description": "The CI evidence artifact for issue #146, emitted by the test binary rather than parsed out of ctest output. Missing telemetry is reported as available:false with null percentiles and never as zero, per docs/RESOURCE_BUDGETS.md.",
+  "type": "object",
+  "required": ["schema_kind", "schema_version", "lane", "identity", "runs"],
+  "properties": {
+    "schema_kind": { "const": "loupe-interaction-trace-report" },
+    "schema_version": { "const": 1 },
+    "lane": {
+      "description": "deterministic is the gating lane with a synthetic clock; present is the desktop/GPU lane with real timing and variance bands.",
+      "enum": ["deterministic", "present"]
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "commit",
+        "compiler",
+        "os",
+        "qt",
+        "cpu",
+        "renderer",
+        "fixture_digest",
+        "profile_or_operation_version",
+        "corpus_digest"
+      ],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "compiler": { "type": "string", "minLength": 1 },
+        "os": { "type": "string", "minLength": 1 },
+        "qt": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 },
+        "renderer": { "type": "string", "minLength": 1 },
+        "fixture_digest": { "type": "string", "minLength": 1 },
+        "profile_or_operation_version": { "type": "string", "minLength": 1 },
+        "corpus_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/run" }
+    }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "run": {
+      "type": "object",
+      "required": [
+        "scenario_id",
+        "status",
+        "trace_id",
+        "summary_schema_version",
+        "budgets",
+        "samples",
+        "input_to_frame_ms",
+        "frame_time_ms",
+        "stage_ms",
+        "slow_frame_causes",
+        "hit_test",
+        "async_overlap",
+        "page_surface_cache",
+        "present_timing",
+        "passed",
+        "first_violated_contract",
+        "responsible_phase",
+        "failure_excerpt"
+      ],
+      "properties": {
+        "scenario_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "status": {
+          "description": "verified means the measurement actually happened; static-only means the contracts passed but present/GPU timing was unavailable; infrastructure-blocked means the lane could not run. A static-only run must never be reported as a verified measurement.",
+          "enum": ["verified", "static-only", "infrastructure-blocked"]
+        },
+        "trace_id": { "type": "string" },
+        "summary_schema_version": { "type": "integer", "minimum": 1 },
+        "budgets": {
+          "type": "object",
+          "required": ["status", "reference_60_hz_ms", "reference_120_hz_ms", "applied"],
+          "properties": {
+            "status": { "enum": ["known", "unavailable"] },
+            "refresh_rate_hz": { "type": ["number", "null"] },
+            "frame_budget_ms": { "type": ["number", "null"] },
+            "reference_60_hz_ms": { "type": "number" },
+            "reference_120_hz_ms": { "type": "number" },
+            "applied": {
+              "type": "object",
+              "required": ["mode", "frame_p95_ms", "input_to_frame_p95_ms"],
+              "properties": {
+                "mode": { "enum": ["strict", "variance-band"] },
+                "frame_p95_ms": { "type": "number" },
+                "input_to_frame_p95_ms": { "type": "number" },
+                "variance_band_multiplier": { "type": ["number", "null"] }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "samples": {
+          "type": "object",
+          "required": ["inputs", "frames", "pending_inputs", "dropped_frames", "unbalanced_frames"],
+          "properties": {
+            "inputs": { "type": "integer", "minimum": 0 },
+            "frames": { "type": "integer", "minimum": 0 },
+            "pending_inputs": { "type": "integer", "minimum": 0 },
+            "dropped_frames": { "type": "integer", "minimum": 0 },
+            "unbalanced_frames": { "type": "integer", "minimum": 0 },
+            "dropped_input_records": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "input_to_frame_ms": { "$ref": "#/$defs/durationPercentiles" },
+        "frame_time_ms": { "$ref": "#/$defs/durationPercentiles" },
+        "stage_ms": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/stageName" },
+          "additionalProperties": { "$ref": "#/$defs/durationPercentiles" }
+        },
+        "slow_frame_causes": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/stageName" },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "hit_test": {
+          "type": "object",
+          "required": ["index_candidates", "precise_hits", "duration_ms"],
+          "properties": {
+            "index_candidates": { "$ref": "#/$defs/countPercentiles" },
+            "precise_hits": { "$ref": "#/$defs/countPercentiles" },
+            "duration_ms": { "$ref": "#/$defs/durationPercentiles" }
+          },
+          "additionalProperties": false
+        },
+        "async_overlap": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/jobKind" },
+          "additionalProperties": {
+            "type": "object",
+            "required": ["frames_overlapped", "slow_frames_overlapped", "active"],
+            "properties": {
+              "frames_overlapped": { "type": "integer", "minimum": 0 },
+              "slow_frames_overlapped": { "type": "integer", "minimum": 0 },
+              "active": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "page_surface_cache": {
+          "type": "object",
+          "required": ["hits", "misses"],
+          "properties": {
+            "hits": { "type": "integer", "minimum": 0 },
+            "misses": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "present_timing": {
+          "description": "A present record on a lane that cannot measure presentation reports available:false with a reason, never a zero p95.",
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["available", "reason"],
+              "properties": {
+                "available": { "const": false },
+                "reason": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            },
+            {
+              "allOf": [{ "$ref": "#/$defs/durationPercentiles" }],
+              "properties": { "available": { "const": true } }
+            }
+          ]
+        },
+        "passed": { "type": "boolean" },
+        "first_violated_contract": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/contract" }]
+        },
+        "responsible_phase": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/phase" }]
+        },
+        "failure_excerpt": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+
+    "durationPercentiles": {
+      "type": "object",
+      "required": ["available", "sample_count", "p50_ms", "p95_ms", "p99_ms"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "sample_count": { "type": "integer", "minimum": 0 },
+        "p50_ms": { "type": ["number", "null"] },
+        "p95_ms": { "type": ["number", "null"] },
+        "p99_ms": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "countPercentiles": {
+      "type": "object",
+      "required": ["available", "sample_count", "p50", "p95", "p99"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "sample_count": { "type": "integer", "minimum": 0 },
+        "p50": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "p99": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "stageName": {
+      "enum": ["interaction", "hit-test", "overlay", "page-surface", "external", "unknown"]
+    },
+    "jobKind": {
+      "enum": ["rendering", "preflight", "ocr", "export", "thumbnail", "batch", "agent", "other"]
+    },
+    "contract": {
+      "description": "Evaluated in this order, so 'first violated' is a documented constant rather than JSON iteration order (AC7).",
+      "enum": [
+        "input-acknowledged",
+        "frame-balance",
+        "telemetry-available",
+        "p95-input-to-frame",
+        "p95-frame-time",
+        "slow-frame-budget",
+        "dropped-frames",
+        "stale-result-safety",
+        "final-state"
+      ]
+    },
+    "phase": {
+      "enum": [
+        "input",
+        "hit-test",
+        "page-cache",
+        "overlay",
+        "composition",
+        "async-overlap",
+        "unknown"
+      ]
+    }
+  }
+}

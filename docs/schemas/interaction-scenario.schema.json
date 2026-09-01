@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/studio-berry/loupe/schema/interaction-scenario-v1.json",
+  "title": "Loupe interaction regression scenario",
+  "description": "One replayable direct-manipulation scenario for issue #146. The recorded input lives under 'trace' in exactly the shape InteractionTrace::toJson() emits, or is generated from 'input_script'; everything else declares the fixture, the synthetic cost model, the budgets, and the expected end state. Scenario payload is deliberately kept out of InteractionTrace itself, whose privacy contract forbids geometry and target identity.",
+  "type": "object",
+  "required": [
+    "schema_kind",
+    "schema_version",
+    "scenario_id",
+    "description",
+    "fixture",
+    "cost_model",
+    "budgets",
+    "expected"
+  ],
+  "properties": {
+    "schema_kind": { "const": "loupe-interaction-scenario" },
+    "schema_version": { "const": 1 },
+    "scenario_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "description": { "type": "string", "minLength": 1 },
+
+    "fixture": {
+      "type": "object",
+      "required": [
+        "page_count",
+        "page_size_mm",
+        "pixel_per_mm",
+        "device_pixel_ratio",
+        "initial_zoom",
+        "viewport_size_px",
+        "page_layout"
+      ],
+      "properties": {
+        "page_count": { "type": "integer", "minimum": 1 },
+        "page_size_mm": { "$ref": "#/$defs/size" },
+        "pixel_per_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "device_pixel_ratio": { "type": "number", "exclusiveMinimum": 0 },
+        "initial_zoom": { "type": "number", "exclusiveMinimum": 0 },
+        "viewport_size_px": { "$ref": "#/$defs/sizeInt" },
+        "page_layout": {
+          "enum": [
+            "single-page",
+            "one-column",
+            "two-pages-left",
+            "two-pages-right",
+            "two-column-left",
+            "two-column-right"
+          ]
+        },
+        "hit_targets": { "type": "array", "items": { "$ref": "#/$defs/hitTarget" } },
+        "generated_targets": {
+          "description": "A dense page is declared as a grid rather than listed. Four thousand literal targets is a diff nobody reviews.",
+          "type": "object",
+          "required": ["kind", "count", "page_index", "grid"],
+          "properties": {
+            "kind": { "$ref": "#/$defs/targetKind" },
+            "count": { "type": "integer", "minimum": 1, "maximum": 100000 },
+            "page_index": { "type": "integer", "minimum": 0 },
+            "id_prefix": { "type": "string", "minLength": 1 },
+            "grid": {
+              "type": "object",
+              "required": ["columns", "rows", "origin", "stride", "size"],
+              "properties": {
+                "columns": { "type": "integer", "minimum": 1 },
+                "rows": { "type": "integer", "minimum": 1 },
+                "origin": { "$ref": "#/$defs/point" },
+                "stride": { "$ref": "#/$defs/size" },
+                "size": { "$ref": "#/$defs/size" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "guides": { "type": "array", "items": { "$ref": "#/$defs/guide" } },
+        "snapping": {
+          "type": "object",
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "screen_threshold_px": { "type": "number", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "async": {
+      "description": "Job actions applied at a given index in the input stream, so 'drag during preflight' happens at the same input on every runner.",
+      "type": "object",
+      "required": ["jobs"],
+      "properties": {
+        "jobs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["at_input_index", "action"],
+            "properties": {
+              "at_input_index": { "type": "integer", "minimum": 0 },
+              "action": {
+                "enum": ["submit", "pump", "cancel", "fail", "stale-result", "bump-revision"]
+              },
+              "kind": {
+                "enum": ["rendering", "preflight", "ocr", "export", "thumbnail", "batch", "agent", "other"]
+              },
+              "count": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "cost_model": {
+      "description": "Synthetic per-stage costs in nanoseconds, multiplied by real run products (index candidates, overlay primitives, cache misses). The deterministic lane reads no real clock, so these are what make latency assertable and byte-identical across machines.",
+      "type": "object",
+      "required": ["base_frame_ns"],
+      "properties": {
+        "base_frame_ns": { "type": "integer", "minimum": 0 },
+        "hit_test_ns_per_candidate": { "type": "integer", "minimum": 0 },
+        "overlay_ns_per_primitive": { "type": "integer", "minimum": 0 },
+        "page_surface_admit_ns": { "type": "integer", "minimum": 0 },
+        "cache_miss_ns": { "type": "integer", "minimum": 0 },
+        "external_present_ns": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "budgets": {
+      "type": "object",
+      "required": ["refresh_rate_hz", "frame_p95_ms", "input_to_frame_p95_ms"],
+      "properties": {
+        "refresh_rate_hz": { "type": "number", "minimum": 0 },
+        "frame_p95_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "input_to_frame_p95_ms": { "type": "number", "exclusiveMinimum": 0 },
+        "max_slow_frames": { "type": "integer", "minimum": 0 },
+        "max_dropped_frames": { "type": "integer", "minimum": 0 },
+        "variance_band_multiplier": {
+          "description": "Applied by the desktop/GPU lane only. The deterministic lane is strict and ignores it.",
+          "type": "number",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "expected": {
+      "description": "Final interaction and document state (AC2). An empty string asserts 'nothing selected' or 'nothing hovered', which is distinct from the key being absent.",
+      "type": "object",
+      "properties": {
+        "selected_id": { "type": "string" },
+        "hover_id": { "type": "string" },
+        "zoom": { "type": "number", "exclusiveMinimum": 0 },
+        "current_page": { "type": "integer", "minimum": 0 },
+        "scroll_offset_px": { "$ref": "#/$defs/pointInt" },
+        "drag_completed": { "type": "integer", "minimum": 0 },
+        "snapped_to": { "type": "string" },
+        "request_generation_changed": { "type": "boolean" },
+        "cancellations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/cancelReason" }
+        },
+        "counters": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "unbalanced_frames": { "type": "integer", "minimum": 0 },
+        "pending_inputs": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+
+    "trace": {
+      "description": "Verbatim InteractionTrace::toJson() output. Present when the scenario is a recorded session; mutually exclusive with input_script.",
+      "type": "object"
+    },
+
+    "input_script": {
+      "description": "Generated input, for scenarios where a literal trace would be hundreds of near-identical records. Mutually exclusive with trace.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "enum": ["pointer-move", "pointer-press", "pointer-release", "wheel", "key", "notification", "hover-sweep"]
+          },
+          "at_px": { "$ref": "#/$defs/pointInt" },
+          "to_px": { "$ref": "#/$defs/pointInt" },
+          "steps": { "type": "integer", "minimum": 1 },
+          "interval_ns": { "type": "integer", "minimum": 1 },
+          "button": { "enum": ["left", "right", "middle", "none"] },
+          "modifiers": {
+            "type": "array",
+            "items": { "enum": ["shift", "control", "alt", "meta"] }
+          },
+          "angle_delta": { "type": "integer" },
+          "key": { "type": "integer" },
+          "notification": { "$ref": "#/$defs/notification" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+
+  "oneOf": [
+    { "required": ["trace"] },
+    { "required": ["input_script"] }
+  ],
+
+  "additionalProperties": false,
+
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } },
+      "additionalProperties": false
+    },
+    "pointInt": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "integer" }, "y": { "type": "integer" } },
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "sizeInt": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "rect": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "targetKind": { "enum": ["finding", "guide", "page-box", "page", "handle"] },
+    "hitTarget": {
+      "type": "object",
+      "required": ["kind", "page_index", "id", "page_bounds"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/targetKind" },
+        "page_index": { "type": "integer", "minimum": 0 },
+        "id": { "type": "string", "minLength": 1 },
+        "page_bounds": { "$ref": "#/$defs/rect" }
+      },
+      "additionalProperties": false
+    },
+    "guide": {
+      "type": "object",
+      "required": ["id", "page_index", "orientation", "position"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "page_index": { "type": "integer", "minimum": 0 },
+        "orientation": { "enum": ["horizontal", "vertical"] },
+        "position": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "cancelReason": {
+      "enum": [
+        "explicit",
+        "escape",
+        "pointer-cancelled",
+        "focus-lost",
+        "capture-lost",
+        "tool-changed",
+        "selection-changed",
+        "revision-changed",
+        "document-closed"
+      ]
+    },
+    "notification": {
+      "enum": ["focus-lost", "capture-lost", "document-closed", "tool-changed"]
+    }
+  }
+}
