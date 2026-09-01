@@ -135,6 +135,7 @@ void WorkloadEnvelopeTest::pageHeavyEnvelopeRecordsIdentity()
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("os")));
     QVERIFY(json.value(QStringLiteral("identity")).toObject().contains(QStringLiteral("qt")));
     QVERIFY(!json.value(QStringLiteral("identity")).toObject().value(QStringLiteral("fixture_digest")).toString().isEmpty());
+    QVERIFY(json.contains(QStringLiteral("process_commit_high_water_bytes")));
     QVERIFY(json.value(QStringLiteral("prefetch_shed")).toBool());
     QVERIFY(json.value(QStringLiteral("interaction_slot_held")).toBool());
     QVERIFY(json.value(QStringLiteral("resources")).toObject().contains(QStringLiteral("pools")));

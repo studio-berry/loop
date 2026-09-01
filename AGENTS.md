@@ -39,7 +39,7 @@ Approval is required for:
 ## Module placement
 
 - Core PDF logic belongs in `LoupeLibCore`; it must not depend on Widgets.
-- Interactive plugins belong in `LoupeEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.
+- Interactive capabilities belong in `LoupeEditor`/`LoupeLibQuick`; batch geometry belongs in `LoupeLibCore`/`PdfTool`; unattended pipelines belong in `PdfTool`.
 - Consult the generated architecture catalog and current code/tests for dynamic facts; narrative docs are not authoritative when they conflict.
 - Record parser/writer/renderer divergences from the upstream engine in `docs/UPSTREAM_DIVERGENCE.md`. Cosmetic Loupe-only code does not belong there.
 

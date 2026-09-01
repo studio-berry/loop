@@ -301,24 +301,24 @@ def check_shortcut_parity(
     for action_id, expected in sorted(expected_by_id.items()):
         command = commands.get(action_id)
         if command is None:
-            errors.append(f"{action_id}: has a Widgets shortcut but no catalog entry")
+            errors.append(f"{action_id}: has a legacy UI shortcut but no catalog entry")
             continue
         actual = command.get("shortcut")
         if actual is None:
             errors.append(
-                f"{action_id}: the Widgets shell binds {expected!r} but the catalog "
+                f"{action_id}: the legacy UI binds {expected!r} but the catalog "
                 "declares no shortcut"
             )
         elif actual != expected:
             errors.append(
-                f"{action_id}: catalog shortcut {actual!r} contradicts the Widgets "
+                f"{action_id}: catalog shortcut {actual!r} contradicts the legacy "
                 f"shell's {expected!r}"
             )
 
     for action_id, command in sorted(commands.items()):
         if "shortcut" in command and action_id not in expected_by_id:
             errors.append(
-                f"{action_id}: the catalog invents a shortcut the Widgets shell does "
+                f"{action_id}: the catalog invents a shortcut the legacy UI does "
                 "not bind; add it to PDFActionManager::initActions first"
             )
 
@@ -381,7 +381,7 @@ def validate_catalog(
         pass
     else:
         errors.append(
-            "Widgets shortcut parity requires both pdfeditormainwindow.cpp and "
+            "Legacy UI shortcut parity requires both shell source files and "
             "pdfprogramcontroller.cpp, or neither after Issue 17"
         )
     return errors
@@ -400,7 +400,7 @@ def verify() -> str:
             f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
         )
     else:
-        shortcut_note = "Widgets shortcut parity skipped (Quick shell owns bindings after Issue 17)."
+        shortcut_note = "Legacy UI shortcut parity skipped (Quick shell owns bindings after Issue 17)."
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
         f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "
