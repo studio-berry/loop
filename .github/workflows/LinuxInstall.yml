@@ -210,11 +210,22 @@ jobs:
           # validates every discovered plugin and aborts on that unresolved
           # dependency, so remove this non-distributable optional driver from
           # the ephemeral Qt installation before deployment.
-          mimer_driver="$QT_ROOT_DIR/plugins/sqldrivers/libqsqlmimer.so"
-          if [[ -e "$mimer_driver" ]]; then
-            rm -f "$mimer_driver"
-            echo "Removed non-distributable optional Qt SQL driver: $mimer_driver" | tee "$evidence_dir/linuxdeployqt.txt"
-          fi
+          sqldrivers_dir="$QT_ROOT_DIR/plugins/sqldrivers"
+          for optional_driver in libqsqlmimer.so libqsqloci.so; do
+            driver="$sqldrivers_dir/$optional_driver"
+            if [[ -e "$driver" ]]; then
+              rm -f "$driver"
+              echo "Removed non-distributable optional Qt SQL driver: $driver" | tee -a "$evidence_dir/linuxdeployqt.txt"
+            fi
+          done
+          for driver in "$sqldrivers_dir"/*.so; do
+            [[ -e "$driver" ]] || continue
+            unresolved="$(ldd "$driver" | awk '/=> not found/ { print $1 }')"
+            if [[ -n "$unresolved" ]]; then
+              echo "Removed Qt SQL driver with unresolved dependencies ($unresolved): $driver" | tee -a "$evidence_dir/linuxdeployqt.txt"
+              rm -f "$driver"
+            fi
+          done
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
           bash "$GITHUB_WORKSPACE/loupe/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
