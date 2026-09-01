@@ -121,6 +121,7 @@ EditorHost::EditorHost(QObject* parent) :
     connectInteraction();
     connectSurfaces();
     registerShellHandlers();
+    registerFeatureHandlers();
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
@@ -131,6 +132,12 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_documentModel, &QuickDocumentModel::searchChanged, this, [this]
+            {
+                refreshFeatureAvailability();
+                bumpPresentation();
+                bumpCommandEpoch();
+            });
 }
 
 EditorHost::~EditorHost()
@@ -206,6 +213,28 @@ QObject* EditorHost::inspector()
 QObject* EditorHost::preview()
 {
     return &m_preview;
+}
+
+void EditorHost::goToPage(int pageIndex)
+{
+    if (!hasDocument())
+    {
+        return;
+    }
+
+    m_session->commandBridge().goToPage(pageIndex);
+    bumpPresentation();
+}
+
+void EditorHost::acknowledgeWorkspaceRequest()
+{
+    if (m_workspaceRequest < 0)
+    {
+        return;
+    }
+
+    m_workspaceRequest = -1;
+    Q_EMIT presentationChanged();
 }
 
 QString EditorHost::preflightStateName() const
@@ -497,6 +526,18 @@ QString EditorHost::shortcutForCommand(const QString& commandId) const
 
 void EditorHost::connectFacade()
 {
+    connect(&m_session->context(), &pdf::PDFDocumentContext::revisionChanged,
+            this,
+            [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
+            {
+                if (m_documentBound)
+                {
+                    m_documentModel.setDocument(&m_session->context());
+                    m_searchRow = -1;
+                    bumpPresentation();
+                }
+            });
+
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::stateChanged, this, [this](pdfinteraction::DocumentState state)
             {
                 if (state == pdfinteraction::DocumentState::Empty || state == pdfinteraction::DocumentState::Error)
@@ -505,6 +546,7 @@ void EditorHost::connectFacade()
                 }
 
                 bumpPresentation();
+                refreshFeatureAvailability();
                 bumpCommandEpoch(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
@@ -514,12 +556,14 @@ void EditorHost::connectFacade()
             {
                 onDocumentGone();
                 onDocumentReady();
+                refreshFeatureAvailability();
                 bumpPresentation();
                 bumpCommandEpoch(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentClosed, this, [this](quint64)
             {
                 onDocumentGone();
+                refreshFeatureAvailability();
                 bumpPresentation();
                 bumpCommandEpoch(); });
 }
@@ -562,6 +606,71 @@ void EditorHost::registerShellHandlers()
     m_session->catalog().setEnabled(QuitCommandId, true);
 }
 
+void EditorHost::registerFeatureHandlers()
+{
+    auto bind = [this](const QString& id, std::function<void()> action)
+    {
+        pdfinteraction::CommandCatalog::Handler handler;
+        handler.invoke = [this, action = std::move(action)](pdfinteraction::CommandInvocationId invocation,
+                                                            const QVariantMap&)
+        {
+            action();
+            m_session->catalog().finishInvocation(invocation, pdfinteraction::CommandTerminalState::Completed);
+            bumpPresentation();
+        };
+        m_session->catalog().setHandler(id, std::move(handler));
+    };
+
+    bind(QStringLiteral("actionPageLayoutContinuous"), [this]
+         { m_session->viewport().setPageLayout(pdfinteraction::PageLayout::OneColumn); });
+    bind(QStringLiteral("actionPageLayoutSinglePage"), [this]
+         { m_session->viewport().setPageLayout(pdfinteraction::PageLayout::SinglePage); });
+    bind(QStringLiteral("actionPageLayoutTwoColumns"), [this]
+         { m_session->viewport().setPageLayout(pdfinteraction::PageLayout::TwoColumnLeft); });
+    bind(QStringLiteral("actionPageLayoutTwoPages"), [this]
+         { m_session->viewport().setPageLayout(pdfinteraction::PageLayout::TwoPagesLeft); });
+    bind(QStringLiteral("actionFullscreenMode"), [this]
+         { m_fullscreenRequested = !m_fullscreenRequested; });
+    bind(QStringLiteral("actionFind"), [this]
+         { m_searchPanelVisible = true; });
+    bind(QStringLiteral("actionFindNext"), [this]
+         { moveSearch(1); });
+    bind(QStringLiteral("actionFindPrevious"), [this]
+         { moveSearch(-1); });
+    bind(QStringLiteral("actionProperties"), [this]
+         { m_workspaceRequest = 2; });
+    refreshFeatureAvailability();
+}
+
+void EditorHost::refreshFeatureAvailability()
+{
+    const bool ready = hasDocument();
+    QHash<pdfinteraction::CommandId, bool> availability;
+    for (const QString& id : {QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
+                              QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
+                              QStringLiteral("actionFind"), QStringLiteral("actionProperties")})
+    {
+        availability.insert(id, ready);
+    }
+    const bool hasSearchResults = ready && m_documentModel.searchResultCount() > 0;
+    availability.insert(QStringLiteral("actionFindNext"), hasSearchResults);
+    availability.insert(QStringLiteral("actionFindPrevious"), hasSearchResults);
+    availability.insert(QStringLiteral("actionFullscreenMode"), true);
+    m_session->catalog().setEnabledBatch(availability);
+}
+
+void EditorHost::moveSearch(int direction)
+{
+    const int count = m_documentModel.searchResults()->rowCount();
+    if (count == 0)
+    {
+        return;
+    }
+
+    m_searchRow = (m_searchRow + direction + count) % count;
+    goToPage(m_documentModel.searchPageAt(m_searchRow));
+}
+
 void EditorHost::refreshHitTestSources()
 {
     m_findingsHitTest.setTargets(m_preflight.findingsModel()->interactionTargets());
@@ -594,6 +703,8 @@ void EditorHost::onDocumentReady()
     m_session->prepareDocumentView();
 
     syncRevisionModels();
+    m_documentModel.setDocument(&m_session->context());
+    m_searchRow = -1;
     refreshHitTestSources();
     m_documentBound = true;
     bindCanvas();
@@ -607,6 +718,8 @@ void EditorHost::onDocumentGone()
     m_session->clearDocumentView();
     m_preflight.findingsModel()->clear();
     m_inspector.clearSelection();
+    m_documentModel.clear();
+    m_searchRow = -1;
     m_preview.clear();
     m_session->hitTest()->clearSources();
     m_documentBound = false;

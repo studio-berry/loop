@@ -71,10 +71,9 @@ Item {
             Layout.fillHeight: true
             currentIndex: 0
 
-            CanvasPane {
-                id: canvasPane
+            DocumentPane {
+                id: documentPane
                 host: root.host
-                Accessible.name: qsTr("Document canvas pane")
             }
 
             PreflightPane {
@@ -87,5 +86,15 @@ Item {
         }
     }
 
-    KeyNavigation.tab: canvasPane.canvasItem
+    KeyNavigation.tab: documentPane
+
+    Connections {
+        target: root.host
+        function onPresentationChanged() {
+            if (root.host && root.host.workspaceRequest >= 0) {
+                workspaceStack.currentIndex = root.host.workspaceRequest
+                root.host.acknowledgeWorkspaceRequest()
+            }
+        }
+    }
 }
