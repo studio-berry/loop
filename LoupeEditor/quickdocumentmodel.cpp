@@ -4,17 +4,18 @@
 #include "pdfcatalog.h"
 #include "pdfdocument.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentsearch.h"
 #include "pdfdocumentsession.h"
-#include "pdfmeshqualitysettings.h"
 #include "pdfoutline.h"
 #include "pdfpage.h"
-#include "pdftextlayout.h"
-#include "pdftextlayoutgenerator.h"
 #include "pdfutils.h"
 
 #include <QRegularExpression>
 
-QuickPageModel::QuickPageModel(QObject* parent) : QAbstractListModel(parent) {}
+QuickPageModel::QuickPageModel(QObject* parent) :
+    QAbstractListModel(parent)
+{
+}
 
 int QuickPageModel::rowCount(const QModelIndex& parent) const
 {
@@ -48,8 +49,7 @@ QVariant QuickPageModel::data(const QModelIndex& index, int role) const
 
 QHash<int, QByteArray> QuickPageModel::roleNames() const
 {
-    return {{PageNumberRole, "pageNumber"}, {WidthRole, "pageWidth"}, {HeightRole, "pageHeight"},
-            {RotationRole, "pageRotation"}, {LabelRole, "label"}};
+    return { { PageNumberRole, "pageNumber" }, { WidthRole, "pageWidth" }, { HeightRole, "pageHeight" }, { RotationRole, "pageRotation" }, { LabelRole, "label" } };
 }
 
 void QuickPageModel::replace(const pdf::PDFDocument* document)
@@ -63,8 +63,8 @@ void QuickPageModel::replace(const pdf::PDFDocument* document)
         for (size_t i = 0; i < catalog->getPageCount(); ++i)
         {
             const pdf::PDFPage* page = catalog->getPage(i);
-            m_pages.append(Page{page->getCropBox().width(), page->getCropBox().height(),
-                                static_cast<int>(page->getPageRotation()), static_cast<int>(i)});
+            m_pages.append(Page{ page->getCropBox().width(), page->getCropBox().height(),
+                                 static_cast<int>(page->getPageRotation()), static_cast<int>(i) });
         }
     }
     endResetModel();
@@ -75,7 +75,11 @@ void QuickPageModel::clear()
     replace(nullptr);
 }
 
-QuickOutlineModel::QuickOutlineModel(QObject* parent) : QAbstractItemModel(parent), m_root(std::make_unique<Node>()) {}
+QuickOutlineModel::QuickOutlineModel(QObject* parent) :
+    QAbstractItemModel(parent),
+    m_root(std::make_unique<Node>())
+{
+}
 QuickOutlineModel::~QuickOutlineModel() = default;
 
 QuickOutlineModel::Node* QuickOutlineModel::nodeForIndex(const QModelIndex& index) const
@@ -138,7 +142,7 @@ QVariant QuickOutlineModel::data(const QModelIndex& index, int role) const
 
 QHash<int, QByteArray> QuickOutlineModel::roleNames() const
 {
-    return {{TitleRole, "title"}, {HasChildrenRole, "hasChildren"}};
+    return { { TitleRole, "title" }, { HasChildrenRole, "hasChildren" } };
 }
 
 void QuickOutlineModel::build(Node* parent, const pdf::PDFOutlineItem* item)
@@ -170,7 +174,10 @@ void QuickOutlineModel::clear()
     replace(nullptr);
 }
 
-QuickSearchResultModel::QuickSearchResultModel(QObject* parent) : QAbstractListModel(parent) {}
+QuickSearchResultModel::QuickSearchResultModel(QObject* parent) :
+    QAbstractListModel(parent)
+{
+}
 
 int QuickSearchResultModel::rowCount(const QModelIndex& parent) const
 {
@@ -193,7 +200,7 @@ QVariant QuickSearchResultModel::data(const QModelIndex& index, int role) const
 
 QHash<int, QByteArray> QuickSearchResultModel::roleNames() const
 {
-    return {{PageRole, "page"}, {MatchedRole, "matched"}, {ContextRole, "context"}};
+    return { { PageRole, "page" }, { MatchedRole, "matched" }, { ContextRole, "context" } };
 }
 
 void QuickSearchResultModel::replace(QList<Result> results, QString query, QString revision)
@@ -210,7 +217,13 @@ void QuickSearchResultModel::clear()
     replace({}, {}, {});
 }
 
-QuickDocumentModel::QuickDocumentModel(QObject* parent) : QObject(parent), m_pages(this), m_outline(this), m_searchResults(this) {}
+QuickDocumentModel::QuickDocumentModel(QObject* parent) :
+    QObject(parent),
+    m_pages(this),
+    m_outline(this),
+    m_searchResults(this)
+{
+}
 
 void QuickDocumentModel::setDocument(pdf::PDFDocumentContext* context)
 {
@@ -329,40 +342,15 @@ bool QuickDocumentModel::search(const QString& query)
         return false;
     }
 
-    const pdf::PDFRevisionIdentity revision = m_context->getRevision();
-    const pdf::PDFDocument* document = m_context->getDocument();
-    if (!document)
-    {
-        clearSearch();
+    const pdf::PDFDocumentSearchResult searchResult = pdf::searchDocumentText(m_context, query);
+    if (!searchResult.admitted)
         return false;
-    }
 
     QList<QuickSearchResultModel::Result> results;
-    const pdf::PDFMeshQualitySettings meshQuality;
-    const pdf::PDFRenderer::Features features = pdf::PDFRenderer::IgnoreOptionalContent;
-    const pdf::PDFCatalog* catalog = document->getCatalog();
-    for (size_t pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
-    {
-        const pdf::PDFPage* page = catalog->getPage(pageIndex);
-        pdf::PDFTextLayoutGenerator generator(features, page, document,
-                                              m_session->getFontCache(), m_session->getCMS(),
-                                              m_session->getOptionalContentActivity(), QTransform(), meshQuality,
-                                              m_session->getProcessingBudget());
-        generator.processContents();
-        const pdf::PDFTextLayout layout = generator.createTextLayout();
-        const pdf::PDFTextFlows flows = pdf::PDFTextFlow::createTextFlows(
-            layout, pdf::PDFTextFlow::RemoveSoftHyphen | pdf::PDFTextFlow::AddLineBreaks,
-            static_cast<pdf::PDFInteger>(pageIndex));
-        for (const pdf::PDFTextFlow& flow : flows)
-        {
-            for (const pdf::PDFFindResult& match : flow.find(query, Qt::CaseInsensitive))
-                results.append({static_cast<int>(pageIndex), match.matched, match.context});
-        }
-    }
-
-    if (!m_context->isCurrent(revision))
-        return false;
-    m_searchResults.replace(std::move(results), query, revision.toString());
+    results.reserve(searchResult.matches.size());
+    for (const pdf::PDFDocumentSearchMatch& match : searchResult.matches)
+        results.append({ static_cast<int>(match.pageIndex), match.matched, match.context });
+    m_searchResults.replace(std::move(results), query, searchResult.revision.toString());
     Q_EMIT searchChanged();
     return true;
 }
