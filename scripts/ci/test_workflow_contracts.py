@@ -68,7 +68,11 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("Deploy Qt runtime closure to staged install tree", windows)
         self.assertIn("windeployqt.exe", windows)
         self.assertIn("--no-compiler-runtime", windows)
+        self.assertIn("--qmldir", windows)
+        self.assertIn("windeployqt-$name.txt", windows)
         self.assertIn("LoupeEditor.exe", windows)
+        self.assertIn("--appimage-extract-and-run", linux)
+        self.assertIn("linuxdeployqt.txt", linux)
         for workflow in (linux, windows):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")

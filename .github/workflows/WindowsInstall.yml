@@ -261,6 +261,8 @@ jobs:
         working-directory: loupe
         shell: pwsh
         run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           $installBin = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\usr\bin"
           $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
           if (-not (Test-Path -LiteralPath $windeployqt)) {
@@ -272,9 +274,13 @@ jobs:
             if (-not (Test-Path -LiteralPath $target)) {
               throw "Expected staged executable was not found: $target"
             }
-            & $windeployqt --release --no-compiler-runtime --no-translations --dir $installBin $target 2>&1
-            if ($LASTEXITCODE -ne 0) {
-              throw "windeployqt failed for $name with exit code $LASTEXITCODE"
+            $output = @(& $windeployqt --release --no-compiler-runtime --no-translations `
+              --qmldir (Join-Path $env:GITHUB_WORKSPACE "loupe\LoupeEditor\qml") `
+              --dir $installBin $target 2>&1)
+            $exitCode = $LASTEXITCODE
+            $output | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-$name.txt")
+            if ($exitCode -ne 0) {
+              throw "windeployqt failed for $name with exit code $exitCode"
             }
           }
         env:
