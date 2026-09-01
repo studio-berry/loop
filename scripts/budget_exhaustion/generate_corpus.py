@@ -65,6 +65,12 @@ def _canonical(value: object) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _normalize_newlines(content: bytes) -> bytes:
+    """Normalize checkout-specific CRLF endings for bytewise verification."""
+
+    return content.replace(b"\r\n", b"\n")
+
+
 def manifest() -> dict[str, object]:
     records = fixtures()
     return {
@@ -92,7 +98,7 @@ def generate(output: Path, check: bool) -> int:
         if check:
             if not path.is_file():
                 problems.append(f"missing {path}")
-            elif path.read_bytes() != content:
+            elif _normalize_newlines(path.read_bytes()) != content:
                 problems.append(f"stale generated fixture {path}")
         else:
             output.mkdir(parents=True, exist_ok=True)
