@@ -138,7 +138,10 @@ def run_fixture(
     baseline: Mapping[str, Any] | None = None,
     margin: float = 2.0,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    candidate_sha: str | None = None,
 ) -> dict[str, Any]:
+    if candidate_sha is None:
+        candidate_sha = _candidate_sha()
     spec = FIXTURE_SPECS[fixture_id]
     record: dict[str, Any] = {
         "fixture_id": fixture_id,
@@ -176,6 +179,17 @@ def run_fixture(
         return record
 
     validation_errors = validate_envelope(envelope, budgets, spec["workload"])
+    identity = envelope.get("identity")
+    identity = identity if isinstance(identity, Mapping) else {}
+    if identity.get("commit") != candidate_sha:
+        validation_errors.append(
+            f"identity.commit {identity.get('commit')!r} does not match candidate {candidate_sha!r}"
+        )
+    if identity.get("fixture_digest") != record["input_sha256"]:
+        validation_errors.append(
+            "identity.fixture_digest "
+            f"{identity.get('fixture_digest')!r} does not match input {record['input_sha256']!r}"
+        )
     page_count = envelope.get("page_count")
     expected_page_count = spec["expected_page_count"]
     if expected_page_count is not None and page_count != expected_page_count:
@@ -203,6 +217,7 @@ def run_matrix(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> dict[str, Any]:
     baseline_by_fixture = _baseline_records(baseline) if isinstance(baseline, Path) else (baseline or {})
+    candidate_sha = _candidate_sha()
     records: list[dict[str, Any]] = []
     for fixture_id, spec in FIXTURE_SPECS.items():
         fixture_path = fixtures.get(fixture_id)
@@ -228,6 +243,7 @@ def run_matrix(
             baseline_by_fixture.get(fixture_id),
             margin,
             runner,
+            candidate_sha,
         )
         record["required"] = spec["required"]
         records.append(record)
@@ -244,7 +260,7 @@ def run_matrix(
     return {
         "schema_kind": MATRIX_KIND,
         "schema_version": 1,
-        "candidate_sha": _candidate_sha(),
+        "candidate_sha": candidate_sha,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "fixtures": records,
         "summary": {

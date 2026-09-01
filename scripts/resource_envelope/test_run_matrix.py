@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -22,9 +23,18 @@ def _policy() -> dict:
     }
 
 
-def _envelope(page_count: int = 256, rss: int = 10, elapsed: int = 10) -> dict:
+def _envelope(
+    page_count: int = 256,
+    rss: int = 10,
+    elapsed: int = 10,
+    commit: str = "candidate-sha",
+    fixture_digest: str | None = None,
+) -> dict:
     return {
-        "identity": {},
+        "identity": {
+            "commit": commit,
+            "fixture_digest": fixture_digest or hashlib.sha256(b"fixture").hexdigest(),
+        },
         "family": "test",
         "status": "incomplete",
         "page_count": page_count,
@@ -61,7 +71,15 @@ class RunMatrixTest(unittest.TestCase):
             def runner(*args, **kwargs):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner)
+            record = run_fixture(
+                Path("PdfTool.exe"),
+                "pathological-vector",
+                fixture,
+                _policy(),
+                1,
+                runner=runner,
+                candidate_sha="candidate-sha",
+            )
             self.assertEqual(record["status"], "flagged")
             self.assertEqual(record["result"]["page_count"], 256)
 
@@ -75,9 +93,53 @@ class RunMatrixTest(unittest.TestCase):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
             baseline = {"result": _envelope(rss=10, elapsed=10)}
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=baseline, margin=2, runner=runner)
+            record = run_fixture(
+                Path("PdfTool.exe"),
+                "pathological-vector",
+                fixture,
+                _policy(),
+                1,
+                baseline=baseline,
+                margin=2,
+                runner=runner,
+                candidate_sha="candidate-sha",
+            )
             self.assertEqual(record["status"], "failed")
             self.assertEqual(len(record["regressions"]), 2)
+
+    def test_identity_must_match_candidate_and_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "fixture.pdf"
+            fixture.write_bytes(b"fixture")
+            payload = json.dumps(
+                {
+                    "workload_envelope": _envelope(
+                        commit="stale-candidate",
+                        fixture_digest=hashlib.sha256(b"other fixture").hexdigest(),
+                    ),
+                }
+            )
+
+            def runner(*args, **kwargs):
+                return subprocess.CompletedProcess(args[0], 0, payload, "")
+
+            record = run_fixture(
+                Path("PdfTool.exe"),
+                "pathological-vector",
+                fixture,
+                _policy(),
+                1,
+                runner=runner,
+                candidate_sha="candidate-sha",
+            )
+
+            self.assertEqual(record["status"], "failed")
+            self.assertTrue(
+                any("identity.commit" in error for error in record["validation_errors"])
+            )
+            self.assertTrue(
+                any("identity.fixture_digest" in error for error in record["validation_errors"])
+            )
 
     def test_matrix_records_missing_required_and_optional_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
