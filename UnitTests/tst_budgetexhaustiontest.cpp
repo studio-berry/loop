@@ -130,8 +130,7 @@ QList<CorpusFixture> loadCorpus()
     }
 
     const QJsonObject root = document.object();
-    if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loupe-processing-budget-exhaustion-corpus")
-        || root.value(QStringLiteral("schema_version")).toInt() != 2)
+    if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loupe-processing-budget-exhaustion-corpus") || root.value(QStringLiteral("schema_version")).toInt() != 2)
     {
         qFatal("Unexpected generated budget exhaustion corpus schema");
     }
@@ -602,10 +601,9 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     QVERIFY(!result.checkStatuses.isEmpty());
     {
         bool found = false;
-        for (const pdf::PreflightCheckStatus &status : result.checkStatuses)
+        for (const pdf::PreflightCheckStatus& status : result.checkStatuses)
         {
-            if (status.budgetKind == QLatin1String("evidence-records")
-                && status.budgetPool == QLatin1String("evidence-cache"))
+            if (status.budgetKind == QLatin1String("evidence-records") && status.budgetPool == QLatin1String("evidence-cache"))
             {
                 found = true;
                 break;
@@ -626,11 +624,10 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     QVERIFY(!checks.isEmpty());
     {
         bool found = false;
-        for (const QJsonValue &value : checks)
+        for (const QJsonValue& value : checks)
         {
             const QJsonObject budget = value.toObject().value(QStringLiteral("budget")).toObject();
-            if (budget.value(QStringLiteral("kind")).toString() == QLatin1String("evidence-records")
-                && budget.value(QStringLiteral("pool")).toString() == QLatin1String("evidence-cache"))
+            if (budget.value(QStringLiteral("kind")).toString() == QLatin1String("evidence-records") && budget.value(QStringLiteral("pool")).toString() == QLatin1String("evidence-cache"))
             {
                 found = true;
                 break;
