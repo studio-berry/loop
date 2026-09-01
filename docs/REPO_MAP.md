@@ -88,7 +88,7 @@ targeted Core tests before merging an authorized sync.
 | Interactive editor | `LoupeEditor/`, `LoupeLibQuick/` | Primary Qt Quick shell and canvas host |
 | Headless CLI | `PdfTool/` | Automation, batch checks, rendering, and repair |
 | Page production | `PdfTool/`, `LoupeLibCore/` | Batch geometry, assembly, and production export |
-| Editor plugins | `LoupeEditorPlugins/` | Editor-only capabilities |
+| Editor capabilities | `LoupeEditor/`, `LoupeLibQuick/`, `LoupeLibCore/` | Contextual capabilities hosted by the Quick editor and shared libraries |
 | Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
 | Preflight contract | `loupe-preflight/` | Profiles, schemas, examples, and report documentation |
 | Architecture records | `docs/adr/`, `docs/` | Decisions, policy, plans, and generated factual catalogs |
