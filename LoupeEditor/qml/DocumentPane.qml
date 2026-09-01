@@ -10,6 +10,11 @@ Item {
     property var host: editorHost
     property var documentModel: host ? host.documentModel : null
 
+    function revealSearch() {
+        tabBar.currentIndex = 2
+        searchField.forceActiveFocus()
+    }
+
     RowLayout {
         anchors.fill: parent
         spacing: 0
@@ -150,6 +155,14 @@ Item {
             Layout.fillHeight: true
             host: root.host
             Accessible.name: qsTr("Document canvas pane")
+        }
+    }
+
+    Connections {
+        target: root.host
+        function onPresentationChanged() {
+            if (root.host && root.host.searchPanelVisible)
+                root.revealSearch()
         }
     }
 }

@@ -136,8 +136,7 @@ EditorHost::EditorHost(QObject* parent) :
             {
                 refreshFeatureAvailability();
                 bumpPresentation();
-                bumpCommandEpoch();
-            });
+                bumpCommandEpoch(); });
 }
 
 EditorHost::~EditorHost()
@@ -553,8 +552,7 @@ void EditorHost::connectFacade()
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             {
                 syncDocumentLifecycle();
-                bumpPresentation();
-            });
+                bumpPresentation(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
             {
@@ -636,7 +634,9 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionFullscreenMode"), [this]
          { m_fullscreenRequested = !m_fullscreenRequested; });
     bind(QStringLiteral("actionFind"), [this]
-         { m_searchPanelVisible = true; });
+         {
+             m_searchPanelVisible = true;
+             m_workspaceRequest = 0; });
     bind(QStringLiteral("actionFindNext"), [this]
          { moveSearch(1); });
     bind(QStringLiteral("actionFindPrevious"), [this]
@@ -650,9 +650,9 @@ void EditorHost::refreshFeatureAvailability()
 {
     const bool ready = hasDocument();
     QHash<pdfinteraction::CommandId, bool> availability;
-    for (const QString& id : {QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
-                              QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
-                              QStringLiteral("actionFind"), QStringLiteral("actionProperties")})
+    for (const QString& id : { QStringLiteral("actionPageLayoutContinuous"), QStringLiteral("actionPageLayoutSinglePage"),
+                               QStringLiteral("actionPageLayoutTwoColumns"), QStringLiteral("actionPageLayoutTwoPages"),
+                               QStringLiteral("actionFind"), QStringLiteral("actionProperties") })
     {
         availability.insert(id, ready);
     }
