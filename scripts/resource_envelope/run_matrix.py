@@ -242,9 +242,12 @@ def run_fixture(
     rasterizers: int = DEFAULT_RASTERIZERS,
     require_provenance: bool = False,
     cancel_after_seconds: float | None = None,
+    candidate_sha: str | None = None,
 ) -> dict[str, Any]:
     if repetitions < 1 or rasterizers < 1:
         raise ValueError("repetitions and rasterizers must be positive")
+    if candidate_sha is None:
+        candidate_sha = _candidate_identity()["candidate_sha"]
     # Resolve relative paths before the child is launched with cwd=ROOT.
     # Otherwise a relative fixture or tool path checked against the caller
     # directory would be looked up again relative to ROOT in the child.
@@ -307,6 +310,11 @@ def run_fixture(
         resident_limit = budgets.get("resource_budget", {}).get("resident_limit_bytes")
         if isinstance(rss, int) and rss >= 0 and isinstance(resident_limit, int) and rss > resident_limit:
             validation_errors.append(f"run {index}: RSS {rss} exceeds resident policy {resident_limit}")
+        identity = envelope.get("identity") if isinstance(envelope.get("identity"), Mapping) else {}
+        if identity.get("commit") != candidate_sha:
+            validation_errors.append(f"run {index}: identity.commit {identity.get('commit')!r} does not match candidate {candidate_sha!r}")
+        if identity.get("fixture_digest") != record.get("fixture_sha256"):
+            validation_errors.append(f"run {index}: identity.fixture_digest {identity.get('fixture_digest')!r} does not match input {record.get('fixture_sha256')!r}")
     record["identity"] = representative.get("identity", {})
     record["result"] = representative
     record["statistics"] = stats
@@ -416,7 +424,7 @@ def run_matrix(
             record["required"] = spec["required"]
             records.append(record)
             continue
-        record = run_fixture(pdf_tool, fixture_id, fixture_path, budgets, timeout_seconds, baseline_by_fixture.get(fixture_id), margin, runner, metadata, repetitions, rasterizers, bool(metadata), cancel_after_seconds if fixture_id == cancel_fixture else None)
+        record = run_fixture(pdf_tool, fixture_id, fixture_path, budgets, timeout_seconds, baseline_by_fixture.get(fixture_id), margin, runner, metadata, repetitions, rasterizers, bool(metadata), cancel_after_seconds if fixture_id == cancel_fixture else None, candidate_sha)
         record["required"] = spec["required"]
         result = record.get("result")
         if isinstance(result, Mapping):
