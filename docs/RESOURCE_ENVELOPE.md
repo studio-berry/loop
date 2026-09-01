@@ -102,3 +102,29 @@ python scripts/resource_envelope/pathological_workload.py `
 
 Use `scripts/resource_envelope/validate_envelope.py` to validate a record
 against the checked-in limits before attaching it to a qualification dossier.
+
+## Run the fixture matrix
+
+The issue #242 matrix is run against externally stored PDFs so large fixtures
+do not enter the repository. Supply the required fixture paths explicitly; the
+multi-GB fixture is optional when the platform or available disk cannot
+support it:
+
+```powershell
+python scripts/resource_envelope/run_matrix.py `
+  --pdf-tool C:\path\to\PdfTool.exe `
+  --fixture office-2mb=C:\fixtures\office-2mb.pdf `
+  --fixture image-heavy-500mb=C:\fixtures\image-heavy-500mb.pdf `
+  --fixture ten-thousand-page=C:\temp\loupe-div2k-10000-pages.pdf `
+  --fixture pathological-vector=C:\temp\loupe-pathological-vector.pdf `
+  --fixture transparency-spots=C:\temp\loupe-transparency-spots.pdf `
+  --output C:\temp\resource-envelope-matrix.json
+```
+
+Each fixture attempt records its input digest, exact PdfTool command, process
+exit code, workload envelope, validation errors, and optional baseline
+regressions. Missing, timed-out, or incomplete measurements remain flagged in
+the JSON; they are never converted to zero or reported as a passing complete
+run. Add `--baseline C:\previous\resource-envelope-matrix.json` to compare
+RSS and elapsed time using `--margin` (default `2.0`). Use `--strict` in a
+qualification job when flagged required fixtures must fail the job.
