@@ -77,6 +77,20 @@ public:
     /// extent that was built from those same rectangles.
     QList<int> query(QPointF point) const;
 
+    /// Item indices whose rectangle's cell footprint overlaps `area`'s cells.
+    /// Same never-a-false-negative contract as the point overload, and the
+    /// same obligation on the caller to apply an exact test.
+    ///
+    /// This overload exists because a tolerance is not a point. Expanding a
+    /// pointer position by a few page units can push the probe across a cell
+    /// boundary, and the neighbouring cell may hold the only item within
+    /// tolerance -- the point query would answer "nothing" for a target the
+    /// user can see is close enough.
+    ///
+    /// An item spanning several probed cells is returned once, so a caller
+    /// that turns candidates into targets cannot hit or draw it twice.
+    QList<int> query(const QRectF& area) const;
+
     int itemCount() const noexcept { return m_itemCount; }
     int cellCount() const noexcept { return m_columns * m_rows; }
 

@@ -60,13 +60,13 @@ with document-revision binding. Inventory:
 | Work | Existing owner | Scheduler kind | Default priority | Status |
 | --- | --- | --- | --- | --- |
 | Page and overlay rendering | `LoupeLibQuick`, `LoupeLibCore` | `Rendering` | `VisiblePage` | **page compile and text layout migrated**; remaining overlay tiles stay on `PDFExecutionPolicy` |
-| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` | **PdfTool `preflight` and Editor preflight migrated** |
-| OCR and indexing | Editor plugins / Core | `OCR` | `Background` | remaining (out of S05 scope) |
+| Preflight and fixups | Editor / PdfTool | `Preflight` or `Export` | `Operator` | **PdfTool `preflight` migrated**; Editor preflight migrated by `SchedulerPreflightService` (issue #144) |
+| OCR and indexing | Editor plugins / Core | `OCR` | `Background` | **migrated (job boundary only; no GUI surface)** via `SchedulerOcrService` (issue #144) |
 | Page production export | `PdfTool`, `LoupeLibCore` | `Export` | `Operator` | **migrated** |
-| Thumbnail generation | `LoupeLibQuick`, `LoupeLibCore` | `Thumbnail` | `NearViewport` | **migrated** |
+| Thumbnail generation | `LoupeLibQuick`, `LoupeLibCore` | `Thumbnail` | `NearViewport` | remaining -- no thumbnail renderer exists in the tree; see `ASYNC_BOUNDARY_DEFERRED.md` |
 | Page production preview | `PdfTool`, `LoupeLibCore` | `Rendering` | `NearViewport` | **migrated** (revision-fenced via `PDFJobScheduler`) |
-| Batch analysis | `PdfTool`, `LoupeLibCore` | `Batch` | `Background` | remaining (out of S05 scope) |
-| Agent context work | future agent surface | `Agent` | `Agent` | remaining |
+| Batch analysis | `PdfTool`, `LoupeLibCore` | `Batch` | `Background` | remaining; see `ASYNC_BOUNDARY_DEFERRED.md` |
+| Agent context work | future agent surface | `Agent` | `Agent` | deferred -- no AI code exists; see `ASYNC_BOUNDARY_DEFERRED.md` |
 
 This migration boundary is deliberate: the scheduler provides the shared
 arbitration contract, while subsequent caller changes must preserve each
@@ -74,8 +74,8 @@ surface's typed result and UI lifecycle. A source audit can use the table to
 reject new unmanaged long-running work and to track the remaining conversions.
 
 `scripts/ci/check_unmanaged_async.py` is the CI guard for that boundary. It
-currently reports the 13 pre-existing `QtConcurrent::run` call sites above as
-known migration debt and fails on any new or multiplied unmanaged launch. The
+currently reports one pre-existing `QtConcurrent::run` call site
+(`LoupeLibCore/sources/pdfdiff.cpp`) as known migration debt and fails on any new or multiplied unmanaged launch. The
 allowlist is a containment measure, not acceptance of #238; the issue remains
 open until those product paths are migrated and cancellation/stale-result
 evidence is recorded on both supported desktop platforms.
@@ -87,3 +87,9 @@ cancellation (including Export/Preflight operator jobs), measured cancellation
 latency, stale-revision discard, progress, metadata, and trace visibility.
 `PageMasterExportTest::cancel_midOutput_beforeWrite_writesNothing` submits
 export through `PDFJobScheduler` and asserts the snapshot is not `Succeeded`.
+
+Work with no interactive caller is not left unguarded. `pdf::PDFThreadAffinity`
+marks the interactive thread at startup, and each expensive service entry calls
+`requireNotInteractive()`, so a path that has never been migrated still cannot
+be reached synchronously from input handling. What remains, and what makes each
+item real work, is registered in `ASYNC_BOUNDARY_DEFERRED.md`.

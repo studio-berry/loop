@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "preflightengine.h"
+
+#include "pdfthreadaffinity.h"
 #include "pdfpreflightverdict.h"
 #include "pdfoperationcontrol.h"
 #include "pdfschemaversion.h"
@@ -5683,6 +5685,11 @@ PreflightResult PreflightEngine::run(const PreflightProfileData& profile)
 
 PreflightResult PreflightEngine::run(const PreflightProfileData& profile, const PDFRevalidationPlan& plan)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("preflight");
+
     PreflightResult result;
     result.profileName = profile.name;
     result.inspectionComplete = true;

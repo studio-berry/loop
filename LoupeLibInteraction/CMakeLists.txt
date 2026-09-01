@@ -71,8 +71,12 @@ add_library(LoupeLibInteraction STATIC
     sources/interactiontarget.h
     sources/interactionstate.cpp
     sources/interactionstate.h
+    sources/dragsnapper.cpp
+    sources/dragsnapper.h
     sources/hittestsource.cpp
     sources/hittestsource.h
+    sources/ocrservice.cpp
+    sources/ocrservice.h
     sources/pagespatialindex.cpp
     sources/pagespatialindex.h
     sources/overlayframe.cpp
@@ -89,6 +93,8 @@ add_library(LoupeLibInteraction STATIC
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
     sources/preflightoverlaybridge.h
+    sources/preflightservice.cpp
+    sources/preflightservice.h
     sources/inspectormodel.cpp
     sources/inspectormodel.h
     sources/previewstatemodel.cpp

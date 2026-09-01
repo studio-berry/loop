@@ -27,6 +27,7 @@
 #include "hittestsource.h"
 #include "inputintent.h"
 #include "interactionglobal.h"
+#include "dragsnapper.h"
 #include "interactionstate.h"
 #include "interactiontrace.h"
 #include "overlaybuilder.h"
@@ -96,6 +97,21 @@ public:
     /// Absent by default: a diagnostic that is on in production is a tax.
     void setTraceRecorder(InteractionTraceRecorder* recorder);
     InteractionTraceRecorder* traceRecorder() const noexcept { return m_trace; }
+
+    /// Optional. Observed, never owned. Absent by default, and absent means
+    /// exactly the behaviour before issue #145: the preview goes wherever the
+    /// pointer puts it.
+    void setSnapper(DragSnapper* snapper);
+    DragSnapper* snapper() const noexcept { return m_snapper; }
+
+    /// Held down, this modifier suppresses snapping for as long as it is held.
+    ///
+    /// Sampled from the current intent on every move rather than latched at
+    /// press: issue #145 AC3 asks for modifiers to be sampled consistently, and
+    /// a user who starts a drag and then decides they want the exact position
+    /// is asking for the snap to stop, not for the gesture to restart.
+    void setSnapSuppressModifier(Qt::KeyboardModifier modifier);
+    Qt::KeyboardModifier snapSuppressModifier() const noexcept { return m_snapSuppressModifier; }
 
     const InteractionState& state() const noexcept { return m_state; }
     const OverlayFrame& overlayFrame() const noexcept { return m_overlay; }
@@ -194,6 +210,10 @@ private:
     InteractionTarget hitTestAt(QPoint viewportPx, int* pageIndex, QPointF* pagePoint) const;
 
     void cancelActive(InteractionCancelReason reason);
+
+    /// Pulls the live drag preview onto a snap candidate, if there is one and
+    /// the user is not suppressing it.
+    void applySnapToPreview(Qt::KeyboardModifiers modifiers);
     void publishOverlay();
 
     IDocumentRevisionSource* m_revisions = nullptr;
@@ -201,6 +221,7 @@ private:
     HitTestDispatcher* m_hitTest = nullptr;
     OverlayBuilder* m_overlays = nullptr;
     InteractionTraceRecorder* m_trace = nullptr;
+    DragSnapper* m_snapper = nullptr;
 
     InteractionState m_state;
     OverlayFrame m_overlay;
@@ -208,6 +229,7 @@ private:
     QString m_activeTool;
     Qt::KeyboardModifier m_zoomModifier = Qt::ControlModifier;
     Qt::MouseButton m_panButton = Qt::MiddleButton;
+    Qt::KeyboardModifier m_snapSuppressModifier = Qt::AltModifier;
     int m_keyScrollStepPx = 40;
 
     quint64 m_generation = 1;

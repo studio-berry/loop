@@ -32,6 +32,7 @@
 #include <QPoint>
 #include <QPointF>
 #include <QRectF>
+#include <QString>
 
 #include <optional>
 
@@ -105,6 +106,15 @@ struct DragSession
     /// Where the target would land if the drag completed now. Presentation only:
     /// it feeds the overlay, never the document.
     QRectF previewPageBounds;
+
+    /// The snap source the preview latched onto, or empty when the preview is
+    /// wherever the pointer put it.
+    ///
+    /// Recorded rather than re-derived. A commit path that had to work out
+    /// whether a preview was snapped, by comparing its bounds against every
+    /// candidate again, would be free to reach a different answer than the one
+    /// the user watched.
+    QString snappedTo;
 };
 
 /// A cheap, per-event, revision-fenced snapshot of what the pointer is doing.
@@ -186,6 +196,15 @@ public:
     /// pressing Shift mid-drag is how constrained movement is expressed, and a
     /// session that remembers only the press state cannot see it.
     bool updateDrag(const RevisionFencedToken& token, QPoint currentPx, QPointF currentPagePoint, Qt::KeyboardModifiers modifiers);
+
+    /// Moves the drag preview onto `topLeft` and records what it snapped to.
+    ///
+    /// Separate from updateDrag because a snap is a decision about presentation
+    /// made after the geometry is known, by something that can see the viewport
+    /// -- and this class deliberately cannot. Returns false when there is no
+    /// current drag, when the token is stale, or before the drag has passed the
+    /// hysteresis threshold.
+    bool setDragPreviewOrigin(const RevisionFencedToken& token, QPointF topLeft, const QString& snappedTo);
 
     /// Ends the active drag and returns it, or nothing when the token no longer
     /// matches or the pointer never passed the hysteresis threshold. A returned

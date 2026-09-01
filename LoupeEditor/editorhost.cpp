@@ -30,9 +30,11 @@
 #include "loupecanvasitem.h"
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
+#include "preflightservice.h"
 #include "previewstatemodel.h"
 
 #include "pdfpage.h"
+#include "preflightprofileresolver.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QAccessible>
@@ -43,6 +45,9 @@
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QUrl>
 
 #include <optional>
@@ -51,6 +56,14 @@ namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
+
+/// Hit slack in device-independent pixels, held constant across zoom.
+///
+/// Two pixels is what a page-box edge needs to be grabbable without the edge
+/// shadowing what sits just inside it. It is expressed in screen units because
+/// that is the unit the user's hand works in; HitTestDispatcher converts it to
+/// page units against the live zoom.
+constexpr qreal CanvasHitTolerancePx = 2.0;
 
 int rotationToDegrees(pdf::PageRotation rotation)
 {
@@ -113,7 +126,8 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
-    m_preflight(&m_session->scheduler(), this)
+    m_preflight(&m_session->scheduler(), this),
+    m_pageBoxSnaps(&m_session->pageBoxSource())
 {
     connectFacade();
     connectViewport();
@@ -121,6 +135,11 @@ EditorHost::EditorHost(QObject* parent) :
     connectInteraction();
     connectSurfaces();
     registerShellHandlers();
+
+    // After m_session, whose submitter this references. The submitter is the
+    // one seam onto pdf::PDFJobScheduler; the service adds no queue of its own.
+    m_preflightService =
+        std::make_unique<pdfinteraction::SchedulerPreflightService>(m_session->submitter(), &m_preflight);
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
@@ -211,6 +230,71 @@ QObject* EditorHost::preview()
 QString EditorHost::preflightStateName() const
 {
     return preflightStateToString(m_preflight.state());
+}
+
+bool EditorHost::preflightRunning() const
+{
+    return m_preflight.state() == pdfinteraction::PreflightController::State::Running;
+}
+
+bool EditorHost::runPreflight(const QUrl& profileFileUrl)
+{
+    if (!m_preflightService || !m_documentBound)
+    {
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+
+    if (document.isNull())
+    {
+        return false;
+    }
+
+    const QString path = profileFileUrl.isLocalFile() ? profileFileUrl.toLocalFile() : profileFileUrl.toString();
+    QFile file(path);
+
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument parsed = QJsonDocument::fromJson(file.readAll(), &parseError);
+
+    if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
+    {
+        return false;
+    }
+
+    // importPreflightProfile validates the committed digest and refuses a
+    // mismatch rather than repairing it. Running an unvalidated profile would
+    // produce a report whose identity does not describe what was checked.
+    const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(parsed.object(), path);
+
+    if (!imported.ok)
+    {
+        return false;
+    }
+
+    pdfinteraction::PreflightRunRequest request;
+    request.documentKey = m_session->context().getDocumentIdentity().documentId;
+    request.documentRevision = m_session->context().getRevision().toString();
+    request.profileDigest = imported.identity.effectiveDigest;
+    request.profile = imported.profile;
+    request.document = document;
+
+    return !m_preflightService->beginRun(std::move(request)).isEmpty();
+}
+
+void EditorHost::cancelPreflight()
+{
+    if (!m_preflightService)
+    {
+        return;
+    }
+
+    m_preflightService->cancel(m_preflightService->activeJobId());
 }
 
 QString EditorHost::previewSummary() const
@@ -623,7 +707,20 @@ void EditorHost::bindCanvas()
     m_session->hitTest()->clearSources();
     m_session->hitTest()->addSource(&m_findingsHitTest);
     m_session->hitTest()->addSource(&m_session->pageBoxSource());
-    m_session->pageBoxSource().setEdgeTolerance(2.0 / qMax(m_session->viewport().zoom(), qreal(0.01)));
+
+    // A screen constant, not a page-space one derived from whatever the zoom
+    // happened to be at bind time. The dispatcher converts it per hit test
+    // against the live zoom (issue #145 AC5); the previous form was computed
+    // once here and was wrong from the first wheel notch onward.
+    m_session->hitTest()->setScreenTolerancePx(CanvasHitTolerancePx);
+
+    // The snapper reads its candidates from the page-box source added above,
+    // so what a drag latches onto is the same geometry a click hits. Wired
+    // here rather than in the constructor because bind/unbind is where the
+    // controller's borrowed collaborators are established (issue #145 AC3).
+    m_dragSnapper.clearProviders();
+    m_dragSnapper.addProvider(&m_pageBoxSnaps);
+    m_session->interaction()->setSnapper(&m_dragSnapper);
 
     m_canvas->bind(&m_session->viewport(), m_session->interaction(), m_session->surfaces());
 }
@@ -634,6 +731,11 @@ void EditorHost::unbindCanvas()
     {
         return;
     }
+
+    // Dropped with the rest of the borrowed collaborators. A snapper left
+    // attached to an unbound canvas would still be consulted by a drag the
+    // controller had no viewport for.
+    m_session->interaction()->setSnapper(nullptr);
 
     m_canvas->bind(nullptr, nullptr, nullptr);
 }

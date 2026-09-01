@@ -1,8 +1,13 @@
 # Phase 5 Widgets deletion handoff
 
-**Status:** prepared by P4-S12 product cutover
+**Status:** terminal source graph recorded; package and release qualification remain open
 **Owner:** 0.2.0 Phase 5
-**Updated:** 2026-08-24
+**Updated:** 2026-08-31
+
+> **Current-state rule:** The terminal candidate section is authoritative for
+> the current source graph. The Session 01–05 sections below preserve dated
+> deletion provenance and pre-deletion gate wording; they are historical
+> evidence, not instructions to rebuild or ship removed surfaces.
 
 ## Current source/manifest reconciliation (Issue #191)
 
@@ -19,6 +24,26 @@ The generated Phase 5 evidence is refreshed from the current CMake graph, and
 `scripts/verify_product_surface.py` fail closed on source, install, packaging,
 or CLI drift. This supersedes any earlier handoff wording below that describes
 retired targets or plugins as still buildable or installed.
+
+## Terminal candidate (Session 09)
+
+The current terminal source graph is recorded on candidate
+`cdx/0.2.0-p5session7` at
+`d099622a0abee38e98c9378cbfd9763f4233b8a8`. `LoupeEditor` is the sole
+supported installed interactive product; `PdfTool`, `LoupeLibCore`, and
+`LoupeLibQuick` are the supported installed CLI/library boundary. The retired
+secondary application, Widgets-library, and editor-plugin source identities are
+absent. The derived Phase 5 disposition contains 6 explicit
+`RETAIN-NON-PRODUCT` rows, with 2 retained legacy UI forms and 12 build-only
+plugin policies accounted for.
+
+Fresh-worktree evidence at this SHA is green for the residue gate, generated
+Phase 5 evidence, source integrity, architecture/catalog, product/shell/plugin
+contracts, and the full CI contract suite (183 tests, 1 intentional skip).
+Supply Chain Policy run `33462071106` is also green. This does not close the
+Session 07 package boundary: no accepted Linux/Windows package pair,
+clean-machine install/smoke evidence, native release build, or full hosted
+release-gate result is recorded here. Those gates remain open.
 
 ## Session 01 qualified inventory and disposition baseline
 
@@ -84,18 +109,18 @@ proof rather than unfinished product migration.
 Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperatorLoop`;
 `docs/evidence/phase5-widgets-parity-evidence.json`.
 
-## Libraries to remove from the maintained product graph
+## Historical pre-deletion library gate
 
 | Library | Role today | Deletion gate |
 | --- | --- | --- |
 | `LoupeLibWidgets` | Widgets canvas, dialogs, annotation helpers | No installed target links it; Quick workspaces cover required operator surfaces per `docs/loupe-shell.json` |
 | Widgets-bound `LoupeLibGui` | Editor/viewer windows, dialogs, chrome | Quick shell replaces `pdfeditormainwindow.ui` and related surfaces classified in `legacy_surface_disposition` |
 
-## Widgets executables still in the source tree
+## Historical pre-deletion executable disposition
 
-Session 03 removed the four secondary executables from the install and packaging
-graph. They remain optional non-installed build targets (`LOUPE_BUILD_*` default
-OFF) until a later session deletes the sources.
+The following table preserves the Session 03 disposition before source deletion.
+At the terminal candidate, all four source identities are absent and are not
+optional build targets.
 
 | Executable | Disposition | Phase 5 route |
 | --- | --- | --- |
@@ -106,7 +131,7 @@ OFF) until a later session deletes the sources.
 
 See `docs/product-surface.json` and `docs/loupe-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
 
-## Plugin directories (12)
+## Historical plugin disposition (12 policy rows)
 
 Session 04 Issue 13 removed `AudioBookPlugin` and `OcrPlugin` from the install
 graph and verified all 12 plugin policy rows through
@@ -130,7 +155,7 @@ ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
 | `AudioBookPlugin` | — | STOP-SHIPPING; not installed; delete in Phase 5 |
 | `OcrPlugin` | CLI | STOP-SHIPPING UI; PdfTool owns OCR; not installed |
 
-## Legacy `.ui` inventory (34 retained forms)
+## Historical legacy `.ui` inventory
 
 Session 04 Issue 14 deleted all 14 `RETIRE` forms for LoupeDiff, LoupePageMaster,
 LoupeLaunchPad, and the AudioBook plugin dock widget. Optional builds of the retired
@@ -164,14 +189,14 @@ blockers that must clear before Issue 17 deletes either library.
 
 Issue 17 deleted `LoupeLibWidgets`, Widgets-bound `LoupeLibGui`, all `LoupeEditorPlugins` sources, and the retired secondary executables (`LoupeViewer`, `LoupePageMaster`, `LoupeDiff`, `LoupeLaunchPad`). All twelve editor plugins are build-only and absent from the `loupe-release` install graph; `widgets-library-consumer-graph.json` records `deletion_safe: true` with no installed product blockers. Linux CI now configures with `-DLOUPE_LOUPE_DISTRIBUTION=ON` so agent-fast matches production profile gates.
 
-## Configure and package proof required in Phase 5
+## Phase 5 qualification ledger
 
-1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile. **Done (static + configure + CI)** — `LOUPE_LOUPE_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` (static checks in source_integrity, configure probe in reusable-linux CI).
-2. `LoupeEditor` install tree must not load `Qt6Widgets` at runtime. **Done** — static graph proof + package smoke scans.
+1. Root CMake must not require `Qt6::Widgets` for the Loupe release profile. **Static/configure proof retained; final candidate package acceptance remains open** — `LOUPE_LOUPE_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`.
+2. `LoupeEditor` install tree must not load `Qt6Widgets` at runtime. **Static graph proof retained; accepted package smoke remains open.**
 3. Clean-machine package smoke with Widgets unavailable in the product graph:
    - Linux: `scripts/smoke-test-appimage.sh` (now rejects `Qt6Widgets` artifacts)
    - Windows: `scripts/Invoke-MsiSmokeTest.ps1`, `scripts/smoke-test-install.ps1` (now rejects `Qt6Widgets.dll`)
-4. Inspect installed artifacts for forbidden `Qt6Widgets` linkage. **Done** — smoke scripts + `verify-widgets-free-release-profile.py --install-dir`.
+4. Inspect installed artifacts for forbidden `Qt6Widgets` linkage. **Open for the final candidate** — the verifier and smoke scripts exist, but no accepted final installed tree is recorded here.
 
 ## Explicitly not Phase 5 scope from P4-S12
 

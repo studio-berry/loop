@@ -22,6 +22,8 @@
 
 #include "pagesurfacerenderer.h"
 
+#include "pdfthreadaffinity.h"
+
 #include "pdfdocument.h"
 #include "pdfdocumentsession.h"
 #include "pdfexception.h"
@@ -217,6 +219,11 @@ void PDFSessionPageSurfaceRenderer::setCacheLimit(qsizetype totalBytes)
 
 PageSurfaceResult PDFSessionPageSurfaceRenderer::render(const PageSurfaceRequest& request, pdf::PDFJobContext& jobContext)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("page-render");
+
     if (jobContext.isCancellationRequested())
     {
         return makeTerminal(request, SurfaceTerminalState::Cancelled, QStringLiteral("page-surface/cancelled"));

@@ -22,6 +22,8 @@
 
 #include "ocrsidecarclient.h"
 
+#include "pdfthreadaffinity.h"
+
 #include "pdftoolabstractapplication.h"
 #include "pdfutils.h"
 
@@ -88,6 +90,11 @@ bool OcrSidecarClient::sendRequest(const QJsonObject& request,
                                    QJsonObject& response,
                                    QString& errorMessage)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("ocr");
+
     const QByteArray line = QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n';
     if (m_process.write(line) != line.size())
     {

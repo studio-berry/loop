@@ -197,6 +197,32 @@ bool InteractionState::updateDrag(const RevisionFencedToken& token, QPoint curre
         session.previewPageBounds = QRectF(topLeft, session.target.pageBounds.size());
     }
 
+    // Every move starts unsnapped. A snap decided on the previous move must not
+    // survive into this one: the pointer may have left the candidate, and a
+    // sticky flag would report a latch the preview no longer shows.
+    session.snappedTo.clear();
+
+    return true;
+}
+
+bool InteractionState::setDragPreviewOrigin(const RevisionFencedToken& token,
+                                            QPointF topLeft,
+                                            const QString& snappedTo)
+{
+    if (!m_drag.has_value() || !isCurrent(token))
+    {
+        return false;
+    }
+
+    DragSession& session = *m_drag;
+
+    if (!session.exceededThreshold || session.target.pageBounds.isNull())
+    {
+        return false;
+    }
+
+    session.previewPageBounds = QRectF(topLeft, session.target.pageBounds.size());
+    session.snappedTo = snappedTo;
     return true;
 }
 

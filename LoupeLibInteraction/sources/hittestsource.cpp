@@ -40,6 +40,34 @@ constexpr int evidencePageToIndex(int page)
     return page - 1;
 }
 
+/// The probe rectangle a tolerance turns a point into.
+///
+/// A zero tolerance yields a zero-size rect, which the spatial index treats
+/// exactly as the point overload did -- that identity is what lets the
+/// tolerance be introduced without moving any existing result.
+QRectF toleranceProbe(QPointF point, qreal tolerance)
+{
+    if (!(tolerance > 0.0))
+    {
+        return QRectF(point, QSizeF(0.0, 0.0));
+    }
+
+    return QRectF(point.x() - tolerance, point.y() - tolerance, tolerance * 2.0, tolerance * 2.0);
+}
+
+/// Precise test with slack. At tolerance zero this is QRectF::contains, so a
+/// caller that asks for no slack gets byte-identical results to the exact test
+/// this replaced.
+bool withinTolerance(const QRectF& box, QPointF point, qreal tolerance)
+{
+    if (!(tolerance > 0.0))
+    {
+        return box.contains(point);
+    }
+
+    return box.adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(point);
+}
+
 bool touchesEdge(const QRectF& box, QPointF point, qreal tolerance)
 {
     if (box.isNull())
@@ -126,6 +154,14 @@ void EvidenceHitTestSource::indexGraph()
 
 QList<InteractionTarget> EvidenceHitTestSource::hitTest(int pageIndex, QPointF pagePoint) const
 {
+    return hitTest(pageIndex, pagePoint, 0.0, nullptr);
+}
+
+QList<InteractionTarget> EvidenceHitTestSource::hitTest(int pageIndex,
+                                                        QPointF pagePoint,
+                                                        qreal pageTolerance,
+                                                        HitTestCounters* counters) const
+{
     QList<InteractionTarget> hits;
 
     const auto pageTargets = m_targetsByPage.constFind(pageIndex);
@@ -135,13 +171,21 @@ QList<InteractionTarget> EvidenceHitTestSource::hitTest(int pageIndex, QPointF p
         return hits;
     }
 
-    for (int candidate : pageIndexEntry.value().query(pagePoint))
+    const QList<int> candidates = pageIndexEntry.value().query(toleranceProbe(pagePoint, pageTolerance));
+
+    for (int candidate : candidates)
     {
         const InteractionTarget& target = pageTargets.value().at(candidate);
-        if (target.pageBounds.contains(pagePoint))
+        if (withinTolerance(target.pageBounds, pagePoint, pageTolerance))
         {
             hits.push_back(target);
         }
+    }
+
+    if (counters)
+    {
+        counters->indexCandidates += int(candidates.size());
+        counters->preciseHits += int(hits.size());
     }
 
     return hits;
@@ -179,6 +223,14 @@ void FindingListHitTestSource::setTargets(QList<InteractionTarget> targets)
 
 QList<InteractionTarget> FindingListHitTestSource::hitTest(int pageIndex, QPointF pagePoint) const
 {
+    return hitTest(pageIndex, pagePoint, 0.0, nullptr);
+}
+
+QList<InteractionTarget> FindingListHitTestSource::hitTest(int pageIndex,
+                                                           QPointF pagePoint,
+                                                           qreal pageTolerance,
+                                                           HitTestCounters* counters) const
+{
     QList<InteractionTarget> hits;
 
     const auto pageTargets = m_targetsByPage.constFind(pageIndex);
@@ -188,13 +240,21 @@ QList<InteractionTarget> FindingListHitTestSource::hitTest(int pageIndex, QPoint
         return hits;
     }
 
-    for (int candidate : pageIndexEntry.value().query(pagePoint))
+    const QList<int> candidates = pageIndexEntry.value().query(toleranceProbe(pagePoint, pageTolerance));
+
+    for (int candidate : candidates)
     {
         const InteractionTarget& target = pageTargets.value().at(candidate);
-        if (target.pageBounds.contains(pagePoint))
+        if (withinTolerance(target.pageBounds, pagePoint, pageTolerance))
         {
             hits.push_back(target);
         }
+    }
+
+    if (counters)
+    {
+        counters->indexCandidates += int(candidates.size());
+        counters->preciseHits += int(hits.size());
     }
 
     return hits;
@@ -212,14 +272,37 @@ void PageBoxHitTestSource::setEdgeTolerance(qreal tolerance)
 
 QList<InteractionTarget> PageBoxHitTestSource::hitTest(int pageIndex, QPointF pagePoint) const
 {
+    return hitTest(pageIndex, pagePoint, m_edgeTolerance, nullptr);
+}
+
+QList<InteractionTarget> PageBoxHitTestSource::hitTest(int pageIndex,
+                                                       QPointF pagePoint,
+                                                       qreal pageTolerance,
+                                                       HitTestCounters* counters) const
+{
     QList<InteractionTarget> hits;
 
-    for (const InteractionTarget& target : targetsForPage(pageIndex))
+    // A page box is hittable on its edge only, so it needs a non-zero slack to
+    // be reachable at all: an exact edge test would demand the pointer land on
+    // a zero-width line. Fall back to the configured value when the caller
+    // supplies none.
+    const qreal tolerance = pageTolerance > 0.0 ? pageTolerance : m_edgeTolerance;
+
+    const QList<InteractionTarget> boxes = targetsForPage(pageIndex);
+
+    for (const InteractionTarget& target : boxes)
     {
-        if (touchesEdge(target.pageBounds, pagePoint, m_edgeTolerance))
+        if (touchesEdge(target.pageBounds, pagePoint, tolerance))
         {
             hits.push_back(target);
         }
+    }
+
+    if (counters)
+    {
+        // At most five boxes and no index: the scan is the narrowing.
+        counters->indexCandidates += int(boxes.size());
+        counters->preciseHits += int(hits.size());
     }
 
     return hits;
@@ -299,6 +382,29 @@ void HitTestDispatcher::setHandles(QList<InteractionTarget> handles)
     m_handles = std::move(handles);
 }
 
+void HitTestDispatcher::setScreenTolerancePx(qreal pixels)
+{
+    m_screenTolerancePx = qMax(qreal(0.0), pixels);
+}
+
+void HitTestDispatcher::setViewScale(qreal pixelsPerPageUnit)
+{
+    m_viewScale = pixelsPerPageUnit;
+}
+
+qreal HitTestDispatcher::pageTolerance() const noexcept
+{
+    if (!(m_screenTolerancePx > 0.0))
+    {
+        return 0.0;
+    }
+
+    // Clamped because a scale of zero is not a real viewport state, and
+    // dividing by it would turn a two-pixel slack into an infinite one and make
+    // every target a hit.
+    return m_screenTolerancePx / qMax(m_viewScale, qreal(0.01));
+}
+
 bool HitTestDispatcher::isSameTarget(const InteractionTarget& left, const InteractionTarget& right)
 {
     return left.isValid() && right.isValid() && left.pageIndex == right.pageIndex && left.id == right.id;
@@ -329,24 +435,50 @@ bool HitTestDispatcher::ranksBefore(const InteractionTarget& left, const Interac
 
 QList<InteractionTarget> HitTestDispatcher::hitTestAll(int pageIndex, QPointF pagePoint) const
 {
+    return hitTestAll(pageIndex, pagePoint, nullptr);
+}
+
+QList<InteractionTarget> HitTestDispatcher::hitTestAll(int pageIndex,
+                                                       QPointF pagePoint,
+                                                       HitTestCounters* counters) const
+{
     QList<InteractionTarget> candidates;
+
+    if (counters)
+    {
+        *counters = HitTestCounters();
+    }
 
     if (pageIndex < 0)
     {
         return candidates;
     }
 
+    // One conversion, here, for every source. A source that divided by zoom
+    // itself would be a second place for this to go stale.
+    const qreal tolerance = pageTolerance();
+
     for (const InteractionTarget& handle : m_handles)
     {
-        if (handle.pageIndex == pageIndex && handle.pageBounds.contains(pagePoint))
+        if (handle.pageIndex == pageIndex &&
+            handle.pageBounds.adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(pagePoint))
         {
             candidates.push_back(handle);
         }
     }
 
+    if (counters)
+    {
+        // Handles are a short caller-supplied list, scanned exactly. They are
+        // still candidates, so they are counted rather than being invisible in
+        // a trace that claims to account for the whole pass.
+        counters->indexCandidates += int(m_handles.size());
+        counters->preciseHits += int(candidates.size());
+    }
+
     for (const IHitTestSource* source : m_sources)
     {
-        candidates.append(source->hitTest(pageIndex, pagePoint));
+        candidates.append(source->hitTest(pageIndex, pagePoint, tolerance, counters));
     }
 
     const InteractionTarget selection = m_selection;
@@ -375,7 +507,12 @@ QList<InteractionTarget> HitTestDispatcher::hitTestAll(int pageIndex, QPointF pa
 
 InteractionTarget HitTestDispatcher::hitTest(int pageIndex, QPointF pagePoint) const
 {
-    const QList<InteractionTarget> candidates = hitTestAll(pageIndex, pagePoint);
+    return hitTest(pageIndex, pagePoint, nullptr);
+}
+
+InteractionTarget HitTestDispatcher::hitTest(int pageIndex, QPointF pagePoint, HitTestCounters* counters) const
+{
+    const QList<InteractionTarget> candidates = hitTestAll(pageIndex, pagePoint, counters);
     if (!candidates.isEmpty())
     {
         return candidates.constFirst();

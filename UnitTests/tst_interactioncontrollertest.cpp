@@ -38,6 +38,7 @@
 
 #include <memory>
 
+#include "dragsnapper.h"
 #include "hittestsource.h"
 #include "inputintent.h"
 #include "interactioncontroller.h"
@@ -148,6 +149,30 @@ public:
     QList<pdfinteraction::InteractionTarget> targets;
 };
 
+/// Snap candidates a test wrote down. DragSnapper's own ranking is pinned in
+/// tst_dragsnappertest.cpp; what this file needs from a provider is one
+/// predictable candidate so the controller's use of it is observable.
+class ScriptedSnapProvider final : public pdfinteraction::ISnapProvider
+{
+public:
+    QList<pdfinteraction::SnapCandidate> snapCandidates(int pageIndex, const QRectF& probePageRect) const override
+    {
+        QList<pdfinteraction::SnapCandidate> visible;
+
+        for (const pdfinteraction::SnapCandidate& candidate : candidates)
+        {
+            if (pageIndex == 0 && probePageRect.contains(candidate.pagePoint))
+            {
+                visible.push_back(candidate);
+            }
+        }
+
+        return visible;
+    }
+
+    QList<pdfinteraction::SnapCandidate> candidates;
+};
+
 pdfinteraction::InteractionTarget makeTarget(pdfinteraction::InteractionTargetKind kind, const QString& id, QRectF bounds, int pageIndex = 0)
 {
     pdfinteraction::InteractionTarget target;
@@ -211,6 +236,12 @@ private Q_SLOTS:
     void panDoesNotSupersedeSurfaceDemand();
     void wheelZoomSupersedesSurfaceDemand();
     void rapidZoomReversalAndPageSwitchSettleWithinTraceBudget();
+    void dragContinuesBeyondViewportEdge();
+    void dragSnapsPreviewOnlyAfterThreshold();
+    void snapMovesPreviewNotCommittedGeometry();
+    void snapSuppressModifierIsSampledPerMove();
+    void hitTestToleranceFollowsLiveViewScale();
+    void traceRecordsHitTestCandidatesAndPreciseHits();
     void hitTestPrecedenceIsOrderIndependent();
     void hitTestBreaksTiesBySmallestAreaThenId();
     void evidenceSourceUsesStableRecordIdentity();

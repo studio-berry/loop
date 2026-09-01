@@ -182,6 +182,23 @@ if(NOT LOUPE_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsHitTestSource "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsHitTestSource")
 
+    # Issue #145: the snapping half of the interaction grammar. DragSnapper
+    # ranks candidates and converts its screen threshold by zoom; both rules
+    # are drivable with no document, so this suite carries no fixture.
+    add_executable(UnitTestsDragSnapper
+        tst_dragsnappertest.cpp
+    )
+
+    target_link_libraries(UnitTestsDragSnapper PRIVATE LoupeLibInteraction LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsDragSnapper PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsDragSnapper "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsDragSnapper")
+
     # Architecture invariant I24, overlay half: deterministic z-order, page-space
     # geometry aligned with the page surfaces, and invalidation independent of
     # them.

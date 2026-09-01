@@ -38,6 +38,22 @@
 namespace pdfinteraction
 {
 
+/// What one hit test cost.
+///
+/// Issue #145 AC7 asks for candidate count and precise-hit-test time. The two
+/// numbers are collected on the one pass that was going to run anyway: an
+/// instrumentation that re-ran the query to count it would be measuring itself,
+/// and issue #140's rule is that a diagnostic must not become the bottleneck.
+struct HitTestCounters
+{
+    /// Candidates the spatial index handed back, before precise geometry. This
+    /// is the number that grows if the index ever stops narrowing.
+    int indexCandidates = 0;
+
+    /// Candidates that survived the precise test.
+    int preciseHits = 0;
+};
+
 /// One domain's answer to "what is under this page point".
 ///
 /// Deliberately narrow. A source is asked about one page and one point and
@@ -55,6 +71,37 @@ public:
     /// callers to depend on its order, and the dispatcher's tie-break is the
     /// only ordering the contract guarantees.
     virtual QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const = 0;
+
+    /// The same question, with a slack in page units.
+    ///
+    /// A tolerance is a screen quantity -- a marker two pixels wide should stay
+    /// grabbable however far the user has zoomed -- but a source tests in page
+    /// space and cannot see the viewport. HitTestDispatcher does the one
+    /// conversion and passes the result down; a source never divides by zoom.
+    ///
+    /// Defaulted to the exact form so a source that has no meaningful slack
+    /// (or has not been taught one yet) stays correct rather than being forced
+    /// to invent one.
+    virtual QList<InteractionTarget> hitTest(int pageIndex,
+                                            QPointF pagePoint,
+                                            qreal pageTolerance,
+                                            HitTestCounters* counters) const
+    {
+        Q_UNUSED(pageTolerance);
+        const QList<InteractionTarget> hits = hitTest(pageIndex, pagePoint);
+
+        if (counters)
+        {
+            // A source with no index scanned everything it holds for this page,
+            // so it cannot report a narrowing it did not do. Charging the hits
+            // to both counters says "no narrowing here" rather than inventing
+            // one.
+            counters->indexCandidates += int(hits.size());
+            counters->preciseHits += int(hits.size());
+        }
+
+        return hits;
+    }
 };
 
 /// Hit-tests preflight and evidence geometry.
@@ -84,6 +131,10 @@ public:
     int unrenderableRecordCount() const noexcept { return m_unrenderableRecords; }
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
+    QList<InteractionTarget> hitTest(int pageIndex,
+                                    QPointF pagePoint,
+                                    qreal pageTolerance,
+                                    HitTestCounters* counters) const override;
 
     /// Every renderable record on a page, for the overlay pass. Same geometry
     /// and same ids as hitTest, so a marker cannot be drawn where nothing is
@@ -113,6 +164,10 @@ public:
     void setTargets(QList<InteractionTarget> targets);
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
+    QList<InteractionTarget> hitTest(int pageIndex,
+                                    QPointF pagePoint,
+                                    qreal pageTolerance,
+                                    HitTestCounters* counters) const override;
 
 private:
     QHash<int, QList<InteractionTarget>> m_targetsByPage;
@@ -133,12 +188,17 @@ class PageBoxHitTestSource final : public IHitTestSource
 public:
     explicit PageBoxHitTestSource(pdf::PDFDocumentContext* context);
 
-    /// Edge tolerance in page units. Set from the viewport by the caller, which
-    /// is the only thing that knows the current zoom.
+    /// Fallback edge tolerance in page units, for a caller that hit-tests this
+    /// source directly rather than through HitTestDispatcher. The dispatcher
+    /// passes its own converted tolerance and this value is then unused.
     void setEdgeTolerance(qreal tolerance);
     qreal edgeTolerance() const noexcept { return m_edgeTolerance; }
 
     QList<InteractionTarget> hitTest(int pageIndex, QPointF pagePoint) const override;
+    QList<InteractionTarget> hitTest(int pageIndex,
+                                    QPointF pagePoint,
+                                    qreal pageTolerance,
+                                    HitTestCounters* counters) const override;
 
     /// Every page box on a page, for the overlay pass.
     QList<InteractionTarget> targetsForPage(int pageIndex) const;
@@ -183,12 +243,38 @@ public:
     void setHandles(QList<InteractionTarget> handles);
     const QList<InteractionTarget>& handles() const noexcept { return m_handles; }
 
+    /// Hit slack in screen pixels, constant across zoom. Issue #145 AC5 asks
+    /// for a configurable screen tolerance converted correctly to document
+    /// space at every zoom; this is the configuration half.
+    void setScreenTolerancePx(qreal pixels);
+    qreal screenTolerancePx() const noexcept { return m_screenTolerancePx; }
+
+    /// Screen pixels per page unit -- the whole page-to-screen scale, which is
+    /// the display density and the zoom together, not the zoom alone. Dividing
+    /// a pixel tolerance by the zoom on its own leaves the density factor in,
+    /// so on a typical display a 2 px slack became closer to 8 px of reach.
+    ///
+    /// Pushed by InteractionController before every hit test rather than
+    /// latched once, because a tolerance derived at bind time is wrong from the
+    /// first wheel notch onward.
+    void setViewScale(qreal pixelsPerPageUnit);
+    qreal viewScale() const noexcept { return m_viewScale; }
+
+    /// The screen tolerance in page units at the current zoom. The single
+    /// conversion point: sources take this value, they never compute it.
+    qreal pageTolerance() const noexcept;
+
     /// Every candidate, ranked. Empty when nothing is hit.
     QList<InteractionTarget> hitTestAll(int pageIndex, QPointF pagePoint) const;
+
+    /// Every candidate, ranked, and what the pass cost. The counters are filled
+    /// on the pass that was going to run anyway -- see HitTestCounters.
+    QList<InteractionTarget> hitTestAll(int pageIndex, QPointF pagePoint, HitTestCounters* counters) const;
 
     /// The winner, or a Page target when only the page itself is under the
     /// point. `pageIndex` of -1 yields an invalid target.
     InteractionTarget hitTest(int pageIndex, QPointF pagePoint) const;
+    InteractionTarget hitTest(int pageIndex, QPointF pagePoint, HitTestCounters* counters) const;
 
     /// Rules 3 to 5 above, exposed so a test pins them rather than re-deriving
     /// them from the implementation. The handle and selection rules are applied
@@ -204,6 +290,8 @@ private:
     QList<IHitTestSource*> m_sources;
     InteractionTarget m_selection;
     QList<InteractionTarget> m_handles;
+    qreal m_screenTolerancePx = 0.0;
+    qreal m_viewScale = 1.0;
 };
 
 }   // namespace pdfinteraction

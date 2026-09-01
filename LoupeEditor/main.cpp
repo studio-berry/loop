@@ -28,6 +28,7 @@
 #include "pdfsentry.h"
 #include "pdfsecurityhandler.h"
 #include "pdfsettings.h"
+#include "pdfthreadaffinity.h"
 
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -191,6 +192,13 @@ int main(int argc, char* argv[])
 {
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
+
+    // Everything after this line runs on the thread that answers input and
+    // drives frames. Naming it here is what lets an expensive service refuse
+    // to run on it (issue #144 AC5); a process that never marks a thread --
+    // PdfTool, the fuzzers, most unit tests -- has no interactive thread and
+    // every guard passes, which is correct rather than lenient.
+    pdf::PDFThreadAffinity::markInteractiveThread();
 
     QCoreApplication::setOrganizationName(QStringLiteral("MelkaJ"));
     QCoreApplication::setApplicationName(QStringLiteral("Loupe"));

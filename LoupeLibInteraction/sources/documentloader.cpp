@@ -22,6 +22,8 @@
 
 #include "documentloader.h"
 
+#include "pdfthreadaffinity.h"
+
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
 
@@ -47,6 +49,11 @@ PDFReaderDocumentLoader::PDFReaderDocumentLoader(std::function<QString(bool*)> q
 DocumentLoadResult PDFReaderDocumentLoader::load(const DocumentSource& source,
                                                  pdf::PDFJobContext& context)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("file-io");
+
     DocumentLoadResult result;
 
     if (!source.isValid())
@@ -117,6 +124,11 @@ DocumentWriteResult PDFDocumentFileWriter::write(const DocumentSource& target,
                                                  const pdf::PDFDocument* document,
                                                  pdf::PDFJobContext& context)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("file-io");
+
     DocumentWriteResult result;
 
     if (!target.isValid() || !document)

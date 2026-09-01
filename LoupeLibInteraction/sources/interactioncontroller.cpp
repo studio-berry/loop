@@ -88,6 +88,16 @@ void InteractionController::setKeyScrollStepPx(int pixels)
     m_keyScrollStepPx = qMax(1, pixels);
 }
 
+void InteractionController::setSnapper(DragSnapper* snapper)
+{
+    m_snapper = snapper;
+}
+
+void InteractionController::setSnapSuppressModifier(Qt::KeyboardModifier modifier)
+{
+    m_snapSuppressModifier = modifier;
+}
+
 void InteractionController::setTraceRecorder(InteractionTraceRecorder* recorder)
 {
     m_trace = recorder;
@@ -152,7 +162,57 @@ InteractionTarget InteractionController::hitTestAt(QPoint viewportPx, int* pageI
         return InteractionTarget();
     }
 
-    return m_hitTest->hitTest(page, localPagePoint);
+    // Push the scale before every hit test rather than at bind time. The
+    // dispatcher's screen tolerance is a constant; what it means in page units
+    // is not, and a value derived once is wrong from the first wheel notch
+    // onward -- which is exactly what it was before issue #145.
+    m_hitTest->setViewScale(m_viewport->pageUnitToPixel());
+
+    if (!m_trace)
+    {
+        return m_hitTest->hitTest(page, localPagePoint);
+    }
+
+    // Issue #145 AC7. Both numbers come off the one pass that was going to run
+    // anyway: re-running the query to count it would make the instrumentation
+    // the cost it reports.
+    HitTestCounters counters;
+    const qint64 startNs = m_trace->nowNs();
+    const InteractionTarget hit = m_hitTest->hitTest(page, localPagePoint, &counters);
+    m_trace->recordHitTest(counters.indexCandidates, counters.preciseHits, m_trace->nowNs() - startNs);
+    return hit;
+}
+
+void InteractionController::applySnapToPreview(Qt::KeyboardModifiers modifiers)
+{
+    if (!m_snapper || !m_snapper->isEnabled() || modifiers.testFlag(m_snapSuppressModifier))
+    {
+        return;
+    }
+
+    const std::optional<DragSession>& drag = m_state.drag();
+
+    if (!drag.has_value() || !drag->exceededThreshold || drag->previewPageBounds.isNull())
+    {
+        return;
+    }
+
+    // The snap is applied to the preview's own top-left, not to the pointer.
+    // Those differ by the grab offset, and snapping the pointer instead would
+    // align the point the user happened to press rather than the edge of the
+    // thing they are placing.
+    QString snappedTo;
+    const QPointF snapped = m_snapper->snap(drag->target.pageIndex,
+                                            drag->previewPageBounds.topLeft(),
+                                            m_viewport->pageUnitToPixel(),
+                                            &snappedTo);
+
+    if (snappedTo.isEmpty())
+    {
+        return;
+    }
+
+    m_state.setDragPreviewOrigin(token(), snapped, snappedTo);
 }
 
 void InteractionController::cancelActive(InteractionCancelReason reason)
@@ -301,6 +361,7 @@ void InteractionController::handlePointerMove(const PointerIntent& intent)
         {
             m_state.setPointerPosition(intent.positionPx, dragPage, dragPagePoint);
             m_state.updateDrag(token(), intent.positionPx, *dragPagePoint, intent.modifiers);
+            applySnapToPreview(intent.modifiers);
         }
 
         publishOverlay();

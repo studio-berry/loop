@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "pdfimage.h"
+
+#include "pdfthreadaffinity.h"
 #include "pdfdocument.h"
 #include "pdfconstants.h"
 #include "pdfexception.h"
@@ -755,6 +757,11 @@ PDFImage PDFImage::createImage(const PDFDocument* document,
                                RenderingIntent renderingIntent,
                                PDFRenderErrorReporter* errorReporter)
 {
+    // Issue #144 AC1: this is expensive and unbounded, so it must not be
+    // reachable from an input handler or a frame callback. The guard does
+    // not move the work -- it reports that the work is in the wrong place.
+    pdf::PDFThreadAffinity::requireNotInteractive("image-decode");
+
     PDFImage image;
     image.m_colorSpace = colorSpace;
     image.m_renderingIntent = renderingIntent;

@@ -531,7 +531,7 @@ void ViewportController::invalidateLayout()
     supersedeDemand();
 }
 
-qreal ViewportController::deviceSpaceUnitToPixel() const
+qreal ViewportController::deviceSpaceUnitToPixel() const noexcept
 {
     return m_pixelPerMM * m_zoom;
 }

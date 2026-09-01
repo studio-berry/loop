@@ -22,6 +22,8 @@
 
 #include "interactiontrace.h"
 
+#include "pdfjobscheduler.h"
+
 #include <QJsonArray>
 
 #include <algorithm>
@@ -73,6 +75,46 @@ QPoint pointFromJson(const QJsonObject& json)
 }
 
 }   // namespace
+
+// TraceJobKind mirrors pdf::PDFJobKind so the trace header does not have to
+// include the scheduler. A mirror that drifts is worse than a dependency: a
+// preflight job would be reported as an export and nobody would see a compile
+// error. These pin every enumerator to its original.
+static_assert(int(TraceJobKind::Rendering) == int(pdf::PDFJobKind::Rendering));
+static_assert(int(TraceJobKind::Preflight) == int(pdf::PDFJobKind::Preflight));
+static_assert(int(TraceJobKind::OCR) == int(pdf::PDFJobKind::OCR));
+static_assert(int(TraceJobKind::Export) == int(pdf::PDFJobKind::Export));
+static_assert(int(TraceJobKind::Thumbnail) == int(pdf::PDFJobKind::Thumbnail));
+static_assert(int(TraceJobKind::Batch) == int(pdf::PDFJobKind::Batch));
+static_assert(int(TraceJobKind::Agent) == int(pdf::PDFJobKind::Agent));
+static_assert(int(TraceJobKind::Other) == int(pdf::PDFJobKind::Other));
+static_assert(int(TraceJobKind::Other) + 1 == TraceJobKindCount,
+              "TraceJobKindCount must cover every TraceJobKind");
+
+const char* getTraceJobKindName(TraceJobKind kind)
+{
+    switch (kind)
+    {
+        case TraceJobKind::Rendering:
+            return "rendering";
+        case TraceJobKind::Preflight:
+            return "preflight";
+        case TraceJobKind::OCR:
+            return "ocr";
+        case TraceJobKind::Export:
+            return "export";
+        case TraceJobKind::Thumbnail:
+            return "thumbnail";
+        case TraceJobKind::Batch:
+            return "batch";
+        case TraceJobKind::Agent:
+            return "agent";
+        case TraceJobKind::Other:
+            break;
+    }
+
+    return "other";
+}
 
 const char* getTraceStageName(TraceStage stage)
 {
@@ -381,6 +423,57 @@ void InteractionTraceRecorder::recordStage(TraceStage stage, qint64 durationNs)
     m_frame->stageNs[size_t(stageIndex(stage))] += durationNs;
 }
 
+void InteractionTraceRecorder::recordHitTest(int indexCandidates, int preciseHits, qint64 durationNs)
+{
+    if (!m_enabled)
+    {
+        return;
+    }
+
+    appendSample(m_hitTestCandidates, qMax(0, indexCandidates));
+    appendSample(m_hitTestPreciseHits, qMax(0, preciseHits));
+    appendSample(m_hitTestDurations, qMax<qint64>(0, durationNs));
+}
+
+void InteractionTraceRecorder::recordJobStateChange(TraceJobKind kind, bool running)
+{
+    if (!m_enabled)
+    {
+        return;
+    }
+
+    int& active = m_activeJobs[size_t(kind)];
+
+    if (running)
+    {
+        ++active;
+        return;
+    }
+
+    // Clamped at zero rather than allowed to go negative. An unbalanced
+    // finish is a caller bug, but a negative count would silently turn later
+    // real overlaps invisible, which is worse than absorbing the one error.
+    active = qMax(0, active - 1);
+}
+
+void InteractionTraceRecorder::recordJobOverlap(bool slowFrame)
+{
+    for (int index = 0; index < TraceJobKindCount; ++index)
+    {
+        if (m_activeJobs[size_t(index)] <= 0)
+        {
+            continue;
+        }
+
+        ++m_framesOverlapped[size_t(index)];
+
+        if (slowFrame)
+        {
+            ++m_slowFramesOverlapped[size_t(index)];
+        }
+    }
+}
+
 void InteractionTraceRecorder::attributeSlowFrame(const OpenFrame& frame, qint64 durationNs)
 {
     const QJsonObject budget = budgetObject(m_config.refreshRateHz);
@@ -441,7 +534,12 @@ void InteractionTraceRecorder::endFrame()
         }
     }
 
+    const QJsonObject frameBudget = budgetObject(m_config.refreshRateHz);
+    const double frameBudgetMs = frameBudget.value(QStringLiteral("frame_budget_ms")).toDouble(-1.0);
+    const bool slowFrame = frameBudgetMs > 0.0 && double(durationNs) / 1000000.0 > frameBudgetMs;
+
     attributeSlowFrame(frame, durationNs);
+    recordJobOverlap(slowFrame);
 
     for (auto it = m_pendingInputs.begin(); it != m_pendingInputs.end();)
     {
@@ -476,6 +574,28 @@ void InteractionTraceRecorder::recordCacheLookup(bool hit)
 
 QJsonObject InteractionTraceRecorder::percentileObject(const QList<qint64>& samples)
 {
+    return percentileObject(samples, PercentileUnit::Duration);
+}
+
+QJsonObject InteractionTraceRecorder::countPercentileObject(const QList<qint64>& samples)
+{
+    return percentileObject(samples, PercentileUnit::Count);
+}
+
+QJsonObject InteractionTraceRecorder::percentileObject(const QList<qint64>& samples, PercentileUnit unit)
+{
+    // A candidate count is not a nanosecond count. Running one through the
+    // duration formatter divides it by a million, so twelve candidates report
+    // as a p50 of 0.000012 -- a number that looks healthy on every dashboard
+    // and means nothing. Counts keep their own unsuffixed keys.
+    const bool isDuration = unit == PercentileUnit::Duration;
+    const QString suffix = isDuration ? QStringLiteral("_ms") : QString();
+
+    const auto key = [&suffix](const char* percentile)
+    {
+        return QString::fromLatin1(percentile) + suffix;
+    };
+
     QJsonObject result;
     result.insert(QStringLiteral("available"), !samples.isEmpty());
     result.insert(QStringLiteral("sample_count"), qint64(samples.size()));
@@ -485,9 +605,9 @@ QJsonObject InteractionTraceRecorder::percentileObject(const QList<qint64>& samp
         // Null, not zero. An absent measurement and a measurement of zero are
         // different facts, and rounding the first into the second is how a
         // dashboard reports a healthy p99 for a path that never ran.
-        result.insert(QStringLiteral("p50_ms"), QJsonValue(QJsonValue::Null));
-        result.insert(QStringLiteral("p95_ms"), QJsonValue(QJsonValue::Null));
-        result.insert(QStringLiteral("p99_ms"), QJsonValue(QJsonValue::Null));
+        result.insert(key("p50"), QJsonValue(QJsonValue::Null));
+        result.insert(key("p95"), QJsonValue(QJsonValue::Null));
+        result.insert(key("p99"), QJsonValue(QJsonValue::Null));
         return result;
     }
 
@@ -500,9 +620,14 @@ QJsonObject InteractionTraceRecorder::percentileObject(const QList<qint64>& samp
         return sorted.at(qMin(rank, sorted.size()) - 1);
     };
 
-    result.insert(QStringLiteral("p50_ms"), durationMs(nearestRank(0.50)));
-    result.insert(QStringLiteral("p95_ms"), durationMs(nearestRank(0.95)));
-    result.insert(QStringLiteral("p99_ms"), durationMs(nearestRank(0.99)));
+    const auto value = [isDuration](qint64 sample)
+    {
+        return isDuration ? durationMs(sample) : QJsonValue(sample);
+    };
+
+    result.insert(key("p50"), value(nearestRank(0.50)));
+    result.insert(key("p95"), value(nearestRank(0.95)));
+    result.insert(key("p99"), value(nearestRank(0.99)));
     return result;
 }
 
@@ -549,8 +674,27 @@ QJsonObject InteractionTraceRecorder::summary() const
     counts.insert(QStringLiteral("dropped_input_records"), qint64(m_droppedInputRecords));
     counts.insert(QStringLiteral("unbalanced_frames"), qint64(m_unbalancedFrames));
 
+    // Counts and timings only, exactly as everywhere else in this summary --
+    // a candidate count says how much geometry was near the pointer, never
+    // what any of it was.
+    QJsonObject hitTest;
+    hitTest.insert(QStringLiteral("index_candidates"), countPercentileObject(m_hitTestCandidates));
+    hitTest.insert(QStringLiteral("precise_hits"), countPercentileObject(m_hitTestPreciseHits));
+    hitTest.insert(QStringLiteral("duration_ms"), percentileObject(m_hitTestDurations));
+
+    QJsonObject asyncOverlap;
+    for (int index = 0; index < TraceJobKindCount; ++index)
+    {
+        QJsonObject kindOverlap;
+        kindOverlap.insert(QStringLiteral("frames_overlapped"), qint64(m_framesOverlapped[size_t(index)]));
+        kindOverlap.insert(QStringLiteral("slow_frames_overlapped"),
+                           qint64(m_slowFramesOverlapped[size_t(index)]));
+        kindOverlap.insert(QStringLiteral("active"), m_activeJobs[size_t(index)]);
+        asyncOverlap.insert(QString::fromLatin1(getTraceJobKindName(TraceJobKind(index))), kindOverlap);
+    }
+
     QJsonObject root;
-    root.insert(QStringLiteral("schema_version"), 1);
+    root.insert(QStringLiteral("schema_version"), InteractionTraceSummaryVersion);
     root.insert(QStringLiteral("trace_id"), m_trace.traceId);
     root.insert(QStringLiteral("enabled"), m_enabled);
     root.insert(QStringLiteral("budgets"), budgetObject(m_config.refreshRateHz));
@@ -558,6 +702,8 @@ QJsonObject InteractionTraceRecorder::summary() const
     root.insert(QStringLiteral("frame_time_ms"), percentileObject(m_frameDurations));
     root.insert(QStringLiteral("stage_ms"), stages);
     root.insert(QStringLiteral("slow_frame_causes"), slowCauses);
+    root.insert(QStringLiteral("hit_test"), hitTest);
+    root.insert(QStringLiteral("async_overlap"), asyncOverlap);
     root.insert(QStringLiteral("page_surface_cache"), cache);
     root.insert(QStringLiteral("counts"), counts);
     return root;
@@ -583,6 +729,16 @@ void InteractionTraceRecorder::reset()
     m_unbalancedFrames = 0;
     m_cacheHits = 0;
     m_cacheMisses = 0;
+
+    m_hitTestCandidates.clear();
+    m_hitTestPreciseHits.clear();
+    m_hitTestDurations.clear();
+
+    // Active job counts are deliberately not cleared: a reset drops recorded
+    // history, but a job that was running before it is still running after,
+    // and zeroing the count here would lose its next completion.
+    m_framesOverlapped.fill(0);
+    m_slowFramesOverlapped.fill(0);
 }
 
 }   // namespace pdfinteraction

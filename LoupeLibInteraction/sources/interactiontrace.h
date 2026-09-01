@@ -85,6 +85,35 @@ const char* getTraceStageName(TraceStage stage);
 
 constexpr int TraceStageCount = 6;
 
+/// The kinds of asynchronous work a frame can overlap with.
+///
+/// A mirror of pdf::PDFJobKind rather than a use of it. This header is included
+/// by every interaction translation unit, and pulling in the scheduler to name
+/// eight enumerators would make the trace type depend on the job system it is
+/// meant to be able to describe from the outside. The mirror is checked against
+/// the original by a static assertion in the recorder's translation unit, so
+/// the two cannot drift silently.
+enum class TraceJobKind
+{
+    Rendering,
+    Preflight,
+    OCR,
+    Export,
+    Thumbnail,
+    Batch,
+    Agent,
+    Other
+};
+
+const char* getTraceJobKindName(TraceJobKind kind);
+
+constexpr int TraceJobKindCount = 8;
+
+/// The summary schema the CI artifact is diffed against. Bumped whenever a
+/// field is added, removed or given a new meaning, so a reader can tell a
+/// missing measurement from an older producer.
+constexpr int InteractionTraceSummaryVersion = 2;
+
 /// Reference frame budgets. Both are constants rather than derived from a
 /// screen, because the neutral layer cannot see one (issue #140 AC2).
 constexpr qreal Reference60HzBudgetMs = 1000.0 / 60.0;
@@ -194,6 +223,25 @@ public:
     /// Reports a page-surface cache outcome. Counts only.
     void recordCacheLookup(bool hit);
 
+    /// Reports what one hit test cost: how many candidates the spatial index
+    /// returned, how many survived the precise geometry test, and how long the
+    /// pass took (issue #145 AC7).
+    ///
+    /// The candidate count is the interesting one. Latency that rises with
+    /// document size looks the same in a frame-time percentile whether the
+    /// index stopped narrowing or the page simply got heavier; the candidate
+    /// count separates them.
+    void recordHitTest(int indexCandidates, int preciseHits, qint64 durationNs);
+
+    /// Reports that a job of `kind` started or finished.
+    ///
+    /// The recorder does not time the job -- the scheduler already does that.
+    /// What it adds is the overlap: which kinds of work were in flight when a
+    /// frame missed its budget (issue #144 AC7). "The drag stuttered" and
+    /// "preflight was running" are two facts; only their intersection is
+    /// evidence.
+    void recordJobStateChange(TraceJobKind kind, bool running);
+
     /// The recorded trace, for replay.
     const InteractionTrace& trace() const noexcept { return m_trace; }
 
@@ -208,16 +256,34 @@ public:
     /// source the frames are timed against rather than a second one.
     qint64 nowNs() const;
 
-    /// Nearest-rank percentiles over `samples`, and an explicit
+    /// Nearest-rank percentiles over `samples` in nanoseconds, reported in
+    /// milliseconds under `p50_ms` / `p95_ms` / `p99_ms`, and an explicit
     /// `available: false` when there are none. Missing telemetry stays missing
     /// and never reads as zero.
     static QJsonObject percentileObject(const QList<qint64>& samples);
+
+    /// The same percentiles over samples that are counts rather than
+    /// durations, reported verbatim under `p50` / `p95` / `p99`.
+    ///
+    /// A separate entry point rather than a flag at the call site: the one
+    /// mistake this guards against is a count silently divided by a million by
+    /// the duration formatter, and that mistake is invisible in the output.
+    static QJsonObject countPercentileObject(const QList<qint64>& samples);
 
     /// Frame budgets, or a typed unavailable result when the refresh rate is
     /// unknown.
     static QJsonObject budgetObject(qreal refreshRateHz);
 
 private:
+    /// Whether a percentile sample is a nanosecond duration or a plain count.
+    enum class PercentileUnit
+    {
+        Duration,
+        Count
+    };
+
+    static QJsonObject percentileObject(const QList<qint64>& samples, PercentileUnit unit);
+
     struct OpenFrame
     {
         qint64 startNs = 0;
@@ -232,6 +298,7 @@ private:
 
     void appendSample(QList<qint64>& samples, qint64 value);
     void attributeSlowFrame(const OpenFrame& frame, qint64 durationNs);
+    void recordJobOverlap(bool slowFrame);
 
     const IMonotonicClock* m_clock = nullptr;
     Config m_config;
@@ -253,6 +320,17 @@ private:
     quint64 m_unbalancedFrames = 0;
     int m_cacheHits = 0;
     int m_cacheMisses = 0;
+
+    QList<qint64> m_hitTestCandidates;
+    QList<qint64> m_hitTestPreciseHits;
+    QList<qint64> m_hitTestDurations;
+
+    /// Jobs of each kind currently running. Counts rather than flags: two
+    /// render jobs overlapping a frame is one overlap for Rendering, but the
+    /// second finishing must not clear the first.
+    std::array<int, TraceJobKindCount> m_activeJobs{};
+    std::array<quint64, TraceJobKindCount> m_framesOverlapped{};
+    std::array<quint64, TraceJobKindCount> m_slowFramesOverlapped{};
 };
 
 }   // namespace pdfinteraction

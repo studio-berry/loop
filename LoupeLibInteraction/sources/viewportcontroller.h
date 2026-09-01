@@ -160,6 +160,14 @@ public:
     void setPixelPerMM(qreal pixelPerMM);
     qreal pixelPerMM() const noexcept { return m_pixelPerMM; }
 
+    /// Screen pixels per page unit: `pixelPerMM() * zoom()`.
+    ///
+    /// The whole page-to-screen scale, which is what converts a screen-space
+    /// hit tolerance or snap threshold into page units. The zoom alone is not
+    /// that number -- it omits the display density, so dividing a pixel slack
+    /// by it leaves the density factor in and overstates the reach.
+    qreal pageUnitToPixel() const noexcept { return deviceSpaceUnitToPixel(); }
+
     void setDevicePixelRatio(qreal devicePixelRatio);
     qreal devicePixelRatio() const noexcept { return m_devicePixelRatio; }
 
@@ -244,7 +252,7 @@ private:
     void rebuildLayout();
     void updatePlacements();
     void supersedeDemand();
-    qreal deviceSpaceUnitToPixel() const;
+    qreal deviceSpaceUnitToPixel() const noexcept;
     QRectF fromDeviceSpace(const QRectF& rectMM) const;
     void placePagesLeftRight(int blockIndex, int leftPageIndex, int rightPageIndex, qreal& yPos, QRectF& boundingRect);
     void placePagesLeftRightByIndices(const QList<int>& indices, bool generateBlocks);

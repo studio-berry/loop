@@ -28,12 +28,14 @@
 #include "commandcatalog.h"
 #include "documentfacade.h"
 #include "documentloader.h"
+#include "dragsnapper.h"
 #include "hittestsource.h"
 #include "inspectormodel.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
+#include "preflightservice.h"
 #include "previewstatemodel.h"
 #include "viewportcommandbridge.h"
 #include "viewportcontroller.h"
@@ -89,6 +91,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QObject* preview READ preview CONSTANT)
     Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
     Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
+    Q_PROPERTY(bool preflightRunning READ preflightRunning NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
     Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
@@ -143,6 +146,25 @@ public:
     bool pageFidelityIsAuthoritative() const;
 
     Q_INVOKABLE void selectFinding(const QString& findingId);
+
+    /// Starts a preflight run against `profileFileUrl`, a local .json profile.
+    ///
+    /// The profile is explicit rather than defaulted. Which policy a document
+    /// should be checked against is an operator decision, and inventing a
+    /// built-in default here would silently certify documents against a profile
+    /// nobody chose.
+    ///
+    /// Returns false, with the state left as it was, when there is no document,
+    /// the file cannot be read, or its committed digest does not match. Returns
+    /// true once the run is submitted -- by which point the state is already
+    /// Running (issue #144 AC3).
+    Q_INVOKABLE bool runPreflight(const QUrl& profileFileUrl);
+
+    /// Cancels the active run. Safe when there is none.
+    Q_INVOKABLE void cancelPreflight();
+
+    /// True while a run is in flight, for binding a Run/Cancel control.
+    bool preflightRunning() const;
     Q_INVOKABLE void announceDocumentState(const QString& message);
 
     /// Toggles the current page between the fast approximate render and the
@@ -209,10 +231,20 @@ private:
     std::unique_ptr<DocumentViewSession> m_session;
     pdfinteraction::PreflightController m_preflight;
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
+
+    /// Constructed after m_session, which owns the submitter it references.
+    std::unique_ptr<pdfinteraction::SchedulerPreflightService> m_preflightService;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
     FocusRestoration m_focusRestoration;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
+
+    /// Declared after m_session, whose page-box source the provider observes,
+    /// and both outlive m_session->interaction(), which only borrows the
+    /// snapper. Reading the boxes from the same source the dispatcher already
+    /// hit-tests is what keeps a snap target from disagreeing with a hit target.
+    pdfinteraction::PageBoxSnapProvider m_pageBoxSnaps;
+    pdfinteraction::DragSnapper m_dragSnapper;
 
     QPointer<pdfquick::LoupeCanvasItem> m_canvas;
     int m_commandEpoch = 0;

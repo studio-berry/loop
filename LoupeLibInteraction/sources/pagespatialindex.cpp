@@ -22,6 +22,7 @@
 
 #include "pagespatialindex.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace pdfinteraction
@@ -148,28 +149,58 @@ int PageSpatialIndex::rowForY(qreal y) const
 
 QList<int> PageSpatialIndex::query(QPointF point) const
 {
+    return query(QRectF(point, QSizeF(0.0, 0.0)));
+}
+
+QList<int> PageSpatialIndex::query(const QRectF& area) const
+{
     if (m_itemCount == 0)
     {
         return {};
     }
 
+    const QRectF probe = area.normalized();
+
     // No indexed rectangle extends past the extent they were all built from,
-    // so a point outside it cannot be contained by anything -- reject before
+    // so a probe entirely outside it cannot overlap anything -- reject before
     // touching a single cell. Compared against the extent's numeric bounds
-    // directly (not QRectF::contains, whose edge-open semantics degrade for
-    // a zero-width/height extent) so this can only ever be a superset of
-    // what any individual item's own precise contains() test would accept --
-    // an early-out this permissive can produce a false positive (caught by
-    // the caller's precise test) but never a false negative.
-    if (point.x() < m_extent.left() || point.x() > m_extent.right() || point.y() < m_extent.top() ||
-        point.y() > m_extent.bottom())
+    // directly (not QRectF::intersects, whose edge-open semantics degrade for
+    // a zero-width/height extent or a zero-size probe) so this can only ever
+    // be a superset of what any individual item's own precise test would
+    // accept -- an early-out this permissive can produce a false positive
+    // (caught by the caller's precise test) but never a false negative.
+    if (probe.right() < m_extent.left() || probe.left() > m_extent.right() ||
+        probe.bottom() < m_extent.top() || probe.top() > m_extent.bottom())
     {
         return {};
     }
 
+    const int columnBegin = columnForX(probe.left());
+    const int columnEnd = columnForX(probe.right());
+    const int rowBegin = rowForY(probe.top());
+    const int rowEnd = rowForY(probe.bottom());
+
     QList<int> candidates = m_overflowItems;
-    const qint64 key = cellKey(columnForX(point.x()), rowForY(point.y()));
-    candidates.append(m_cells.value(key));
+
+    for (int column = columnBegin; column <= columnEnd; ++column)
+    {
+        for (int row = rowBegin; row <= rowEnd; ++row)
+        {
+            candidates.append(m_cells.value(cellKey(column, row)));
+        }
+    }
+
+    // A rectangle wider than one cell is a member of every cell it covers, so
+    // a probe spanning several cells collects it several times. The point
+    // overload could never do this, and a caller that turned candidates into
+    // targets would draw and hit the same object twice. Sorting also makes the
+    // result independent of cell traversal order.
+    if (columnBegin != columnEnd || rowBegin != rowEnd)
+    {
+        std::sort(candidates.begin(), candidates.end());
+        candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    }
+
     return candidates;
 }
 

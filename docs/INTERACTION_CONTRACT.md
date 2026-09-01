@@ -103,7 +103,62 @@ Two Core-backed sources ship in this session:
   crop box covers most of the page, and an interior hit would shadow every finding inside it.
 
 Text-layout and annotation sources are later implementations of the same interface.
-`pdf::PDFSnapper` stays where it is and is not wrapped here.
+
+### Tolerance
+
+A hit tolerance is a **screen** quantity — a target 2 px wide on the display should stay
+grabbable at any zoom — but every source tests in page space. `HitTestDispatcher` owns the
+one conversion, `pageTolerance = screenTolerancePx / max(viewScale, 0.01)`, applied inside
+`hitTestAll()`. Sources take the page-space tolerance as an argument and never compute it.
+
+`viewScale` is `ViewportController::pageUnitToPixel()` — screen pixels per page unit, which is
+`pixelPerMM() * zoom()`. Dividing by the zoom alone is not the same conversion: it leaves the
+display density in, so on a typical 96 dpi screen a 2 px slack reached roughly 8 px.
+
+The conversion is done per hit test, not per bind. `InteractionController::hitTestAt` pushes
+the current scale into the dispatcher before dispatching, because a tolerance derived once at
+startup is wrong from the first wheel notch onward — which is what it was before issue #145.
+
+### Snapping
+
+`pdf::PDFSnapper` stays where it is and is not wrapped here: it is Widgets-era and shaped for
+the old viewer's input. `DragSnapper` is the neutral seam instead. It holds `ISnapProvider`s,
+converts its threshold screen-to-page by the same rule as tolerance — the same
+`pageUnitToPixel()` scale, not the zoom — and returns a snapped page point.
+
+`EditorHost::bindCanvas` wires one `PageBoxSnapProvider` over the same `PageBoxHitTestSource`
+the dispatcher hit-tests, so a snap target cannot disagree with a hit target, and
+`unbindCanvas` drops the snapper with the rest of the borrowed collaborators.
+
+Snapping applies only after `DragSession::exceededThreshold` and only to
+`DragSession::previewPageBounds`. It never reaches committed geometry before `dragCompleted`,
+so a snap is a preview the user can still steer out of. The suppress modifier
+(`Qt::AltModifier` by default) is read from the current `PointerIntent` on every move rather
+than latched at drag start, which is what issue #145 AC3 means by sampling modifiers
+consistently.
+
+`PageBoxSnapProvider` is the one provider that ships. Object edges, baselines and rulers are
+a separate issue, not a gap in this one.
+
+## Thread affinity
+
+`pdf::PDFThreadAffinity::markInteractiveThread()` runs once at startup. Every expensive
+service entry — preflight, OCR, file I/O, page render, font scan, image decode — opens with
+`requireNotInteractive()`, so calling one from an input handler is a test failure rather than
+a review question.
+
+Only these may run on the interactive thread:
+
+- input normalization (host event to `PointerIntent` / `WheelIntent` / `KeyIntent`);
+- small transient state transitions (`InteractionState`, selection, hover, drag session);
+- frame scheduling;
+- overlay composition (`OverlayBuilder::build` and the scene-graph sync);
+- bounded application of a result that already arrived (swapping a `CanvasSnapshot`, setting
+  findings on the overlay builder).
+
+Everything else is a job. Results return through `JobRelay`, which is the non-blocking
+dispatcher: a worker holds a `shared_ptr` to it, the owner detaches on its own thread, and a
+completion that arrives after the owner is gone finds it detached and does nothing.
 
 ## Overlays
 

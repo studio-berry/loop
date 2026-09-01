@@ -393,6 +393,7 @@
     "UnitTestsDocumentFacade",
     "UnitTestsDocumentSession",
     "UnitTestsDocumentViewSession",
+    "UnitTestsDragSnapper",
     "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",

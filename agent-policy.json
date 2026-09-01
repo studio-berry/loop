@@ -124,12 +124,13 @@
         "UnitTests/tst_interactioncontrollertest.cpp",
         "UnitTests/tst_overlayframetest.cpp",
         "UnitTests/tst_hittestsourcetest.cpp",
+        "UnitTests/tst_dragsnappertest.cpp",
         "docs/interaction-boundary-policy.json",
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
       "targets": ["LoupeLibInteraction"],
-      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
+      "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsOverlayFrame", "UnitTestsHitTestSource", "UnitTestsDragSnapper"]
     },
     "quick": {
       "paths": [

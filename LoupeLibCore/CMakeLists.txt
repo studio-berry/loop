@@ -93,6 +93,8 @@ add_library(LoupeLibCore SHARED
     sources/pdfprocessingbudget.h
     sources/pdfjobscheduler.cpp
     sources/pdfjobscheduler.h
+    sources/pdfthreadaffinity.cpp
+    sources/pdfthreadaffinity.h
     sources/pdfschemaversion.cpp
     sources/pdfschemaversion.h
     sources/pdfevidencegraph.cpp
