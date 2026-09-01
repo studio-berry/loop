@@ -33,11 +33,11 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
         const PDFPage* page = catalog->getPage(pageIndex);
         PDFTextLayoutGenerator generator(features, page, document,
                                          session->getFontCache(), session->getCMS(),
-                                         session->getOptionalContentActivity(), QTransform(), meshQuality,
-                                         session->getProcessingBudget());
+                                         session->getOptionalContentActivity(), QTransform(), meshQuality);
         generator.processContents();
         const PDFTextFlows flows = PDFTextFlow::createTextFlows(
-            generator.createTextLayout(), PDFTextFlow::RemoveSoftHyphen | PDFTextFlow::AddLineBreaks,
+            generator.createTextLayout(),
+            PDFTextFlow::FlowFlags(PDFTextFlow::RemoveSoftHyphen) | PDFTextFlow::AddLineBreaks,
             static_cast<PDFInteger>(pageIndex));
         for (const PDFTextFlow& flow : flows)
         {
