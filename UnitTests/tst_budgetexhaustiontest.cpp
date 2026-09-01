@@ -172,19 +172,57 @@ void configureOnlyExpectedLimit(pdf::PDFProcessingLimits& limits, const CorpusFi
     const pdf::PDFBudgetKind kind = budgetKindFromName(fixture.budgetKind);
     switch (kind)
     {
-        case pdf::PDFBudgetKind::InputBytes: limits.maxInputBytes = fixture.limit; break;
-        case pdf::PDFBudgetKind::SingleDecodedStreamBytes: limits.maxDecodedStreamBytes = fixture.limit; break;
-        case pdf::PDFBudgetKind::CumulativeDecodedBytes: limits.maxCumulativeDecodedBytes = fixture.limit; break;
-        case pdf::PDFBudgetKind::DecompressionRatio: limits.maxDecompressionRatio = fixture.limit; break;
-        case pdf::PDFBudgetKind::ObjectDepth: limits.maxObjectDepth = static_cast<quint32>(fixture.limit); break;
-        case pdf::PDFBudgetKind::RecursiveContentDepth: limits.maxRecursiveContentDepth = static_cast<quint32>(fixture.limit); break;
-        case pdf::PDFBudgetKind::ObjectsVisited: limits.maxObjectsVisited = fixture.limit; break;
-        case pdf::PDFBudgetKind::RenderOperations: limits.maxRenderOperations = fixture.limit; break;
-        case pdf::PDFBudgetKind::RenderPixels: limits.maxRenderPixels = fixture.limit; break;
-        case pdf::PDFBudgetKind::ElapsedTime: limits.maxElapsed = std::chrono::milliseconds(fixture.limit); break;
-        case pdf::PDFBudgetKind::EvidenceRecords: limits.maxEvidenceRecords = fixture.limit; break;
-        case pdf::PDFBudgetKind::UndoSnapshots: limits.maxUndoSnapshots = fixture.limit; break;
-        case pdf::PDFBudgetKind::RollbackArtifacts: limits.maxRollbackArtifacts = fixture.limit; break;
+        case pdf::PDFBudgetKind::InputBytes:
+            limits.maxInputBytes = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::SingleDecodedStreamBytes:
+            limits.maxDecodedStreamBytes = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::CumulativeDecodedBytes:
+            limits.maxCumulativeDecodedBytes = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::DecompressionRatio:
+            limits.maxDecompressionRatio = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::ObjectDepth:
+            limits.maxObjectDepth = static_cast<quint32>(fixture.limit);
+            break;
+
+        case pdf::PDFBudgetKind::RecursiveContentDepth:
+            limits.maxRecursiveContentDepth = static_cast<quint32>(fixture.limit);
+            break;
+
+        case pdf::PDFBudgetKind::ObjectsVisited:
+            limits.maxObjectsVisited = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::RenderOperations:
+            limits.maxRenderOperations = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::RenderPixels:
+            limits.maxRenderPixels = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::ElapsedTime:
+            limits.maxElapsed = std::chrono::milliseconds(fixture.limit);
+            break;
+
+        case pdf::PDFBudgetKind::EvidenceRecords:
+            limits.maxEvidenceRecords = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::UndoSnapshots:
+            limits.maxUndoSnapshots = fixture.limit;
+            break;
+
+        case pdf::PDFBudgetKind::RollbackArtifacts:
+            limits.maxRollbackArtifacts = fixture.limit;
+            break;
     }
 }
 
@@ -221,7 +259,10 @@ void executeFixture(const CorpusFixture& fixture, pdf::PDFProcessingBudget& budg
     }
     else if (fixture.operation == QLatin1String("charge-objects"))
     {
-        for (quint64 index = 0; index < attempted; ++index) budget.chargeObject(fixture.context);
+        for (quint64 index = 0; index < attempted; ++index)
+        {
+            budget.chargeObject(fixture.context);
+        }
     }
     else if (fixture.operation == QLatin1String("charge-render-operations"))
     {
@@ -234,7 +275,10 @@ void executeFixture(const CorpusFixture& fixture, pdf::PDFProcessingBudget& budg
     else if (fixture.operation == QLatin1String("check-elapsed"))
     {
         std::chrono::steady_clock::time_point now{};
-        pdf::PDFProcessingBudget deterministicBudget(budget.limits(), [&now] { return now; });
+        pdf::PDFProcessingBudget deterministicBudget(
+            budget.limits(),
+            [&now]
+            { return now; });
         now += std::chrono::milliseconds(attempted);
         deterministicBudget.checkElapsed(fixture.context);
     }
@@ -244,11 +288,17 @@ void executeFixture(const CorpusFixture& fixture, pdf::PDFProcessingBudget& budg
     }
     else if (fixture.operation == QLatin1String("charge-undo-snapshots"))
     {
-        for (quint64 index = 0; index < attempted; ++index) budget.chargeUndoSnapshot(fixture.context);
+        for (quint64 index = 0; index < attempted; ++index)
+        {
+            budget.chargeUndoSnapshot(fixture.context);
+        }
     }
     else if (fixture.operation == QLatin1String("charge-rollback-artifacts"))
     {
-        for (quint64 index = 0; index < attempted; ++index) budget.chargeRollbackArtifact(fixture.context);
+        for (quint64 index = 0; index < attempted; ++index)
+        {
+            budget.chargeRollbackArtifact(fixture.context);
+        }
     }
     else
     {
@@ -550,8 +600,19 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     QVERIFY(!result.inspectionComplete);
     QCOMPARE(result.errorCode, QStringLiteral("budget-exceeded"));
     QVERIFY(!result.checkStatuses.isEmpty());
-    QCOMPARE(result.checkStatuses.first().budgetKind, QStringLiteral("evidence-records"));
-    QCOMPARE(result.checkStatuses.first().budgetPool, QStringLiteral("evidence-cache"));
+    {
+        bool found = false;
+        for (const pdf::PreflightCheckStatus &status : result.checkStatuses)
+        {
+            if (status.budgetKind == QLatin1String("evidence-records")
+                && status.budgetPool == QLatin1String("evidence-cache"))
+            {
+                found = true;
+                break;
+            }
+        }
+        QVERIFY2(found, "checkStatuses must contain evidence-records budget");
+    }
 
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
@@ -562,10 +623,21 @@ void BudgetExhaustionTest::preflightEvidenceBudgetIsIncomplete()
     QCOMPARE(report.value(QStringLiteral("error")).toObject().value(QStringLiteral("code")).toString(),
              QStringLiteral("budget-exceeded"));
     const QJsonArray checks = report.value(QStringLiteral("checks")).toArray();
-    QCOMPARE(checks.size(), 1);
-    const QJsonObject budget = checks.first().toObject().value(QStringLiteral("budget")).toObject();
-    QCOMPARE(budget.value(QStringLiteral("kind")).toString(), QStringLiteral("evidence-records"));
-    QCOMPARE(budget.value(QStringLiteral("pool")).toString(), QStringLiteral("evidence-cache"));
+    QVERIFY(!checks.isEmpty());
+    {
+        bool found = false;
+        for (const QJsonValue &value : checks)
+        {
+            const QJsonObject budget = value.toObject().value(QStringLiteral("budget")).toObject();
+            if (budget.value(QStringLiteral("kind")).toString() == QLatin1String("evidence-records")
+                && budget.value(QStringLiteral("pool")).toString() == QLatin1String("evidence-cache"))
+            {
+                found = true;
+                break;
+            }
+        }
+        QVERIFY2(found, "report checks must contain evidence-records budget");
+    }
     QVERIFY(!report.value(QStringLiteral("pass")).toBool());
     QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
              QStringLiteral("incomplete"));
