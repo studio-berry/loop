@@ -1,0 +1,12 @@
+{
+  "attempted": 65,
+  "budget_kind": "single-decoded-stream-bytes",
+  "budget_pool": "decoded-streams",
+  "context": "synthetic/single-decoded-stream-bytes",
+  "id": "single-decoded-stream-bytes",
+  "limit": 64,
+  "operation": "check-decoded-stream-size",
+  "payload": {
+    "compressed_bytes": 65
+  }
+}

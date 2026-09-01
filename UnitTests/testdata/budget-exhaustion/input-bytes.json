@@ -1,0 +1,12 @@
+{
+  "attempted": 65,
+  "budget_kind": "input-bytes",
+  "budget_pool": "document-model",
+  "context": "synthetic/input-bytes",
+  "id": "input-bytes",
+  "limit": 64,
+  "operation": "charge-input-bytes",
+  "payload": {
+    "source_bytes": 65
+  }
+}

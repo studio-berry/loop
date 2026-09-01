@@ -1,0 +1,165 @@
+{
+  "fixture_count": 13,
+  "fixtures": [
+    {
+      "attempted": 65,
+      "budget_kind": "input-bytes",
+      "budget_pool": "document-model",
+      "context": "synthetic/input-bytes",
+      "id": "input-bytes",
+      "limit": 64,
+      "operation": "charge-input-bytes",
+      "payload": {
+        "source_bytes": 65
+      }
+    },
+    {
+      "attempted": 65,
+      "budget_kind": "single-decoded-stream-bytes",
+      "budget_pool": "decoded-streams",
+      "context": "synthetic/single-decoded-stream-bytes",
+      "id": "single-decoded-stream-bytes",
+      "limit": 64,
+      "operation": "check-decoded-stream-size",
+      "payload": {
+        "compressed_bytes": 65
+      }
+    },
+    {
+      "attempted": 65,
+      "budget_kind": "cumulative-decoded-bytes",
+      "budget_pool": "decoded-streams",
+      "context": "synthetic/cumulative-decoded-bytes",
+      "id": "cumulative-decoded-bytes",
+      "limit": 64,
+      "operation": "charge-decoded-bytes",
+      "payload": {
+        "decoded_bytes": 65
+      }
+    },
+    {
+      "attempted": 20,
+      "budget_kind": "decompression-ratio",
+      "budget_pool": "decoded-streams",
+      "context": "synthetic/decompression-ratio",
+      "id": "decompression-ratio",
+      "limit": 4,
+      "operation": "check-decoded-stream-size",
+      "payload": {
+        "compressed_bytes": 4,
+        "decoded_bytes": 20
+      }
+    },
+    {
+      "attempted": 3,
+      "budget_kind": "object-depth",
+      "budget_pool": "document-model",
+      "context": "synthetic/object-depth",
+      "id": "object-depth",
+      "limit": 2,
+      "operation": "enter-depth",
+      "payload": {
+        "depth": 3
+      }
+    },
+    {
+      "attempted": 3,
+      "budget_kind": "recursive-content-depth",
+      "budget_pool": "document-model",
+      "context": "synthetic/recursive-content-depth",
+      "id": "recursive-content-depth",
+      "limit": 2,
+      "operation": "enter-depth",
+      "payload": {
+        "depth": 3
+      }
+    },
+    {
+      "attempted": 4,
+      "budget_kind": "objects-visited",
+      "budget_pool": "document-model",
+      "context": "synthetic/objects-visited",
+      "id": "objects-visited",
+      "limit": 3,
+      "operation": "charge-objects",
+      "payload": {
+        "objects": 4
+      }
+    },
+    {
+      "attempted": 4,
+      "budget_kind": "render-operations",
+      "budget_pool": "raster-tile",
+      "context": "synthetic/render-operations",
+      "id": "render-operations",
+      "limit": 3,
+      "operation": "charge-render-operations",
+      "payload": {
+        "operations": 4
+      }
+    },
+    {
+      "attempted": 65,
+      "budget_kind": "render-pixels",
+      "budget_pool": "raster-tile",
+      "context": "synthetic/render-pixels",
+      "id": "render-pixels",
+      "limit": 64,
+      "operation": "charge-render-pixels",
+      "payload": {
+        "pixels": 65
+      }
+    },
+    {
+      "attempted": 2,
+      "budget_kind": "elapsed-time",
+      "budget_pool": "document-model",
+      "context": "synthetic/elapsed-time",
+      "id": "elapsed-time",
+      "limit": 1,
+      "operation": "check-elapsed",
+      "payload": {
+        "elapsed_ms": 2
+      }
+    },
+    {
+      "attempted": 4,
+      "budget_kind": "evidence-records",
+      "budget_pool": "evidence-cache",
+      "context": "synthetic/evidence-records",
+      "id": "evidence-records",
+      "limit": 3,
+      "operation": "charge-evidence-records",
+      "payload": {
+        "records": 4
+      }
+    },
+    {
+      "attempted": 4,
+      "budget_kind": "undo-snapshots",
+      "budget_pool": "undo",
+      "context": "synthetic/undo-snapshots",
+      "id": "undo-snapshots",
+      "limit": 3,
+      "operation": "charge-undo-snapshots",
+      "payload": {
+        "snapshots": 4
+      }
+    },
+    {
+      "attempted": 4,
+      "budget_kind": "rollback-artifacts",
+      "budget_pool": "rollback",
+      "context": "synthetic/rollback-artifacts",
+      "id": "rollback-artifacts",
+      "limit": 3,
+      "operation": "charge-rollback-artifacts",
+      "payload": {
+        "artifacts": 4
+      }
+    }
+  ],
+  "generated_by": "scripts/budget_exhaustion/generate_corpus.py",
+  "schema_kind": "loupe-processing-budget-exhaustion-corpus",
+  "schema_version": 1
+}

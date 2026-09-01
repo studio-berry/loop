@@ -1,0 +1,12 @@
+{
+  "attempted": 3,
+  "budget_kind": "recursive-content-depth",
+  "budget_pool": "document-model",
+  "context": "synthetic/recursive-content-depth",
+  "id": "recursive-content-depth",
+  "limit": 2,
+  "operation": "enter-depth",
+  "payload": {
+    "depth": 3
+  }
+}

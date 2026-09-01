@@ -802,6 +802,9 @@ add_executable(UnitTestsBudgetExhaustion
     tst_budgetexhaustiontest.cpp
 )
 target_link_libraries(UnitTestsBudgetExhaustion PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsBudgetExhaustion PRIVATE
+    BUDGET_EXHAUSTION_CORPUS_DIR="${CMAKE_SOURCE_DIR}/UnitTests/testdata/budget-exhaustion"
+)
 set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
@@ -809,6 +812,7 @@ set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsBudgetExhaustion "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsBudgetExhaustion")
+set_tests_properties(UnitTestsBudgetExhaustion PROPERTIES TIMEOUT 10)
 
 add_executable(UnitTestsResourceBudget
     tst_resourcebudgettest.cpp

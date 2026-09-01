@@ -29,12 +29,23 @@
 #include "preflightengine.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QFile>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QMap>
 #include <QPainter>
 #include <QPainterPath>
+#include <QSet>
 #include <QtTest>
 
 #include <functional>
+#include <optional>
+
+#ifndef BUDGET_EXHAUSTION_CORPUS_DIR
+#define BUDGET_EXHAUSTION_CORPUS_DIR ""
+#endif
 
 class BudgetExhaustionTest : public QObject
 {
@@ -42,6 +53,7 @@ class BudgetExhaustionTest : public QObject
 
 private slots:
     void everyKindReportsExactKindAndPool();
+    void generatedCorpusReportsEveryDimensionAndIsIncomplete();
     void generatedCorpusIsIncompleteNeverPass();
     void preflightEvidenceBudgetIsIncomplete();
     void rasterSizeBudgetIsIncomplete();
@@ -49,6 +61,195 @@ private slots:
 
 namespace
 {
+
+struct CorpusFixture
+{
+    QString id;
+    QString operation;
+    QString budgetKind;
+    QString budgetPool;
+    quint64 limit = 0;
+    quint64 attempted = 0;
+    QString context;
+    QJsonObject payload;
+};
+
+pdf::PDFBudgetKind budgetKindFromName(const QString& name)
+{
+    static const QMap<QString, pdf::PDFBudgetKind> kinds{
+        { QStringLiteral("input-bytes"), pdf::PDFBudgetKind::InputBytes },
+        { QStringLiteral("single-decoded-stream-bytes"), pdf::PDFBudgetKind::SingleDecodedStreamBytes },
+        { QStringLiteral("cumulative-decoded-bytes"), pdf::PDFBudgetKind::CumulativeDecodedBytes },
+        { QStringLiteral("decompression-ratio"), pdf::PDFBudgetKind::DecompressionRatio },
+        { QStringLiteral("object-depth"), pdf::PDFBudgetKind::ObjectDepth },
+        { QStringLiteral("recursive-content-depth"), pdf::PDFBudgetKind::RecursiveContentDepth },
+        { QStringLiteral("objects-visited"), pdf::PDFBudgetKind::ObjectsVisited },
+        { QStringLiteral("render-operations"), pdf::PDFBudgetKind::RenderOperations },
+        { QStringLiteral("render-pixels"), pdf::PDFBudgetKind::RenderPixels },
+        { QStringLiteral("elapsed-time"), pdf::PDFBudgetKind::ElapsedTime },
+        { QStringLiteral("evidence-records"), pdf::PDFBudgetKind::EvidenceRecords },
+        { QStringLiteral("undo-snapshots"), pdf::PDFBudgetKind::UndoSnapshots },
+        { QStringLiteral("rollback-artifacts"), pdf::PDFBudgetKind::RollbackArtifacts },
+    };
+    Q_ASSERT(kinds.contains(name));
+    return kinds.value(name);
+}
+
+CorpusFixture readFixture(const QJsonObject& object)
+{
+    CorpusFixture fixture;
+    fixture.id = object.value(QStringLiteral("id")).toString();
+    fixture.operation = object.value(QStringLiteral("operation")).toString();
+    fixture.budgetKind = object.value(QStringLiteral("budget_kind")).toString();
+    fixture.budgetPool = object.value(QStringLiteral("budget_pool")).toString();
+    fixture.limit = object.value(QStringLiteral("limit")).toInteger();
+    fixture.attempted = object.value(QStringLiteral("attempted")).toInteger();
+    fixture.context = object.value(QStringLiteral("context")).toString();
+    fixture.payload = object.value(QStringLiteral("payload")).toObject();
+    return fixture;
+}
+
+QList<CorpusFixture> loadCorpus()
+{
+    QFile file(QDir(QStringLiteral(BUDGET_EXHAUSTION_CORPUS_DIR)).filePath(QStringLiteral("manifest.json")));
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        qFatal("Could not open the generated budget exhaustion corpus: %s", qPrintable(file.fileName()));
+    }
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+    {
+        qFatal("Invalid generated budget exhaustion corpus: %s", qPrintable(parseError.errorString()));
+    }
+
+    const QJsonObject root = document.object();
+    if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loupe-processing-budget-exhaustion-corpus")
+        || root.value(QStringLiteral("schema_version")).toInt() != 1)
+    {
+        qFatal("Unexpected generated budget exhaustion corpus schema");
+    }
+    const QJsonArray entries = root.value(QStringLiteral("fixtures")).toArray();
+    if (entries.size() != root.value(QStringLiteral("fixture_count")).toInt())
+    {
+        qFatal("Generated budget exhaustion corpus fixture count is inconsistent");
+    }
+
+    QList<CorpusFixture> fixtures;
+    for (const QJsonValue& entry : entries)
+    {
+        if (!entry.isObject())
+        {
+            qFatal("Generated budget exhaustion corpus contains a non-object fixture");
+        }
+        fixtures.append(readFixture(entry.toObject()));
+    }
+    return fixtures;
+}
+
+void configureOnlyExpectedLimit(pdf::PDFProcessingLimits& limits, const CorpusFixture& fixture)
+{
+    limits.maxInputBytes = 1'000'000;
+    limits.maxDecodedStreamBytes = 1'000'000;
+    limits.maxCumulativeDecodedBytes = 1'000'000;
+    limits.maxDecompressionRatio = 1'000'000;
+    limits.maxObjectDepth = 1'000'000;
+    limits.maxRecursiveContentDepth = 1'000'000;
+    limits.maxObjectsVisited = 1'000'000;
+    limits.maxRenderOperations = 1'000'000;
+    limits.maxRenderPixels = 1'000'000;
+    limits.maxElapsed = std::chrono::hours(1);
+    limits.maxEvidenceRecords = 1'000'000;
+    limits.maxUndoSnapshots = 1'000'000;
+    limits.maxRollbackArtifacts = 1'000'000;
+
+    const pdf::PDFBudgetKind kind = budgetKindFromName(fixture.budgetKind);
+    switch (kind)
+    {
+        case pdf::PDFBudgetKind::InputBytes: limits.maxInputBytes = fixture.limit; break;
+        case pdf::PDFBudgetKind::SingleDecodedStreamBytes: limits.maxDecodedStreamBytes = fixture.limit; break;
+        case pdf::PDFBudgetKind::CumulativeDecodedBytes: limits.maxCumulativeDecodedBytes = fixture.limit; break;
+        case pdf::PDFBudgetKind::DecompressionRatio: limits.maxDecompressionRatio = fixture.limit; break;
+        case pdf::PDFBudgetKind::ObjectDepth: limits.maxObjectDepth = static_cast<quint32>(fixture.limit); break;
+        case pdf::PDFBudgetKind::RecursiveContentDepth: limits.maxRecursiveContentDepth = static_cast<quint32>(fixture.limit); break;
+        case pdf::PDFBudgetKind::ObjectsVisited: limits.maxObjectsVisited = fixture.limit; break;
+        case pdf::PDFBudgetKind::RenderOperations: limits.maxRenderOperations = fixture.limit; break;
+        case pdf::PDFBudgetKind::RenderPixels: limits.maxRenderPixels = fixture.limit; break;
+        case pdf::PDFBudgetKind::ElapsedTime: limits.maxElapsed = std::chrono::milliseconds(fixture.limit); break;
+        case pdf::PDFBudgetKind::EvidenceRecords: limits.maxEvidenceRecords = fixture.limit; break;
+        case pdf::PDFBudgetKind::UndoSnapshots: limits.maxUndoSnapshots = fixture.limit; break;
+        case pdf::PDFBudgetKind::RollbackArtifacts: limits.maxRollbackArtifacts = fixture.limit; break;
+    }
+}
+
+void enterDepth(pdf::PDFProcessingBudget& budget, pdf::PDFBudgetKind kind, quint64 depth, const QString& context)
+{
+    if (depth == 0)
+    {
+        return;
+    }
+    pdf::PDFProcessingBudget::DepthScope scope(budget, kind, context);
+    enterDepth(budget, kind, depth - 1, context);
+}
+
+void executeFixture(const CorpusFixture& fixture, pdf::PDFProcessingBudget& budget)
+{
+    const quint64 attempted = fixture.attempted;
+    if (fixture.operation == QLatin1String("charge-input-bytes"))
+    {
+        budget.chargeInputBytes(attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("check-decoded-stream-size"))
+    {
+        const quint64 decoded = fixture.payload.value(QStringLiteral("decoded_bytes")).toInteger(attempted);
+        const quint64 compressed = fixture.payload.value(QStringLiteral("compressed_bytes")).toInteger(attempted);
+        budget.checkDecodedStreamSize(decoded, compressed, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-decoded-bytes"))
+    {
+        budget.chargeDecodedBytes(attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("enter-depth"))
+    {
+        enterDepth(budget, budgetKindFromName(fixture.budgetKind), attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-objects"))
+    {
+        for (quint64 index = 0; index < attempted; ++index) budget.chargeObject(fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-render-operations"))
+    {
+        budget.chargeRenderOperation(attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-render-pixels"))
+    {
+        budget.chargeRenderPixels(attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("check-elapsed"))
+    {
+        std::chrono::steady_clock::time_point now{};
+        pdf::PDFProcessingBudget deterministicBudget(budget.limits(), [&now] { return now; });
+        now += std::chrono::milliseconds(attempted);
+        deterministicBudget.checkElapsed(fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-evidence-records"))
+    {
+        budget.chargeEvidenceRecords(attempted, fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-undo-snapshots"))
+    {
+        for (quint64 index = 0; index < attempted; ++index) budget.chargeUndoSnapshot(fixture.context);
+    }
+    else if (fixture.operation == QLatin1String("charge-rollback-artifacts"))
+    {
+        for (quint64 index = 0; index < attempted; ++index) budget.chargeRollbackArtifact(fixture.context);
+    }
+    else
+    {
+        QFAIL(qPrintable(QStringLiteral("unknown corpus operation: %1").arg(fixture.operation)));
+    }
+}
 
 void expectKind(pdf::PDFBudgetKind kind, pdf::PDFBudgetPool pool, const std::function<void()>& charge)
 {
@@ -186,6 +387,69 @@ void BudgetExhaustionTest::everyKindReportsExactKindAndPool()
                    [&budget]
                    { budget.chargeRollbackArtifact(QStringLiteral("rollback")); });
     }
+}
+
+void BudgetExhaustionTest::generatedCorpusReportsEveryDimensionAndIsIncomplete()
+{
+    const QList<CorpusFixture> fixtures = loadCorpus();
+    QSet<QString> dimensions;
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+
+    for (const CorpusFixture& fixture : fixtures)
+    {
+        QVERIFY2(!dimensions.contains(fixture.budgetKind), qPrintable(QStringLiteral("duplicate budget dimension: %1").arg(fixture.budgetKind)));
+        dimensions.insert(fixture.budgetKind);
+        QVERIFY(fixture.limit < fixture.attempted);
+        QVERIFY(!fixture.context.isEmpty());
+
+        pdf::PDFProcessingLimits limits;
+        configureOnlyExpectedLimit(limits, fixture);
+        pdf::PDFProcessingBudget budget(limits);
+        bool exhausted = false;
+        QElapsedTimer fixtureTimer;
+        fixtureTimer.start();
+        try
+        {
+            executeFixture(fixture, budget);
+        }
+        catch (const pdf::PDFBudgetExceededException& exception)
+        {
+            exhausted = true;
+            const pdf::PDFBudgetExceeded& detail = exception.getDetail();
+            QCOMPARE(detail.kind, budgetKindFromName(fixture.budgetKind));
+            QCOMPARE(QString::fromLatin1(pdf::getPDFBudgetPoolName(detail.pool)), fixture.budgetPool);
+            QCOMPARE(detail.limit, fixture.limit);
+            QCOMPARE(detail.attempted, fixture.attempted);
+            QCOMPARE(detail.context, fixture.context);
+
+            pdf::PreflightResult result;
+            result.inspectionComplete = false;
+            result.errorCode = QStringLiteral("budget-exceeded");
+            result.errorMessage = QStringLiteral("synthetic budget exhaustion");
+            result.checkStatuses.append({ fixture.id,
+                                          QStringLiteral("incomplete"),
+                                          QStringLiteral("budget-exceeded"),
+                                          fixture.budgetKind,
+                                          fixture.budgetPool,
+                                          static_cast<qint64>(detail.limit),
+                                          static_cast<qint64>(detail.attempted),
+                                          detail.context });
+            const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+            QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+            QCOMPARE(verdict.reasonCode, QStringLiteral("budget-exceeded"));
+            QVERIFY(!verdict.isPass());
+            const QJsonObject report = result.toJson();
+            QVERIFY(!report.value(QStringLiteral("pass")).toBool());
+            QCOMPARE(report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString(),
+                     QStringLiteral("incomplete"));
+        }
+        QVERIFY2(exhausted, qPrintable(QStringLiteral("fixture did not exhaust: %1").arg(fixture.id)));
+        QVERIFY2(fixtureTimer.elapsed() < 1000, qPrintable(QStringLiteral("fixture exceeded 1 second: %1").arg(fixture.id)));
+    }
+
+    QCOMPARE(dimensions.size(), 13);
+    QVERIFY2(totalTimer.elapsed() < 2000, "budget exhaustion corpus exceeded its 2 second bound");
 }
 
 void BudgetExhaustionTest::generatedCorpusIsIncompleteNeverPass()

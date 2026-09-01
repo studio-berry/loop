@@ -1,0 +1,12 @@
+{
+  "attempted": 4,
+  "budget_kind": "undo-snapshots",
+  "budget_pool": "undo",
+  "context": "synthetic/undo-snapshots",
+  "id": "undo-snapshots",
+  "limit": 3,
+  "operation": "charge-undo-snapshots",
+  "payload": {
+    "snapshots": 4
+  }
+}
