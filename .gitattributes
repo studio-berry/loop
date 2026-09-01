@@ -12,3 +12,4 @@ LoupeLibCore/cmaps/** binary
 LoupeLibCore/liberation-fonts-ttf/** -whitespace
 3rdparty_licenses/** -whitespace
 WixInstaller/explic.rtf -whitespace
+UnitTests/testdata/budget-exhaustion/** text eol=lf
