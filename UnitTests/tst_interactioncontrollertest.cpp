@@ -743,6 +743,232 @@ void InteractionControllerTest::rapidZoomReversalAndPageSwitchSettleWithinTraceB
     QVERIFY(inputLatency.value(QStringLiteral("p95_ms")).toDouble() <= referenceBudgetMs);
 }
 
+/// Presses the object twice at `pressPagePoint`: the first click selects it, the
+/// second begins the drag. Returns the viewport pixel of that press.
+static QPoint beginDragOnObject(pdfinteraction::InteractionController& controller,
+                                const pdfinteraction::ViewportController& viewport,
+                                QPointF pressPagePoint,
+                                quint64& sequence)
+{
+    const QPoint pressPx = viewport.pagePointToViewportMatrix(0).map(pressPagePoint).toPoint();
+
+    controller.handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, sequence++, Qt::LeftButton, Qt::LeftButton));
+    controller.handlePointer(makePointer(pdfinteraction::PointerAction::Release, pressPx, sequence++, Qt::LeftButton));
+    controller.handlePointer(makePointer(pdfinteraction::PointerAction::Press, pressPx, sequence++, Qt::LeftButton, Qt::LeftButton));
+
+    return pressPx;
+}
+
+void InteractionControllerTest::dragContinuesBeyondViewportEdge()
+{
+    // Issue #145 AC3. A drag that stopped tracking once the pointer left the
+    // viewport would strand the preview at the edge while the user is still
+    // holding the button, and the release would then commit a position they
+    // never saw. The page point is a plain inverse mapping, so it stays defined
+    // outside the visible rect.
+    quint64 sequence = 1;
+    beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+
+    QVERIFY(m_controller->state().drag().has_value());
+
+    const QPoint farOutside(-500, -400);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, farOutside, sequence++, Qt::NoButton, Qt::LeftButton));
+
+    const std::optional<pdfinteraction::DragSession>& session = m_controller->state().drag();
+    QVERIFY(session.has_value());
+    QVERIFY(session->exceededThreshold);
+
+    const std::optional<QPointF> outsidePagePoint = m_viewport->viewportToPagePoint(farOutside, 0);
+    QVERIFY(outsidePagePoint.has_value());
+
+    // Same rule as inside the viewport: topLeft is the pointer less the grab
+    // offset, with no clamping to the page or to the visible rect.
+    QVERIFY(pointsClose(session->previewPageBounds.topLeft(), *outsidePagePoint - session->grabOffset));
+}
+
+void InteractionControllerTest::dragSnapsPreviewOnlyAfterThreshold()
+{
+    // Snapping is a decision about a drag, and below the hysteresis threshold
+    // there is no drag yet -- only a press that may still turn out to be a
+    // click. Snapping there would move an object the user never dragged.
+    ScriptedSnapProvider provider;
+    provider.candidates = { pdfinteraction::SnapCandidate{ QPointF(42.0, 20.0), QStringLiteral("trim-box") } };
+
+    pdfinteraction::DragSnapper snapper;
+    snapper.addProvider(&provider);
+    m_controller->setSnapper(&snapper);
+
+    quint64 sequence = 1;
+    const QPoint pressPx = beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+
+    // Three pixels of travel, under the four-pixel threshold.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, pressPx + QPoint(3, 0), sequence++, Qt::NoButton, Qt::LeftButton));
+
+    QVERIFY(m_controller->state().drag().has_value());
+    QVERIFY(!m_controller->state().drag()->exceededThreshold);
+    QVERIFY(m_controller->state().drag()->previewPageBounds.isNull());
+    QVERIFY(m_controller->state().drag()->snappedTo.isEmpty());
+
+    // Past the threshold the preview exists and the candidate two page units
+    // away is within the default eight-pixel threshold at this scale.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(58.0, 38.0)), sequence++, Qt::NoButton, Qt::LeftButton));
+
+    QVERIFY(m_controller->state().drag()->exceededThreshold);
+    QCOMPARE(m_controller->state().drag()->snappedTo, QStringLiteral("trim-box"));
+
+    m_controller->setSnapper(nullptr);
+}
+
+void InteractionControllerTest::snapMovesPreviewNotCommittedGeometry()
+{
+    ScriptedSnapProvider provider;
+    provider.candidates = { pdfinteraction::SnapCandidate{ QPointF(42.0, 20.0), QStringLiteral("trim-box") } };
+
+    pdfinteraction::DragSnapper snapper;
+    snapper.addProvider(&provider);
+    m_controller->setSnapper(&snapper);
+
+    quint64 sequence = 1;
+    beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+
+    const QRectF targetBoundsBefore = m_controller->state().drag()->target.pageBounds;
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(58.0, 38.0)), sequence++, Qt::NoButton, Qt::LeftButton));
+
+    const std::optional<pdfinteraction::DragSession>& session = m_controller->state().drag();
+    QVERIFY(session.has_value());
+
+    // Unsnapped the preview would sit at (40, 20); the candidate pulls it to
+    // (42, 20) and the size is untouched.
+    QVERIFY(pointsClose(session->previewPageBounds.topLeft(), QPointF(42.0, 20.0)));
+    QVERIFY(pointsClose(QPointF(session->previewPageBounds.width(), session->previewPageBounds.height()), QPointF(20.0, 20.0)));
+
+    // The snap is presentation. The target the drag is steering is unchanged
+    // until the gesture completes, and the source id is recorded rather than
+    // left to be re-derived by whoever commits it.
+    QCOMPARE(session->target.pageBounds, targetBoundsBefore);
+    QCOMPARE(session->snappedTo, QStringLiteral("trim-box"));
+
+    m_controller->setSnapper(nullptr);
+}
+
+void InteractionControllerTest::snapSuppressModifierIsSampledPerMove()
+{
+    // Issue #145 AC3: modifiers are sampled on every move, not latched at
+    // press. A user who starts a drag and then wants the exact position is
+    // asking for the snap to stop, not for the gesture to restart.
+    ScriptedSnapProvider provider;
+    provider.candidates = { pdfinteraction::SnapCandidate{ QPointF(42.0, 20.0), QStringLiteral("trim-box") } };
+
+    pdfinteraction::DragSnapper snapper;
+    snapper.addProvider(&provider);
+    m_controller->setSnapper(&snapper);
+
+    QCOMPARE(m_controller->snapSuppressModifier(), Qt::AltModifier);
+
+    quint64 sequence = 1;
+    beginDragOnObject(*m_controller, *m_viewport, QPointF(38.0, 38.0), sequence);
+
+    const QPoint movePx = viewportPointFor(*m_viewport, QPointF(58.0, 38.0));
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, sequence++, Qt::NoButton, Qt::LeftButton));
+    QCOMPARE(m_controller->state().drag()->snappedTo, QStringLiteral("trim-box"));
+
+    // Alt pressed mid-gesture, without a new press.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, sequence++, Qt::NoButton, Qt::LeftButton, Qt::AltModifier));
+
+    const std::optional<pdfinteraction::DragSession>& suppressed = m_controller->state().drag();
+    QVERIFY(suppressed.has_value());
+    QVERIFY(suppressed->exceededThreshold);
+    QVERIFY(suppressed->snappedTo.isEmpty());
+    QVERIFY(pointsClose(suppressed->previewPageBounds.topLeft(), QPointF(40.0, 20.0)));
+
+    // Released again: the snap comes back, and the drag is still the same one.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, movePx, sequence++, Qt::NoButton, Qt::LeftButton));
+    QCOMPARE(m_controller->state().drag()->snappedTo, QStringLiteral("trim-box"));
+
+    m_controller->setSnapper(nullptr);
+}
+
+void InteractionControllerTest::hitTestToleranceFollowsLiveViewScale()
+{
+    // Issue #145 AC5. The tolerance is a screen constant; what it means in page
+    // units is not, and the conversion divides by the whole page-to-screen
+    // scale -- pixelPerMM times zoom -- rather than by the zoom alone.
+    //
+    // ScriptedHitTestSource does not implement the tolerance overload, so this
+    // uses the real index-backed source: a tolerance that is never applied
+    // would pass against a fake that ignores it.
+    pdfinteraction::FindingListHitTestSource findings;
+    findings.setTargets({ objectTarget() });
+
+    m_dispatcher->clearSources();
+    m_dispatcher->addSource(&findings);
+    m_dispatcher->setScreenTolerancePx(4.0);
+
+    // 1.5 page units outside the right edge of the object, which ends at x = 40.
+    const QPointF outsidePagePoint(41.5, 30.0);
+
+    // pixelPerMM is 2 and zoom is 1, so 4 px of slack is 2 page units and 1.5
+    // is inside it.
+    QCOMPARE(m_viewport->pageUnitToPixel(), 2.0);
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, outsidePagePoint), 1));
+    QCOMPARE(m_controller->state().hovered().id, QStringLiteral("finding-a"));
+
+    // Zoomed to 2: the same 4 px is 1 page unit, and 1.5 is now outside. A
+    // tolerance latched at bind time would still report a hit here.
+    m_viewport->setZoom(2.0);
+    QCOMPARE(m_viewport->pageUnitToPixel(), 4.0);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, outsidePagePoint), 2));
+
+    // Nothing was within tolerance, so the dispatcher falls back to the page
+    // itself rather than to the finding.
+    QCOMPARE(m_controller->state().hovered().kind, pdfinteraction::InteractionTargetKind::Page);
+
+    // Well inside the object the hit survives the zoom: the tolerance shrank,
+    // the geometry did not move.
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(30.0, 30.0)), 3));
+    QCOMPARE(m_controller->state().hovered().id, QStringLiteral("finding-a"));
+}
+
+void InteractionControllerTest::traceRecordsHitTestCandidatesAndPreciseHits()
+{
+    // Issue #145 AC7. Both numbers come off the pass that was going to run
+    // anyway, and both are counts -- a candidate count pushed through the
+    // duration formatter would report one candidate as a p50 of 0.000001 ms,
+    // which reads as healthy on every dashboard and means nothing.
+    pdfinteraction::FindingListHitTestSource findings;
+    findings.setTargets({ objectTarget() });
+
+    m_dispatcher->clearSources();
+    m_dispatcher->addSource(&findings);
+
+    pdfinteraction::ManualClock clock;
+    pdfinteraction::InteractionTraceRecorder recorder(clock);
+    m_controller->setTraceRecorder(&recorder);
+
+    m_controller->handlePointer(makePointer(pdfinteraction::PointerAction::Move, viewportPointFor(*m_viewport, QPointF(30.0, 30.0)), 1));
+
+    const QJsonObject summary = recorder.summary();
+    QCOMPARE(summary.value(QStringLiteral("schema_version")).toInt(), pdfinteraction::InteractionTraceSummaryVersion);
+
+    const QJsonObject hitTest = summary.value(QStringLiteral("hit_test")).toObject();
+    const QJsonObject candidates = hitTest.value(QStringLiteral("index_candidates")).toObject();
+    const QJsonObject precise = hitTest.value(QStringLiteral("precise_hits")).toObject();
+
+    QVERIFY(candidates.value(QStringLiteral("available")).toBool());
+    QCOMPARE(candidates.value(QStringLiteral("sample_count")).toInt(), 1);
+    QVERIFY(candidates.value(QStringLiteral("p50")).toInt() >= 1);
+    QCOMPARE(precise.value(QStringLiteral("p50")).toInt(), 1);
+
+    // Counts keep count keys. The suffixed ones belong to durations.
+    QVERIFY(!candidates.contains(QStringLiteral("p50_ms")));
+    QVERIFY(hitTest.value(QStringLiteral("duration_ms")).toObject().contains(QStringLiteral("p50_ms")));
+
+    m_controller->setTraceRecorder(nullptr);
+}
+
 void InteractionControllerTest::hitTestPrecedenceIsOrderIndependent()
 {
     const QRectF shared(20.0, 20.0, 20.0, 20.0);
