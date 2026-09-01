@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Keep the one command catalog in parity with the shell it replaces.
 
-docs/loupe-shell-actions.json is the single registry for Editor commands.
-scripts/verify-loupe-shell-contract.ps1 already pins its ID set against the
-<action> entries in LoupeLibGui/pdfeditormainwindow.ui; this check owns the
+docs/loop-shell-actions.json is the single registry for Editor commands.
+scripts/verify-loop-shell-contract.ps1 already pins its ID set against the
+<action> entries in LoopLibGui/pdfeditormainwindow.ui; this check owns the
 `command` block that pdfinteraction::CommandCatalog consumes.
 
 The interesting rule is shortcut parity. Shortcuts are not in the .ui — they are
 assigned in C++ by PDFActionManager::initActions against enum names, which
-LoupeLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
+LoopLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
 disagreed with those assignments would be a second command truth wearing the
 first one's ID set, so both files are parsed and compared here.
 
-See docs/LOUPE_SHELL_CONTRACT.md and architecture invariant I22.
+See docs/LOOP_SHELL_CONTRACT.md and architecture invariant I22.
 """
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / "docs" / "loupe-shell-actions.json"
-MAIN_WINDOW_PATH = ROOT / "LoupeLibGui" / "pdfeditormainwindow.cpp"
-CONTROLLER_PATH = ROOT / "LoupeLibGui" / "pdfprogramcontroller.cpp"
+POLICY_PATH = ROOT / "docs" / "loop-shell-actions.json"
+MAIN_WINDOW_PATH = ROOT / "LoopLibGui" / "pdfeditormainwindow.cpp"
+CONTROLLER_PATH = ROOT / "LoopLibGui" / "pdfprogramcontroller.cpp"
 
-# Commands that have a handler in LoupeLibInteraction (DocumentFacade for
+# Commands that have a handler in LoopLibInteraction (DocumentFacade for
 # document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
 # may only leave this set by being implemented somewhere else, never by being
 # quietly downgraded.
@@ -54,8 +54,8 @@ IMPLEMENTED_COMMANDS = frozenset(
 )
 
 # Commands registered by the Quick shell host (EditorHost) rather than
-# LoupeLibInteraction. Promoting one to implemented still requires a real
-# capability in loupe-shell-actions.json.
+# LoopLibInteraction. Promoting one to implemented still requires a real
+# capability in loop-shell-actions.json.
 SHELL_IMPLEMENTED_COMMANDS = frozenset(
     {
         "actionQuit",
@@ -364,9 +364,17 @@ def validate_catalog(
 
     errors.extend(check_implemented_set(policy))
 
-    enum_to_id = action_ids_by_enum(read_source(main_window_path), main_window_path)
-    shortcuts = widget_shortcuts(read_source(controller_path), controller_path)
-    errors.extend(check_shortcut_parity(policy, enum_to_id, shortcuts, main_window_path))
+    if main_window_path.is_file() and controller_path.is_file():
+        enum_to_id = action_ids_by_enum(read_source(main_window_path), main_window_path)
+        shortcuts = widget_shortcuts(read_source(controller_path), controller_path)
+        errors.extend(check_shortcut_parity(policy, enum_to_id, shortcuts, main_window_path))
+    elif not main_window_path.is_file() and not controller_path.is_file():
+        pass
+    else:
+        errors.append(
+            "Widgets shortcut parity requires both pdfeditormainwindow.cpp and "
+            "pdfprogramcontroller.cpp, or neither after Issue 17"
+        )
     return errors
 
 
@@ -376,12 +384,18 @@ def verify() -> str:
         raise ContractError("\n".join(f"  - {error}" for error in errors))
 
     policy = load_policy(POLICY_PATH)
-    shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
     implemented = len(IMPLEMENTED_COMMANDS)
+    if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
+        shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
+        shortcut_note = (
+            f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
+        )
+    else:
+        shortcut_note = "Widgets shortcut parity skipped (Quick shell owns bindings after Issue 17)."
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
-        f"({implemented} implemented, {len(policy['actions']) - implemented} declared), "
-        f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
+        f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "
+        f"{shortcut_note}"
     )
 
 

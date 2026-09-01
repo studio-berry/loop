@@ -1,6 +1,6 @@
 # Editor accessibility baseline
 
-Loupe's Editor treats accessibility as part of the normal desktop workflow. The
+Loop's Editor treats accessibility as part of the normal desktop workflow. The
 baseline covers keyboard-only operation, deterministic menu mnemonics, visible
 focus, screen-reader names and descriptions, semantic status text, contrast,
 and DPI-aware sizing. It applies to the Editor shell and to Editor-hosted
@@ -8,7 +8,7 @@ workspaces such as Preflight.
 
 ## Shared policy
 
-`LoupeLibWidgets/sources/pdfaccessibility.*` is the shared policy and test
+`LoopLibQuick` is the shared product accessibility boundary and test
 surface. It provides:
 
 - widget-tree findings for controls that require explicit names or descriptions;

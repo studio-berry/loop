@@ -1,7 +1,57 @@
 {
-  "commit": "unspecified",
-  "os": "linux",
-  "qt": "6.11.1",
-  "pages": 40,
-  "notes": "Measured by UnitTestsHugeDocumentEnvelope. Interaction slot remains available via PDFJobPriority::Interaction."
+  "identity": {
+    "commit": "unspecified",
+    "compiler": "unspecified",
+    "build": "Release",
+    "os": "linux",
+    "qt": "6.11.1",
+    "cpu": "unspecified",
+    "gpu": "unavailable",
+    "renderer": "loop",
+    "fixture_digest": "synthetic-huge-envelope-40",
+    "profile_version": "resource-envelope-v2",
+    "operation_version": "resource-envelope-v2",
+    "product_version": "0.2.0-alpha"
+  },
+  "family": "synthetic-page-heavy",
+  "status": "incomplete",
+  "incomplete_reason": "preflight-measurement-unavailable",
+  "page_count": 40,
+  "open_to_first_view_ms": -1,
+  "rss_high_water_bytes": -1,
+  "cache_high_water_bytes": 0,
+  "preflight_high_water_bytes": -1,
+  "pages_materialized": 40,
+  "elapsed_ms": 0,
+  "cancellation_latency_ms": -1,
+  "recovery_ms": -1,
+  "pressure_shed_count": 0,
+  "prefetch_shed": false,
+  "interaction_slot_held": true,
+  "resources": {
+    "config": {
+      "resident_limit_bytes": 805306368,
+      "pool_limits_bytes": {
+        "active-document-model": 268435456,
+        "compiled-evidence-cache": 134217728,
+        "raster-tile-cache": 134217728,
+        "gpu-texture-cache": 134217728,
+        "decoded-stream-image-cache": 268435456,
+        "undo-history": 268435456,
+        "rollback-storage": 2147483648
+      }
+    },
+    "resident_bytes": 0,
+    "resident_high_water_bytes": 0,
+    "pressure": "normal",
+    "pools": {
+      "active-document-model": { "limit_bytes": 268435456, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "compiled-evidence-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "raster-tile-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "gpu-texture-cache": { "limit_bytes": 134217728, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "decoded-stream-image-cache": { "limit_bytes": 268435456, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "undo-history": { "limit_bytes": 268435456, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 },
+      "rollback-storage": { "limit_bytes": 2147483648, "current_bytes": 0, "high_water_bytes": 0, "evictions": 0, "shed": 0 }
+    }
+  }
 }

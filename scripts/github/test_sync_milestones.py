@@ -116,7 +116,7 @@ class SyncMilestonesTests(unittest.TestCase):
 
         gh_api.assert_called_once_with(
             "GET",
-            "repos/studio-berry/loupe/milestones?state=all&per_page=100",
+            "repos/studio-berry/loop/milestones?state=all&per_page=100",
             paginate=True,
         )
         self.assertEqual([item.number for item in milestones], [1, 101])

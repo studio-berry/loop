@@ -30,4 +30,4 @@ be rewritten here. JSON migrations that change bytes append a provenance
 ## Goldens
 
 Current and previous supported versions live under
-`loupe-preflight/testdata/schemas/`.
+`loop-preflight/testdata/schemas/`.

@@ -1,14 +1,14 @@
 # Qt Quick canvas contract
 
-Status: P4-S6 (0.2.0 Phase 4). Types live in `LoupeLibQuick/sources/loupecanvasitem.h`,
+Status: P4-S6 (0.2.0 Phase 4). Types live in `LoopLibQuick/sources/loopcanvasitem.h`,
 `canvasnodebuilder.h`, `canvaspalette.h`, `canvaspresentmetrics.h`, `canvastraceoverlay.h`,
-and `loupecanvasaccessible.h`. Architecture invariants **I25**, **I26**, and **I27**; test
+and `loopcanvasaccessible.h`. Architecture invariants **I25**, **I26**, and **I27**; test
 targets `UnitTestsQuickCanvas`, `UnitTestsCanvasParity`, and `UnitTestsQuickAccessibility`.
 Companion to [INTERACTION_CONTRACT.md](INTERACTION_CONTRACT.md), which owns the
 host-neutral half, and [PAGE_SURFACE_CONTRACT.md](PAGE_SURFACE_CONTRACT.md), which owns
 page pixels.
 
-`LoupeLibQuick` is the first and only target in Phase 4 that links `Qt6::Quick`. It closes
+`LoopLibQuick` is the first and only target in Phase 4 that links `Qt6::Quick`. It closes
 the path that P4-S1 through P4-S4 built up to:
 
 ```
@@ -20,7 +20,7 @@ CanvasSnapshot (page pixels) + OverlayFrame (overlays)      →  QSGNode tree
 
 **The Quick layer presents. It decides nothing.**
 
-`LoupeCanvasItem` translates and draws. It performs no hit testing, no gesture recognition,
+`LoopCanvasItem` translates and draws. It performs no hit testing, no gesture recognition,
 no panning arithmetic and no zoom arithmetic, because `InteractionController` and
 `ViewportController` already own all of it. A host that re-derives any of it is a second
 implementation that will disagree with the first, which is what the seam exists to prevent.
@@ -54,17 +54,17 @@ takes the three neutral objects by pointer; none of them is a property, a contex
 or constructible from QML. `SurfaceBuffer` crosses C++ ownership boundaries and nothing
 else — never a QML property, JS value, `QByteArray` context property, or URL.
 
-`LoupeLibQuick` installs with `LoupeEditor` and registers `Loupe.Canvas` from
+`LoopLibQuick` installs with `LoopEditor` and registers `Loop.Canvas` from
 C++ with `QML_NAMED_ELEMENT` and ships no `.qml` of its own. The packaged
-`Loupe.Quick` module (P4-S7) hosts `LoupeCanvas` in `CanvasPane.qml`; wiring
+`Loop.Quick` module (P4-S7) hosts `LoopCanvas` in `CanvasPane.qml`; wiring
 remains C++ `bind()` only.
 
 ## Admitted hosting
 
 ADR-009 as amended admits the direct `QQuickItem` and prohibits `QQuickPaintedItem`,
-`QQuickWidget` and `WindowContainer` as shipped product architecture. `LoupeCanvasItem`
+`QQuickWidget` and `WindowContainer` as shipped product architecture. `LoopCanvasItem`
 builds scene-graph nodes in `updatePaintNode`; there is no `QPainter` anywhere in the page
-pixel or overlay path, and neither `LoupeLibQuick` nor `UnitTestsQuickCanvas` links
+pixel or overlay path, and neither `LoopLibQuick` nor `UnitTestsQuickCanvas` links
 `Qt6::QuickWidgets` or `Qt6::Widgets`.
 
 ## Threads
@@ -214,38 +214,26 @@ not been measured is `available: false`, never `0`.
 This is canvas evidence and it stays separate from PdfTool's benchmark evidence, which
 measures a different thing on a different path.
 
-## Parity against the Widgets oracle
+## Retained Quick-native canvas checks
 
-`UnitTestsCanvasParity` is the P4-S6 differential gate and the only target in the tree that
-links both canvases. It compares, for the same document, revision, renderer configuration and
-page box:
+`UnitTestsCanvasParity` is retained as a Quick-native contract suite. It has no
+Widgets link and no second host implementation. Its geometry cases assert the
+explicit supported layout contract for one-column, two-column, rotation, and
+media/crop-box behavior; its interaction case checks viewport/page round trips;
+and its pixel cases compare the grabbed frame with the admitted Core-rendered
+surface. The geometry and pixel budgets remain fail-closed in
+`UnitTests/testdata/canvas-parity/budgets.json`.
 
-- **layout**, against the Widgets draw-space controller — page extents and the vector between
-  page origins, in millimetres, which is the unit the oracle computes in. Absolute position
-  depends on centring and scroll offset, which are host state rather than layout;
-- **pixels**, against the surface the Core renderer produced — the grabbed frame cropped to
-  the placed page rect, inset by one pixel so the antialiased page edge is not measured.
+The SHA-attributed migration evidence and claim-to-test map are archived in
+`docs/evidence/phase5-widgets-parity-evidence.json`. The former migration-only
+comparison target and its layout probe were removed after this replacement
+coverage was recorded. Runtime output remains an observation written beside the
+test binary; it is not a regenerable golden or a release qualification claim.
 
-The oracle is narrow on purpose. It is reached through `pdf::PDFDrawSpaceLayoutProbe`, a
-migration-only free function in `LoupeLibWidgets` that constructs a `PDFDrawSpaceController`,
-asks it for page rectangles and destroys it. The probe exists because
-`PDFDrawSpaceController` is declared in a public header but is not exported, so a test outside
-that library cannot reach it on Windows; exporting one value-returning function is a smaller
-change than exporting the controller, and it means no upstream-derived source is modified at
-all. The parity target therefore constructs no `QWidget` and cannot reach
-`PDFDrawWidgetProxy`, `QQuickWidget` or `WindowContainer`; ADR-009's prohibition is intact,
-and `UnitTestsQuickCanvas` remains Widgets-free and remains what pins I25. Both the probe and
-the link are migration-only, and Phase 5 deletes them with the library.
-
-Budgets live in `UnitTests/testdata/canvas-parity/budgets.json` and are read fail-closed: a
-case with no entry fails rather than falling back to a default. Observed measurements are
-written next to the test binary as evidence, not as a baseline — there is no golden to
-regenerate, so the gate cannot be made to pass by refreshing it.
-
-The gate runs on the software backend under an offscreen platform, which is what makes it
-deterministic on a runner with no GPU. ADR-010 is right that offscreen is not by itself
-scene-graph evidence; native and both-OS evidence still comes from the smoke and benchmark
-runs, and P4-S6 does not close that gate.
+The suite runs on the software backend under an offscreen platform for
+deterministic pull-request coverage. Native and both-OS evidence still comes
+from the smoke and benchmark runs, and this contract does not close those later
+gates.
 
 ## Accessibility and design tokens
 
@@ -265,9 +253,9 @@ The product Quick accessibility runtime remains a Phase-4-exit gate, per ADR-010
 - Native-backend and Windows parity evidence. The differential gate above runs on the
   software backend in the pull-request lane; native and both-OS evidence is an ADR-010
   Phase-4-exit gate and is not closed here.
-- Installation and packaging. `LoupeLibQuick` is built opt-in
-  (`-DLOUPE_BUILD_QUICK_CANVAS=ON`, which CI sets on both platforms) and is not installed,
-  for the same reason `LoupeLibInteraction` is not: ADR-010's packaging and accessibility
+- Installation and packaging. `LoopLibQuick` is built opt-in
+  (`-DLOOP_BUILD_QUICK_CANVAS=ON`, which CI sets on both platforms) and is not installed,
+  for the same reason `LoopLibInteraction` is not: ADR-010's packaging and accessibility
   gates are Phase-4-exit gates, and an install rule here would claim a shipped product Quick
   module exists.
 - A QML shell that hosts the canvas. P4-S5 delivered the item and its contract and P4-S6

@@ -4,7 +4,7 @@
 Complements check_generated_dependency_paths.py, which covers vcpkg state. This
 check exists because PR #188 shipped a 207-file Docker build tree (including a
 46 MB shared library), a root debug log, and a committed merge-conflict block
-that broke the LoupeLibCore build.
+that broke the LoopLibCore build.
 
 Everything here is judged from `git ls-files`, so it reports what is *tracked*
 and not merely present in a dirty working tree.
@@ -49,8 +49,8 @@ EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 FUZZ_CORPUS_PREFIX = "Fuzz/corpus/regression/"
 FUZZ_MANIFEST_PATH = "Fuzz/corpus/regression/manifest.json"
 FUZZ_MANIFEST_EXEMPT = frozenset({".gitkeep", "LICENSE", "README.md", "manifest.json"})
-PREFLIGHT_FIXTURES_PREFIX = "loupe-preflight/testdata/fixtures/"
-PREFLIGHT_MANIFEST_PATH = "loupe-preflight/testdata/fixtures/manifest.json"
+PREFLIGHT_FIXTURES_PREFIX = "loop-preflight/testdata/fixtures/"
+PREFLIGHT_MANIFEST_PATH = "loop-preflight/testdata/fixtures/manifest.json"
 WHITESPACE_CHECK = re.compile(r"^([^:]+):(\d+):\s+(.+)$")
 
 

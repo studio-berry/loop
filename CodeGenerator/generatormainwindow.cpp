@@ -89,7 +89,7 @@ void GeneratorMainWindow::load(const QString& fileName)
 
 void GeneratorMainWindow::saveSettings()
 {
-    QSettings settings("MelkaJ");
+    QSettings settings;
     settings.setValue("fileName", m_defaultFileName);
     settings.setValue("headerFile", m_headerFileName);
     settings.setValue("sourceFile", m_sourceFileName);
@@ -360,7 +360,7 @@ void GeneratorMainWindow::onParameterTreeCurrentItemChanged(QTreeWidgetItem* cur
 
 void GeneratorMainWindow::loadSettings()
 {
-    QSettings settings("MelkaJ");
+    QSettings settings;
     m_defaultFileName = settings.value("fileName").toString();
     m_headerFileName = settings.value("headerFile", QVariant()).toString();
     m_sourceFileName = settings.value("sourceFile", QVariant()).toString();

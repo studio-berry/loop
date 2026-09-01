@@ -1,6 +1,6 @@
 # Interaction and overlay contract
 
-Status: P4-S4 (0.2.0 Phase 4). Types live in `LoupeLibInteraction/sources/inputintent.h`,
+Status: P4-S4 (0.2.0 Phase 4). Types live in `LoopLibInteraction/sources/inputintent.h`,
 `interactiontarget.h`, `interactionstate.h`, `hittestsource.h`, `overlayframe.h`,
 `overlaybuilder.h`, `interactiontrace.h`, and `interactioncontroller.h`.
 Architecture invariant **I24**; test targets `UnitTestsInteractionController` and
@@ -37,8 +37,8 @@ it through P4-S2's `CommandCatalog`, which stays the only mutation path.
 
 `QMouseEvent`, `QWheelEvent` and `QKeyEvent` do not cross the seam. Three value types do,
 each carrying an `InputStamp` — a host-supplied monotonic nanosecond reading plus a sequence
-ordinal. Two consequences follow, and both are the point: a Widgets oracle, a Quick canvas
-and a test drive identical code, and a recorded session replays with its original spacing,
+ordinal. Two consequences follow, and both are the point: the Quick canvas and its tests
+drive identical code, and a recorded session replays with its original spacing,
 which a `QEvent` cannot.
 
 `KeyIntent` carries a key code and no text. Key text can be document content being typed, and
@@ -193,7 +193,7 @@ so replaying into a recording controller does not append the trace to itself.
 ## Not in this session
 
 - The developer-facing trace overlay and GPU/present timing from issue #140. Neither can exist
-  in a layer that links no QML and no scene graph. **Delivered in P4-S5** by `LoupeLibQuick`:
+  in a layer that links no QML and no scene graph. **Delivered in P4-S5** by `LoopLibQuick`:
   `CanvasTraceOverlay` renders the recorder's privacy-safe summary, and `CanvasPresentMetrics`
   measures the scene graph's render pass and swap and charges them to `TraceStage::External`.
   See [QUICK_CANVAS_CONTRACT.md](QUICK_CANVAS_CONTRACT.md).

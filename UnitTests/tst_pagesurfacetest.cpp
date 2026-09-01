@@ -25,8 +25,8 @@
 // complete key.
 //
 // As in tst_interactionboundarytest.cpp, the strongest assertion here is the link
-// line in UnitTests/CMakeLists.txt. This target links LoupeLibInteraction,
-// LoupeLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
+// line in UnitTests/CMakeLists.txt. This target links LoopLibInteraction,
+// LoopLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
 // Qt6::Widgets. QTEST_GUILESS_MAIN then proves the P4-S3 exit condition: current
 // admission, stale rejection, cancellation, pressure shedding and recovery are
 // all provable without a Quick item and without a QWidget.
@@ -46,6 +46,7 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
+#include "pdfdocumentreader.h"
 #include "pdfjobscheduler.h"
 #include "pdfprocessingbudget.h"
 
@@ -53,6 +54,54 @@ namespace
 {
 
 constexpr QSizeF A4 = QSizeF(210.0, 297.0);
+
+QString overprintFixturesDirectory()
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+}
+
+QString overprintRendersDirectory()
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/renders");
+}
+
+/// Same tolerance as tst_overprintrendertest.cpp's compareRender: small
+/// Qt/platform rasterization differences are expected, a bounded number of
+/// differing pixels is not.
+bool imagesMatchWithinTolerance(const QImage& actual, const QImage& expected)
+{
+    if (actual.isNull() || expected.isNull() || actual.size() != expected.size())
+    {
+        return false;
+    }
+
+    const QImage actualRgba = actual.convertToFormat(QImage::Format_RGBA8888);
+    const QImage expectedRgba = expected.convertToFormat(QImage::Format_RGBA8888);
+    constexpr int maxChannelDelta = 2;
+    constexpr int differingPixelBudget = 64;
+    int differingPixels = 0;
+
+    for (int y = 0; y < actualRgba.height(); ++y)
+    {
+        const uchar* actualLine = actualRgba.constScanLine(y);
+        const uchar* expectedLine = expectedRgba.constScanLine(y);
+        for (int x = 0; x < actualRgba.width(); ++x)
+        {
+            const int offset = x * 4;
+            int pixelMaxDelta = 0;
+            for (int channel = 0; channel < 4; ++channel)
+            {
+                pixelMaxDelta = qMax(pixelMaxDelta, qAbs(int(actualLine[offset + channel]) - int(expectedLine[offset + channel])));
+            }
+            if (pixelMaxDelta > maxChannelDelta)
+            {
+                ++differingPixels;
+            }
+        }
+    }
+
+    return differingPixels <= differingPixelBudget;
+}
 
 pdf::PDFRevisionIdentity makeRevision(const QString& documentId, quint64 documentRevision = 1, quint64 cacheGeneration = 0)
 {
@@ -305,6 +354,7 @@ private slots:
     void oversizeSurfacesAreRefusedRatherThanEvictingTheCache();
     void inexactSurfacesStandInDuringZoom();
     void sessionRendererSerializesAndRendersARealPage();
+    void sessionRendererEscalatesToAuthoritativeOverprintMatchingGoldenBaseline();
 };
 
 void PageSurfaceTest::initTestCase()
@@ -826,6 +876,49 @@ void PageSurfaceTest::sessionRendererSerializesAndRendersARealPage()
     const pdfinteraction::PageSurfaceResult detached = renderer.render(request, liveContext);
     QCOMPARE(detached.state, pdfinteraction::SurfaceTerminalState::Failed);
     QCOMPARE(detached.typedError, QStringLiteral("page-surface/context-gone"));
+}
+
+void PageSurfaceTest::sessionRendererEscalatesToAuthoritativeOverprintMatchingGoldenBaseline()
+{
+    // Issue #49: the canvas's one-page escalation to PDFRenderPolicy::forOutputPreview()
+    // must produce the same pixels as the authoritative PDFTransparencyRenderer
+    // construction tst_overprintrendertest.cpp already trusts against this
+    // committed baseline -- proving canvas escalation and that test agree, not
+    // just that each independently renders something plausible.
+    const QString fixturePath = overprintFixturesDirectory() + QStringLiteral("/overprint-cmyk-mode1-on.pdf");
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    pdf::PDFDocument document = reader.readFromFile(fixturePath);
+    QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::OK);
+
+    pdf::PDFDocumentContext context(&document);
+    pdfinteraction::PDFSessionPageSurfaceRenderer renderer(context);
+
+    pdfinteraction::PageSurfaceRequest request;
+    request.key = pdfinteraction::makePageSurfaceKey(context.getRevision(),
+                                                     0,
+                                                     pdf::PageRotation::None,
+                                                     pdf::PDFRenderer::getDefaultFeatures(),
+                                                     pdfinteraction::withAuthoritativeOverprintMarker(QStringLiteral("srgb")),
+                                                     1.0,
+                                                     QSize(128, 128),
+                                                     1.0);
+    request.token = pdfinteraction::RevisionFencedToken{ 1, context.getRevision() };
+
+    auto token = std::make_shared<pdf::PDFJobCancellationToken>();
+    pdf::PDFJobContext jobContext(token, pdf::PDFProcessingLimits::conservativeDefaults(), [](int) {});
+
+    const pdfinteraction::PageSurfaceResult result = renderer.render(request, jobContext);
+
+    QCOMPARE(result.state, pdfinteraction::SurfaceTerminalState::Complete);
+    QVERIFY(result.pixels);
+    QVERIFY(!result.pixels->image.isNull());
+    QCOMPARE(result.pixelSize, QSize(128, 128));
+
+    const QImage baseline(overprintRendersDirectory() + QStringLiteral("/overprint-cmyk-mode1-on.png"));
+    QVERIFY2(!baseline.isNull(), "Missing committed baseline overprint-cmyk-mode1-on.png");
+    QVERIFY2(imagesMatchWithinTolerance(result.pixels->image, baseline),
+             "Authoritative canvas escalation does not match the committed overprint-cmyk-mode1-on.png baseline");
 }
 
 QTEST_GUILESS_MAIN(PageSurfaceTest)

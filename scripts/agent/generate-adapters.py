@@ -75,7 +75,7 @@ def render(policy: dict, adapter: str) -> str:
     display_version = format_product_version(version, prerelease)
     lines = [
         "<!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->",
-        "# Loupe agent policy adapter",
+        "# Loop agent policy adapter",
         "",
         f"Repository: `{policy['repository']}`; version: `{display_version}`; language: `{policy['language']}`; minimum Qt: `{policy['qt_minimum']}`.",
         "",
@@ -103,10 +103,10 @@ def render(policy: dict, adapter: str) -> str:
         "",
         "## Module placement",
         "",
-        "- Core PDF logic belongs in `LoupeLibCore`; it must not depend on Widgets.",
-        "- Interactive plugins belong in `LoupeEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.",
+        "- Core PDF logic belongs in `LoopLibCore`; it must not depend on Widgets.",
+        "- Interactive plugins belong in `LoopEditorPlugins` hosted by the Editor; batch geometry belongs in PageMaster; unattended pipelines belong in PdfTool.",
         "- Consult the generated architecture catalog and current code/tests for dynamic facts; narrative docs are not authoritative when they conflict.",
-        "- Record parser/writer/renderer divergences from the upstream engine in `docs/UPSTREAM_DIVERGENCE.md`. Cosmetic Loupe-only code does not belong there.",
+        "- Record parser/writer/renderer divergences from the upstream engine in `docs/UPSTREAM_DIVERGENCE.md`. Cosmetic Loop-only code does not belong there.",
         "",
         f"Generated adapter: `{adapter}`.",
         "",

@@ -43,13 +43,13 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->setupUi(this);
     setWindowState(Qt::WindowMaximized);
 
-    QSettings settings(QSettings::IniFormat, QSettings::UserScope, QCoreApplication::organizationName(), QCoreApplication::applicationName());
+    QSettings settings;
     m_directory = settings.value("Directory").toString();
 }
 
 MainWindow::~MainWindow()
 {
-    QSettings settings(QSettings::IniFormat, QSettings::UserScope, QCoreApplication::organizationName(), QCoreApplication::applicationName());
+    QSettings settings;
     settings.setValue("Directory", m_directory);
 
     delete ui;

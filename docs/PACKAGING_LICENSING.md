@@ -1,6 +1,6 @@
 # Release packaging and OSS licensing (MIC-140)
 
-Planning review for Loupe desktop distribution — **not legal advice**. A qualified open-source licensing attorney should review the final release manifest before commercial distribution.
+Planning review for Loop desktop distribution — **not legal advice**. A qualified open-source licensing attorney should review the final release manifest before commercial distribution.
 
 **Linear:** [MIC-140](https://linear.app/mbx2/issue/MIC-140/plan-packaging-licensing-review-ghostscriptverapdfjre-bundle)
 **Notion source:** [MIC-140 — Packaging & Licensing Review](https://app.notion.com/p/9bdbe383233d44cd88b7916d9aa4ce6d)
@@ -8,13 +8,13 @@ Planning review for Loupe desktop distribution — **not legal advice**. A quali
 
 ## Recommendation
 
-Ship Loupe’s **default desktop bundle as C++/Qt only**: Loupe host + Loupe plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
+Ship Loop’s **default desktop bundle as C++/Qt only**: Loop host + Loop plugin + PdfTool `preflight` sidecar. Do **not** bundle Ghostscript, PDFBox, PikePDF, Python, veraPDF, or a JRE by default. Offer veraPDF + a pinned Temurin runtime only as an **optional PDF/A/PDF/UA add-on** when a client requirement justifies it.
 
 ## Decision record
 
 | Component | Default bundle | Optional add-on | Decision |
 |-----------|:--------------:|:---------------:|----------|
-| Loupe host (upstream fork) | Yes | — | MIT; re-verify at each release commit |
+| Loop host (upstream fork) | Yes | — | MIT; re-verify at each release commit |
 | Qt runtime | Yes | — | Dynamically linked LGPL-eligible modules; avoid requiring a commercial Qt license unless chosen |
 | PdfTool `preflight` engine | Yes | — | Separate C++ process; no JVM. Version with plugin and JSON schema |
 | Little CMS | Transitive | — | MIT; include notice |
@@ -23,12 +23,12 @@ Ship Loupe’s **default desktop bundle as C++/Qt only**: Loupe host + Loupe plu
 | veraPDF CLI | No | Yes | MPL 2.0 option; pin exact release; process-separated; include MPL text and controlled source location |
 | Eclipse Temurin runtime | No | With veraPDF | Pin LTS supported by selected veraPDF; ship license/NOTICE unchanged; `jlink` only after license/runtime validation |
 | Ghostscript | No | No without contract | Exclude from proprietary packages unless Artifex grants commercial distribution license |
-| PDFBox | No | No current need | Superseded by LoupeLibCore + optional veraPDF |
+| PDFBox | No | No current need | Superseded by LoopLibCore + optional veraPDF |
 | PikePDF / Python | No | No current need | Dropped from architecture |
 
 ## Why the original MIC-140 issue is stale
 
-Default checks run in PdfTool on LoupeLibCore. PDFBox and Ghostscript were removed from the default path; veraPDF is optional for client-driven PDF/A or PDF/UA validation. The default engine needs **neither Java nor a JRE**.
+Default checks run in PdfTool on LoopLibCore. PDFBox and Ghostscript were removed from the default path; veraPDF is optional for client-driven PDF/A or PDF/UA validation. The default engine needs **neither Java nor a JRE**.
 
 MIC-140 is therefore a **release packaging and license-compliance gate**, not a “bundle Ghostscript/veraPDF/JRE” task:
 
@@ -42,19 +42,19 @@ MIC-140 is therefore a **release packaging and license-compliance gate**, not a 
 ### Default bundle
 
 ```text
-Loupe/
+Loop/
 ├─ app/
-│  ├─ LoupeEditor[.exe]
+│  ├─ LoopEditor[.exe]
 │  ├─ PdfTool[.exe]
 │  └─ required shared libraries
 ├─ plugins/
-│  └─ loupe-preflight[.dll|.so|.dylib]
+│  └─ loop-preflight[.dll|.so|.dylib]
 ├─ profiles/
-│  ├─ loupe-default.yaml
+│  ├─ loop-default.yaml
 │  └─ schemas/
 ├─ licenses/
 │  ├─ THIRD_PARTY_NOTICES.txt
-│  ├─ LOUPE-MIT.txt
+│  ├─ LOOP-MIT.txt
 │  ├─ Qt-LGPL-3.0.txt
 │  └─ component license and NOTICE files
 ├─ manifest/
@@ -63,14 +63,15 @@ Loupe/
 └─ VERSION.json
 ```
 
-User profiles (overrides): `%APPDATA%/Loupe` or MelkaJ org settings (Windows),
-`~/.config/loupe` / MelkaJ (Linux), plus bundled defaults under `profiles/`.
+User profiles (overrides): `%APPDATA%/Loop` (Windows) or `~/.config/Loop` (Linux),
+plus bundled defaults under `profiles/`. The first Loop launch migrates compatible
+settings from the legacy `MelkaJ` organization.
 See [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md).
 
 ### Optional validator pack
 
 ```text
-Loupe-ValidatorPack/
+Loop-ValidatorPack/
 ├─ verapdf/
 │  ├─ exact upstream CLI distribution
 │  └─ version metadata
@@ -84,11 +85,11 @@ Loupe-ValidatorPack/
 └─ VERSION.json
 ```
 
-`VERSION.json` should bind app, plugin ABI, PdfTool engine, report-schema version, profile-schema version, and optional validator-pack version. Refuse execution on incompatible major contract versions (see `schema_version` in [loupe-preflight/README.md](../loupe-preflight/README.md)).
+`VERSION.json` should bind app, plugin ABI, PdfTool engine, report-schema version, profile-schema version, and optional validator-pack version. Refuse execution on incompatible major contract versions (see `schema_version` in [loop-preflight/README.md](../loop-preflight/README.md)).
 
 ## License findings
 
-### Loupe host and transitive runtime
+### Loop host and transitive runtime
 
 The upstream engine moved from LGPLv3 to MIT (April 27, 2025) but lists third-party libraries with independent terms (Qt, FreeType, OpenJPEG, OpenSSL, Little CMS, zlib, Blend2D). Re-verify the exact fork commit and resolved binaries at release time; top-level MIT does not replace dependency obligations.
 
@@ -105,9 +106,9 @@ Closed-source apps may use LGPLv3-eligible Qt libraries if all LGPL requirements
 
 Sources: [Qt LGPL obligations](https://www.qt.io/development/open-source-lgpl-obligations), [Qt OSS FAQ](https://www.qt.io/faq/qt-open-source-licensing).
 
-### Qt Quick Controls (Loupe 1.2 foundation)
+### Qt Quick Controls (Loop 1.2 foundation)
 
-ADR-007 and ADR-010 select Qt Quick Controls 2 as the future Loupe 1.2 shell
+ADR-007 and ADR-010 select Qt Quick Controls 2 as the future Loop 1.2 shell
 foundation, but the qualification harness does not add the modules to a
 shipped artifact. When
 the first Quick implementation lands, the release manifest must enumerate the
@@ -123,11 +124,21 @@ graph rendering. Until those artifacts and tests are attached to the release
 record, packaging must not claim Qt Quick support or silently add Quick
 runtime files.
 
+Session 07 makes the package-boundary evidence format explicit for the two
+in-scope artifacts: Linux x86_64 AppImage and Windows x64 MSI. Each workflow
+checks out and verifies a required full `source_sha`, inventories and hashes the
+extracted payload, inspects every ELF/PE image with the platform tools, records
+package-contained transitive dependencies, external system dependencies, and
+runtime plugin candidates, and fails closed on `Qt6Widgets`, uninspected binaries,
+or unresolved non-system dependencies. The Linux and Windows evidence documents
+are paired by `scripts/ci/compare_package_boundary_evidence.py`; evidence remains
+qualification data and is not copied into release assets.
+
 ### veraPDF optional pack
 
 Dual-licensed GPLv3+ or MPL 2.0+. Select **MPL 2.0** in the optional pack and document that election. Distributors must tell recipients where to obtain corresponding MPL-covered source.
 
-Ship unmodified upstream CLI when possible. Keep Loupe integration in a separate process and separate proprietary files. Preserve veraPDF license/notice files and archive exact corresponding source.
+Ship unmodified upstream CLI when possible. Keep Loop integration in a separate process and separate proprietary files. Preserve veraPDF license/notice files and archive exact corresponding source.
 
 Sources: [veraPDF licensing](https://verapdf.org/home/), [veraPDF apps](https://github.com/veraPDF/veraPDF-apps), [MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
 
@@ -148,7 +159,7 @@ Sources: [Adoptium FAQ](https://adoptium.net/docs/faq), [OpenJDK GPLv2 + CE](htt
 
 AGPL or Artifex commercial license. Since Ghostscript is not needed for the default architecture, **complete exclusion** is the lowest-risk decision.
 
-**Hard gate:** fail packaging if a Ghostscript executable, library, resource, installer, or container layer appears in a proprietary Loupe artifact unless the release record contains an executed Artifex commercial agreement.
+**Hard gate:** fail packaging if a Ghostscript executable, library, resource, installer, or container layer appears in a proprietary Loop artifact unless the release record contains an executed Artifex commercial agreement.
 
 Sources: [Ghostscript licensing](https://ghostscript.com/licensing), [Artifex licensing](https://artifex.com/licensing).
 
@@ -162,6 +173,9 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 
 - [ ] Pin every source commit, binary version, download URL, and SHA-256 hash
 - [ ] Produce SPDX or CycloneDX SBOM from the **final packaged artifact** — not only the source tree
+- [ ] For the Linux AppImage and Windows MSI, archive versioned package-boundary evidence containing the exact source SHA, package digest, complete file inventory, ELF/PE dependency graph, external system dependencies, runtime plugin candidates, inspection-tool versions, and smoke transcripts
+- [ ] Pair the Linux and Windows evidence documents by one identical accepted `source_sha`; keep the pair/evidence outside release asset publication
+- [ ] Fail the package boundary if any `Qt6Widgets` payload, direct import, transitive package dependency, runtime plugin, uninspected binary, or unresolved non-system dependency is present
 - [ ] Scan installer/archive for undeclared executables, shared libraries, JARs, Python wheels, fonts, ICC profiles, and data files
 - [ ] Generate `THIRD_PARTY_NOTICES.txt` from resolved manifest; manual review
 - [ ] Archive every license and NOTICE file exactly as shipped
@@ -184,13 +198,14 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 - [ ] Optional veraPDF/Temurin pack has pinned version pair, license bundle, source-location record, checksums, and smoke tests
 - [ ] SBOM and third-party notices generated from final artifact
 - [ ] Clean-machine install, upgrade, rollback, and uninstall pass without system Java or other prerequisites
+- [ ] Session 07 clean-VM proof passes on disposable Ubuntu 24.04 and Windows Server 2022 machines: install, launch, external-PDF operator flow, preflight state/findings, Quick/accessibility checklist, clean exit, and uninstall
 - [ ] Final legal review complete before commercial ship
 
 ## Suggested Linear issue rewrite
 
 **Title:** `[Plan] Release packaging + OSS licensing gate (Qt / optional veraPDF)`
 
-**Summary:** Default Loupe packaging is C++/Qt only: Loupe host, Loupe plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
+**Summary:** Default Loop packaging is C++/Qt only: Loop host, Loop plugin, and PdfTool preflight sidecar. No JRE, Ghostscript, PDFBox, PikePDF, or Python in the default installer. veraPDF + Eclipse Temurin may ship as a separately versioned optional validator pack for client-required PDF/A/PDF/UA validation. Ghostscript is prohibited unless covered by an executed Artifex commercial distribution license.
 
 **Deliverables:**
 

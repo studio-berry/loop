@@ -1,6 +1,6 @@
 # Independent validation evidence
 
-Phase 2 requires external evidence for claims that Loupe cannot prove with its
+Phase 2 requires external evidence for claims that Loop cannot prove with its
 own parser, renderer, or preflight implementation. The qualification helper
 `scripts/qualification/run_independent_validators.py` discovers the validators
 from `PATH`; it does not install or bundle them.
@@ -30,9 +30,9 @@ expanded arguments, candidate byte count and SHA-256, exit status, duration,
 bounded stdout/stderr, platform, and a normalized result. Missing tools,
 timeouts, invocation failures, and absent signatures are `incomplete`; a
 nonzero validator exit is `rejected`. `incomplete` never qualifies as PASS,
-and self-only Loupe checks do not satisfy this gate.
+and self-only Loop checks do not satisfy this gate.
 
 The conversion fixture triad remains the source-level oracle in
-`loupe-preflight/testdata/conversion/manifest.json`. Any real PDF added for a
+`loop-preflight/testdata/conversion/manifest.json`. Any real PDF added for a
 platform qualification run must record provenance, license, digest, expected
 validator result, and known limitations alongside the evidence artifact.

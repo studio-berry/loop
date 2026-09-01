@@ -21,6 +21,8 @@
 // SOFTWARE.
 
 #include "mainwindow.h"
+#include "pdfapplicationidentity.h"
+#include "pdfsettings.h"
 
 #include <QApplication>
 
@@ -28,9 +30,8 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-    QCoreApplication::setOrganizationName("MelkaJ");
-    QCoreApplication::setApplicationName("JBIG2_image_viewer");
-    QCoreApplication::setApplicationVersion("1.0");
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::Jbig2Viewer);
+    pdf::PDFSettings::migrateLegacySettings();
 
     MainWindow w;
     w.show();

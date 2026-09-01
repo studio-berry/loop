@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/workload-envelope-v1.json",
-  "title": "Loupe measured workload envelope",
+  "$id": "https://github.com/studio-berry/loop/schema/workload-envelope-v2.json",
+  "title": "Loop measured workload envelope",
   "type": "object",
   "required": [
     "identity",
@@ -9,9 +9,12 @@
     "status",
     "page_count",
     "rss_high_water_bytes",
+    "preflight_high_water_bytes",
+    "pages_materialized",
     "elapsed_ms",
     "prefetch_shed",
-    "interaction_slot_held"
+    "interaction_slot_held",
+    "resources"
   ],
   "properties": {
     "identity": { "type": "object" },
@@ -24,12 +27,69 @@
     "open_to_first_view_ms": { "type": "integer", "minimum": -1 },
     "rss_high_water_bytes": { "type": "integer", "minimum": -1 },
     "cache_high_water_bytes": { "type": "integer", "minimum": -1 },
+    "preflight_high_water_bytes": { "type": "integer", "minimum": -1 },
+    "pages_materialized": { "type": "integer", "minimum": -1 },
     "elapsed_ms": { "type": "integer", "minimum": 0 },
     "cancellation_latency_ms": { "type": "integer", "minimum": -1 },
     "recovery_ms": { "type": "integer", "minimum": -1 },
     "pressure_shed_count": { "type": "integer", "minimum": 0 },
     "prefetch_shed": { "type": "boolean" },
-    "interaction_slot_held": { "type": "boolean" }
+    "interaction_slot_held": { "type": "boolean" },
+    "resources": {
+      "type": "object",
+      "required": ["config", "resident_bytes", "resident_high_water_bytes", "pressure", "pools"],
+      "properties": {
+        "config": {
+          "type": "object",
+          "required": ["resident_limit_bytes", "pool_limits_bytes"],
+          "properties": {
+            "resident_limit_bytes": { "type": "integer", "minimum": 0 },
+            "pool_limits_bytes": {
+              "type": "object",
+              "required": [
+                "active-document-model",
+                "compiled-evidence-cache",
+                "raster-tile-cache",
+                "gpu-texture-cache",
+                "decoded-stream-image-cache",
+                "undo-history",
+                "rollback-storage"
+              ],
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "resident_bytes": { "type": "integer", "minimum": 0 },
+        "resident_high_water_bytes": { "type": "integer", "minimum": 0 },
+        "pressure": { "enum": ["normal", "shedding", "hard"] },
+        "pools": {
+          "type": "object",
+          "required": [
+            "active-document-model",
+            "compiled-evidence-cache",
+            "raster-tile-cache",
+            "gpu-texture-cache",
+            "decoded-stream-image-cache",
+            "undo-history",
+            "rollback-storage"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "required": ["limit_bytes", "current_bytes", "high_water_bytes", "evictions", "shed"],
+            "properties": {
+              "limit_bytes": { "type": "integer", "minimum": 0 },
+              "current_bytes": { "type": "integer", "minimum": 0 },
+              "high_water_bytes": { "type": "integer", "minimum": 0 },
+              "evictions": { "type": "integer", "minimum": 0 },
+              "shed": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": true
 }

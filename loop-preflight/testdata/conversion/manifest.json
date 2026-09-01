@@ -1,0 +1,37 @@
+{
+  "schema_kind": "package-manifest",
+  "schema_version": 1,
+  "description": "Conversion fixture triad for the independent oracle lane. PDFs are generated in tests; veraPDF is skip-if-missing and never bundled.",
+  "fixtures": [
+    {
+      "id": "already-conformant",
+      "kind": "already-conformant",
+      "provenance": "Generated at test runtime by UnitTestsStandardOracle using PDFDocumentBuilder; no third-party content.",
+      "license": "Synthetic test artifact; no third-party license restrictions.",
+      "digest": "runtime-sha256-recorded-in-independent-evidence",
+      "expected_validator_result": "passed",
+      "known_limits": "Structural stand-in; not evidence of every PDF/A or PDF/X feature.",
+      "notes": "Empty page used as a structural stand-in; Loop still requires an independent validator and never self-certifies."
+    },
+    {
+      "id": "safely-convertible",
+      "kind": "safely-convertible",
+      "provenance": "Generated at test runtime by UnitTestsStandardOracle using PDFDocumentBuilder; no third-party content.",
+      "license": "Synthetic test artifact; no third-party license restrictions.",
+      "digest": "runtime-sha256-recorded-in-independent-evidence",
+      "expected_validator_result": "passed",
+      "known_limits": "Exercises the supported metadata rewrite path; does not prove general PDF/X convertibility.",
+      "notes": "Missing PDF/X identification that standards-convert can rewrite when a validator is configured."
+    },
+    {
+      "id": "deliberately-unconvertible",
+      "kind": "deliberately-unconvertible",
+      "provenance": "Generated at test runtime by UnitTestsStandardOracle using PDFDocumentBuilder; no third-party content.",
+      "license": "Synthetic test artifact; no third-party license restrictions.",
+      "digest": "runtime-sha256-recorded-in-independent-evidence",
+      "expected_validator_result": "rejected",
+      "known_limits": "Deliberate blocker fixture; rejection is an oracle contract, not a complete standards test corpus.",
+      "notes": "Oracle mismatch (/bin/false or veraPDF fail) must remain ERROR, not PASS."
+    }
+  ]
+}

@@ -9,7 +9,7 @@ ApplicationWindow {
     visible: true
     width: 640
     height: 360
-    title: "Loupe Quick Shell Smoke"
+    title: "Loop Quick Shell Smoke"
 
     ColumnLayout {
         anchors.fill: parent

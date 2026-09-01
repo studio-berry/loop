@@ -2,26 +2,26 @@
 
 ## Supported versions
 
-Loupe-PDF is released from the `master` branch of [mberrys/Loupe-pdf](https://github.com/mberrys/Loupe-pdf).
+Loop-PDF is released from the `master` branch of [mberrys/Loop-pdf](https://github.com/mberrys/Loop-pdf).
 
 | Version | Supported |
 | ------- | --------- |
-| 0.1.x (current `LOUPE_VERSION`) | Yes — security fixes land here |
+| 0.1.x (current `LOOP_VERSION`) | Yes — security fixes land here |
 | Older fork tags / unreleased branches | Best effort only |
 
-Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Loupe-specific.
+Upstream PDF4QT releases are not covered by this policy; report upstream issues to [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) when they are not Loop-specific.
 
 ## Reporting a vulnerability
 
 Please report security issues privately:
 
-1. Open a **private** vulnerability report on GitHub for `mberrys/Loupe-pdf` (Security advisories), **or**
+1. Open a **private** vulnerability report on GitHub for `mberrys/Loop-pdf` (Security advisories), **or**
 2. Email the maintainer listed on the GitHub profile for this fork.
 
 Include:
 
 - Affected binary/surface (PdfTool, Editor, PageMaster, library)
-- Loupe version / commit hash
+- Loop version / commit hash
 - Minimal PDF or steps to reproduce
 - Crash / DoS / info-disclosure impact
 
@@ -33,12 +33,12 @@ Please do **not** open a public GitHub issue for unfixed vulnerabilities.
 
 Highest-risk surfaces for this project:
 
-- PDF parsers and stream filters (`LoupeLibCore`)
+- PDF parsers and stream filters (`LoopLibCore`)
 - Image codecs (JBIG2, CCITT, DCT)
 - Attachment / launch / URI handlers
 - Atomic write / export paths (PageMaster, PdfTool)
 
-Fuzz harnesses live under `Fuzz/` and `.github/workflows/fuzz.yml`. Crash reporting may be sent via Sentry when `SENTRY_DSN` / `LOUPE_ENABLE_SENTRY` is configured — treat that as operational telemetry, not a substitute for private disclosure. Sentry is configured with `send_default_pii` disabled; see `docs/PRODUCTION_RUNBOOK.md` for opt-in guidance.
+Fuzz harnesses live under `Fuzz/` and `.github/workflows/fuzz.yml`. Crash reporting may be sent via Sentry when `SENTRY_DSN` / `LOOP_ENABLE_SENTRY` is configured — treat that as operational telemetry, not a substitute for private disclosure. Sentry is configured with `send_default_pii` disabled; see `docs/PRODUCTION_RUNBOOK.md` for opt-in guidance.
 
 ## Logging and diagnostics bundles
 

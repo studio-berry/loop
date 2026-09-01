@@ -53,6 +53,10 @@
 #include <functional>
 #include <thread>
 #include <utility>
+
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+#include <process.h>
+#endif
 #include <vector>
 
 class PageMasterExportTest : public QObject
@@ -233,7 +237,11 @@ int runCrashHarness(const QStringList& arguments)
         {
             // Simulate process death after the atomic PDF commit and before its
             // manifest update. The parent verifies the final path remains valid.
+#if defined(Q_OS_WIN) && defined(__MINGW32__)
+            ::_exit(91);
+#else
             std::quick_exit(91);
+#endif
         }
 
         // Real persistence, mirroring PDFPageMasterExport::run()'s internal
@@ -1268,7 +1276,7 @@ void PageMasterExportTest::resume_mismatchedManifestRejectsResume()
                                              { QStringLiteral("path"), staleOther },
                                              { QStringLiteral("status"), QStringLiteral("written") } } } }
     };
-    const QString manifestPath = tempDir.filePath(QStringLiteral(".loupe-batch.json"));
+    const QString manifestPath = tempDir.filePath(QStringLiteral(".loop-batch.json"));
     QFile manifestFile(manifestPath);
     QVERIFY(manifestFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
     manifestFile.write(QJsonDocument(staleManifest).toJson(QJsonDocument::Compact));
@@ -1508,7 +1516,7 @@ void PageMasterExportTest::resume_preflightProfileIdentityDriftRejectsResume()
     QVERIFY(tempDir.isValid());
 
     const QString profilePath = tempDir.filePath(QStringLiteral("profile.json"));
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     QVERIFY(QFile::copy(fixturePath, profilePath));
     const QString outputPath = tempDir.filePath(QStringLiteral("profile-output.pdf"));
     const QString manifestPath = tempDir.filePath(QStringLiteral("profile-manifest.json"));
@@ -1553,8 +1561,8 @@ void PageMasterExportTest::preflight_gate_blocksFailedOutput()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
-    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     QVERIFY(QFile::exists(fixturePath));
     QVERIFY(QFile::exists(profilePath));
 
@@ -1580,8 +1588,8 @@ void PageMasterExportTest::preflight_sidecarWriteFailure_failsClosed()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
-    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     QVERIFY(QFile::exists(fixturePath));
     QVERIFY(QFile::exists(profilePath));
 
@@ -1616,8 +1624,8 @@ void PageMasterExportTest::preflight_finalSidecarWriteFailure_keepsPriorOutput()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
-    const QString profilePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles/loupe-default.json");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString profilePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     QVERIFY(QFile::exists(fixturePath));
     QVERIFY(QFile::exists(profilePath));
 

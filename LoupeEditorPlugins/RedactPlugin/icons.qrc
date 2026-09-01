@@ -1,9 +1,0 @@
-<RCC>
-    <qresource prefix="/pdfplugins/redactplugin">
-        <file>redact-create-document.svg</file>
-        <file>redact-rectangle.svg</file>
-        <file>redact-text.svg</file>
-        <file>redact-page.svg</file>
-        <file>redact-text-selection.svg</file>
-    </qresource>
-</RCC>

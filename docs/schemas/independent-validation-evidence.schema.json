@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://loupe.studio-berry.dev/schemas/independent-validation-evidence.schema.json",
-  "title": "Loupe independent validation evidence",
+  "$id": "https://loop.studio-berry.dev/schemas/independent-validation-evidence.schema.json",
+  "title": "Loop independent validation evidence",
   "type": "object",
   "required": ["schema", "schema_version", "status", "input", "validators", "platform"],
   "properties": {
-    "schema": { "const": "loupe.independent-validation-evidence" },
+    "schema": { "const": "loop.independent-validation-evidence" },
     "schema_version": { "const": 1 },
     "candidate_sha": { "type": "string", "minLength": 7 },
     "status": { "enum": ["passed", "rejected", "incomplete"] },

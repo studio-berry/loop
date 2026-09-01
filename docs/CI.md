@@ -11,7 +11,7 @@ validated. Format and clang-tidy run on added, modified, renamed, or copied
 C/C++ files only; deleted paths still classify modules. These are the fast
 checks for
 the shared integration baseline. The full Linux and Windows build-and-test
-jobs run for release qualification. These are the two platforms Loupe V1
+jobs run for release qualification. These are the two platforms Loop V1
 supports; **macOS** CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
@@ -53,6 +53,16 @@ directories.
 
 `scripts/ci/check_generated_dependency_paths.py` inspects the Git index and
 fails CI if any known generated dependency path is tracked again.
+
+### Windows local test executables
+
+Windows test executables need the configured Qt and Loop/vcpkg runtime DLLs beside
+the executable. If the dependency set is not deployed into the build output,
+the process can wait behind a missing-DLL system error instead of printing a
+normal test failure. For a Release test directory, run `windeployqt` with the
+configured Qt root and deploy the Qt/Loop dependencies into that same
+directory before invoking CTest. Generated DLLs and plugin directories remain
+local build output and must not be committed.
 
 ## Tracked source integrity
 
@@ -97,10 +107,10 @@ the signing step refuses to run against an unpinned toolchain.
 
 ## Sentry debug files
 
-Windows Release builds with `LOUPE_ENABLE_SENTRY` emit PDBs (`/Zi` +
+Windows Release builds with `LOOP_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
-uploads Loupe PDBs to `berry-studios/loupe-pdf` on the EU region
+uploads Loop PDBs to `berry-studios/loop-pdf` on the EU region
 (`https://de.sentry.io`) using the pinned `sentryCli` binary. GitHub
 Actions cannot reference `secrets` in `if:` conditionals, so the workflow
 always runs the step; `upload_sentry_debug_files.ps1` no-ops when

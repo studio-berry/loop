@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/resource-envelope-manifest-v1.json",
-  "title": "Loupe resource envelope workload manifest",
+  "$id": "https://github.com/studio-berry/loop/schema/resource-envelope-manifest-v1.json",
+  "title": "Loop resource envelope workload manifest",
   "type": "object",
   "required": ["schema_kind", "schema_version", "corpus", "selection", "examples"],
   "properties": {
-    "schema_kind": { "const": "loupe-resource-envelope" },
+    "schema_kind": { "const": "loop-resource-envelope" },
     "schema_version": { "const": 1 },
     "corpus": {
       "type": "object",

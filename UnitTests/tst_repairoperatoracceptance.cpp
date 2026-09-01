@@ -85,7 +85,7 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     QCOMPARE(parseError.error, QJsonParseError::NoError);
     QVERIFY(reportDocument.isObject());
     const QJsonObject report = reportDocument.object();
-    QCOMPARE(report.value(QStringLiteral("schema")).toString(), QStringLiteral("loupe.repair-operation"));
+    QCOMPARE(report.value(QStringLiteral("schema")).toString(), QStringLiteral("loop.repair-operation"));
     QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
     QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);

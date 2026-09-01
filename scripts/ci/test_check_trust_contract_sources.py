@@ -13,7 +13,7 @@ class TrustContractSourceTest(unittest.TestCase):
     def test_overlay_guard_is_the_only_findings_empty_exception(self) -> None:
         self.assertEqual(
             OVERLAY_FINDINGS_GUARD,
-            "LoupeEditorPlugins/LoupePreflightPlugin/loupepreflightplugin.cpp",
+            "LoopLibInteraction/sources/preflightcontroller.cpp",
         )
 
     def test_relative_paths_are_posix_paths(self) -> None:

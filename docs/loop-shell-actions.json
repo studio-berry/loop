@@ -1,0 +1,1400 @@
+{
+  "schema_version": 1,
+  "issue": 193,
+  "source_ui": "LoopEditor Quick shell (Widgets pdfeditormainwindow.ui deleted Issue 17)",
+  "expected_action_count": 107,
+  "actions": [
+    {
+      "id": "actionAbout",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionAbout.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionAutomaticDocumentRefresh",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionAutomaticDocumentRefresh.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBecomeASponsor",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionBecomeASponsor.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBleedFixup",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionBleedFixup.label",
+        "shortcut": {
+          "sequence": "Ctrl+Shift+B"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBookmarkAutoGenerate",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionBookmarkAutoGenerate.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBookmarkExport",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionBookmarkExport.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBookmarkImport",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionBookmarkImport.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionBookmarkPage",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionBookmarkPage.label",
+        "shortcut": {
+          "sequence": "Ctrl+M"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCertificateManager",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionCertificateManager.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionClearRecentFileHistory",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionClearRecentFileHistory.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionClose",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionClose.label",
+        "shortcut": {
+          "standard_key": "Close",
+          "windows": {
+            "sequence": "Ctrl+W"
+          }
+        },
+        "parameters": [],
+        "capability": "document.read",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionCollectDiagnostics",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionCollectDiagnostics.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionColorBitonal",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionColorBitonal.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionColorCustom",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionColorCustom.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionColorGrayscale",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionColorGrayscale.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionColorHighContrast",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionColorHighContrast.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionColorInvert",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionColorInvert.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCopyText",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCopyText.label",
+        "shortcut": {
+          "standard_key": "Copy"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateBitonalDocument",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionCreateBitonalDocument.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateEllipse",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateEllipse.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateFreehandCurve",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateFreehandCurve.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlink",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlink.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFit",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFit.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitB",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitB.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitBH",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitBH.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitBV",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitBV.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitH",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitH.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitR",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitR.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFFitV",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFFitV.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFXYZ",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFXYZ.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateHyperlinkToThisPDFXYZInheritZoom",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionCreateHyperlinkToThisPDFXYZInheritZoom.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreatePolygon",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreatePolygon.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreatePolyline",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreatePolyline.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateRectangle",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateRectangle.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateStraightLine",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateStraightLine.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateTextHighlight",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateTextHighlight.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateTextSquiggly",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateTextSquiggly.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateTextStrikeout",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateTextStrikeout.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionCreateTextUnderline",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionCreateTextUnderline.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionDeselectText",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionDeselectText.label",
+        "shortcut": {
+          "standard_key": "Deselect"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionEncryption",
+      "disposition": "ABSORB",
+      "target": "Fix",
+      "command": {
+        "label_key": "command.actionEncryption.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionExtractImage",
+      "disposition": "ABSORB",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionExtractImage.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionFind",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFind.label",
+        "shortcut": {
+          "standard_key": "Find"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionFindNext",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFindNext.label",
+        "shortcut": {
+          "standard_key": "FindNext"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionFindPrevious",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFindPrevious.label",
+        "shortcut": {
+          "standard_key": "FindPrevious"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionFirstPageOnRightSide",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFirstPageOnRightSide.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionFitHeight",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFitHeight.label",
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionFitPage",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFitPage.label",
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionFitWidth",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFitWidth.label",
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionFullscreenMode",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionFullscreenMode.label",
+        "shortcut": {
+          "sequence": "Ctrl+L"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGetSource",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionGetSource.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGoToDocumentEnd",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToDocumentEnd.label",
+        "shortcut": {
+          "standard_key": "MoveToEndOfDocument"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionGoToDocumentStart",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToDocumentStart.label",
+        "shortcut": {
+          "standard_key": "MoveToStartOfDocument"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionGotoNextBookmark",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGotoNextBookmark.label",
+        "shortcut": {
+          "sequence": "Ctrl+."
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGoToNextLine",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToNextLine.label",
+        "shortcut": {
+          "standard_key": "MoveToNextLine"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGoToNextPage",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToNextPage.label",
+        "shortcut": {
+          "standard_key": "MoveToNextPage"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionGotoPreviousBookmark",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGotoPreviousBookmark.label",
+        "shortcut": {
+          "sequence": "Ctrl+,"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGoToPreviousLine",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToPreviousLine.label",
+        "shortcut": {
+          "standard_key": "MoveToPreviousLine"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionGoToPreviousPage",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionGoToPreviousPage.label",
+        "shortcut": {
+          "standard_key": "MoveToPreviousPage"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionInlineText",
+      "disposition": "ABSORB",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionInlineText.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionInsertPageNumbers",
+      "disposition": "ABSORB",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionInsertPageNumbers.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionMagnifier",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionMagnifier.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionOpen",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionOpen.label",
+        "shortcut": {
+          "standard_key": "Open"
+        },
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.read",
+        "cancellable": true,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionOptimize",
+      "disposition": "ABSORB",
+      "target": "Fix",
+      "command": {
+        "label_key": "command.actionOptimize.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionOptimizeImages",
+      "disposition": "ABSORB",
+      "target": "Fix",
+      "command": {
+        "label_key": "command.actionOptimizeImages.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionOptions",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionOptions.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPageGeometry",
+      "disposition": "ABSORB",
+      "target": "Pages",
+      "command": {
+        "label_key": "command.actionPageGeometry.label",
+        "shortcut": {
+          "sequence": "Ctrl+Shift+R"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPageLayoutContinuous",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionPageLayoutContinuous.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPageLayoutSinglePage",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionPageLayoutSinglePage.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPageLayoutTwoColumns",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionPageLayoutTwoColumns.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPageLayoutTwoPages",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionPageLayoutTwoPages.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionPrint",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionPrint.label",
+        "shortcut": {
+          "standard_key": "Print"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionProperties",
+      "disposition": "KEEP",
+      "target": "Inspect",
+      "command": {
+        "label_key": "command.actionProperties.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionQuit",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionQuit.label",
+        "shortcut": {
+          "standard_key": "Quit",
+          "windows": {
+            "sequence": "Ctrl+F4"
+          }
+        },
+        "parameters": [],
+        "capability": "application",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionRedo",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionRedo.label",
+        "shortcut": {
+          "standard_key": "Redo"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRemoveExternalLinks",
+      "disposition": "ABSORB",
+      "target": "Fix",
+      "command": {
+        "label_key": "command.actionRemoveExternalLinks.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRender_to_Images",
+      "disposition": "ABSORB",
+      "target": "Production",
+      "command": {
+        "label_key": "command.actionRender_to_Images.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRendering_Errors",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRendering_Errors.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionAntialiasing",
+      "disposition": "KEEP",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionAntialiasing.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionDisplayAnnotations",
+      "disposition": "KEEP",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionDisplayAnnotations.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionDisplayRenderTimes",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionDisplayRenderTimes.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionIgnoreOptionalContentSettings",
+      "disposition": "KEEP",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionIgnoreOptionalContentSettings.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionSmoothPictures",
+      "disposition": "KEEP",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionSmoothPictures.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRenderOptionTextAntialiasing",
+      "disposition": "KEEP",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionRenderOptionTextAntialiasing.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionResetToFactorySettings",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionResetToFactorySettings.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionRotateLeft",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionRotateLeft.label",
+        "shortcut": {
+          "sequence": "Ctrl+Shift+-"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionRotateRight",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionRotateRight.label",
+        "shortcut": {
+          "sequence": "Ctrl+Shift++"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionSanitize",
+      "disposition": "ABSORB",
+      "target": "Fix",
+      "command": {
+        "label_key": "command.actionSanitize.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionSave",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSave.label",
+        "shortcut": {
+          "standard_key": "Save"
+        },
+        "parameters": [],
+        "capability": "document.write",
+        "cancellable": true,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionSave_As",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSave_As.label",
+        "shortcut": {
+          "standard_key": "SaveAs"
+        },
+        "parameters": [
+          {
+            "name": "path",
+            "type": "string",
+            "required": true
+          }
+        ],
+        "capability": "document.write",
+        "cancellable": true,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionScreenshot",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionScreenshot.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionSelectTable",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSelectTable.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionSelectText",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSelectText.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionSelectTextAll",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSelectTextAll.label",
+        "shortcut": {
+          "standard_key": "SelectAll"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionSend_by_E_Mail",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionSend_by_E_Mail.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionShow_Text_Blocks",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionShow_Text_Blocks.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionShow_Text_Lines",
+      "disposition": "ADVANCED",
+      "target": "Advanced",
+      "command": {
+        "label_key": "command.actionShow_Text_Lines.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteComment",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteComment.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteHelp",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteHelp.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteInsert",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteInsert.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteKey",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteKey.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteNewParagraph",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteNewParagraph.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteNote",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteNote.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionStickyNoteParagraph",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionStickyNoteParagraph.label",
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionUndo",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionUndo.label",
+        "shortcut": {
+          "standard_key": "Undo"
+        },
+        "parameters": [],
+        "capability": "unclassified",
+        "cancellable": false,
+        "availability": "declared"
+      }
+    },
+    {
+      "id": "actionZoom_In",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionZoom_In.label",
+        "shortcut": {
+          "standard_key": "ZoomIn"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    },
+    {
+      "id": "actionZoom_Out",
+      "disposition": "KEEP",
+      "target": "Document",
+      "command": {
+        "label_key": "command.actionZoom_Out.label",
+        "shortcut": {
+          "standard_key": "ZoomOut"
+        },
+        "parameters": [],
+        "capability": "none",
+        "cancellable": false,
+        "availability": "implemented"
+      }
+    }
+  ]
+}

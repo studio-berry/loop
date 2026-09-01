@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://studio-berry.github.io/loupe/schemas/product-surface.schema.json",
-  "title": "Loupe product-surface manifest",
+  "$id": "https://studio-berry.github.io/loop/schemas/product-surface.schema.json",
+  "title": "Loop product-surface manifest",
   "description": "The machine-readable product disposition and release inventory for ADR-005.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "adr", "profiles", "surfaces", "packaging", "cli", "shell_contract"],
+  "required": ["schema_version", "adr", "profiles", "surfaces", "packaging", "cli", "ui", "shell_contract"],
   "properties": {
     "schema_version": { "type": "integer", "const": 1 },
     "adr": { "type": "string", "const": "docs/adr/adr-005-product-surface-pruning-classification.md" },
@@ -13,7 +13,7 @@
       "type": "array",
       "prefixItems": [
         { "const": "developer" },
-        { "const": "loupe-release" }
+        { "const": "loop-release" }
       ],
       "minItems": 2,
       "maxItems": 2,
@@ -26,40 +26,73 @@
     },
     "packaging": { "$ref": "#/$defs/packaging" },
     "cli": { "$ref": "#/$defs/cli" },
-    "shell_contract": { "const": "docs/loupe-shell.json" }
+    "ui": { "$ref": "#/$defs/ui" },
+    "shell_contract": { "const": "docs/loop-shell.json" }
   },
   "$defs": {
     "profileState": { "enum": ["present", "absent"] },
     "disposition": {
       "enum": ["KEEP", "ADVANCED", "CLI-ONLY", "ABSORB", "HIDE", "OPEN", "STOP-SHIPPING", "REMOVE"]
     },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["developer", "loop-release"],
+      "properties": {
+        "developer": { "$ref": "#/$defs/profileState" },
+        "loop-release": { "$ref": "#/$defs/profileState" }
+      }
+    },
     "surface": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "disposition", "owner", "rationale", "profiles", "validation_evidence", "follow_up_issue"],
+      "required": [
+        "id",
+        "kind",
+        "artifact",
+        "artifact_scope",
+        "source_status",
+        "disposition",
+        "owner",
+        "rationale",
+        "profiles",
+        "validation_evidence",
+        "follow_up_issue"
+      ],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-        "kind": { "enum": ["application", "developer-tool", "plugin", "workspace", "packaging"] },
+        "kind": { "enum": ["application", "developer-tool", "library", "plugin", "workspace", "packaging"] },
         "artifact": { "type": ["string", "null"] },
         "artifact_scope": { "enum": ["install", "build", "none"] },
+        "artifact_patterns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "build_option": { "type": ["string", "null"], "minLength": 1 },
+        "source_status": { "enum": ["maintained", "deleted"] },
         "disposition": { "$ref": "#/$defs/disposition" },
         "owner": { "type": ["string", "null"] },
         "rationale": { "type": "string", "minLength": 1 },
-        "profiles": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["developer", "loupe-release"],
-          "properties": {
-            "developer": { "$ref": "#/$defs/profileState" },
-            "loupe-release": { "$ref": "#/$defs/profileState" }
-          }
-        },
+        "profiles": { "$ref": "#/$defs/profiles" },
         "replacement_surface": { "type": ["string", "null"] },
         "dependencies": { "type": "array", "items": { "type": "string" } },
         "validation_evidence": { "type": "string", "minLength": 1 },
         "follow_up_issue": { "type": ["integer", "null"], "minimum": 1 }
       },
       "allOf": [
+        {
+          "if": { "properties": { "artifact_scope": { "const": "none" } } },
+          "then": { "properties": { "artifact": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "artifact_scope": { "enum": ["install", "build"] } } },
+          "then": { "properties": { "artifact": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "if": { "properties": { "artifact_scope": { "const": "install" } } },
+          "then": { "required": ["artifact_patterns"] }
+        },
         {
           "if": { "properties": { "disposition": { "const": "OPEN" } } },
           "then": {
@@ -68,44 +101,113 @@
               "follow_up_issue": { "type": "integer", "minimum": 1 }
             }
           }
+        },
+        {
+          "if": { "properties": { "source_status": { "const": "deleted" } } },
+          "then": {
+            "properties": {
+              "profiles": {
+                "properties": {
+                  "developer": { "const": "absent" },
+                  "loop-release": { "const": "absent" }
+                }
+              }
+            }
+          }
         }
       ]
     },
     "profileFiles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["developer", "loupe-release"],
+      "required": ["developer", "loop-release"],
       "properties": {
-        "developer": { "type": "array", "items": { "type": "string" } },
-        "loupe-release": { "type": "array", "items": { "type": "string" } }
+        "developer": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "loop-release": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }
     },
     "packaging": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["desktop_entries", "appx_applications"],
+      "required": [
+        "desktop_entries",
+        "appx_applications",
+        "loop_launcher",
+        "flatpak",
+        "wix",
+        "first_party_artifact_globs",
+        "ignored_artifact_paths"
+      ],
       "properties": {
         "desktop_entries": { "$ref": "#/$defs/profileFiles" },
         "appx_applications": { "$ref": "#/$defs/profileFiles" },
-        "loupe_launcher": {
+        "loop_launcher": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["executable", "file_associations"],
+          "required": ["desktop_entry", "executable", "appx_id", "file_associations"],
           "properties": {
-            "executable": { "const": "LoupeEditor" },
-            "file_associations": { "type": "array", "items": { "type": "string" } }
+            "desktop_entry": { "type": "string", "minLength": 1 },
+            "executable": { "const": "LoopEditor" },
+            "appx_id": { "const": "LoopEditor" },
+            "file_associations": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
           }
-        }
+        },
+        "flatpak": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["manifest", "app_id", "command", "profiles"],
+          "properties": {
+            "manifest": { "type": "string", "minLength": 1 },
+            "app_id": { "type": "string", "minLength": 1 },
+            "command": { "const": "LoopEditor" },
+            "profiles": { "$ref": "#/$defs/profiles" }
+          }
+        },
+        "wix": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["template", "profiles", "required_components", "forbidden_tokens"],
+          "properties": {
+            "template": { "type": "string", "minLength": 1 },
+            "profiles": { "$ref": "#/$defs/profiles" },
+            "required_components": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+            "forbidden_tokens": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+          }
+        },
+        "first_party_artifact_globs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "ignored_artifact_paths": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
+      }
+    },
+    "commandInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "field", "mode", "required_commands"],
+      "properties": {
+        "source": { "const": "PdfTool capabilities --console-format json" },
+        "field": { "const": "commands" },
+        "mode": { "const": "all-registered" },
+        "required_commands": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }
     },
     "cli": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["discovery_command", "capability_field", "required_build_capabilities"],
+      "required": ["discovery_command", "capability_field", "required_build_capabilities", "command_inventory"],
       "properties": {
         "discovery_command": { "const": "PdfTool capabilities --console-format json" },
         "capability_field": { "const": "build_capabilities" },
-        "required_build_capabilities": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+        "required_build_capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+        "command_inventory": { "$ref": "#/$defs/commandInventory" }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "entrypoint_surface", "legacy_forms"],
+      "properties": {
+        "contract": { "const": "docs/loop-shell.json" },
+        "entrypoint_surface": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "legacy_forms": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }
     }
   }

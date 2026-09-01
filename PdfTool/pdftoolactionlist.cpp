@@ -149,7 +149,7 @@ bool recordActionListHistory(const QString& outputPath,
                              const QJsonObject& summary,
                              QString* error)
 {
-    const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore artifacts(historyDirectory);
     const auto input = artifacts.importBytes(sourceData, { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });
     const auto output = artifacts.importBytes(candidateData, { QStringLiteral("application/pdf"), QStringLiteral("candidate-output.pdf") });
@@ -209,7 +209,7 @@ QString PDFToolActionList::getStandardString(StandardString standardString) cons
     {
         case Command: return QStringLiteral("action-list");
         case Name: return PDFToolTranslationContext::tr("Action List");
-        case Description: return PDFToolTranslationContext::tr("Validate, plan, and execute reusable declarative Loupe operations.");
+        case Description: return PDFToolTranslationContext::tr("Validate, plan, and execute reusable declarative Loop operations.");
     }
     return QString();
 }
@@ -263,7 +263,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
         QStringList validationErrors;
         const pdf::PDFOperationResult validation = executor.validate(actionList, executionOptions, &validationErrors);
         const QJsonObject data{
-            { QStringLiteral("schema"), QStringLiteral("loupe-action-list-validation") },
+            { QStringLiteral("schema"), QStringLiteral("loop-action-list-validation") },
             { QStringLiteral("recipe"), options.actionListRecipe },
             { QStringLiteral("action_list"), actionList.toJson() },
             { QStringLiteral("valid"), bool(validation) },
@@ -344,7 +344,7 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
             }
             items.append(std::move(item));
         }
-        const QJsonObject data{{QStringLiteral("schema"), QStringLiteral("loupe-action-list-batch")}, {QStringLiteral("recipe"), actionList.id}, {QStringLiteral("items"), items}};
+        const QJsonObject data{{QStringLiteral("schema"), QStringLiteral("loop-action-list-batch")}, {QStringLiteral("recipe"), actionList.id}, {QStringLiteral("items"), items}};
         if (options.executionContext) options.executionContext->setData(data);
         if (options.outputStyle != PDFOutputFormatter::Style::Json)
             PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);

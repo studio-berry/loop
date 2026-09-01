@@ -25,7 +25,7 @@
 //
 // The link line in UnitTests/CMakeLists.txt is again load-bearing, but it proves
 // the opposite of what the P4-S1..S4 targets prove. Those link no Qml and no
-// Quick, so a presentation include fails to build. This one links LoupeLibQuick
+// Quick, so a presentation include fails to build. This one links LoopLibQuick
 // and therefore Qt6::Quick, and what it has to establish instead is that the
 // admitted presentation host stayed on its own side of ADR-010 rule 5: Qt Quick
 // events become the neutral input values and nothing else, the neutral values
@@ -56,7 +56,7 @@
 #include "canvaspalette.h"
 #include "canvaspresentmetrics.h"
 #include "canvastraceoverlay.h"
-#include "loupecanvasitem.h"
+#include "loopcanvasitem.h"
 
 #include "hittestsource.h"
 #include "interactioncontroller.h"
@@ -140,10 +140,10 @@ bool sendFocusOut(QQuickItem* item, Qt::FocusReason reason = Qt::OtherFocusReaso
 }
 
 /// Re-exposes protected handlers the translation contract must drive directly.
-class TestCanvasItem final : public pdfquick::LoupeCanvasItem
+class TestCanvasItem final : public pdfquick::LoopCanvasItem
 {
 public:
-    using pdfquick::LoupeCanvasItem::focusOutEvent;
+    using pdfquick::LoopCanvasItem::focusOutEvent;
 };
 
 /// sceneGraphInvalidated is a protected QQuickWindow signal. Emitting it from the
@@ -203,10 +203,14 @@ private Q_SLOTS:
     void devicePixelRatioChangeRepublishesGeometry();
     void itemDestroyedWithWorkInFlight();
     void overlayOnlyChangeDoesNotResyncTiles();
+    void denyExtraGraphicsSuppressesOverlaysOnCanvas();
+    void overlayOnlyHoverPreservesSurfaceDemand();
+    void zoomReissuesSurfaceDemand();
     void firstViewIsUnavailableUntilAPageIsOnScreen();
 
 private:
     void bindItem();
+    void bindItemWithSurfaces();
 
     /// Builds the coordinator half of the graph. Separate from init() because
     /// most cases in this file are translation tests that must keep proving they
@@ -239,6 +243,7 @@ private:
     std::unique_ptr<FakeRevisionSource> m_revisions;
     std::unique_ptr<pdfinteraction::ViewportController> m_viewport;
     std::unique_ptr<pdfinteraction::HitTestDispatcher> m_hitTest;
+    pdfinteraction::RenderPresentationPolicy m_policy;
     std::unique_ptr<pdfinteraction::OverlayBuilder> m_overlays;
     std::unique_ptr<pdfinteraction::InteractionController> m_controller;
     std::unique_ptr<ScriptedHitTestSource> m_source;
@@ -252,6 +257,7 @@ private:
 
 void QuickCanvasTest::init()
 {
+    m_policy = {};
     m_geometry = std::make_unique<FakeGeometrySource>(2);
     m_revisions = std::make_unique<FakeRevisionSource>();
 
@@ -267,7 +273,7 @@ void QuickCanvasTest::init()
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
     m_hitTest->addSource(m_source.get());
 
-    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport);
+    m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(*m_viewport, m_policy);
 
     m_controller = std::make_unique<pdfinteraction::InteractionController>(*m_revisions, *m_viewport, *m_hitTest, *m_overlays);
 
@@ -298,6 +304,12 @@ void QuickCanvasTest::bindItem()
     // publishViewportGeometry reads the screen. The tests in this file inject a
     // known density so coordinator demand does not depend on the CI monitor.
     m_viewport->setPixelPerMM(PixelPerMM);
+}
+
+void QuickCanvasTest::bindItemWithSurfaces()
+{
+    buildCoordinator();
+    bindItem();
 }
 
 void QuickCanvasTest::buildCoordinator()
@@ -587,7 +599,7 @@ void QuickCanvasTest::unboundItemIgnoresInput()
 {
     // No bind() call. An item with no document behind it is the normal state at
     // startup and after a close, and it must not crash or half-report.
-    pdfquick::LoupeCanvasItem item;
+    pdfquick::LoopCanvasItem item;
     item.setSize(QSizeF(200.0, 200.0));
 
     const QPointF position(10.0, 10.0);
@@ -908,6 +920,84 @@ void QuickCanvasTest::overlayOnlyChangeDoesNotResyncTiles()
     QCOMPARE(m_renderer->renderCount, rendersBefore);
     QCOMPARE(m_surfaces->counters().requested, requestedBefore);
     QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+}
+
+void QuickCanvasTest::denyExtraGraphicsSuppressesOverlaysOnCanvas()
+{
+    showItemInWindow();
+    requestSurfacesAndDrain();
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QVERIFY(sendMousePress(m_item.get(), inside));
+
+    renderFrame();
+    QVERIFY(m_item->frameStats().tiles > 0);
+    QVERIFY(m_item->frameStats().overlayPrimitives > 0);
+
+    const int tilesBefore = m_item->frameStats().tiles;
+    const int rendersBefore = m_renderer->renderCount;
+    const int requestedBefore = m_surfaces->counters().requested;
+
+    m_policy.features |= pdf::PDFRenderer::DenyExtraGraphics;
+    m_controller->refreshOverlay();
+    renderFrame();
+
+    QCOMPARE(m_item->frameStats().overlayPrimitives, 0);
+    QCOMPARE(m_item->frameStats().tiles, tilesBefore);
+    QCOMPARE(m_renderer->renderCount, rendersBefore);
+    QCOMPARE(m_surfaces->counters().requested, requestedBefore);
+
+    m_policy.features &= ~pdf::PDFRenderer::DenyExtraGraphics;
+    m_controller->refreshOverlay();
+    renderFrame();
+    QVERIFY(m_item->frameStats().overlayPrimitives > 0);
+}
+
+void QuickCanvasTest::overlayOnlyHoverPreservesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
+
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    QSignalSpy overlaySpy(m_controller.get(), &pdfinteraction::InteractionController::overlayFrameChanged);
+
+    const QRect placed = m_viewport->placedPageRect(0);
+    QVERIFY(!placed.isEmpty());
+
+    const QPointF inside(placed.left() + placed.width() * 0.3, placed.top() + placed.height() * 0.7);
+    QVERIFY(sendMouseMove(m_item.get(), inside, Qt::NoButton));
+
+    // A hover through the admitted host must rebuild overlays only. Issue #143 and
+    // gh-143 overlayOnlyUpdatePreservesPageSurfaceCache are the reference here.
+    QVERIFY(overlaySpy.size() >= 1);
+    QCOMPARE(m_submitter->submittedSpecs.size(), submissionsBefore);
+    QCOMPARE(m_viewport->requestGeneration(), generationBefore);
+}
+
+void QuickCanvasTest::zoomReissuesSurfaceDemand()
+{
+    bindItemWithSurfaces();
+
+    m_surfaces->requestSurfaces();
+    requestSurfacesAndDrain();
+
+    const int submissionsBefore = m_submitter->submittedSpecs.size();
+    const quint64 generationBefore = m_viewport->requestGeneration();
+
+    const QPointF anchor(100.0, 100.0);
+    const int notch = pdfinteraction::InteractionController::WheelDeltasPerStep;
+
+    QVERIFY(sendWheel(m_item.get(), anchor, QPoint(0, notch), Qt::ControlModifier));
+
+    QVERIFY(m_viewport->requestGeneration() > generationBefore);
+    QVERIFY(m_submitter->submittedSpecs.size() >= submissionsBefore);
 }
 
 void QuickCanvasTest::firstViewIsUnavailableUntilAPageIsOnScreen()

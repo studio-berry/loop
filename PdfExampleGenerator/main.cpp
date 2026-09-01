@@ -22,11 +22,15 @@
 
 #include <QApplication>
 
+#include "pdfapplicationidentity.h"
+#include "pdfsettings.h"
 #include "pdfexamplesgenerator.h"
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfExampleGenerator);
+    pdf::PDFSettings::migrateLegacySettings();
     PDFExamplesGenerator::generateAnnotationsExample();
     PDFExamplesGenerator::generatePageBoxesExample();
     PDFExamplesGenerator::generateOutlineExample();

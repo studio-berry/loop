@@ -6,7 +6,7 @@
 **Superseded-by:** none
 **Amended:** 2026-08-21 — see "Amendment" section below
 **Date:** 2026-08-20
-**Deciders:** Loupe 0.1.2 execution directive / #247
+**Deciders:** Loop 0.1.2 execution directive / #247
 
 ## Context
 
@@ -112,9 +112,18 @@ target) reaching `status: pass`. `qquickwidget` and `window-container` are
 still run and their JSON recorded for diagnostic reference, but a headless
 `window-container` focus limitation does not block S21 admission.
 
+## Retirement update (2026-08-26)
+
+The temporary non-installed comparison target and its layout probe described by
+this amendment have now been removed in Phase 5 Session 02. The retained
+Quick-native claim map, explicit geometry measurements, and pixel budgets are
+archived in `docs/evidence/phase5-widgets-parity-evidence.json`; this ADR's
+historical hosting decision remains diagnostic context rather than a maintained
+build target.
+
 ## Verification contract
 
-The target is opt-in through `LOUPE_BUILD_CANVAS_BENCHMARK=ON`. The runner
+The target is opt-in through `LOOP_BUILD_CANVAS_BENCHMARK=ON`. The runner
 fails unless every requested candidate reports `status: pass`; the CI
 admission scope above narrows which candidates gate the pipeline without
 changing this underlying per-candidate contract. CI or local qualification
@@ -138,4 +147,4 @@ Those remain explicit later gates in ADR-007 and ADR-010.
 - [Quick-root admission](adr-010-quick-root-admission.md)
 - [Qt Quick Controls shell](adr-007-qt-quick-controls-shell.md)
 - [Quick composition contract](../QUICK_COMPOSITION.md)
-- [Issue #247](https://github.com/studio-berry/loupe/issues/247)
+- [Issue #247](https://github.com/studio-berry/loop/issues/247)

@@ -1,6 +1,6 @@
 # Platform support (Windows, Linux)
 
-Loupe PDF V1 ships on **two** desktop platforms: Windows and Linux. This
+Loop PDF V1 ships on **two** desktop platforms: Windows and Linux. This
 document is the source of truth for supported OS, install layouts, and the
 **cross-platform compatibility pass** over modules that are already
 feature-complete.
@@ -16,9 +16,12 @@ as a **post-V1** epic; see [macOS (post-V1)](#macos-post-v1).
 
 | Platform | Status | CI | Official packages |
 |----------|--------|----|-------------------|
-| **Windows** (x64) | Supported | `ci.yml` + `WindowsInstall.yml` | MSI (`WixInstaller/`), portable zip |
-| **Linux** (x64) | Supported | `ci.yml` + `LinuxInstall.yml` / `LinuxFlatpak.yml` | AppImage (attached to releases via `CreateReleaseDraft.yml`), Flatpak (built by `LinuxFlatpak.yml`, not yet attached to releases). **`.deb` is built by `ci.yml` but does not work** — verified 2026-08-02: installs cleanly on a clean Ubuntu 22.04 container (`dpkg -i` succeeds) but fails to launch (`libQt6Gui.so.6: cannot open shared object file`) because, unlike the AppImage, it doesn't bundle the Qt runtime; also has a glibc mismatch against 22.04. Not attached to releases. Do not claim it as shipped |
+| **Windows** (x64) | Supported; Session 07 package-boundary gate targets MSI | `ci.yml` + `WindowsInstall.yml` | x64 MSI (`WixInstaller/`) |
+| **Linux** (x86_64) | Supported; Session 07 package-boundary gate targets AppImage | `ci.yml` + `LinuxInstall.yml` | x86_64 AppImage (`CreateReleaseDraft.yml`) |
 | **macOS** | **Not supported for V1** — source builds best-effort | None | None |
+
+Session 07 qualifies only the Linux x86_64 AppImage and Windows x64 MSI. Flatpak,
+MSIX, and portable ZIP remain outside this gate even when their build jobs exist.
 
 Unsupported for V1: macOS, iOS, Android, other BSDs. Community builds elsewhere
 are best-effort only and produce no official release artifacts.
@@ -30,29 +33,29 @@ are best-effort only and produce no official release artifacts.
 
 ## Install and plugin layout
 
-| Platform | Binaries | Plugins (`LOUPE_PLUGINS_DIR`) | Preflight profiles |
+| Platform | Binaries | Plugins (`LOOP_PLUGINS_DIR`) | Preflight profiles |
 |----------|----------|--------------------------------|--------------------|
-| Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/loupe/profiles/` in bundle |
-| Linux | `<prefix>/bin` | `<prefix>/lib/loupe` | `/usr/share/loupe/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
+| Windows | `<prefix>/bin` (beside MSI tree) | `<prefix>/pdfplugins` (relative `../pdfplugins`) | `share/loop/profiles/` in bundle |
+| Linux | `<prefix>/bin` | `<prefix>/lib/loop` | `/usr/share/loop/profiles/` (AppImage internal `usr/` layout; the `.deb`'s layout is the same but the package doesn't run — see Supported platforms above) |
 
 Flatpak packaging uses the bounded `--filesystem=home` permission; see
 `docs/FLATPAK_SANDBOX.md` for named-path overrides and the portal-only
 evaluation record.
 
-Editor must resolve **PdfTool** and **LoupePreflightPlugin** without a
+Editor must resolve **PdfTool** and `loop-default.json` without a
 developer toolchain on PATH.
 
-The profile directory is set by `LOUPE_PREFLIGHT_PROFILES_DIR` in
-`LoupeEditorPlugins/LoupePreflightPlugin/CMakeLists.txt`, derived from
-`LOUPE_INSTALL_SHARE_DIR`. Note that `-DLOUPE_INSTALL_TO_USR=ON` (used by the
-Windows CI and MSI builds) prefixes that with `usr/`, so the shipped path is
-`usr/share/loupe/profiles/`. Any smoke test must derive this from the install
-prefix rather than assuming a fixed absolute location.
+The profile directory is set by `LOOP_PREFLIGHT_PROFILES_DIR` in
+`PdfTool/CMakeLists.txt`, derived from `${LOOP_INSTALL_SHARE_DIR}`. Note that
+`-DLOOP_INSTALL_TO_USR=ON` (used by the Windows CI and MSI builds) prefixes
+that with `usr/`, so the shipped path is `usr/share/loop/profiles/`. Any
+smoke test must derive this from the install prefix rather than assuming a
+fixed absolute location.
 
 ## V1 slim distribution
 
-When `LOUPE_LOUPE_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
-(LoupePreflight and required inspection plugins). PageMaster / Diff / Viewer /
+When `LOOP_LOOP_DISTRIBUTION=ON`, prefer Editor + PdfTool + core plugins
+(LoopPreflight and required inspection plugins). PageMaster / Diff / Viewer /
 LaunchPad may ship in full packages; still build them in CI on both supported OS.
 
 ## Cross-platform compatibility pass
@@ -64,41 +67,48 @@ bundling** and **installer packaging** for modules that are already complete.
 
 | Module / surface | Already complete? | Win | Linux | What to verify |
 |------------------|-------------------|:--:|:-----:|----------------|
-| LoupeLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
-| LoupeLibWidgets / LoupeLibGui | Yes | ☐ | ☐ | Plugin relative path; settings paths |
+| LoopLibCore | Yes | ☐ | ☐ | Qt 6.11.1 + vcpkg build; codecs/fonts; no Widgets |
+| LoopLibQuick / LoopLibCore | Yes | ☐ | ☐ | Plugin relative path; settings paths |
 | PdfTool (`preflight`, `add-bleed`, …) | Yes | ☐ | ☐ | Bundled next to Editor; working directory; offscreen CI |
-| LoupePreflightPlugin | Yes | ☐ | ☐ | Finds PdfTool + `loupe-default.json`; `.dll` / `.so` |
-| LoupeEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
+| Preflight profiles (`loop-default.json`) | Yes | ☐ | ☐ | `PdfTool` preflight finds `loop-default.json` at the installed share path |
+| LoopEditor | Yes | ☐ | ☐ | Clean-machine launch; plugins load; operator loop |
 | Other Editor plugins | Yes | ☐ | ☐ | Present in intended bundle set; load without system Qt |
-| LoupePageMaster export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
-| LoupeViewer / Diff / LaunchPad | Adjacent | ☐ | ☐ | Build in CI; optional in slim package |
-| loupe-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
+| Page production export (MIC-307–312) | Yes | ☐ | ☐ | Atomic write + manifest; cancel; case-sensitive FS |
+| Retired secondary product identities | No | N/A | N/A | Replaced by LoopEditor, PdfTool, and in-app workspaces |
+| loop-preflight profiles + schemas | Yes | ☐ | ☐ | Installed at documented path; schema version contract |
 | UnitTests (operator, corpus, PageMaster) | Yes | ☐ | ☐ | `ctest` green on both CI runners |
-| Windows MSI | In review (MIC-301) | ☐ | — | Clean VM smoke; redist. **V1 ships unsigned** (MIC-342 / MIC-345) |
-| Linux AppImage / Flatpak | Exists | — | ☐ | Smoke; Flatpak sandbox workflows and portal behavior are tracked in [Flatpak sandbox policy](FLATPAK_SANDBOX.md). **`.deb` builds but doesn't run** (missing Qt runtime, glibc mismatch) — do not gate on it until fixed |
+| Windows MSI | Session 07 exact-SHA package boundary | ☐ | — | x64 WiX package, dependency evidence, clean VM operator/a11y loop; **V1 ships unsigned** (MIC-342 / MIC-345) |
+| Linux AppImage | Session 07 exact-SHA package boundary | — | ☐ | x86_64 package, dependency evidence, clean VM operator/a11y loop |
+| Flatpak / MSIX / portable ZIP | Out of Session 07 scope | — | — | Build or sandbox work may exist, but these formats are not release-gate evidence |
 | Sentry (optional) | Partial | ☐ | ☐ | Opt-in DSN only; DB path; no default PII |
 | OCR sidecar (optional) | Not V1-gated | ☐ | ☐ | Bundled-only guidance; do not block platform gate |
-| OcrPlugin (Editor UI) | **Not shipped in V1 — CLI-only, MIC-343** | ☐ | ☐ | `pdfplugins/OcrPlugin.dll` (or `.so`) must be **absent**. Built with `-DLOUPE_PLUGIN_OCR=OFF`; `PdfTool ocr` is unaffected and remains available |
+| OcrPlugin (Editor UI) | **Not shipped in V1 — CLI-only, MIC-343** | ☐ | ☐ | `pdfplugins/OcrPlugin.dll` (or `.so`) must be **absent**. Built with `-DLOOP_PLUGIN_OCR=OFF`; `PdfTool ocr` is unaffected and remains available |
 
 ### Bundling rules (all OS)
 
 1. Ship Qt runtime and required Qt plugins (`platforms`, `imageformats`, …) inside the package — do not require a system Qt install.
-2. Co-locate PdfTool, LoupePreflightPlugin, and `loupe-default.json` per the layout table.
+2. Co-locate PdfTool and `loop-default.json` per the layout table.
 3. Keep the default bundle C++/Qt only (see `docs/PACKAGING_LICENSING.md`); scan for forbidden Ghostscript / JRE / Python payloads.
 4. **V1 ships unsigned** on Windows (no Authenticode). Publish `SHA256SUMS.txt` and disclose SmartScreen (MIC-342). Code signing is post-V1 / paid-distribution (MIC-345) — not a V1 bundling gate.
 5. Document upgrade, uninstall, and binary rollback (no cloud DB).
 6. OCR ships CLI-only in V1 (`PdfTool ocr`); `OcrPlugin` (the Editor UI plugin) must not be present in any release package format. `scripts/smoke-test-install.ps1` fails the scan if it finds one (MIC-343).
+7. Session 07 package evidence must bind the artifact to the full `source_sha`, hash every payload file, inspect every ELF/PE image with the platform tools, record package-contained transitive dependencies and external system dependencies, and fail on any `Qt6Widgets` payload/import/plugin or unresolved non-system dependency.
 
 ### Smoke test (every installer)
 
 1. Clean machine (no Qt / MSVC required at runtime).
 2. Install the platform package.
-3. Launch LoupeEditor.
-4. Open a sample PDF; run Loupe Preflight; confirm findings JSON.
+3. Launch LoopEditor.
+4. Open a sample PDF; run Loop Preflight; confirm findings JSON.
 5. Confirm PdfTool exists beside the app and profiles resolve.
+6. Run `LoopEditor --quick-smoke` with both the native/default and software Quick backends while developer Qt paths are scrubbed.
+7. Archive the package-boundary inspector evidence, smoke transcript, tool versions, file inventory, dependency graph, runtime plugin candidates, and package/source digests. This evidence is qualification data, not a release asset.
 
 Windows automation for steps 2–5 lives in `scripts/smoke-test-install.ps1`; the full
 MSI lifecycle wrapper is `scripts/Invoke-MsiSmokeTest.ps1`.
+The Linux package equivalent is `scripts/smoke-test-appimage.sh`; pass an explicit
+external `TestPdf` on a clean VM. The Session 07 workflows upload evidence under
+`loop-package-boundary-linux-evidence` and `loop-package-boundary-windows-evidence`.
 
 ### Windows MSI clean-machine run (MIC-301)
 
@@ -107,27 +117,40 @@ PowerShell. Build the MSI first via the `Windows_MSI` workflow (`workflow_dispat
 
 ```powershell
 # Fresh install -> smoke -> uninstall
-.\scripts\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_<version>.msi
+.\scripts\Invoke-MsiSmokeTest.ps1 `
+    -MsiPath .\mberrys.Loop-pdf_<version>.msi `
+    -SourceSha <accepted-session-06-sha> `
+    -TestPdf C:\Temp\external-test.pdf
 
 # Add upgrade coverage when a previous MSI is available
 .\scripts\Invoke-MsiSmokeTest.ps1 `
-    -MsiPath .\mberrys.Loupe-pdf_<new>.msi `
-    -PreviousMsiPath .\mberrys.Loupe-pdf_<old>.msi
+    -MsiPath .\mberrys.Loop-pdf_<new>.msi `
+    -PreviousMsiPath .\mberrys.Loop-pdf_<old>.msi `
+    -SourceSha <accepted-session-06-sha> `
+    -TestPdf C:\Temp\external-test.pdf
 ```
 
 The wrapper asserts install, layout resolution, preflight execution, Editor launch,
 forbidden-payload absence, upgrade, and clean uninstall. Attach the transcript to
 MIC-301.
 
-**Two things to confirm on the first run**, both currently unverified:
+The MSI workflow now invokes WiX with `Platform=x64` and `-arch x64`; the smoke
+wrapper rejects an install directory under `Program Files (x86)` and expects the
+64-bit `Program Files` directory. This is a packaging contract, not clean-VM proof.
 
-1. **Install architecture.** `WindowsInstall.yml` runs `candle ... -arch x86` while the
-   payload is x64 (`--triplet x64-windows`, `win64_msvc2022_64`). If the MSI installs
-   under `Program Files (x86)`, fix the WiX arch to `x64` before sign-off — the smoke
-   test will fail on the expected `InstallDir`, which is the intended signal.
-2. **Profiles path.** `smoke-test-install.ps1` probes several layouts because
-   `LOUPE_INSTALL_TO_USR=ON` shifts the share tree. Record which candidate resolved and
-   make the layout table above match what actually ships.
+The clean-VM acceptance gate remains:
+
+1. Use the exact `source_sha` accepted by Session 06 and record it in the MSI/AppImage
+   evidence pair.
+2. Install from a fresh Windows VM with no MSVC, Qt, Python, or repository checkout.
+3. Launch, open the explicit external PDF, navigate workspaces, inspect preflight
+   findings, verify names/roles/focus/status behavior, and exit cleanly.
+4. Attach the package/dependency evidence and operator/accessibility transcript before
+   treating the Session 07 exit gate as passed.
+
+**The profiles path is still a required observation:** `smoke-test-install.ps1` probes
+several layouts because `LOOP_INSTALL_TO_USR=ON` shifts the share tree. Record which
+candidate resolved and keep the layout table above synchronized with the VM evidence.
 
 ## macOS (post-V1)
 
@@ -135,7 +158,7 @@ macOS is explicitly **out of scope for V1**. The work below is retained as the
 entry criteria for adding it in a later release, not as a V1 checklist.
 
 - Apps already set `MACOSX_BUNDLE ON` for Editor, Viewer, PageMaster, Diff, LaunchPad.
-- CMake today treats non-`LOUPE_LINUX` like Windows for `LOUPE_PLUGINS_DIR` (`pdfplugins`, `CMakeLists.txt:198-201`). That path must be confirmed inside a `.app` bundle or the install rules adjusted.
+- CMake today treats non-`LOOP_LINUX` like Windows for `LOOP_PLUGINS_DIR` (`pdfplugins`, `CMakeLists.txt:198-201`). That path must be confirmed inside a `.app` bundle or the install rules adjusted.
 - A `macos` job in `ci.yml` with Qt 6.11.1 + vcpkg, mirroring the Ubuntu/Windows `ctest` set, is the minimum bar before any macOS claim is restored.
 - Notarization and staple steps belong in a dedicated `macOSInstall.yml` before attaching artifacts to the release draft. This requires an **Apple Developer Program** enrollment, which is not currently held.
 
@@ -148,5 +171,6 @@ entry criteria for adding it in a later release, not as a V1 checklist.
 | `README.md` | User-facing supported platforms and install pointers |
 | `docs/CI.md` | Which OS jobs run in GitHub Actions |
 | `docs/PACKAGING_LICENSING.md` | License / SBOM / default-bundle rules |
+| `docs/SESSION_07_PACKAGE_BOUNDARY.md` | Exact-SHA package evidence and clean-VM gate |
 | `docs/PRODUCTION_RUNBOOK.md` | Deploy / rollback / support |
 | `AGENTS.md` | Contributor note: plugin dirs per OS |
