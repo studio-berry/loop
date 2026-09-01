@@ -281,6 +281,14 @@ jobs:
             }
           }
 
+          $builtLoupeQuick = Join-Path $env:GITHUB_WORKSPACE "loupe\build\Loupe\Quick"
+          $qmlLoupeQuick = Join-Path $installBin "qml\Loupe\Quick"
+          if (-not (Test-Path -LiteralPath $builtLoupeQuick)) {
+            throw "Built Loupe.Quick QML module was not found: $builtLoupeQuick"
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoupeQuick) | Out-Null
+          Copy-Item -Recurse -Force -LiteralPath $builtLoupeQuick -Destination $qmlLoupeQuick
+
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so
           # Qt resolves its bundled QML imports and plugins without the runner's
