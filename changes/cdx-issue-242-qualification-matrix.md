@@ -1,4 +1,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Add a tracked external-fixture resource-envelope matrix runner that records every benchmark attempt, validates measured envelopes against policy, and flags unavailable measurements and baseline RSS or elapsed-time regressions.
+Summary: Strengthen resource-envelope qualification with exact external-fixture manifests, repeated cold-process profiles, baseline identity and RSS/time regression checks, controlled cancellation probes, and a separate Windows peak-commit measurement.

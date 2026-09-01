@@ -103,28 +103,69 @@ python scripts/resource_envelope/pathological_workload.py `
 Use `scripts/resource_envelope/validate_envelope.py` to validate a record
 against the checked-in limits before attaching it to a qualification dossier.
 
+For strict qualification, create a manifest containing the exact `sha256`,
+`size_bytes`, and provenance for each external PDF, then pass it with
+`--manifest`. Relative paths are resolved relative to the manifest file. The
+runner records the Windows peak commit value as
+`process_commit_high_water_bytes`; Linux keeps that field at `-1` because
+virtual-size high water is not equivalent to process commit.
+
 ## Run the fixture matrix
 
-The issue #242 matrix is run against externally stored PDFs so large fixtures
-do not enter the repository. Supply the required fixture paths explicitly; the
-multi-GB fixture is optional when the platform or available disk cannot
-support it:
+Write `C:\temp\resource-envelope-fixtures.json` using the checked-in
+
+The helper records exact digests and sizes:
 
 ```powershell
-python scripts/resource_envelope/run_matrix.py `
-  --pdf-tool C:\path\to\PdfTool.exe `
+python scripts/resource_envelope/create_fixture_manifest.py `
   --fixture office-2mb=C:\fixtures\office-2mb.pdf `
   --fixture image-heavy-500mb=C:\fixtures\image-heavy-500mb.pdf `
   --fixture ten-thousand-page=C:\temp\loupe-div2k-10000-pages.pdf `
   --fixture pathological-vector=C:\temp\loupe-pathological-vector.pdf `
   --fixture transparency-spots=C:\temp\loupe-transparency-spots.pdf `
+  --provenance "release fixture bundle 2026-08" `
+  --output C:\temp\resource-envelope-fixtures.json
+```
+
+The issue #242 matrix is run against externally stored PDFs so large fixtures
+do not enter the repository. The multi-GB fixture is optional when the
+platform or available disk cannot support it. The manifest has this shape:
+
+```json
+{
+  "schema_kind": "loupe-resource-envelope-fixtures",
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "pathological-vector",
+      "path": "C:\\temp\\loupe-pathological-vector.pdf",
+      "sha256": "<64 lowercase hex characters>",
+      "size_bytes": 123456,
+      "provenance": "pathological_workload.py --family pathological-vector"
+    }
+  ]
+}
+```
+
+Then run the strict qualification profile. Use `--repetitions 3` for the
+recommended cold-process timing/RSS sample:
+
+```powershell
+python scripts/resource_envelope/run_matrix.py `
+  --pdf-tool C:\path\to\PdfTool.exe `
+  --manifest C:\temp\resource-envelope-fixtures.json `
+  --repetitions 3 --rasterizers 8 --strict `
   --output C:\temp\resource-envelope-matrix.json
 ```
 
 Each fixture attempt records its input digest, exact PdfTool command, process
-exit code, workload envelope, validation errors, and optional baseline
-regressions. Missing, timed-out, or incomplete measurements remain flagged in
-the JSON; they are never converted to zero or reported as a passing complete
-run. Add `--baseline C:\previous\resource-envelope-matrix.json` to compare
-RSS and elapsed time using `--margin` (default `2.0`). Use `--strict` in a
-qualification job when flagged required fixtures must fail the job.
+exit code, individual envelopes, conservative peak-RSS statistics, validation
+errors, and optional baseline regressions. Missing, timed-out, or incomplete
+measurements remain flagged in the JSON; they are never converted to zero or
+reported as a passing complete run. Add
+`--baseline C:\previous\resource-envelope-matrix.json` to compare matching
+fixture digests and platform/toolchain identities. The default regression
+margin is `2.0`; use a narrower margin only after collecting stable platform
+baselines. Add `--cancel-fixture pathological-vector
+--cancel-after-seconds 1` to send an interrupt to one controlled probe and
+record the application's cancellation latency.

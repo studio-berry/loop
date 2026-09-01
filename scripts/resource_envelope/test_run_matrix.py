@@ -6,7 +6,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.resource_envelope.run_matrix import FIXTURE_SPECS, _fixture_args, run_fixture, run_matrix
+from scripts.resource_envelope.run_matrix import (
+    FIXTURE_SPECS,
+    _fixture_args,
+    _load_fixture_manifest,
+    run_fixture,
+    run_matrix,
+)
+from scripts.resource_envelope.create_fixture_manifest import create_manifest
 from scripts.resource_envelope.validate_envelope import POOL_NAMES
 
 
@@ -47,6 +54,18 @@ def _envelope(page_count: int = 256, rss: int = 10, elapsed: int = 10) -> dict:
     }
 
 
+def _metadata(fixture: Path) -> dict:
+    import hashlib
+
+    return {
+        "path": str(fixture),
+        "sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
+        "size_bytes": fixture.stat().st_size,
+        "provenance": "unit-test fixture",
+        "page_count": 256,
+    }
+
+
 class RunMatrixTest(unittest.TestCase):
     def test_fixture_argument_rejects_unknown_name(self) -> None:
         with self.assertRaises(ValueError):
@@ -61,7 +80,7 @@ class RunMatrixTest(unittest.TestCase):
             def runner(*args, **kwargs):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner)
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture))
             self.assertEqual(record["status"], "flagged")
             self.assertEqual(record["result"]["page_count"], 256)
 
@@ -75,9 +94,56 @@ class RunMatrixTest(unittest.TestCase):
                 return subprocess.CompletedProcess(args[0], 0, payload, "")
 
             baseline = {"result": _envelope(rss=10, elapsed=10)}
-            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=baseline, margin=2, runner=runner)
+            metadata = _metadata(fixture)
+            current = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=None, runner=runner, metadata=metadata)
+            baseline["fixture_sha256"] = current["fixture_sha256"]
+            baseline["identity"] = current["identity"]
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, baseline=baseline, margin=2, runner=runner, metadata=metadata)
             self.assertEqual(record["status"], "failed")
             self.assertEqual(len(record["regressions"]), 2)
+
+    def test_repetitions_record_conservative_memory_and_median_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "fixture.pdf"
+            fixture.write_bytes(b"fixture")
+            envelopes = [_envelope(rss=value, elapsed=value) for value in (10, 20, 30)]
+
+            def runner(*args, **kwargs):
+                return subprocess.CompletedProcess(args[0], 0, json.dumps({"workload_envelope": envelopes.pop(0)}), "")
+
+            record = run_fixture(Path("PdfTool.exe"), "pathological-vector", fixture, _policy(), 1, runner=runner, metadata=_metadata(fixture), repetitions=3)
+            self.assertEqual(record["statistics"]["elapsed_ms"]["median"], 20)
+            self.assertEqual(record["result"]["rss_high_water_bytes"], 30)
+
+    def test_manifest_resolves_relative_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "fixture.pdf"
+            fixture.write_bytes(b"fixture")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({
+                "schema_kind": "loupe-resource-envelope-fixtures",
+                "schema_version": 1,
+                "fixtures": [{
+                    "fixture_id": "pathological-vector",
+                    "path": "fixture.pdf",
+                    "sha256": "0" * 64,
+                    "size_bytes": 7,
+                    "provenance": "unit-test",
+                }],
+            }), encoding="utf-8")
+            loaded = _load_fixture_manifest(manifest)
+            self.assertEqual(Path(loaded["pathological-vector"]["path"]), fixture.resolve())
+
+    def test_create_manifest_records_digest_size_and_expected_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "fixture.pdf"
+            fixture.write_bytes(b"fixture")
+            manifest = create_manifest({"pathological-vector": fixture}, "unit-test generator")
+            record = manifest["fixtures"][0]
+            self.assertEqual(record["size_bytes"], 7)
+            self.assertEqual(record["page_count"], 256)
+            self.assertEqual(record["provenance"], "unit-test generator")
 
     def test_matrix_records_missing_required_and_optional_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

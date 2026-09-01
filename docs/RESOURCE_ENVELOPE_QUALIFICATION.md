@@ -19,9 +19,14 @@ Quick product path is implemented in Phase 4.
 1. Validate the external DIV2K corpus and generate one canonical manifest with
    `--hash-all`.
 2. Build the deterministic 10,000-page image-heavy PDF and record its digest.
-3. Run `scripts/resource_envelope/run_matrix.py` with the 2 MB office,
+3. Create an external fixture manifest using the schema at
+   `docs/schemas/resource-envelope-fixtures.schema.json`, then run
+   `scripts/resource_envelope/run_matrix.py --manifest ... --strict` with the 2 MB office,
    image-heavy, 10,000-page, pathological-vector, and transparency/spot
    fixtures. Supply the multi-GB fixture when platform addressability permits.
+   The strict job is expected to remain non-passing until the native benchmark
+   also supplies preflight and recovery measurements; unavailable fields must
+   not be promoted to zero.
 4. Run PdfTool benchmark profiles on Linux and Windows with the same manifest.
 5. Run the integrated session/scheduler harness with the same workload identity.
 6. Replay the bounded lifecycle trace corpus on both platforms.
