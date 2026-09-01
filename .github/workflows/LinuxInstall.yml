@@ -21,6 +21,7 @@ jobs:
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loupe/vcpkg/overlays/linux:${{ github.workspace }}/loupe/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-binary-cache
       GNUPGHOME: ${{ github.workspace }}/gnupg
       QT_QPA_PLATFORM: offscreen
 
@@ -131,6 +132,7 @@ jobs:
 
           ./vcpkg/bootstrap-vcpkg.sh
           ./vcpkg/vcpkg integrate install
+          echo "VCPKG_BINARY_SOURCES=clear;files,$VCPKG_DEFAULT_BINARY_CACHE,readwrite" >> "$GITHUB_ENV"
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -139,6 +141,7 @@ jobs:
             ./vcpkg/downloads
             ./vcpkg/packages
             ./vcpkg_installed
+            ./vcpkg-binary-cache
           key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
             ${{ runner.os }}-vcpkg-v2-
@@ -164,7 +167,7 @@ jobs:
         working-directory: loupe
         run: |
           cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target all release_translations -j6
+          cmake --build build --target LoupeEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
