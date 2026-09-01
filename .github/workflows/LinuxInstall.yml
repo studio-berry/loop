@@ -205,6 +205,16 @@ jobs:
           evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
+          # Qt may ship the proprietary Mimer SQL driver, but its external
+          # libmimerapi.so is not part of the Loop distribution. linuxdeployqt
+          # validates every discovered plugin and aborts on that unresolved
+          # dependency, so remove this non-distributable optional driver from
+          # the ephemeral Qt installation before deployment.
+          mimer_driver="$QT_ROOT_DIR/plugins/sqldrivers/libqsqlmimer.so"
+          if [[ -e "$mimer_driver" ]]; then
+            rm -f "$mimer_driver"
+            echo "Removed non-distributable optional Qt SQL driver: $mimer_driver" | tee "$evidence_dir/linuxdeployqt.txt"
+          fi
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
           bash "$GITHUB_WORKSPACE/loupe/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
