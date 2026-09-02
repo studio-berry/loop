@@ -127,7 +127,7 @@ PDF_TOOL="${BIN_DIR}/PdfTool"
 PROFILE_PATH="${PROFILES_DIR}/loop-default.json"
 
 set +e
-PREFLIGHT_OUTPUT="$("$PDF_TOOL" preflight "$TEST_PDF" --profile "$PROFILE_PATH" --console-format text 2>&1)"
+PREFLIGHT_OUTPUT="$("$PDF_TOOL" preflight "$TEST_PDF" --profile "$PROFILE_PATH" --console-format json 2>&1)"
 PREFLIGHT_EXIT=$?
 set -e
 
