@@ -111,7 +111,7 @@ the signing step refuses to run against an unpinned toolchain.
 Windows Release builds with `LOOP_ENABLE_SENTRY` emit PDBs (`/Zi` +
 `/DEBUG:FULL`) so crashpad minidumps can be symbolicated. After the Windows
 CI and MSI packaging jobs, `scripts/ci/upload_sentry_debug_files.ps1`
-uploads Loop PDBs to `berry-studios/loop-pdf` on the EU region
+uploads Loop PDBs to `berry-studios/loupe-pdf` on the EU region
 (`https://de.sentry.io`) using the pinned `sentryCli` binary. GitHub
 Actions cannot reference `secrets` in `if:` conditionals, so the workflow
 always runs the step; `upload_sentry_debug_files.ps1` no-ops when

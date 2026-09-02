@@ -111,7 +111,7 @@ Debug Files — they are not Issues or traces.
 
 **Privacy:** Desktop sentry-native 0.15.x does not send default PII (`send_default_pii` is NX-only in that pin). Crashes may still include OS-level paths and PDF bytes in minidumps — set `SENTRY_DSN=off` in high-classification environments. CI sets `SENTRY_DSN=off` so test runs do not flood the project.
 
-**Debug files:** Windows CI uploads Loop PDBs to `berry-studios/loop-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
+**Debug files:** Windows CI uploads Loop PDBs to `berry-studios/loupe-pdf` (EU) when `SENTRY_AUTH_TOKEN` is set. Without those files, crash stacks stay unsymbolicated. Store the token as a GitHub Actions secret with `project:releases` (or broader) scope; do not commit it.
 
 **Verify (Windows, Sentry-enabled build):**
 
