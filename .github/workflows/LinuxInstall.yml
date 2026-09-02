@@ -246,6 +246,13 @@ jobs:
           fi
           mkdir -p "$qml_module_destination"
           cp -a "$qml_module_source/." "$qml_module_destination/"
+          sqlite_driver="$QT_ROOT_DIR/plugins/sqldrivers/libqsqlite.so"
+          if [[ ! -e "$sqlite_driver" ]]; then
+            echo "::error::Required Qt SQLite driver is missing: $sqlite_driver"
+            exit 1
+          fi
+          mkdir -p install/usr/lib/sqldrivers
+          cp -f "$sqlite_driver" install/usr/lib/sqldrivers/libqsqlite.so
           cat > install/usr/bin/qt.conf <<'EOF'
           [Paths]
           Prefix=..
