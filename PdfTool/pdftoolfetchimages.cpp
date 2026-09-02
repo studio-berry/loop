@@ -311,12 +311,25 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
     auto imageRange = pdf::PDFIntegerRange<size_t>(0, m_images.size());
     pdf::PDFExecutionPolicy::execute(pdf::PDFExecutionPolicy::Scope::Page, imageRange.begin(), imageRange.end(), saveImage);
 
-    return m_failedWrites.load() > 0 ? PDFToolExitCode::PartialOutput : PDFToolExitCode::Success;
+    if (m_failedWrites.load() > 0)
+    {
+        return PDFToolExitCode::PartialOutput;
+    }
+
+    // A vector-only document legitimately yields no images; a caller that gates a
+    // release on "figures were produced" must not be green-lit by an empty
+    // output directory, so --fail-if-empty turns that into a finding.
+    if (m_images.empty())
+    {
+        return reportEmptyResult(options, PDFToolTranslationContext::tr("images"));
+    }
+
+    return PDFToolExitCode::Success;
 }
 
 PDFToolAbstractApplication::Options PDFToolFetchImages::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem | DestructiveWrite;
+    return ConsoleFormat | OpenDocument | PageSelector | ImageWriterSettings | ImageExportSettingsFiles | ColorManagementSystem | DestructiveWrite | EmptyResultPolicy;
 }
 
 void PDFToolFetchImages::onImageExtracted(pdf::PDFInteger pageIndex, pdf::PDFInteger order, const QImage& image)

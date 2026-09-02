@@ -40,6 +40,7 @@ class Jbig2DecoderTest : public QObject
 private slots:
     void test_codeTables_rejectsOversizedRangeBitLength();
     void test_codeTables_acceptsValidSmallTable();
+    void test_paint_boundsTheExpansionAllocation();
 };
 
 void Jbig2DecoderTest::test_codeTables_rejectsOversizedRangeBitLength()
@@ -112,6 +113,34 @@ void Jbig2DecoderTest::test_codeTables_acceptsValidSmallTable()
     {
         QFAIL(qPrintable(QStringLiteral("A valid small huffman table must not throw: %1").arg(e.getMessage())));
     }
+}
+
+void Jbig2DecoderTest::test_paint_boundsTheExpansionAllocation()
+{
+    // paint() with expandY grows the target bitmap to offsetY + height. That is
+    // the one path that resizes a bitmap after construction, so it has to repeat
+    // the dimension check a constructor performs - otherwise a wide page plus a
+    // large (attacker-chosen, and legitimately signed) offset asks for an
+    // allocation no real JBIG2 page needs.
+    pdf::PDFJBIG2Bitmap page(8192, 8);
+    pdf::PDFJBIG2Bitmap region(8, 8);
+
+    bool thrown = false;
+    try
+    {
+        page.paint(region, 0, 1 << 20, pdf::PDFJBIG2BitOperation::Or, true, 0x00);
+    }
+    catch (const pdf::PDFException&)
+    {
+        thrown = true;
+    }
+
+    QVERIFY2(thrown, "An out-of-range expansion was allocated instead of refused");
+
+    // A modest expansion still works.
+    pdf::PDFJBIG2Bitmap smallPage(16, 8);
+    smallPage.paint(region, 0, 16, pdf::PDFJBIG2BitOperation::Or, true, 0x00);
+    QCOMPARE(smallPage.getHeight(), 24);
 }
 
 QTEST_GUILESS_MAIN(Jbig2DecoderTest)

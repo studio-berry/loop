@@ -39,6 +39,7 @@
 #include <QImageWriter>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QFile>
 #include <QTemporaryDir>
 
 namespace pdftool
@@ -199,6 +200,14 @@ bool renderPageToPng(pdf::PDFDocument* document,
             renderError = writer.errorString();
             return;
         }
+
+        // The staging directory is already private (QTemporaryDir uses mkdtemp,
+        // i.e. 0700), but the raster carries the document's content, so make the
+        // file itself owner-only too rather than relying on the directory mode
+        // alone. A failure here is not fatal - the enclosing directory still
+        // keeps other local users out.
+        QFile::setPermissions(outputPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+
         rendered = true;
     };
 

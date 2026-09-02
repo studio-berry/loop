@@ -3918,10 +3918,21 @@ void PDFJBIG2Bitmap::paint(const PDFJBIG2Bitmap& bitmap, int offsetX, int offset
         return;
     }
 
-    // Expand, if it is allowed and target bitmap has too low height
+    // Expand, if it is allowed and target bitmap has too low height.
+    //
+    // This is the one path that grows a bitmap after construction, so it is also
+    // the one path that escapes the dimension check every constructor performs.
+    // offsetY is attacker-controlled and, since region offsets became correctly
+    // signed, may be as large as MAX_BITMAP_SIZE - so a region placed far down a
+    // wide page can ask for an allocation of hundreds of megabytes (and, on a
+    // wide enough page, overflow the int pixel count). Validate the grown
+    // dimensions exactly as a constructor would.
     if (expandY && offsetY + bitmap.getHeight() > m_height)
     {
-        m_height = offsetY + bitmap.getHeight();
+        const int expandedHeight = offsetY + bitmap.getHeight();
+        checkJBIG2BitmapDimensions(m_width, expandedHeight);
+
+        m_height = expandedHeight;
         m_data.resize(getPixelCount(), expandPixel);
     }
 

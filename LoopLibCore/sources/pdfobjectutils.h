@@ -66,6 +66,12 @@ public:
     inline explicit PDFMarkedObjectsContext() = default;
 
     inline bool isMarked(PDFObjectReference reference) const { return m_markedReferences.count(reference); }
+
+    /// Number of references currently marked. Marks are held by
+    /// PDFMarkedObjectsLock for exactly the span of the traversal that owns
+    /// them, so for a depth-first walk this is the depth of the current path -
+    /// which is what a recursive parser needs to bound its own recursion.
+    inline size_t getMarkedCount() const { return m_markedReferences.size(); }
     inline void mark(PDFObjectReference reference) { m_markedReferences.insert(reference); }
     inline void unmark(PDFObjectReference reference) { m_markedReferences.erase(reference); }
 

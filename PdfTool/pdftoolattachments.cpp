@@ -79,6 +79,10 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
 
     QMimeDatabase mimeDatabase;
 
+    const bool saveRequested = options.attachmentsSaveAll ||
+                               !options.attachmentsSaveNumber.isEmpty() ||
+                               !options.attachmentsSaveFileName.isEmpty();
+
     size_t savedFileCount = 0;
     size_t no = 1;
     std::vector<FileInfo> embeddedFiles;
@@ -167,6 +171,14 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
         else
         {
             PDFConsole::writeText(formatter.getString(), options.outputCodec);
+        }
+
+        // Two different situations reach this branch: a plain listing, and a
+        // --save-* selection that matched nothing. Both produced no file, which
+        // is what --fail-if-empty asks about.
+        if (embeddedFiles.empty() || saveRequested)
+        {
+            return reportEmptyResult(options, PDFToolTranslationContext::tr("attachments"));
         }
     }
     else
@@ -306,7 +318,7 @@ PDFToolExitCode PDFToolAttachmentsApplication::execute(const PDFToolOptions& opt
 
 PDFToolAbstractApplication::Options PDFToolAttachmentsApplication::getOptionsFlags() const
 {
-    return ConsoleFormat | OpenDocument | Attachments | DestructiveWrite;
+    return ConsoleFormat | OpenDocument | Attachments | DestructiveWrite | EmptyResultPolicy;
 }
 
 }   // namespace pdftool

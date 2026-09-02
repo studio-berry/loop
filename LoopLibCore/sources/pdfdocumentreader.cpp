@@ -40,6 +40,19 @@
 namespace pdf
 {
 
+namespace
+{
+
+// Bounds for the dense object table built by damaged-document recovery. The
+// table is indexed by object number, so its size is driven by the highest
+// number a malformed document happens to declare rather than by how much was
+// actually recovered. A document numbered more sparsely than this is not a
+// recoverable document, it is a document asking for a large allocation.
+constexpr PDFInteger DAMAGED_DOCUMENT_MAX_OBJECT_NUMBER_DENSITY = 64;
+constexpr PDFInteger DAMAGED_DOCUMENT_MINIMUM_OBJECT_SLOTS = 4096;
+
+}   // namespace
+
 PDFDocumentReader::PDFDocumentReader(PDFProgress* progress,
                                      const std::function<QString(bool*)>& getPasswordCallback,
                                      bool permissive,
@@ -884,7 +897,27 @@ PDFDocument PDFDocumentReader::readDamagedDocumentFromBuffer(const QByteArray& b
 
         if (!restoredObjects.empty())
         {
-            objects.resize(restoredObjects.rbegin()->first.objectNumber + 1);
+            // The object table is dense: it is indexed by object number, so a
+            // single recovered object numbered 9999999 would allocate ten million
+            // entries. The per-reference check in restoreObjects() bounds an
+            // object number by the file size, which on a 50 MiB file still allows
+            // a table of fifty million entries. Bound the table by how many
+            // objects were actually recovered instead: real damaged documents are
+            // numbered densely, and a highest-number-to-recovered-count ratio far
+            // past that is a malformed document rather than a recoverable one.
+            const PDFInteger highestObjectNumber = restoredObjects.rbegin()->first.objectNumber;
+            const PDFInteger maximumObjectNumber = std::max<PDFInteger>(
+                DAMAGED_DOCUMENT_MINIMUM_OBJECT_SLOTS,
+                static_cast<PDFInteger>(restoredObjects.size()) * DAMAGED_DOCUMENT_MAX_OBJECT_NUMBER_DENSITY);
+
+            if (highestObjectNumber > maximumObjectNumber)
+            {
+                throw PDFException(PDFTranslationContext::tr("Damaged document declares object number %1, but only %2 objects could be recovered; refusing to build an object table of that size.")
+                                       .arg(highestObjectNumber)
+                                       .arg(restoredObjects.size()));
+            }
+
+            objects.resize(highestObjectNumber + 1);
 
             for (auto& objectItem : restoredObjects)
             {
@@ -901,7 +934,14 @@ PDFDocument PDFDocumentReader::readDamagedDocumentFromBuffer(const QByteArray& b
         }
 
         PDFObjectStorage storage(std::move(objects), PDFObject(trailerDictionaryObject), qMove(m_securityHandler));
-        return PDFDocument(std::move(storage), m_version, QByteArray());
+
+        // The recovered document corresponds to exactly these bytes, so it gets a
+        // real source digest like any other successful read. Returning an empty
+        // digest here silently disabled the "the file changed underneath us" guard
+        // in PDFDocumentWriter::writeIncremental for every permissively recovered
+        // document - the one class of document where appending to the wrong bytes
+        // is most likely.
+        return PDFDocument(std::move(storage), m_version, hash(buffer));
     }
     catch (const PDFException &parserException)
     {
