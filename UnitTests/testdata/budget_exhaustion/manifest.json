@@ -1,0 +1,152 @@
+{
+  "cases": [
+    {
+      "description": "A single page whose content stream is a FlateDecode decompression bomb: 200000 bytes of highly compressible payload compress to 218 bytes (ratio ~917:1).",
+      "expected": {
+        "kind": "decompression-ratio",
+        "pool": "decoded-streams"
+      },
+      "id": "decompression-bomb",
+      "limits": {
+        "maxDecompressionRatio": 40
+      },
+      "path": "session",
+      "pdf": "decompression_bomb.pdf",
+      "profile": {
+        "checks": [
+          {
+            "id": "color-inventory",
+            "severity": "info"
+          }
+        ],
+        "name": "budget-corpus-decompression-bomb"
+      },
+      "sha256": "cb56164642d3476d6233909d96f251db5444445056c3b30fa07f31bcb05bf703"
+    },
+    {
+      "description": "12 pages, each with an unfiltered ~1012 byte content stream; no single stream is large, but the cumulative decoded total across the document exceeds a tightened cap.",
+      "expected": {
+        "kind": "cumulative-decoded-bytes",
+        "pool": "decoded-streams"
+      },
+      "id": "cumulative-decoded-bytes",
+      "limits": {
+        "maxCumulativeDecodedBytes": 6000
+      },
+      "path": "session",
+      "pdf": "cumulative_decoded_bytes.pdf",
+      "profile": {
+        "checks": [
+          {
+            "id": "color-inventory",
+            "severity": "info"
+          }
+        ],
+        "name": "budget-corpus-cumulative-decoded-bytes"
+      },
+      "sha256": "c6c36385834fa6e5005efb820b2ffaed758cac8ebc062ff2ef9cdef94271365a"
+    },
+    {
+      "description": "A page whose content stream invokes a chain of 12 nested Form XObjects (each drawing the next via the Do operator).",
+      "expected": {
+        "kind": "recursive-content-depth",
+        "pool": "document-model"
+      },
+      "id": "deep-nested-content-streams",
+      "limits": {
+        "maxRecursiveContentDepth": 4
+      },
+      "path": "session",
+      "pdf": "deep_nested_content_streams.pdf",
+      "profile": {
+        "checks": [
+          {
+            "id": "color-inventory",
+            "severity": "info"
+          }
+        ],
+        "name": "budget-corpus-deep-nested-content-streams"
+      },
+      "sha256": "8474f1c5fc7cc79a9b972255983ae6d9306260f54a538fb35b9a72beb6bed425"
+    },
+    {
+      "description": "A page content stream with 200 operator/operand tokens -- a stand-in for a pathologically operation-heavy page that would otherwise take an unbounded amount of processing to finish rendering.",
+      "expected": {
+        "kind": "render-operations",
+        "pool": "raster-tile"
+      },
+      "id": "long-running-render-work",
+      "limits": {
+        "maxRenderOperations": 40
+      },
+      "path": "session",
+      "pdf": "long_running_render_work.pdf",
+      "profile": {
+        "checks": [
+          {
+            "id": "color-inventory",
+            "severity": "info"
+          }
+        ],
+        "name": "budget-corpus-long-running-render-work"
+      },
+      "sha256": "2f0fc6ceb8a29daf30e0431be53a7deb867bb81870ee0ff70ce78dba04026e35"
+    },
+    {
+      "description": "A page with a 4000x4000pt declared MediaBox and a single fill spanning it; the 'thin-parts' check's raster probe is configured with an unreachably small pixel budget.",
+      "expected": {
+        "kind": "render-pixels",
+        "pool": "raster-tile"
+      },
+      "id": "raster-probe-pixel-budget",
+      "limits": {},
+      "path": "session",
+      "pdf": "raster_probe_pixel_budget.pdf",
+      "profile": {
+        "checks": [
+          {
+            "classes": [
+              "thin-fill"
+            ],
+            "id": "thin-parts",
+            "max_raster_pixels": 4,
+            "min_effective_width_pt": 0.25,
+            "probe_dpi": 150,
+            "severity": "info"
+          }
+        ],
+        "name": "budget-corpus-raster-probe-pixel-budget"
+      },
+      "sha256": "dc50324b1c3e4308406b15c03f0406db7bd4c62769fa564d59a165d7a2f9cdec"
+    },
+    {
+      "description": "An otherwise-ordinary document with one extra indirect object whose value is a 40-level nested array literal, unreachable from the catalog -- every occupied xref entry is still parsed.",
+      "expected": {
+        "kind": "object-depth",
+        "pool": "document-model"
+      },
+      "id": "deep-recursive-object-graph",
+      "limits": {
+        "maxObjectDepth": 20
+      },
+      "path": "reader",
+      "pdf": "deep_recursive_object_graph.pdf",
+      "sha256": "3a55933ef0bca9c4e6f76a05cb05171d474261d5230439ab7f195a3dba0426c6"
+    },
+    {
+      "description": "An otherwise-ordinary document plus 120 trivial extra indirect objects (unreachable from the catalog) driving the document's total visited-object count past a tightened cap.",
+      "expected": {
+        "kind": "objects-visited",
+        "pool": "document-model"
+      },
+      "id": "pathological-object-count",
+      "limits": {
+        "maxObjectsVisited": 60
+      },
+      "path": "reader",
+      "pdf": "pathological_object_count.pdf",
+      "sha256": "daf3f8f4c51ac715963dd9f8cef1bef38dbccae563d37bbffe609c9f5b78e372"
+    }
+  ],
+  "schema_version": 1
+}
