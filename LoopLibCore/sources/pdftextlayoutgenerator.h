@@ -37,8 +37,9 @@ public:
                                     const PDFCMS* cms,
                                     const PDFOptionalContentActivity* optionalContentActivity,
                                     QTransform pagePointToDevicePointMatrix,
-                                    const PDFMeshQualitySettings& meshQualitySettings) :
-        BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings),
+                                    const PDFMeshQualitySettings& meshQualitySettings,
+                                    PDFProcessingBudget* processingBudget = nullptr) :
+        BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
         m_features(features)
     {
 

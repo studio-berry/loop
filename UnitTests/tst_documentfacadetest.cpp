@@ -342,7 +342,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
             QVERIFY(descriptor.capability != pdfinteraction::CommandCapability::Unclassified);
         }
     }
-    QCOMPARE(implemented, 16);
+    QCOMPARE(implemented, 25);
 }
 
 void DocumentFacadeTest::catalogPublishesAvailabilityAtomically()
