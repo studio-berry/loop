@@ -350,7 +350,7 @@ def plugin_candidate(path: Path) -> bool:
         & {
             "plugins",
             "pdfplugins",
-            "loupe",
+            "loop",
             "platforms",
             "imageformats",
             "iconengines",
@@ -419,7 +419,7 @@ def inspect_linux(root: Path, binaries: list[dict[str, Any]]) -> tuple[list[dict
         "QTDIR",
         "QT_ROOT_DIR",
         "Qt6_DIR",
-        "LOUPE_QT_ROOT",
+        "LOOP_QT_ROOT",
     ):
         runtime_env.pop(variable, None)
 
@@ -690,7 +690,7 @@ def build_evidence(
     status = "passed" if not unique_findings else "failed"
     return {
         "schema_version": 1,
-        "kind": "loupe-package-boundary-evidence",
+        "kind": "loop-package-boundary-evidence",
         "source_sha": source_sha.lower(),
         "platform": platform,
         "expected_architecture": expected_architecture or "unspecified",
@@ -834,7 +834,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Use an already extracted payload; intended for local fixtures and package re-checks.",
     )
     args = parser.parse_args(argv)
-    work_dir = args.work_dir or Path(tempfile.mkdtemp(prefix="loupe-package-boundary-"))
+    work_dir = args.work_dir or Path(tempfile.mkdtemp(prefix="loop-package-boundary-"))
     try:
         evidence = inspect(
             args.platform,

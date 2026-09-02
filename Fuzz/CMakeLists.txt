@@ -20,28 +20,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-if(NOT LOUPE_BUILD_FUZZERS)
+if(NOT LOOP_BUILD_FUZZERS)
     return()
 endif()
 
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    message(FATAL_ERROR "LOUPE_BUILD_FUZZERS requires Clang with libFuzzer support.")
+    message(FATAL_ERROR "LOOP_BUILD_FUZZERS requires Clang with libFuzzer support.")
 endif()
 
-function(loupe_add_fuzzer target source)
+function(loop_add_fuzzer target source)
     add_executable(${target} ${source})
-    target_link_libraries(${target} PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
-    if(LOUPE_USE_TBB)
+    target_link_libraries(${target} PRIVATE LoopLibCore Qt6::Core Qt6::Gui)
+    if(LOOP_USE_TBB)
         target_link_libraries(${target} PRIVATE TBB::tbb)
     endif()
     target_compile_options(${target} PRIVATE -fsanitize=fuzzer)
     target_link_options(${target} PRIVATE -fsanitize=fuzzer)
     set_target_properties(${target} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
     )
 endfunction()
 
-loupe_add_fuzzer(fuzz_pdf_parser fuzz_pdf_parser.cpp)
-loupe_add_fuzzer(fuzz_stream_filters fuzz_stream_filters.cpp)
-loupe_add_fuzzer(fuzz_content_stream fuzz_content_stream.cpp)
-loupe_add_fuzzer(fuzz_images fuzz_images.cpp)
+loop_add_fuzzer(fuzz_pdf_parser fuzz_pdf_parser.cpp)
+loop_add_fuzzer(fuzz_stream_filters fuzz_stream_filters.cpp)
+loop_add_fuzzer(fuzz_content_stream fuzz_content_stream.cpp)
+loop_add_fuzzer(fuzz_images fuzz_images.cpp)

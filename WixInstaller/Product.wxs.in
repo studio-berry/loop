@@ -2,22 +2,22 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <?define MyInstallDir="${WIX_INSTALL_PREFIX}" ?>
 
-  <Product Id="*" Name="Loupe" Language="1033" Version="${LOUPE_VERSION}" Manufacturer="Michael Berry" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
+  <Product Id="*" Name="Loop" Language="1033" Version="${LOOP_VERSION}" Manufacturer="Michael Berry" UpgradeCode="26336d8a-b2e7-44fc-9a73-68aa99900c7a">
     <Package Id="*" Platform="x64" InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Manufacturer="Michael Berry" Keywords="pdf,production,cli" />
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Loupe is already installed." />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Loop is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <WixVariable Id="WixUILicenseRtf" Value="explic.rtf" />
 
-    <Feature Id="feature_LOUPE_Framework" Title="Loupe" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loupe desktop, Loupe CLI, and shared PDF services.">
-      <ComponentGroupRef Id="LOUPE_Framework" />
+    <Feature Id="feature_LOOP_Framework" Title="Loop" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no" Display="expand" Description="Loop desktop, Loop CLI, and shared PDF services.">
+      <ComponentGroupRef Id="LOOP_Framework" />
       <ComponentRef Id="ProgramMenuDir" />
 
-      <Feature Id="feature_LOUPE_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="LoupeEditor Quick shell for interactive PDF inspection and preparation.">
-        <ComponentGroupRef Id="LOUPE_Editor"/>
-${LOUPE_WIX_EDITOR_DATA_REF}
-${LOUPE_WIX_FEATURE_OCR_SERVICE}
+      <Feature Id="feature_LOOP_Editor" Absent="allow" AllowAdvertise="no" Title="Editor"  Display="expand" Level="1" Description="LoopEditor Quick shell for interactive PDF inspection and preparation.">
+        <ComponentGroupRef Id="LOOP_Editor"/>
+${LOOP_WIX_EDITOR_DATA_REF}
+${LOOP_WIX_FEATURE_OCR_SERVICE}
       </Feature>
     </Feature>
 
@@ -27,18 +27,18 @@ ${LOUPE_WIX_FEATURE_OCR_SERVICE}
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="LOUPE" />
+        <Directory Id="INSTALLFOLDER" Name="LOOP" />
         <Directory Id="dir_share_root" Name="share">
-          <Directory Id="dir_loupe" Name="loupe">
-            <Directory Id="dir_loupe_profiles" Name="profiles">
-              <Directory Id="dir_loupe_schemas" Name="schemas" />
+          <Directory Id="dir_loop" Name="loop">
+            <Directory Id="dir_loop_profiles" Name="profiles">
+              <Directory Id="dir_loop_schemas" Name="schemas" />
             </Directory>
           </Directory>
         </Directory>
       </Directory>
       <Directory Id="DesktopFolder" Name="Desktop"/>
       <Directory Id="ProgramMenuFolder" Name="Programs">
-        <Directory Id="ProgramMenuDir" Name="Loupe">
+        <Directory Id="ProgramMenuDir" Name="Loop">
           <Component Id="ProgramMenuDir" Guid="{33A118A2-C455-45C1-9E0C-710750A71335}">
             <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
             <RegistryValue Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Type="string" Value="" KeyPath="yes" />
@@ -49,23 +49,23 @@ ${LOUPE_WIX_FEATURE_OCR_SERVICE}
   </Fragment>
 
   <Fragment>
-    <ComponentGroup Id="LOUPE_Framework">
+    <ComponentGroup Id="LOOP_Framework">
       <Component Id="cmplibcrypto" Directory="INSTALLFOLDER" Guid="{66259284-4454-4AD2-92D4-AEED3D27A0EC}">
         <File Id="fillibcrypto" KeyPath="yes" Source="$(var.MyInstallDir)\libcrypto-3-x64.dll" />
       </Component>
       <Component Id="cmplibssl" Directory="INSTALLFOLDER" Guid="{B0309455-5073-465A-B3C4-83CEAE720761}">
         <File Id="fillibssl" KeyPath="yes" Source="$(var.MyInstallDir)\libssl-3-x64.dll" />
       </Component>
-      <Component Id="cmpLoupeLibCore" Directory="INSTALLFOLDER" Guid="{C8CFFAE9-F913-4103-BD46-A8299E42938E}">
-        <File Id="filLoupeLibCore" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibCore.dll" />
+      <Component Id="cmpLoopLibCore" Directory="INSTALLFOLDER" Guid="{C8CFFAE9-F913-4103-BD46-A8299E42938E}">
+        <File Id="filLoopLibCore" KeyPath="yes" Source="$(var.MyInstallDir)\LoopLibCore.dll" />
       </Component>
-      <Component Id="cmpLoupeLibQuick" Directory="INSTALLFOLDER" Guid="{F8E1B0D4-4B37-4A6C-9D2E-7F3A5C8B1D90}">
-        <File Id="filLoupeLibQuick" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeLibQuick.dll" />
+      <Component Id="cmpLoopLibQuick" Directory="INSTALLFOLDER" Guid="{F8E1B0D4-4B37-4A6C-9D2E-7F3A5C8B1D90}">
+        <File Id="filLoopLibQuick" KeyPath="yes" Source="$(var.MyInstallDir)\LoopLibQuick.dll" />
       </Component>
       <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{E5C28C55-AC18-4E71-B84E-82745BC0360B}">
         <File Id="filPdfTool" KeyPath="yes" Source="$(var.MyInstallDir)\PdfTool.exe" />
       </Component>
-${LOUPE_WIX_SENTRY_CRASHPAD}
+${LOOP_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Core" Directory="INSTALLFOLDER" Guid="{D8024726-7864-42BE-9E38-DFF782AC5C97}">
         <File Id="filQt6Core" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Core.dll" />
       </Component>
@@ -75,7 +75,7 @@ ${LOUPE_WIX_SENTRY_CRASHPAD}
       <Component Id="cmpQt6Network" Directory="INSTALLFOLDER" Guid="{69DD98CF-191F-4E16-9475-7201CF05630D}">
                 <File Id="filQt6Network" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Network.dll" />
       </Component>
-${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
+${LOOP_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6Qml" Directory="INSTALLFOLDER" Guid="{7A6C5B4D-3E2F-41D0-9C8B-7A6E5D4C3B2A}">
         <File Id="filQt6Qml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Qml.dll" />
       </Component>
@@ -88,7 +88,7 @@ ${LOUPE_WIX_QT_PRINTSUPPORT_COMPONENT}
       <Component Id="cmpQt6QuickDialogs2" Directory="INSTALLFOLDER" Guid="{AD9F8E70-6152-4403-CFBE-AD91807F6E5D}">
         <File Id="filQt6QuickDialogs2" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6QuickDialogs2.dll" />
       </Component>
-${LOUPE_WIX_QT_WIDGETS_COMPONENT}
+${LOOP_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Svg" Directory="INSTALLFOLDER" Guid="{8324FA84-C4A4-47E8-849B-62D5FD5F2B4A}">
                 <File Id="filQt6Svg" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Svg.dll" />
       </Component>
@@ -98,8 +98,8 @@ ${LOUPE_WIX_QT_WIDGETS_COMPONENT}
       <Component Id="cmpQt6Xml" Directory="INSTALLFOLDER" Guid="{686836FB-9324-4849-AEFC-3AC5575BE2EC}">
                 <File Id="filQt6Xml" KeyPath="yes" Source="$(var.MyInstallDir)\Qt6Xml.dll" />
       </Component>
-${LOUPE_WIX_ICU_COMPONENTS}
-${LOUPE_WIX_QML_COMPONENTS}
+${LOOP_WIX_ICU_COMPONENTS}
+${LOOP_WIX_QML_COMPONENTS}
       <Component Id="cmpqoffscreen" Directory="dir_platforms" Guid="{A1B2C3D4-E5F6-4789-A012-3456789ABCDE}">
         <File Id="filqoffscreen" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qoffscreen.dll" />
       </Component>
@@ -136,7 +136,7 @@ ${LOUPE_WIX_QML_COMPONENTS}
       <Component Id="cmpqwindows" Directory="dir_platforms" Guid="{8A574FB6-B003-45E6-80F2-0989BEE14A63}">
         <File Id="filqwindows" KeyPath="yes" Source="$(var.MyInstallDir)\platforms\qwindows.dll" />
       </Component>
-${LOUPE_WIX_QT_STYLES_COMPONENT}
+${LOOP_WIX_QT_STYLES_COMPONENT}
       <Component Id="cmpqtexttospeech_sapi" Directory="dir_texttospeech" Guid="{305900CC-4483-4E0F-B611-C32FD9E01021}">
         <File Id="filqtexttospeech_sapi" KeyPath="yes" Source="$(var.MyInstallDir)\texttospeech\qtexttospeech_sapi.dll" />
       </Component>
@@ -211,38 +211,38 @@ ${LOUPE_WIX_QT_STYLES_COMPONENT}
       </Component>
 
       <Component Id="cmptransen" Directory="dir_translations" Guid="{9A96085A-079F-4DD6-B41E-8F854911D3D2}">
-        <File Id="filtransen" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_en.qm" />
+        <File Id="filtransen" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_en.qm" />
       </Component>
 
       <Component Id="cmptransde" Directory="dir_translations" Guid="{B39F38CF-B6C0-47C3-8684-7B154654F435}">
-        <File Id="filtransde" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_de.qm" />
+        <File Id="filtransde" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_de.qm" />
       </Component>
 
       <Component Id="cmptranscs" Directory="dir_translations" Guid="{CE00279C-8F80-4365-A368-10C2BD569795}">
-        <File Id="filtranscs" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_cs.qm" />
+        <File Id="filtranscs" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_cs.qm" />
       </Component>
 
       <Component Id="cmptranses" Directory="dir_translations" Guid="{8857D5F3-D960-4E33-95CF-8F13C300D0E6}">
-        <File Id="filtranses" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_es.qm" />
+        <File Id="filtranses" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_es.qm" />
       </Component>
 
       <Component Id="cmptransko" Directory="dir_translations" Guid="{B959062A-9893-4891-A862-69DFA83E36FA}">
-        <File Id="filtransko" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_ko.qm" />
+        <File Id="filtransko" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_ko.qm" />
       </Component>
       <Component Id="cmptransfr" Directory="dir_translations" Guid="{ADB92655-5718-4F73-B2B9-1F9F58ADE2EF}">
-        <File Id="filtransfr" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_fr.qm" />
+        <File Id="filtransfr" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_fr.qm" />
       </Component>
       <Component Id="cmptransru" Directory="dir_translations" Guid="{994A80C7-F748-428C-A51F-4578A5698B7E}">
-        <File Id="filtransru" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_ru.qm" />
+        <File Id="filtransru" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_ru.qm" />
       </Component>
       <Component Id="cmptranstr" Directory="dir_translations" Guid="{3C6E123C-3975-43DB-93F2-55EAF484F30E}">
-        <File Id="filtranstr" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_tr.qm" />
+        <File Id="filtranstr" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_tr.qm" />
       </Component>
       <Component Id="cmptranszhcn" Directory="dir_translations" Guid="{6275178D-82EF-430A-8443-A01BFBCD9E09}">
-        <File Id="filtranszhcn" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_zh_CN.qm" />
+        <File Id="filtranszhcn" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_zh_CN.qm" />
       </Component>
       <Component Id="cmptranszhtw" Directory="dir_translations" Guid="{D9F7DADC-193E-4BB3-8CF0-B1D469ED79FF}">
-        <File Id="filtranszhtw" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOUPE_zh_TW.qm" />
+        <File Id="filtranszhtw" KeyPath="yes" Source="$(var.MyInstallDir)\translations\LOOP_zh_TW.qm" />
       </Component>
 
       <Component Id="cmpturbojpeg" Directory="INSTALLFOLDER" Guid="{F6E7CB0D-650B-4E2C-BE9F-FCD67446AFB2}">
@@ -253,17 +253,17 @@ ${LOUPE_WIX_QT_STYLES_COMPONENT}
   </Fragment>
 
   <Fragment>
-    <ComponentGroup Id="LOUPE_Editor">
+    <ComponentGroup Id="LOOP_Editor">
       <Component Id="cmpQtConf" Directory="INSTALLFOLDER" Guid="{A4B2C6D8-E0F1-4A3B-9C5D-7E8F0A1B2C3D}">
         <File Id="filQtConf" KeyPath="yes" Source="$(var.MyInstallDir)\qt.conf" />
       </Component>
-      <Component Id="cmpLoupeEditor" Directory="INSTALLFOLDER" Guid="{52D3CF62-F556-4E7A-BCEB-75E5E65ED786}">
-        <File Id="filLoupeEditor" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeEditor.exe">
-          <Shortcut Id="LOUPE_Editor_Shortcut" Directory="ProgramMenuDir" Name="Loupe" Description="Inspect and prepare production PDFs" WorkingDirectory="INSTALLFOLDER" Icon="LOUPE_VP_Icon.exe" IconIndex="0" Advertise="yes"/>
+      <Component Id="cmpLoopEditor" Directory="INSTALLFOLDER" Guid="{52D3CF62-F556-4E7A-BCEB-75E5E65ED786}">
+        <File Id="filLoopEditor" KeyPath="yes" Source="$(var.MyInstallDir)\LoopEditor.exe">
+          <Shortcut Id="LOOP_Editor_Shortcut" Directory="ProgramMenuDir" Name="Loop" Description="Inspect and prepare production PDFs" WorkingDirectory="INSTALLFOLDER" Icon="LOOP_VP_Icon.exe" IconIndex="0" Advertise="yes"/>
         </File>
-        <ProgId Id='loupe_default_editor.pdf' Description='PDF Document'>
+        <ProgId Id='loop_default_editor.pdf' Description='PDF Document'>
           <Extension Id='pdf' ContentType='application/pdf'>
-            <Verb Id='open' Command='Open' TargetFile='filLoupeEditor' Argument='"%1"' />
+            <Verb Id='open' Command='Open' TargetFile='filLoopEditor' Argument='"%1"' />
           </Extension>
         </ProgId>
       </Component>
@@ -271,22 +271,22 @@ ${LOUPE_WIX_QT_STYLES_COMPONENT}
   </Fragment>
 
   <Fragment>
-    <Icon Id="LOUPE_VP_Icon.exe" SourceFile="$(var.MyInstallDir)\LoupeEditor.exe"/>
+    <Icon Id="LOOP_VP_Icon.exe" SourceFile="$(var.MyInstallDir)\LoopEditor.exe"/>
   </Fragment>
 
-${LOUPE_WIX_FRAGMENT_OCR_SERVICE}
-${LOUPE_WIX_QML_DIRECTORY_REFS}
+${LOOP_WIX_FRAGMENT_OCR_SERVICE}
+${LOOP_WIX_QML_DIRECTORY_REFS}
 
   <Fragment>
-    <ComponentGroup Id="LOUPE_Loupe_Data">
-      <Component Id="cmpLoupeDefaultProfile" Directory="dir_loupe_profiles" Guid="{C1D9E8A2-5F4B-4A6C-9D3E-7B1F0C8A2D45}">
-        <File Id="filLoupeDefaultProfile" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loupe\profiles\loupe-default.json" />
+    <ComponentGroup Id="LOOP_Loop_Data">
+      <Component Id="cmpLoopDefaultProfile" Directory="dir_loop_profiles" Guid="{C1D9E8A2-5F4B-4A6C-9D3E-7B1F0C8A2D45}">
+        <File Id="filLoopDefaultProfile" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loop\profiles\loop-default.json" />
       </Component>
-      <Component Id="cmpLoupeProfileSchema" Directory="dir_loupe_schemas" Guid="{D2E0F9B3-6A5C-4B7D-8E4F-9C2A1D3B4E56}">
-        <File Id="filLoupeProfileSchema" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loupe\profiles\schemas\profile.schema.json" />
+      <Component Id="cmpLoopProfileSchema" Directory="dir_loop_schemas" Guid="{D2E0F9B3-6A5C-4B7D-8E4F-9C2A1D3B4E56}">
+        <File Id="filLoopProfileSchema" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loop\profiles\schemas\profile.schema.json" />
       </Component>
-      <Component Id="cmpLoupeReportSchema" Directory="dir_loupe_schemas" Guid="{E3F1A0C4-7B6D-4C8E-9F5A-0D3B2E4C5F67}">
-        <File Id="filLoupeReportSchema" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loupe\profiles\schemas\report.schema.json" />
+      <Component Id="cmpLoopReportSchema" Directory="dir_loop_schemas" Guid="{E3F1A0C4-7B6D-4C8E-9F5A-0D3B2E4C5F67}">
+        <File Id="filLoopReportSchema" KeyPath="yes" Source="$(var.MyInstallDir)\..\share\loop\profiles\schemas\report.schema.json" />
       </Component>
     </ComponentGroup>
   </Fragment>
@@ -297,7 +297,7 @@ ${LOUPE_WIX_QML_DIRECTORY_REFS}
     </DirectoryRef>
   </Fragment>
 
-${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
+${LOOP_WIX_QT_PRINTSUPPORT_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">
@@ -305,7 +305,7 @@ ${LOUPE_WIX_QT_PRINTSUPPORT_DIRECTORY}
     </DirectoryRef>
   </Fragment>
 
-${LOUPE_WIX_QT_STYLES_DIRECTORY}
+${LOOP_WIX_QT_STYLES_DIRECTORY}
 
   <Fragment>
     <DirectoryRef Id="INSTALLFOLDER">

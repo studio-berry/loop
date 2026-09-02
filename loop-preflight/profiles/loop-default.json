@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "loop-default",
+  "version": "1.0.0",
+  "digest": "0c32cc54154186f2d92a02804e4b8ac8ebd226863cca15e9670bf12f1c84c1a1",
+  "name": "Loop Default",
+  "description": "Default prepress profile for Loop print jobs (Venue Poster, Handbill, Signage).",
+  "job_types": ["Venue Poster", "Handbill", "Signage"],
+  "checks": [
+    { "id": "embedded-fonts", "severity": "error" },
+    { "id": "image-resolution", "min_dpi": 300, "severity": "warning" },
+    { "id": "bleed", "required": true, "amount_pt": 9, "severity": "error" },
+    { "id": "trim", "severity": "warning", "tolerance_pt": 1 },
+    { "id": "page-size", "severity": "warning", "tolerance_pt": 1 },
+    { "id": "color-mode", "allowed": ["CMYK", "Grayscale"], "severity": "error" },
+    { "id": "transparency-risk", "severity": "warning" },
+    { "id": "color-inventory", "probe_dpi": 150, "rich_black_k_percent": 10, "severity": "info" },
+    { "id": "white-overprint", "severity": "warning" }
+  ],
+  "fixups": [
+    { "id": "rgb-to-cmyk", "confirm": true },
+    { "id": "add-bleed", "amount_pt": 9, "confirm": true },
+    { "id": "downsample-images", "target_dpi": 300, "confirm": true }
+  ]
+}

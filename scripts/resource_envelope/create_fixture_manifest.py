@@ -29,7 +29,7 @@ def create_manifest(fixtures: dict[str, Path], provenance: str) -> dict[str, obj
             record["page_count"] = expected_page_count
         records.append(record)
     return {
-        "schema_kind": "loupe-resource-envelope-fixtures",
+        "schema_kind": "loop-resource-envelope-fixtures",
         "schema_version": 1,
         "fixtures": records,
     }

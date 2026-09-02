@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/lifecycle-trace-v1.json",
-  "title": "Loupe deterministic lifecycle trace",
+  "$id": "https://github.com/studio-berry/loop/schema/lifecycle-trace-v1.json",
+  "title": "Loop deterministic lifecycle trace",
   "type": "object",
   "required": [
     "schema_kind",
@@ -14,7 +14,7 @@
     "shrink_history"
   ],
   "properties": {
-    "schema_kind": { "const": "loupe-lifecycle-trace" },
+    "schema_kind": { "const": "loop-lifecycle-trace" },
     "schema_version": { "const": 1 },
     "seed": { "type": "integer", "minimum": 0 },
     "initial_artifact_digest": { "type": "string", "minLength": 1 },

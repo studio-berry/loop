@@ -9,7 +9,7 @@ provenance and negative contract fixtures remain explicitly non-authoritative.
 ## Implementation
 
 - Removed retired secondary desktop entries and icons.
-- Reduced the WiX project to the current x64 LoupeEditor/PdfTool product boundary.
+- Reduced the WiX project to the current x64 LoopEditor/PdfTool product boundary.
 - Updated current workspace, platform, scheduler, recovery, accessibility, and
   repository-map documentation to use the Quick/Core graph.
 - Added `scripts/ci/check_phase5_residue.py`, wired into source-integrity CI,
@@ -32,5 +32,5 @@ release evidence remain separate acceptance records.
 ## Next-session entry condition
 
 Session 09 may start only from this branch’s accepted exact SHA after Issues
-LOUPE-25, LOUPE-26, and LOUPE-27 and the Session 08 exit gate are updated from
+issues 25, 26, and 27 and the Session 08 exit gate are updated from
 the final evidence record.

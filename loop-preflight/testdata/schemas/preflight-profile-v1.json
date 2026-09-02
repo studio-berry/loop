@@ -1,0 +1,13 @@
+{
+  "schema_kind": "preflight-profile",
+  "schema_version": 1,
+  "id": "loop-default",
+  "version": "1",
+  "name": "Loop default",
+  "checks": [
+    {
+      "id": "bleed",
+      "amount_pt": 9
+    }
+  ]
+}

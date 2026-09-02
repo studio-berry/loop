@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared validation for the checked-in Loupe product-surface contract.
+"""Shared validation for the checked-in Loop product-surface contract.
 
 The product-surface manifest is intentionally small and dependency-free.  This
 module keeps the schema-level checks and the source/install/package checks in one
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-PROFILES = ("developer", "loupe-release")
+PROFILES = ("developer", "loop-release")
 MANIFEST_RELATIVE = Path("docs/product-surface.json")
 SCHEMA_RELATIVE = Path("docs/schemas/product-surface.schema.json")
 ARTIFACT_EXTENSIONS = frozenset({".a", ".dll", ".dylib", ".exe", ".lib", ".so"})
@@ -85,7 +85,7 @@ def _validate_profile_map(value: Any, label: str, errors: list[str], *, arrays: 
         errors.append(f"{label} must be an object")
         return
     if set(value) != set(PROFILES):
-        errors.append(f"{label} must define exactly developer and loupe-release")
+        errors.append(f"{label} must define exactly developer and loop-release")
         return
     for profile in PROFILES:
         item = value[profile]
@@ -115,9 +115,9 @@ def validate_manifest(manifest: dict[str, Any], root: Path | None = None) -> lis
     if manifest.get("adr") != "docs/adr/adr-005-product-surface-pruning-classification.md":
         errors.append("adr must link to ADR-005")
     if manifest.get("profiles") != list(PROFILES):
-        errors.append("profiles must be exactly [developer, loupe-release]")
-    if manifest.get("shell_contract") != "docs/loupe-shell.json":
-        errors.append("shell_contract must link to docs/loupe-shell.json")
+        errors.append("profiles must be exactly [developer, loop-release]")
+    if manifest.get("shell_contract") != "docs/loop-shell.json":
+        errors.append("shell_contract must link to docs/loop-shell.json")
 
     surfaces = manifest.get("surfaces")
     surface_ids: list[str] = []
@@ -196,7 +196,7 @@ def validate_manifest(manifest: dict[str, Any], root: Path | None = None) -> lis
     expected_packaging = {
         "desktop_entries",
         "appx_applications",
-        "loupe_launcher",
+        "loop_launcher",
         "flatpak",
         "wix",
         "first_party_artifact_globs",
@@ -211,17 +211,17 @@ def validate_manifest(manifest: dict[str, Any], root: Path | None = None) -> lis
     _validate_profile_map(packaging.get("desktop_entries"), "packaging.desktop_entries", errors, arrays=True)
     _validate_profile_map(packaging.get("appx_applications"), "packaging.appx_applications", errors, arrays=True)
 
-    launcher = packaging.get("loupe_launcher")
+    launcher = packaging.get("loop_launcher")
     if not isinstance(launcher, dict):
-        errors.append("packaging.loupe_launcher must be an object")
+        errors.append("packaging.loop_launcher must be an object")
     else:
         if set(launcher) != {"desktop_entry", "executable", "appx_id", "file_associations"}:
-            errors.append("packaging.loupe_launcher has an unexpected field set")
+            errors.append("packaging.loop_launcher has an unexpected field set")
         for field in ("desktop_entry", "executable", "appx_id"):
             if not _is_nonempty_string(launcher.get(field)):
-                errors.append(f"packaging.loupe_launcher.{field} must be non-empty")
+                errors.append(f"packaging.loop_launcher.{field} must be non-empty")
         if not isinstance(launcher.get("file_associations"), list) or any(not _is_nonempty_string(item) for item in launcher.get("file_associations", [])):
-            errors.append("packaging.loupe_launcher.file_associations must be a string array")
+            errors.append("packaging.loop_launcher.file_associations must be a string array")
 
     flatpak = packaging.get("flatpak")
     if not isinstance(flatpak, dict):
@@ -288,8 +288,8 @@ def validate_manifest(manifest: dict[str, Any], root: Path | None = None) -> lis
     else:
         if set(ui) != {"contract", "entrypoint_surface", "legacy_forms"}:
             errors.append("ui has an unexpected field set")
-        if ui.get("contract") != "docs/loupe-shell.json":
-            errors.append("ui.contract must link to docs/loupe-shell.json")
+        if ui.get("contract") != "docs/loop-shell.json":
+            errors.append("ui.contract must link to docs/loop-shell.json")
         if ui.get("entrypoint_surface") not in surface_ids:
             errors.append("ui.entrypoint_surface must name a manifest surface")
         legacy_forms = ui.get("legacy_forms")
@@ -430,14 +430,14 @@ def validate_source(root: Path, manifest: dict[str, Any], profile: str, build_di
         expected_state = row.get("profiles", {}).get(profile)
         if expected_state not in {"present", "absent"}:
             continue
-        if option == "LOUPE_BUILD_QUICK_CANVAS":
-            if not re.search(r"if\s*\(\s*LOUPE_BUILD_QUICK_CANVAS\s*\)", cmake_text):
-                errors.append("LOUPE_BUILD_QUICK_CANVAS does not guard its maintained product targets")
+        if option == "LOOP_BUILD_QUICK_CANVAS":
+            if not re.search(r"if\s*\(\s*LOOP_BUILD_QUICK_CANVAS\s*\)", cmake_text):
+                errors.append("LOOP_BUILD_QUICK_CANVAS does not guard its maintained product targets")
             continue
         expected_default = "ON" if expected_state == "present" else "OFF"
         default_marker = f"_{option}_DEFAULT"
-        if profile == "loupe-release":
-            default_pattern = rf"if\s*\(\s*LOUPE_LOUPE_DISTRIBUTION\s*\).*?set\(\s*{re.escape(default_marker)}\s+OFF\s*\)"
+        if profile == "loop-release":
+            default_pattern = rf"if\s*\(\s*LOOP_LOOP_DISTRIBUTION\s*\).*?set\(\s*{re.escape(default_marker)}\s+OFF\s*\)"
         else:
             default_pattern = rf"else\s*\(\s*\).*?set\(\s*{re.escape(default_marker)}\s+ON\s*\)"
         if not re.search(default_pattern, cmake_text, flags=re.IGNORECASE | re.DOTALL):
@@ -452,11 +452,11 @@ def validate_source(root: Path, manifest: dict[str, Any], profile: str, build_di
             errors.append(f"build directory has no CMakeCache.txt: {build_dir}")
         else:
             values = _read_cache_values(cache)
-            expected_distribution = "ON" if profile == "loupe-release" else "OFF"
-            if values.get("LOUPE_LOUPE_DISTRIBUTION") != expected_distribution:
+            expected_distribution = "ON" if profile == "loop-release" else "OFF"
+            if values.get("LOOP_LOOP_DISTRIBUTION") != expected_distribution:
                 errors.append(
-                    f"CMake cache profile mismatch: expected LOUPE_LOUPE_DISTRIBUTION={expected_distribution}, "
-                    f"found {values.get('LOUPE_LOUPE_DISTRIBUTION')!r}"
+                    f"CMake cache profile mismatch: expected LOOP_LOOP_DISTRIBUTION={expected_distribution}, "
+                    f"found {values.get('LOOP_LOOP_DISTRIBUTION')!r}"
                 )
             for row in rows:
                 option = row.get("build_option")
@@ -673,7 +673,7 @@ def _appx_association_tokens(associations: Iterable[str]) -> set[str]:
 def validate_packaging_sources(root: Path, manifest: dict[str, Any], profile: str) -> list[str]:
     errors: list[str] = []
     packaging = manifest["packaging"]
-    launcher = packaging["loupe_launcher"]
+    launcher = packaging["loop_launcher"]
 
     flatpak = packaging["flatpak"]
     if flatpak["profiles"][profile] == "present":
@@ -686,12 +686,12 @@ def validate_packaging_sources(root: Path, manifest: dict[str, Any], profile: st
                 errors.append(f"Flatpak command drift: expected {flatpak['command']}")
             modules = document.get("modules", [])
             project_module = next(
-                (item for item in modules if isinstance(item, dict) and item.get("name") == "loupe-pdf"),
+                (item for item in modules if isinstance(item, dict) and item.get("name") == "loop-pdf"),
                 None,
             )
             opts = project_module.get("config-opts", []) if isinstance(project_module, dict) else []
-            if "-DLOUPE_LOUPE_DISTRIBUTION=ON" not in opts:
-                errors.append("Flatpak project module is not configured for loupe-release")
+            if "-DLOOP_LOOP_DISTRIBUTION=ON" not in opts:
+                errors.append("Flatpak project module is not configured for loop-release")
         except ContractError as exc:
             errors.append(str(exc))
 

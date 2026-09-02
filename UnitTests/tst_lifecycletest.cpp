@@ -144,7 +144,7 @@ QJsonObject traceToJson(quint64 seed, const QVector<TraceCommand>& trace)
             { QStringLiteral("argument"), QString::number(trace.at(index).argument) } });
     }
     return QJsonObject{
-        { QStringLiteral("schema_kind"), QStringLiteral("loupe-lifecycle-trace") },
+        { QStringLiteral("schema_kind"), QStringLiteral("loop-lifecycle-trace") },
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("seed"), static_cast<qint64>(seed) },
         { QStringLiteral("initial_artifact_digest"), pdf::PDFRunIdentity::digestBytes(QByteArrayLiteral("lifecycle-source-v1")) },
@@ -270,7 +270,7 @@ void LifecycleTest::boundedTraceGenerationIsDeterministic()
     QCOMPARE(QJsonDocument(traceToJson(seed, first)).toJson(QJsonDocument::Compact),
              QJsonDocument(traceToJson(seed, second)).toJson(QJsonDocument::Compact));
 
-    QFile goldenFile(QStringLiteral(LOUPE_UNITTEST_SOURCE_DIR "/testdata/lifecycle/seed-20260821.json"));
+    QFile goldenFile(QStringLiteral(LOOP_UNITTEST_SOURCE_DIR "/testdata/lifecycle/seed-20260821.json"));
     QVERIFY(goldenFile.open(QIODevice::ReadOnly));
     QJsonParseError parseError;
     const QJsonDocument goldenDocument = QJsonDocument::fromJson(goldenFile.readAll(), &parseError);

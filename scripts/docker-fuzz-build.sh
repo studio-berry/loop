@@ -9,7 +9,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-build}"
-IMAGE="${LOUPE_FUZZ_DOCKER_IMAGE:-ubuntu:24.04}"
+IMAGE="${LOOP_FUZZ_DOCKER_IMAGE:-ubuntu:24.04}"
 
 if [[ -f /.dockerenv ]]; then
     exec "${REPO_ROOT}/scripts/docker-fuzz-build-inner.sh" "${MODE}"

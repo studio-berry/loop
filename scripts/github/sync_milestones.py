@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MILESTONES_DIR = ROOT / "docs" / "github-milestones"
 MANIFEST_PATH = MILESTONES_DIR / "manifest.json"
-REPO = "studio-berry/loupe"
+REPO = "studio-berry/loop"
 
 
 @dataclass(frozen=True)

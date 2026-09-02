@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/interaction-scenario-v1.json",
-  "title": "Loupe interaction regression scenario",
+  "$id": "https://github.com/studio-berry/loop/schema/interaction-scenario-v1.json",
+  "title": "Loop interaction regression scenario",
   "description": "One replayable direct-manipulation scenario for issue #146. The recorded input lives under 'trace' in exactly the shape InteractionTrace::toJson() emits, or is generated from 'input_script'; everything else declares the fixture, the synthetic cost model, the budgets, and the expected end state. Scenario payload is deliberately kept out of InteractionTrace itself, whose privacy contract forbids geometry and target identity.",
   "type": "object",
   "required": [
@@ -15,7 +15,7 @@
     "expected"
   ],
   "properties": {
-    "schema_kind": { "const": "loupe-interaction-scenario" },
+    "schema_kind": { "const": "loop-interaction-scenario" },
     "schema_version": { "const": 1 },
     "scenario_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
     "description": { "type": "string", "minLength": 1 },

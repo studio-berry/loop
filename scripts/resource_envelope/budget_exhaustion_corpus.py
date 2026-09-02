@@ -6,7 +6,7 @@ for it in manifest.json -- not by being large, but by being the wrong shape
 (a decompression bomb, a deeply nested object, thousands of tiny operators,
 ...). None of these files are third-party samples and none exceed a few
 kilobytes: the point is that a hostile document does not need to be big to
-be hostile, and Loupe must fail closed (report the exact exceeded budget)
+be hostile, and Loop must fail closed (report the exact exceeded budget)
 rather than hang, get OOM-killed, or silently return a clean result.
 
 Two thirds of the manifest ("path": "session") trip their budget while

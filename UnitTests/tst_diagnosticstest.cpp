@@ -232,8 +232,8 @@ void DiagnosticsTest::rotation_rollsAtSizeCapAndPrunesOldFiles()
     QTemporaryDir logDir;
     QVERIFY(logDir.isValid());
 
-    qputenv("LOUPE_LOG_DIR", logDir.path().toLocal8Bit());
-    qputenv("LOUPE_LOG_LEVEL", "Debug");
+    qputenv("LOOP_LOG_DIR", logDir.path().toLocal8Bit());
+    qputenv("LOOP_LOG_LEVEL", "Debug");
 
     const QtMessageHandler previousHandler = qInstallMessageHandler(silentMessageHandler);
     {
@@ -249,8 +249,8 @@ void DiagnosticsTest::rotation_rollsAtSizeCapAndPrunesOldFiles()
     }
     qInstallMessageHandler(previousHandler);
 
-    qunsetenv("LOUPE_LOG_DIR");
-    qunsetenv("LOUPE_LOG_LEVEL");
+    qunsetenv("LOOP_LOG_DIR");
+    qunsetenv("LOOP_LOG_LEVEL");
 
     const QString baseLogPath = QDir(logDir.path()).filePath(QStringLiteral("rotationtest.log"));
     const QString rotated1Path = baseLogPath + QStringLiteral(".1");
@@ -279,7 +279,7 @@ void DiagnosticsTest::collector_writesManifestWithMatchingHashes()
 
     QTemporaryDir logDir;
     QVERIFY(logDir.isValid());
-    qputenv("LOUPE_LOG_DIR", logDir.path().toLocal8Bit());
+    qputenv("LOOP_LOG_DIR", logDir.path().toLocal8Bit());
 
     const QtMessageHandler previousHandler = qInstallMessageHandler(silentMessageHandler);
 
@@ -297,7 +297,7 @@ void DiagnosticsTest::collector_writesManifestWithMatchingHashes()
     }
 
     qInstallMessageHandler(previousHandler);
-    qunsetenv("LOUPE_LOG_DIR");
+    qunsetenv("LOOP_LOG_DIR");
 
     QVERIFY2(result.success, qPrintable(result.errorMessage));
     QVERIFY(QDir(result.bundleDirectory).exists());
@@ -361,8 +361,8 @@ void DiagnosticsTest::collector_scrubsFinalBundleArtifacts()
     QVERIFY(outputDir.isValid());
     QTemporaryDir logDir;
     QVERIFY(logDir.isValid());
-    qputenv("LOUPE_LOG_DIR", logDir.path().toLocal8Bit());
-    qputenv("LOUPE_LOG_LEVEL", "Warning");
+    qputenv("LOOP_LOG_DIR", logDir.path().toLocal8Bit());
+    qputenv("LOOP_LOG_LEVEL", "Warning");
 
     const QtMessageHandler previousHandler = qInstallMessageHandler(silentMessageHandler);
     pdf::PDFDiagnosticsResult result;
@@ -376,8 +376,8 @@ void DiagnosticsTest::collector_scrubsFinalBundleArtifacts()
         result = pdf::PDFDiagnosticsCollector::collect(options);
     }
     qInstallMessageHandler(previousHandler);
-    qunsetenv("LOUPE_LOG_DIR");
-    qunsetenv("LOUPE_LOG_LEVEL");
+    qunsetenv("LOOP_LOG_DIR");
+    qunsetenv("LOOP_LOG_LEVEL");
 
     QVERIFY2(result.success, qPrintable(result.errorMessage));
     QDirIterator it(result.bundleDirectory, QDir::Files, QDirIterator::Subdirectories);

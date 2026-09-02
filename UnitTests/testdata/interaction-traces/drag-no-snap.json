@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "drag-no-snap",
   "description": "Drag a finding with snapping off. Asserts the grab offset taken at the press survives the whole gesture, so the object does not jump its corner to the cursor on the first move, and that exactly one operation is emitted on release.",

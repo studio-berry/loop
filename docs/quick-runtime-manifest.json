@@ -3,10 +3,10 @@
   "status": "product-complete",
   "product_qml_shipped": true,
   "product_target": {
-    "name": "LoupeEditor",
-    "qml_uri": "Loupe.Quick",
-    "qml_file": "LoupeEditor/qml/Main.qml",
-    "cmake_file": "LoupeEditor/CMakeLists.txt",
+    "name": "LoopEditor",
+    "qml_uri": "Loop.Quick",
+    "qml_file": "LoopEditor/qml/Main.qml",
+    "cmake_file": "LoopEditor/CMakeLists.txt",
     "install": true,
     "qt_modules": [
       "Qt6::Qml",
@@ -18,8 +18,8 @@
   "qualification_targets": [
     {
       "name": "QuickShellSmoke",
-      "cmake_option": "LOUPE_BUILD_QUICK_SHELL_SMOKE",
-      "qml_uri": "Loupe.QuickShellSmoke",
+      "cmake_option": "LOOP_BUILD_QUICK_SHELL_SMOKE",
+      "qml_uri": "Loop.QuickShellSmoke",
       "qml_file": "QuickShellSmoke/QuickShellSmoke.qml",
       "cmake_file": "QuickShellSmoke/CMakeLists.txt",
       "install": false,
@@ -31,8 +31,8 @@
     },
     {
       "name": "CanvasBenchmark",
-      "cmake_option": "LOUPE_BUILD_CANVAS_BENCHMARK",
-      "qml_uri": "Loupe.CanvasBenchmark",
+      "cmake_option": "LOOP_BUILD_CANVAS_BENCHMARK",
+      "qml_uri": "Loop.CanvasBenchmark",
       "qml_file": "CanvasBenchmark/CanvasBenchmark.qml",
       "cmake_file": "CanvasBenchmark/CMakeLists.txt",
       "install": false,

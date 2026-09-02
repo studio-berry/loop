@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate the external DIV2K bleed corpus and build deterministic PDF workloads.
 
-The corpus is intentionally external to the Loupe repository.  The default
+The corpus is intentionally external to the Loop repository.  The default
 location is the generated corpus used by the bleed research lab::
 
     C:\\.dev\\repos\\l-bleed\\results\\DIV2K
@@ -12,10 +12,10 @@ Examples::
         --corpus-root C:\\.dev\\repos\\l-bleed\\results\\DIV2K
     python scripts/resource_envelope/div2k_workload.py manifest \
         --corpus-root C:\\.dev\\repos\\l-bleed\\results\\DIV2K \
-        --output C:\\temp\\loupe-div2k-manifest.json --sample-count 256
+        --output C:\\temp\\loop-div2k-manifest.json --sample-count 256
     python scripts/resource_envelope/div2k_workload.py build-pdf \
-        --manifest C:\\temp\\loupe-div2k-manifest.json \
-        --output C:\\temp\\loupe-div2k-10000-pages.pdf --page-count 10000
+        --manifest C:\\temp\\loop-div2k-manifest.json \
+        --output C:\\temp\\loop-div2k-10000-pages.pdf --page-count 10000
 
 The PDF writer deliberately supports the corpus' 8-bit RGB, non-interlaced PNG
 files without requiring a package installation.  Workload outputs and their

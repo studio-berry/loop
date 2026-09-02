@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify one installed Loupe product profile against the checked-in manifest."""
+"""Verify one installed Loop product profile against the checked-in manifest."""
 
 from __future__ import annotations
 

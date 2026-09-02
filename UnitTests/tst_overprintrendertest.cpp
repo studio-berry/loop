@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// Render goldens are refreshed with LOUPE_UPDATE_SNAPSHOTS=1. The comparison is
+// Render goldens are refreshed with LOOP_UPDATE_SNAPSHOTS=1. The comparison is
 // intentionally tolerant of small Qt/platform rasterization differences while
 // still requiring a bounded number of differing pixels. Mismatch images are
 // written beside the committed baselines for CI artifact inspection.
@@ -59,17 +59,17 @@ const RenderCase RENDER_CASES[] = {
 
 QString fixturesDirectory()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 QString rendersDirectory()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/renders");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/renders");
 }
 
 bool updateSnapshotsRequested()
 {
-    return qEnvironmentVariableIntValue("LOUPE_UPDATE_SNAPSHOTS") == 1;
+    return qEnvironmentVariableIntValue("LOOP_UPDATE_SNAPSHOTS") == 1;
 }
 
 QImage renderFixture(const QString& fixturePath, bool separationSimulation)

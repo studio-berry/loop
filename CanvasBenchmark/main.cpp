@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+#include "pdfapplicationidentity.h"
+
 #include <QApplication>
 #include <QAccessible>
 #include <QColor>
@@ -261,7 +263,7 @@ QJsonObject runQuickCandidate(Candidate candidate)
         widgetHost->setObjectName(QStringLiteral("qquickWidgetHost"));
         quickWidget = std::make_unique<QQuickWidget>(widgetHost.get());
         quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-        quickWidget->setSource(QUrl(QStringLiteral("qrc:/qt/qml/Loupe/CanvasBenchmark/CanvasBenchmark.qml")));
+        quickWidget->setSource(QUrl(QStringLiteral("qrc:/qt/qml/Loop/CanvasBenchmark/CanvasBenchmark.qml")));
         quickWidget->setGeometry(0, 0, kWidth, kHeight);
         widgetHost->resize(kWidth, kHeight);
         widgetHost->show();
@@ -395,7 +397,7 @@ QJsonObject runFocusBridgeProbe()
     quickWidget.setObjectName(QStringLiteral("quickBridge"));
     quickWidget.setResizeMode(QQuickWidget::SizeRootObjectToView);
     quickWidget.setFocusPolicy(Qt::StrongFocus);
-    quickWidget.setSource(QUrl(QStringLiteral("qrc:/qt/qml/Loupe/CanvasBenchmark/CanvasBenchmark.qml")));
+    quickWidget.setSource(QUrl(QStringLiteral("qrc:/qt/qml/Loop/CanvasBenchmark/CanvasBenchmark.qml")));
 
     QLineEdit after;
     after.setObjectName(QStringLiteral("widgetAfterQuick"));
@@ -470,6 +472,7 @@ QJsonObject runFocusBridgeProbe()
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::CanvasBenchmark);
     QString requested = QStringLiteral("all");
     for (int index = 1; index < argc; ++index)
     {

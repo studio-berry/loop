@@ -22,9 +22,9 @@ relations on the issues.
 
 ## Context
 
-Cycle 1 delivered Loupe V1 (operator loop, MIC-300) and stabilized CI. The four
-High-priority Loupe tickets filed from the Dev Issue Tracker (MIC-306–309) all target
-PageMaster export robustness. The export job in `LoupePageMaster/mainwindow.cpp:464-584`
+Cycle 1 delivered Loop V1 (operator loop, MIC-300) and stabilized CI. The four
+High-priority Loop tickets filed from the Dev Issue Tracker (MIC-306–309) all target
+PageMaster export robustness. The export job in `LoopPageMaster/mainwindow.cpp:464-584`
 assembles all outputs into `assembledDocumentStorage` before optimizing and writing any
 (unbounded peak memory), has no cancellation contract (`~MainWindow` blocks on
 `m_exportWatcher->waitForFinished()`), and tracks written files only in memory, so a
@@ -80,4 +80,4 @@ the three behaviors land as increments on the new service.
 - MIC-309: killing the process mid-batch leaves no torn PDFs; manifest identifies
   completed vs. pending outputs on restart.
 - MIC-319: golden-corpus white-overprint fixture produces the new finding; snapshot
-  added under `loupe-preflight/testdata/`.
+  added under `loop-preflight/testdata/`.

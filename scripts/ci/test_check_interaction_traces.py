@@ -27,7 +27,7 @@ from scripts.ci.check_interaction_traces import (  # noqa: E402
 
 def minimal_scenario(**over) -> dict:
     scenario = {
-        "schema_kind": "loupe-interaction-scenario",
+        "schema_kind": "loop-interaction-scenario",
         "schema_version": 1,
         "scenario_id": "example",
         "description": "An example scenario.",
@@ -67,7 +67,7 @@ def duration(available=True, p50=1.0, p95=2.0, p99=3.0, sample_count=10) -> dict
 
 def minimal_report(**over) -> dict:
     report = {
-        "schema_kind": "loupe-interaction-trace-report",
+        "schema_kind": "loop-interaction-trace-report",
         "schema_version": 1,
         "lane": "deterministic",
         "identity": {
@@ -140,7 +140,7 @@ class CorpusTests(unittest.TestCase):
             (corpus / "manifest.json").write_text(
                 json.dumps(
                     {
-                        "schema_kind": "loupe-interaction-corpus",
+                        "schema_kind": "loop-interaction-corpus",
                         "schema_version": 1,
                         "scenarios": [
                             {
@@ -185,7 +185,7 @@ class CorpusTests(unittest.TestCase):
             (corpus / "manifest.json").write_text(
                 json.dumps(
                     {
-                        "schema_kind": "loupe-interaction-corpus",
+                        "schema_kind": "loop-interaction-corpus",
                         "schema_version": 1,
                         "scenarios": [
                             {
@@ -226,7 +226,7 @@ class BlockedScenarioTests(unittest.TestCase):
             (corpus / "manifest.json").write_text(
                 json.dumps(
                     {
-                        "schema_kind": "loupe-interaction-corpus",
+                        "schema_kind": "loop-interaction-corpus",
                         "schema_version": 1,
                         "scenarios": [
                             {

@@ -1,0 +1,472 @@
+[
+  {
+    "id": "bleed-adequate",
+    "pdf": "bleed-adequate.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "MediaBox 220x220, TrimBox 200x200 inset 10pt on all sides -> unset BleedBox falls back to CropBox -> MediaBox, giving 10pt margin (>= amount_pt 9)."
+  },
+  {
+    "id": "bleed-missing",
+    "pdf": "bleed-missing.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": ["bleed", "color-inventory"] },
+    "source": "generated",
+    "notes": "Only MediaBox (200x200) is set; TrimBox/BleedBox/CropBox all fall back to it, so bleed==trim==media -> zero bleed margin -> bleed check fails."
+  },
+  {
+    "id": "color-rgb",
+    "pdf": "color-rgb.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": ["color-mode", "color-inventory"] },
+    "source": "hand-built",
+    "notes": "DeviceRGB image (disallowed) at ~310 DPI on a page with adequate bleed and no fonts, so only color-mode fires."
+  },
+  {
+    "id": "color-cmyk",
+    "pdf": "color-cmyk.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "hand-built",
+    "notes": "DeviceCMYK image (allowed) at ~310 DPI, adequate bleed, no fonts -> clean pass. Implemented in MIC-148."
+  },
+  {
+    "id": "color-inventory-spot",
+    "pdf": "color-inventory-spot.pdf",
+    "profile": "testdata/profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Named Separation colorant; expected spot-color and separation informational findings."
+  },
+  {
+    "id": "rich-black",
+    "pdf": "rich-black.pdf",
+    "profile": "testdata/profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y plus K patch; expected page-scoped rich-black informational finding."
+  },
+  {
+    "id": "black-only",
+    "pdf": "black-only.pdf",
+    "profile": "testdata/profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process black alone; must not emit rich-black."
+  },
+  {
+    "id": "cmy-rich-no-k",
+    "pdf": "cmy-rich-no-k.pdf",
+    "profile": "testdata/profiles/test-color-inventory.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "Process C/M/Y without K; must not emit rich-black."
+  },
+  {
+    "id": "image-dpi-low",
+    "pdf": "image-dpi-low.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["image-resolution", "color-inventory"] },
+    "source": "hand-built",
+    "notes": "100x100 px DeviceGray image placed at 4x4 in -> ~25 DPI, below min_dpi 300. image-resolution is severity warning in loop-default, so it appears in warnings[] and report.pass stays true. Implemented in MIC-149."
+  },
+  {
+    "id": "image-dpi-ok",
+    "pdf": "image-dpi-ok.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "hand-built",
+    "notes": "1240x1240 px DeviceGray image placed at 4x4 in -> ~310 DPI (>= 300), adequate bleed, no fonts -> clean pass. Implemented in MIC-149."
+  },
+  {
+    "id": "image-dpi-excessive",
+    "pdf": "image-dpi-excessive.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "generated",
+    "notes": "1200x1200 px DeviceGray image placed at 2x2 in -> 600 DPI. Preflight should advertise downsample-images with the conservative 300-DPI target while leaving image-resolution clean."
+  },
+  {
+    "id": "font-not-embedded",
+    "pdf": "font-not-embedded.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": ["embedded-fonts", "color-inventory"] },
+    "source": "hand-built",
+    "notes": "Text set in Helvetica (standard-14) with no FontFile, adequate bleed, no images -> only embedded-fonts fires. Implemented in MIC-150."
+  },
+  {
+    "id": "font-embedded",
+    "pdf": "font-embedded.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": ["color-inventory"] },
+    "source": "hand-built",
+    "notes": "Text set in a subsetted TrueType font embedded via /FontFile2, adequate bleed, no images -> clean pass. Implemented in MIC-150."
+  },
+  {
+    "id": "trim-pagesize-mismatch",
+    "pdf": "trim-pagesize-mismatch.pdf",
+    "profile": "testdata/profiles/test-trim-pagesize.json",
+    "expect": { "pass": false, "check_ids": ["trim", "page-size"] },
+    "source": "hand-built",
+    "notes": "MediaBox == TrimBox == 540x720, 72 pt off the profile's expected 612x792 (US Letter) on each dimension, far beyond the 1 pt tolerance -> trim and page-size both fail (error severity in the test profile)."
+  },
+  {
+    "id": "trim-pagesize-ok",
+    "pdf": "trim-pagesize-ok.pdf",
+    "profile": "testdata/profiles/test-trim-pagesize.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "MediaBox == TrimBox == 612x792, matching the profile's expected US Letter size within tolerance -> clean pass."
+  },
+  {
+    "id": "content-bleed-adequate",
+    "pdf": "content-bleed-adequate.pdf",
+    "profile": "examples/profile-tiered-bleed.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Boxes adequate, artwork extends into all bleed margins -> clean pass. Content-bleed check implemented in MIC-151."
+  },
+  {
+    "id": "content-bleed-missing",
+    "pdf": "content-bleed-missing.pdf",
+    "profile": "examples/profile-tiered-bleed.json",
+    "expect": { "pass": true, "check_ids": ["content-bleed"] },
+    "source": "hand-built",
+    "notes": "Boxes adequate but artwork stops at trim -> content-bleed warning. Content-bleed check implemented in MIC-151."
+  },
+  {
+    "id": "content-bleed-raster-confirm",
+    "pdf": "content-bleed-raster-confirm.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": { "pass": true, "check_ids": ["content-bleed"] },
+    "source": "generated",
+    "notes": "Fast bounds flags gap; strip raster confirms empty bleed margins and emits bleed-margin-empty per edge."
+  },
+  {
+    "id": "content-bleed-three-of-four",
+    "pdf": "content-bleed-three-of-four.pdf",
+    "profile": "examples/profile-tiered-bleed.json",
+    "expect": { "pass": true, "check_ids": ["content-bleed"] },
+    "source": "generated",
+    "notes": "Artwork into left/right/top bleed strips only; Tier-1 emits exactly one content-bleed on the bottom edge."
+  },
+  {
+    "id": "ai-art-missing-bleed",
+    "pdf": "ai-art-missing-bleed.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "source": "hand-built",
+    "notes": "CMYK raster flush to trim with geometric edge lines; zero box bleed margin."
+  },
+  {
+    "id": "ai-art-partial-bleed",
+    "pdf": "ai-art-partial-bleed.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "source": "hand-built",
+    "notes": "Uneven bleed boxes: adequate left/bottom, short right/top."
+  },
+  {
+    "id": "ai-art-hard-corners",
+    "pdf": "ai-art-hard-corners.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "source": "hand-built",
+    "notes": "High-contrast checker corners at trim for mirror seam visibility."
+  },
+  {
+    "id": "ai-art-raster-trim-edge",
+    "pdf": "ai-art-raster-trim-edge.pdf",
+    "profile": "examples/profile-tiered-bleed-raster.json",
+    "expect": { "pass": false, "check_ids": ["bleed"] },
+    "source": "hand-built",
+    "notes": "Photo-like RGB gradient raster touching trim boundary."
+  },
+  {
+    "id": "white-overprint",
+    "pdf": "white-overprint.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "CMYK paper white with overprint enabled on a filled path -> white-overprint warning. MIC-319."
+  },
+  {
+    "id": "white-overprint-ok",
+    "pdf": "white-overprint-ok.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "hand-built",
+    "notes": "Same white fill without overprint -> clean pass. MIC-319."
+  },
+  {
+    "id": "white-overprint-form",
+    "pdf": "white-overprint-form.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint inside a Form XObject painted via Do. MIC-306."
+  },
+  {
+    "id": "white-overprint-separation",
+    "pdf": "white-overprint-separation.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using a Separation color space."
+  },
+  {
+    "id": "white-overprint-devicen",
+    "pdf": "white-overprint-devicen.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using a DeviceN color space."
+  },
+  {
+    "id": "white-overprint-iccbased",
+    "pdf": "white-overprint-iccbased.pdf",
+    "profile": "testdata/profiles/test-white-overprint.json",
+    "expect": { "pass": true, "check_ids": ["white-overprint"] },
+    "source": "hand-built",
+    "notes": "White overprint using an ICCBased color space."
+  },
+  {
+    "id": "ink-coverage-over",
+    "pdf": "ink-coverage-over.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": ["ink-coverage"] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 370% TAC on an otherwise light page; the test profile isolates the ink-coverage warning."
+  },
+  {
+    "id": "ink-coverage-ok",
+    "pdf": "ink-coverage-ok.pdf",
+    "profile": "testdata/profiles/test-ink-coverage.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "CMYK patch at approximately 190% TAC, below the 300% test threshold."
+  },
+  {
+    "id": "output-intent-cmyk",
+    "pdf": "output-intent-cmyk.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "One CGATS TR 001 output intent with a deterministic synthetic CMYK ICC profile and matching ProfileCS."
+  },
+  {
+    "id": "output-intent-missing",
+    "pdf": "output-intent-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Catalog has no /OutputIntents key, so the required output-intent check emits output-intent-missing."
+  },
+  {
+    "id": "output-intent-profile-missing",
+    "pdf": "output-intent-profile-missing.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Intent identifies CGATS TR 001 but omits /DestOutputProfile, exercising the profile-missing finding."
+  },
+  {
+    "id": "output-intent-rgb",
+    "pdf": "output-intent-rgb.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "Embedded synthetic sRGB profile is valid but disallowed by the test profile's CMYK-only allow-list."
+  },
+  {
+    "id": "output-intent-profile-invalid",
+    "pdf": "output-intent-profile-invalid.pdf",
+    "profile": "testdata/profiles/test-output-intent.json",
+    "expect": { "pass": false, "check_ids": ["output-intent"] },
+    "source": "generated",
+    "notes": "DestOutputProfile is a stream containing non-ICC bytes, exercising invalid-profile handling."
+  },
+  {
+    "id": "transparency-normal-cmyk",
+    "pdf": "transparency-normal-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "notes": "Normal CMYK transparency group with matching CMYK content remains clean."
+  },
+  {
+    "id": "transparency-hue",
+    "pdf": "transparency-hue.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Hue blend mode in a transparency group emits a blend-mode risk warning."
+  },
+  {
+    "id": "transparency-rgb-group-cmyk",
+    "pdf": "transparency-rgb-group-cmyk.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "CMYK artwork entering an explicit RGB transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-rgb",
+    "pdf": "transparency-cmyk-group-rgb.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "RGB artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-cmyk-group-spot",
+    "pdf": "transparency-cmyk-group-spot.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "Spot artwork entering an explicit CMYK transparency group emits a blend-space warning."
+  },
+  {
+    "id": "transparency-annotation-appearance",
+    "pdf": "transparency-annotation-appearance.pdf",
+    "profile": "testdata/profiles/test-transparency-risk.json",
+    "expect": { "pass": true, "check_ids": ["transparency-risk"] },
+    "source": "generated",
+    "notes": "A risky transparency group exists only in an annotation appearance stream."
+  },
+  {
+    "id": "malformed-not-pdf",
+    "pdf": "malformed-not-pdf.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": false, "check_ids": [] },
+    "source": "hand-built",
+    "pending": true,
+    "notes": "Non-PDF input for malformed-input operator acceptance; manifest allowlist only."
+  },
+  {
+    "id": "overprint-cmyk-mode0-off",
+    "pdf": "overprint-cmyk-mode0-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode0-on",
+    "pdf": "overprint-cmyk-mode0-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-off",
+    "pdf": "overprint-cmyk-mode1-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-cmyk-mode1-on",
+    "pdf": "overprint-cmyk-mode1-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-off",
+    "pdf": "overprint-group-stroke-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-group-stroke-on",
+    "pdf": "overprint-group-stroke-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-off",
+    "pdf": "overprint-multiply-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-multiply-on",
+    "pdf": "overprint-multiply-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-off",
+    "pdf": "overprint-separation-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-separation-on",
+    "pdf": "overprint-separation-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-off",
+    "pdf": "overprint-white-off.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "overprint-white-on",
+    "pdf": "overprint-white-on.pdf",
+    "profile": "profiles/loop-default.json",
+    "expect": { "pass": true, "check_ids": [] },
+    "source": "generated",
+    "pending": true,
+    "notes": "Overprint render fixture pair; corpus snapshots pending."
+  },
+  {
+    "id": "thin-strokes-hairline",
+    "pdf": "thin-strokes-hairline.pdf",
+    "profile": "testdata/profiles/test-thin-strokes.json",
+    "expect": { "pass": false, "check_ids": ["thin-strokes"] },
+    "source": "generated",
+    "notes": "S07 corpus row for thin-strokes hairline stroke detection."
+  },
+  {
+    "id": "thin-parts-fill",
+    "pdf": "thin-parts-fill.pdf",
+    "profile": "testdata/profiles/test-thin-parts.json",
+    "expect": { "pass": false, "check_ids": ["thin-parts"] },
+    "source": "generated",
+    "pending": true,
+    "notes": "S07 corpus row for thin-parts; generate with LoopGenerateFixtures."
+  }
+]

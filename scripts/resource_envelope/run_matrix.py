@@ -26,7 +26,7 @@ from scripts.resource_envelope.validate_envelope import validate_envelope
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUDGETS = ROOT / "docs" / "RESOURCE_ENVELOPE_BUDGETS.json"
-MATRIX_KIND = "loupe-resource-envelope-matrix"
+MATRIX_KIND = "loop-resource-envelope-matrix"
 DEFAULT_RASTERIZERS = 8
 
 # These names mirror issue #242. multi-gb is optional because platform
@@ -348,7 +348,7 @@ def run_fixture(
 
 def _load_fixture_manifest(path: Path) -> dict[str, dict[str, Any]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema_kind") != "loupe-resource-envelope-fixtures" or payload.get("schema_version") != 1:
+    if payload.get("schema_kind") != "loop-resource-envelope-fixtures" or payload.get("schema_version") != 1:
         raise ValueError("fixture manifest schema_kind/schema_version is invalid")
     records = payload.get("fixtures")
     if not isinstance(records, list):

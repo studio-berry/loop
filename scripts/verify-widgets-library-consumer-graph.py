@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GRAPH_PATH = ROOT / "docs/generated/widgets-library-consumer-graph.json"
-LIBRARIES = ("LoupeLibWidgets", "LoupeLibGui")
+LIBRARIES = ("LoopLibWidgets", "LoopLibGui")
 ALLOWED_CONSUMER_CLASSES = frozenset(
     {
         "installed-product-plugin",
@@ -26,7 +26,7 @@ ALLOWED_CONSUMER_CLASSES = frozenset(
     }
 )
 ALLOWED_BINDINGS = frozenset({"widgets-bound", "neutral-relocatable"})
-ALLOWED_OWNERS = frozenset({"LoupeLibCore", "delete-with-widgets-library"})
+ALLOWED_OWNERS = frozenset({"LoopLibCore", "delete-with-widgets-library"})
 ALLOWED_LIBRARY_STATUSES = frozenset({"present-in-profile", "deleted-not-in-profile"})
 
 

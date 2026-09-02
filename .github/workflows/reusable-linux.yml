@@ -23,7 +23,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     env:
-      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loupe/vcpkg/overlays/linux:${{ github.workspace }}/loupe/vcpkg/overlays/general
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
@@ -34,46 +34,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          path: loupe
+          path: loop
           fetch-depth: 0
 
       - name: Verify supply-chain pins
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/ci/check_supply_chain_pins.py
 
-      - name: Verify Loupe shell contract
-        working-directory: loupe
+      - name: Verify Loop shell contract
+        working-directory: loop
         run: |
-          python3 scripts/verify-loupe-shell-contract.py
+          python3 scripts/verify-loop-shell-contract.py
       - name: Verify plugin and legacy form accounting
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-plugin-form-accounting.py
       - name: Verify Widgets library consumer graph
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-widgets-library-consumer-graph.py
       - name: Verify installed product graph
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-installed-product-graph.py
       - name: Verify Widgets-free release profile
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-widgets-free-release-profile.py
       - name: Verify interaction boundary
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-interaction-boundary.py
       - name: Verify command catalog
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-command-catalog.py
       - name: Verify Quick shell admission policy
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-quick-shell-policy.py
       - name: Verify Quick runtime/package contract
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/verify-quick-runtime-contract.py
       - name: Verify branch policy
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/ci/check_branch_policy.py
       - name: Verify version policy
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/ci/check_version_policy.py
 
       - name: Prepare vcpkg directories
@@ -92,7 +92,7 @@ jobs:
           # -> deb) so a runner image drift fails loudly.
           DEB_PIN="$(python3 - <<'PY'
           import json
-          with open("loupe/.github/pins/packaging-tools.json", encoding="utf-8") as f:
+          with open("loop/.github/pins/packaging-tools.json", encoding="utf-8") as f:
               print(json.load(f)["deb"]["dpkgVersion"])
           PY
           )"
@@ -106,7 +106,7 @@ jobs:
         run: |
           VCPKG_COMMIT="$(python3 - <<'PY'
           import json
-          with open("loupe/vcpkg-configuration.json", encoding="utf-8") as f:
+          with open("loop/vcpkg-configuration.json", encoding="utf-8") as f:
               print(json.load(f)["default-registry"]["baseline"])
           PY
           )"
@@ -141,7 +141,7 @@ jobs:
 
       - name: 'VCPKG: Install project dependencies'
         run: |
-          ./vcpkg install --x-manifest-root=$GITHUB_WORKSPACE/loupe --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          ./vcpkg install --x-manifest-root=$GITHUB_WORKSPACE/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt
@@ -157,7 +157,7 @@ jobs:
           cache-key-prefix: ${{ runner.os }}-qt-6111
 
       - name: Verify Widgets-free release configure
-        working-directory: loupe
+        working-directory: loop
         run: |
           python3 scripts/verify-widgets-free-release-profile.py --configure \
             --build-dir build-widgets-free-verify -- \
@@ -167,7 +167,7 @@ jobs:
 
       - name: Prepare Widgets-absent Qt prefix
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
           test -n "${QT_ROOT_DIR:-}" || {
             echo "::error::install-qt-action did not provide QT_ROOT_DIR"
@@ -175,102 +175,102 @@ jobs:
           }
           python3 scripts/ci/prepare_widgets_free_qt.py \
             --source "$QT_ROOT_DIR" \
-            --destination "$RUNNER_TEMP/loupe-qt-without-widgets" \
-            --manifest "$RUNNER_TEMP/loupe-widgets-free-qt.json"
-          echo "LOUPE_WIDGETS_FREE_QT_PREFIX=$RUNNER_TEMP/loupe-qt-without-widgets" >> "$GITHUB_ENV"
-          echo "LOUPE_WIDGETS_FREE_BUILD_DIR=$RUNNER_TEMP/loupe-widgets-free-build" >> "$GITHUB_ENV"
-          echo "LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR=$RUNNER_TEMP/loupe-widgets-free-negative" >> "$GITHUB_ENV"
+            --destination "$RUNNER_TEMP/loop-qt-without-widgets" \
+            --manifest "$RUNNER_TEMP/loop-widgets-free-qt.json"
+          echo "LOOP_WIDGETS_FREE_QT_PREFIX=$RUNNER_TEMP/loop-qt-without-widgets" >> "$GITHUB_ENV"
+          echo "LOOP_WIDGETS_FREE_BUILD_DIR=$RUNNER_TEMP/loop-widgets-free-build" >> "$GITHUB_ENV"
+          echo "LOOP_WIDGETS_FREE_NEGATIVE_BUILD_DIR=$RUNNER_TEMP/loop-widgets-free-negative" >> "$GITHUB_ENV"
 
       - name: Verify Widgets-absent release configure
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
           python3 scripts/verify-widgets-free-release-profile.py \
-            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
+            --qt-prefix "$LOOP_WIDGETS_FREE_QT_PREFIX" \
             --configure \
-            --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
+            --build-dir "$LOOP_WIDGETS_FREE_BUILD_DIR" \
             -- \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
-            -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON \
-            -DLOUPE_BUILD_QUICK_CANVAS=ON \
-            -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON \
-            -DLOUPE_BUILD_CANVAS_BENCHMARK=OFF \
+            -DLOOP_BUILD_QUICK_SHELL_SMOKE=ON \
+            -DLOOP_BUILD_QUICK_CANVAS=ON \
+            -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON \
+            -DLOOP_BUILD_CANVAS_BENCHMARK=OFF \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Verify Widgets-bound target fails closed
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
           python3 scripts/verify-widgets-free-release-profile.py \
-            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
+            --qt-prefix "$LOOP_WIDGETS_FREE_QT_PREFIX" \
             --configure \
             --expect-configure-failure \
-            --build-dir "$LOUPE_WIDGETS_FREE_NEGATIVE_BUILD_DIR" \
+            --build-dir "$LOOP_WIDGETS_FREE_NEGATIVE_BUILD_DIR" \
             -- \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DCMAKE_VCPKG_BUILD_TYPE=Release \
             -DVCPKG_INSTALLED_DIR="$VCPKG_INSTALLED_DIR" \
-            -DLOUPE_BUILD_CODE_GENERATOR=ON
+            -DLOOP_BUILD_CODE_GENERATOR=ON
 
       - name: Build Widgets-absent release profile
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
-          cmake --build "$LOUPE_WIDGETS_FREE_BUILD_DIR" --target all release_translations --config Release -j6
+          cmake --build "$LOOP_WIDGETS_FREE_BUILD_DIR" --target all release_translations --config Release -j6
 
       - name: Smoke Widgets-absent Qt Quick backends
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Mode native
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Mode software -ExpectedGraphicsApi software
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Mode native
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Mode software -ExpectedGraphicsApi software
 
       - name: Smoke Widgets-absent product accessibility
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Backend native
-          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOUPE_WIDGETS_FREE_BUILD_DIR" -Backend software
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Backend native
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -BuildDir "$LOOP_WIDGETS_FREE_BUILD_DIR" -Backend software
 
       - name: Test Widgets-absent release profile
         if: ${{ !inputs.fast }}
-        run: ctest --test-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" --output-on-failure
+        run: ctest --test-dir "$LOOP_WIDGETS_FREE_BUILD_DIR" --output-on-failure
 
       - name: Record Linux Widgets-free release evidence
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: |
           python3 scripts/ci/record_widgets_free_release_evidence.py \
             --root . \
-            --qt-prefix "$LOUPE_WIDGETS_FREE_QT_PREFIX" \
-            --manifest "$RUNNER_TEMP/loupe-widgets-free-qt.json" \
-            --build-dir "$LOUPE_WIDGETS_FREE_BUILD_DIR" \
+            --qt-prefix "$LOOP_WIDGETS_FREE_QT_PREFIX" \
+            --manifest "$RUNNER_TEMP/loop-widgets-free-qt.json" \
+            --build-dir "$LOOP_WIDGETS_FREE_BUILD_DIR" \
             --platform linux \
             --qt-version 6.11.1 \
             --build-status passed \
             --test-status passed \
             --negative-configure-status passed \
-            --output "$RUNNER_TEMP/loupe-widgets-free-release-evidence.json"
+            --output "$RUNNER_TEMP/loop-widgets-free-release-evidence.json"
 
       - name: Upload Linux Widgets-free release evidence
         if: ${{ !inputs.fast }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: loupe-widgets-free-linux-evidence
+          name: loop-widgets-free-linux-evidence
           path: |
-            ${{ runner.temp }}/loupe-widgets-free-qt.json
-            ${{ runner.temp }}/loupe-widgets-free-release-evidence.json
-            ${{ runner.temp }}/loupe-widgets-free-build/CMakeCache.txt
+            ${{ runner.temp }}/loop-widgets-free-qt.json
+            ${{ runner.temp }}/loop-widgets-free-release-evidence.json
+            ${{ runner.temp }}/loop-widgets-free-build/CMakeCache.txt
           if-no-files-found: error
 
       - name: Build project
-        working-directory: loupe
+        working-directory: loop
         run: |
-          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_BUILD_QUICK_SHELL_SMOKE=ON -DLOUPE_BUILD_CANVAS_BENCHMARK=ON -DLOUPE_BUILD_QUICK_CANVAS=ON -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
+          cmake -B build -S . -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_BUILD_QUICK_SHELL_SMOKE=ON -DLOOP_BUILD_CANVAS_BENCHMARK=ON -DLOOP_BUILD_QUICK_CANVAS=ON -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release
           if [ "${{ inputs.fast }}" != "true" ]; then
             cmake --build build --target all release_translations --config Release -j6
             cmake --install build
@@ -278,7 +278,7 @@ jobs:
 
       - name: Smoke Qt Quick preferred backend
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
           # Requests OpenGL (the Linux-preferred backend per ADR-007's table),
@@ -296,7 +296,7 @@ jobs:
 
       - name: Smoke Qt Quick software backend
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-backend-smoke.ps1 -BuildDir ./build -Mode software -ExpectedGraphicsApi software
@@ -308,7 +308,7 @@ jobs:
       # known not to work under a headless offscreen platform.
       - name: Run S21 canvas benchmark (native, required candidates)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
@@ -317,7 +317,7 @@ jobs:
 
       - name: Run S21 canvas benchmark (software, required candidates)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
@@ -328,38 +328,38 @@ jobs:
       - name: Run S21 canvas benchmark (full diagnostic, non-blocking)
         if: ${{ !inputs.fast }}
         continue-on-error: true
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-canvas-benchmark.ps1 -BuildDir ./build -Candidate all
 
       - name: Run QWidget/Quick focus bridge (native)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode native
 
       - name: Run QWidget/Quick focus bridge (software)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-quick-focus-bridge.ps1 -BuildDir ./build -Mode software
 
       - name: Run product Quick accessibility smoke (native)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend native
 
       - name: Run product Quick accessibility smoke (software)
         if: ${{ !inputs.fast }}
-        working-directory: loupe
+        working-directory: loop
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/run-product-quick-a11y-smoke.ps1 -Backend software
 
       - name: Prove change with agent-fast
         if: inputs.fast
-        working-directory: loupe
+        working-directory: loop
         env:
           BASE_SHA: ${{ inputs.base_sha }}
           HEAD_SHA: ${{ inputs.head_sha }}
@@ -372,7 +372,7 @@ jobs:
 
       - name: Test agent policy checker
         if: inputs.fast
-        working-directory: loupe
+        working-directory: loop
         run: python3 -m unittest scripts.agent.test_check_change -v
 
       - name: Upload agent-fast evidence
@@ -380,29 +380,29 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: agent-fast-evidence
-          path: loupe/agent-fast-evidence.json
+          path: loop/agent-fast-evidence.json
           if-no-files-found: error
 
-      - name: Verify loupe-release product surface
+      - name: Verify loop-release product surface
         if: ${{ !inputs.fast }}
-        working-directory: loupe
-        run: pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release
+        working-directory: loop
+        run: pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release
 
       - name: Run unit tests
         if: ${{ !inputs.fast }}
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
           ctest --output-on-failure
 
       - name: Run preflight corpus gate
         if: ${{ !inputs.fast }}
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
           ctest -R UnitTestsPreflightCorpus --output-on-failure
 
       - name: Make DEB package
         if: ${{ !inputs.fast && github.event_name != 'pull_request' }}
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
           sh make-package.sh
 
@@ -411,5 +411,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ubuntu-deb-package
-          path: ./loupe/build/*.deb
+          path: ./loop/build/*.deb
           retention-days: 30

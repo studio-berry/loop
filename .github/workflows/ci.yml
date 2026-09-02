@@ -29,6 +29,10 @@ jobs:
         run: python3 scripts/ci/test_check_source_integrity.py
       - name: Test workflow contracts
         run: python3 -m unittest scripts.ci.test_workflow_contracts -v
+      - name: Test Loop identity contract
+        run: python3 scripts/ci/test_check_loop_identity.py
+      - name: Verify active Loop identity
+        run: python3 scripts/ci/check_loop_identity.py
       - name: Verify tracked source integrity
         run: python3 scripts/ci/check_source_integrity.py
       - name: Verify authoritative product-surface contract

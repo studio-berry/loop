@@ -1,6 +1,6 @@
-# Loupe repair operations
+# Loop repair operations
 
-Loupe corrective editing is represented by one Core contract shared by the
+Loop corrective editing is represented by one Core contract shared by the
 Editor and PdfTool. An operation is first analyzed against an immutable source
 document, producing a serializable plan. The plan names its operation version,
 typed parameters, risk, affected semantic domains and targets, preconditions,
@@ -48,7 +48,7 @@ is advertised only when its descriptor marks it as a preflight fixup. Profile
 validation rejects unknown or unimplemented fixup IDs, so the report cannot
 advertise a remedy that the registered repair contract cannot execute.
 The fixup capability registry is the source of truth for the current build. The
-shipped Loupe Default profile lists these registered IDs, and the Editor sidecar
+shipped Loop Default profile lists these registered IDs, and the Editor sidecar
 filter plus `PdfTool capabilities --console-format json` consume that registry.
 An operation is advertised only when it is implemented in the current build, is
 applicable to the raised finding/document, and is present in the active profile.
@@ -72,7 +72,7 @@ Example:
 PdfTool repair input.pdf --operation add-bleed \
   --param mode=mirror --param bleed_mm=3 \
   --output output.pdf --report-file repair.json --overwrite \
-  --profile loupe-default.json
+  --profile loop-default.json
 ```
 
 `--dry-run` emits the plan without writing a candidate. `--render-dir` stores
