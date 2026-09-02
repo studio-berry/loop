@@ -85,6 +85,8 @@ jobs:
 
       - name: Install appimagetool
         working-directory: loop
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           bash scripts/ci/download_verified.sh \
             --gh-asset "AppImage/appimagetool" \

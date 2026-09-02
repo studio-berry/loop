@@ -56,11 +56,15 @@ case "$mode" in
 
     # GitHub requires an Accept header to receive the raw binary payload.
     # asset-id downloads are immutable and version-carrying.
-    curl --fail --location \
+    curl_args=(--fail --location \
       -H "Accept: application/octet-stream" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
       "https://api.github.com/repos/${repo}/releases/assets/${asset_id}" \
-      -o "$temporary_output"
+      -o "$temporary_output")
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+      curl_args+=( -H "Authorization: Bearer ${GITHUB_TOKEN}" )
+    fi
+    curl "${curl_args[@]}"
     ;;
 
   --url)
