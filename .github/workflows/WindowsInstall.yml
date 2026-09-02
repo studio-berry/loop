@@ -263,7 +263,7 @@ jobs:
         shell: pwsh
         run: |
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUNDLE_OCR_SERVICE=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke LoopLibQuickplugin release_translations --config Release -j6
           cmake --install build --config Release
           .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 

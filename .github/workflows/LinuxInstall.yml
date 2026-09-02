@@ -182,7 +182,7 @@ jobs:
         working-directory: loop
         run: |
           cmake -B build -S . -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke LoopLibQuickplugin release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
@@ -243,9 +243,12 @@ jobs:
             echo "::error::Built Loop.Canvas QML module was not found: $loop_canvas_src"
             exit 1
           fi
-          canvas_plugin="$loop_canvas_src/libLoopLibQuickplugin.so"
-          if [[ ! -f "$canvas_plugin" ]]; then
-            echo "::error::Built Loop.Canvas shared QML plugin was not found: $canvas_plugin"
+          canvas_plugin="$(find "$loop_canvas_src" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | sort | head -n1)"
+          if [[ -z "$canvas_plugin" ]]; then
+            canvas_plugin="$(find "$GITHUB_WORKSPACE/loop/build/LoopLibQuick" -name 'libLoopLibQuickplugin.so*' -type f | sort | head -n1)"
+          fi
+          if [[ -z "$canvas_plugin" ]]; then
+            echo "::error::Built Loop.Canvas shared QML plugin was not found under $loop_canvas_src or loop/build/LoopLibQuick"
             exit 1
           fi
           mkdir -p "$(dirname "$qml_canvas_dest")"
@@ -260,8 +263,12 @@ jobs:
             echo "::error::Staged Loop.Canvas QML module is missing a .qmltypes file"
             exit 1
           fi
-          if [[ ! -f "$qml_canvas_dest/libLoopLibQuickplugin.so" ]]; then
-            echo "::error::Staged Loop.Canvas shared QML plugin was not found: $qml_canvas_dest/libLoopLibQuickplugin.so"
+          if ! find "$qml_canvas_dest" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | grep -q .; then
+            cp -f "$canvas_plugin" "$qml_canvas_dest/"
+            echo "Staged Loop.Canvas shared QML plugin: $canvas_plugin -> $qml_canvas_dest" | tee -a "$evidence_dir/linuxdeployqt.txt"
+          fi
+          if ! find "$qml_canvas_dest" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | grep -q .; then
+            echo "::error::Staged Loop.Canvas shared QML plugin was not found under $qml_canvas_dest"
             exit 1
           fi
           # Headless PdfTool smoke runs with QT_QPA_PLATFORM=offscreen and strips
