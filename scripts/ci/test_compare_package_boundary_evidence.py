@@ -19,7 +19,7 @@ SPEC.loader.exec_module(PAIR)
 def evidence(platform: str, source_sha: str, status: str = "passed") -> dict:
     return {
         "schema_version": 1,
-        "kind": "loupe-package-boundary-evidence",
+        "kind": "loop-package-boundary-evidence",
         "platform": platform,
         "source_sha": source_sha,
         "status": status,

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/studio-berry/loop/schema/release-candidate-dossier-v1.json",
-  "title": "Loupe release candidate dossier",
+  "title": "Loop release candidate dossier",
   "description": "Issue #264's candidate manifest, expanded with the required-evidence categories the issue lists. One dossier describes exactly one candidate_sha; a rerun against a different SHA is a different dossier, never an edit of this one in place.",
   "type": "object",
   "required": ["schema_kind", "schema_version", "release", "candidate_sha", "base_sha", "checks", "artifacts", "known_limitations", "rollback"],
   "properties": {
-    "schema_kind": { "const": "loupe-release-candidate-dossier" },
+    "schema_kind": { "const": "loop-release-candidate-dossier" },
     "schema_version": { "const": 1 },
     "release": { "type": "string", "minLength": 1, "description": "The target release version, e.g. \"0.2.0\"." },
     "candidate_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "The exact commit every check, build, and artifact below must derive from. A dossier with checks recorded against more than one SHA is invalid." },

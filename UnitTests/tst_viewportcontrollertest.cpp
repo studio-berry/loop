@@ -24,8 +24,8 @@
 // zoom, rotation, pan, and the page/viewport transforms.
 //
 // As in tst_interactionboundarytest.cpp, the strongest assertion here is the link
-// line in UnitTests/CMakeLists.txt. This target links LoupeLibInteraction,
-// LoupeLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
+// line in UnitTests/CMakeLists.txt. This target links LoopLibInteraction,
+// LoopLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
 // Qt6::Widgets. QTEST_GUILESS_MAIN then proves the P4-S3 exit condition for the
 // viewport: none of this behaviour needs a QWidget, a QScreen, or a scrollbar.
 

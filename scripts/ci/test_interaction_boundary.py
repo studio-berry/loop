@@ -36,7 +36,7 @@ add_library(LibUnderTest STATIC
     sources/thing.h
 )
 
-target_link_libraries(LibUnderTest PRIVATE LoupeLibCore Qt6::Core Qt6::Gui)
+target_link_libraries(LibUnderTest PRIVATE LoopLibCore Qt6::Core Qt6::Gui)
 target_include_directories(LibUnderTest INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 """
 
@@ -59,7 +59,7 @@ POLICY = {
             "sources": "LibUnderTest/sources",
             "linkage": "STATIC",
             "installed": False,
-            "allowed_link_targets": ["LoupeLibCore", "Qt6::Core", "Qt6::Gui"],
+            "allowed_link_targets": ["LoopLibCore", "Qt6::Core", "Qt6::Gui"],
         }
     ],
     "forbidden_includes": ["^QtWidgets(/|$)", "^QWidget$", "^QQuick.*$", "^QSG.*$"],
@@ -100,8 +100,8 @@ class InteractionBoundaryTests(unittest.TestCase):
 
     def test_linking_widgets_is_rejected(self):
         cmake = CLEAN_CMAKE.replace(
-            "PRIVATE LoupeLibCore Qt6::Core Qt6::Gui",
-            "PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Widgets",
+            "PRIVATE LoopLibCore Qt6::Core Qt6::Gui",
+            "PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Widgets",
         )
         errors = BoundaryFixture(self, cmake=cmake).run()
         self.assertTrue(any("Qt6::Widgets" in error for error in errors), errors)

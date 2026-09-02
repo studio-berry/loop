@@ -6,18 +6,18 @@
 **Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-311 / Cycle 2 sprint plan
-**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loupe #30 Action List stage)
+**Amended:** 2026-07-21 (MIC-307 one-output retention + combined progress; MIC-308 cancellation); 2026-08-09 (Loop #30 Action List stage)
 
 ## Context
 
-PageMaster batch export lives in `LoupePageMaster/mainwindow.cpp` as an anonymous
+PageMaster batch export lives in `LoopPageMaster/mainwindow.cpp` as an anonymous
 `runExportJob` helper. MIC-307/308/309 all rewrite that loop (memory bounding,
 cancellation, atomic writes + manifest). Without a headless Core service, those
 changes stay UI-coupled and untestable via `UnitTests`/`ctest`.
 
 ## Decision
 
-- **Location:** `LoupeLibCore/sources/pdfpagemasterexport.h/.cpp`, namespace `pdf`.
+- **Location:** `LoopLibCore/sources/pdfpagemasterexport.h/.cpp`, namespace `pdf`.
 - **API:** `PDFPageMasterExport::run(PDFPageMasterExportJob)` returns
   `PDFPageMasterExportResult`. Job owns source `PDFDocument` copies and `QImage`
   sources; optional `PDFProgress*` is borrowed.

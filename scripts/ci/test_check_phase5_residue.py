@@ -14,7 +14,7 @@ class Phase5ResidueTests(unittest.TestCase):
     def test_maintained_paths_reject_deleted_surface_names(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "CMakeLists.txt").write_text("add_subdirectory(LoupeLibGui)\n", encoding="utf-8")
+            (root / "CMakeLists.txt").write_text("add_subdirectory(LoopLibGui)\n", encoding="utf-8")
             with mock.patch.object(check_phase5_residue, "tracked_paths", return_value=["CMakeLists.txt"]):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(len(findings), 1)
@@ -24,7 +24,7 @@ class Phase5ResidueTests(unittest.TestCase):
             root = Path(directory)
             path = root / "docs" / "adr"
             path.mkdir(parents=True)
-            (path / "adr-005.md").write_text("LoupeLibGui is historical.\n", encoding="utf-8")
+            (path / "adr-005.md").write_text("LoopLibGui is historical.\n", encoding="utf-8")
             with mock.patch.object(check_phase5_residue, "tracked_paths", return_value=["docs/adr/adr-005.md"]):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(findings, [])
@@ -34,7 +34,7 @@ class Phase5ResidueTests(unittest.TestCase):
             root = Path(directory)
             path = root / "docs"
             path.mkdir()
-            (path / "REPO_MAP.md").write_text("LoupeViewer is gone.\n", encoding="utf-8")
+            (path / "REPO_MAP.md").write_text("LoopViewer is gone.\n", encoding="utf-8")
             with mock.patch.object(check_phase5_residue, "tracked_paths", return_value=["docs/REPO_MAP.md"]):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(len(findings), 1)
@@ -42,7 +42,7 @@ class Phase5ResidueTests(unittest.TestCase):
     def test_generated_agent_adapters_are_scanned(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "AGENTS.md").write_text("LoupeLibGui is gone.\n", encoding="utf-8")
+            (root / "AGENTS.md").write_text("LoopLibGui is gone.\n", encoding="utf-8")
             with mock.patch.object(check_phase5_residue, "tracked_paths", return_value=["AGENTS.md"]):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(len(findings), 1)
@@ -53,7 +53,7 @@ class Phase5ResidueTests(unittest.TestCase):
             path = root / "scripts"
             path.mkdir()
             (path / "verify-installed-product-graph.py").write_text(
-                "FORBIDDEN = 'LoupeLibGui'\n", encoding="utf-8"
+                "FORBIDDEN = 'LoopViewer'\n", encoding="utf-8"
             )
             with mock.patch.object(
                 check_phase5_residue,

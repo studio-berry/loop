@@ -29,16 +29,16 @@ LAUNCH_PATTERNS = {
 # These are known product debts, not a permission to add more work to the
 # files.  The count check makes the migration observable in every PR.
 KNOWN_QTCONCURRENT_COUNTS = {
-    "LoupeLibCore/sources/pdfdiff.cpp": 1,
+    "LoopLibCore/sources/pdfdiff.cpp": 1,
 }
 
 SCHEDULER_INTERNALS = {
-    "LoupeLibCore/sources/pdfjobscheduler.cpp",
-    "LoupeLibCore/sources/pdfjobscheduler.h",
+    "LoopLibCore/sources/pdfjobscheduler.cpp",
+    "LoopLibCore/sources/pdfjobscheduler.h",
 }
 BOUNDED_LOW_LEVEL = {
-    "LoupeLibCore/sources/pdfexecutionpolicy.cpp",
-    "LoupeLibCore/sources/pdfexecutionpolicy.h",
+    "LoopLibCore/sources/pdfexecutionpolicy.cpp",
+    "LoopLibCore/sources/pdfexecutionpolicy.h",
 }
 
 

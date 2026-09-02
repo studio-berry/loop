@@ -54,9 +54,9 @@ private:
 
 void OcrCliTest::initTestCase()
 {
-    if (!qEnvironmentVariableIsEmpty("LOUPE_OCR_SKIP"))
+    if (!qEnvironmentVariableIsEmpty("LOOP_OCR_SKIP"))
     {
-        QSKIP("LOUPE_OCR_SKIP is set");
+        QSKIP("LOOP_OCR_SKIP is set");
     }
 }
 
@@ -69,25 +69,25 @@ QString OcrCliTest::mockSidecarPath() const
 {
     // Drive the Python mock directly so CI does not depend on +x bits or
     // shebang/CRLF behavior of the thin .sh/.cmd wrappers.
-    return QDir(QStringLiteral(LOUPE_OCR_SOURCE_DIR))
+    return QDir(QStringLiteral(LOOP_OCR_SOURCE_DIR))
         .filePath(QStringLiteral("tools/mock_ocr_sidecar.py"));
 }
 
 QString OcrCliTest::fixturePdfPath() const
 {
-    return QDir(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR))
+    return QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR))
         .filePath(QStringLiteral("testdata/fixtures/image-dpi-low.pdf"));
 }
 
 QString OcrCliTest::textOnlyPdfPath() const
 {
-    return QDir(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR))
+    return QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR))
         .filePath(QStringLiteral("testdata/fixtures/font-embedded.pdf"));
 }
 
 QString OcrCliTest::missingSidecarPath() const
 {
-    return QDir::temp().filePath(QStringLiteral("loupe-ocr-sidecar-does-not-exist"));
+    return QDir::temp().filePath(QStringLiteral("loop-ocr-sidecar-does-not-exist"));
 }
 
 bool OcrCliTest::runMockOcr(const QString& mode,
@@ -100,7 +100,7 @@ bool OcrCliTest::runMockOcr(const QString& mode,
     environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
     if (!mode.isEmpty())
     {
-        environment.insert(QStringLiteral("LOUPE_OCR_MOCK_MODE"), mode);
+        environment.insert(QStringLiteral("LOOP_OCR_MOCK_MODE"), mode);
     }
     process.setProcessEnvironment(environment);
     process.setProgram(pdfToolPath());

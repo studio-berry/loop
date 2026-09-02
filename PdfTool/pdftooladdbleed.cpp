@@ -93,7 +93,7 @@ pdf::PDFOperationResult appendAddBleedProvenance(const QString& outputPath,
                                                  const pdf::PDFBleedFixupSettings& settings,
                                                  const pdf::PDFBleedFixupReport& report)
 {
-    const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loupe-history");
+    const QString historyDirectory = QFileInfo(outputPath).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore artifacts(historyDirectory);
     const auto input = artifacts.importBytes(sourceData,
                                              { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });

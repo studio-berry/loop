@@ -1,7 +1,7 @@
 {
   "$schema": "docs/schemas/agent-policy.schema.json",
   "format_version": 1,
-  "repository": "studio-berry/loupe",
+  "repository": "studio-berry/loop",
   "language": "C++20",
   "qt_minimum": "6.11.1",
   "branches": {
@@ -46,30 +46,34 @@
     "vcpkg.json",
     "vcpkg-configuration.json",
     "vcpkg/**",
-    "loupe-preflight/schemas/**",
+    "loop-preflight/schemas/**",
     "docs/schemas/**",
-    "LoupeLibCore/sources/**",
+    "LoopLibCore/sources/**",
     "UnitTests/CMakeLists.txt"
   ],
   "module_boundaries": {
     "core": {
       "paths": [
-        "LoupeLibCore/**",
+        "LoopLibCore/**",
         "UnitTests/tst_bleedfixuptest.cpp",
+        "UnitTests/tst_budgetcorpustest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
-        "UnitTests/tst_overprinttest.cpp"
+        "UnitTests/tst_overprinttest.cpp",
+        "UnitTests/tst_revisionstresstest.cpp"
       ],
-      "targets": ["LoupeLibCore"],
+      "targets": ["LoopLibCore"],
       "tests": [
         "UnitTests",
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBleedFixup",
+        "UnitTestsBudgetCorpus",
         "UnitTestsBudgetExhaustion",
         "UnitTestsConversionOracle",
         "UnitTestsDocumentSession",
         "UnitTestsEvidenceGraph",
         "UnitTestsHugeDocumentEnvelope",
+        "UnitTestsApplicationIdentity",
         "UnitTestsIdentitySeparation",
         "UnitTestsIncrementalSave",
         "UnitTestsJobScheduler",
@@ -83,6 +87,7 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
+        "UnitTestsRevisionStress",
         "UnitTestsSchemaEvolution",
         "UnitTestsStandardOracle",
         "UnitTestsWorkloadEnvelope"
@@ -94,8 +99,8 @@
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrCli"]
     },
     "preflight": {
-      "paths": ["loupe-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp", "LoupeLibInteraction/sources/preflight*.cpp", "LoupeLibInteraction/sources/preflight*.h"],
-      "targets": ["PdfTool", "LoupeLibInteraction"],
+      "paths": ["loop-preflight/**", "UnitTests/*preflight*", "UnitTests/tst_preflight*", "UnitTests/tst_operatoracceptance.cpp", "UnitTests/tst_standardoracletest.cpp", "LoopLibInteraction/sources/preflight*.cpp", "LoopLibInteraction/sources/preflight*.h"],
+      "targets": ["PdfTool", "LoopLibInteraction"],
       "tests": [
         "UnitTestsPreflightChecks",
         "UnitTestsPreflightCorpus",
@@ -108,13 +113,13 @@
       ]
     },
     "pagemaster": {
-      "paths": ["LoupeLibCore/sources/pdfpagemasterexport.*", "PdfTool/**"],
+      "paths": ["LoopLibCore/sources/pdfpagemasterexport.*", "PdfTool/**"],
       "targets": ["PdfTool"],
       "tests": ["UnitTestsPageMasterExport"]
     },
     "interaction": {
       "paths": [
-        "LoupeLibInteraction/**",
+        "LoopLibInteraction/**",
         "UnitTests/tst_interactionboundarytest.cpp",
         "UnitTests/tst_documentfacadetest.cpp",
         "UnitTests/tst_viewportcontrollertest.cpp",
@@ -128,18 +133,18 @@
         "scripts/verify-interaction-boundary.py",
         "scripts/verify-command-catalog.py"
       ],
-      "targets": ["LoupeLibInteraction"],
+      "targets": ["LoopLibInteraction"],
       "tests": ["UnitTestsInteractionBoundary", "UnitTestsDocumentFacade", "UnitTestsViewportController", "UnitTestsViewportCommands", "UnitTestsPageSurface", "UnitTestsPageSurfaceBudget", "UnitTestsInteractionController", "UnitTestsOverlayFrame", "UnitTestsHitTestSource"]
     },
     "quick": {
       "paths": [
-        "LoupeLibQuick/**",
-        "LoupeEditor/editorhost.cpp",
-        "LoupeEditor/editorhost.h",
-        "LoupeEditor/documentviewsession.cpp",
-        "LoupeEditor/documentviewsession.h",
-        "LoupeEditor/main.cpp",
-        "LoupeEditor/qml/**",
+        "LoopLibQuick/**",
+        "LoopEditor/editorhost.cpp",
+        "LoopEditor/editorhost.h",
+        "LoopEditor/documentviewsession.cpp",
+        "LoopEditor/documentviewsession.h",
+        "LoopEditor/main.cpp",
+        "LoopEditor/qml/**",
         "UnitTests/tst_quickcanvastest.cpp",
         "UnitTests/tst_canvasparitytest.cpp",
         "UnitTests/testdata/canvas-parity/**",
@@ -150,7 +155,7 @@
         "UnitTests/tst_shellkeyboardtest.cpp",
         "ProductQuickAccessibilitySmoke/**"
       ],
-      "targets": ["LoupeLibQuick", "LoupeEditor", "LoupeEditorQuick", "ProductQuickAccessibilitySmoke"],
+      "targets": ["LoopLibQuick", "LoopEditor", "LoopEditorQuick", "ProductQuickAccessibilitySmoke"],
       "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction"]
     },
     "developer_widgets": {
@@ -164,7 +169,7 @@
       "tests": []
     },
     "plugins": {
-      "paths": ["docs/product-surface.json", "docs/loupe-shell.json"],
+      "paths": ["docs/product-surface.json", "docs/loop-shell.json"],
       "targets": [],
       "tests": ["UnitTestsPluginAbi"]
     },
@@ -172,17 +177,17 @@
       "paths": [
         "docs/schemas/product-surface.schema.json",
         "docs/schemas/pdftool-result.schema.json",
-        "docs/schemas/loupe-shell.schema.json",
-        "docs/schemas/loupe-shell-actions.schema.json",
-        "loupe-ocr/schemas/**",
-        "loupe-preflight/schemas/**"
+        "docs/schemas/loop-shell.schema.json",
+        "docs/schemas/loop-shell-actions.schema.json",
+        "loop-ocr/schemas/**",
+        "loop-preflight/schemas/**"
       ],
       "targets": ["PdfTool"],
       "tests": ["UnitTestsPdfToolContract", "UnitTestsOcrContract", "UnitTestsPreflightCorpus"]
     },
     "build_policy": {
       "paths": ["CMakeLists.txt", "**/CMakeLists.txt", "cmake/**", "vcpkg.json", "vcpkg-configuration.json", "vcpkg/**"],
-      "targets": ["LoupeLibCore", "PdfTool", "UnitTests"],
+      "targets": ["LoopLibCore", "PdfTool", "UnitTests"],
       "tests": ["UnitTests"]
     },
     "documentation": {

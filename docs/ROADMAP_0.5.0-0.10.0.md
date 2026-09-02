@@ -199,7 +199,7 @@ a job binding; repeat-job open rate on the same spine.
 
 **Entry gate.**
 - 0.4.0 released and operator-accepted (agent alpha proven inside authority bounds).
-- Product/package identity decision (Loupe→Loop) is terminal — required before new
+- Product/package identity decision (Loop→Loop) is terminal — required before new
   persisted schema kinds and CLI command families are named.
 - Schema-evolution policy (0.1.1) operative: new persisted kinds declare kind +
   major/minor and golden fixtures from day one.
@@ -286,7 +286,7 @@ Signals: % of JobSpec fields extracted then confirmed without edit; intake time 
 
 **Entry gate.** 0.5.0 released and accepted (candidate specs need a spine to land in).
 Locked EasyOCR V1 design ([OCR_EASYOCR_PLAN.md](OCR_EASYOCR_PLAN.md)) and the
-`loupe-ocr/` sidecar reconciled against current truth, including the V1 "CLI-only, no
+`loop-ocr/` sidecar reconciled against current truth, including the V1 "CLI-only, no
 bundled sidecar" product decision that this milestone supersedes deliberately.
 
 **Architecture.**
@@ -295,7 +295,7 @@ bundled sidecar" product decision that this milestone supersedes deliberately.
   wins; OCR failure yields attributable INCOMPLETE, never silent absence (invariant 22).
 - **Page gate** — live-text-first classification (live / image-only / mixed), budgets,
   golden corpus; the expensive sidecar starts only when a page needs it.
-- **Sidecar lifecycle** — `LoupeOcrService` process supervision, exit-code contract,
+- **Sidecar lifecycle** — `LoopOcrService` process supervision, exit-code contract,
   offline model provisioning, clean-machine packaging, absent-sidecar fail-closed.
 - **Deterministic spec parsers** — dimensions, quantities, stock, dates, color counts,
   with unit/locale normalization; pure functions over OCR/live text; zero model
@@ -318,7 +318,7 @@ learning behavior.
 
 | Session | Type | Delivers | Depends on | Exit evidence |
 |---------|------|----------|------------|---------------|
-| S00 | reconcile | State of `loupe-ocr/`, sidecar packaging, MIC-343 CLI-only decision, 0.4.0 boundary reuse points | 0.6.0 entry gate | Reconciliation table; issues authored |
+| S00 | reconcile | State of `loop-ocr/`, sidecar packaging, MIC-343 CLI-only decision, 0.4.0 boundary reuse points | 0.6.0 entry gate | Reconciliation table; issues authored |
 | S01 | contract | OCR-evidence schema kind; live-text precedence; confidence semantics | S00 | Fixture round-trip; precedence tests |
 | S02 | core | Page-gate hardening: classification classes, budgets, corpus | S01 | Golden classification corpus green; INCOMPLETE attribution tested |
 | S03 | persistence | Sidecar lifecycle + packaging qualification (models, exit codes, clean machine) | S00 | Clean-machine smoke; absent-sidecar fail-closed test |
@@ -723,5 +723,5 @@ At each milestone's activation (its predecessor's release acceptance):
 - 📐 Orchestration template: https://app.notion.com/p/3c39cb079ddb81eebf8dd8948612c365
 - Platform evolution & workflow intelligence vision: https://app.notion.com/p/3b49cb079ddb81cea546c5146054a942
 - Repository: [VERSIONING.md](VERSIONING.md) · [SCHEMA_EVOLUTION.md](SCHEMA_EVOLUTION.md) ·
-  [OCR_EASYOCR_PLAN.md](OCR_EASYOCR_PLAN.md) · [LOUPE_WORKSPACES.md](LOUPE_WORKSPACES.md) ·
+  [OCR_EASYOCR_PLAN.md](OCR_EASYOCR_PLAN.md) · [LOOP_WORKSPACES.md](LOOP_WORKSPACES.md) ·
   [V1_RELEASE_READINESS.md](V1_RELEASE_READINESS.md) · [github-milestones/](github-milestones/README.md)

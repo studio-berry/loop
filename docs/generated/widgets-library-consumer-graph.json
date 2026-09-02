@@ -4,13 +4,13 @@
   "issue": 17,
   "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
   "profile": {
-    "id": "loupe-release",
+    "id": "loop-release",
     "options": {
-      "LOUPE_BUILD_CODE_GENERATOR": false,
-      "LOUPE_BUILD_EXAMPLE_GENERATOR": false,
-      "LOUPE_BUILD_JBIG2_VIEWER": false,
-      "LOUPE_BUILD_QUICK_CANVAS": true,
-      "LOUPE_LOUPE_DISTRIBUTION": true
+      "LOOP_BUILD_CODE_GENERATOR": false,
+      "LOOP_BUILD_EXAMPLE_GENERATOR": false,
+      "LOOP_BUILD_JBIG2_VIEWER": false,
+      "LOOP_BUILD_QUICK_CANVAS": true,
+      "LOOP_LOOP_DISTRIBUTION": true
     },
     "configuration_mode": "manifest-derived-source",
     "configured_build_dir": null,
@@ -23,7 +23,7 @@
   },
   "libraries": [
     {
-      "target": "LoupeLibWidgets",
+      "target": "LoopLibWidgets",
       "status": "deleted-not-in-profile",
       "installed_in_profile": false,
       "direct_consumers": [],
@@ -31,7 +31,7 @@
       "deletion_blocked": false
     },
     {
-      "target": "LoupeLibGui",
+      "target": "LoopLibGui",
       "status": "deleted-not-in-profile",
       "installed_in_profile": false,
       "direct_consumers": [],
@@ -46,7 +46,7 @@
     "unclassified_neutral_code": [],
     "installed_product_blockers": [],
     "deletion_safe": true,
-    "issue_17_prerequisite": "Issue 17 deleted LoupeLibWidgets and Widgets-bound LoupeLibGui from the maintained loupe-release graph."
+    "issue_17_prerequisite": "Issue 17 deleted LoopLibWidgets and Widgets-bound LoopLibGui from the maintained loop-release graph."
   },
   "counts": {
     "libraries": 2,

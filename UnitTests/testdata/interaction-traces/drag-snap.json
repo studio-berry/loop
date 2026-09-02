@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "drag-snap",
   "description": "Drag a finding past a guide with snapping on, then hold Alt. Asserts the preview latches to the guide while unmodified and releases it under Alt, and that the snap the user watched is the one recorded on the session.",

@@ -32,15 +32,15 @@
     Directory for verbose Windows Installer logs.
 
 .EXAMPLE
-    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loupe-pdf_0.1.0.msi
+    .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loop-pdf_0.1.0.msi
 #>
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,
     [string]$PreviousMsiPath = "",
-    [string]$InstallDir = "${env:ProgramFiles}\LOUPE",
+    [string]$InstallDir = "${env:ProgramFiles}\LOOP",
     [string]$TestPdf = "",
     [string]$SourceSha = "",
-    [string]$LogDir = "$env:TEMP\loupe-msi-smoke",
+    [string]$LogDir = "$env:TEMP\loop-msi-smoke",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar
 )
@@ -129,12 +129,12 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
 Write-Host "=== Uninstalling ==="
 Invoke-Msi -Arguments "/x `"$MsiPath`"" -LogName "uninstall"
 
-# The current WiX tree places share\loupe below INSTALLFOLDER. Keep the
+# The current WiX tree places share\loop below INSTALLFOLDER. Keep the
 # historical sibling location in the scan as well so an upgrade from an older
 # MSI cannot leave files behind unnoticed.
 $shareLeftoverRoots = @(
-    (Join-Path $InstallDir "share\loupe"),
-    (Join-Path (Split-Path -Parent $InstallDir) "share\loupe")
+    (Join-Path $InstallDir "share\loop"),
+    (Join-Path (Split-Path -Parent $InstallDir) "share\loop")
 )
 foreach ($shareLeftoverRoot in $shareLeftoverRoots | Select-Object -Unique) {
     if (Test-Path -LiteralPath $shareLeftoverRoot) {

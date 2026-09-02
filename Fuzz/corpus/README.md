@@ -9,7 +9,7 @@ Hosted CI (`.github/workflows/fuzz.yml`), `scripts/fuzz-bughunt.sh`, and
 (`-runs=0`) before time-bounded mutation fuzzing.
 
 Do not add third-party malware samples. All seeds must be synthetic or
-fuzzer-generated against Loupe and redistributable under `LICENSE`.
+fuzzer-generated against Loop and redistributable under `LICENSE`.
 
 ## Layout
 

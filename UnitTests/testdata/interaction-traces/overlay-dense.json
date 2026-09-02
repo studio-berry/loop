@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "overlay-dense",
   "description": "Hover over a page carrying far more findings and guides than the overlay bounds admit. Asserts the frame stays bounded at maxPrimitives and reports what it dropped, rather than growing without limit or aborting the pass.",

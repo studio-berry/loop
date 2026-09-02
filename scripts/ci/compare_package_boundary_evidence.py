@@ -23,7 +23,7 @@ def load(path: Path, expected_platform: str) -> dict[str, Any]:
         evidence = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise PairError(f"unable to read evidence {path}: {exc}") from exc
-    if evidence.get("schema_version") != 1 or evidence.get("kind") != "loupe-package-boundary-evidence":
+    if evidence.get("schema_version") != 1 or evidence.get("kind") != "loop-package-boundary-evidence":
         raise PairError(f"unsupported evidence schema: {path}")
     if evidence.get("platform") != expected_platform:
         raise PairError(f"expected {expected_platform} evidence, got {evidence.get('platform')}: {path}")
@@ -68,7 +68,7 @@ def compare(linux_path: Path, windows_path: Path, expected_sha: str) -> dict[str
         )
     return {
         "schema_version": 1,
-        "kind": "loupe-package-boundary-pair",
+        "kind": "loop-package-boundary-pair",
         "source_sha": source_sha,
         "packages": {
             "linux": linux["package"],

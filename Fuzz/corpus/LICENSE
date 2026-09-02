@@ -21,5 +21,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Fuzz corpus seeds in this directory are synthetic or libFuzzer-generated inputs
-produced against Loupe. They are not third-party documents or malware samples.
-Redistribution is permitted under the same MIT terms as the Loupe project.
+produced against Loop. They are not third-party documents or malware samples.
+Redistribution is permitted under the same MIT terms as the Loop project.

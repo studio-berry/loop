@@ -19,7 +19,7 @@ jobs:
     # packaging runner aligned with that oldest-supported deployment tool.
     runs-on: ubuntu-22.04
     env:
-      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loupe/vcpkg/overlays/linux:${{ github.workspace }}/loupe/vcpkg/overlays/general
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-binary-cache
       GNUPGHOME: ${{ github.workspace }}/gnupg
@@ -34,12 +34,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          path: loupe
+          path: loop
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
 
       - name: Verify exact source SHA
-        working-directory: loupe
+        working-directory: loop
         env:
           EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
@@ -52,15 +52,15 @@ jobs:
             echo "::error::Checkout SHA $actual_sha does not match source_sha $EXPECTED_SOURCE_SHA"
             exit 1
           fi
-          echo "LOUPE_SOURCE_SHA=$actual_sha" >> "$GITHUB_ENV"
+          echo "LOOP_SOURCE_SHA=$actual_sha" >> "$GITHUB_ENV"
           echo "Packaging source SHA: $actual_sha"
 
       - name: Verify supply-chain pins
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/ci/check_supply_chain_pins.py
 
       - name: Resolve verified packaging tool pins
-        working-directory: loupe
+        working-directory: loop
         run: |
           python3 - <<'PY'
           import json
@@ -84,7 +84,7 @@ jobs:
           PY
 
       - name: Install appimagetool
-        working-directory: loupe
+        working-directory: loop
         run: |
           bash scripts/ci/download_verified.sh \
             --gh-asset "AppImage/appimagetool" \
@@ -95,7 +95,7 @@ jobs:
           sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
 
       - name: Download verified AppImage runtime
-        working-directory: loupe
+        working-directory: loop
         run: |
           # appimagetool otherwise resolves the *latest* type-2 runtime on its own.
           # Supply the exact pinned runtime so packaging never resolves a mutable
@@ -112,7 +112,7 @@ jobs:
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           VCPKG_COMMIT="$(python3 - <<'PY'
           import json
-          with open("loupe/vcpkg-configuration.json", encoding="utf-8") as f:
+          with open("loop/vcpkg-configuration.json", encoding="utf-8") as f:
               print(json.load(f)["default-registry"]["baseline"])
           PY
           )"
@@ -149,7 +149,7 @@ jobs:
 
       - name: 'VCPKG: Install Project Dependencies'
         run: |
-          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loupe --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt
@@ -165,68 +165,68 @@ jobs:
           cache-key-prefix: ${{ runner.os }}-qt-6111
 
       - name: Build Project
-        working-directory: loupe
+        working-directory: loop
         run: |
-          cmake -B build -S . -DLOUPE_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoupeEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
+          cmake -B build -S . -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
-          pwsh ./scripts/verify-loupe-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loupe/build/install" -Profile loupe-release -BuildDir build -InstallManifestPath build/install_manifest.txt
+          pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
       - name: Run product Quick accessibility qualification harness (native)
-        working-directory: loupe
+        working-directory: loop
         run: |
-          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          echo "source_sha=$LOUPE_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
+          echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
           pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
 
       - name: Run product Quick accessibility qualification harness (software)
-        working-directory: loupe
+        working-directory: loop
         run: |
-          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          echo "source_sha=$LOUPE_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-software.txt"
+          echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-software.txt"
           pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend software 2>&1 | tee -a "$evidence_dir/quick-a11y-software.txt"
 
       - name: Read version
         id: get_version
         run: |
-          version=$(cat "loupe/build/version.txt")
+          version=$(cat "loop/build/version.txt")
           echo "Version: $version"
-          echo "appimagefilename=Loupe-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
-          echo "appimage_update_info=gh-releases-zsync|mberrys|Loupe-pdf|latest|Loupe-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
-          echo "AppImage file name: Loupe-pdf-$version-x86_64.AppImage"
+          echo "appimagefilename=Loop-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
+          echo "appimage_update_info=gh-releases-zsync|mberrys|Loop-pdf|latest|Loop-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
+          echo "AppImage file name: Loop-pdf-$version-x86_64.AppImage"
 
       - name: 'Linux Deploy Qt'
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
-          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          loupe_quick_src="$GITHUB_WORKSPACE/loupe/build/LoupeEditor/Loupe/Quick"
-          qml_dest="install/usr/lib/qml/Loupe/Quick"
-          if [ ! -d "$loupe_quick_src" ]; then
-            echo "::error::Built Loupe.Quick QML module was not found: $loupe_quick_src"
+          loop_quick_src="$GITHUB_WORKSPACE/loop/build/LoopEditor/Loop/Quick"
+          qml_dest="install/usr/lib/qml/Loop/Quick"
+          if [ ! -d "$loop_quick_src" ]; then
+            echo "::error::Built Loop.Quick QML module was not found: $loop_quick_src"
             exit 1
           fi
           mkdir -p "$(dirname "$qml_dest")"
-          cp -a "$loupe_quick_src/." "$qml_dest/"
+          cp -a "$loop_quick_src/." "$qml_dest/"
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
-          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
-          bash "$GITHUB_WORKSPACE/loupe/scripts/ci/download_verified.sh" \
+          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loop-pdf.svg install/io.github.mberrys.Loop-pdf.svg
+          bash "$GITHUB_WORKSPACE/loop/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
             "$LINUXDEPLOYQT_ASSET_ID" \
             deploy.AppImage \
             "$LINUXDEPLOYQT_SHA256"
           chmod +x deploy.AppImage
           ./deploy.AppImage --appimage-extract-and-run \
-            install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop \
+            install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop \
             -executable-dir=install/usr/bin \
-            -qmldir="$GITHUB_WORKSPACE/loupe/LoupeEditor/qml" \
+            -qmldir="$GITHUB_WORKSPACE/loop/LoopEditor/qml" \
             -extra-plugins=iconengines,imageformats,texttospeech 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
@@ -248,7 +248,7 @@ jobs:
 
       - name: Pack AppImage (unsigned — V1 default)
         if: vars.SIGN_APPIMAGE != 'true'
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
           appimagetool \
             --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
@@ -257,7 +257,7 @@ jobs:
 
       - name: Sign and Repack AppImage
         if: vars.SIGN_APPIMAGE == 'true'
-        working-directory: loupe/build
+        working-directory: loop/build
         run: |
           appimagetool \
             --runtime-file "$GITHUB_WORKSPACE/runtime-x86_64" \
@@ -270,7 +270,7 @@ jobs:
       - name: Manual signature
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
-          gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --passphrase "${{ secrets.PGP_PASSPHRASE }}" --local-user "${{ secrets.PGP_KEY_ID }}" --output loupe/build/${{ env.appimagefilename }}.sig loupe/build/${{ env.appimagefilename }}
+          gpg --batch --yes --verbose --pinentry-mode loopback --detach-sign --passphrase "${{ secrets.PGP_PASSPHRASE }}" --local-user "${{ secrets.PGP_KEY_ID }}" --output loop/build/${{ env.appimagefilename }}.sig loop/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
@@ -278,33 +278,33 @@ jobs:
         if: vars.SIGN_APPIMAGE == 'true'
         run: |
           echo "${{ secrets.PGP_PUBLIC_KEY }}" | gpg --batch --import
-          gpg --verify loupe/build/${{ env.appimagefilename }}.sig loupe/build/${{ env.appimagefilename }}
+          gpg --verify loop/build/${{ env.appimagefilename }}.sig loop/build/${{ env.appimagefilename }}
         env:
           GNUPGHOME: ${{ env.GNUPGHOME }}
 
       - name: Run AppImage smoke test
-        working-directory: loupe
+        working-directory: loop
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
           chmod +x "build/${{ env.appimagefilename }}"
-          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loupe-preflight/testdata/fixtures/bleed-adequate.pdf" 2>&1 | tee "$evidence_dir/appimage-smoke.txt"
+          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loop-preflight/testdata/fixtures/bleed-adequate.pdf" 2>&1 | tee "$evidence_dir/appimage-smoke.txt"
 
       - name: Inspect AppImage package boundary
-        working-directory: loupe
+        working-directory: loop
         run: |
-          evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
           python3 scripts/ci/inspect_package_dependencies.py \
             --platform linux \
             --package "build/${{ env.appimagefilename }}" \
-            --source-sha "$LOUPE_SOURCE_SHA" \
+            --source-sha "$LOOP_SOURCE_SHA" \
             --expected-architecture x86-64 \
-            --work-dir "$RUNNER_TEMP/loupe-package-boundary-linux-work" \
+            --work-dir "$RUNNER_TEMP/loop-package-boundary-linux-work" \
             --output "$evidence_dir/evidence.json" \
             --report "$evidence_dir/inspection.txt" 2>&1 | tee "$evidence_dir/inspector.txt"
 
@@ -312,8 +312,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: loupe-package-boundary-linux-evidence
-          path: ${{ runner.temp }}/loupe-package-boundary-linux
+          name: loop-package-boundary-linux-evidence
+          path: ${{ runner.temp }}/loop-package-boundary-linux
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -322,7 +322,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}
-          path: ./loupe/build/${{ env.appimagefilename }}
+          path: ./loop/build/${{ env.appimagefilename }}
           retention-days: 30
           compression-level: 0
 
@@ -331,7 +331,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.sig
-          path: ./loupe/build/${{ env.appimagefilename }}.sig
+          path: ./loop/build/${{ env.appimagefilename }}.sig
           retention-days: 30
           if-no-files-found: warn
           compression-level: 0
@@ -340,7 +340,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: ${{ env.appimagefilename }}.zsync
-          path: ./loupe/build/${{ env.appimagefilename }}.zsync
+          path: ./loop/build/${{ env.appimagefilename }}.zsync
           retention-days: 30
           if-no-files-found: warn
           compression-level: 0

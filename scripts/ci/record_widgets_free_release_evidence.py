@@ -13,14 +13,14 @@ from pathlib import Path
 
 
 REQUIRED_CACHE_MARKERS = (
-    "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-    "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+    "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+    "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
 )
 FORBIDDEN_CACHE_MARKERS = (
-    "LOUPE_BUILD_CODE_GENERATOR:BOOL=ON",
-    "LOUPE_BUILD_JBIG2_VIEWER:BOOL=ON",
-    "LOUPE_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
-    "LOUPE_BUILD_CANVAS_BENCHMARK:BOOL=ON",
+    "LOOP_BUILD_CODE_GENERATOR:BOOL=ON",
+    "LOOP_BUILD_JBIG2_VIEWER:BOOL=ON",
+    "LOOP_BUILD_EXAMPLE_GENERATOR:BOOL=ON",
+    "LOOP_BUILD_CANVAS_BENCHMARK:BOOL=ON",
 )
 REQUIRED_FORBIDDEN_QT_PREFIXES = {
     "qt6widgets",
@@ -91,7 +91,7 @@ def record_evidence(
         raise EvidenceError(f"release configure cache does not exist: {cache}")
 
     manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
-    if not isinstance(manifest_data, dict) or manifest_data.get("kind") != "loupe-widgets-free-qt-prefix":
+    if not isinstance(manifest_data, dict) or manifest_data.get("kind") != "loop-widgets-free-qt-prefix":
         raise EvidenceError("manifest is not a Widgets-free Qt prefix manifest")
     if not manifest_data.get("excluded_paths"):
         raise EvidenceError("manifest does not record excluded Widgets paths")
@@ -133,7 +133,7 @@ def record_evidence(
 
     return {
         "schema_version": 1,
-        "kind": "loupe-widgets-free-release-evidence",
+        "kind": "loop-widgets-free-release-evidence",
         "status": "passed",
         "source_sha": source_sha,
         "github_sha": github_sha or None,
@@ -151,11 +151,11 @@ def record_evidence(
         "tests": {"status": test_status},
         "negative_widgets_configure": {"status": negative_configure_status},
         "release_options": {
-            "LOUPE_LOUPE_DISTRIBUTION": True,
-            "LOUPE_BUILD_CANVAS_BENCHMARK": False,
-            "LOUPE_BUILD_CODE_GENERATOR": False,
-            "LOUPE_BUILD_JBIG2_VIEWER": False,
-            "LOUPE_BUILD_EXAMPLE_GENERATOR": False,
+            "LOOP_LOOP_DISTRIBUTION": True,
+            "LOOP_BUILD_CANVAS_BENCHMARK": False,
+            "LOOP_BUILD_CODE_GENERATOR": False,
+            "LOOP_BUILD_JBIG2_VIEWER": False,
+            "LOOP_BUILD_EXAMPLE_GENERATOR": False,
         },
         "excluded_widgets_paths": manifest_data["excluded_paths"],
         "excluded_widgets_bound_qt_paths": manifest_data["excluded_paths"],

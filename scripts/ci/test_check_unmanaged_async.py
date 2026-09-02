@@ -6,7 +6,7 @@ from check_unmanaged_async import scan_source_text
 class UnmanagedAsyncAuditTest(unittest.TestCase):
     def test_detects_all_launch_forms(self):
         launches = scan_source_text(
-            "LoupeLibGui/example.cpp",
+            "LoopLibGui/example.cpp",
             """
             QtConcurrent::run(work);
             auto thread = QThread::create(work);

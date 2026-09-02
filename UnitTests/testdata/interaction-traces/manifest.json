@@ -1,12 +1,12 @@
 {
-  "schema_kind": "loupe-interaction-corpus",
+  "schema_kind": "loop-interaction-corpus",
   "schema_version": 1,
   "scenarios": [
     {
       "id": "click-select-deselect",
       "path": "UnitTests/testdata/interaction-traces/click-select-deselect.json",
       "issue": 146,
-      "sha256": "718f433ac5669a93190bce6f02b0a48f8d5859f9ce98346f96d570650c77eda5",
+      "sha256": "928deef8f2bdc35e2b385c379065888728e5c6b402b9969aa7d8944f6d9e5d56",
       "lanes": [
         "deterministic"
       ]
@@ -15,7 +15,7 @@
       "id": "drag-no-snap",
       "path": "UnitTests/testdata/interaction-traces/drag-no-snap.json",
       "issue": 146,
-      "sha256": "7148cc4b13ea5a04dc2a7ccb4eb7f0adc9f04f7b6e8a0fdca7a4c71424dfd1c7",
+      "sha256": "111753d405946cfd2c8e1a1679a717c2e8aa0cd67c2f57ed04535844b8280083",
       "lanes": [
         "deterministic"
       ]
@@ -24,7 +24,7 @@
       "id": "drag-snap",
       "path": "UnitTests/testdata/interaction-traces/drag-snap.json",
       "issue": 146,
-      "sha256": "c352f12024bd91d51bec7d1613c16c6887c6e8406668411459c83d75f93ad46d",
+      "sha256": "d903f432aa78be1b64eda760ae41858ca7c734fac116f2eb95c32b8e19f445d5",
       "lanes": [
         "deterministic"
       ],
@@ -35,7 +35,7 @@
       "id": "hover-dense",
       "path": "UnitTests/testdata/interaction-traces/hover-dense.json",
       "issue": 146,
-      "sha256": "0dd807c3ae2f831dfd4db17b04809654edaf0ffd3c910848248078a5c1977ee4",
+      "sha256": "bba2c6312f4a181fff43a2a3d333efc1d6a9069753f02e56fe44ff1a31a33bcd",
       "lanes": [
         "deterministic"
       ]
@@ -44,7 +44,7 @@
       "id": "hover-sparse",
       "path": "UnitTests/testdata/interaction-traces/hover-sparse.json",
       "issue": 146,
-      "sha256": "79dc49c89dd6ef1805539ad41ec47920b363c02620b73d0cdea6b5f91efa328a",
+      "sha256": "393f59fd4beb8cd7c5eec5e00a7a222214a46087ce9827488cac53589aa9a1a4",
       "lanes": [
         "deterministic"
       ]
@@ -53,7 +53,7 @@
       "id": "overlay-dense",
       "path": "UnitTests/testdata/interaction-traces/overlay-dense.json",
       "issue": 146,
-      "sha256": "21937d56f2a6b64a314596039061087765b45a604d748f2814e7dd7aec1ed5bf",
+      "sha256": "55a0b5c35eae3a1fadda39dcec2f4a1d9f6f644b33c5cb021c1180d1e90ce8b5",
       "lanes": [
         "deterministic"
       ]
@@ -62,7 +62,7 @@
       "id": "pan",
       "path": "UnitTests/testdata/interaction-traces/pan.json",
       "issue": 146,
-      "sha256": "007117ede01e0af716967ef7339376936de628d5c8c59dec18b8eecbcfb91c9c",
+      "sha256": "c43200db0b9aedfbaab7730b75ef0ae3e1909bed355b105ea1c7771aea341244",
       "lanes": [
         "deterministic"
       ]
@@ -71,7 +71,7 @@
       "id": "zoom-anchored",
       "path": "UnitTests/testdata/interaction-traces/zoom-anchored.json",
       "issue": 146,
-      "sha256": "cf31f186276f957a69c3c62614f68659cc805f7fef1ba517d1ce5f141fa05f28",
+      "sha256": "0089819a19f41c14574eae79a66b4cb85240e61b253df39fb9ef239556637862",
       "lanes": [
         "deterministic"
       ]
@@ -80,7 +80,7 @@
       "id": "zoom-reversal",
       "path": "UnitTests/testdata/interaction-traces/zoom-reversal.json",
       "issue": 146,
-      "sha256": "5bde62d81c39852cfbaed28fe45f50fa1c566da78342f38d102229a94d89f459",
+      "sha256": "28c6fc63971eb59d5a00ba12266dad4f846ebbc5a5468a51b172ce756646a86a",
       "lanes": [
         "deterministic"
       ]

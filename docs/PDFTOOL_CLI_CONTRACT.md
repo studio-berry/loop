@@ -67,7 +67,7 @@ contains only fixups available in the current build.
     "report": {
       "schema_version": 3,
       "pass": false,
-      "profile": "Loupe Default",
+      "profile": "Loop Default",
       "errors": [],
       "warnings": [],
       "fixups_available": []
@@ -187,6 +187,6 @@ process must no longer appear successful.
 
 - Machine-readable envelope schema: `schemas/pdftool-result.schema.json`
   (versioned alongside this document).
-- Preflight continues to validate against `loupe-preflight/schemas/report.schema.json`
+- Preflight continues to validate against `loop-preflight/schemas/report.schema.json`
   (unchanged); the envelope carries it under `data.report`.
 - OCR carries its report under `data.report` (unchanged domain schema).

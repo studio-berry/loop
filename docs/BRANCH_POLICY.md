@@ -1,4 +1,4 @@
-# Loupe branch policy
+# Loop branch policy
 
 `stable` is the release line and the repository default branch. `dev` is the
 first integration line. `unstable` is the qualification line. Short-lived topic
@@ -40,7 +40,7 @@ branch protection when a token can read it.
 - Integration workflow: `.github/workflows/ci.yml`
 - Integration pull_request branches: `dev`, `unstable`
 
-`master` is not part of the Loupe branch policy. It is retained only in older
+`master` is not part of the Loop branch policy. It is retained only in older
 historical documents or upstream references; new workflow triggers must not
 target it.
 

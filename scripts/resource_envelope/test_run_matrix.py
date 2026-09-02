@@ -169,7 +169,7 @@ class RunMatrixTest(unittest.TestCase):
             fixture.write_bytes(b"fixture")
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({
-                "schema_kind": "loupe-resource-envelope-fixtures",
+                "schema_kind": "loop-resource-envelope-fixtures",
                 "schema_version": 1,
                 "fixtures": [{
                     "fixture_id": "pathological-vector",

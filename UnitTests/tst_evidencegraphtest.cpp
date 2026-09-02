@@ -96,7 +96,7 @@ pdf::PDFDocument buildLowDpiImagePage()
 
 pdf::PDFDocument loadFixtureDocument(const char* relativePath)
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/") + QString::fromUtf8(relativePath);
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR) + QStringLiteral("/testdata/fixtures/") + QString::fromUtf8(relativePath);
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
                                   { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);

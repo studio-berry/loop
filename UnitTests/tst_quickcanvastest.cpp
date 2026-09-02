@@ -25,7 +25,7 @@
 //
 // The link line in UnitTests/CMakeLists.txt is again load-bearing, but it proves
 // the opposite of what the P4-S1..S4 targets prove. Those link no Qml and no
-// Quick, so a presentation include fails to build. This one links LoupeLibQuick
+// Quick, so a presentation include fails to build. This one links LoopLibQuick
 // and therefore Qt6::Quick, and what it has to establish instead is that the
 // admitted presentation host stayed on its own side of ADR-010 rule 5: Qt Quick
 // events become the neutral input values and nothing else, the neutral values
@@ -56,7 +56,7 @@
 #include "canvaspalette.h"
 #include "canvaspresentmetrics.h"
 #include "canvastraceoverlay.h"
-#include "loupecanvasitem.h"
+#include "loopcanvasitem.h"
 
 #include "hittestsource.h"
 #include "interactioncontroller.h"
@@ -140,10 +140,10 @@ bool sendFocusOut(QQuickItem* item, Qt::FocusReason reason = Qt::OtherFocusReaso
 }
 
 /// Re-exposes protected handlers the translation contract must drive directly.
-class TestCanvasItem final : public pdfquick::LoupeCanvasItem
+class TestCanvasItem final : public pdfquick::LoopCanvasItem
 {
 public:
-    using pdfquick::LoupeCanvasItem::focusOutEvent;
+    using pdfquick::LoopCanvasItem::focusOutEvent;
 };
 
 /// sceneGraphInvalidated is a protected QQuickWindow signal. Emitting it from the
@@ -599,7 +599,7 @@ void QuickCanvasTest::unboundItemIgnoresInput()
 {
     // No bind() call. An item with no document behind it is the normal state at
     // startup and after a close, and it must not crash or half-report.
-    pdfquick::LoupeCanvasItem item;
+    pdfquick::LoopCanvasItem item;
     item.setSize(QSizeF(200.0, 200.0));
 
     const QPointF position(10.0, 10.0);

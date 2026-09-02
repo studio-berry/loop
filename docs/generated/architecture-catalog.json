@@ -297,31 +297,31 @@
   "registered_operations": [
     {
       "id": "add-bleed",
-      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "downsample-images",
-      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "production.add-contour-bleed",
-      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "production.place-grommets",
-      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "production.validate-wide-format",
-      "implementation": "LoupeLibCore/sources/pdfproductionrepair.cpp"
+      "implementation": "LoopLibCore/sources/pdfproductionrepair.cpp"
     },
     {
       "id": "rgb-to-cmyk",
-      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
     },
     {
       "id": "standards-convert",
-      "implementation": "LoupeLibCore/sources/pdfrepairprimitives.cpp"
+      "implementation": "LoopLibCore/sources/pdfrepairprimitives.cpp"
     }
   ],
   "schema_kinds": [
@@ -343,11 +343,11 @@
   ],
   "schema_versions": {
     "json_schemas": {
-      "loupe-preflight/schemas/action-list.schema.json": [],
-      "loupe-preflight/schemas/profile.schema.json": [
+      "loop-preflight/schemas/action-list.schema.json": [],
+      "loop-preflight/schemas/profile.schema.json": [
         1
       ],
-      "loupe-preflight/schemas/report.schema.json": [
+      "loop-preflight/schemas/report.schema.json": [
         1,
         2,
         3
@@ -363,15 +363,15 @@
     "docs/branch-policy.json",
     "docs/version-policy.json",
     "docs/architecture-invariants.json",
-    "LoupeLibCore/sources/preflightengine.cpp",
-    "LoupeLibCore/sources/preflightengine.h",
+    "LoopLibCore/sources/preflightengine.cpp",
+    "LoopLibCore/sources/preflightengine.h",
     "docs/preflight-check-catalog-overlay.json",
-    "LoupeLibCore/sources/pdfactionlist.cpp",
-    "LoupeLibCore/sources/pdfrepairoperation.cpp",
-    "LoupeLibCore/sources/pdfrepairprimitives.cpp",
-    "LoupeLibCore/sources/pdfproductionrepair.cpp",
-    "loupe-preflight/schemas/*.json",
-    "LoupeLibCore/sources/pdfschemaversion.cpp",
+    "LoopLibCore/sources/pdfactionlist.cpp",
+    "LoopLibCore/sources/pdfrepairoperation.cpp",
+    "LoopLibCore/sources/pdfrepairprimitives.cpp",
+    "LoopLibCore/sources/pdfproductionrepair.cpp",
+    "loop-preflight/schemas/*.json",
+    "LoopLibCore/sources/pdfschemaversion.cpp",
     "docs/PDFX_POLICY_MATRIX.md",
     "UnitTests/CMakeLists.txt",
     ".github/workflows/*.yml"
@@ -379,11 +379,13 @@
   "test_targets": [
     "UnitTests",
     "UnitTestsActionList",
+    "UnitTestsApplicationIdentity",
     "UnitTestsAuthorSettings",
     "UnitTestsBenchmarkIdentity",
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
+    "UnitTestsBudgetCorpus",
     "UnitTestsBudgetExhaustion",
     "UnitTestsCanvasParity",
     "UnitTestsContentEditor",
@@ -440,6 +442,7 @@
     "UnitTestsRepairOperation",
     "UnitTestsRepairOperatorAcceptance",
     "UnitTestsResourceBudget",
+    "UnitTestsRevisionStress",
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",

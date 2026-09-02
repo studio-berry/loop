@@ -50,7 +50,7 @@ private slots:
 void ActionListTest::parsesAndRoundTripsRecipe()
 {
     const QJsonObject json{
-        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
         { QStringLiteral("id"), QStringLiteral("press-ready") },
         { QStringLiteral("name"), QStringLiteral("Press ready") },
         { QStringLiteral("onFailure"), QStringLiteral("stop") },
@@ -76,7 +76,7 @@ void ActionListTest::rejectsUnknownOperationAndWrongParameterType()
 {
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
         { QStringLiteral("id"), QStringLiteral("bad") },
         { QStringLiteral("name"), QStringLiteral("Bad") },
         { QStringLiteral("steps"), QJsonArray{
@@ -105,7 +105,7 @@ void ActionListTest::dryRunDoesNotMutateSource()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
         { QStringLiteral("id"), QStringLiteral("dry") },
         { QStringLiteral("name"), QStringLiteral("Dry") },
         { QStringLiteral("steps"), QJsonArray{QJsonObject{
@@ -131,7 +131,7 @@ void ActionListTest::executesRegisteredOperationOnCandidate()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
         { QStringLiteral("id"), QStringLiteral("execute") },
         { QStringLiteral("name"), QStringLiteral("Execute") },
         { QStringLiteral("steps"), QJsonArray{QJsonObject{
@@ -157,7 +157,7 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loupe-action-list/1") },
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
         { QStringLiteral("id"), QStringLiteral("cancel") },
         { QStringLiteral("name"), QStringLiteral("Cancel") },
         { QStringLiteral("steps"), QJsonArray{QJsonObject{

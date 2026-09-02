@@ -120,7 +120,7 @@ def build_pdf(manifest_path: Path, output: Path, page_count: int, page_seed: int
 
     object_data: dict[int, bytes] = {
         1: b"<< /Type /Catalog /Pages 2 0 R /Info 3 0 R >>",
-        3: b"<< /Producer (Loupe resource envelope) /CreationDate (D:20260101000000Z) >>",
+        3: b"<< /Producer (Loop resource envelope) /CreationDate (D:20260101000000Z) >>",
     }
     image_object_numbers = []
     next_object = 4

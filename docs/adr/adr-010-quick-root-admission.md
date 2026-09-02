@@ -6,7 +6,7 @@
 **Superseded-by:** none
 **Supersedes:** the migration-topology and pre-0.1.1 deferral clauses of [ADR-007: Qt Quick Controls foundation](adr-007-qt-quick-controls-shell.md)
 **Date:** 2026-08-20
-**Deciders:** Loupe 0.1.2 execution directive / #178
+**Deciders:** Loop 0.1.2 execution directive / #178
 
 ## Decision
 
@@ -77,5 +77,5 @@ backend contract.
 - [ ] Final-artifact SBOM, notices, LGPL replacement/relink evidence, and
       clean-machine package smoke close the packaging gate.
 - [x] Product Quick accessibility runtime and focus-bridge evidence close the
-      GUI admission gate on the branch (`LoupeCanvasAccessible`, `FocusRestoration`,
+      GUI admission gate on the branch (`LoopCanvasAccessible`, `FocusRestoration`,
       `ProductQuickAccessibilitySmoke`; Phase 6 screen-reader proof remains open).

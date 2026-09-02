@@ -11,15 +11,15 @@ current post-Session-05 tree; Editor workspace integration remains planned for
 
 The release package presents two product surfaces:
 
-- **Loupe** is the `LoupeEditor` desktop shell. Opening a PDF provides the
+- **Loop** is the `LoopEditor` desktop shell. Opening a PDF provides the
   normal viewing behavior; future Editor workspaces are named Pages /
   Production, Compare, and Production Preview.
-- **Loupe CLI** is the product-facing name for `PdfTool`. The `PdfTool`
+- **Loop CLI** is the product-facing name for `PdfTool`. The `PdfTool`
   executable, command names, machine-readable contracts, and automation
   compatibility remain unchanged.
 
-The release profile contains `LoupeEditor`, `PdfTool`, `LoupeLibCore`, and
-`LoupeLibQuick`. CodeGenerator, JBIG2 Viewer, and PdfExampleGenerator remain
+The release profile contains `LoopEditor`, `PdfTool`, `LoopLibCore`, and
+`LoopLibQuick`. CodeGenerator, JBIG2 Viewer, and PdfExampleGenerator remain
 available only in the full developer build. The former Viewer, PageMaster, Diff,
 LaunchPad, and editor-plugin sources are deleted and absent from both profiles;
 they are recorded as historical dispositions so an upstream reintroduction is
@@ -29,15 +29,15 @@ The Editor-facing Pages / Production and Compare seams must reuse the existing
 Core/PageMaster export and Core Diff contracts. This 0.2B slice does not move
 their visible UI into Editor; that workspace integration is a 0.3 deliverable.
 
-Issue #192 records the boundary in [LOUPE_WORKSPACES.md](LOUPE_WORKSPACES.md).
+Issue #192 records the boundary in [LOOP_WORKSPACES.md](LOOP_WORKSPACES.md).
 Issue #191 makes [product-surface.json](product-surface.json) the executable
-inventory for developer and `loupe-release` packaging profiles. Both
+inventory for developer and `loop-release` packaging profiles. Both
 `scripts/verify_product_surface.py` and the PowerShell compatibility entry point
 consume it; this plan and ADR-005 remain the decision record.
 
 ## Objective
 
-Move Loupe from an upstream-shaped multi-application distribution to a focused
+Move Loop from an upstream-shaped multi-application distribution to a focused
 print-production product surface while preserving shared upstream engine code,
 PdfTool automation, and upstream-sync flexibility.
 
@@ -54,8 +54,8 @@ The implementation must follow the ADR-005 order:
 
 ### In scope
 
-- Loupe desktop as the primary interactive surface.
-- Loupe CLI, currently `PdfTool`, as the headless/automation surface.
+- Loop desktop as the primary interactive surface.
+- Loop CLI, currently `PdfTool`, as the headless/automation surface.
 - First-class product groupings for Document, Preflight, Production Preview,
   Pages, Inspect, Fix, and Compare.
 - Release-profile gating for developer utilities and the absence of deleted
@@ -79,11 +79,11 @@ The implementation must follow the ADR-005 order:
 
 | Concern | Current anchor | Planning implication |
 | --- | --- | --- |
-| Distribution switch | `CMakeLists.txt:58-113` | Reuse `LOUPE_LOUPE_DISTRIBUTION`; the manifest records its developer/release consequences. |
+| Distribution switch | `CMakeLists.txt:58-113` | Reuse `LOOP_LOOP_DISTRIBUTION`; the manifest records its developer/release consequences. |
 | Conditional application targets | `CMakeLists.txt:284-320` | Keep maintained developer tools opt-in to the release profile and fail on unmanifested install targets. |
 | Linux install surface | `CMakeLists.txt:374-420` | Keep the manifest desktop inventory aligned with profile-selected `.desktop`, icon, and metainfo installation. |
 | Windows packaging | `WixInstaller/CMakeLists.txt` and `WixInstaller/Product.wxs.in` | Package Editor, PdfTool, Core, and Quick without stale compatibility/plugin features or Qt Widgets. |
-| Editor shell | `LoupeEditor/` and `docs/loupe-shell.json` | Keep the Quick shell contract as the UI authority; future workspace wiring remains a separate issue. |
+| Editor shell | `LoopEditor/` and `docs/loop-shell.json` | Keep the Quick shell contract as the UI authority; future workspace wiring remains a separate issue. |
 | Plugin registry/build | `docs/generated/phase5-widgets-disposition.json` | Deleted editor-plugin sources remain absent; the manifest records their historical disposition and follow-up ownership. |
 | Product manifest | `docs/product-surface.json`, `docs/schemas/product-surface.schema.json`, and `scripts/product_surface.py` | The manifest is the executable inventory; source, install, package, and CLI checks derive from it. |
 
@@ -98,7 +98,7 @@ The implementation must follow the ADR-005 order:
 - [ ] Resolve the redaction decision against GitHub #66 before changing the
       Editor plugin or the supported CLI surface.
 - [x] Preserve Compare as `OPEN` with owner `m.berry` and follow-up #193 while
-      recording the already-deleted `LoupeDiff` as absent.
+      recording the already-deleted `LoopDiff` as absent.
 - [ ] Decide whether developer-menu visibility is a build flag, a release
       setting, or both. The existing `m_allowDeveloperMode` setting is a useful
       compatibility mechanism.
@@ -111,9 +111,9 @@ artifact inventory.
 
 ### Phase 1 — Make the release profile merge-durable
 
-**Goal:** Produce a slim Loupe build without deleting upstream-syncable sources.
+**Goal:** Produce a slim Loop build without deleting upstream-syncable sources.
 
-- [x] Keep `LOUPE_LOUPE_DISTRIBUTION` as the top-level release switch and make
+- [x] Keep `LOOP_LOOP_DISTRIBUTION` as the top-level release switch and make
       release/packaging workflows pass it explicitly.
 - [x] Verify that the release profile contains only the installed Editor, PdfTool,
       Core, and Quick product artifacts; developer tools remain developer-only.
@@ -128,19 +128,19 @@ artifact inventory.
 - [x] Keep a full developer configuration available for upstream comparison and
       development workflows.
 
-**Primary files:** `CMakeLists.txt`, `LoupeEditor/CMakeLists.txt`, `WixInstaller/`,
+**Primary files:** `CMakeLists.txt`, `LoopEditor/CMakeLists.txt`, `WixInstaller/`,
 CI workflow configure commands, and the manifest-backed verification scripts.
 
 **Deliverable:** two inspectable configurations: full developer build and slim
-Loupe release build.
+Loop release build.
 
 ### Phase 2 — Align release packaging and entrypoints
 
-**Goal:** Make installed artifacts communicate one Loupe desktop product.
+**Goal:** Make installed artifacts communicate one Loop desktop product.
 
 - [x] Gate Linux `.desktop`, icon, and metainfo installation on the release
       surface; retain source assets for developer/full builds.
-- [x] Make the primary Loupe desktop entry launch `LoupeEditor` directly in
+- [x] Make the primary Loop desktop entry launch `LoopEditor` directly in
       the slim profile instead of exposing LaunchPad as the product shell.
 - [x] Remove Viewer, Diff, and PageMaster desktop entries from slim Linux
       artifacts while keeping only the manifest-declared Editor entries in the
@@ -162,7 +162,7 @@ shortcuts or names.
 
 ### Phase 3 — Reorganize the Editor surface
 
-**Goal:** Make the Editor feel like Loupe without changing shared PDF behavior.
+**Goal:** Make the Editor feel like Loop without changing shared PDF behavior.
 
 - [ ] Lock the first information architecture: File, Edit, View, Document,
       Production, Preflight, and Help, with contextual Inspect/Fix/Compare
@@ -180,11 +180,11 @@ shortcuts or names.
 - [ ] Add UI-level tests or deterministic action-visibility checks for release
       and developer modes where the existing test harness permits them.
 
-**Primary files:** `LoupeLibGui/pdfeditormainwindow.ui`,
-`LoupeLibGui/pdfeditormainwindow.cpp`, `pdfprogramcontroller.cpp`, relevant
+**Primary files:** `LoopLibGui/pdfeditormainwindow.ui`,
+`LoopLibGui/pdfeditormainwindow.cpp`, `pdfprogramcontroller.cpp`, relevant
 plugin action registration, and UI test fixtures.
 
-**Deliverable:** an Editor shell whose visible actions match the Loupe product
+**Deliverable:** an Editor shell whose visible actions match the Loop product
 manifest in both release and developer modes.
 
 ### Phase 4 — Absorb workflows without duplicating semantics
@@ -246,20 +246,20 @@ build is available, validate the installed tree in this order:
 | Linux and Windows packaging diverge | Users see different products by platform | Validate both install manifests against one expected surface table. |
 | Removing Viewer/PageMaster/Diff before replacement | Supported workflow disappears | Preserve Core/PdfTool contracts, keep Compare `OPEN`, and record deleted compatibility artifacts explicitly. |
 | Redaction status is guessed | Security or product commitment becomes inconsistent | Leave `OPEN` and block redaction-surface changes on #66. |
-| UI-only pruning misses plugin actions | Generic upstream UI leaks back into Loupe | Audit `pdfprogramcontroller` and plugin registration, not only `.ui` files. |
+| UI-only pruning misses plugin actions | Generic upstream UI leaks back into Loop | Audit `pdfprogramcontroller` and plugin registration, not only `.ui` files. |
 | Release default breaks developer/CI workflows | Contributors lose useful upstream comparison tools | Use explicit release-profile configuration and preserve the full matrix. |
 
 ## Acceptance criteria
 
 - [ ] ADR-005 classification remains the source of truth and its `OPEN` items
       are not silently resolved.
-- [x] Slim release configuration builds and packages only the supported Loupe
+- [x] Slim release configuration builds and packages only the supported Loop
       desktop/CLI surface and maintained Core/Quick libraries.
 - [x] Full developer configuration still builds the upstream-comparison
       developer tools.
 - [x] No stale Viewer, Diff, PageMaster, LaunchPad, or editor-plugin artifact
       remains in either manifest profile.
-- [ ] Editor release menus expose the focused Loupe workflow while developer
+- [ ] Editor release menus expose the focused Loop workflow while developer
       diagnostics remain available through an explicit path.
 - [ ] PdfTool and shared Core semantics remain available independently of GUI
       pruning.
@@ -273,7 +273,7 @@ build is available, validate the installed tree in this order:
 - Phase 0: Implemented for Issue #191 — release artifact contract and OPEN rows are explicit
 - Phase 1: Implemented — slim release flag is explicit and developer tools remain outside the release profile
 - Phase 2: Implemented — desktop/AppX/Flatpak/WiX sources and staged artifact checks derive from the manifest
-- Phase 3: Partial — release-only Developer menu gating is implemented; full Loupe information architecture remains follow-up work
+- Phase 3: Partial — release-only Developer menu gating is implemented; full Loop information architecture remains follow-up work
 - Phase 4: Boundary recorded; Editor workspace wiring remains deferred to #193
 - Phase 5: Deferred until level-3 removals are explicitly approved
 

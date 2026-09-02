@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate Session 05 Issue 16/17 Widgets library consumer graph evidence.
 
-Re-dumps the loupe-release dependency graph around LoupeLibWidgets and
-Widgets-bound LoupeLibGui, classifies every consumer and neutral relocation
+Re-dumps the loop-release dependency graph around LoopLibWidgets and
+Widgets-bound LoopLibGui, classifies every consumer and neutral relocation
 owner, and records installed-product blockers for consumer-first deletion.
 """
 
@@ -24,7 +24,7 @@ from generate_phase5_widgets_evidence import (
 
 
 GRAPH_PATH = Path("docs/generated/widgets-library-consumer-graph.json")
-LIBRARIES = ("LoupeLibWidgets", "LoupeLibGui")
+LIBRARIES = ("LoopLibWidgets", "LoopLibGui")
 SOURCE_SUFFIXES = (".cpp", ".h", ".hpp")
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^">]+)[">]')
 WIDGETS_HEADER = re.compile(
@@ -45,7 +45,7 @@ def _consumer_class(target: str, target_row: dict, library: str) -> str:
     cmake = target_row["cmake"].replace("\\", "/")
     if cmake.startswith(("UnitTests/", "Fuzz/")):
         return "test-consumer"
-    if target == "LoupeLibGui" and library == "LoupeLibWidgets":
+    if target == "LoopLibGui" and library == "LoopLibWidgets":
         return "widgets-library"
     kind = _surface_kind(target, cmake)
     if kind == "plugin":
@@ -72,21 +72,21 @@ def _replacement_owner(
     if product_row and product_row.get("replacement_surface"):
         return str(product_row["replacement_surface"])
     if consumer_class == "test-consumer":
-        return "UnitTests (profile-disabled in loupe-release)"
+        return "UnitTests (profile-disabled in loop-release)"
     if consumer_class == "widgets-library":
-        return "LoupeEditor Quick shell and PdfTool"
+        return "LoopEditor Quick shell and PdfTool"
     if consumer_class == "developer-tool-consumer":
         return "developer-only qualification boundary"
     if consumer_class == "build-only-retired-executable":
-        return "loupe-editor or loupe-cli per product-surface.json"
+        return "loop-editor or loop-cli per product-surface.json"
     if consumer_class == "build-only-plugin":
-        return "LoupeEditor (sole installed interactive product)"
+        return "LoopEditor (sole installed interactive product)"
     return "unassigned"
 
 
 def _scan_neutral_code(root: Path) -> list[dict]:
     rows: list[dict] = []
-    for directory in ("LoupeLibWidgets/sources", "LoupeLibGui"):
+    for directory in ("LoopLibWidgets/sources", "LoopLibGui"):
         base = root / directory
         if not base.is_dir():
             continue
@@ -94,7 +94,7 @@ def _scan_neutral_code(root: Path) -> list[dict]:
             if not path.is_file() or path.suffix not in SOURCE_SUFFIXES:
                 continue
             relative = path.relative_to(root).as_posix()
-            current_owner = "LoupeLibWidgets" if relative.startswith("LoupeLibWidgets/") else "LoupeLibGui"
+            current_owner = "LoopLibWidgets" if relative.startswith("LoopLibWidgets/") else "LoopLibGui"
             text = path.read_text(encoding="utf-8")
             ui_sibling = path.with_suffix(".ui")
             widgets_bound = bool(
@@ -123,7 +123,7 @@ def _scan_neutral_code(root: Path) -> list[dict]:
                         "path": relative,
                         "current_owner": current_owner,
                         "binding": "neutral-relocatable",
-                        "correct_owner": "LoupeLibCore",
+                        "correct_owner": "LoopLibCore",
                         "rationale": "No Qt Widgets include or QWidget type usage; relocate to Core before deleting the Widgets library.",
                     }
                 )
@@ -256,9 +256,9 @@ def build_graph(root: Path) -> dict:
             "installed_product_blockers": installed_product_blockers,
             "deletion_safe": deletion_safe,
             "issue_17_prerequisite": (
-                "Issue 17 deleted LoupeLibWidgets and Widgets-bound LoupeLibGui from the maintained loupe-release graph."
+                "Issue 17 deleted LoopLibWidgets and Widgets-bound LoopLibGui from the maintained loop-release graph."
                 if deletion_safe
-                else "Issue 17 must not delete LoupeLibWidgets or Widgets-bound LoupeLibGui while installed_product_blockers is non-empty."
+                else "Issue 17 must not delete LoopLibWidgets or Widgets-bound LoopLibGui while installed_product_blockers is non-empty."
             ),
         },
         "counts": {

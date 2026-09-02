@@ -1,6 +1,6 @@
 # Interaction and overlay contract
 
-Status: P4-S4 (0.2.0 Phase 4). Types live in `LoupeLibInteraction/sources/inputintent.h`,
+Status: P4-S4 (0.2.0 Phase 4). Types live in `LoopLibInteraction/sources/inputintent.h`,
 `interactiontarget.h`, `interactionstate.h`, `hittestsource.h`, `overlayframe.h`,
 `overlaybuilder.h`, `interactiontrace.h`, and `interactioncontroller.h`.
 Architecture invariant **I24**; test targets `UnitTestsInteractionController` and
@@ -274,7 +274,7 @@ wired up.
 ## Not in this session
 
 - The developer-facing trace overlay and GPU/present timing from issue #140. Neither can exist
-  in a layer that links no QML and no scene graph. **Delivered in P4-S5** by `LoupeLibQuick`:
+  in a layer that links no QML and no scene graph. **Delivered in P4-S5** by `LoopLibQuick`:
   `CanvasTraceOverlay` renders the recorder's privacy-safe summary, and `CanvasPresentMetrics`
   measures the scene graph's render pass and swap and charges them to `TraceStage::External`.
   See [QUICK_CANVAS_CONTRACT.md](QUICK_CANVAS_CONTRACT.md).
