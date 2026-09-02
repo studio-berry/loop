@@ -280,6 +280,13 @@ jobs:
               throw "windeployqt failed for $name with exit code $exitCode"
             }
           }
+          $qmlModuleSource = Join-Path $env:GITHUB_WORKSPACE "loupeuildLoupeEditorLoupeQuick"
+          $qmlModuleDestination = Join-Path $installBin "qmlLoupeQuick"
+          if (-not (Test-Path -LiteralPath $qmlModuleSource -PathType Container)) {
+            throw "Built Loupe.Quick QML module is missing: $qmlModuleSource"
+          }
+          New-Item -ItemType Directory -Force -Path $qmlModuleDestination | Out-Null
+          Copy-Item -LiteralPath (Join-Path $qmlModuleSource "*") -Destination $qmlModuleDestination -Recurse -Force
 
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so

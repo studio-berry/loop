@@ -238,6 +238,14 @@ jobs:
               exit 1
             fi
           done
+          qml_module_source="LoupeEditor/Loupe/Quick"
+          qml_module_destination="install/usr/lib/qml/Loupe/Quick"
+          if [[ ! -d "$qml_module_source" ]]; then
+            echo "::error::Built Loupe.Quick QML module is missing: $qml_module_source"
+            exit 1
+          fi
+          mkdir -p "$qml_module_destination"
+          cp -a "$qml_module_source/." "$qml_module_destination/"
           cat > install/usr/bin/qt.conf <<'EOF'
           [Paths]
           Prefix=..
