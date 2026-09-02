@@ -186,6 +186,8 @@ foreach ($item in $requiredFiles) {
     Write-Host "OK: $($item.Label)"
 }
 
+$pdfTool = Join-Path $InstallDir "PdfTool.exe"
+
 $versionOutput = @(& $pdfTool --version 2>&1)
 $versionExit = $LASTEXITCODE
 $versionText = $versionOutput -join "`n"
@@ -248,7 +250,6 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
 }
 
 $profilePath = Join-Path $ProfilesDir "loop-default.json"
-$pdfTool = Join-Path $InstallDir "PdfTool.exe"
 $editor = Join-Path $InstallDir "LoopEditor.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
