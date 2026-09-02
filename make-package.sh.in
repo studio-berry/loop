@@ -11,8 +11,8 @@ echo "Priority: optional" >>$file
 echo "Architecture: amd64" >>$file
 echo "Maintainer: Michael Berry" >>$file
 echo "Description: Loop-PDF: PDF editor and toolkit based on PDF4QT (Qt, C++)." >>$file
-echo "Homepage: https://github.com/mberrys/Loop-pdf" >>$file
-echo "Vcs-Browser: https://github.com/mberrys/Loop-pdf" >>$file
+echo "Homepage: https://github.com/studio-berry/loop" >>$file
+echo "Vcs-Browser: https://github.com/studio-berry/loop" >>$file
 
 
 dpkg-deb --build install

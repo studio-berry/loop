@@ -196,7 +196,7 @@ jobs:
           version=$(cat "loop/build/version.txt")
           echo "Version: $version"
           echo "appimagefilename=Loop-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
-          echo "appimage_update_info=gh-releases-zsync|mberrys|Loop-pdf|latest|Loop-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
+          echo "appimage_update_info=gh-releases-zsync|studio-berry|loop|latest|Loop-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
           echo "AppImage file name: Loop-pdf-$version-x86_64.AppImage"
 
       - name: 'Linux Deploy Qt'
