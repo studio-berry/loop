@@ -2,7 +2,7 @@
 # BSP-002 §3.3, §3.4, §3.2; BSP-006 §3.4, §5.1 — pre-push policy
 set -euo pipefail
 
-protected="${IVORY_PROTECTED_BRANCHES:-^refs/heads/(main|master|stable|dev|release/.*)$}"
+protected="${IVORY_PROTECTED_BRANCHES:-^refs/heads/(main|master|stable|unstable|dev|release/.*)$}"
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -z "$remote_ref" ]] && continue

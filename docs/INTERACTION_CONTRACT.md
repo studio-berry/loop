@@ -190,6 +190,87 @@ feeds it back in order, leaving the controller in the state the original session
 the same viewport, hit-test sources and document state. Recording is suppressed during replay,
 so replaying into a recording controller does not append the trace to itself.
 
+## Regression traces
+
+Issue #146. The corpus lives in `UnitTests/testdata/interaction-traces/`, one
+JSON scenario per file plus a `manifest.json` of ids and digests. Schemas:
+[interaction-scenario.schema.json](schemas/interaction-scenario.schema.json) and
+[interaction-trace-report.schema.json](schemas/interaction-trace-report.schema.json).
+`scripts/ci/check_interaction_traces.py --corpus-only` validates the corpus
+without a build, so a malformed scenario fails in seconds rather than after a
+compile.
+
+A scenario **embeds** an `InteractionTrace` under `trace`; it does not extend
+one. `InteractionTrace` may not carry geometry or target identity — that is the
+privacy rule above, and a test enforces it — while a scenario must declare both
+to state its fixture and its expected selection. Embedding keeps the shipping
+type unchanged and lets a recorded field trace drop in as the `trace` member. A
+scenario that would otherwise be hundreds of near-identical records uses
+`input_script` instead, and a dense page declares `generated_targets` as a grid:
+a corpus nobody can read in review is a corpus nobody checks.
+
+### Two lanes
+
+| | Deterministic | Present |
+| --- | --- | --- |
+| Target | `UnitTestsInteractionTraces` | `UnitTestsInteractionTracesPresent` |
+| Clock | `ManualClock`, set from each `InputStamp` | `SteadyMonotonicClock` |
+| Budgets | strict, from the scenario | scenario budget × `variance_band_multiplier` |
+| Gating | yes | no |
+
+The deterministic lane reads no real clock. Stage time comes from the
+scenario's `cost_model` multiplied by real run products — index candidates,
+overlay primitives, cache misses, admitted surfaces — so the same scenario
+produces byte-identical output on every machine.
+
+The cost this buys is worth stating: `StageTimer` measures zero under a manual
+clock, so a regression that is purely slower code is invisible in this lane *as
+elapsed time*. What catches it is the counts the cost model multiplies, since a
+regression that costs time almost always costs one of those. Real elapsed time
+lives in the present lane, where a shared CI runner's variance is absorbed by a
+band rather than pretended away.
+
+A present run reports `verified`, `static-only`, or `infrastructure-blocked`.
+Only `verified` participates in the band assertion. A lane that cannot measure
+presentation reports `available: false` with
+`interaction-trace/present-timing-unavailable` and never a zero percentile —
+the same rule [RESOURCE_BUDGETS.md](RESOURCE_BUDGETS.md) applies to every other
+budget, and the reason a headless run may not be recorded as a desktop result.
+
+### What a failure says
+
+A failed run names one contract and one phase (issue #146 AC7). Contracts are
+evaluated in a fixed order, so "first violated" is a documented constant rather
+than whichever key the JSON happened to yield first:
+
+`input-acknowledged` → `frame-balance` → `telemetry-available` →
+`p95-input-to-frame` → `p95-frame-time` → `slow-frame-budget` →
+`dropped-frames` → `stale-result-safety` → `final-state`.
+
+The phase is derived from the slow-frame attribution, translating trace stages
+into the vocabulary the issue asks a reader to act on:
+
+| `TraceStage` | Phase |
+| --- | --- |
+| `Interaction` | `input` |
+| `HitTest` | `hit-test` |
+| `PageSurface` | `page-cache` |
+| `Overlay` | `overlay` |
+| `External` | `composition` |
+| `Unknown` | `async-overlap` when a job overlapped a slow frame, else `unknown` |
+
+`Unknown` is the interesting row. A frame slowed by something no stage measured
+must not have a cause invented for it, but it is not nothing either: if an
+expensive job was in flight across it, the overlap is the finding.
+
+### Scenarios ahead of the harness
+
+A manifest entry may carry `blocked_on` with a `blocked_reason`. Such a
+scenario is validated as data but is not required to produce a run, which is
+what lets the coverage check stay strict for everything else — a scenario that
+silently stops running is otherwise indistinguishable from one that was never
+wired up.
+
 ## Not in this session
 
 - The developer-facing trace overlay and GPU/present timing from issue #140. Neither can exist

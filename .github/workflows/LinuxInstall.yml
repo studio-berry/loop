@@ -15,10 +15,13 @@ permissions:
 
 jobs:
   build_ubuntu:
-    runs-on: ubuntu-24.04
+    # linuxdeployqt is pinned to a glibc-2.35-compatible build. Keep the
+    # packaging runner aligned with that oldest-supported deployment tool.
+    runs-on: ubuntu-22.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-binary-cache
       GNUPGHOME: ${{ github.workspace }}/gnupg
       QT_QPA_PLATFORM: offscreen
 
@@ -26,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 libspeechd2 gnupg2 wget appstream libcups2 libcups2-dev
+          sudo apt-get install -y libxcb-cursor0 libspeechd2 libfontconfig1-dev gnupg2 wget appstream libcups2 libcups2-dev
 
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -106,6 +109,7 @@ jobs:
 
       - name: 'VCPKG: Set up VCPKG'
         run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
           VCPKG_COMMIT="$(python3 - <<'PY'
           import json
           with open("loop/vcpkg-configuration.json", encoding="utf-8") as f:
@@ -128,7 +132,8 @@ jobs:
           }
 
           ./vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg integrate install
+          ./vcpkg/vcpkg integrate install
+          echo "VCPKG_BINARY_SOURCES=clear;files,$VCPKG_DEFAULT_BINARY_CACHE,readwrite" >> "$GITHUB_ENV"
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -137,6 +142,7 @@ jobs:
             ./vcpkg/downloads
             ./vcpkg/packages
             ./vcpkg_installed
+            ./vcpkg-binary-cache
           key: ${{ runner.os }}-vcpkg-v2-${{ hashFiles('**/vcpkg.json', '**/vcpkg-configuration.json') }}
           restore-keys: |
             ${{ runner.os }}-vcpkg-v2-
@@ -162,7 +168,7 @@ jobs:
         working-directory: loop
         run: |
           cmake -B build -S . -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target all release_translations -j6
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
@@ -196,6 +202,20 @@ jobs:
       - name: 'Linux Deploy Qt'
         working-directory: loop/build
         run: |
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          mkdir -p "$evidence_dir"
+          set -o pipefail
+          loop_quick_src="$GITHUB_WORKSPACE/loop/build/LoopEditor/Loop/Quick"
+          qml_dest="install/usr/lib/qml/Loop/Quick"
+          if [ ! -d "$loop_quick_src" ]; then
+            echo "::error::Built Loop.Quick QML module was not found: $loop_quick_src"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$qml_dest")"
+          cp -a "$loop_quick_src" "$qml_dest"
+          # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
+          # not bundle. Remove them so deploy does not fail on missing vendor libs.
+          rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loop-pdf.svg install/io.github.mberrys.Loop-pdf.svg
           bash "$GITHUB_WORKSPACE/loop/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
@@ -203,7 +223,10 @@ jobs:
             deploy.AppImage \
             "$LINUXDEPLOYQT_SHA256"
           chmod +x deploy.AppImage
-          ./deploy.AppImage install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop -executable-dir=install/usr/bin -extra-plugins=iconengines,imageformats,texttospeech
+          ./deploy.AppImage --appimage-extract-and-run \
+            install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop \
+            -executable-dir=install/usr/bin \
+            -extra-plugins=iconengines,imageformats,texttospeech 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'

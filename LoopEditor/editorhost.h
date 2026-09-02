@@ -40,6 +40,7 @@
 
 #include "focusrestoration.h"
 #include "documentviewsession.h"
+#include "quickdocumentmodel.h"
 
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
@@ -87,6 +88,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QObject* preflight READ preflight CONSTANT)
     Q_PROPERTY(QObject* inspector READ inspector CONSTANT)
     Q_PROPERTY(QObject* preview READ preview CONSTANT)
+    Q_PROPERTY(QObject* documentModel READ documentModel CONSTANT)
     Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
     Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
@@ -96,6 +98,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool pageFidelityIsExact READ pageFidelityIsExact NOTIFY presentationChanged)
     Q_PROPERTY(QString pageFidelityReason READ pageFidelityReason NOTIFY presentationChanged)
     Q_PROPERTY(bool pageFidelityIsAuthoritative READ pageFidelityIsAuthoritative NOTIFY presentationChanged)
+    Q_PROPERTY(bool searchPanelVisible READ searchPanelVisible NOTIFY presentationChanged)
+    Q_PROPERTY(bool fullscreenRequested READ fullscreenRequested NOTIFY presentationChanged)
+    Q_PROPERTY(int workspaceRequest READ workspaceRequest NOTIFY presentationChanged)
 
 public:
     explicit EditorHost(QObject* parent = nullptr);
@@ -120,6 +125,7 @@ public:
     QObject* preflight();
     QObject* inspector();
     QObject* preview();
+    QObject* documentModel() { return &m_documentModel; }
     FocusRestoration* focusRestoration() { return &m_focusRestoration; }
 
     QString preflightStateName() const;
@@ -127,6 +133,9 @@ public:
     QString inspectorTitle() const;
     bool preferReducedMotion() const;
     bool highContrast() const;
+    bool searchPanelVisible() const noexcept { return m_searchPanelVisible; }
+    bool fullscreenRequested() const noexcept { return m_fullscreenRequested; }
+    int workspaceRequest() const noexcept { return m_workspaceRequest; }
 
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
@@ -149,6 +158,8 @@ public:
     /// authoritative overprint-accurate one. Re-renders only that page;
     /// the document stays open.
     Q_INVOKABLE void toggleCurrentPageFidelity();
+    Q_INVOKABLE void goToPage(int pageIndex);
+    Q_INVOKABLE void acknowledgeWorkspaceRequest();
 
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;
@@ -193,12 +204,16 @@ private:
     void connectInteraction();
     void connectSurfaces();
     void registerShellHandlers();
+    void registerFeatureHandlers();
+    void refreshFeatureAvailability();
+    void moveSearch(int direction);
     void refreshHitTestSources();
     void bumpPresentation();
     void bumpCommandEpoch();
 
     void onDocumentReady();
     void onDocumentGone();
+    void syncDocumentLifecycle();
     void bindCanvas();
     void unbindCanvas();
     void syncRevisionModels();
@@ -211,12 +226,17 @@ private:
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
+    QuickDocumentModel m_documentModel;
     FocusRestoration m_focusRestoration;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     int m_commandEpoch = 0;
     bool m_documentBound = false;
+    bool m_searchPanelVisible = false;
+    bool m_fullscreenRequested = false;
+    int m_workspaceRequest = -1;
+    int m_searchRow = -1;
 };
 
 #endif   // EDITORHOST_H
