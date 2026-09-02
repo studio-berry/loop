@@ -1,6 +1,6 @@
 # Quick competitor parity
 
-The Quick shell owns the interactive PDF surface; `LoupeLibCore` remains the
+The Quick shell owns the interactive PDF surface; `LoopLibCore` remains the
 owner of PDF objects, document revisions, and persistence. The first parity
 slice is intentionally model-driven:
 

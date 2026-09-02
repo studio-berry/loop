@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-set(_loupe_pdftool_sources
+set(_loop_pdftool_sources
     main.cpp
     pdfoutputformatter.cpp
     pdftoolabstractapplication.cpp
@@ -88,49 +88,49 @@ set(_loupe_pdftool_sources
     pdftoolactionlist.h
 )
 
-if(NOT LOUPE_LOUPE_DISTRIBUTION)
-    list(APPEND _loupe_pdftool_sources pdftoolaudiobook.cpp)
+if(NOT LOOP_LOOP_DISTRIBUTION)
+    list(APPEND _loop_pdftool_sources pdftoolaudiobook.cpp)
 endif()
 
-add_executable(PdfTool ${_loupe_pdftool_sources})
+add_executable(PdfTool ${_loop_pdftool_sources})
 
-target_link_libraries(PdfTool PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Xml)
+target_link_libraries(PdfTool PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Xml)
 
-if(MINGW AND NOT LOUPE_LOUPE_DISTRIBUTION)
+if(MINGW AND NOT LOOP_LOOP_DISTRIBUTION)
     target_link_libraries(PdfTool PRIVATE ole32 sapi)
 endif()
 
 set_target_properties(PdfTool PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
 
-install(TARGETS PdfTool RUNTIME DESTINATION ${LOUPE_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOUPE_INSTALL_LIB_DIR})
+install(TARGETS PdfTool RUNTIME DESTINATION ${LOOP_INSTALL_BIN_DIR} LIBRARY DESTINATION ${LOOP_INSTALL_LIB_DIR})
 
 # Preflight profiles are ship-critical data consumed by PdfTool preflight and the
-# release smoke (Resolve-ProfilesDir). The former LoupePreflightPlugin owned
+# release smoke (Resolve-ProfilesDir). The former LoopPreflightPlugin owned
 # these install() rules; that plugin is now deleted and PdfTool is the surviving
 # headless owner that guarantees the staged share tree (see WixInstaller
-# LOUPE_Loupe_Data and LinuxInstall/WindowsInstall smokes).
-set(LOUPE_PREFLIGHT_PROFILES_DIR ${LOUPE_INSTALL_SHARE_DIR}/loupe/profiles)
-install(FILES ${CMAKE_SOURCE_DIR}/loupe-preflight/profiles/loupe-default.json
-        DESTINATION ${LOUPE_PREFLIGHT_PROFILES_DIR})
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/loupe-preflight/schemas/
-        DESTINATION ${LOUPE_PREFLIGHT_PROFILES_DIR}/schemas)
+# LOOP_Loop_Data and LinuxInstall/WindowsInstall smokes).
+set(LOOP_PREFLIGHT_PROFILES_DIR ${LOOP_INSTALL_SHARE_DIR}/loop/profiles)
+install(FILES ${CMAKE_SOURCE_DIR}/loop-preflight/profiles/loop-default.json
+        DESTINATION ${LOOP_PREFLIGHT_PROFILES_DIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/loop-preflight/schemas/
+        DESTINATION ${LOOP_PREFLIGHT_PROFILES_DIR}/schemas)
 
 # Headless corpus/CI sets QT_QPA_PLATFORM=offscreen; windeployqt often only ships qwindows.
 # Copy qoffscreen next to PdfTool so PdfTool help/preflight do not hang on missing plugin.
-if(WIN32 AND DEFINED LOUPE_QT_ROOT AND EXISTS "${LOUPE_QT_ROOT}/plugins/platforms/qoffscreen.dll")
+if(WIN32 AND DEFINED LOOP_QT_ROOT AND EXISTS "${LOOP_QT_ROOT}/plugins/platforms/qoffscreen.dll")
     add_custom_command(TARGET PdfTool POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PdfTool>/platforms"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${LOUPE_QT_ROOT}/plugins/platforms/qoffscreen.dll"
+            "${LOOP_QT_ROOT}/plugins/platforms/qoffscreen.dll"
             "$<TARGET_FILE_DIR:PdfTool>/platforms/qoffscreen.dll"
         COMMENT "Copy qoffscreen.dll for headless PdfTool")
 endif()
 
-if(LOUPE_ENABLE_SENTRY)
-    loupe_deploy_sentry_crashpad(PdfTool)
+if(LOOP_ENABLE_SENTRY)
+    loop_deploy_sentry_crashpad(PdfTool)
 endif()

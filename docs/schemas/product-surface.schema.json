@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://studio-berry.github.io/loupe/schemas/product-surface.schema.json",
-  "title": "Loupe product-surface manifest",
+  "$id": "https://studio-berry.github.io/loop/schemas/product-surface.schema.json",
+  "title": "Loop product-surface manifest",
   "description": "The machine-readable product disposition and release inventory for ADR-005.",
   "type": "object",
   "additionalProperties": false,
@@ -13,7 +13,7 @@
       "type": "array",
       "prefixItems": [
         { "const": "developer" },
-        { "const": "loupe-release" }
+        { "const": "loop-release" }
       ],
       "minItems": 2,
       "maxItems": 2,
@@ -27,7 +27,7 @@
     "packaging": { "$ref": "#/$defs/packaging" },
     "cli": { "$ref": "#/$defs/cli" },
     "ui": { "$ref": "#/$defs/ui" },
-    "shell_contract": { "const": "docs/loupe-shell.json" }
+    "shell_contract": { "const": "docs/loop-shell.json" }
   },
   "$defs": {
     "profileState": { "enum": ["present", "absent"] },
@@ -37,10 +37,10 @@
     "profiles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["developer", "loupe-release"],
+      "required": ["developer", "loop-release"],
       "properties": {
         "developer": { "$ref": "#/$defs/profileState" },
-        "loupe-release": { "$ref": "#/$defs/profileState" }
+        "loop-release": { "$ref": "#/$defs/profileState" }
       }
     },
     "surface": {
@@ -109,7 +109,7 @@
               "profiles": {
                 "properties": {
                   "developer": { "const": "absent" },
-                  "loupe-release": { "const": "absent" }
+                  "loop-release": { "const": "absent" }
                 }
               }
             }
@@ -120,10 +120,10 @@
     "profileFiles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["developer", "loupe-release"],
+      "required": ["developer", "loop-release"],
       "properties": {
         "developer": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-        "loupe-release": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        "loop-release": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }
     },
     "packaging": {
@@ -132,7 +132,7 @@
       "required": [
         "desktop_entries",
         "appx_applications",
-        "loupe_launcher",
+        "loop_launcher",
         "flatpak",
         "wix",
         "first_party_artifact_globs",
@@ -141,14 +141,14 @@
       "properties": {
         "desktop_entries": { "$ref": "#/$defs/profileFiles" },
         "appx_applications": { "$ref": "#/$defs/profileFiles" },
-        "loupe_launcher": {
+        "loop_launcher": {
           "type": "object",
           "additionalProperties": false,
           "required": ["desktop_entry", "executable", "appx_id", "file_associations"],
           "properties": {
             "desktop_entry": { "type": "string", "minLength": 1 },
-            "executable": { "const": "LoupeEditor" },
-            "appx_id": { "const": "LoupeEditor" },
+            "executable": { "const": "LoopEditor" },
+            "appx_id": { "const": "LoopEditor" },
             "file_associations": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true }
           }
         },
@@ -159,7 +159,7 @@
           "properties": {
             "manifest": { "type": "string", "minLength": 1 },
             "app_id": { "type": "string", "minLength": 1 },
-            "command": { "const": "LoupeEditor" },
+            "command": { "const": "LoopEditor" },
             "profiles": { "$ref": "#/$defs/profiles" }
           }
         },
@@ -205,7 +205,7 @@
       "additionalProperties": false,
       "required": ["contract", "entrypoint_surface", "legacy_forms"],
       "properties": {
-        "contract": { "const": "docs/loupe-shell.json" },
+        "contract": { "const": "docs/loop-shell.json" },
         "entrypoint_surface": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "legacy_forms": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       }

@@ -17,7 +17,7 @@ RETIRED_PLUGINS = frozenset(
         "AudioBookPlugin",
         "DimensionsPlugin",
         "EditorPlugin",
-        "LoupePreflightPlugin",
+        "LoopPreflightPlugin",
         "ObjectInspectorPlugin",
         "OcrPlugin",
         "OutputPreviewPlugin",
@@ -75,10 +75,10 @@ def _tracked_ui_references(root: Path) -> list[tuple[str, str]]:
 
 
 def validate_accounting(root: Path) -> None:
-    _run("verify-loupe-shell-contract.py")
+    _run("verify-loop-shell-contract.py")
     _run("verify-plugin-surface-policies.py")
 
-    shell = json.loads((root / "docs/loupe-shell.json").read_text(encoding="utf-8"))
+    shell = json.loads((root / "docs/loop-shell.json").read_text(encoding="utf-8"))
     ledger = _ledger_ui_paths(shell)
     expected_ledger_count = 2
     if len(ledger) != expected_ledger_count:
@@ -113,9 +113,9 @@ def validate_accounting(root: Path) -> None:
         row = plugin_rows[name]
         if row.get("artifact_scope") != "build":
             raise AccountingError(f"{name} must be build-only in product ledger")
-        if row.get("profiles", {}).get("loupe-release") != "absent":
-            raise AccountingError(f"{name} must be absent from loupe-release in product ledger")
-        cmake = root / "LoupeEditorPlugins" / name / "CMakeLists.txt"
+        if row.get("profiles", {}).get("loop-release") != "absent":
+            raise AccountingError(f"{name} must be absent from loop-release in product ledger")
+        cmake = root / "LoopEditorPlugins" / name / "CMakeLists.txt"
         if cmake.is_file() and re.search(rf"install\s*\(\s*TARGETS\s+{re.escape(name)}\b", cmake.read_text(encoding="utf-8")):
             raise AccountingError(f"{name} still has install() rule")
 

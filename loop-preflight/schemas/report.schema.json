@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loop.dev/schemas/preflight/report.schema.json",
+  "title": "Loop Preflight Report",
+  "description": "Normalized JSON report written to stdout by loop-preflight. The Qt plugin consumes this shape only — never backend-specific payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pass", "profile", "errors", "warnings", "fixups_available", "inspection_complete", "checks", "verdict"],
+  "properties": {
+    "schema_kind": {
+      "type": "string",
+      "const": "preflight-report",
+      "description": "Machine-readable schema kind for compatibility routing."
+    },
+    "schema_version": {
+      "type": "integer",
+      "enum": [1, 2, 3],
+      "description": "Report contract version. Version 1 required page and bbox on every finding. Version 2 adds explicit scope and optional location fields. Version 3 adds inspection_complete and per-check status reporting (checks[]). Decisions, digests, profile identity, coverage scope, and variable bindings are additive fields in version 3."
+    },
+    "inspection_complete": {
+      "type": "boolean",
+      "description": "False when at least one check could not run to completion (unknown check id, a check threw and was contained, or mandatory PDF/X evidence was unavailable) — pass is forced false in that case even if no error findings were recorded."
+    },
+    "pass": {
+      "type": "boolean",
+      "description": "Compatibility convenience value derived from verdict.state; it is true only for the pass verdict."
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict",
+      "description": "Canonical operator-facing reduction shared by Core, CLI, PageMaster, and the Editor."
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Profile name that produced this report (profile.name)."
+    },
+    "engine_version": {
+      "type": "string",
+      "description": "Optional loop-preflight engine version string."
+    },
+    "pdf": {
+      "type": "string",
+      "description": "Optional path or basename of the checked PDF."
+    },
+    "pdfx": {
+      "$ref": "#/$defs/pdfx",
+      "description": "Optional normalized PDF/X conformance result. Present only when the profile requested a PDF/X target."
+    },
+    "profile_resolution": {
+      "type": "object",
+      "description": "Optional deterministic profile selection and provenance record.",
+      "additionalProperties": true
+    },
+    "document_revision_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the exact PDF bytes inspected."
+    },
+    "effective_profile_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 digest of the effective profile JSON used for this run."
+    },
+    "profile_identity": {
+      "type": "object",
+      "description": "Resolved profile identity. digest is the file digest; effective_digest is after restrictions and variable substitution.",
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "name": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "source_path": { "type": "string" },
+        "provisional": { "type": "boolean" }
+      }
+    },
+    "coverage_scope": {
+      "type": "object",
+      "description": "Coverage claim for this profile. A clean pass is clean against this scope, not a GWG conformance certificate.",
+      "additionalProperties": true
+    },
+    "variable_bindings": {
+      "type": "array",
+      "description": "Variable values used for this run, including the winning binding source.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "value": true,
+          "source": { "type": "string", "enum": ["default", "job-spec", "cli"] }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Operator decisions imported for, or recorded beside, this run. Decision state is derived against the current digests.",
+      "items": { "$ref": "#/$defs/decision" }
+    },
+    "errors": {
+      "type": "array",
+      "description": "Failing findings with severity error (or mapped to error).",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Non-failing findings.",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "fixups_available": {
+      "type": "array",
+      "description": "Fixups the engine believes apply to this document given the profile. May be filtered dynamically by the engine; not necessarily identical to profile.fixups.",
+      "items": { "$ref": "#/$defs/fixup_available" }
+    },
+    "checks": {
+      "type": "array",
+      "description": "Per-check outcome for every check listed in the profile, in profile order.",
+      "items": { "$ref": "#/$defs/check_status" }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason_code", "reason", "blocking_finding_ids", "waived_finding_ids"],
+      "properties": {
+        "state": { "type": "string", "enum": ["pass", "fail", "incomplete", "error"] },
+        "reason_code": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "blocking_finding_ids": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{16}$" }, "uniqueItems": true },
+        "waived_finding_ids": { "type": "array", "items": { "type": "string", "pattern": "^[0-9a-f]{16}$" }, "uniqueItems": true }
+      }
+    },
+    "pdfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "policyVersion", "status", "failedRuleIds", "incompleteRuleIds", "rules"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["PDF/X-1a:2001", "PDF/X-4"]
+        },
+        "policyVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["conformant", "non-conformant", "incomplete"]
+        },
+        "failedRuleIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "incompleteRuleIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pdfx_rule" }
+        }
+      }
+    },
+    "pdfx_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mandatory", "state"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^pdfx\\.[a-z0-9.-]+$" },
+        "mandatory": { "type": "boolean" },
+        "state": { "type": "string", "enum": ["passed", "failed", "not-inspected", "not-applicable"] },
+        "evidence": { "type": "object", "additionalProperties": true },
+        "diagnostic": { "type": "string" }
+      }
+    },
+    "bbox": {
+      "type": "array",
+      "description": "Axis-aligned box in PDF user space (points), page coordinates: [x0, y0, x1, y1] with x0 <= x1 and y0 <= y1. Origin is the page media-box lower-left (PDF convention). Present only when the engine has a meaningful page-space region to highlight.",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number" }
+    },
+    "graph_backed_finding_type": {
+      "type": "string",
+      "enum": [
+        "image-resolution",
+        "color-mode",
+        "spot-color",
+        "separation",
+        "rich-black",
+        "embedded-fonts",
+        "white-overprint",
+        "transparency-blend-mode",
+        "transparency-blend-space",
+        "hairline-stroke",
+        "thin-stroke"
+      ],
+      "description": "Finding types emitted from Evidence Graph records; each must cite evidence_ids."
+    },
+    "evidence_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Ids of Evidence Graph records this finding cites. Required for graph-backed finding types."
+    },
+    "graph_backed_finding_evidence": {
+      "if": {
+        "properties": { "type": { "$ref": "#/$defs/graph_backed_finding_type" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["evidence_ids"],
+        "properties": {
+          "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+        }
+      }
+    },
+    "finding_v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "type", "severity", "message", "bbox"],
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based page index."
+        },
+        "object_id": {
+          "type": ["string", "null"],
+          "description": "Optional PDF object / resource identifier when known (stringified). Null or omit when not applicable."
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Machine-readable finding type (kebab-case), often matching a check id."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description for the report panel."
+        },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "check_id": {
+          "type": "string",
+          "description": "Optional profile check id that produced this finding."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+      },
+      "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
+    },
+    "finding_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "type", "severity", "message"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Stable content-addressed finding identity."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["document", "page", "object"],
+          "description": "document: no page location; page: page-level condition; object: page object or region when bbox/object_id are known."
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Required for page and object scope. Absent for document scope."
+        },
+        "object_id": {
+          "type": ["string", "null"],
+          "description": "Optional PDF object / resource identifier when known. Never substitutes for scope."
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Machine-readable finding type (kebab-case), often matching a check id."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable description for the report panel."
+        },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "check_id": {
+          "type": "string",
+          "description": "Optional profile check id that produced this finding."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional structured evidence for deterministic diagnostics."
+        },
+        "evidence_ids": { "$ref": "#/$defs/evidence_ids" }
+      },
+      "allOf": [{ "$ref": "#/$defs/graph_backed_finding_evidence" }]
+    },
+    "finding": {
+      "oneOf": [
+        { "$ref": "#/$defs/finding_v1" },
+        { "$ref": "#/$defs/finding_v2" }
+      ]
+    },
+    "check_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Profile check id this status refers to."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "warning", "failed", "skipped", "unsupported"],
+          "description": "ok: no findings. warning: only warning/info findings. failed: at least one error finding, or the check threw and was contained. skipped: disabled in the profile or incomplete because a required inspection could not run within its budget. unsupported: unknown check id or unavailable mandatory PDF/X evidence."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Present for skipped/unsupported/failed statuses; omitted for ok/warning."
+        }
+      }
+    },
+    "fixup_available": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "safe", "description"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "safe": {
+          "type": "boolean",
+          "description": "True only for fixups that do not change printed color/content in a material way. Most print fixups are safe: false."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Optional parameters for automated fixup invocation (e.g. mode for add-bleed)."
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "kind", "justification", "operator", "timestamp_utc", "document_revision_digest", "effective_profile_digest"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["accept", "waive", "override", "reject", "reopen"] },
+        "justification": { "type": "string", "minLength": 3 },
+        "operator": { "type": "string", "minLength": 1 },
+        "timestamp_utc": { "type": "string", "format": "date-time" },
+        "external_reference": { "type": "string" },
+        "document_revision_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effective_profile_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "state": { "type": "string", "enum": ["active", "stale_document", "stale_profile", "invalid"] }
+      }
+    }
+  }
+}

@@ -21,20 +21,20 @@
 // SOFTWARE.
 
 // Runs the built PdfTool `preflight` command (see PdfTool/pdftoolpreflight.cpp and
-// loupe-preflight/README.md) against the golden corpus under
-// loupe-preflight/testdata/fixtures/manifest.json and checks:
+// loop-preflight/README.md) against the golden corpus under
+// loop-preflight/testdata/fixtures/manifest.json and checks:
 //  - the report's pass/fail outcome and triggered check ids match the manifest
 //  - the full report matches a committed snapshot, so an unintended change in a
 //    check's output is caught in CI instead of silently changing behavior
 //
-// PDFTOOL_EXECUTABLE_PATH and LOUPE_PREFLIGHT_SOURCE_DIR are injected by
+// PDFTOOL_EXECUTABLE_PATH and LOOP_PREFLIGHT_SOURCE_DIR are injected by
 // UnitTests/CMakeLists.txt. Fixture PDFs and snapshots are generated, not
-// hand-written (see loupe-preflight/README.md); rows whose fixture hasn't been
+// hand-written (see loop-preflight/README.md); rows whose fixture hasn't been
 // generated yet are skipped rather than failed, so this test stays green until
-// its corpus is populated. Set LOUPE_UPDATE_SNAPSHOTS=1 to (re)write the
+// its corpus is populated. Set LOOP_UPDATE_SNAPSHOTS=1 to (re)write the
 // snapshot files instead of comparing against them, e.g. after generating new
 // fixtures or an intentional rule change:
-//   LOUPE_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus
+//   LOOP_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus
 
 #include "processoutputcapture.h"
 
@@ -52,34 +52,34 @@ namespace
 
 QString fixturesDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
 }
 
 QString snapshotsDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/snapshots");
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/snapshots");
 }
 
 QString sourceDir()
 {
-    return QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR);
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR);
 }
 
 bool updateSnapshotsRequested()
 {
-    return qEnvironmentVariableIntValue("LOUPE_UPDATE_SNAPSHOTS") == 1;
+    return qEnvironmentVariableIntValue("LOOP_UPDATE_SNAPSHOTS") == 1;
 }
 
 const char* const s_regenerateHint =
-    "Fixture not generated yet. Run LoupeGenerateFixtures, then "
-    "LOUPE_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus, and commit the "
-    "output (see loupe-preflight/README.md, 'Golden corpus & CI').";
+    "Fixture not generated yet. Run LoopGenerateFixtures, then "
+    "LOOP_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus, and commit the "
+    "output (see loop-preflight/README.md, 'Golden corpus & CI').";
 
 const char* const s_pendingHint =
     "Fixture marked pending: the check(s) it exercises are not yet implemented in "
     "the engine, so its expect{} records the intended future outcome. Drop the "
     "\"pending\" flag in manifest.json (and add a snapshot) once the check lands "
-    "(see loupe-preflight/README.md, 'Hand-built custom-check fixtures').";
+    "(see loop-preflight/README.md, 'Hand-built custom-check fixtures').";
 
 }   // namespace
 
@@ -339,7 +339,7 @@ void PreflightCorpusTest::preflightMatchesSnapshot()
 
     QFile snapshotFile(snapshotPath);
     QVERIFY2(snapshotFile.open(QIODevice::ReadOnly),
-             qPrintable(QStringLiteral("Missing snapshot '%1'. Run with LOUPE_UPDATE_SNAPSHOTS=1 to create it.").arg(snapshotPath)));
+             qPrintable(QStringLiteral("Missing snapshot '%1'. Run with LOOP_UPDATE_SNAPSHOTS=1 to create it.").arg(snapshotPath)));
     const QByteArray expectedJson = snapshotFile.readAll();
 
     // Normalize EOLs so Windows checkouts (eol=crlf) match QJsonDocument LF output.

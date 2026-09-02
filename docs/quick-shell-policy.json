@@ -10,8 +10,8 @@
       "QtQuick.Layouts",
       "QtQuick.Window",
       "QtQuick.Dialogs",
-      "Loupe.Canvas",
-      "Loupe.Quick"
+      "Loop.Canvas",
+      "Loop.Quick"
     ],
     "forbidden": [
       "remote URLs",

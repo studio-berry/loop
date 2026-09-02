@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Loop
+Comment=Inspect and prepare production PDFs
+Exec=LoopEditor %f
+Icon=io.github.mberrys.Loop-pdf
+Terminal=false
+Categories=Office;
+MimeType=application/pdf;

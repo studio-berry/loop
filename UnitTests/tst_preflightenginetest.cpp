@@ -852,7 +852,7 @@ void PreflightEngineTest::fontIntegrity_checkIsRegistered()
 
 void PreflightEngineTest::run_fontIntegrity_keepsValidEmbeddedFixtureClean()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/font-embedded.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1030,7 +1030,7 @@ void PreflightEngineTest::run_pdfxWithoutDocumentIsIncompleteAndSerialized()
 void PreflightEngineTest::run_pdfxEmitsStableRuleIdsAndEvidence()
 {
     const QByteArray profileContent = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!profileContent.isEmpty());
 
     pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent } });
@@ -1442,7 +1442,7 @@ void PreflightEngineTest::run_contentBleedRasterConfirm_emitsBleedMarginEmptyAnd
 
 void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverprint()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1471,7 +1471,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningForWhitePaintWithOverpr
 
 void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-ok.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-ok.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1498,7 +1498,7 @@ void PreflightEngineTest::run_whiteOverprint_passesWhenOverprintOff()
 
 void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-form.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/white-overprint-form.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1527,7 +1527,7 @@ void PreflightEngineTest::run_whiteOverprint_emitsWarningInsideFormXObject()
 
 void PreflightEngineTest::run_inkCoverage_emitsRegionalWarningForOverLimitFixture()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-over.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-over.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1568,7 +1568,7 @@ void PreflightEngineTest::run_inkCoverage_emitsRegionalWarningForOverLimitFixtur
 
 void PreflightEngineTest::run_inkCoverage_passesBelowLimitFixture()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-ok.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/ink-coverage-ok.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1741,7 +1741,7 @@ void PreflightEngineTest::run_downsampleFixupCarriesTargetDpi()
 
 void PreflightEngineTest::run_colorRgbFixtureFailsColorMode()
 {
-    const QString fixturePath = QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
+    const QString fixturePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/color-rgb.pdf");
     QVERIFY(QFile::exists(fixturePath));
 
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
@@ -1892,7 +1892,7 @@ void PreflightEngineTest::run_outputIntent_notRequiredPassesWithoutIntent()
 void PreflightEngineTest::run_outputIntent_emptyIdentifierEmitsIdentityFinding()
 {
     const QByteArray profileContent = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!profileContent.isEmpty());
 
     pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArray(), QByteArrayLiteral("CMYK"), profileContent } });
@@ -1912,7 +1912,7 @@ void PreflightEngineTest::run_outputIntent_emptyIdentifierEmitsIdentityFinding()
 void PreflightEngineTest::run_outputIntent_identifierNotInAllowListEmitsIdentityFinding()
 {
     const QByteArray profileContent = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!profileContent.isEmpty());
 
     pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("Other"), QByteArrayLiteral("CMYK"), profileContent } });
@@ -1935,7 +1935,7 @@ void PreflightEngineTest::run_outputIntent_identifierNotInAllowListEmitsIdentity
 void PreflightEngineTest::run_outputIntent_profileCsDisagreesWithEmbeddedProfile()
 {
     const QByteArray profileContent = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
     QVERIFY(!profileContent.isEmpty());
 
     pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("CGATS TR 001"), QByteArrayLiteral("CMYK"), profileContent } });
@@ -1959,9 +1959,9 @@ void PreflightEngineTest::run_outputIntent_profileCsDisagreesWithEmbeddedProfile
 void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding()
 {
     const QByteArray cmykProfile = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     const QByteArray rgbProfile = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-rgb.pdf"));
     QVERIFY(!cmykProfile.isEmpty());
     QVERIFY(!rgbProfile.isEmpty());
 
@@ -1986,7 +1986,7 @@ void PreflightEngineTest::run_outputIntent_conflictingIntentsEmitConflictFinding
 void PreflightEngineTest::run_outputIntent_strictMultipleIntentsEmitAmbiguityFinding()
 {
     const QByteArray cmykProfile = loadOutputIntentProfile(
-        QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
+        QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures/output-intent-cmyk.pdf"));
     QVERIFY(!cmykProfile.isEmpty());
 
     pdf::PDFDocument document = buildOutputIntentDocument({ { QByteArrayLiteral("first"), QByteArrayLiteral("CMYK"), cmykProfile },
@@ -2083,19 +2083,19 @@ void PreflightEngineTest::parseProfile_readsIdentityFields()
     QString errorMessage;
     const QJsonObject object{
         { QStringLiteral("name"), QStringLiteral("Identity") },
-        { QStringLiteral("id"), QStringLiteral("loupe.test.identity") },
+        { QStringLiteral("id"), QStringLiteral("loop.test.identity") },
         { QStringLiteral("version"), QStringLiteral("1.2.3") },
         { QStringLiteral("authored"), QJsonObject{ { QStringLiteral("by"), QStringLiteral("qa") } } },
-        { QStringLiteral("derived_from"), QJsonObject{ { QStringLiteral("id"), QStringLiteral("loupe.test.parent") } } },
+        { QStringLiteral("derived_from"), QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop.test.parent") } } },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{ { QStringLiteral("id"), QStringLiteral("bleed") } } } }
     };
     QVERIFY(pdf::PreflightEngine::parseProfile(object, profile, errorMessage));
-    QCOMPARE(profile.id, QStringLiteral("loupe.test.identity"));
+    QCOMPARE(profile.id, QStringLiteral("loop.test.identity"));
     QCOMPARE(profile.version, QStringLiteral("1.2.3"));
 
     const pdf::PreflightProfileIdentity identity = pdf::identifyPreflightProfile(object);
     QCOMPARE(identity.authored.value(QStringLiteral("by")).toString(), QStringLiteral("qa"));
-    QCOMPARE(identity.derivedFrom.value(QStringLiteral("id")).toString(), QStringLiteral("loupe.test.parent"));
+    QCOMPARE(identity.derivedFrom.value(QStringLiteral("id")).toString(), QStringLiteral("loop.test.parent"));
 }
 
 void PreflightEngineTest::run_emptyRestrictionScopeIsIncomplete()

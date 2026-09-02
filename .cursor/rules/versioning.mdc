@@ -1,17 +1,17 @@
 ---
-description: Loupe product versions follow Semantic Versioning 2.0
+description: Loop product versions follow Semantic Versioning 2.0
 alwaysApply: true
 ---
 
 # Semantic Versioning
 
-Loupe releases use [SemVer 2.0](https://semver.org/). The current version is
+Loop releases use [SemVer 2.0](https://semver.org/). The current version is
 **0.2.0-alpha**.
 
-- Canonical core: `LOUPE_VERSION` in root `CMakeLists.txt` (`0.2.0`).
-- Pre-release: `LOUPE_VERSION_PRERELEASE` (`alpha` until 0.2.0 final).
+- Canonical core: `LOOP_VERSION` in root `CMakeLists.txt` (`0.2.0`).
+- Pre-release: `LOOP_VERSION_PRERELEASE` (`alpha` until 0.2.0 final).
 - Git tags: `v0.2.0-alpha` now; `vMAJOR.MINOR.PATCH` with optional `-pre.release`.
-- Do not use four-part `x.y.z.w` product versions. Appx derives `LOUPE_WINDOWS_VERSION` as `MAJOR.MINOR.PATCH.0`.
+- Do not use four-part `x.y.z.w` product versions. Appx derives `LOOP_WINDOWS_VERSION` as `MAJOR.MINOR.PATCH.0`.
 - Former gates 0.0.3–0.0.6 are 0.1.1–0.1.4. Do not reintroduce 0.0.3 as a living version.
 - Bump MAJOR for breaking CLI/ABI/behavior, MINOR for compatible features, PATCH for compatible fixes.
 - Policy: `docs/VERSIONING.md` and `docs/version-policy.json`.

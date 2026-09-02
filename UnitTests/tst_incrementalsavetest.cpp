@@ -166,7 +166,7 @@ void IncrementalSaveTest::signedPdfIncrementalSave_preservesSignedPrefix()
         QDateTime::currentDateTimeUtc(),
         0);
     const pdf::PDFObjectReference field = builder.createFormFieldSignature(
-        QStringLiteral("LoupeSignature"), {}, signature);
+        QStringLiteral("LoopSignature"), {}, signature);
     builder.createInvisibleFormFieldWidget(field, page);
     builder.setCatalogMetadata(QByteArrayLiteral("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF/></x:xmpmeta>"));
 

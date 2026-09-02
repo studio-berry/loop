@@ -24,8 +24,8 @@
 // catalog; no second action registry.
 //
 // As in tst_interactionboundarytest.cpp, the strongest assertion here is the
-// link line in UnitTests/CMakeLists.txt. This target links LoupeLibInteraction,
-// LoupeLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
+// link line in UnitTests/CMakeLists.txt. This target links LoopLibInteraction,
+// LoopLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
 // Qt6::Widgets. QTEST_GUILESS_MAIN then proves the P4-S2 exit condition: the
 // full document lifecycle and the command path are drivable without a QWidget
 // and without a QML engine.
@@ -306,7 +306,7 @@ void DocumentFacadeTest::catalogLoadsTheWholeEditorActionSet()
 {
     pdfinteraction::CommandCatalog catalog;
 
-    // The embedded contract is docs/loupe-shell-actions.json itself. A static
+    // The embedded contract is docs/loop-shell-actions.json itself. A static
     // library that lost its resource would present an empty command set as a
     // working one, so this also pins the resource wiring.
     QVERIFY2(catalog.isLoaded(), qPrintable(catalog.loadError()));
@@ -876,7 +876,7 @@ void DocumentFacadeTest::shellStatusProjectionIsPinned()
     using pdfinteraction::DocumentState;
     using pdfinteraction::ShellDocumentStatus;
 
-    // docs/loupe-shell.json names five document states. The facade's richer
+    // docs/loop-shell.json names five document states. The facade's richer
     // model answers in those five terms; this table is the whole projection, so
     // no host has to re-derive it and drift.
     QCOMPARE(DocumentFacade::projectShellStatus(DocumentState::Empty, {}, DocumentOutputState::None),

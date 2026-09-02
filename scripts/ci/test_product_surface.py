@@ -41,7 +41,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
 
     def test_open_rows_require_owner_and_follow_up_issue(self):
         manifest = copy.deepcopy(self.manifest)
-        row = next(item for item in manifest["surfaces"] if item["id"] == "loupe-compare")
+        row = next(item for item in manifest["surfaces"] if item["id"] == "loop-compare")
         row["owner"] = None
         row["follow_up_issue"] = None
         errors = validate_manifest(manifest)
@@ -50,7 +50,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
 
     def test_deleted_surface_cannot_be_present_in_a_profile(self):
         manifest = copy.deepcopy(self.manifest)
-        row = next(item for item in manifest["surfaces"] if item["id"] == "loupe-viewer")
+        row = next(item for item in manifest["surfaces"] if item["id"] == "loop-viewer")
         row["profiles"]["developer"] = "present"
         errors = validate_manifest(manifest)
         self.assertTrue(any("deleted but not absent from every profile" in error for error in errors))
@@ -65,7 +65,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         install = Path(temporary.name)
-        for relative in ("LoupeEditor.exe", "PdfTool.exe", "LoupeLibCore.dll", "LoupeLibQuick.dll"):
+        for relative in ("LoopEditor.exe", "PdfTool.exe", "LoopLibCore.dll", "LoopLibQuick.dll"):
             path = install / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"fixture")
@@ -73,8 +73,8 @@ class ProductSurfaceContractTests(unittest.TestCase):
 
     def test_stray_first_party_artifact_fails_closed(self):
         install = self._make_install_tree()
-        (install / "LoupeUnexpected.dll").write_bytes(b"fixture")
-        errors = validate_install(install, self.manifest, "loupe-release")
+        (install / "LoopUnexpected.dll").write_bytes(b"fixture")
+        errors = validate_install(install, self.manifest, "loop-release")
         self.assertTrue(any("unmanifested first-party artifact" in error for error in errors))
 
     def test_forbidden_plugin_artifact_fails_closed(self):
@@ -90,7 +90,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         nested_qml.write_bytes(b"fixture")
         (install / "platforms" / "qwindows.dll").parent.mkdir(parents=True, exist_ok=True)
         (install / "platforms" / "qwindows.dll").write_bytes(b"fixture")
-        self.assertEqual(validate_install(install, self.manifest, "loupe-release"), [])
+        self.assertEqual(validate_install(install, self.manifest, "loop-release"), [])
 
     def test_install_manifest_drift_fails_closed(self):
         install = self._make_install_tree()
@@ -98,12 +98,12 @@ class ProductSurfaceContractTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         install_manifest = Path(temporary.name) / "install_manifest.txt"
         install_manifest.write_text(
-            "\n".join(str(install / name) for name in ("LoupeEditor.exe", "PdfTool.exe", "LoupeLibCore.dll", "LoupeLibQuick.dll"))
+            "\n".join(str(install / name) for name in ("LoopEditor.exe", "PdfTool.exe", "LoopLibCore.dll", "LoopLibQuick.dll"))
             + "\n",
             encoding="utf-8",
         )
         (install / "unexpected.txt").write_text("fixture", encoding="utf-8")
-        errors = validate_install(install, self.manifest, "loupe-release", install_manifest)
+        errors = validate_install(install, self.manifest, "loop-release", install_manifest)
         self.assertTrue(any("absent from CMake install manifest" in error for error in errors))
 
     def test_install_manifest_preserves_final_symlink_name(self):
@@ -143,16 +143,16 @@ class ProductSurfaceContractTests(unittest.TestCase):
         manifest = copy.deepcopy(self.manifest)
         manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
         discovery = self._discovery_file([{"id": "help"}, {"id": "preflight"}])
-        self.assertEqual(validate_cli(manifest, profile="loupe-release", discovery_json=discovery), [])
+        self.assertEqual(validate_cli(manifest, profile="loop-release", discovery_json=discovery), [])
 
         manifest["cli"]["command_inventory"]["required_commands"] = ["missing"]
-        errors = validate_cli(manifest, profile="loupe-release", discovery_json=discovery)
+        errors = validate_cli(manifest, profile="loop-release", discovery_json=discovery)
         self.assertTrue(any("manifest CLI command is absent" in error for error in errors))
 
         manifest["cli"]["command_inventory"]["required_commands"] = ["help", "preflight"]
         errors = validate_cli(
             manifest,
-            profile="loupe-release",
+            profile="loop-release",
             discovery_json=self._discovery_file([{"id": "help"}, {"id": "preflight"}, {"id": "diagnostics"}]),
         )
         self.assertTrue(any("absent from manifest CLI inventory: diagnostics" in error for error in errors))
@@ -168,12 +168,12 @@ class ProductSurfaceContractTests(unittest.TestCase):
         pdf_tool = ROOT / "build" / "usr" / "bin" / "PdfTool"
         if not pdf_tool.is_file():
             self.skipTest("PdfTool is not built in this worktree")
-        errors = validate_cli(self.manifest, profile="loupe-release", pdf_tool=pdf_tool)
+        errors = validate_cli(self.manifest, profile="loop-release", pdf_tool=pdf_tool)
         self.assertEqual(errors, [])
 
     def test_cli_inventory_must_be_sorted_and_unique(self):
         discovery = self._discovery_file([{"id": "preflight"}, {"id": "help"}, {"id": "help"}])
-        errors = validate_cli(self.manifest, profile="loupe-release", discovery_json=discovery)
+        errors = validate_cli(self.manifest, profile="loop-release", discovery_json=discovery)
         self.assertTrue(any("duplicate ids" in error for error in errors))
         self.assertTrue(any("not deterministically sorted" in error for error in errors))
 

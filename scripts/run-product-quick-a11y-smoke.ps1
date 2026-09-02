@@ -16,7 +16,7 @@ $executable = Get-ChildItem -LiteralPath $resolvedBuildDir -Recurse -File |
     Select-Object -First 1
 
 if (-not $executable) {
-    throw "ProductQuickAccessibilitySmoke binary not found below $resolvedBuildDir. Configure with -DLOUPE_BUILD_PRODUCT_QUICK_ACCESSIBILITY_SMOKE=ON and build the target first."
+    throw "ProductQuickAccessibilitySmoke binary not found below $resolvedBuildDir. Configure with -DLOOP_BUILD_PRODUCT_QUICK_ACCESSIBILITY_SMOKE=ON and build the target first."
 }
 
 $env:QT_QPA_PLATFORM = "offscreen"

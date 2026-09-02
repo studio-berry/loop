@@ -1,14 +1,14 @@
-# Loupe diagnostics and support bundles
+# Loop diagnostics and support bundles
 
-Loupe writes local diagnostics through one shared Core sink used by Editor and
+Loop writes local diagnostics through one shared Core sink used by Editor and
 PdfTool. The sink is privacy-scrubbed before every persisted line, rotates at
 2 MiB, and retains at most the active log plus `.1` and `.2` backups. The
-default level is `Warning`; `LOUPE_LOG_LEVEL` or the `diagnostics/logLevel`
+default level is `Warning`; `LOOP_LOG_LEVEL` or the `diagnostics/logLevel`
 setting can select `Off`, `Error`, `Warning`, `Info`, or `Debug`.
 
 The log directory is resolved in this order:
 
-1. `LOUPE_LOG_DIR`, when set;
+1. `LOOP_LOG_DIR`, when set;
 2. `<settings-path>/logs` for an Editor portable/`--config` installation;
 3. Qt's writable application-local data directory plus `logs`, with the
    system temporary directory as a final fallback.

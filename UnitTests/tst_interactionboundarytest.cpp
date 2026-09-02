@@ -24,8 +24,8 @@
 // or QML dependency.
 //
 // The strongest assertion in this file is not written in C++ — it is the link
-// line in UnitTests/CMakeLists.txt. This target links LoupeLibInteraction,
-// LoupeLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
+// line in UnitTests/CMakeLists.txt. This target links LoopLibInteraction,
+// LoopLibCore, Qt6::Core, Qt6::Gui and Qt6::Test, and deliberately not
 // Qt6::Widgets. Qt scopes its headers per module, so if a public interaction
 // header ever pulls in QtWidgets or QtQuick this translation unit stops
 // compiling. QTEST_GUILESS_MAIN then proves the layer also runs without a

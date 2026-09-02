@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "zoom-anchored",
   "description": "Six wheel-zoom steps anchored at one cursor position. Asserts the page point under the cursor is unchanged at the end, and that a zoom does advance the viewport request generation -- the half of issue #142's rule that pan must not.",

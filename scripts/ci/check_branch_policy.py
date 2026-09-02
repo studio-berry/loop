@@ -431,7 +431,7 @@ def fetch_branch_protection(
         f"{GITHUB_API}/repos/{repo}/branches/{branch}/protection",
         headers={
             "Accept": "application/vnd.github+json",
-            "User-Agent": "loupe-check-branch-policy",
+            "User-Agent": "loop-check-branch-policy",
             "X-GitHub-Api-Version": "2022-11-28",
             **({"Authorization": f"Bearer {token}"} if token else {}),
         },
@@ -499,7 +499,7 @@ def validate_repository(
 
     if live:
         repo_name = repo or os.environ.get("GITHUB_REPOSITORY")
-        auth = token or os.environ.get("LOUPE_POLICY_TOKEN") or os.environ.get(
+        auth = token or os.environ.get("LOOP_POLICY_TOKEN") or os.environ.get(
             "GITHUB_TOKEN"
         ) or os.environ.get("GH_TOKEN")
         if not repo_name or not auth:

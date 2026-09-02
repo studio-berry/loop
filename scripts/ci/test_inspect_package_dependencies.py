@@ -28,23 +28,23 @@ class PackageInspectorTests(unittest.TestCase):
 
     def test_linux_dependency_parsers_capture_direct_and_unresolved_imports(self):
         readelf = """
- 0x0000000000000001 (NEEDED)             Shared library: [libLoupeLibCore.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libLoopLibCore.so]
  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 """
         self.assertEqual(
             INSPECTOR.parse_readelf_needed(readelf),
-            ["libLoupeLibCore.so", "libc.so.6"],
+            ["libLoopLibCore.so", "libc.so.6"],
         )
         resolved, unresolved = INSPECTOR.parse_ldd(
             """
-libLoupeLibCore.so => /payload/libLoupeLibCore.so (0x00007f)
+libLoopLibCore.so => /payload/libLoopLibCore.so (0x00007f)
 libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f)
 libMissing.so => not found
 linux-vdso.so.1 (0x00007fff)
 """
         )
         self.assertEqual(unresolved, ["libMissing.so"])
-        self.assertEqual(resolved[0], {"name": "libLoupeLibCore.so", "path": "/payload/libLoupeLibCore.so"})
+        self.assertEqual(resolved[0], {"name": "libLoopLibCore.so", "path": "/payload/libLoopLibCore.so"})
 
     def test_dumpbin_parser_captures_dependency_names(self):
         dependencies = INSPECTOR.parse_dumpbin_dependents(
@@ -53,10 +53,10 @@ Image has the following dependencies:
 
     Qt6Core.dll
     KERNEL32.dll
-    LoupeLibCore.dll
+    LoopLibCore.dll
 """
         )
-        self.assertEqual(dependencies, ["Qt6Core.dll", "KERNEL32.dll", "LoupeLibCore.dll"])
+        self.assertEqual(dependencies, ["Qt6Core.dll", "KERNEL32.dll", "LoopLibCore.dll"])
 
     def test_pe_fixture_architecture_is_x64(self):
         image = bytearray(96)
@@ -115,12 +115,12 @@ Image has the following dependencies:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "payload"
             root.mkdir()
-            (root / "LoupeEditor.exe").write_bytes(b"editor")
+            (root / "LoopEditor.exe").write_bytes(b"editor")
             package = Path(directory) / "package.msi"
             package.write_bytes(b"package")
             binaries = [
                 {
-                    "path": "LoupeEditor.exe",
+                    "path": "LoopEditor.exe",
                     "format": "PE",
                     "sha256": "0" * 64,
                     "size": 6,
@@ -153,13 +153,13 @@ Image has the following dependencies:
             root = Path(directory) / "payload"
             (root / "usr" / "bin").mkdir(parents=True)
             (root / "usr" / "lib").mkdir(parents=True)
-            (root / "usr" / "bin" / "LoupeEditor").write_bytes(b"editor")
+            (root / "usr" / "bin" / "LoopEditor").write_bytes(b"editor")
             (root / "usr" / "lib" / "libQt6Core.so.6").write_bytes(b"core")
             package = Path(directory) / "package.AppImage"
             package.write_bytes(b"package")
             binaries = [
                 {
-                    "path": "usr/bin/LoupeEditor",
+                    "path": "usr/bin/LoopEditor",
                     "format": "ELF",
                     "sha256": "0" * 64,
                     "size": 6,
@@ -203,7 +203,7 @@ Image has the following dependencies:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "payload"
             root.mkdir()
-            (root / "LoupeEditor.exe").write_bytes(b"editor")
+            (root / "LoopEditor.exe").write_bytes(b"editor")
             package = Path(directory) / "package"
             package.write_bytes(b"package")
             evidence = INSPECTOR.build_evidence(
@@ -212,7 +212,7 @@ Image has the following dependencies:
                 root,
                 "c" * 40,
                 [],
-                [{"path": "LoupeEditor.exe", "format": "unknown", "architecture": "unknown"}],
+                [{"path": "LoopEditor.exe", "format": "unknown", "architecture": "unknown"}],
                 "x64",
             )
             self.assertEqual(evidence["status"], "failed")
@@ -220,7 +220,7 @@ Image has the following dependencies:
 
     def test_missing_inspection_tool_fails_closed(self):
         with self.assertRaises(INSPECTOR.InspectionError):
-            INSPECTOR.resolve_required_tool("loupe-tool-that-does-not-exist")
+            INSPECTOR.resolve_required_tool("loop-tool-that-does-not-exist")
 
     def test_runtime_plugin_candidates_are_inventoried(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -3,8 +3,8 @@
 Category: changed
 Audience: developers
 Breaking-Change: yes
-Summary: Replace the installed LoupeEditor product root with a packaged Loupe.Quick
+Summary: Replace the installed LoopEditor product root with a packaged Loop.Quick
 ApplicationWindow that opens, closes, reopens, and navigates a PDF through DocumentFacade,
 CommandCatalog, ViewportController, PageSurfaceCoordinator, InteractionController, and
-LoupeCanvasItem. Adds EditorHost, ViewportCommandBridge, and LoupeEditorWidgetsOracle as a
+LoopCanvasItem. Adds EditorHost, ViewportCommandBridge, and LoopEditorWidgetsOracle as a
 non-installed Widgets parity target.

@@ -52,9 +52,9 @@ static PDFToolOcrApplication s_ocrApplication;
 QString bundledOcrSidecarPath(const QString& applicationDirectory)
 {
 #ifdef Q_OS_WIN
-    return QDir(applicationDirectory).filePath(QStringLiteral("LoupeOcrService/LoupeOcrService.exe"));
+    return QDir(applicationDirectory).filePath(QStringLiteral("LoopOcrService/LoopOcrService.exe"));
 #else
-    return QDir(applicationDirectory).filePath(QStringLiteral("LoupeOcrService/LoupeOcrService"));
+    return QDir(applicationDirectory).filePath(QStringLiteral("LoopOcrService/LoopOcrService"));
 #endif
 }
 
@@ -62,16 +62,16 @@ QString bundledOcrSidecarPath(const QString& applicationDirectory)
 /// Developer convenience for running out of a build tree. Deliberately excluded
 /// from release builds: in an installed layout the four parent steps escape the
 /// install prefix and clamp at the filesystem root (for example
-/// C:/loupe-ocr/tools/dev_ocr_sidecar.cmd), a location an unprivileged user can
+/// C:/loop-ocr/tools/dev_ocr_sidecar.cmd), a location an unprivileged user can
 /// create. Consulting it there would let a local attacker plant a script that
 /// PdfTool executes with the privileges of whoever runs `PdfTool ocr`. Release
-/// builds must use --sidecar or LOUPE_OCR_SIDECAR instead.
+/// builds must use --sidecar or LOOP_OCR_SIDECAR instead.
 QString devOcrSidecarPath(const QString& applicationDirectory)
 {
 #ifdef Q_OS_WIN
-    const QString relativePath = QStringLiteral("../../../../loupe-ocr/tools/dev_ocr_sidecar.cmd");
+    const QString relativePath = QStringLiteral("../../../../loop-ocr/tools/dev_ocr_sidecar.cmd");
 #else
-    const QString relativePath = QStringLiteral("../../../../loupe-ocr/tools/dev_ocr_sidecar.sh");
+    const QString relativePath = QStringLiteral("../../../../loop-ocr/tools/dev_ocr_sidecar.sh");
 #endif
     return QDir::cleanPath(QDir(applicationDirectory).filePath(relativePath));
 }
@@ -84,7 +84,7 @@ QString resolveOcrSidecarPath()
     // An explicitly configured sidecar is authoritative. Return it even when it is
     // not runnable so the caller reports that exact path, rather than silently
     // falling through and launching a different binary than the operator asked for.
-    const QByteArray envSidecar = qgetenv("LOUPE_OCR_SIDECAR");
+    const QByteArray envSidecar = qgetenv("LOOP_OCR_SIDECAR");
     if (!envSidecar.isEmpty())
     {
         return QString::fromUtf8(envSidecar);
@@ -237,7 +237,7 @@ QString PDFToolOcrApplication::getStandardString(StandardString standardString) 
             return PDFToolTranslationContext::tr("OCR");
 
         case Description:
-            return PDFToolTranslationContext::tr("Run Loupe OCR on image-only pages and emit a JSON report.");
+            return PDFToolTranslationContext::tr("Run Loop OCR on image-only pages and emit a JSON report.");
 
         default:
             Q_ASSERT(false);

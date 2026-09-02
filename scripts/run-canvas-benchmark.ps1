@@ -24,7 +24,7 @@ $executable = Get-ChildItem -LiteralPath $resolvedBuildDir -Recurse -File |
     Select-Object -First 1
 
 if (-not $executable) {
-    throw "CanvasBenchmark executable was not found below $resolvedBuildDir. Configure with -DLOUPE_BUILD_CANVAS_BENCHMARK=ON and build the target first."
+    throw "CanvasBenchmark executable was not found below $resolvedBuildDir. Configure with -DLOOP_BUILD_CANVAS_BENCHMARK=ON and build the target first."
 }
 
 Write-Output "Running CanvasBenchmark candidate=$Candidate executable=$($executable.FullName)"

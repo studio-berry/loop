@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LOOP Editor
+Comment=Edit and modify PDF files
+Exec=LoopEditor %f
+Icon=io.github.mberrys.Loop-pdf.LoopEditor
+Terminal=false
+Categories=Office;
+MimeType=application/pdf;

@@ -32,7 +32,7 @@ build/*
 # Local git worktrees checked out beside the main tree.
 /.worktrees/
 
-# Local Qt Quick loop scaffold; not part of the Loupe product graph.
+# Local Qt Quick loop scaffold; not part of the Loop product graph.
 /loop/
 
 # One-off investigation artifacts. Debug logs and per-PR debug scripts are
@@ -50,4 +50,4 @@ __pycache__/
 /agent-fast-evidence.json
 
 # PdfTool preflight/repair provenance sidecars written next to inspected PDFs.
-*.loupe-history/
+*.loop-history/

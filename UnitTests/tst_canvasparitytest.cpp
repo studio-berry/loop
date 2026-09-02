@@ -49,7 +49,7 @@
 
 #include <memory>
 
-#include "loupecanvasitem.h"
+#include "loopcanvasitem.h"
 
 #include "documentcontextsource.h"
 #include "hittestsource.h"
@@ -75,7 +75,7 @@ constexpr qreal PixelPerMM = 96.0 / 25.4;
 
 QString budgetsPath()
 {
-    return QStringLiteral(LOUPE_UNITTEST_SOURCE_DIR "/testdata/canvas-parity/budgets.json");
+    return QStringLiteral(LOOP_UNITTEST_SOURCE_DIR "/testdata/canvas-parity/budgets.json");
 }
 
 /// Runs submitted work inline so a requested surface is admitted by the time
@@ -184,7 +184,7 @@ struct ParityFixture
         window = std::make_unique<QQuickWindow>();
         window->resize(ViewportSide, ViewportSide);
 
-        item = std::make_unique<pdfquick::LoupeCanvasItem>();
+        item = std::make_unique<pdfquick::LoopCanvasItem>();
         item->setParentItem(window->contentItem());
         item->setSize(QSizeF(ViewportSide, ViewportSide));
         item->bind(&viewport, controller.get(), surfaces.get());
@@ -251,7 +251,7 @@ struct ParityFixture
     std::unique_ptr<pdfinteraction::PageSurfaceCoordinator> surfaces;
     std::unique_ptr<pdfinteraction::OverlayBuilder> overlays;
     std::unique_ptr<pdfinteraction::InteractionController> controller;
-    std::unique_ptr<pdfquick::LoupeCanvasItem> item;
+    std::unique_ptr<pdfquick::LoopCanvasItem> item;
     std::unique_ptr<QQuickWindow> window;
 
     pdfinteraction::PageLayout layout;

@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "pan",
   "description": "Middle-button drag pans the viewport. Asserts the viewport request generation does not advance, which is issue #142's rule that a pan must not cancel in-flight page renders.",

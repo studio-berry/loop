@@ -28,17 +28,17 @@ REQUIRED_MARKERS = {
         "PDFOperationHistoryStore",
         "PDFOperationHistoryEvent",
     ),
-    "LoupeLibCore/sources/pdfpagemasterexport.cpp": ("reducePreflightVerdict",),
-    "LoupeLibCore/sources/pdfpreflightverdict.h": ("reducePreflightVerdict",),
-    "LoupeLibCore/sources/pdfoperationhistory.h": (
+    "LoopLibCore/sources/pdfpagemasterexport.cpp": ("reducePreflightVerdict",),
+    "LoopLibCore/sources/pdfpreflightverdict.h": ("reducePreflightVerdict",),
+    "LoopLibCore/sources/pdfoperationhistory.h": (
         "enum class PDFOperationHistoryEventKind",
-        "struct LOUPELIBCORESHARED_EXPORT PDFOperationHistoryEvent",
+        "struct LOOPLIBCORESHARED_EXPORT PDFOperationHistoryEvent",
     ),
-    "LoupeLibCore/sources/pdfoperationhistorystore.h": (
-        "class LOUPELIBCORESHARED_EXPORT PDFOperationHistoryStore",
+    "LoopLibCore/sources/pdfoperationhistorystore.h": (
+        "class LOOPLIBCORESHARED_EXPORT PDFOperationHistoryStore",
         "PDFOperationResult appendEvent(PDFOperationHistoryEvent event",
     ),
-    "LoupeLibInteraction/sources/preflightcontroller.cpp": (
+    "LoopLibInteraction/sources/preflightcontroller.cpp": (
         "result.inspectionComplete",
         "State::Pass",
         "State::Findings",
@@ -47,12 +47,12 @@ REQUIRED_MARKERS = {
 
 PRODUCT_ROOTS = (
     "PdfTool",
-    "LoupeLibCore",
-    "LoupeLibInteraction",
-    "LoupeEditor",
+    "LoopLibCore",
+    "LoopLibInteraction",
+    "LoopEditor",
 )
 SOURCE_SUFFIXES = {".cpp", ".h", ".hpp", ".cc", ".cxx"}
-OVERLAY_FINDINGS_GUARD = "LoupeLibInteraction/sources/preflightcontroller.cpp"
+OVERLAY_FINDINGS_GUARD = "LoopLibInteraction/sources/preflightcontroller.cpp"
 
 
 def source_paths() -> list[Path]:
