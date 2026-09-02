@@ -39,6 +39,30 @@ class Phase5ResidueTests(unittest.TestCase):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(len(findings), 1)
 
+    def test_generated_agent_adapters_are_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "AGENTS.md").write_text("LoopLibGui is gone.\n", encoding="utf-8")
+            with mock.patch.object(check_phase5_residue, "tracked_paths", return_value=["AGENTS.md"]):
+                findings = check_phase5_residue.violations(root)
+        self.assertEqual(len(findings), 1)
+
+    def test_validation_scripts_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "scripts"
+            path.mkdir()
+            (path / "verify-installed-product-graph.py").write_text(
+                "FORBIDDEN = 'LoopViewer'\n", encoding="utf-8"
+            )
+            with mock.patch.object(
+                check_phase5_residue,
+                "tracked_paths",
+                return_value=["scripts/verify-installed-product-graph.py"],
+            ):
+                findings = check_phase5_residue.violations(root)
+        self.assertEqual(findings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,265 @@
+{
+  "schema_kind": "loop-interaction-scenario",
+  "schema_version": 1,
+  "scenario_id": "drag-no-snap",
+  "description": "Drag a finding with snapping off. Asserts the grab offset taken at the press survives the whole gesture, so the object does not jump its corner to the cursor on the first move, and that exactly one operation is emitted on release.",
+  "fixture": {
+    "page_count": 4,
+    "page_size_mm": {
+      "width": 210.0,
+      "height": 297.0
+    },
+    "pixel_per_mm": 2.0,
+    "device_pixel_ratio": 1.0,
+    "initial_zoom": 1.0,
+    "viewport_size_px": {
+      "width": 1200,
+      "height": 800
+    },
+    "page_layout": "single-page",
+    "hit_targets": [
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0001",
+        "page_bounds": {
+          "x": 20.0,
+          "y": 20.0,
+          "width": 40.0,
+          "height": 20.0
+        }
+      },
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0002",
+        "page_bounds": {
+          "x": 90.0,
+          "y": 20.0,
+          "width": 30.0,
+          "height": 30.0
+        }
+      },
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0003",
+        "page_bounds": {
+          "x": 20.0,
+          "y": 80.0,
+          "width": 60.0,
+          "height": 15.0
+        }
+      }
+    ],
+    "snapping": {
+      "enabled": false
+    }
+  },
+  "cost_model": {
+    "base_frame_ns": 500000,
+    "hit_test_ns_per_candidate": 20000,
+    "overlay_ns_per_primitive": 3000,
+    "page_surface_admit_ns": 400000,
+    "cache_miss_ns": 2000000,
+    "external_present_ns": 1500000
+  },
+  "budgets": {
+    "refresh_rate_hz": 60.0,
+    "frame_p95_ms": 16.667,
+    "input_to_frame_p95_ms": 16.667,
+    "max_slow_frames": 0,
+    "max_dropped_frames": 0,
+    "variance_band_multiplier": 2.5
+  },
+  "expected": {
+    "selected_id": "f-0001",
+    "drag_completed": 1,
+    "snapped_to": "",
+    "cancellations": [],
+    "unbalanced_frames": 0,
+    "pending_inputs": 0
+  },
+  "trace": {
+    "schema_version": 1,
+    "trace_id": "drag-no-snap",
+    "inputs": [
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 16666667,
+            "sequence": 1
+          },
+          "action": "move",
+          "position_px": {
+            "x": 110,
+            "y": 70
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 33333334,
+            "sequence": 2
+          },
+          "action": "press",
+          "position_px": {
+            "x": 110,
+            "y": 70
+          },
+          "button": 1,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 50000001,
+            "sequence": 3
+          },
+          "action": "move",
+          "position_px": {
+            "x": 130,
+            "y": 70
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 66666668,
+            "sequence": 4
+          },
+          "action": "move",
+          "position_px": {
+            "x": 150,
+            "y": 75
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 83333335,
+            "sequence": 5
+          },
+          "action": "move",
+          "position_px": {
+            "x": 170,
+            "y": 80
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 100000002,
+            "sequence": 6
+          },
+          "action": "move",
+          "position_px": {
+            "x": 190,
+            "y": 85
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 116666669,
+            "sequence": 7
+          },
+          "action": "move",
+          "position_px": {
+            "x": 210,
+            "y": 90
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 133333336,
+            "sequence": 8
+          },
+          "action": "move",
+          "position_px": {
+            "x": 230,
+            "y": 95
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 150000003,
+            "sequence": 9
+          },
+          "action": "move",
+          "position_px": {
+            "x": 250,
+            "y": 100
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 166666670,
+            "sequence": 10
+          },
+          "action": "move",
+          "position_px": {
+            "x": 270,
+            "y": 105
+          },
+          "button": 0,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 183333337,
+            "sequence": 11
+          },
+          "action": "release",
+          "position_px": {
+            "x": 270,
+            "y": 105
+          },
+          "button": 1,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      }
+    ]
+  }
+}

@@ -46,8 +46,10 @@ def parse_branch_policy() -> dict[str, Any]:
         "default_branch",
         "release_branch",
         "integration_branch",
+        "qualification_branch",
         "topic_branch_source",
         "topic_branch_patterns",
+        "promotion_chain",
         "protected_branches",
     }
     missing = sorted(required - policy.keys())
@@ -57,8 +59,10 @@ def parse_branch_policy() -> dict[str, Any]:
         policy["default_branch"],
         policy["release_branch"],
         policy["integration_branch"],
+        policy["qualification_branch"],
         policy["topic_branch_source"],
         *policy["protected_branches"],
+        *policy["promotion_chain"],
     }
     if any(not isinstance(branch, str) or not branch for branch in branches):
         raise ValueError("branch policy contains an empty branch name")
@@ -70,7 +74,9 @@ def parse_branch_policy() -> dict[str, Any]:
         "default": policy["default_branch"],
         "release": policy["release_branch"],
         "integration": policy["integration_branch"],
+        "qualification": policy["qualification_branch"],
         "topic_source": policy["topic_branch_source"],
+        "promotion_chain": policy["promotion_chain"],
         "protected": sorted(policy["protected_branches"]),
         "topic_patterns": sorted(policy["topic_branch_patterns"]),
     }

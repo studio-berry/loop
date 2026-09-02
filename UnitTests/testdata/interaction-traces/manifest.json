@@ -1,0 +1,89 @@
+{
+  "schema_kind": "loop-interaction-corpus",
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "click-select-deselect",
+      "path": "UnitTests/testdata/interaction-traces/click-select-deselect.json",
+      "issue": 146,
+      "sha256": "928deef8f2bdc35e2b385c379065888728e5c6b402b9969aa7d8944f6d9e5d56",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "drag-no-snap",
+      "path": "UnitTests/testdata/interaction-traces/drag-no-snap.json",
+      "issue": 146,
+      "sha256": "111753d405946cfd2c8e1a1679a717c2e8aa0cd67c2f57ed04535844b8280083",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "drag-snap",
+      "path": "UnitTests/testdata/interaction-traces/drag-snap.json",
+      "issue": 146,
+      "sha256": "d903f432aa78be1b64eda760ae41858ca7c734fac116f2eb95c32b8e19f445d5",
+      "lanes": [
+        "deterministic"
+      ],
+      "blocked_on": "gh-488",
+      "blocked_reason": "DragSnapper and the Alt-suppression rule land in PR #488"
+    },
+    {
+      "id": "hover-dense",
+      "path": "UnitTests/testdata/interaction-traces/hover-dense.json",
+      "issue": 146,
+      "sha256": "bba2c6312f4a181fff43a2a3d333efc1d6a9069753f02e56fe44ff1a31a33bcd",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "hover-sparse",
+      "path": "UnitTests/testdata/interaction-traces/hover-sparse.json",
+      "issue": 146,
+      "sha256": "393f59fd4beb8cd7c5eec5e00a7a222214a46087ce9827488cac53589aa9a1a4",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "overlay-dense",
+      "path": "UnitTests/testdata/interaction-traces/overlay-dense.json",
+      "issue": 146,
+      "sha256": "55a0b5c35eae3a1fadda39dcec2f4a1d9f6f644b33c5cb021c1180d1e90ce8b5",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "pan",
+      "path": "UnitTests/testdata/interaction-traces/pan.json",
+      "issue": 146,
+      "sha256": "c43200db0b9aedfbaab7730b75ef0ae3e1909bed355b105ea1c7771aea341244",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "zoom-anchored",
+      "path": "UnitTests/testdata/interaction-traces/zoom-anchored.json",
+      "issue": 146,
+      "sha256": "0089819a19f41c14574eae79a66b4cb85240e61b253df39fb9ef239556637862",
+      "lanes": [
+        "deterministic"
+      ]
+    },
+    {
+      "id": "zoom-reversal",
+      "path": "UnitTests/testdata/interaction-traces/zoom-reversal.json",
+      "issue": 146,
+      "sha256": "28c6fc63971eb59d5a00ba12266dad4f846ebbc5a5468a51b172ce756646a86a",
+      "lanes": [
+        "deterministic"
+      ]
+    }
+  ]
+}

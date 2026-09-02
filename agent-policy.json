@@ -7,10 +7,12 @@
   "branches": {
     "default": "stable",
     "integration": "dev",
+    "qualification": "unstable",
     "release": "stable",
     "topic_source": "dev",
     "topic_branch_patterns": ["gh-*", "feature/*", "fix/*", "chore/*", "docs/*"],
-    "protected": ["dev", "stable"]
+    "promotion_chain": ["dev", "unstable", "stable"],
+    "protected": ["unstable", "stable"]
   },
   "autonomy": {
     "allowed": [
@@ -54,15 +56,18 @@
       "paths": [
         "LoopLibCore/**",
         "UnitTests/tst_bleedfixuptest.cpp",
+        "UnitTests/tst_budgetcorpustest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
-        "UnitTests/tst_overprinttest.cpp"
+        "UnitTests/tst_overprinttest.cpp",
+        "UnitTests/tst_revisionstresstest.cpp"
       ],
       "targets": ["LoopLibCore"],
       "tests": [
         "UnitTests",
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBleedFixup",
+        "UnitTestsBudgetCorpus",
         "UnitTestsBudgetExhaustion",
         "UnitTestsConversionOracle",
         "UnitTestsDocumentSession",
@@ -82,6 +87,7 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
+        "UnitTestsRevisionStress",
         "UnitTestsSchemaEvolution",
         "UnitTestsStandardOracle",
         "UnitTestsWorkloadEnvelope"

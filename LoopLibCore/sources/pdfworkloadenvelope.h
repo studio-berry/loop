@@ -66,6 +66,9 @@ struct LOOPLIBCORESHARED_EXPORT PDFWorkloadEnvelope
     // -1 means that the platform could not provide this measurement. It is
     // intentionally distinct from zero so unavailable evidence cannot pass.
     qint64 rssHighWaterBytes = -1;
+    // Windows exposes peak commit charge separately from peak working set.
+    // Linux leaves this unavailable rather than substituting virtual size.
+    qint64 processCommitHighWaterBytes = -1;
     qint64 cacheHighWaterBytes = -1;
     qint64 preflightHighWaterBytes = -1;
     qint64 pagesMaterialized = -1;
@@ -78,6 +81,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFWorkloadEnvelope
     QJsonObject resources;
 
     static qint64 currentRssHighWaterBytes();
+    static qint64 currentProcessCommitHighWaterBytes();
     void recordResources(const PDFResourceBudget& budget);
     QJsonObject toJson() const;
 };

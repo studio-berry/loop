@@ -1,0 +1,324 @@
+{
+  "schema_kind": "loop-interaction-scenario",
+  "schema_version": 1,
+  "scenario_id": "overlay-dense",
+  "description": "Hover over a page carrying far more findings and guides than the overlay bounds admit. Asserts the frame stays bounded at maxPrimitives and reports what it dropped, rather than growing without limit or aborting the pass.",
+  "fixture": {
+    "page_count": 4,
+    "page_size_mm": {
+      "width": 210.0,
+      "height": 297.0
+    },
+    "pixel_per_mm": 2.0,
+    "device_pixel_ratio": 1.0,
+    "initial_zoom": 1.0,
+    "viewport_size_px": {
+      "width": 1200,
+      "height": 800
+    },
+    "page_layout": "single-page",
+    "generated_targets": {
+      "kind": "finding",
+      "count": 6000,
+      "page_index": 0,
+      "id_prefix": "o-",
+      "grid": {
+        "columns": 100,
+        "rows": 60,
+        "origin": {
+          "x": 2.0,
+          "y": 2.0
+        },
+        "stride": {
+          "width": 2.0,
+          "height": 4.8
+        },
+        "size": {
+          "width": 1.5,
+          "height": 3.0
+        }
+      }
+    },
+    "guides": [
+      {
+        "id": "g-000",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 5.0
+      },
+      {
+        "id": "g-001",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 7.0
+      },
+      {
+        "id": "g-002",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 9.0
+      },
+      {
+        "id": "g-003",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 11.0
+      },
+      {
+        "id": "g-004",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 13.0
+      },
+      {
+        "id": "g-005",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 15.0
+      },
+      {
+        "id": "g-006",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 17.0
+      },
+      {
+        "id": "g-007",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 19.0
+      },
+      {
+        "id": "g-008",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 21.0
+      },
+      {
+        "id": "g-009",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 23.0
+      },
+      {
+        "id": "g-010",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 25.0
+      },
+      {
+        "id": "g-011",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 27.0
+      },
+      {
+        "id": "g-012",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 29.0
+      },
+      {
+        "id": "g-013",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 31.0
+      },
+      {
+        "id": "g-014",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 33.0
+      },
+      {
+        "id": "g-015",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 35.0
+      },
+      {
+        "id": "g-016",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 37.0
+      },
+      {
+        "id": "g-017",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 39.0
+      },
+      {
+        "id": "g-018",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 41.0
+      },
+      {
+        "id": "g-019",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 43.0
+      },
+      {
+        "id": "g-020",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 45.0
+      },
+      {
+        "id": "g-021",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 47.0
+      },
+      {
+        "id": "g-022",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 49.0
+      },
+      {
+        "id": "g-023",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 51.0
+      },
+      {
+        "id": "g-024",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 53.0
+      },
+      {
+        "id": "g-025",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 55.0
+      },
+      {
+        "id": "g-026",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 57.0
+      },
+      {
+        "id": "g-027",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 59.0
+      },
+      {
+        "id": "g-028",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 61.0
+      },
+      {
+        "id": "g-029",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 63.0
+      },
+      {
+        "id": "g-030",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 65.0
+      },
+      {
+        "id": "g-031",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 67.0
+      },
+      {
+        "id": "g-032",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 69.0
+      },
+      {
+        "id": "g-033",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 71.0
+      },
+      {
+        "id": "g-034",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 73.0
+      },
+      {
+        "id": "g-035",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 75.0
+      },
+      {
+        "id": "g-036",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 77.0
+      },
+      {
+        "id": "g-037",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 79.0
+      },
+      {
+        "id": "g-038",
+        "page_index": 0,
+        "orientation": "horizontal",
+        "position": 81.0
+      },
+      {
+        "id": "g-039",
+        "page_index": 0,
+        "orientation": "vertical",
+        "position": 83.0
+      }
+    ]
+  },
+  "cost_model": {
+    "base_frame_ns": 500000,
+    "hit_test_ns_per_candidate": 20000,
+    "overlay_ns_per_primitive": 3000,
+    "page_surface_admit_ns": 400000,
+    "cache_miss_ns": 2000000,
+    "external_present_ns": 1500000
+  },
+  "budgets": {
+    "refresh_rate_hz": 60.0,
+    "frame_p95_ms": 16.667,
+    "input_to_frame_p95_ms": 16.667,
+    "max_slow_frames": 0,
+    "max_dropped_frames": 0,
+    "variance_band_multiplier": 2.5
+  },
+  "expected": {
+    "selected_id": "",
+    "drag_completed": 0,
+    "request_generation_changed": false,
+    "cancellations": [],
+    "unbalanced_frames": 0,
+    "pending_inputs": 0
+  },
+  "input_script": [
+    {
+      "kind": "hover-sweep",
+      "at_px": {
+        "x": 40,
+        "y": 150
+      },
+      "to_px": {
+        "x": 760,
+        "y": 450
+      },
+      "steps": 150,
+      "interval_ns": 16666667
+    }
+  ]
+}

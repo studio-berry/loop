@@ -7,6 +7,7 @@ Pane {
 
     property var host: editorHost
     property var inspectorModel: host ? host.inspector : null
+    property var documentModel: host ? host.documentModel : null
 
     padding: 8
 
@@ -61,6 +62,45 @@ Pane {
             visible: host && host.previewSummary.length > 0
             text: host ? qsTr("Preview: %1").arg(host.previewSummary) : ""
             Accessible.name: qsTr("Production preview status")
+        }
+
+        GroupBox {
+            Layout.fillWidth: true
+            title: qsTr("Document properties")
+            visible: host && host.hasDocument
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 4
+
+                Label {
+                    text: qsTr("Title: %1").arg(root.documentModel ? root.documentModel.title : "")
+                }
+                Label {
+                    text: qsTr("Author: %1").arg(root.documentModel ? root.documentModel.author : "")
+                }
+                Label {
+                    text: qsTr("PDF version: %1").arg(root.documentModel ? root.documentModel.version : "")
+                }
+                Label {
+                    text: qsTr("Attachments: %1").arg(root.documentModel && root.documentModel.hasAttachments ? qsTr("present") : qsTr("none"))
+                }
+                Label {
+                    text: qsTr("Optional content: %1").arg(root.documentModel && root.documentModel.hasOptionalContent ? qsTr("present") : qsTr("none"))
+                }
+                Label {
+                    text: qsTr("Lifecycle: %1").arg(root.documentModel ? root.documentModel.lifecycleState : "")
+                }
+                Label {
+                    text: qsTr("Document state: %1").arg(root.documentModel && root.documentModel.modified ? qsTr("modified") : qsTr("unchanged"))
+                }
+                Label {
+                    text: qsTr("Security: %1").arg(root.documentModel && root.documentModel.encrypted ? qsTr("encrypted") : qsTr("not encrypted"))
+                }
+                Label {
+                    text: qsTr("Permissions: %1").arg(root.documentModel && root.documentModel.canPrint ? qsTr("printing allowed") : qsTr("printing restricted"))
+                }
+            }
         }
     }
 }
