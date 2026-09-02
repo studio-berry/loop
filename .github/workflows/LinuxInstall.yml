@@ -273,10 +273,24 @@ jobs:
             deploy.AppImage \
             "$LINUXDEPLOYQT_SHA256"
           chmod +x deploy.AppImage
+          loop_editor_qml="$GITHUB_WORKSPACE/loop/LoopEditor/qml"
+          if [ ! -d "$loop_editor_qml" ]; then
+            echo "::error::LoopEditor QML sources were not found: $loop_editor_qml"
+            exit 1
+          fi
           ./deploy.AppImage --appimage-extract-and-run \
             install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop \
             -executable-dir=install/usr/bin \
+            -qmldir="$loop_editor_qml" \
+            -qmldir="$loop_quick_src" \
+            -qmldir="$loop_canvas_src" \
             -extra-plugins=iconengines,imageformats,texttospeech,platforms 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
+          controls_plugin="$(find install/usr/lib/qml -name 'libqtquickcontrols2plugin.so' -print -quit)"
+          if [ -z "$controls_plugin" ]; then
+            echo "::error::QtQuick.Controls plugin was not bundled into the AppImage tree"
+            exit 1
+          fi
+          echo "Bundled QtQuick.Controls plugin: $controls_plugin" | tee -a "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'

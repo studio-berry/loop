@@ -313,29 +313,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopCanvas) | Out-Null
           Copy-Item -Recurse -Force -LiteralPath $builtLoopCanvas -Destination $qmlLoopCanvas
 
-          function Copy-BuiltQmlPlugin {
-            param(
-              [string]$PluginBaseName,
-              [string]$ModuleDir
-            )
-
-            $plugin = Get-ChildItem -LiteralPath $buildDir -Recurse -File |
-              Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
-              Sort-Object FullName |
-              Select-Object -First 1
-            if (-not $plugin) {
-              throw "Built QML plugin was not found below $buildDir`: $PluginBaseName.dll"
-            }
-
-            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $installBin $plugin.Name) -Force
-            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $ModuleDir $plugin.Name) -Force
-            Write-Host "Staged QML plugin: $($plugin.Name) -> $ModuleDir" |
-              Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
-          }
-
-          Copy-BuiltQmlPlugin -PluginBaseName "LoopEditorQuickplugin" -ModuleDir $qmlLoopQuick
-          Copy-BuiltQmlPlugin -PluginBaseName "LoopLibQuickplugin" -ModuleDir $qmlLoopCanvas
-
           $platformDir = Join-Path $installBin "platforms"
           $offscreenPlugin = Join-Path $env:QT_ROOT_DIR "plugins\platforms\qoffscreen.dll"
           if (-not (Test-Path -LiteralPath $offscreenPlugin)) {
