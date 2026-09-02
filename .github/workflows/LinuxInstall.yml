@@ -205,14 +205,14 @@ jobs:
           evidence_dir="$RUNNER_TEMP/loupe-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          loupe_quick_src="$GITHUB_WORKSPACE/loupe/build/Loupe/Quick"
+          loupe_quick_src="$GITHUB_WORKSPACE/loupe/build/LoupeEditor/Loupe/Quick"
           qml_dest="install/usr/lib/qml/Loupe/Quick"
           if [ ! -d "$loupe_quick_src" ]; then
             echo "::error::Built Loupe.Quick QML module was not found: $loupe_quick_src"
             exit 1
           fi
           mkdir -p "$(dirname "$qml_dest")"
-          cp -a "$loupe_quick_src" "$qml_dest"
+          cp -a "$loupe_quick_src/." "$qml_dest/"
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
@@ -226,6 +226,7 @@ jobs:
           ./deploy.AppImage --appimage-extract-and-run \
             install/usr/share/applications/io.github.mberrys.Loupe-pdf.desktop \
             -executable-dir=install/usr/bin \
+            -qmldir="$GITHUB_WORKSPACE/loupe/LoupeEditor/qml" \
             -extra-plugins=iconengines,imageformats,texttospeech 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
