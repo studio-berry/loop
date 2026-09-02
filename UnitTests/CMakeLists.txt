@@ -589,6 +589,39 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     add_test(UnitTestsOverprintRender "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsOverprintRender")
 endif()
 
+# Guarded the same way LoopLibQuick's own add_subdirectory() is (see the top-level
+# CMakeLists.txt): the tools/legacy-host build (LOOP_BUILD_ONLY_CORE_LIBRARY, or
+# LOOP_BUILD_QUICK_CANVAS off) must not descend into anything that requires it.
+#
+# This compiles the design-system token/state-mapping sources directly rather
+# than linking the LoopLibQuick target: they depend on QColor only, not on
+# Qt Quick/Qml, and linking the SHARED LoopLibQuick library from a plain
+# add_executable() test would be the first such link edge in this file --
+# every other LoopLibQuick consumer uses qt_add_executable() plus
+# qt_import_qml_plugins() (see ProductQuickAccessibilitySmoke/CMakeLists.txt),
+# neither of which this test needs.
+if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY AND LOOP_BUILD_QUICK_CANVAS)
+    add_executable(UnitTestsLoopStateVisual
+        tst_loopstatevisualtest.cpp
+        ${CMAKE_SOURCE_DIR}/LoopLibQuick/sources/looptokens.cpp
+        ${CMAKE_SOURCE_DIR}/LoopLibQuick/sources/loopstatevisual.cpp
+    )
+
+    target_include_directories(UnitTestsLoopStateVisual PRIVATE
+        ${CMAKE_SOURCE_DIR}/LoopLibQuick/sources
+        ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
+    )
+    target_link_libraries(UnitTestsLoopStateVisual PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsLoopStateVisual PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsLoopStateVisual "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsLoopStateVisual")
+endif()
+
 add_executable(UnitTestsPageMasterExport
 	tst_pagemasterexporttest.cpp
 )
