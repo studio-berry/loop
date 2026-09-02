@@ -128,7 +128,7 @@ jobs:
           }
 
           ./vcpkg/bootstrap-vcpkg.sh
-          ./vcpkg integrate install
+          ./vcpkg/vcpkg integrate install
 
       - name: 'VCPKG: Cache vcpkg dependencies'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
@@ -143,7 +143,7 @@ jobs:
 
       - name: 'VCPKG: Install Project Dependencies'
         run: |
-          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          ./vcpkg/vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt
