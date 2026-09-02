@@ -323,12 +323,12 @@ jobs:
           # Qt environment variables. Make the staged tree self-describing so
           # Qt resolves its bundled QML imports and plugins without the runner's
           # Qt installation.
-          @"
-          [Paths]
-          Prefix=.
-          Plugins=.
-          Qml2Imports=qml;.
-          "@ | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
+          @(
+            '[Paths]'
+            'Prefix=.'
+            'Plugins=.'
+            'Qml2Imports=qml;.'
+          ) | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $installBin "qt.conf") -Destination (Join-Path $evidenceDir "qt.conf")
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}

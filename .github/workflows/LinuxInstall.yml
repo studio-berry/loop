@@ -248,12 +248,11 @@ jobs:
               exit 1
             fi
           done
-          cat > install/usr/bin/qt.conf <<'EOF'
-          [Paths]
-          Prefix=..
-          Plugins=lib
-          Qml2Imports=lib/qml
-          EOF
+          printf '%s\n' \
+            '[Paths]' \
+            'Prefix=..' \
+            'Plugins=lib' \
+            'Qml2Imports=lib/qml' > install/usr/bin/qt.conf
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
