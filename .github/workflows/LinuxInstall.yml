@@ -225,6 +225,34 @@ jobs:
           fi
           mkdir -p "$(dirname "$qml_dest")"
           cp -a "$loop_quick_src" "$qml_dest"
+          loop_canvas_src="$GITHUB_WORKSPACE/loop/build/LoopLibQuick/Loop/Canvas"
+          qml_canvas_dest="install/usr/lib/qml/Loop/Canvas"
+          if [ ! -d "$loop_canvas_src" ]; then
+            echo "::error::Built Loop.Canvas QML module was not found: $loop_canvas_src"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$qml_canvas_dest")"
+          cp -a "$loop_canvas_src" "$qml_canvas_dest"
+          # Headless PdfTool smoke runs with QT_QPA_PLATFORM=offscreen and strips
+          # developer Qt env vars. Bundle the offscreen QPA plugin and qt.conf so
+          # the packaged tree is self-describing (WindowsInstall.yml does the same).
+          platform_dir="install/usr/lib/platforms"
+          mkdir -p "$platform_dir"
+          for platform_plugin in libqoffscreen.so libqminimal.so; do
+            source_plugin="$QT_ROOT_DIR/plugins/platforms/$platform_plugin"
+            if [[ -e "$source_plugin" ]]; then
+              cp -f "$source_plugin" "$platform_dir/$platform_plugin"
+              echo "Staged Qt platform plugin: $platform_plugin" | tee -a "$evidence_dir/linuxdeployqt.txt"
+            elif [[ "$platform_plugin" == "libqoffscreen.so" ]]; then
+              echo "::error::Required Qt platform plugin is missing: $source_plugin"
+              exit 1
+            fi
+          done
+          printf '%s\n' \
+            '[Paths]' \
+            'Prefix=..' \
+            'Plugins=lib' \
+            'Qml2Imports=lib/qml' > install/usr/bin/qt.conf
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"

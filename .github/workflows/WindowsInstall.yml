@@ -302,16 +302,33 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopQuick) | Out-Null
           Copy-Item -Recurse -Force -LiteralPath $builtLoopQuick -Destination $qmlLoopQuick
 
+          $builtLoopCanvas = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopLibQuick\Loop\Canvas"
+          $qmlLoopCanvas = Join-Path $installBin "qml\Loop\Canvas"
+          if (-not (Test-Path -LiteralPath $builtLoopCanvas)) {
+            throw "Built Loop.Canvas QML module was not found: $builtLoopCanvas"
+          }
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopCanvas) | Out-Null
+          Copy-Item -Recurse -Force -LiteralPath $builtLoopCanvas -Destination $qmlLoopCanvas
+
+          $platformDir = Join-Path $installBin "platforms"
+          $offscreenPlugin = Join-Path $env:QT_ROOT_DIR "plugins\platforms\qoffscreen.dll"
+          if (-not (Test-Path -LiteralPath $offscreenPlugin)) {
+            throw "Required Qt platform plugin is missing: $offscreenPlugin"
+          }
+          New-Item -ItemType Directory -Force -Path $platformDir | Out-Null
+          Copy-Item -LiteralPath $offscreenPlugin -Destination (Join-Path $platformDir "qoffscreen.dll") -Force
+          Write-Host "Staged Qt platform plugin: qoffscreen.dll" | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
+
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so
           # Qt resolves its bundled QML imports and plugins without the runner's
           # Qt installation.
-          @"
-          [Paths]
-          Prefix=.
-          Plugins=.
-          Qml2Imports=qml
-          "@ | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
+          @(
+            '[Paths]'
+            'Prefix=.'
+            'Plugins=.'
+            'Qml2Imports=qml;.'
+          ) | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $installBin "qt.conf") -Destination (Join-Path $evidenceDir "qt.conf")
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
@@ -323,7 +340,6 @@ jobs:
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
         # conditionals and the workflow file fails to parse. The script no-ops
         # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
-        continue-on-error: true
         working-directory: loop
         shell: pwsh
         env:

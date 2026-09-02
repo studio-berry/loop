@@ -400,7 +400,6 @@ jobs:
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
         # conditionals and the workflow file fails to parse. The script no-ops
         # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
-        continue-on-error: true
         working-directory: loop
         shell: pwsh
         env:
