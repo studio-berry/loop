@@ -226,6 +226,12 @@ jobs:
               rm -f "$driver"
             fi
           done
+          cat > install/usr/bin/qt.conf <<'EOF'
+          [Paths]
+          Prefix=..
+          Plugins=lib
+          Qml2Imports=lib/qml
+          EOF
           cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loupe-pdf.svg install/io.github.mberrys.Loupe-pdf.svg
           bash "$GITHUB_WORKSPACE/loupe/scripts/ci/download_verified.sh" \
             --gh-asset "probonopd/linuxdeployqt" \
