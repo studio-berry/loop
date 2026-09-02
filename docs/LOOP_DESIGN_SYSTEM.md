@@ -5,16 +5,15 @@ mapping shared by every Loop surface, and records the current adoption state.
 
 ## Naming note
 
-Issue #194 was written against an earlier snapshot of this fork and names
-paths (`Pdf4QtLibGui/loupe/…`, `Pdf4QtEditorPlugins/…`) and a `Loupe`-prefixed
-namespace that no longer exist: the Qt Widgets GUI has been retired and the
-product underwent the Loupe → Loop rebrand (`changes/cdx-retire-widgets-oracle.md`,
-`changes/cdx-loupe-to-loop-rebrand.md`). This document and the code it
-describes use the repository's current naming instead of the issue's literal
-text: `pdfquick::tokens` in `LoopLibQuick`, `Loop`-prefixed types, and this
-file at `docs/LOOP_DESIGN_SYSTEM.md`. `#193`, `#195`, `#196`, and `#127` carry
-the same stale paths and will need the same translation when they are picked
-up.
+Issue #194 was written against an earlier snapshot of this fork, before the
+Qt Widgets GUI was retired and the product was renamed to Loop (see the
+`changes/` fragments for that history). It names paths under `Pdf4QtLibGui/…`
+and `Pdf4QtEditorPlugins/…` and a namespace prefixed with the product's old
+name, none of which exist any more. This document and the code it describes
+use the repository's current naming instead of the issue's literal text:
+`pdfquick::tokens` in `LoopLibQuick`, `Loop`-prefixed types, and this file at
+`docs/LOOP_DESIGN_SYSTEM.md`. `#193`, `#195`, `#196`, and `#127` carry the
+same stale paths and will need the same translation when they are picked up.
 
 `docs/quick-design-tokens.json` (issue #178, ADR-007 P4-S5) already defined a
 provisional colour/spacing/motion contract for the first Quick slice, checked
