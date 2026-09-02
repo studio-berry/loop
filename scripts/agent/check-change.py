@@ -121,7 +121,7 @@ def current_branch(override: str | None) -> str:
 def policy_integration_branches(policy: dict) -> set[str]:
     branches = policy.get("branches", {})
     names: set[str] = set(branches.get("protected") or [])
-    for key in ("integration", "release", "default"):
+    for key in ("integration", "qualification", "release", "default"):
         value = branches.get(key)
         if isinstance(value, str) and value:
             names.add(value)

@@ -214,6 +214,7 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
                                                           : QStringLiteral("incomplete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
             envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+            envelope.processCommitHighWaterBytes = pdf::PDFWorkloadEnvelope::currentProcessCommitHighWaterBytes();
             envelope.elapsedMs = m_wallTime;
             envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
             envelope.incompleteReason = cancelled

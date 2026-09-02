@@ -89,6 +89,8 @@ add_library(LoopLibCore SHARED
     sources/pdfworkloadenvelope.h
     sources/pdfdocumentcontext.cpp
     sources/pdfdocumentcontext.h
+    sources/pdfdocumentsearch.cpp
+    sources/pdfdocumentsearch.h
     sources/pdfprocessingbudget.cpp
     sources/pdfprocessingbudget.h
     sources/pdfjobscheduler.cpp
