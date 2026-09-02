@@ -257,14 +257,14 @@ try {
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
     $nativeExit = $LASTEXITCODE
     if ($nativeExit -ne 0) {
-        throw "LoupeEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+        throw "LoupeEditor native Quick startup failed with exit code $($nativeExit): $($nativeOutput -join [Environment]::NewLine)"
     }
     Write-Host "OK: LoupeEditor native Quick startup"
     $env:QT_QUICK_BACKEND = "software"
     $softwareOutput = @(& $editor --quick-smoke 2>&1)
     $softwareExit = $LASTEXITCODE
     if ($softwareExit -ne 0) {
-        throw "LoupeEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
+        throw "LoupeEditor software Quick startup failed with exit code $($softwareExit): $($softwareOutput -join [Environment]::NewLine)"
     }
     Write-Host "OK: LoupeEditor software Quick startup"
 } finally {
