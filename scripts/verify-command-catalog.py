@@ -59,6 +59,15 @@ IMPLEMENTED_COMMANDS = frozenset(
 SHELL_IMPLEMENTED_COMMANDS = frozenset(
     {
         "actionQuit",
+        "actionFind",
+        "actionFindNext",
+        "actionFindPrevious",
+        "actionFullscreenMode",
+        "actionPageLayoutContinuous",
+        "actionPageLayoutSinglePage",
+        "actionPageLayoutTwoColumns",
+        "actionPageLayoutTwoPages",
+        "actionProperties",
     }
 )
 
@@ -384,7 +393,7 @@ def verify() -> str:
         raise ContractError("\n".join(f"  - {error}" for error in errors))
 
     policy = load_policy(POLICY_PATH)
-    implemented = len(IMPLEMENTED_COMMANDS)
+    implemented = len(IMPLEMENTED_COMMANDS | SHELL_IMPLEMENTED_COMMANDS)
     if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
         shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
         shortcut_note = (

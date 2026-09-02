@@ -66,6 +66,13 @@ ApplicationWindow {
             } else {
                 window.title = qsTr("Loupe")
             }
+            if (host) {
+                if (host.fullscreenRequested) {
+                    window.visibility = Window.FullScreen
+                } else if (window.visibility === Window.FullScreen) {
+                    window.visibility = Window.Windowed
+                }
+            }
         }
     }
 
@@ -148,6 +155,13 @@ ApplicationWindow {
         Menu {
             title: qsTr("&View")
             Action {
+                text: qsTr("&Find…")
+                enabled: commandEnabled("actionFind")
+                shortcut: shortcutSequence(commandMap["actionFind"])
+                onTriggered: invoke("actionFind")
+            }
+            MenuSeparator {}
+            Action {
                 text: qsTr("Zoom &In")
                 enabled: commandEnabled("actionZoom_In")
                 shortcut: shortcutSequence(commandMap["actionZoom_In"])
@@ -189,6 +203,42 @@ ApplicationWindow {
                 enabled: commandEnabled("actionRotateRight")
                 shortcut: shortcutSequence(commandMap["actionRotateRight"])
                 onTriggered: invoke("actionRotateRight")
+            }
+            MenuSeparator {}
+            Action {
+                text: qsTr("Continuous Layout")
+                enabled: commandEnabled("actionPageLayoutContinuous")
+                onTriggered: invoke("actionPageLayoutContinuous")
+            }
+            Action {
+                text: qsTr("Single Page Layout")
+                enabled: commandEnabled("actionPageLayoutSinglePage")
+                onTriggered: invoke("actionPageLayoutSinglePage")
+            }
+            Action {
+                text: qsTr("Two-Column Layout")
+                enabled: commandEnabled("actionPageLayoutTwoColumns")
+                onTriggered: invoke("actionPageLayoutTwoColumns")
+            }
+            Action {
+                text: qsTr("Two-Page Layout")
+                enabled: commandEnabled("actionPageLayoutTwoPages")
+                onTriggered: invoke("actionPageLayoutTwoPages")
+            }
+            Action {
+                text: qsTr("Fullscreen")
+                enabled: commandEnabled("actionFullscreenMode")
+                shortcut: shortcutSequence(commandMap["actionFullscreenMode"])
+                onTriggered: invoke("actionFullscreenMode")
+            }
+        }
+
+        Menu {
+            title: qsTr("&Document")
+            Action {
+                text: qsTr("&Properties")
+                enabled: commandEnabled("actionProperties")
+                onTriggered: invoke("actionProperties")
             }
         }
     }

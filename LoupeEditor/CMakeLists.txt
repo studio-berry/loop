@@ -29,6 +29,8 @@ add_library(LoupeEditorQuick STATIC
     editorhost.h
     focusrestoration.cpp
     focusrestoration.h
+    quickdocumentmodel.cpp
+    quickdocumentmodel.h
 )
 
 qt_add_qml_module(LoupeEditorQuick
@@ -38,6 +40,7 @@ qt_add_qml_module(LoupeEditorQuick
     QML_FILES
         qml/Main.qml
         qml/Workspace.qml
+        qml/DocumentPane.qml
         qml/CanvasPane.qml
         qml/PreflightPane.qml
         qml/InspectorPane.qml

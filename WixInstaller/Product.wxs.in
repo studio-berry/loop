@@ -254,6 +254,9 @@ ${LOUPE_WIX_QT_STYLES_COMPONENT}
 
   <Fragment>
     <ComponentGroup Id="LOUPE_Editor">
+      <Component Id="cmpQtConf" Directory="INSTALLFOLDER" Guid="{A4B2C6D8-E0F1-4A3B-9C5D-7E8F0A1B2C3D}">
+        <File Id="filQtConf" KeyPath="yes" Source="$(var.MyInstallDir)\qt.conf" />
+      </Component>
       <Component Id="cmpLoupeEditor" Directory="INSTALLFOLDER" Guid="{52D3CF62-F556-4E7A-BCEB-75E5E65ED786}">
         <File Id="filLoupeEditor" KeyPath="yes" Source="$(var.MyInstallDir)\LoupeEditor.exe">
           <Shortcut Id="LOUPE_Editor_Shortcut" Directory="ProgramMenuDir" Name="Loupe" Description="Inspect and prepare production PDFs" WorkingDirectory="INSTALLFOLDER" Icon="LOUPE_VP_Icon.exe" IconIndex="0" Advertise="yes"/>

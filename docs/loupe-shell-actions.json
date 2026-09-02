@@ -536,9 +536,9 @@
           "standard_key": "Find"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -551,9 +551,9 @@
           "standard_key": "FindNext"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -566,9 +566,9 @@
           "standard_key": "FindPrevious"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -629,9 +629,9 @@
           "sequence": "Ctrl+L"
         },
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "application",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -881,9 +881,9 @@
       "command": {
         "label_key": "command.actionPageLayoutContinuous.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -893,9 +893,9 @@
       "command": {
         "label_key": "command.actionPageLayoutSinglePage.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -905,9 +905,9 @@
       "command": {
         "label_key": "command.actionPageLayoutTwoColumns.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -917,9 +917,9 @@
       "command": {
         "label_key": "command.actionPageLayoutTwoPages.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "none",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {
@@ -944,9 +944,9 @@
       "command": {
         "label_key": "command.actionProperties.label",
         "parameters": [],
-        "capability": "unclassified",
+        "capability": "document.read",
         "cancellable": false,
-        "availability": "declared"
+        "availability": "implemented"
       }
     },
     {

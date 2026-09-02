@@ -78,6 +78,21 @@ set_target_properties(UnitTestsJobScheduler PROPERTIES
 
 add_test(UnitTestsJobScheduler "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsJobScheduler")
 
+add_executable(UnitTestsRevisionStress
+    tst_revisionstresstest.cpp
+)
+
+target_link_libraries(UnitTestsRevisionStress PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsRevisionStress PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsRevisionStress "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRevisionStress")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase4-tests.cmake)
 
 
@@ -809,6 +824,26 @@ set_target_properties(UnitTestsBudgetExhaustion PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
 )
 add_test(UnitTestsBudgetExhaustion "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsBudgetExhaustion")
+
+# gh-243: synthetic adversarial PDF corpus, one fixture per PDFProcessingBudget
+# dimension, read through PDFDocumentReader/PreflightEngine like a real upload.
+# Fixtures and manifest.json are generated (not hand-written) by
+# scripts/resource_envelope/budget_exhaustion_corpus.py; see
+# UnitTests/testdata/budget_exhaustion/manifest.json and tst_budgetcorpustest.cpp.
+add_executable(UnitTestsBudgetCorpus
+    tst_budgetcorpustest.cpp
+)
+target_link_libraries(UnitTestsBudgetCorpus PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsBudgetCorpus PRIVATE
+    BUDGET_CORPUS_DIR="${CMAKE_SOURCE_DIR}/UnitTests/testdata/budget_exhaustion"
+)
+set_target_properties(UnitTestsBudgetCorpus PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsBudgetCorpus "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsBudgetCorpus")
 
 add_executable(UnitTestsResourceBudget
     tst_resourcebudgettest.cpp
