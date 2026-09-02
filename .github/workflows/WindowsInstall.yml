@@ -202,6 +202,18 @@ jobs:
 
       - name: 'VCPKG: Install project dependencies'
         run: |
+          # Seed the two GNU archives through the primary GNU host.  The
+          # vcpkg portfiles prefer ftpmirror.gnu.org, which intermittently
+          # returned 502/503 during package qualification; a verified
+          # filename in downloads lets vcpkg reuse the archive and keeps the
+          # existing portfile hash verification authoritative.
+          New-Item -ItemType Directory -Force -Path downloads | Out-Null
+          curl.exe --fail --location --retry 5 --retry-delay 5 --retry-all-errors `
+            --output downloads\automake-1.17.tar.gz `
+            https://ftp.gnu.org/gnu/automake/automake-1.17.tar.gz
+          curl.exe --fail --location --retry 5 --retry-delay 5 --retry-all-errors `
+            --output downloads\gperf-3.3.tar.gz `
+            https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz
           $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loop'
           .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
