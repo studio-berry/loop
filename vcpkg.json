@@ -8,6 +8,7 @@
     "zlib",
     "openjpeg",
     "freetype",
+    "fontconfig",
     "libjpeg-turbo",
     "libpng",
     "blend2d",
