@@ -1,6 +1,7 @@
 name: Windows_MSI
 
 on:
+  # Keep manual packaging qualification available for exact source SHAs.
   workflow_dispatch:
     inputs:
       source_sha:
