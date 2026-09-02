@@ -25,6 +25,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRandomGenerator>
 #include <QSaveFile>
 #include <QHash>
 
@@ -134,19 +135,36 @@ QString PDFSafeFileWriter::makeUniqueFileName(const QString& fileName)
     const QString suffix = info.suffix();
     const QString directory = info.absolutePath();
 
-    // Bounded probe; the "base (n).ext" cascade frees the path quickly in practice.
-    for (qint64 n = 1; n < 100000; ++n)
-    {
-        QString candidate;
-        if (suffix.isEmpty())
-        {
-            candidate = QDir(directory).filePath(QStringLiteral("%1 (%2)").arg(baseName).arg(n));
-        }
-        else
-        {
-            candidate = QDir(directory).filePath(QStringLiteral("%1 (%2).%3").arg(baseName).arg(n).arg(suffix));
-        }
+    // The "base (n).ext" cascade frees a path within a handful of probes for any
+    // directory a person assembled. A directory pre-filled with those names - by
+    // a document whose attachments are all called the same thing, say - would
+    // otherwise cost a hundred thousand synchronous stat() calls before giving
+    // up, so the sequential probe is short and a random suffix takes over.
+    constexpr int SEQUENTIAL_PROBE_LIMIT = 128;
+    constexpr int RANDOM_PROBE_LIMIT = 64;
 
+    auto candidateFor = [&](const QString& discriminator)
+    {
+        return suffix.isEmpty()
+                   ? QDir(directory).filePath(QStringLiteral("%1 (%2)").arg(baseName, discriminator))
+                   : QDir(directory).filePath(QStringLiteral("%1 (%2).%3").arg(baseName, discriminator, suffix));
+    };
+
+    for (int n = 1; n <= SEQUENTIAL_PROBE_LIMIT; ++n)
+    {
+        const QString candidate = candidateFor(QString::number(n));
+        if (!QFile::exists(candidate))
+        {
+            return candidate;
+        }
+    }
+
+    // Random discriminators also break the tie between two processes that start
+    // probing the same directory at the same moment: sequential names make them
+    // converge on the same candidate, random ones do not.
+    for (int n = 0; n < RANDOM_PROBE_LIMIT; ++n)
+    {
+        const QString candidate = candidateFor(QString::number(QRandomGenerator::global()->generate(), 16));
         if (!QFile::exists(candidate))
         {
             return candidate;

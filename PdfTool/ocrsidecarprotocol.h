@@ -32,6 +32,19 @@
 namespace pdftool::ocr
 {
 
+/// The OCR option defaults, in one place. They are consumed both by the
+/// capability-discovery table (which tells callers what the defaults are) and by
+/// the command-line parser (which applies them), so a single definition is what
+/// keeps the advertised default and the applied default from drifting apart.
+///
+/// Language codes are ISO 639-1 ("en", "de"), matching what the loop-ocr sidecar
+/// normalizes to in engine.py::normalize_languages. Nothing in Loop emits ISO
+/// 639-2 ("eng", "deu"); if that ever changes, convert at this boundary rather
+/// than teaching downstream consumers both code sets.
+inline constexpr QLatin1StringView DEFAULT_OCR_LANGUAGES = QLatin1StringView("en");
+inline constexpr QLatin1StringView DEFAULT_OCR_DPI = QLatin1StringView("300");
+inline constexpr QLatin1StringView DEFAULT_OCR_MIN_TEXT_CHARS = QLatin1StringView("20");
+
 inline QStringList normalizeLanguages(const QString& specification)
 {
     QStringList languages;
@@ -46,7 +59,7 @@ inline QStringList normalizeLanguages(const QString& specification)
 
     if (languages.isEmpty())
     {
-        languages.append(QStringLiteral("en"));
+        languages.append(QString(DEFAULT_OCR_LANGUAGES));
     }
     else
     {

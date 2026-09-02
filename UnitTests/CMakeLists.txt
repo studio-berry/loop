@@ -512,7 +512,8 @@ add_executable(UnitTestsPdfToolContract
 target_link_libraries(UnitTestsPdfToolContract PRIVATE Qt6::Core Qt6::Test)
 add_dependencies(UnitTestsPdfToolContract PdfTool)
 target_compile_definitions(UnitTestsPdfToolContract PRIVATE
-    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>")
+    PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 
 set_target_properties(UnitTestsPdfToolContract PROPERTIES
     WIN32_EXECUTABLE OFF

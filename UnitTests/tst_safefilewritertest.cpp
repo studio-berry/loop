@@ -79,6 +79,7 @@ private slots:
     void findOutputConflicts_allowsExistingDestinationsWithOverwrite();
     void makeUniqueFileName_returnsInputWhenFree();
     void makeUniqueFileName_appendsFreeVariant();
+    void makeUniqueFileName_fallsBackToRandomSuffix();
 };
 
 void SafeFileWriterTest::writeData_success_placesFile()
@@ -254,6 +255,27 @@ void SafeFileWriterTest::makeUniqueFileName_appendsFreeVariant()
     QVERIFY(secondUnique != firstUnique);
     QVERIFY(secondUnique.endsWith(QStringLiteral(" (2).pdf")));
     QVERIFY(!QFile::exists(secondUnique));
+}
+
+void SafeFileWriterTest::makeUniqueFileName_fallsBackToRandomSuffix()
+{
+    // A directory pre-filled with the whole sequential cascade must not cost an
+    // unbounded stat() scan - the writer switches to a random discriminator and
+    // still returns a free, non-colliding name.
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+    const QString path = temporaryDirectory.filePath(QStringLiteral("report.pdf"));
+
+    QVERIFY(writeRawContent(path, "occupied"));
+    for (int n = 1; n <= 128; ++n)
+    {
+        QVERIFY(writeRawContent(temporaryDirectory.filePath(QStringLiteral("report (%1).pdf").arg(n)), "occupied"));
+    }
+
+    const QString unique = pdf::PDFSafeFileWriter::makeUniqueFileName(path);
+    QVERIFY2(unique != path, qPrintable(unique));
+    QVERIFY2(!QFile::exists(unique), qPrintable(unique));
+    QVERIFY2(unique.endsWith(QStringLiteral(".pdf")), qPrintable(unique));
 }
 
 QTEST_APPLESS_MAIN(SafeFileWriterTest)
