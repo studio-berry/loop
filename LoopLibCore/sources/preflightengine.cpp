@@ -2215,6 +2215,8 @@ void recordBudgetFailure(PreflightResult& result,
     status.budgetLimit = static_cast<qint64>(detail.limit);
     status.budgetAttempted = static_cast<qint64>(detail.attempted);
     status.budgetContext = detail.context;
+    status.budgetObservedBytes = static_cast<qint64>(detail.observedBytes);
+    status.budgetCompressedBytes = static_cast<qint64>(detail.compressedBytes);
     result.checkStatuses.push_back(status);
     result.inspectionComplete = false;
 
@@ -5541,6 +5543,11 @@ QJsonObject PreflightResult::toJson(const QString& pdfPath) const
             }
             budgetObject.insert(QStringLiteral("limit"), status.budgetLimit);
             budgetObject.insert(QStringLiteral("attempted"), status.budgetAttempted);
+            if (status.budgetKind == QLatin1String("decompression-ratio"))
+            {
+                budgetObject.insert(QStringLiteral("observed_bytes"), status.budgetObservedBytes);
+                budgetObject.insert(QStringLiteral("compressed_bytes"), status.budgetCompressedBytes);
+            }
             if (!status.budgetContext.isEmpty())
             {
                 budgetObject.insert(QStringLiteral("context"), status.budgetContext);
