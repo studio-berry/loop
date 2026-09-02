@@ -34,7 +34,7 @@ if (-not $cli -or -not $cli.assetId -or -not $cli.sha256 -or -not $cli.upstream)
 }
 
 $org = if ($env:SENTRY_ORG) { $env:SENTRY_ORG } else { "berry-studios" }
-$project = if ($env:SENTRY_PROJECT) { $env:SENTRY_PROJECT } else { "loupe-pdf" }
+$project = if ($env:SENTRY_PROJECT) { $env:SENTRY_PROJECT } else { "4511866328449104" }
 $url = if ($env:SENTRY_URL) { $env:SENTRY_URL } else { "https://de.sentry.io" }
 
 $cliPath = Join-Path $env:RUNNER_TEMP "sentry-cli-Windows-x86_64.exe"
