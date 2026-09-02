@@ -59,6 +59,15 @@ IMPLEMENTED_COMMANDS = frozenset(
 SHELL_IMPLEMENTED_COMMANDS = frozenset(
     {
         "actionQuit",
+        "actionFind",
+        "actionFindNext",
+        "actionFindPrevious",
+        "actionFullscreenMode",
+        "actionPageLayoutContinuous",
+        "actionPageLayoutSinglePage",
+        "actionPageLayoutTwoColumns",
+        "actionPageLayoutTwoPages",
+        "actionProperties",
     }
 )
 
@@ -292,24 +301,24 @@ def check_shortcut_parity(
     for action_id, expected in sorted(expected_by_id.items()):
         command = commands.get(action_id)
         if command is None:
-            errors.append(f"{action_id}: has a Widgets shortcut but no catalog entry")
+            errors.append(f"{action_id}: has a legacy UI shortcut but no catalog entry")
             continue
         actual = command.get("shortcut")
         if actual is None:
             errors.append(
-                f"{action_id}: the Widgets shell binds {expected!r} but the catalog "
+                f"{action_id}: the legacy UI binds {expected!r} but the catalog "
                 "declares no shortcut"
             )
         elif actual != expected:
             errors.append(
-                f"{action_id}: catalog shortcut {actual!r} contradicts the Widgets "
+                f"{action_id}: catalog shortcut {actual!r} contradicts the legacy "
                 f"shell's {expected!r}"
             )
 
     for action_id, command in sorted(commands.items()):
         if "shortcut" in command and action_id not in expected_by_id:
             errors.append(
-                f"{action_id}: the catalog invents a shortcut the Widgets shell does "
+                f"{action_id}: the catalog invents a shortcut the legacy UI does "
                 "not bind; add it to PDFActionManager::initActions first"
             )
 
@@ -372,7 +381,7 @@ def validate_catalog(
         pass
     else:
         errors.append(
-            "Widgets shortcut parity requires both pdfeditormainwindow.cpp and "
+            "Legacy UI shortcut parity requires both shell source files and "
             "pdfprogramcontroller.cpp, or neither after Issue 17"
         )
     return errors
@@ -384,14 +393,14 @@ def verify() -> str:
         raise ContractError("\n".join(f"  - {error}" for error in errors))
 
     policy = load_policy(POLICY_PATH)
-    implemented = len(IMPLEMENTED_COMMANDS)
+    implemented = len(IMPLEMENTED_COMMANDS | SHELL_IMPLEMENTED_COMMANDS)
     if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
         shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
         shortcut_note = (
             f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
         )
     else:
-        shortcut_note = "Widgets shortcut parity skipped (Quick shell owns bindings after Issue 17)."
+        shortcut_note = "Legacy UI shortcut parity skipped (Quick shell owns bindings after Issue 17)."
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
         f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "

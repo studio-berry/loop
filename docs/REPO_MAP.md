@@ -7,7 +7,7 @@ tracking policy.
 
 | Role | Repository | Branch |
 |------|------------|--------|
-| Loop canonical repository | [studio-berry/loop](https://github.com/studio-berry/loop) | `stable` (default/release), `dev` (integration) |
+| Loop canonical repository | [studio-berry/loop](https://github.com/studio-berry/loop) | `stable` (default/release), `unstable` (qualification), `dev` (integration) |
 | Upstream PDF engine source | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) | `master` (upstream only) |
 
 Loop owns the product decisions, branding, release policy, and downstream
@@ -16,10 +16,12 @@ tooling. Do not infer Loop branch policy from upstream's `master` branch.
 
 ## Branch policy
 
-- `dev` is the integration branch.
+- `dev` is the first integration branch.
+- `unstable` is the qualification branch; it carries the fast integration gate
+  formerly required on `dev`.
 - `stable` is the release branch and repository default.
 - Topic branches start from `dev`, stay focused, and merge back to `dev`.
-- Releases promote a verified `dev` state to `stable`.
+- Reviewed commits promote along `dev` → `unstable` → `stable`.
 - `master` is not an active Loop branch.
 
 The reviewed machine-readable policy is

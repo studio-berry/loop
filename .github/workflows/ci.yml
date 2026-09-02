@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - dev
+      - unstable
       - stable
   pull_request:
     branches:
       - dev
+      - unstable
   workflow_dispatch:
 
 concurrency:
@@ -41,6 +43,10 @@ jobs:
           python3 scripts/ci/check_phase5_residue.py
       - name: Verify unmanaged async launch allowlist
         run: python3 scripts/ci/check_unmanaged_async.py
+      - name: Verify interaction trace corpus
+        run: |
+          python3 -m unittest scripts.ci.test_check_interaction_traces -q
+          python3 scripts/ci/check_interaction_traces.py --corpus-only
       - name: Verify semantic-trust source boundaries
         run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
       - name: Verify generated dependency paths are untracked

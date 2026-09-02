@@ -3,7 +3,7 @@
 This is the non-visual foundation for issue #193. The 0.1.1 release gate is
 complete, but product GUI work remains gated by the S21 canvas and S22 Quick
 admission contracts. This document therefore defines the state, routing, and
-verification contract without changing the existing Widgets shell. The
+verification contract without changing the existing shell. The
 repository may contain the qualification-only Quick smoke harness; it is not
 product UI or a shipped Qt Quick surface.
 
@@ -16,7 +16,7 @@ Editor action inventory is recorded in [`loop-shell-actions.json`](loop-shell-ac
 `LoopEditor` is the installed interactive Loop shell on the P4-S7 navigable
 product root: a packaged `Loop.Quick` `ApplicationWindow` that opens, closes,
 reopens, and navigates a PDF through the host-neutral Interaction/Canvas stack.
-The former non-installed Widgets migration target has been retired after its
+The former non-installed migration target has been retired after its
 parity assertions were moved into the Quick-native canvas contract suite. This
 is a navigable slice, not the Phase 4 operator loop or GUI exit gate.
 
@@ -143,14 +143,14 @@ that is not in the contract is reported as a routing error rather than ignored.
 against `PDFActionManager::initActions` so the catalog cannot become a second
 command truth wearing the first one's ID set.
 
-The Quick shell policy is self-authoritative; the retired Widgets form is not a
+The Quick shell policy is self-authoritative; the retired migration form is not a
 runtime or documentation dependency.
 
 ## UI foundation gate
 
 Issue #178 selects Qt Quick Controls for the application shell. The installed
 `LoopEditor` product root is now Qt Quick (`gui_status: quick-admitted` in
-`loop-shell.json`). The migration-only Widgets comparison target is retired;
+`loop-shell.json`). The migration-only comparison target is retired;
 the preserved parity evidence and Quick-native replacement checks are recorded
 in `docs/evidence/phase5-widgets-parity-evidence.json`.
 
