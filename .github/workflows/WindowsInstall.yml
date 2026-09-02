@@ -313,6 +313,60 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopCanvas) | Out-Null
           Copy-Item -Recurse -Force -LiteralPath $builtLoopCanvas -Destination $qmlLoopCanvas
 
+          function Assert-BuiltQmlModule {
+            param(
+              [string]$BuiltModuleDir,
+              [string]$ModuleLabel
+            )
+
+            $qmldir = Join-Path $BuiltModuleDir "qmldir"
+            if (-not (Test-Path -LiteralPath $qmldir)) {
+              throw "Built $ModuleLabel QML module is missing qmldir: $qmldir"
+            }
+            $typeInfo = Get-ChildItem -LiteralPath $BuiltModuleDir -File -Filter "*.qmltypes" |
+              Select-Object -First 1
+            if (-not $typeInfo) {
+              throw "Built $ModuleLabel QML module is missing a .qmltypes file under $BuiltModuleDir"
+            }
+          }
+
+          function Copy-BuiltSharedQmlPlugin {
+            param(
+              [string]$PluginBaseName,
+              [string]$BuiltModuleDir,
+              [string]$StagedModuleDir,
+              [string]$InstallBin,
+              [string]$BuildDir
+            )
+
+            $plugin = Get-ChildItem -LiteralPath $BuiltModuleDir -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
+              Select-Object -First 1
+            if (-not $plugin) {
+              $plugin = Get-ChildItem -LiteralPath $BuildDir -Recurse -File |
+                Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
+                Sort-Object FullName |
+                Select-Object -First 1
+            }
+            if (-not $plugin) {
+              throw "Built shared QML plugin was not found for $PluginBaseName in $BuiltModuleDir or below $BuildDir"
+            }
+
+            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $StagedModuleDir $plugin.Name) -Force
+            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $InstallBin $plugin.Name) -Force
+            Write-Host "Staged shared QML plugin: $($plugin.Name) -> $StagedModuleDir and $InstallBin" |
+              Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
+          }
+
+          Assert-BuiltQmlModule -BuiltModuleDir $builtLoopQuick -ModuleLabel "Loop.Quick"
+          Assert-BuiltQmlModule -BuiltModuleDir $builtLoopCanvas -ModuleLabel "Loop.Canvas"
+          Copy-BuiltSharedQmlPlugin `
+            -PluginBaseName "LoopLibQuickplugin" `
+            -BuiltModuleDir $builtLoopCanvas `
+            -StagedModuleDir $qmlLoopCanvas `
+            -InstallBin $installBin `
+            -BuildDir $buildDir
+
           $platformDir = Join-Path $installBin "platforms"
           $offscreenPlugin = Join-Path $env:QT_ROOT_DIR "plugins\platforms\qoffscreen.dll"
           if (-not (Test-Path -LiteralPath $offscreenPlugin)) {

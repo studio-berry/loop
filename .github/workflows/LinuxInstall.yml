@@ -227,14 +227,43 @@ jobs:
           fi
           mkdir -p "$(dirname "$qml_dest")"
           cp -a "$loop_quick_src" "$qml_dest"
+          for required in qmldir; do
+            if [[ ! -f "$loop_quick_src/$required" ]]; then
+              echo "::error::Built Loop.Quick QML module is missing $required"
+              exit 1
+            fi
+          done
+          if ! compgen -G "$loop_quick_src/*.qmltypes" > /dev/null; then
+            echo "::error::Built Loop.Quick QML module is missing a .qmltypes file"
+            exit 1
+          fi
           loop_canvas_src="$GITHUB_WORKSPACE/loop/build/LoopLibQuick/Loop/Canvas"
           qml_canvas_dest="install/usr/lib/qml/Loop/Canvas"
           if [ ! -d "$loop_canvas_src" ]; then
             echo "::error::Built Loop.Canvas QML module was not found: $loop_canvas_src"
             exit 1
           fi
+          canvas_plugin="$loop_canvas_src/libLoopLibQuickplugin.so"
+          if [[ ! -f "$canvas_plugin" ]]; then
+            echo "::error::Built Loop.Canvas shared QML plugin was not found: $canvas_plugin"
+            exit 1
+          fi
           mkdir -p "$(dirname "$qml_canvas_dest")"
           cp -a "$loop_canvas_src" "$qml_canvas_dest"
+          for required in qmldir; do
+            if [[ ! -f "$qml_canvas_dest/$required" ]]; then
+              echo "::error::Staged Loop.Canvas QML module is missing $required"
+              exit 1
+            fi
+          done
+          if ! compgen -G "$qml_canvas_dest/*.qmltypes" > /dev/null; then
+            echo "::error::Staged Loop.Canvas QML module is missing a .qmltypes file"
+            exit 1
+          fi
+          if [[ ! -f "$qml_canvas_dest/libLoopLibQuickplugin.so" ]]; then
+            echo "::error::Staged Loop.Canvas shared QML plugin was not found: $qml_canvas_dest/libLoopLibQuickplugin.so"
+            exit 1
+          fi
           # Headless PdfTool smoke runs with QT_QPA_PLATFORM=offscreen and strips
           # developer Qt env vars. Bundle the offscreen QPA plugin and qt.conf so
           # the packaged tree is self-describing (WindowsInstall.yml does the same).
