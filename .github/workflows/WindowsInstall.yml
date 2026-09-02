@@ -274,6 +274,7 @@ jobs:
           $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           $installBin = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\usr\bin"
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE "loop\build"
           $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
           if (-not (Test-Path -LiteralPath $windeployqt)) {
             throw "Qt deployment tool was not found: $windeployqt"
@@ -286,6 +287,8 @@ jobs:
             }
             $output = @(& $windeployqt --release --no-compiler-runtime --no-translations `
               --qmldir (Join-Path $env:GITHUB_WORKSPACE "loop\LoopEditor\qml") `
+              --qmldir (Join-Path $buildDir "LoopEditor\Loop\Quick") `
+              --qmldir (Join-Path $buildDir "LoopLibQuick\Loop\Canvas") `
               --dir $installBin $target 2>&1)
             $exitCode = $LASTEXITCODE
             $output | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-$name.txt")
@@ -310,6 +313,29 @@ jobs:
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopCanvas) | Out-Null
           Copy-Item -Recurse -Force -LiteralPath $builtLoopCanvas -Destination $qmlLoopCanvas
 
+          function Copy-BuiltQmlPlugin {
+            param(
+              [string]$PluginBaseName,
+              [string]$ModuleDir
+            )
+
+            $plugin = Get-ChildItem -LiteralPath $buildDir -Recurse -File |
+              Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
+              Sort-Object FullName |
+              Select-Object -First 1
+            if (-not $plugin) {
+              throw "Built QML plugin was not found below $buildDir`: $PluginBaseName.dll"
+            }
+
+            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $installBin $plugin.Name) -Force
+            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $ModuleDir $plugin.Name) -Force
+            Write-Host "Staged QML plugin: $($plugin.Name) -> $ModuleDir" |
+              Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
+          }
+
+          Copy-BuiltQmlPlugin -PluginBaseName "LoopEditorQuickplugin" -ModuleDir $qmlLoopQuick
+          Copy-BuiltQmlPlugin -PluginBaseName "LoopLibQuickplugin" -ModuleDir $qmlLoopCanvas
+
           $platformDir = Join-Path $installBin "platforms"
           $offscreenPlugin = Join-Path $env:QT_ROOT_DIR "plugins\platforms\qoffscreen.dll"
           if (-not (Test-Path -LiteralPath $offscreenPlugin)) {
@@ -331,14 +357,12 @@ jobs:
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so
           # Qt resolves its bundled QML imports and plugins without the runner's
-          # Qt installation.
-          @(
-            '[Paths]'
-            'Prefix=.'
-            'Plugins=.'
-            'Qml2Imports=qml;.'
-          ) | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
-          Copy-Item -LiteralPath (Join-Path $installBin "qt.conf") -Destination (Join-Path $evidenceDir "qt.conf")
+          # Qt installation. Write the file literally: the prior array writer
+          # dropped the ";." suffix from Qml2Imports on hosted PowerShell.
+          $qtConfPath = Join-Path $installBin "qt.conf"
+          $qtConf = "[Paths]`r`nPrefix=.`r`nPlugins=.`r`nQml2Imports=qml;.`r`n"
+          [System.IO.File]::WriteAllText($qtConfPath, $qtConf)
+          Copy-Item -LiteralPath $qtConfPath -Destination (Join-Path $evidenceDir "qt.conf")
         env:
           VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
           VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
