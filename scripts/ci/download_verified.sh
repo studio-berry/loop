@@ -10,6 +10,10 @@
 # --gh-asset resolves a GitHub release asset by its immutable asset id, so a
 # future `continuous` version of the upstream release cannot silently change the
 # artifact that lands in the build. --url is for versioned release archives.
+#
+# When GITHUB_TOKEN is set (GitHub Actions jobs provide it automatically), pass it
+# to the Releases API so pinned public assets download reliably instead of
+# failing with HTTP 403 from unauthenticated/rate-limited runner egress.
 
 set -euo pipefail
 
@@ -56,14 +60,18 @@ case "$mode" in
 
     # GitHub requires an Accept header to receive the raw binary payload.
     # asset-id downloads are immutable and version-carrying.
-    curl_args=(--fail --location \
-      -H "Accept: application/octet-stream" \
-      -H "X-GitHub-Api-Version: 2022-11-28" \
-      "https://api.github.com/repos/${repo}/releases/assets/${asset_id}" \
-      -o "$temporary_output")
+    curl_args=(
+      --fail --location --retry 5 --retry-delay 2 --retry-all-errors
+      -H "Accept: application/octet-stream"
+      -H "X-GitHub-Api-Version: 2022-11-28"
+    )
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-      curl_args+=( -H "Authorization: Bearer ${GITHUB_TOKEN}" )
+      curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
     fi
+    curl_args+=(
+      "https://api.github.com/repos/${repo}/releases/assets/${asset_id}"
+      -o "$temporary_output"
+    )
     curl "${curl_args[@]}"
     ;;
 
