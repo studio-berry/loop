@@ -120,7 +120,7 @@ qint64 expectedLimitFor(const QJsonObject& testCase)
     const QJsonArray checks = testCase.value(QStringLiteral("profile")).toObject().value(QStringLiteral("checks")).toArray();
     if (!checks.isEmpty())
     {
-        const QJsonObject check = checks.constFirst().toObject();
+        const QJsonObject check = checks.at(0).toObject();
         if (check.contains(QStringLiteral("max_raster_pixels")))
         {
             return static_cast<qint64>(check.value(QStringLiteral("max_raster_pixels")).toDouble());
