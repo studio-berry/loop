@@ -25,6 +25,7 @@
 
 #include "pdfdocument.h"
 #include "pdfglobal.h"
+#include "pdftransparencyflattener.h"
 #include "pdfutils.h"   // PDFOperationResult, returned by preview()/apply() below
 
 #include <QByteArray>
@@ -45,7 +46,7 @@ enum class PDFStandardTarget
 
 LOOPLIBCORESHARED_EXPORT QString pdfStandardTargetToString(PDFStandardTarget target);
 LOOPLIBCORESHARED_EXPORT bool pdfStandardTargetFromString(const QString& value,
-                                                            PDFStandardTarget* target);
+                                                          PDFStandardTarget* target);
 LOOPLIBCORESHARED_EXPORT QStringList supportedPDFStandardTargets();
 
 struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionSettings
@@ -56,6 +57,8 @@ struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionSettings
     QString outputIntentName;
     bool normalizeColor = false;
     bool blackPointCompensation = true;
+    bool flattenTransparency = false;
+    PDFTransparencyFlattenSettings transparencyFlattenSettings;
     QString independentValidatorProgram;
     QStringList independentValidatorArguments;
     int independentValidatorTimeoutMs = 120000;
@@ -83,6 +86,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFStandardConversionReport
     QStringList blockers;
     QStringList warnings;
     QJsonObject validator;
+    QJsonObject transparencyFlatten;
 
     QJsonObject toJson() const;
 };
