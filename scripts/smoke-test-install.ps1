@@ -251,7 +251,7 @@ Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:LOUPE_QT_ROOT -ErrorAction SilentlyContinue
 try {
-    $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format text 2>&1
+    $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
