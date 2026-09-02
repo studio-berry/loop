@@ -47,7 +47,7 @@ private slots:
 namespace
 {
 
-QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStringLiteral("LOUPE.TestPlugin"))
+QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStringLiteral("LOOP.TestPlugin"))
 {
     return QJsonObject{
         { QStringLiteral("IID"), iid },
@@ -58,15 +58,15 @@ QJsonObject qtPluginJson(const QJsonObject& metadata, const QString& iid = QStri
 QJsonObject validMetadata()
 {
     return QJsonObject{
-        { QStringLiteral("PluginId"), QStringLiteral("LOUPE.TestPlugin") },
+        { QStringLiteral("PluginId"), QStringLiteral("LOOP.TestPlugin") },
         { QStringLiteral("AbiVersion"), 1 },
         { QStringLiteral("Name"), QStringLiteral("Test Plugin") },
-        { QStringLiteral("Author"), QStringLiteral("Loupe") },
+        { QStringLiteral("Author"), QStringLiteral("Loop") },
         { QStringLiteral("Version"), QStringLiteral("1.0.0") },
         { QStringLiteral("License"), QStringLiteral("MIT") },
         { QStringLiteral("Description"), QStringLiteral("ABI unit test plugin") },
         { QStringLiteral("Capabilities"), QJsonArray{ QStringLiteral("read-document"), QStringLiteral("propose-operation") } },
-        { QStringLiteral("BuildId"), QStringLiteral("loupe-0.2.0") }
+        { QStringLiteral("BuildId"), QStringLiteral("loop-0.2.0") }
     };
 }
 
@@ -85,7 +85,7 @@ void PluginAbiTest::acceptedManifestPasses()
                                                                             {});
     QVERIFY(decision.accepted);
     QCOMPARE(decision.info.abiVersion, quint32(pdf::PDF_PLUGIN_ABI_VERSION));
-    QCOMPARE(decision.info.pluginId, QStringLiteral("LOUPE.TestPlugin"));
+    QCOMPARE(decision.info.pluginId, QStringLiteral("LOOP.TestPlugin"));
     QVERIFY(decision.info.capabilities.contains(QStringLiteral("read-document")));
 }
 
@@ -131,7 +131,7 @@ void PluginAbiTest::duplicateIdFailsClosed()
     const QString pluginPath = directory.filePath(QStringLiteral("test.so"));
     QVERIFY(QFile(pluginPath).open(QIODevice::WriteOnly));
 
-    const QSet<QString> seen{ QStringLiteral("LOUPE.TestPlugin") };
+    const QSet<QString> seen{ QStringLiteral("LOOP.TestPlugin") };
     const pdf::PDFPluginTrustDecision decision = pdf::inspectPluginManifest(qtPluginJson(validMetadata()),
                                                                             pluginPath,
                                                                             directory.path(),

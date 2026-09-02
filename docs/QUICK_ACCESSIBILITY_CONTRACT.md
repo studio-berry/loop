@@ -1,7 +1,7 @@
 # Quick accessibility contract
 
-Status: P4-S10 (0.2.0 Phase 4). Types live in `LoupeLibQuick/sources/loupecanvasaccessible.*`,
-`LoupeEditor/focusrestoration.*`, and the packaged `Loupe.Quick` shell QML.
+Status: P4-S10 (0.2.0 Phase 4). Types live in `LoopLibQuick/sources/loopcanvasaccessible.*`,
+`LoopEditor/focusrestoration.*`, and the packaged `Loop.Quick` shell QML.
 
 ## Scope
 

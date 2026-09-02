@@ -34,7 +34,7 @@
 
 #include <regex>
 
-#ifdef LOUPE_COMPILER_MSVC
+#ifdef LOOP_COMPILER_MSVC
 #pragma warning(push)
 #pragma warning(disable:4125)
 #endif
@@ -1226,7 +1226,7 @@ QString LexicalAnalyzerTest::getStringFromTokens(const std::vector<pdf::PDFLexic
     return QString("{ %1 }").arg(stringTokens.join(", "));
 }
 
-#ifdef LOUPE_COMPILER_MSVC
+#ifdef LOOP_COMPILER_MSVC
 #pragma warning(pop)
 #endif
 

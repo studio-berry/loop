@@ -1,8 +1,8 @@
 # Atomic, collision-safe, overwrite-explicit outputs — Implementation Plan
 
 Status: **in review** (planning doc, M0 — locked before code).
-Scope: Loupe-pdf 0.1.0-alpha, branch `dev`.
-Issue: [studio-berry/loupe#10] — "Make generated PDF and attachment outputs atomic, collision-safe, and overwrite-explicit".
+Scope: Loop-pdf 0.1.0-alpha, branch `dev`.
+Issue: [studio-berry/loop#10] — "Make generated PDF and attachment outputs atomic, collision-safe, and overwrite-explicit".
 Phase 1 (MIC-309, PR #46/#47) landed: `PdfTool unite`/`separate` write through `PDFDocumentWriter(safeWrite=true)` and PageMaster got atomic per-output writes plus a batch manifest. This document covers Phase 2 — every remaining generated-file output in the tree.
 
 ## Goal
@@ -18,7 +18,7 @@ Three defect classes are closed:
 - **Not collision-safe** — names that collide *within a single run* get a unique suffix; losing an
   attachment is data loss regardless of what the user asked for.
 
-Two worse-than-not-atomic defects are folded in: `loupepreflightplugin.cpp:808-811` deletes an existing
+Two worse-than-not-atomic defects are folded in: `looppreflightplugin.cpp:808-811` deletes an existing
 output up front (defeating the `QSaveFile` guarantee), and `signatureplugin.cpp:494-499` swallows the
 signed-document write result.
 
@@ -27,7 +27,7 @@ signed-document write result.
 - Changing `PDFDocumentWriter::write`s signature — the fix at PDF call sites is `safeWrite=true` consistently.
 - Making PdfTool interactive — destructive fixups stay non-interactive (`--overwrite` / `--dry-run` / `--report`).
 - Collision-renaming files that already exist on disk across runs (that is `--overwrite` semantics, not `makeUniqueFileName`).
-- `OCRPlugin` / `LoupePreflightPlugin` snapshot writes and `PdfTool ocr` page PNGs: they target `QTemporaryDir`, where the non-atomic path is correct.
+- `OCRPlugin` / `LoopPreflightPlugin` snapshot writes and `PdfTool ocr` page PNGs: they target `QTemporaryDir`, where the non-atomic path is correct.
 - **Known gap (documented):** `PdfTool audiobook` streams through Windows SAPI (`ISpeechFileStream`), which cannot be redirected through `QSaveFile` without restructuring the feature. Left as-is; noted here so future work can revisit it.
 
 ## Spec locks
@@ -48,7 +48,7 @@ signed-document write result.
 
 ```cpp
 namespace pdf {
-class LOUPELIBCORESHARED_EXPORT PDFSafeFileWriter
+class LOOPLIBCORESHARED_EXPORT PDFSafeFileWriter
 {
 public:
     enum class OverwritePolicy { Fail, Overwrite };
@@ -75,7 +75,7 @@ without the flag, fail before writing anything and name the offending path.
 
 ## Surface order
 
-1. **Core** — `PDFSafeFileWriter` (+ `LoupeLibCore/CMakeLists.txt`); `pdfpagemasterexport.cpp` swaps its file-local `writeDocumentAtomically` and manifest/preflight `writeFileAtomically` onto `PDFSafeFileWriter`. Regression signal: `tst_pagemasterexporttest.cpp` stays green unmodified.
+1. **Core** — `PDFSafeFileWriter` (+ `LoopLibCore/CMakeLists.txt`); `pdfpagemasterexport.cpp` swaps its file-local `writeDocumentAtomically` and manifest/preflight `writeFileAtomically` onto `PDFSafeFileWriter`. Regression signal: `tst_pagemasterexporttest.cpp` stays green unmodified.
 2. **PdfTool** — one flag: `registerDestructiveWriteOptions(bool registerForceAlias)`; `--overwrite` canonical; `--force` alias except `add-bleed`. Command table below.
 3. **Gui / Editor plugins / Diff** — direct `PDFSafeFileWriter` use (all depend on Core).
 4. **Tests** — `tst_safefilewritertest.cpp` (new Core tests) + `tst_operatoracceptance.cpp` (real-CLI acceptance).
@@ -94,23 +94,23 @@ without the flag, fail before writing anything and name the offending path.
 
 | File | Change |
 |------|--------|
-| `LoupeLibGui/pdfsidebarwidget.cpp` | Attachment save → `writeData` |
-| `LoupeLibGui/pdfbookmarkmanager.cpp` | Bookmark JSON export → `writeData`; surface open/write failures through the caller |
-| `LoupeLibGui/pdfrendertoimagesdialog.cpp` | Rendered-image write → atomic `writeDevice` |
+| `LoopLibGui/pdfsidebarwidget.cpp` | Attachment save → `writeData` |
+| `LoopLibGui/pdfbookmarkmanager.cpp` | Bookmark JSON export → `writeData`; surface open/write failures through the caller |
+| `LoopLibGui/pdfrendertoimagesdialog.cpp` | Rendered-image write → atomic `writeDevice` |
 | `SignaturePlugin/signatureplugin.cpp` | Signed doc → `writeData`, **and report failures** (currently silent) |
 | `RedactPlugin/redactplugin.cpp` | `writer.write(..., false)` → `true` |
-| `LoupePreflightPlugin/loupepreflightplugin.cpp` | Delete `QFile::remove(outputPath)` before the atomic write |
-| `LoupeDiff/mainwindow.cpp` | XML export → `writeDevice` wrapping `saveToXML`; report write → unconditional `safeWrite=true` |
+| `LoopPreflightPlugin/looppreflightplugin.cpp` | Delete `QFile::remove(outputPath)` before the atomic write |
+| `LoopDiff/mainwindow.cpp` | XML export → `writeDevice` wrapping `saveToXML`; report write → unconditional `safeWrite=true` |
 
-Confirmation prompts stay in Editor/PageMaster (never in PdfTool). `loupepreflightplugin.cpp:783-791` overwrite prompt is the pattern.
+Confirmation prompts stay in Editor/PageMaster (never in PdfTool). `looppreflightplugin.cpp:783-791` overwrite prompt is the pattern.
 
 ## Related code
 
 | Area | Path |
 |------|------|
-| Safe writer | `LoupeLibCore/sources/pdfsafefilewriter.{h,cpp}` (new), `LoupeLibCore/CMakeLists.txt` |
-| Existing QSaveFile pattern | `LoupeLibCore/sources/pdfdocumentwriter.cpp:192-217` |
-| PageMaster swap | `LoupeLibCore/sources/pdfpagemasterexport.cpp:326-343` |
+| Safe writer | `LoopLibCore/sources/pdfsafefilewriter.{h,cpp}` (new), `LoopLibCore/CMakeLists.txt` |
+| Existing QSaveFile pattern | `LoopLibCore/sources/pdfdocumentwriter.cpp:192-217` |
+| PageMaster swap | `LoopLibCore/sources/pdfpagemasterexport.cpp:326-343` |
 | Flag plumbing | `PdfTool/pdftoolAbstractApplication.{h,cpp}` |
 | Write-path hooks | `PdfTool/pdftoolattachments.cpp`, `pdftoolremoveexternallinks.cpp`, `pdftooladdbleed.cpp`, `pdftoolrender.cpp`, `pdftoolfetchimages.cpp`, `pdftoolunite.cpp`, `pdftoolredact.cpp` |
 | Planning process | `docs/PLANNING.md` |
@@ -120,9 +120,9 @@ Confirmation prompts stay in Editor/PageMaster (never in PdfTool). `loupepreflig
 
 Implementation completed on `dev` (uncommitted):
 
-- **Core**: `PDFSafeFileWriter` added (`pdfsafefilewriter.{h,cpp}`, `LoupeLibCore/CMakeLists.txt`); `pdfpagemasterexport.cpp` swaps its file-local `writeDocumentAtomically` onto `PDFDocumentWriter::write(..., safeWrite=true)` and routes the manifest/preflight `writeFileAtomically` through `PDFSafeFileWriter::writeData`. `tst_pagemasterexporttest.cpp` untouched.
+- **Core**: `PDFSafeFileWriter` added (`pdfsafefilewriter.{h,cpp}`, `LoopLibCore/CMakeLists.txt`); `pdfpagemasterexport.cpp` swaps its file-local `writeDocumentAtomically` onto `PDFDocumentWriter::write(..., safeWrite=true)` and routes the manifest/preflight `writeFileAtomically` through `PDFSafeFileWriter::writeData`. `tst_pagemasterexporttest.cpp` untouched.
 - **PdfTool**: one shared `DestructiveWrite` flag — `--overwrite` canonical, `--force` a registered legacy alias except on `add-bleed` (`add-bleed --force` keeps its heuristic meaning). `PDFToolOptions::destructiveForce` → `destructiveOverwrite`; added `validateDestructiveOutputs()`; deleted `removePartialOutput()` and its unite/redact callers. `add-bleed`, `remove-external-links`, `attachments`, `render`, `fetch-images` now guard outputs up front (no silent clobber) and write via the safe path; `attachments` uniquifies intra-run collision names.
-- **Surfaces**: bookmark JSON export + sidebar attachment save → `writeData` (failures surfaced); render-to-images dialog → atomic `writeDevice`; Diff XML report → `writeDevice`, report PDF → unconditional `safeWrite=true`; RedactPlugin → `safeWrite=true`; SignaturePlugin signed-doc → `writeData` and failures now reported; LoupePreflightPlugin no longer deletes the existing output before the atomic write.
+- **Surfaces**: bookmark JSON export + sidebar attachment save → `writeData` (failures surfaced); render-to-images dialog → atomic `writeDevice`; Diff XML report → `writeDevice`, report PDF → unconditional `safeWrite=true`; RedactPlugin → `safeWrite=true`; SignaturePlugin signed-doc → `writeData` and failures now reported; LoopPreflightPlugin no longer deletes the existing output before the atomic write.
 - **Tests**: `tst_safefilewritertest.cpp` (new Core test, `UnitTestsSafeFileWriter` target) + overwrite-explicit CLI acceptance slot in `tst_operatoracceptance.cpp`.
 
 Builds were not run (repo rule); the Cursor Cloud build/tests steps are in the AGENTS.md dev build notes.

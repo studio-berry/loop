@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterator, Sequence
 
 DEFAULT_CORPUS_ROOT = Path(r"C:\.dev\repos\l-bleed\results\DIV2K")
-SCHEMA_KIND = "loupe-resource-envelope"
+SCHEMA_KIND = "loop-resource-envelope"
 SCHEMA_VERSION = 1
 EXPECTED_SOURCE_COUNTS = {"train": 800, "valid": 100}
 PAIR_FILES = ("input.png", "ground_truth.png", "mask.png", "metadata.json")

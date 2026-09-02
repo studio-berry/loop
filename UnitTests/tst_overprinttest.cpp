@@ -340,7 +340,7 @@ void OverprintTest::preflightRenderPaths_useAuthoritativePolicy()
     // PDFTransparencyRendererSettings without setting renderPolicy silently
     // reintroduces PDFRenderPolicy::allowApproximation = true, which this
     // guards against.
-    const QString sourceDir = QStringLiteral(LOUPE_SOURCE_DIR "/LoupeLibCore/sources");
+    const QString sourceDir = QStringLiteral(LOOP_SOURCE_DIR "/LoopLibCore/sources");
     const QString marker = QStringLiteral("PDFRenderPolicy::forPreflightAnalysis()");
 
     for (const QString& fileName : { QStringLiteral("pdfinkcoverageprobe.cpp"), QStringLiteral("pdfcolorinventory.cpp") })

@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 // Page/zoom/rotate catalog handlers live in the host-neutral layer. This target
-// links LoupeLibInteraction, LoupeLibCore, Qt6::Core, Qt6::Gui and Qt6::Test,
+// links LoopLibInteraction, LoopLibCore, Qt6::Core, Qt6::Gui and Qt6::Test,
 // and deliberately not Qt6::Widgets or Qt6::Qml. QTEST_GUILESS_MAIN is the
 // P4-S7 proof that navigation commands do not need a presentation host.
 

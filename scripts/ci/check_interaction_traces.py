@@ -141,8 +141,8 @@ def validate_scenario(scenario: dict, label: str) -> list[Violation]:
     """Return (subject, reason) for every scenario-document violation."""
     violations: list[Violation] = []
 
-    if scenario.get("schema_kind") != "loupe-interaction-scenario":
-        violations.append((label, "schema_kind must be loupe-interaction-scenario"))
+    if scenario.get("schema_kind") != "loop-interaction-scenario":
+        violations.append((label, "schema_kind must be loop-interaction-scenario"))
     if scenario.get("schema_version") != 1:
         violations.append((label, "schema_version must be 1"))
 
@@ -251,8 +251,8 @@ def validate_corpus(corpus_dir: Path = CORPUS_DIR, root: Path = ROOT) -> list[Vi
 
     violations: list[Violation] = []
 
-    if manifest.get("schema_kind") != "loupe-interaction-corpus":
-        violations.append(("manifest.json", "schema_kind must be loupe-interaction-corpus"))
+    if manifest.get("schema_kind") != "loop-interaction-corpus":
+        violations.append(("manifest.json", "schema_kind must be loop-interaction-corpus"))
     if manifest.get("schema_version") != 1:
         violations.append(("manifest.json", "schema_version must be 1"))
         return violations
@@ -415,8 +415,8 @@ def validate_report(
     """Return (subject, reason) for every report violation."""
     violations: list[Violation] = []
 
-    if report.get("schema_kind") != "loupe-interaction-trace-report":
-        violations.append(("report", "schema_kind must be loupe-interaction-trace-report"))
+    if report.get("schema_kind") != "loop-interaction-trace-report":
+        violations.append(("report", "schema_kind must be loop-interaction-trace-report"))
     if report.get("schema_version") != 1:
         violations.append(("report", "schema_version must be 1"))
         return violations

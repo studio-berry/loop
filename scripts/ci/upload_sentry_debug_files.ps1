@@ -1,4 +1,4 @@
-# Upload Loupe PDBs to Sentry so crashpad minidumps can be symbolicated.
+# Upload Loop PDBs to Sentry so crashpad minidumps can be symbolicated.
 #
 # No-ops when SENTRY_AUTH_TOKEN is unset (fork PRs, local runs without a token).
 # Requires packaging-tools.json -> sentryCli and scripts/ci/download_verified.ps1.
@@ -34,7 +34,7 @@ if (-not $cli -or -not $cli.assetId -or -not $cli.sha256 -or -not $cli.upstream)
 }
 
 $org = if ($env:SENTRY_ORG) { $env:SENTRY_ORG } else { "berry-studios" }
-$project = if ($env:SENTRY_PROJECT) { $env:SENTRY_PROJECT } else { "loupe-pdf" }
+$project = if ($env:SENTRY_PROJECT) { $env:SENTRY_PROJECT } else { "loop-pdf" }
 $url = if ($env:SENTRY_URL) { $env:SENTRY_URL } else { "https://de.sentry.io" }
 
 $cliPath = Join-Path $env:RUNNER_TEMP "sentry-cli-Windows-x86_64.exe"
@@ -48,12 +48,12 @@ if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     -OutFile $cliPath `
     -Sha256 $cli.sha256
 
-$pdbFilter = '^(Loupe|PdfTool|pdf)'
+$pdbFilter = '^(Loop|PdfTool|pdf)'
 $pdbs = @(Get-ChildItem -LiteralPath $BuildDir -Recurse -Filter *.pdb -File -ErrorAction SilentlyContinue |
     Where-Object { $_.BaseName -match $pdbFilter })
 
 if ($pdbs.Count -eq 0) {
-    throw "upload_sentry_debug_files.ps1: no Loupe PDBs under $BuildDir. Release builds need /Zi when LOUPE_ENABLE_SENTRY is on."
+    throw "upload_sentry_debug_files.ps1: no Loop PDBs under $BuildDir. Release builds need /Zi when LOOP_ENABLE_SENTRY is on."
 }
 
 Write-Host "upload_sentry_debug_files.ps1: uploading $($pdbs.Count) PDB(s) to $org/$project ($url)"

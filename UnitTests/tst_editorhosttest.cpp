@@ -224,7 +224,7 @@ void EditorHostTest::openLargeDocument()
     // so this does not bump generation if already set.
     host.setViewportGeometry(96.0 / 25.4, 1.0, 1024, 768);
 
-    // The shell's Quick host without a LoupeCanvasItem leaves
+    // The shell's Quick host without a LoopCanvasItem leaves
     // DocumentViewSession::hitTest() empty (EditorHost::bindCanvas() is the
     // only place that adds PageBoxHitTestSource). For a fencing proof we need
     // a source that can produce overlay-only hover transitions. Inject a
@@ -325,12 +325,12 @@ void EditorHostTest::openLargeDocument()
     QCOMPARE(viewport.requestGeneration(), generationBefore);
     QCOMPARE(session->revisionSource()->currentRevision(), revisionBefore);
 
-    // Optional envelope: when LOUPE_STRESS_ENVELOPE is set, record
+    // Optional envelope: when LOOP_STRESS_ENVELOPE is set, record
     // PDFWorkloadEnvelope identity and timings for observability. This is
     // opt-in so CI without the env var does not pay the cost of JSON
     // assertions, but when enabled it proves the 1k-page shell open is
     // measurable and the envelope contract holds.
-    const QByteArray envelopeEnv = qgetenv("LOUPE_STRESS_ENVELOPE");
+    const QByteArray envelopeEnv = qgetenv("LOOP_STRESS_ENVELOPE");
     if (!envelopeEnv.isEmpty())
     {
         const bool envelopeEnabled = envelopeEnv == QByteArrayLiteral("1") || envelopeEnv.toLower() == QByteArrayLiteral("true");

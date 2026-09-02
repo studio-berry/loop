@@ -1,6 +1,6 @@
 # Page surface contract
 
-Status: P4-S3 (0.2.0 Phase 4). Types live in `LoupeLibInteraction/sources/pagesurfacekey.h`,
+Status: P4-S3 (0.2.0 Phase 4). Types live in `LoopLibInteraction/sources/pagesurfacekey.h`,
 `pagesurfacerenderer.h`, `pagesurfacecoordinator.h`, and `canvassnapshot.h`.
 Architecture invariant **I23**; test targets `UnitTestsViewportController`,
 `UnitTestsPageSurface`, `UnitTestsPageSurfaceBudget`, and `UnitTestsDocumentViewSession`.

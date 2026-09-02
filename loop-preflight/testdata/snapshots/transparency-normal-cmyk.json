@@ -1,0 +1,19 @@
+{
+    "checks": [
+        {
+            "id": "transparency-risk",
+            "status": "ok"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": true,
+    "pass": true,
+    "profile": "Loop Test - Transparency Risk",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "warnings": [
+    ]
+}

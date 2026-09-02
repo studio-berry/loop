@@ -1,6 +1,6 @@
 # Incremental PDF save
 
-Loupe retains a hash for the opened source and rereads the original bytes when
+Loop retains a hash for the opened source and rereads the original bytes when
 an edit is safe to preserve in place. The incremental update contains changed
 object numbers, a classic xref section, and a trailer whose `/Prev` value points
 to the previous xref. The prefix through the previous `%%EOF` is copied

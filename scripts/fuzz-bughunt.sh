@@ -2,7 +2,7 @@
 # Run MIC-304 libFuzzer harnesses locally with ASan/UBSan.
 #
 # Prerequisites:
-#   - Clang with libFuzzer (LOUPE_BUILD_FUZZERS=ON)
+#   - Clang with libFuzzer (LOOP_BUILD_FUZZERS=ON)
 #   - Qt + vcpkg deps (see scripts/setup-dev-env.sh)
 #
 # Usage:
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="${LOUPE_FUZZ_BUILD_DIR:-${REPO_ROOT}/build-fuzz}"
+BUILD_DIR="${LOOP_FUZZ_BUILD_DIR:-${REPO_ROOT}/build-fuzz}"
 SECONDS_PER_TARGET="${1:-120}"
 shift || true
 
@@ -22,7 +22,7 @@ else
     TARGETS=()
 fi
 
-export LD_LIBRARY_PATH="${LOUPE_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${LOOP_QT_ROOT:-/opt/Qt/6.11.1/gcc_64}/lib:${LD_LIBRARY_PATH:-}"
 
 python3 "${REPO_ROOT}/scripts/ci/check_fuzz_corpus.py"
 

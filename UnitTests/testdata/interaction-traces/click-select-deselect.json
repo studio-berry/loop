@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-interaction-scenario",
+  "schema_kind": "loop-interaction-scenario",
   "schema_version": 1,
   "scenario_id": "click-select-deselect",
   "description": "Click selects the finding under the pointer; a second click on empty page space clears it. Both presses stay under the drag threshold, so neither may emit a document operation.",

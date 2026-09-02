@@ -1,1 +1,1 @@
-"""External resource-envelope tooling for Loupe qualification."""
+"""External resource-envelope tooling for Loop qualification."""

@@ -3,12 +3,12 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Close the Phase 4 seam at the presentation end. A new LoupeLibQuick target -- the
-first and only one in Phase 4 that links Qt6::Quick -- adds LoupeCanvasItem, a direct
+Summary: Close the Phase 4 seam at the presentation end. A new LoopLibQuick target -- the
+first and only one in Phase 4 that links Qt6::Quick -- adds LoopCanvasItem, a direct
 QQuickItem that turns Qt Quick events into the PointerIntent, WheelIntent and KeyIntent
 values InteractionController takes, and turns CanvasSnapshot page pixels and OverlayFrame
-overlays into a scene-graph node tree. It is opt-in (-DLOUPE_BUILD_QUICK_CANVAS=ON, which CI
-sets on Linux and Windows) and not installed, for the same reason LoupeLibInteraction is not:
+overlays into a scene-graph node tree. It is opt-in (-DLOOP_BUILD_QUICK_CANVAS=ON, which CI
+sets on Linux and Windows) and not installed, for the same reason LoopLibInteraction is not:
 ADR-010's packaging and accessibility gates are Phase-4-exit gates.
 
 The load-bearing rule is that the Quick layer presents and decides nothing. The item does no
@@ -46,7 +46,7 @@ releaseResources() set a pending flag that updatePaintNode acts on, and CanvasPr
 DirectConnection handlers only read a clock into an atomic, posting the durations to the GUI
 thread so the single-threaded recorder is never touched from the render thread.
 
-LoupeLibInteraction is unchanged and still links no Widgets, Qml or Quick;
+LoopLibInteraction is unchanged and still links no Widgets, Qml or Quick;
 scripts/verify-interaction-boundary.py and invariant I21 continue to enforce that, and the
 new target is deliberately not added to docs/interaction-boundary-policy.json, whose
 forbidden-include list is global across the targets it names. Also anchors the five hook

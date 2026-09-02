@@ -29,7 +29,7 @@
 #include <windows.h>
 #include <sapi.h>
 
-#if defined(LOUPE_USE_PRAGMA_LIB)
+#if defined(LOOP_USE_PRAGMA_LIB)
 #pragma comment(lib, "ole32")
 #endif
 

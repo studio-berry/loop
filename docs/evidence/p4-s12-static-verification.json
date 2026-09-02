@@ -11,7 +11,7 @@
       "result": "pass"
     },
     {
-      "command": "python3 scripts/verify-loupe-shell-contract.py",
+      "command": "python3 scripts/verify-loop-shell-contract.py",
       "platform": "linux-agent",
       "result": "pass"
     },
@@ -21,7 +21,7 @@
       "result": "pass"
     },
     {
-      "command": "python3 scripts/ci/test_verify_loupe_shell_contract.py",
+      "command": "python3 scripts/ci/test_verify_loop_shell_contract.py",
       "platform": "linux-agent",
       "result": "pass"
     },

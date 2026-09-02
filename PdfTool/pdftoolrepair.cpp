@@ -317,7 +317,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
     }
 
     QJsonObject reportJson{
-        { QStringLiteral("schema"), QStringLiteral("loupe.repair-operation") },
+        { QStringLiteral("schema"), QStringLiteral("loop.repair-operation") },
         { QStringLiteral("schema_version"), 1 },
         { QStringLiteral("command"), QStringLiteral("repair") },
         { QStringLiteral("operation"), options.repairOperationId },
@@ -491,7 +491,7 @@ PDFToolExitCode PDFToolRepair::execute(const PDFToolOptions& options)
         return PDFToolExitCode::Cancelled;
     }
 
-    const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loupe-history");
+    const QString historyDirectory = QFileInfo(options.repairOutputDocument).absoluteFilePath() + QStringLiteral(".loop-history");
     pdf::PDFArtifactStore historyArtifacts(historyDirectory);
     const auto historyInput = historyArtifacts.importBytes(sourceData,
                                                            { QStringLiteral("application/pdf"), QStringLiteral("original-input.pdf") });

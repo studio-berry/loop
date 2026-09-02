@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/studio-berry/loupe/schema/interaction-trace-report-v1.json",
-  "title": "Loupe interaction trace regression report",
+  "$id": "https://github.com/studio-berry/loop/schema/interaction-trace-report-v1.json",
+  "title": "Loop interaction trace regression report",
   "description": "The CI evidence artifact for issue #146, emitted by the test binary rather than parsed out of ctest output. Missing telemetry is reported as available:false with null percentiles and never as zero, per docs/RESOURCE_BUDGETS.md.",
   "type": "object",
   "required": ["schema_kind", "schema_version", "lane", "identity", "runs"],
   "properties": {
-    "schema_kind": { "const": "loupe-interaction-trace-report" },
+    "schema_kind": { "const": "loop-interaction-trace-report" },
     "schema_version": { "const": 1 },
     "lane": {
       "description": "deterministic is the gating lane with a synthetic clock; present is the desktop/GPU lane with real timing and variance bands.",

@@ -1,6 +1,6 @@
 #include "focusrestoration.h"
-#include "loupecanvasaccessible.h"
-#include "loupecanvasitem.h"
+#include "loopcanvasaccessible.h"
+#include "loopcanvasitem.h"
 
 #include <QAccessible>
 #include <QGuiApplication>
@@ -19,13 +19,13 @@ private Q_SLOTS:
 
 void QuickAccessibilityTest::canvasAccessibleHasNoChildren()
 {
-    pdfquick::installLoupeCanvasAccessibility();
+    pdfquick::installLoopCanvasAccessibility();
 
     QQuickWindow window;
     window.resize(320, 240);
     window.show();
 
-    pdfquick::LoupeCanvasItem item(window.contentItem());
+    pdfquick::LoopCanvasItem item(window.contentItem());
     item.setWidth(320);
     item.setHeight(240);
     item.setAccessibleDocumentSummary(QStringLiteral("Document canvas. Page 1 of 1. Zoom 100 percent."));

@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"product-surface: {error}", file=sys.stderr)
         return 1
-    print("product-surface source contract verified for developer and loupe-release")
+    print("product-surface source contract verified for developer and loop-release")
     return 0
 
 

@@ -38,8 +38,8 @@
 #include <QSet>
 #include <QTemporaryFile>
 
-#ifndef LOUPE_PREFLIGHT_SCHEMA_VERSION
-#define LOUPE_PREFLIGHT_SCHEMA_VERSION 3
+#ifndef LOOP_PREFLIGHT_SCHEMA_VERSION
+#define LOOP_PREFLIGHT_SCHEMA_VERSION 3
 #endif
 
 namespace pdfplugin::preflight
@@ -261,7 +261,7 @@ inline bool isStableFindingId(const QString& value)
 
 inline bool isSupportedSchemaVersion(int schemaVersion)
 {
-    return schemaVersion >= 1 && schemaVersion <= LOUPE_PREFLIGHT_SCHEMA_VERSION;
+    return schemaVersion >= 1 && schemaVersion <= LOOP_PREFLIGHT_SCHEMA_VERSION;
 }
 
 inline bool isGraphBackedFindingType(const QString& type)
@@ -367,7 +367,7 @@ inline bool validateFindingCommonFields(const QJsonObject& finding, const QStrin
 }
 
 /// Keys accepted on a schema-version-1 finding. Must stay in sync with
-/// loupe-preflight/schemas/report.schema.json's finding_v1 definition; see
+/// loop-preflight/schemas/report.schema.json's finding_v1 definition; see
 /// normalizedReportAllowedProperties() for why this is a named accessor.
 inline const QSet<QString>& findingV1AllowedProperties()
 {
@@ -386,7 +386,7 @@ inline const QSet<QString>& findingV1AllowedProperties()
 }
 
 /// Keys accepted on a schema-version-2+ finding. Must stay in sync with
-/// loupe-preflight/schemas/report.schema.json's finding_v2 definition; see
+/// loop-preflight/schemas/report.schema.json's finding_v2 definition; see
 /// normalizedReportAllowedProperties() for why this is a named accessor.
 inline const QSet<QString>& findingV2AllowedProperties()
 {
@@ -556,7 +556,7 @@ inline bool validateFixup(const QJsonValue& value, int index, QString* errorMess
 }
 
 /// Top-level keys accepted on a normalized preflight report. Must stay in sync with
-/// the "properties" object in loupe-preflight/schemas/report.schema.json; a parity
+/// the "properties" object in loop-preflight/schemas/report.schema.json; a parity
 /// test (UnitTestsOperatorAcceptance) cross-checks the two so producer/validator
 /// contract drift like coverage_scope/profile_identity/variable_bindings/error being
 /// added to PreflightResult::toJson() without a matching allow-list update fails CI
@@ -637,7 +637,7 @@ inline bool validateNormalizedReport(const QJsonObject& report, QString* errorMe
     const QJsonValue schemaVersion = normalizedReport.value(QStringLiteral("schema_version"));
     if (!isInteger(schemaVersion) || !isSupportedSchemaVersion(schemaVersion.toInt()))
     {
-        return setValidationError(errorMessage, QStringLiteral("schema_version must be between 1 and %1.").arg(LOUPE_PREFLIGHT_SCHEMA_VERSION));
+        return setValidationError(errorMessage, QStringLiteral("schema_version must be between 1 and %1.").arg(LOOP_PREFLIGHT_SCHEMA_VERSION));
     }
 
     const int schemaVersionValue = schemaVersion.toInt();

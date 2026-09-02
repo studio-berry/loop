@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/loop">
+        <file alias="schema-compatibility.json">../docs/schema-compatibility.json</file>
+    </qresource>
+</RCC>

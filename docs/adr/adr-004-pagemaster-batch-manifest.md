@@ -17,7 +17,7 @@ enables resume or cleanup.
 
 ## Decision
 
-- **Manifest file:** `.loupe-batch.json` in the directory of the first output
+- **Manifest file:** `.loop-batch.json` in the directory of the first output
   path in the batch. One manifest per export invocation; `batch_id` is a UUID
   string generated at batch start.
 - **Manifest schema (version 1):**
@@ -40,7 +40,7 @@ enables resume or cleanup.
   `PDFDocumentWriter`, then renamed to `finalPath` with `QFile::rename` only
   after a successful write. Failed rename removes the partial file.
 - **Manifest updates:** after each output attempt (success or failure), rewrite
-  the manifest atomically (write `.loupe-batch.json.<pid>.partial`, rename).
+  the manifest atomically (write `.loop-batch.json.<pid>.partial`, rename).
 - **Resume:** when `PDFPageMasterExportJob::resume` is true and a manifest
   exists beside the first output, outputs with `status: written` are skipped
   (path must still exist on disk). `pending` and `failed` are retried.

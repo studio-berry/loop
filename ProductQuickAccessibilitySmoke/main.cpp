@@ -1,6 +1,7 @@
 #include "editorhost.h"
 
-#include "loupecanvasitem.h"
+#include "pdfapplicationidentity.h"
+#include "loopcanvasitem.h"
 
 #include <QAccessible>
 #include <QGuiApplication>
@@ -47,14 +48,14 @@ bool verifyCanvasAccessibility(QQuickWindow* window)
         return false;
     }
 
-    const QList<pdfquick::LoupeCanvasItem*> canvases = window->findChildren<pdfquick::LoupeCanvasItem*>();
+    const QList<pdfquick::LoopCanvasItem*> canvases = window->findChildren<pdfquick::LoopCanvasItem*>();
     if (canvases.isEmpty())
     {
         fprintf(stderr, "product-quick-a11y-smoke canvas item not found\n");
         return false;
     }
 
-    pdfquick::LoupeCanvasItem* canvas = canvases.front();
+    pdfquick::LoopCanvasItem* canvas = canvases.front();
     QAccessibleInterface* iface = QAccessible::queryAccessibleInterface(canvas);
     if (!iface)
     {
@@ -82,6 +83,7 @@ bool verifyCanvasAccessibility(QQuickWindow* window)
 int main(int argc, char** argv)
 {
     QGuiApplication application(argc, argv);
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::ProductQuickAccessibilitySmoke);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     EditorHost host;
@@ -133,7 +135,7 @@ int main(int argc, char** argv)
                              Qt::DirectConnection);
                      });
 
-    engine.loadFromModule(QStringLiteral("Loupe.Quick"), QStringLiteral("Main"));
+    engine.loadFromModule(QStringLiteral("Loop.Quick"), QStringLiteral("Main"));
 
     if (engine.rootObjects().isEmpty())
     {

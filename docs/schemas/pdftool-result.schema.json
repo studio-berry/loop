@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://studio-berry.github.io/loupe/schemas/pdftool-result.schema.json",
+  "$id": "https://studio-berry.github.io/loop/schemas/pdftool-result.schema.json",
   "title": "PdfTool result envelope",
   "description": "Machine-facing contract emitted by PdfTool to stdout when --console-format json is requested; preflight and OCR emit it by default. See docs/PDFTOOL_CLI_CONTRACT.md.",
   "type": "object",

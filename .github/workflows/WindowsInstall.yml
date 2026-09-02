@@ -1,6 +1,7 @@
 name: Windows_MSI
 
 on:
+  # Keep manual packaging qualification available for exact source SHAs.
   workflow_dispatch:
     inputs:
       source_sha:
@@ -20,7 +21,7 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-binary-cache
-      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\loupe\vcpkg\overlays\general
+      VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\loop\vcpkg\overlays\general
       QT_QPA_PLATFORM: offscreen
       SENTRY_DSN: off
 
@@ -28,12 +29,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          path: loupe
+          path: loop
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
 
       - name: Verify exact source SHA
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         env:
           EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
@@ -46,15 +47,15 @@ jobs:
           if ($actualSha.ToLowerInvariant() -ne $expectedSha) {
             throw "Checkout SHA $actualSha does not match source_sha $env:EXPECTED_SOURCE_SHA"
           }
-          "LOUPE_SOURCE_SHA=$actualSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LOOP_SOURCE_SHA=$actualSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Packaging source SHA: $actualSha"
 
       - name: Verify supply-chain pins
-        working-directory: loupe
+        working-directory: loop
         run: python scripts\ci\check_supply_chain_pins.py
 
       - name: Verify Phase 5 Widgets completeness contract
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         run: .\scripts\verify-phase5-widgets-contract.ps1
 
@@ -65,7 +66,7 @@ jobs:
           # .github/pins/packaging-tools.json and verify its SHA-256 before use.
           # This replaces the previous "highest SDK found" scan, which silently
           # followed runner image drift.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loop\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $sdkVersion = $pins.windowsSdk.version
           $expectedHash = "$($pins.windowsSdk.makeAppxSha256)".ToLowerInvariant()
 
@@ -96,7 +97,7 @@ jobs:
           # Supply-chain gate: signing MUST NOT proceed while the DigiCert
           # KeyLocker toolset is unpinned. The pin block (version/url/sha256)
           # lives in .github/pins/packaging-tools.json.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loop\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $keylocker = $pins.digicertKeylocker
           if ([string]::IsNullOrWhiteSpace([string]$keylocker.version) -or
               [string]::IsNullOrWhiteSpace([string]$keylocker.url) -or
@@ -134,7 +135,7 @@ jobs:
           echo "C:\Program Files\DigiCert\DigiCert Keylocker Tools" >> $env:GITHUB_PATH
 
           # Download and install the Keylocker tools
-          & "$env:GITHUB_WORKSPACE\loupe\scripts\ci\download_verified.ps1" `
+          & "$env:GITHUB_WORKSPACE\loop\scripts\ci\download_verified.ps1" `
             -Url $pins.digicertKeylocker.url `
             -OutFile $installer `
             -Sha256 $pins.digicertKeylocker.sha256
@@ -167,7 +168,7 @@ jobs:
 
       - name: 'VCPKG: Set up VCPKG'
         run: |
-          $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\vcpkg-configuration.json" | ConvertFrom-Json
+          $manifest = Get-Content -Raw "$env:GITHUB_WORKSPACE\loop\vcpkg-configuration.json" | ConvertFrom-Json
           $VCPKG_COMMIT = $manifest.'default-registry'.baseline
           if ($VCPKG_COMMIT -notmatch '^[0-9a-f]{40}$') {
             throw "Invalid vcpkg baseline in vcpkg-configuration.json: $VCPKG_COMMIT"
@@ -200,7 +201,7 @@ jobs:
 
       - name: 'VCPKG: Install project dependencies'
         run: |
-          $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loupe'
+          $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loop'
           .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
@@ -246,33 +247,33 @@ jobs:
           }
 
       - name: Build project
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOUPE_INSTALL_QT_DEPENDENCIES=ON -DLOUPE_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOUPE_QT_ROOT="${env:QT_ROOT_DIR}" -DLOUPE_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOUPE_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOUPE_INSTALL_TO_USR=ON -DLOUPE_LOUPE_DISTRIBUTION=ON -DLOUPE_PLUGIN_OCR=OFF -DLOUPE_BUNDLE_OCR_SERVICE=OFF -DLOUPE_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoupeEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUNDLE_OCR_SERVICE=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
           cmake --install build --config Release
-          .\scripts\verify-loupe-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" -Profile loupe-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
+          .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 
       - name: Deploy Qt runtime closure to staged install tree
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          $installBin = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\usr\bin"
+          $installBin = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\usr\bin"
           $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
           if (-not (Test-Path -LiteralPath $windeployqt)) {
             throw "Qt deployment tool was not found: $windeployqt"
           }
 
-          foreach ($name in @("LoupeEditor.exe", "PdfTool.exe")) {
+          foreach ($name in @("LoopEditor.exe", "PdfTool.exe")) {
             $target = Join-Path $installBin $name
             if (-not (Test-Path -LiteralPath $target)) {
               throw "Expected staged executable was not found: $target"
             }
             $output = @(& $windeployqt --release --no-compiler-runtime --no-translations `
-              --qmldir (Join-Path $env:GITHUB_WORKSPACE "loupe\LoupeEditor\qml") `
+              --qmldir (Join-Path $env:GITHUB_WORKSPACE "loop\LoopEditor\qml") `
               --dir $installBin $target 2>&1)
             $exitCode = $LASTEXITCODE
             $output | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-$name.txt")
@@ -281,13 +282,13 @@ jobs:
             }
           }
 
-          $builtLoupeQuick = Join-Path $env:GITHUB_WORKSPACE "loupe\build\LoupeEditor\Loupe\Quick"
-          $qmlLoupeQuick = Join-Path $installBin "qml\Loupe\Quick"
-          if (-not (Test-Path -LiteralPath $builtLoupeQuick)) {
-            throw "Built Loupe.Quick QML module was not found: $builtLoupeQuick"
+          $builtLoopQuick = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopEditor\Loop\Quick"
+          $qmlLoopQuick = Join-Path $installBin "qml\Loop\Quick"
+          if (-not (Test-Path -LiteralPath $builtLoopQuick)) {
+            throw "Built Loop.Quick QML module was not found: $builtLoopQuick"
           }
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoupeQuick) | Out-Null
-          Copy-Item -Recurse -Force -LiteralPath $builtLoupeQuick -Destination $qmlLoupeQuick
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopQuick) | Out-Null
+          Copy-Item -Recurse -Force -LiteralPath $builtLoopQuick -Destination $qmlLoopQuick
 
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so
@@ -310,33 +311,33 @@ jobs:
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
         # conditionals and the workflow file fails to parse. The script no-ops
         # when SENTRY_AUTH_TOKEN is unset (fork pull requests).
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_ORG: berry-studios
-          SENTRY_PROJECT: loupe-pdf
+          SENTRY_PROJECT: loop-pdf
           SENTRY_URL: https://de.sentry.io
         run: |
-          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loupe\build"
+          .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loop\build"
 
       - name: Run product Quick accessibility qualification harness (native)
         shell: pwsh
         run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          "source_sha=$env:LOUPE_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-native.txt")
-          & ".\loupe\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loupe\build" -Backend native 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
+          "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-native.txt")
+          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -Backend native 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
           if ($LASTEXITCODE -ne 0) { throw "Native product Quick accessibility qualification harness failed." }
 
       - name: Run product Quick accessibility qualification harness (software)
         shell: pwsh
         run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          "source_sha=$env:LOUPE_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-software.txt")
-          & ".\loupe\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loupe\build" -Backend software 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-software.txt") -Append
+          "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-software.txt")
+          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -Backend software 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-software.txt") -Append
           if ($LASTEXITCODE -ne 0) { throw "Software product Quick accessibility qualification harness failed." }
 
       - name: Validate staged install tree
@@ -347,9 +348,9 @@ jobs:
           # docs/PACKAGING_LICENSING.md prohibition on Ghostscript / JRE / Python
           # payloads -- previously a manual checklist item with nothing checking it.
           # Editor launch is skipped: no interactive desktop on the runner.
-          .\loupe\scripts\smoke-test-install.ps1 `
-            -InstallDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin" `
-            -SourceSha $env:LOUPE_SOURCE_SHA `
+          .\loop\scripts\smoke-test-install.ps1 `
+            -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" `
+            -SourceSha $env:LOOP_SOURCE_SHA `
             -SkipEditorLaunch
 
       - name: Generate third-party notices
@@ -357,19 +358,19 @@ jobs:
         env:
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg\installed
         run: |
-          .\loupe\scripts\generate-third-party-notices.ps1 `
-            -OutputPath "${env:GITHUB_WORKSPACE}\loupe\build\install\THIRD_PARTY_NOTICES.txt"
+          .\loop\scripts\generate-third-party-notices.ps1 `
+            -OutputPath "${env:GITHUB_WORKSPACE}\loop\build\install\THIRD_PARTY_NOTICES.txt"
 
       - name: Read version
         id: get_version
         shell: pwsh
         run: |
-          $version = Get-Content -Path ".\loupe\build\version.txt" -Raw
+          $version = Get-Content -Path ".\loop\build\version.txt" -Raw
           $version = $version.Trim()  # Odstraní případné prázdné znaky kolem verze
           Write-Host "Version: $version"
-          echo "loupe_version=$version" >> $env:GITHUB_ENV
-          echo "msipackagefilename=mberrys.Loupe-pdf_${version}.msi" >> $env:GITHUB_ENV
-          Write-Host "MSI package file name: mberrys.Loupe-pdf_${version}.msi"
+          echo "loop_version=$version" >> $env:GITHUB_ENV
+          echo "msipackagefilename=mberrys.Loop-pdf_${version}.msi" >> $env:GITHUB_ENV
+          Write-Host "MSI package file name: mberrys.Loop-pdf_${version}.msi"
 
       - name: Download verified WiX Toolset
         shell: pwsh
@@ -378,9 +379,9 @@ jobs:
           # (wix.url + wix.sha256). Download it and verify the digest before any
           # candle/light run; the previous step relied on whatever WiX toolset
           # happened to be preinstalled on the runner image.
-          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loupe\.github\pins\packaging-tools.json" | ConvertFrom-Json
+          $pins = Get-Content -Raw "$env:GITHUB_WORKSPACE\loop\.github\pins\packaging-tools.json" | ConvertFrom-Json
           $wixZip = "$env:GITHUB_WORKSPACE\wix314-binaries.zip"
-          & "$env:GITHUB_WORKSPACE\loupe\scripts\ci\download_verified.ps1" `
+          & "$env:GITHUB_WORKSPACE\loop\scripts\ci\download_verified.ps1" `
             -Url $pins.wix.url `
             -OutFile $wixZip `
             -Sha256 $pins.wix.sha256
@@ -402,36 +403,36 @@ jobs:
         run: |
           # cmake --install stages runtime DLLs that the hand-maintained Product.wxs.in
           # may omit. Light only packages listed files — close the gap before candle.
-          & "${env:GITHUB_WORKSPACE}\loupe\scripts\Inject-WixMissingDlls.ps1" `
-            -ProductWxs "${env:GITHUB_WORKSPACE}\loupe\build\WixInstaller\Product.wxs" `
-            -InstallBinDir "${env:GITHUB_WORKSPACE}\loupe\build\install\usr\bin"
+          & "${env:GITHUB_WORKSPACE}\loop\scripts\Inject-WixMissingDlls.ps1" `
+            -ProductWxs "${env:GITHUB_WORKSPACE}\loop\build\WixInstaller\Product.wxs" `
+            -InstallBinDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin"
 
       - name: Create MSI Package
-        working-directory: loupe\build\WixInstaller
+        working-directory: loop\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
-          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOUPE.sln" -d"SolutionName=LOUPE" -d"SolutionPath=LOUPE.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOUPE.wixproj" -d"ProjectName=LOUPE" -d"ProjectPath=LOUPE.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOUPE" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOUPE.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOUPE.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOUPE.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOUPE.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOUPE.wixproj obj\Release\Product.wixobj
+          & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj
 
       - name: Sign MSI Package
         shell: pwsh
         if: vars.SIGN_MSI == 'true'
         run: |
-          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
-          signtool.exe verify /v /pa "${{ github.workspace }}\loupe\build\install\${{ env.msipackagefilename }}"
+          signtool.exe sign /sha1 ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 "${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }}"
+          signtool.exe verify /v /pa "${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }}"
 
       - name: Inspect MSI package boundary
         shell: pwsh
         run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\${{ env.msipackagefilename }}"
-          $inspectorOutput = @(& python ".\loupe\scripts\ci\inspect_package_dependencies.py" `
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
+          $inspectorOutput = @(& python ".\loop\scripts\ci\inspect_package_dependencies.py" `
             --platform windows `
             --package $msiPath `
-            --source-sha $env:LOUPE_SOURCE_SHA `
+            --source-sha $env:LOOP_SOURCE_SHA `
             --expected-architecture x64 `
-            --work-dir (Join-Path $env:RUNNER_TEMP "loupe-package-boundary-windows-work") `
+            --work-dir (Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows-work") `
             --output (Join-Path $evidenceDir "evidence.json") `
             --report (Join-Path $evidenceDir "inspection.txt") 2>&1)
           $inspectorOutput | Tee-Object -FilePath (Join-Path $evidenceDir "inspector.txt")
@@ -443,12 +444,12 @@ jobs:
           # The release MSI is x64 and must install beneath 64-bit Program Files.
           # The full editor operator launch is skipped on the hosted runner; the
           # packaged native/software Quick startup is exercised by the smoke script.
-          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loupe\build\install\${{ env.msipackagefilename }}"
-          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOUPE"
-          & "${env:GITHUB_WORKSPACE}\loupe\scripts\Invoke-MsiSmokeTest.ps1" `
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
+          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
+          & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
-            -SourceSha $env:LOUPE_SOURCE_SHA `
+            -SourceSha $env:LOOP_SOURCE_SHA `
             -SkipEditorLaunch
 
 
@@ -456,28 +457,28 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: loupe-package-boundary-windows-evidence
-          path: ${{ runner.temp }}\loupe-package-boundary-windows
+          name: loop-package-boundary-windows-evidence
+          path: ${{ runner.temp }}\loop-package-boundary-windows
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
 
       - name: Create MSIX Package
         run: |
-          MakeAppx pack /d ".\loupe\build\install\usr\bin" /p ".\loupe\build\install\mberrys.Loupe-pdf_${{ env.loupe_version }}.msix"
+          MakeAppx pack /d ".\loop\build\install\usr\bin" /p ".\loop\build\install\mberrys.Loop-pdf_${{ env.loop_version }}.msix"
 
       - name: Upload ZIP directory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'Loupe-pdf-Windows-${{ env.loupe_version }}.zip'
-          path: .\loupe\build\install\usr\bin
+          name: 'Loop-pdf-Windows-${{ env.loop_version }}.zip'
+          path: .\loop\build\install\usr\bin
           retention-days: 30
 
       - name: Upload MSIX package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: 'mberrys.Loupe-pdf_${{ env.loupe_version }}.msix'
-          path: .\loupe\build\install\mberrys.Loupe-pdf_${{ env.loupe_version }}.msix
+          name: 'mberrys.Loop-pdf_${{ env.loop_version }}.msix'
+          path: .\loop\build\install\mberrys.Loop-pdf_${{ env.loop_version }}.msix
           retention-days: 30
           compression-level: 0
 
@@ -485,6 +486,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: '${{ env.msipackagefilename }}'
-          path: .\loupe\build\install\${{ env.msipackagefilename }}
+          path: .\loop\build\install\${{ env.msipackagefilename }}
           retention-days: 30
           compression-level: 0

@@ -1,18 +1,18 @@
 # Repo map
 
-Loupe repository layout, fork relationship, branch policy, and upstream
+Loop repository layout, fork relationship, branch policy, and upstream
 tracking policy.
 
 ## Repositories
 
 | Role | Repository | Branch |
 |------|------------|--------|
-| Loupe canonical repository | [studio-berry/loupe](https://github.com/studio-berry/loupe) | `stable` (default/release), `unstable` (qualification), `dev` (integration) |
+| Loop canonical repository | [studio-berry/loop](https://github.com/studio-berry/loop) | `stable` (default/release), `unstable` (qualification), `dev` (integration) |
 | Upstream PDF engine source | [JakubMelka/PDF4QT](https://github.com/JakubMelka/PDF4QT) | `master` (upstream only) |
 
-Loupe owns the product decisions, branding, release policy, and downstream
+Loop owns the product decisions, branding, release policy, and downstream
 changes. PDF4QT remains the upstream source for the PDF engine and inherited
-tooling. Do not infer Loupe branch policy from upstream's `master` branch.
+tooling. Do not infer Loop branch policy from upstream's `master` branch.
 
 ## Branch policy
 
@@ -22,15 +22,15 @@ tooling. Do not infer Loupe branch policy from upstream's `master` branch.
 - `stable` is the release branch and repository default.
 - Topic branches start from `dev`, stay focused, and merge back to `dev`.
 - Reviewed commits promote along `dev` → `unstable` → `stable`.
-- `master` is not an active Loupe branch.
+- `master` is not an active Loop branch.
 
 The reviewed machine-readable policy is
 [`branch-policy.json`](branch-policy.json). The current factual branch and
-workflow audit is tracked in GitHub issue [#232](https://github.com/studio-berry/loupe/issues/232).
+workflow audit is tracked in GitHub issue [#232](https://github.com/studio-berry/loop/issues/232).
 
 ## Versioning
 
-Loupe uses [Semantic Versioning 2.0](https://semver.org/). The current product
+Loop uses [Semantic Versioning 2.0](https://semver.org/). The current product
 version is **0.2.0-alpha**. Policy: [`version-policy.json`](version-policy.json)
 and [`VERSIONING.md`](VERSIONING.md). Former 0.0.3–0.0.6 gates are 0.1.1–0.1.4.
 
@@ -38,7 +38,7 @@ and [`VERSIONING.md`](VERSIONING.md). Former 0.0.3–0.0.6 gates are 0.1.1–0.1
 
 Parser, writer, and renderer divergences from upstream PDF4QT are
 recorded in [`UPSTREAM_DIVERGENCE.md`](UPSTREAM_DIVERGENCE.md). Cosmetic
-Loupe-only code does not belong there. Re-run the mapped tests after an
+Loop-only code does not belong there. Re-run the mapped tests after an
 authorized sync; a clean merge is not verification.
 
 ### Policy: on-demand GitHub Sync fork
@@ -47,17 +47,17 @@ Pull upstream changes only when explicitly requested, through GitHub's **Sync
 fork** UI or an intentional local `gh repo sync`. Do not automatically merge
 upstream in CI.
 
-When syncing, preserve Loupe product and licensing decisions. Take upstream
-code fixes in shared engine code unless a current Loupe ADR or issue says
-otherwise. Do not push Loupe branding, product UX, or release policy upstream.
+When syncing, preserve Loop product and licensing decisions. Take upstream
+code fixes in shared engine code unless a current Loop ADR or issue says
+otherwise. Do not push Loop branding, product UX, or release policy upstream.
 
 ### Conflict handling
 
 Likely conflict files include `README.md`, `LICENSE`, `.github/**`,
 `CMakeLists.txt`, and `RELEASES.txt`.
 
-- Keep Loupe branding and licensing in `README.md` / `LICENSE`.
-- Prefer upstream code fixes everywhere else, subject to current Loupe tests
+- Keep Loop branding and licensing in `README.md` / `LICENSE`.
+- Prefer upstream code fixes everywhere else, subject to current Loop tests
   and accepted ADRs.
 - Run targeted builds/tests after an authorized sync; do not treat a clean
   merge as verification.
@@ -84,13 +84,13 @@ targeted Core tests before merging an authorized sync.
 
 | Area | Path | Purpose |
 |------|------|---------|
-| Core PDF library | `LoupeLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
-| Interactive editor | `LoupeEditor/`, `LoupeLibQuick/` | Primary Qt Quick shell and canvas host |
+| Core PDF library | `LoopLibCore/` | Shared PDF parsing, rendering, preflight, and repair logic |
+| Interactive editor | `LoopEditor/`, `LoopLibQuick/` | Primary Qt Quick shell and canvas host |
 | Headless CLI | `PdfTool/` | Automation, batch checks, rendering, and repair |
-| Page production | `PdfTool/`, `LoupeLibCore/` | Batch geometry, assembly, and production export |
-| Editor capabilities | `LoupeEditor/`, `LoupeLibQuick/`, `LoupeLibCore/` | Contextual capabilities hosted by the Quick editor and shared libraries |
+| Page production | `PdfTool/`, `LoopLibCore/` | Batch geometry, assembly, and production export |
+| Editor plugins | `LoopEditorPlugins/` | Editor-only capabilities |
 | Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
-| Preflight contract | `loupe-preflight/` | Profiles, schemas, examples, and report documentation |
+| Preflight contract | `loop-preflight/` | Profiles, schemas, examples, and report documentation |
 | Architecture records | `docs/adr/`, `docs/` | Decisions, policy, plans, and generated factual catalogs |
 
 For module placement and build constraints, see [`AGENTS.md`](../AGENTS.md).
