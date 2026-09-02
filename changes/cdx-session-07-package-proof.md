@@ -1,4 +1,4 @@
 Category: internal
 Audience: Maintainers
 Breaking-Change: no
-Summary: Repair release-package qualification metadata, fail Windows packaging when Sentry debug-file upload errors instead of continuing on error, keep optional symbol publication no-oping only when SENTRY_AUTH_TOKEN is unset, install gperf/vcpkg autotools build deps on all Linux CI paths that run vcpkg install, stage Qt offscreen platform plugins plus column-0 qt.conf and the QSQLITE SQL driver in the Linux AppImage and Windows MSI staged install trees for headless PdfTool and packaged Quick startup smoke, stage Loop.Canvas with qoffscreen plus application-directory QML imports and column-0 qt.conf in the Windows MSI tree, and fix LoopEditor bundled-plugin resolution plus Windows qt.conf and QML plugin closure for scrubbed Quick startup smoke.
+Summary: Repair release-package qualification metadata, scope fontconfig to Unix, fail Windows packaging on Sentry debug-file upload errors, install Linux gperf/vcpkg autotools dependencies, and make Linux and Windows package trees self-describing for headless PdfTool and Quick startup smoke, including WiX harvesting of built Loop QML modules.

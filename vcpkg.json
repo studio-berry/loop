@@ -8,7 +8,10 @@
     "zlib",
     "openjpeg",
     "freetype",
-    "fontconfig",
+    {
+      "name": "fontconfig",
+      "platform": "!windows"
+    },
     "libjpeg-turbo",
     "libpng",
     "blend2d",
