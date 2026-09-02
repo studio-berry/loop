@@ -1,6 +1,6 @@
 # Editor accessibility baseline
 
-Loupe's Editor treats accessibility as part of the normal desktop workflow. The
+Loop's Editor treats accessibility as part of the normal desktop workflow. The
 baseline covers keyboard-only operation, deterministic menu mnemonics, visible
 focus, screen-reader names and descriptions, semantic status text, contrast,
 and DPI-aware sizing. It applies to the Editor shell and to Editor-hosted
@@ -8,7 +8,7 @@ workspaces such as Preflight.
 
 ## Shared policy
 
-`LoupeLibQuick` is the shared product accessibility boundary and test
+`LoopLibQuick` is the shared product accessibility boundary and test
 surface. It provides:
 
 - widget-tree findings for controls that require explicit names or descriptions;
@@ -39,9 +39,9 @@ remains an application-level follow-up under the GUI/E2E harness issue.
 
 ADR-007 adopts Qt Quick Controls as the 1.2 shell foundation. It extends this
 baseline; it does not create a second accessibility standard. Quick components
-must expose the same meaningful name, description, role, state, visible focus,
-keyboard reachability, contrast, status text, and DPI-aware sizing expected of
-Widgets components.
+must expose meaningful names, descriptions, roles, states, visible focus,
+keyboard reachability, contrast, status text, and DPI-aware sizing under the
+same application accessibility baseline.
 
 Every Quick `Dialog`, `Menu`, and `Popup` must have a keyboard/focus test that
 covers opening, traversal, typeahead where applicable, Escape dismissal,

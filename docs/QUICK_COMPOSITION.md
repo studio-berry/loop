@@ -1,7 +1,7 @@
 # Qt Quick composition pattern
 
-This document defines how Loupe product components are composed in the Qt Quick
-shell shipped with `LoupeEditor` (P4-S7 navigable slice). Qualification-only
+This document defines how Loop product components are composed in the Qt Quick
+shell shipped with `LoopEditor` (P4-S7 navigable slice). Qualification-only
 harnesses such as `QuickShellSmoke` remain non-product references; they do not
 define the installed operator loop, which is still incomplete until later
 Phase 4 sessions.

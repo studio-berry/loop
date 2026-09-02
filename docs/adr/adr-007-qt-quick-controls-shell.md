@@ -1,15 +1,15 @@
-# ADR-007: Qt Quick Controls foundation for the Loupe 1.2 shell
+# ADR-007: Qt Quick Controls foundation for the Loop 1.2 shell
 
 **Status:** accepted
 **Implemented-at:** not implemented
 **Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
 **Superseded-by:** [ADR-010: Quick-root admission and shell boundary](adr-010-quick-root-admission.md)
 **Date:** 2026-08-09
-**Deciders:** Loupe #178 / 1.2 shell decision
+**Deciders:** Loop #178 / 1.2 shell decision
 
 ## Context
 
-Loupe's current interactive shell is inherited Qt Widgets code. That shell is
+Loop's current interactive shell is inherited Qt Widgets code. That shell is
 appropriate for the 0.0.x and 1.1 work already in progress, but the 1.2
 product surface is a persistent single-document workspace: inspection,
 findings, evidence, history, production preview, and approval flows share a
@@ -17,16 +17,16 @@ live canvas. It needs layered chrome, anchored inspectors, menus and popovers,
 keyboard/focus state, and transitions without coupling product behavior to a
 native widget style.
 
-Issue #178 replaces the earlier web/Radix proposal. Loupe is a Qt 6 desktop
+Issue #178 replaces the earlier web/Radix proposal. Loop is a Qt 6 desktop
 application, and the decision must not introduce a second language runtime,
 bridge process, or packaging story.
 
 ## Decision
 
-Loupe adopts **Qt Quick Controls 2** as the behavioral UI foundation for the
+Loop adopts **Qt Quick Controls 2** as the behavioral UI foundation for the
 1.2 application shell. Qt Quick Controls supplies control semantics,
 composition, focus handling, menus, dialogs, popups, scrolling, and input
-behavior. It does not select Loupe's visual language: color, typography,
+behavior. It does not select Loop's visual language: color, typography,
 spacing, icons, animation timing, and custom control styling remain product
 design decisions.
 
@@ -129,7 +129,7 @@ gates.
 
 Rejected. These options add a second runtime, bridge/process lifecycle,
 packaging, and accessibility boundary to a Qt application. The earlier web
-proposal is historical and is not the Loupe 1.2 direction.
+proposal is historical and is not the Loop 1.2 direction.
 
 ### Immediate full Quick rewrite
 
@@ -169,4 +169,4 @@ adoption preserves feature delivery while those risks are measured.
 - [Qt Quick Controls](https://doc.qt.io/qt-6/qtquickcontrols-index.html)
 - [Qt 6.11 changes to Qt Quick](https://doc.qt.io/qt-6/quick-changes-qt6.html)
 - [QQuickWindow scene-graph backend selection](https://doc.qt.io/qt-6/qquickwindow.html)
-- [Loupe issue #178](https://github.com/studio-berry/loupe/issues/178)
+- [Loop issue #178](https://github.com/studio-berry/loop/issues/178)

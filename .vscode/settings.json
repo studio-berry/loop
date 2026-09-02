@@ -1,11 +1,11 @@
 {
     "cmake.configureSettings": {
-        "LOUPE_INSTALL_QT_DEPENDENCIES": "0",
+        "LOOP_INSTALL_QT_DEPENDENCIES": "0",
         "CMAKE_TOOLCHAIN_FILE": "/opt/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_INSTALLED_DIR": "/opt/vcpkg_installed",
         "VCPKG_MANIFEST_INSTALL": "OFF",
         "CMAKE_BUILD_TYPE": "Release",
-        "LOUPE_QT_ROOT": "/opt/Qt/6.9.1/gcc_64"
+        "LOOP_QT_ROOT": "/opt/Qt/6.9.1/gcc_64"
     },
     "cmake.generator": "Ninja",
     "cmake.buildDirectory": "${workspaceFolder}/build",
@@ -25,7 +25,7 @@
         "VCPKG_ROOT": "/opt/vcpkg",
         "VCPKG_INSTALLED_DIR": "/opt/vcpkg_installed",
         "VCPKG_OVERLAY_PORTS": "${workspaceFolder}/vcpkg/overlays/linux:${workspaceFolder}/vcpkg/overlays/general",
-        "LOUPE_QT_ROOT": "/opt/Qt/6.9.1/gcc_64",
+        "LOOP_QT_ROOT": "/opt/Qt/6.9.1/gcc_64",
         "QT_ROOT_DIR": "/opt/Qt/6.9.1/gcc_64",
         "CMAKE_PREFIX_PATH": "/opt/Qt/6.9.1/gcc_64",
         "LD_LIBRARY_PATH": "/opt/Qt/6.9.1/gcc_64/lib",

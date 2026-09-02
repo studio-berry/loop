@@ -108,7 +108,7 @@ def validate_product_target(product: dict, root_cmake: str) -> None:
 
     declaration = f"add_subdirectory({name})"
     quick_blocks = re.findall(
-        r"if\s*\(\s*LOUPE_BUILD_QUICK_CANVAS\s*\)(.*?)endif\s*\(\s*\)",
+        r"if\s*\(\s*LOOP_BUILD_QUICK_CANVAS\s*\)(.*?)endif\s*\(\s*\)",
         root_cmake,
         re.DOTALL,
     )
@@ -116,7 +116,7 @@ def validate_product_target(product: dict, root_cmake: str) -> None:
         declaration in quick_block for quick_block in quick_blocks
     ):
         raise ContractError(
-            f"product target {name} must be gated by LOUPE_BUILD_QUICK_CANVAS"
+            f"product target {name} must be gated by LOOP_BUILD_QUICK_CANVAS"
         )
 
 

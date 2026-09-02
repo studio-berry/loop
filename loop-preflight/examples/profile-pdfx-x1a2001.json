@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "Loop PDF/X-1a:2001 policy",
+  "description": "Strict PDF/X-1a:2001 conformance policy layered onto the shared Loop preflight checks.",
+  "pdfx": {
+    "target": "PDF/X-1a:2001",
+    "policyVersion": 1
+  },
+  "checks": [
+    {
+      "id": "color-inventory",
+      "severity": "info"
+    },
+    {
+      "id": "transparency-risk",
+      "severity": "warning"
+    }
+  ]
+}

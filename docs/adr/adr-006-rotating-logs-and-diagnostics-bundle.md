@@ -9,9 +9,9 @@
 
 ## Context
 
-Loupe had no application logging: zero use of `qInstallMessageHandler` or
+Loop had no application logging: zero use of `qInstallMessageHandler` or
 `QLoggingCategory` repo-wide, `qWarning` used twice in shipping GUI code
-(`LoupeLibGui/pdfwintaskbarprogress.cpp`), and the support story documented
+(`LoopLibGui/pdfwintaskbarprogress.cpp`), and the support story documented
 in `docs/PRODUCTION_RUNBOOK.md` was "ask the user to run the failing command
 in a terminal and attach stderr." Diagnostic signal that does exist today is
 thrown away: `PDFRenderError`s die with the widget, preflight sidecar stderr
@@ -27,7 +27,7 @@ the one that leaks document content.
 
 - **Log location** mirrors `PDFSentrySession`'s `databasePath()` in structure,
   but adds a portable-install branch Sentry does not have:
-  1. `LOUPE_LOG_DIR` environment variable, if set;
+  1. `LOOP_LOG_DIR` environment variable, if set;
   2. `<settingsPath>/logs`, when `PDFSettings::getSettingsPath()` is non-empty
      (portable / `--config` installs — Editor only, PdfTool has no `--config`);
   3. `QStandardPaths::AppLocalDataLocation` + `/logs`, falling back to the temp
@@ -62,7 +62,7 @@ the one that leaks document content.
 - **The message handler chains to whatever was previously installed**,
   restoring it on destruction, so PdfTool's existing stderr behavior is
   unchanged; the log file is additive, not a replacement output.
-- **Level control** reads `LOUPE_LOG_LEVEL`, else the `diagnostics/logLevel`
+- **Level control** reads `LOOP_LOG_LEVEL`, else the `diagnostics/logLevel`
   `QSettings` key, else `Warning`. Core reads that key itself (via the
   standard `QSettings(QSettings::IniFormat, QSettings::UserScope,
   organizationName(), applicationName())` idiom already used ~20 times in the
@@ -70,7 +70,7 @@ the one that leaks document content.
   so PdfTool gets the same setting without depending on the Gui module.
 - **Diagnostics bundle is a plain directory + `manifest.json`.** No new
   dependency, no Qt private modules. `manifest.json` follows the versioned-
-  schema precedent already established by `LOUPE_PREFLIGHT_SCHEMA_VERSION`.
+  schema precedent already established by `LOOP_PREFLIGHT_SCHEMA_VERSION`.
   Every file is written with `QSaveFile` and the whole bundle directory is
   removed on any failure, so a partial bundle is never left behind — the same
   discipline as the PageMaster manifest-rollback work (A9/A23 in
@@ -82,7 +82,7 @@ the one that leaks document content.
   disclosed privacy property (R-008) that this feature does not change or
   paper over.
 - **Surfaces:** Editor and PdfTool, with the API living in Core
-  (`LoupeLibCore/sources/pdflogger.*`, `pdflogscrubber.*`,
+  (`LoopLibCore/sources/pdflogger.*`, `pdflogscrubber.*`,
   `pdfdiagnostics.*`) so Viewer/PageMaster/Diff can adopt the same logger and
   collector later without duplicating the scrubbing logic.
 
@@ -95,7 +95,7 @@ the one that leaks document content.
   captured and scrubbed once a session is active — no call site has to
   remember to scrub, and none can accidentally bypass it.
 - The portable-install (`--config`) log path only applies to the Editor;
-  PdfTool always resolves to `AppLocalDataLocation` (or `LOUPE_LOG_DIR`) since
+  PdfTool always resolves to `AppLocalDataLocation` (or `LOOP_LOG_DIR`) since
   it has no `--config` option today. Adding one is out of scope for this
   change.
 - `PDFSentrySession`'s crash DB still does not honor `--config` — this ADR

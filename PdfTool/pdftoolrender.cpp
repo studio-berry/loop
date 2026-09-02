@@ -168,7 +168,7 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
     pdf::PDFRunIdentity identity = pdf::PDFRunIdentity::capture();
     identity.fixtureDigest = pdf::PDFRunIdentity::digestFile(options.document);
     identity.operationVersion = QStringLiteral("resource-envelope-v2");
-    identity.renderer = QStringLiteral("loupe");
+    identity.renderer = QStringLiteral("loop");
 
     PDFOutputFormatter formatter(options.outputStyle);
     formatter.beginDocument("benchmark", PDFToolTranslationContext::tr("Benchmark rendering of document %1").arg(options.document));
@@ -214,6 +214,7 @@ void PDFToolBenchmark::finish(const PDFToolOptions& options)
                                                           : QStringLiteral("incomplete");
             envelope.pageCount = static_cast<qint64>(m_pageInfo.size());
             envelope.rssHighWaterBytes = pdf::PDFWorkloadEnvelope::currentRssHighWaterBytes();
+            envelope.processCommitHighWaterBytes = pdf::PDFWorkloadEnvelope::currentProcessCommitHighWaterBytes();
             envelope.elapsedMs = m_wallTime;
             envelope.cancellationLatencyMs = cancelled ? cancellationLatencyMs() : -1;
             envelope.incompleteReason = cancelled

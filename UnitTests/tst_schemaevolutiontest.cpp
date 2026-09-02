@@ -104,7 +104,7 @@ void SchemaEvolutionTest::unsupportedMajorFailsClosed()
 
 void SchemaEvolutionTest::compatibilityResourceIsCwdIndependentAndMatchesEveryKind()
 {
-    QFile resource(QStringLiteral(":/loupe/schema-compatibility.json"));
+    QFile resource(QStringLiteral(":/loop/schema-compatibility.json"));
     QVERIFY(resource.open(QIODevice::ReadOnly));
     const QJsonObject matrix = QJsonDocument::fromJson(resource.readAll()).object();
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
@@ -157,7 +157,7 @@ void SchemaEvolutionTest::currentAndPreviousReportGoldensRoundTrip()
 {
     auto load = [](const QString& name, bool* opened)
     {
-        QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + name);
+        QFile file(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + name);
         *opened = file.open(QIODevice::ReadOnly);
         if (!*opened)
         {
@@ -198,7 +198,7 @@ void SchemaEvolutionTest::migrateIsPure()
 
 void SchemaEvolutionTest::v2GoldenMigratesToV3Deterministically()
 {
-    QFile file(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json"));
+    QFile file(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json"));
     QVERIFY(file.open(QIODevice::ReadOnly));
     const QJsonObject source = QJsonDocument::fromJson(file.readAll()).object();
 

@@ -1,6 +1,6 @@
 # Canonical preflight verdict
 
-Loupe reduces every normalized `PreflightResult` through
+Loop reduces every normalized `PreflightResult` through
 `pdf::reducePreflightVerdict()` in Core. The reducer is the only authority for
 the operator-facing outcome; the legacy `pass` boolean is emitted only as a
 derived compatibility field.

@@ -7,7 +7,7 @@ Issue #237 resolves the overlap between #32 (operation history) and #133
 
 There is one runtime event type, `PDFOperationHistoryEvent`, and one append-only
 chain, `PDFOperationHistoryStore`. Storage is the existing SQLite history
-sidecar/app store (`<pdf>.loupe-history` in the headless paths), never the PDF
+sidecar/app store (`<pdf>.loop-history` in the headless paths), never the PDF
 bytes. The PDF is therefore not changed merely by recording provenance.
 
 `PDFOperationHistoryEventKind` carries the #133 vocabulary:
@@ -46,5 +46,5 @@ kinds hash the new fields as part of their canonical payload.
 - The chain is tamper-evident, not tamper-proof. A writer who can replace the
   complete sidecar can rewrite the chain. This is attribution and provenance,
   not a digital signature, PKI, or non-repudiation service.
-- No parallel `PreflightAuditEvent` type or `.loupe-audit.jsonl` chain is
+- No parallel `PreflightAuditEvent` type or `.loop-audit.jsonl` chain is
   permitted.

@@ -3,12 +3,13 @@
 *.sh text eol=lf
 docs/generated/phase5-widgets-inventory.json text eol=lf
 docs/generated/phase5-widgets-disposition.json text eol=lf
+UnitTests/testdata/interaction-traces/** text eol=lf
 *.pdf binary
 *.icc binary
 Fuzz/corpus/regression/** binary
 Fuzz/corpus/regression/README.md text
 Fuzz/corpus/regression/manifest.json text
-LoupeLibCore/cmaps/** binary
-LoupeLibCore/liberation-fonts-ttf/** -whitespace
+LoopLibCore/cmaps/** binary
+LoopLibCore/liberation-fonts-ttf/** -whitespace
 3rdparty_licenses/** -whitespace
 WixInstaller/explic.rtf -whitespace

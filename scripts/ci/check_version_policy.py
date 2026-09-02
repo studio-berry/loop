@@ -20,18 +20,18 @@ AGENTS_MD = ROOT / "AGENTS.md"
 
 SEMVER_CORE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CMAKE_VERSION = re.compile(
-    r"^set\(LOUPE_VERSION\s+([0-9]+(?:\.[0-9]+)*)\)\s*$", re.MULTILINE
+    r"^set\(LOOP_VERSION\s+([0-9]+(?:\.[0-9]+)*)\)\s*$", re.MULTILINE
 )
 CMAKE_PRERELEASE = re.compile(
-    r"^set\(LOUPE_VERSION_PRERELEASE\s+([^)]*)\)\s*$", re.MULTILINE
+    r"^set\(LOOP_VERSION_PRERELEASE\s+([^)]*)\)\s*$", re.MULTILINE
 )
 FOUR_PART_RELEASE_GREP = re.compile(
-    r"set\\\(LOUPE_VERSION \\K\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+"
+    r"set\\\(LOOP_VERSION \\K\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+"
 )
 THREE_PART_RELEASE_GREP = re.compile(
-    r"set\\\(LOUPE_VERSION \\K\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+"
+    r"set\\\(LOOP_VERSION \\K\[0-9\]\+\\.\[0-9\]\+\\.\[0-9\]\+"
 )
-PRERELEASE_RELEASE_GREP = re.compile(r"LOUPE_VERSION_PRERELEASE")
+PRERELEASE_RELEASE_GREP = re.compile(r"LOOP_VERSION_PRERELEASE")
 
 DOCUMENTED_SCHEME = re.compile(r"^[-*]\s+Scheme:\s*(.+)$", re.MULTILINE)
 DOCUMENTED_CANONICAL = re.compile(r"^[-*]\s+Canonical version:\s*(.+)$", re.MULTILINE)
@@ -87,11 +87,11 @@ def parse_policy(text: str) -> dict[str, str]:
 def parse_cmake_version(text: str) -> str:
     match = CMAKE_VERSION.search(text)
     if not match:
-        raise ValueError("CMakeLists.txt has no set(LOUPE_VERSION ...) assignment")
+        raise ValueError("CMakeLists.txt has no set(LOOP_VERSION ...) assignment")
     version = match.group(1)
     if not SEMVER_CORE.fullmatch(version):
         raise ValueError(
-            f"LOUPE_VERSION must be SemVer MAJOR.MINOR.PATCH without a fourth "
+            f"LOOP_VERSION must be SemVer MAJOR.MINOR.PATCH without a fourth "
             f"component or pre-release suffix, got {version!r}"
         )
     return version
@@ -120,7 +120,7 @@ def validate_versioning_doc(text: str, policy: dict[str, str]) -> list[str]:
 
     canonical = required(DOCUMENTED_CANONICAL, "Canonical version")
     if canonical and policy["cmake_variable"] not in canonical:
-        errors.append("VERSIONING.md Canonical version must name LOUPE_VERSION")
+        errors.append("VERSIONING.md Canonical version must name LOOP_VERSION")
 
     fmt = required(DOCUMENTED_FORMAT, "Format")
     if fmt and fmt != policy["cmake_format"]:
@@ -146,7 +146,7 @@ def validate_versioning_doc(text: str, policy: dict[str, str]) -> list[str]:
 
     windows = required(DOCUMENTED_WINDOWS, "Windows Appx version")
     if windows and policy["windows_variable"] not in windows:
-        errors.append("VERSIONING.md Windows Appx version must name LOUPE_WINDOWS_VERSION")
+        errors.append("VERSIONING.md Windows Appx version must name LOOP_WINDOWS_VERSION")
 
     workflow = required(DOCUMENTED_RELEASE_WORKFLOW, "Release workflow")
     if workflow and workflow != policy["release_workflow"]:
@@ -160,16 +160,16 @@ def validate_release_workflow(text: str, prerelease: str = "") -> list[str]:
     errors: list[str] = []
     if FOUR_PART_RELEASE_GREP.search(text):
         errors.append(
-            "CreateReleaseDraft.yml still parses a four-part LOUPE_VERSION; "
+            "CreateReleaseDraft.yml still parses a four-part LOOP_VERSION; "
             "use MAJOR.MINOR.PATCH"
         )
     elif not THREE_PART_RELEASE_GREP.search(text):
         errors.append(
-            "CreateReleaseDraft.yml must grep set(LOUPE_VERSION) as MAJOR.MINOR.PATCH"
+            "CreateReleaseDraft.yml must grep set(LOOP_VERSION) as MAJOR.MINOR.PATCH"
         )
     if prerelease and not PRERELEASE_RELEASE_GREP.search(text):
         errors.append(
-            "CreateReleaseDraft.yml must read LOUPE_VERSION_PRERELEASE when a "
+            "CreateReleaseDraft.yml must read LOOP_VERSION_PRERELEASE when a "
             "pre-release label is set"
         )
     return errors
@@ -181,8 +181,8 @@ def validate_appx_manifest(text: str, policy: dict[str, str]) -> list[str]:
         return [
             f"AppxManifest.xml.in Identity.Version must use {policy['windows_variable']}"
         ]
-    if "${LOUPE_VERSION}" in text:
-        return ["AppxManifest.xml.in must not use three-part LOUPE_VERSION"]
+    if "${LOOP_VERSION}" in text:
+        return ["AppxManifest.xml.in must not use three-part LOOP_VERSION"]
     return []
 
 
@@ -217,12 +217,12 @@ def validate_repository(root: Path) -> list[str]:
     prerelease = parse_cmake_prerelease(cmake_text)
     if version is not None and version != policy["current"]:
         errors.append(
-            f"LOUPE_VERSION {version!r} must match version-policy.json current "
+            f"LOOP_VERSION {version!r} must match version-policy.json current "
             f"{policy['current']!r}"
         )
     if prerelease != policy["prerelease"]:
         errors.append(
-            f"LOUPE_VERSION_PRERELEASE {prerelease!r} must match version-policy.json "
+            f"LOOP_VERSION_PRERELEASE {prerelease!r} must match version-policy.json "
             f"prerelease {policy['prerelease']!r}"
         )
 

@@ -1,6 +1,6 @@
-# Loupe operation history
+# Loop operation history
 
-Loupe durable production provenance is separate from `PDFUndoRedoManager` and `PDFRecoveryManager`.
+Loop durable production provenance is separate from `PDFUndoRedoManager` and `PDFRecoveryManager`.
 Undo/redo remains an in-memory interaction feature. Recovery remains disposable crash-recovery state. The
 operation history is an append-only Core service for production workflows and automation.
 
@@ -11,7 +11,7 @@ Issue #237 makes this convergence explicit: #32's `PDFOperationHistoryEvent` is 
 `PDFOperationHistoryStore` is the one SQLite-backed chain. #133 event kinds are represented by
 `PDFOperationHistoryEventKind` values (`DocumentOpened`, `PreflightRun`, `FixApplied`, `DecisionRecorded`,
 `DecisionInvalidated`, `CertificateIssued`, and `CertificateInvalidated`). There is no `PreflightAuditEvent`,
-`.loupe-audit.jsonl`, or second hash chain in Core.
+`.loop-audit.jsonl`, or second hash chain in Core.
 
 ## Runtime contract
 
@@ -50,7 +50,7 @@ remain and are marked `artifact_evicted`. Shared artifacts are retained until th
 opening the destination `QSaveFile`, then appends a new `history.rollback` execution and `rolled-back` event.
 Intervening history is never erased. A corrupt or missing target fails before the current document is touched.
 
-The headless `PdfTool repair` and `action-list run/batch` paths create a per-output `<pdf>.loupe-history` sidecar
+The headless `PdfTool repair` and `action-list run/batch` paths create a per-output `<pdf>.loop-history` sidecar
 using this API. Editor and PageMaster UI wiring remains deferred until after 0.1.1; those surfaces must use this
 same Core chain when enabled rather than introducing separate history stores. Action List parents and corrective-
 operation plans can use `parentExecutionId`, canonical parameters, and digest references without coupling Core

@@ -19,7 +19,7 @@ a near-white margin fill, and a clipped image. The defaults remain:
 The probe test repeats the same fixture and asserts identical per-edge ink
 counts and verdicts. Tier-2 remains opt-in through `raster_confirm`; the
 default profile never pays the raster cost.
-Scope: Loupe-pdf 0.1.0-alpha. Phase 1 — CLI engine.
+Scope: Loop-pdf 0.1.0-alpha. Phase 1 — CLI engine.
 Primary API names: **`PDFDocumentSession`** (`pdfdocumentsession.*`), **`PDFBleedMarginProbe`** (`pdfbleedmarginprobe.*`), **`PreflightEngine`** (PdfTool orchestrator).
 Finding types: **`content-bleed`**, **`bleed-margin-empty`**, **`needs-auto-bleed`**.
 Profile params: **`raster_confirm`** (bool), **`raster_confirm_dpi`** (default 150), **`raster_white_threshold`** (default 0.9975) — per-check.
@@ -39,13 +39,13 @@ This mirrors Acrobat/Sinalite behavior: flag most bleed gaps structurally, escal
 ### Non-goals
 
 - **Generating** bleed artwork. That is `PDFBleedFixup` / `PdfTool add-bleed` (MIC-121/122) — see [MIRROR_BLEED_PLAN.md](MIRROR_BLEED_PLAN.md). This feature *detects* and may *advertise* `add-bleed` as a fixup; it never paints.
-- Changing the shipped `loupe-default` profile's pass/fail behavior. Without `raster_confirm`, Tier 2 never runs and the default profile stays exactly as fast as today.
+- Changing the shipped `loop-default` profile's pass/fail behavior. Without `raster_confirm`, Tier 2 never runs and the default profile stays exactly as fast as today.
 - Async / GUI page compilation. The engine path is synchronous and headless (`PDFRenderer::compile`), not the Editor's `PDFAsynchronousPageCompiler`.
-- New toolchains or dependencies. This stays on LoupeLibCore (MIT) + QPDF (Apache-2.0); no JRE, Ghostscript, PDFBox, or PikePDF (per the hybrid sidecar plan).
+- New toolchains or dependencies. This stays on LoopLibCore (MIT) + QPDF (Apache-2.0); no JRE, Ghostscript, PDFBox, or PikePDF (per the hybrid sidecar plan).
 
 ### Architecture alignment
 
-Consistent with the **hybrid sidecar** plan of record: all preflight logic lives in the **engine** (`LoupeLibCore` + the PdfTool `preflight` command, a separate process), never inside the Editor GUI process. `PDFDocumentSession` and `PDFBleedMarginProbe` are **reuse-extensions** built on the existing `PDFRenderer` / `PDFPrecompiledPage` stack — a shared perf foundation, not a parallel renderer. Because they use the same document model as the LOUPE renderer, the `bbox`es they emit match what Phase 2 overlays (`IDocumentDrawInterface`) draw — the core reason the engine is C++/PdfTool rather than Java.
+Consistent with the **hybrid sidecar** plan of record: all preflight logic lives in the **engine** (`LoopLibCore` + the PdfTool `preflight` command, a separate process), never inside the Editor GUI process. `PDFDocumentSession` and `PDFBleedMarginProbe` are **reuse-extensions** built on the existing `PDFRenderer` / `PDFPrecompiledPage` stack — a shared perf foundation, not a parallel renderer. Because they use the same document model as the LOOP renderer, the `bbox`es they emit match what Phase 2 overlays (`IDocumentDrawInterface`) draw — the core reason the engine is C++/PdfTool rather than Java.
 
 ## Architecture
 
@@ -164,7 +164,7 @@ inline bool contentWithinBleed(const QRectF& contentBounds,
 A headless Core session that owns a document plus the caches the tiered checks need. Grounded in the existing wiring at `pdftoolrender.cpp:178` and `pdfbleedfixup.cpp:464` (which already assemble document + OC activity + CMS + font cache + renderer — the session is that wiring plus ownership and caching).
 
 ```cpp
-class LOUPELIBCORESHARED_EXPORT PDFDocumentSession
+class LOOPLIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
     explicit PDFDocumentSession(const PDFDocument* document,
@@ -183,7 +183,7 @@ public:
 };
 ```
 
-Backing primitives (all confirmed present in `LoupeLibCore/sources/`):
+Backing primitives (all confirmed present in `LoopLibCore/sources/`):
 
 - Owns `PDFOptionalContentActivity` (`OCUsage::Export`), a `PDFCMSManager` (→ `PDFCMSPointer`), and `PDFFontCache(DEFAULT_FONT_CACHE_LIMIT, DEFAULT_REALIZED_FONT_CACHE_LIMIT)` with `setCacheShrinkEnabled(nullptr, false)` — exactly the `pdfbleedfixup.cpp:464` pattern.
 - `compiledPage()` compiles via `PDFRenderer::compile(PDFPrecompiledPage*, pageIndex)` into a `QCache<PDFInteger, PDFPrecompiledPage>`, reusing `PDFPrecompiledPage::markAccessed()` / `hasExpired()` for LRU (the same hooks the Editor's `PDFAsynchronousPageCompiler` uses).
@@ -216,7 +216,7 @@ Locked here (not in AGENTS.md) per `docs/PLANNING.md`. All reviewable in this M0
 | `raster_confirm_dpi` | **150** (was 72) | 72 DPI makes a 9pt bleed strip only **~6px** deep (0.125in × 72) — too coarse to distinguish faint content from noise. 150 DPI gives **~19px**, still ¼ the pixels of a 300-DPI probe, but enough to compute a meaningful coverage ratio. |
 | `raster_white_threshold` | **0.9975** (was 0.95) | Fraction of an edge strip that must be background/white before that edge is called empty. 0.95 (the old default) would call a strip "empty" even with **5% ink coverage** — large enough to be genuine bleed content, not noise. 0.9975 (⇔ ≤0.25% non-background) only fires on strips that are *actually* blank within antialiasing/compression noise (~0.01–0.05%), while still clearing faint-but-real bleed (light gradients, watermarks, thin rules) that a laxer 0.95 bar would already have passed anyway — so the practical gap between the two thresholds is at the *strict* end, not the lax end: 0.95 was simply too permissive to catch much of anything. |
 | Coverage scope | **per-edge** (4 independent strips: top/bottom/left/right) | Not an aggregate over the whole perimeter (see below) — that gap in the original MIC-155/160 wording ("strip rects" / no scope stated) is closed here. |
-| Bleed reach | `amount_pt` = **9** | Existing `loupe-default` value (9 pt ≈ 0.125 in). |
+| Bleed reach | `amount_pt` = **9** | Existing `loop-default` value (9 pt ≈ 0.125 in). |
 | Bleed/content tolerance | `tolerance_pt` = **0.25** when unset | Promotes today's hard-coded `isBleedAdequate` value to a profile param. |
 | Render features | `ClipToCropBox` off, annotations off | Match `pdfbleedfixup.cpp` strip render; probe the full bleed margin, not the crop. |
 
@@ -245,23 +245,23 @@ All three `raster_*` params fit `profile.schema.json`'s check objects (which all
 
 - The Editor's de-facto session is spread across `PDFDrawSpaceController` (owns `PDFFontCache`, holds document + `PDFOptionalContentActivity`) and `PDFDrawWidgetProxy` (owns the `PDFAsynchronousPageCompiler` with its `QCache<PDFInteger, PDFPrecompiledPage>`, exposes `getCMSManager`).
 - `PDFDocumentSession` mirrors that getter surface (`document()`, `fontCache()`, `cms()`, `compiledPage()`) so `PDFDrawWidgetProxy` could hold or delegate to a session without changing its callers.
-- The Loupe Preflight plugin (MIC-137, done) currently only displays report JSON produced by the CLI. Once the session exists, an in-process preflight run in the Editor could share the already-compiled pages of the open document instead of recompiling — the payoff of putting the cache in Core.
+- The Loop Preflight plugin (MIC-137, done) currently only displays report JSON produced by the CLI. Once the session exists, an in-process preflight run in the Editor could share the already-compiled pages of the open document instead of recompiling — the payoff of putting the cache in Core.
 - **Actual Editor wiring is the P2 stretch (MIC-156 / issue 8), not this epic's core.** This doc only locks the session's shape so that reuse stays possible.
 
 ## Related code
 
 | Area | Path |
 |------|------|
-| Page boxes | `LoupeLibCore/sources/pdfpage.h` (`getMediaBox/getCropBox/getBleedBox/getTrimBox`) |
-| Renderer / compile | `LoupeLibCore/sources/pdfrenderer.h`, `pdfpainter.h` (`PDFPrecompiledPage`) |
-| Session prototype | `LoupeLibCore/sources/pdfbleedfixup.cpp` (wiring + strip raster) |
+| Page boxes | `LoopLibCore/sources/pdfpage.h` (`getMediaBox/getCropBox/getBleedBox/getTrimBox`) |
+| Renderer / compile | `LoopLibCore/sources/pdfrenderer.h`, `pdfpainter.h` (`PDFPrecompiledPage`) |
+| Session prototype | `LoopLibCore/sources/pdfbleedfixup.cpp` (wiring + strip raster) |
 | Headless wiring example | `PdfTool/pdftoolrender.cpp` |
-| Decoded streams | `LoupeLibCore/sources/pdfdocument.h`, `pdfstreamfilters.h` |
-| Editor session split | `LoupeLibWidgets/sources/pdfdrawspacecontroller.h`, `pdfcompiler.h` |
+| Decoded streams | `LoopLibCore/sources/pdfdocument.h`, `pdfstreamfilters.h` |
+| Editor session split | `LoopLibWidgets/sources/pdfdrawspacecontroller.h`, `pdfcompiler.h` |
 | Preflight command | `PdfTool/pdftoolpreflight.cpp` |
 | Preflight box math | `PdfTool/pdftoolpreflightchecks.h` |
-| Report / profile schema | `loupe-preflight/schemas/report.schema.json`, `profile.schema.json` |
-| Default profile | `loupe-preflight/profiles/loupe-default.{yaml,json}` |
+| Report / profile schema | `loop-preflight/schemas/report.schema.json`, `profile.schema.json` |
+| Default profile | `loop-preflight/profiles/loop-default.{yaml,json}` |
 | Sibling fixup plan | `docs/MIRROR_BLEED_PLAN.md` |
 | Prepress note | `NOTES.txt` §14.11 |
 | Planning process | `docs/PLANNING.md` |

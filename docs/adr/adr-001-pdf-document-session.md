@@ -31,7 +31,7 @@ from PdfTool (headless), Editor (GUI), and PageMaster (batch).
 - **Thread-safety:** The session is not thread-safe. A single synchronous run
   owns its session; concurrent page evaluation requires separate sessions or
   external synchronization.
-- **Namespace:** `pdf::PDFDocumentSession` in `LoupeLibCore`.
+- **Namespace:** `pdf::PDFDocumentSession` in `LoopLibCore`.
 
 ## Consequences
 

@@ -185,7 +185,7 @@ void FilenameSanitizerTest::test_attachmentOpenPath_contained()
     QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
-    const QString attachmentDirectoryName = tempDir.filePath(QStringLiteral("LOUPE/Attachments/test-id"));
+    const QString attachmentDirectoryName = tempDir.filePath(QStringLiteral("LOOP/Attachments/test-id"));
     QVERIFY(QDir().mkpath(attachmentDirectoryName));
 
     const QString sanitizedFileName = pdf::PDFFilenameSanitizer::sanitize(QStringLiteral("../../secret.txt"));

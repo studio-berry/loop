@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Keep the one command catalog in parity with the shell it replaces.
 
-docs/loupe-shell-actions.json is the single registry for Editor commands.
-scripts/verify-loupe-shell-contract.ps1 already pins its ID set against the
-<action> entries in LoupeLibGui/pdfeditormainwindow.ui; this check owns the
+docs/loop-shell-actions.json is the single registry for Editor commands.
+scripts/verify-loop-shell-contract.ps1 already pins its ID set against the
+<action> entries in LoopLibGui/pdfeditormainwindow.ui; this check owns the
 `command` block that pdfinteraction::CommandCatalog consumes.
 
 The interesting rule is shortcut parity. Shortcuts are not in the .ui — they are
 assigned in C++ by PDFActionManager::initActions against enum names, which
-LoupeLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
+LoopLibGui/pdfeditormainwindow.cpp maps to .ui action IDs. A catalog that
 disagreed with those assignments would be a second command truth wearing the
 first one's ID set, so both files are parsed and compared here.
 
-See docs/LOUPE_SHELL_CONTRACT.md and architecture invariant I22.
+See docs/LOOP_SHELL_CONTRACT.md and architecture invariant I22.
 """
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_PATH = ROOT / "docs" / "loupe-shell-actions.json"
-MAIN_WINDOW_PATH = ROOT / "LoupeLibGui" / "pdfeditormainwindow.cpp"
-CONTROLLER_PATH = ROOT / "LoupeLibGui" / "pdfprogramcontroller.cpp"
+POLICY_PATH = ROOT / "docs" / "loop-shell-actions.json"
+MAIN_WINDOW_PATH = ROOT / "LoopLibGui" / "pdfeditormainwindow.cpp"
+CONTROLLER_PATH = ROOT / "LoopLibGui" / "pdfprogramcontroller.cpp"
 
-# Commands that have a handler in LoupeLibInteraction (DocumentFacade for
+# Commands that have a handler in LoopLibInteraction (DocumentFacade for
 # document lifecycle, ViewportCommandBridge for page/zoom/rotate). A command
 # may only leave this set by being implemented somewhere else, never by being
 # quietly downgraded.
@@ -54,11 +54,20 @@ IMPLEMENTED_COMMANDS = frozenset(
 )
 
 # Commands registered by the Quick shell host (EditorHost) rather than
-# LoupeLibInteraction. Promoting one to implemented still requires a real
-# capability in loupe-shell-actions.json.
+# LoopLibInteraction. Promoting one to implemented still requires a real
+# capability in loop-shell-actions.json.
 SHELL_IMPLEMENTED_COMMANDS = frozenset(
     {
         "actionQuit",
+        "actionFind",
+        "actionFindNext",
+        "actionFindPrevious",
+        "actionFullscreenMode",
+        "actionPageLayoutContinuous",
+        "actionPageLayoutSinglePage",
+        "actionPageLayoutTwoColumns",
+        "actionPageLayoutTwoPages",
+        "actionProperties",
     }
 )
 
@@ -292,24 +301,24 @@ def check_shortcut_parity(
     for action_id, expected in sorted(expected_by_id.items()):
         command = commands.get(action_id)
         if command is None:
-            errors.append(f"{action_id}: has a Widgets shortcut but no catalog entry")
+            errors.append(f"{action_id}: has a legacy UI shortcut but no catalog entry")
             continue
         actual = command.get("shortcut")
         if actual is None:
             errors.append(
-                f"{action_id}: the Widgets shell binds {expected!r} but the catalog "
+                f"{action_id}: the legacy UI binds {expected!r} but the catalog "
                 "declares no shortcut"
             )
         elif actual != expected:
             errors.append(
-                f"{action_id}: catalog shortcut {actual!r} contradicts the Widgets "
+                f"{action_id}: catalog shortcut {actual!r} contradicts the legacy "
                 f"shell's {expected!r}"
             )
 
     for action_id, command in sorted(commands.items()):
         if "shortcut" in command and action_id not in expected_by_id:
             errors.append(
-                f"{action_id}: the catalog invents a shortcut the Widgets shell does "
+                f"{action_id}: the catalog invents a shortcut the legacy UI does "
                 "not bind; add it to PDFActionManager::initActions first"
             )
 
@@ -372,7 +381,7 @@ def validate_catalog(
         pass
     else:
         errors.append(
-            "Widgets shortcut parity requires both pdfeditormainwindow.cpp and "
+            "Legacy UI shortcut parity requires both shell source files and "
             "pdfprogramcontroller.cpp, or neither after Issue 17"
         )
     return errors
@@ -384,14 +393,14 @@ def verify() -> str:
         raise ContractError("\n".join(f"  - {error}" for error in errors))
 
     policy = load_policy(POLICY_PATH)
-    implemented = len(IMPLEMENTED_COMMANDS)
+    implemented = len(IMPLEMENTED_COMMANDS | SHELL_IMPLEMENTED_COMMANDS)
     if MAIN_WINDOW_PATH.is_file() and CONTROLLER_PATH.is_file():
         shortcuts = widget_shortcuts(read_source(CONTROLLER_PATH), CONTROLLER_PATH)
         shortcut_note = (
             f"{len(shortcuts)} shortcuts in parity with PDFActionManager::initActions."
         )
     else:
-        shortcut_note = "Widgets shortcut parity skipped (Quick shell owns bindings after Issue 17)."
+        shortcut_note = "Legacy UI shortcut parity skipped (Quick shell owns bindings after Issue 17)."
     return (
         f"Command catalog verified: {len(policy['actions'])} descriptors "
         f"({implemented} implemented, {len(policy['actions']) - implemented} declared); "

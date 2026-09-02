@@ -15,7 +15,7 @@ from shutil import which
 from typing import Any
 
 
-SCHEMA = "loupe.independent-validation-evidence"
+SCHEMA = "loop.independent-validation-evidence"
 SCHEMA_VERSION = 1
 MAX_OUTPUT = 4096
 CLAIMS = {

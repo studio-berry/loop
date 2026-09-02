@@ -117,7 +117,7 @@ QJsonObject scopeFixtureReport(const QJsonObject& finding, bool pass)
     return QJsonObject{
         { QStringLiteral("schema_version"), 2 },
         { QStringLiteral("pass"), pass },
-        { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
+        { QStringLiteral("profile"), QStringLiteral("Loop Default") },
         { QStringLiteral("errors"), errors },
         { QStringLiteral("warnings"), warnings },
         { QStringLiteral("fixups_available"), QJsonArray() }
@@ -128,8 +128,8 @@ QJsonObject scopeFixtureReport(const QJsonObject& finding, bool pass)
 
 void PreflightPluginTest::resolveBundlePath_combinesApplicationAndRelativePaths()
 {
-    QCOMPARE(pdfplugin::preflight::resolveBundlePath(QStringLiteral("/bundle/app"), QStringLiteral("../share/loupe/profiles/loupe-default.json")),
-             QStringLiteral("/bundle/share/loupe/profiles/loupe-default.json"));
+    QCOMPARE(pdfplugin::preflight::resolveBundlePath(QStringLiteral("/bundle/app"), QStringLiteral("../share/loop/profiles/loop-default.json")),
+             QStringLiteral("/bundle/share/loop/profiles/loop-default.json"));
 }
 
 void PreflightPluginTest::isExpectedPreflightExitCode_acceptsPassAndFindings()
@@ -146,7 +146,7 @@ void PreflightPluginTest::isNormalizedReport_requiresTheSidecarContract()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 1);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
@@ -162,7 +162,7 @@ void PreflightPluginTest::isNormalizedReport_acceptsFixupParams()
     QJsonObject report;
     report.insert(QStringLiteral("schema_version"), 1);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
 
@@ -207,7 +207,7 @@ void PreflightPluginTest::isNormalizedReport_acceptsSchemaV3InspectionIncomplete
     report.insert(QStringLiteral("schema_version"), 3);
     report.insert(QStringLiteral("inspection_complete"), false);
     report.insert(QStringLiteral("pass"), false);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
@@ -228,7 +228,7 @@ void PreflightPluginTest::isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerd
     report.insert(QStringLiteral("schema_version"), 3);
     report.insert(QStringLiteral("inspection_complete"), true);
     report.insert(QStringLiteral("pass"), true);
-    report.insert(QStringLiteral("profile"), QStringLiteral("Loupe Default"));
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
     report.insert(QStringLiteral("errors"), QJsonArray());
     report.insert(QStringLiteral("warnings"), QJsonArray());
     report.insert(QStringLiteral("fixups_available"), QJsonArray());
@@ -254,7 +254,7 @@ void PreflightPluginTest::preflightReportModel_failsClosedOnMalformedCurrentSche
         { QStringLiteral("schema_version"), 3 },
         { QStringLiteral("inspection_complete"), true },
         { QStringLiteral("pass"), true },
-        { QStringLiteral("profile"), QStringLiteral("Loupe Default") },
+        { QStringLiteral("profile"), QStringLiteral("Loop Default") },
         { QStringLiteral("errors"), QJsonArray() },
         { QStringLiteral("warnings"), QJsonArray() },
         { QStringLiteral("fixups_available"), QJsonArray() },
@@ -311,7 +311,7 @@ void PreflightPluginTest::isImplementedFixupId_advertisesImplementedFixups()
 
 void PreflightPluginTest::shippedProfileFixups_areImplemented()
 {
-    const QDir profiles(QStringLiteral(LOUPE_PREFLIGHT_SOURCE_DIR "/profiles"));
+    const QDir profiles(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles"));
     const QFileInfoList profileFiles = profiles.entryInfoList({ QStringLiteral("*.json") },
                                                               QDir::Files,
                                                               QDir::Name);
@@ -407,7 +407,7 @@ void PreflightPluginTest::pdfToolEnvelope_extractsReportAndDiagnostics()
                                                  { QStringLiteral("severity"), QStringLiteral("error") },
                                                  { QStringLiteral("code"), QStringLiteral("cli.invalid-arguments") },
                                                  { QStringLiteral("message"), QStringLiteral("No profile specified.") } } } },
-        { QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), QJsonObject{ { QStringLiteral("schema_version"), 3 }, { QStringLiteral("pass"), true }, { QStringLiteral("profile"), QStringLiteral("Loupe Default") }, { QStringLiteral("errors"), QJsonArray() }, { QStringLiteral("warnings"), QJsonArray() }, { QStringLiteral("fixups_available"), QJsonArray() }, { QStringLiteral("inspection_complete"), true }, { QStringLiteral("checks"), QJsonArray() }, { QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("pass") }, { QStringLiteral("reason_code"), QStringLiteral("no-blocking-findings") }, { QStringLiteral("reason"), QStringLiteral("No blocking findings were reported.") }, { QStringLiteral("blocking_finding_ids"), QJsonArray() }, { QStringLiteral("waived_finding_ids"), QJsonArray() } } } } } } }
+        { QStringLiteral("data"), QJsonObject{ { QStringLiteral("report"), QJsonObject{ { QStringLiteral("schema_version"), 3 }, { QStringLiteral("pass"), true }, { QStringLiteral("profile"), QStringLiteral("Loop Default") }, { QStringLiteral("errors"), QJsonArray() }, { QStringLiteral("warnings"), QJsonArray() }, { QStringLiteral("fixups_available"), QJsonArray() }, { QStringLiteral("inspection_complete"), true }, { QStringLiteral("checks"), QJsonArray() }, { QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("pass") }, { QStringLiteral("reason_code"), QStringLiteral("no-blocking-findings") }, { QStringLiteral("reason"), QStringLiteral("No blocking findings were reported.") }, { QStringLiteral("blocking_finding_ids"), QJsonArray() }, { QStringLiteral("waived_finding_ids"), QJsonArray() } } } } } } }
     };
 
     QVERIFY(pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")));

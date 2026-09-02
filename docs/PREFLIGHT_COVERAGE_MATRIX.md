@@ -1,6 +1,6 @@
 # Preflight check catalog and GWG / PDF/X coverage
 
-Loupe publishes a generated check catalog and a coverage matrix so a clean
+Loop publishes a generated check catalog and a coverage matrix so a clean
 preflight pass is read as **clean against this scope**, not as a Ghent Workgroup
 certificate.
 
@@ -24,12 +24,12 @@ entry names a check that is not registered.
 
 Each check is `covered`, `partial` (limitation named in the overlay), or
 `not_covered`. Process families follow GWG's sheetfed offset, web offset,
-packaging, newspaper, and digital printing groups, plus Loupe's audited PDF/X
+packaging, newspaper, and digital printing groups, plus Loop's audited PDF/X
 targets. See also [`PDFX_POLICY_MATRIX.md`](PDFX_POLICY_MATRIX.md).
 
 ## Claim
 
-**Loupe does not claim formal GWG conformance.** The matrix is a measurement
+**Loop does not claim formal GWG conformance.** The matrix is a measurement
 and backlog tool. A report's `coverage_scope` object carries the same claim
 with the enabled check ids for that run.
 

@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
-  <Identity Name="mberrys.Loupe-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${LOUPE_WINDOWS_VERSION}" />
+  <Identity Name="mberrys.Loop-pdf" Publisher="CN=F0582764-7439-4F99-A76D-473EDF10E031" Version="${LOOP_WINDOWS_VERSION}" />
   <Properties>
-    <DisplayName>Loupe</DisplayName>
+    <DisplayName>Loop</DisplayName>
     <PublisherDisplayName>Michael Berry</PublisherDisplayName>
     <Logo>assets\logo.png</Logo>
-    <Description>Loupe: inspect and prepare production PDFs.</Description>
+    <Description>Loop: inspect and prepare production PDFs.</Description>
   </Properties>
   <Resources>
     <Resource Language="en-us" />
   </Resources>
   <Applications>
-    <Application Id="LoupeEditor" Executable="LoupeEditor.exe" EntryPoint="windows.fullTrustApplication">
-      <uap:VisualElements DisplayName="Loupe"
+    <Application Id="LoopEditor" Executable="LoopEditor.exe" EntryPoint="windows.fullTrustApplication">
+      <uap:VisualElements DisplayName="Loop"
                           Description="Inspect and prepare production PDFs with deterministic preflight and production tools."
                           BackgroundColor="transparent"
-                          Square150x150Logo="assets\150x150\io.github.mberrys.Loupe-pdf.LoupeEditor.png"
-                          Square44x44Logo="assets\44x44\io.github.mberrys.Loupe-pdf.LoupeEditor.png">
+                          Square150x150Logo="assets\150x150\io.github.mberrys.Loop-pdf.LoopEditor.png"
+                          Square44x44Logo="assets\44x44\io.github.mberrys.Loop-pdf.LoopEditor.png">
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.fileTypeAssociation">
@@ -29,7 +29,7 @@
         </uap:Extension>
       </Extensions>
     </Application>
-@LOUPE_LOUPE_COMPAT_APPLICATIONS@
+@LOOP_LOOP_COMPAT_APPLICATIONS@
   </Applications>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19045.0" />

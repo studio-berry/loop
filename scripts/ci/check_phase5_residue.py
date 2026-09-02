@@ -16,12 +16,15 @@ MAINTAINED_PREFIXES = (
     "WixInstaller/",
     "Desktop/",
     "README.md",
-    "LoupeEditor/",
-    "LoupeLibCore/",
-    "LoupeLibInteraction/",
-    "LoupeLibQuick/",
+    "AGENTS.md",
+    ".claude/",
+    ".cursor/",
+    "LoopEditor/",
+    "LoopLibCore/",
+    "LoopLibInteraction/",
+    "LoopLibQuick/",
     "PdfTool/",
-    "loupe-ocr/",
+    "loop-ocr/",
     "scripts/",
     "UnitTests/",
 )
@@ -29,15 +32,15 @@ CURRENT_DOCS = {
     "docs/ACCESSIBILITY_BASELINE.md",
     "docs/EDITOR_RECOVERY.md",
     "docs/JOB_SCHEDULER.md",
-    "docs/LOUPE_SHELL_CONTRACT.md",
-    "docs/LOUPE_WORKSPACES.md",
+    "docs/LOOP_SHELL_CONTRACT.md",
+    "docs/LOOP_WORKSPACES.md",
     "docs/PLATFORM_SUPPORT.md",
     "docs/REPO_MAP.md",
 }
 FORBIDDEN = (
-    re.compile(r"\bLoupeLibWidgets(?:/|\\|\b)"),
-    re.compile(r"\bLoupeLibGui(?:/|\\|\b)"),
-    re.compile(r"\bLoupe(?:Viewer|PageMaster|Diff|LaunchPad)(?:\.exe)?\b"),
+    re.compile(r"\bLoopLibWidgets(?:/|\\|\b)"),
+    re.compile(r"\bLoopLibGui(?:/|\\|\b)"),
+    re.compile(r"\bLoop(?:Viewer|PageMaster|Diff|LaunchPad)(?:\.exe)?\b"),
 )
 
 

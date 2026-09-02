@@ -1,0 +1,231 @@
+{
+  "schema_kind": "loop-interaction-scenario",
+  "schema_version": 1,
+  "scenario_id": "click-select-deselect",
+  "description": "Click selects the finding under the pointer; a second click on empty page space clears it. Both presses stay under the drag threshold, so neither may emit a document operation.",
+  "fixture": {
+    "page_count": 4,
+    "page_size_mm": {
+      "width": 210.0,
+      "height": 297.0
+    },
+    "pixel_per_mm": 2.0,
+    "device_pixel_ratio": 1.0,
+    "initial_zoom": 1.0,
+    "viewport_size_px": {
+      "width": 1200,
+      "height": 800
+    },
+    "page_layout": "single-page",
+    "hit_targets": [
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0001",
+        "page_bounds": {
+          "x": 20.0,
+          "y": 20.0,
+          "width": 40.0,
+          "height": 20.0
+        }
+      },
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0002",
+        "page_bounds": {
+          "x": 90.0,
+          "y": 20.0,
+          "width": 30.0,
+          "height": 30.0
+        }
+      },
+      {
+        "kind": "finding",
+        "page_index": 0,
+        "id": "f-0003",
+        "page_bounds": {
+          "x": 20.0,
+          "y": 80.0,
+          "width": 60.0,
+          "height": 15.0
+        }
+      }
+    ]
+  },
+  "cost_model": {
+    "base_frame_ns": 500000,
+    "hit_test_ns_per_candidate": 20000,
+    "overlay_ns_per_primitive": 3000,
+    "page_surface_admit_ns": 400000,
+    "cache_miss_ns": 2000000,
+    "external_present_ns": 1500000
+  },
+  "budgets": {
+    "refresh_rate_hz": 60.0,
+    "frame_p95_ms": 16.667,
+    "input_to_frame_p95_ms": 16.667,
+    "max_slow_frames": 0,
+    "max_dropped_frames": 0,
+    "variance_band_multiplier": 2.5
+  },
+  "expected": {
+    "selected_id": "",
+    "hover_id": "",
+    "drag_completed": 0,
+    "request_generation_changed": false,
+    "cancellations": [],
+    "unbalanced_frames": 0,
+    "pending_inputs": 0
+  },
+  "trace": {
+    "schema_version": 1,
+    "trace_id": "click-select-deselect",
+    "inputs": [
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 16666667,
+            "sequence": 1
+          },
+          "action": "move",
+          "position_px": {
+            "x": 300,
+            "y": 200
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 33333334,
+            "sequence": 2
+          },
+          "action": "move",
+          "position_px": {
+            "x": 200,
+            "y": 120
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 50000001,
+            "sequence": 3
+          },
+          "action": "move",
+          "position_px": {
+            "x": 110,
+            "y": 70
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 66666668,
+            "sequence": 4
+          },
+          "action": "press",
+          "position_px": {
+            "x": 110,
+            "y": 70
+          },
+          "button": 1,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 83333335,
+            "sequence": 5
+          },
+          "action": "release",
+          "position_px": {
+            "x": 110,
+            "y": 70
+          },
+          "button": 1,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 100000002,
+            "sequence": 6
+          },
+          "action": "move",
+          "position_px": {
+            "x": 300,
+            "y": 400
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 116666669,
+            "sequence": 7
+          },
+          "action": "move",
+          "position_px": {
+            "x": 500,
+            "y": 520
+          },
+          "button": 0,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 133333336,
+            "sequence": 8
+          },
+          "action": "press",
+          "position_px": {
+            "x": 500,
+            "y": 520
+          },
+          "button": 1,
+          "buttons": 1,
+          "modifiers": 0
+        }
+      },
+      {
+        "pointer": {
+          "stamp": {
+            "monotonic_ns": 150000003,
+            "sequence": 9
+          },
+          "action": "release",
+          "position_px": {
+            "x": 500,
+            "y": 520
+          },
+          "button": 1,
+          "buttons": 0,
+          "modifiers": 0
+        }
+      }
+    ]
+  }
+}

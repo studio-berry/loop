@@ -1,6 +1,6 @@
 # Preflight wave merge order
 
-Loupe 0.1.1 semantic-trust work spans `cursor/s00-m0-plan-0158` and wave branches
+Loop 0.1.1 semantic-trust work spans `cursor/s00-m0-plan-0158` and wave branches
 `wave-a` through `wave-d`. Merge or rebase in this order so later waves do not
 reintroduce stale fixes from an older base.
 

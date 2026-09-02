@@ -1,5 +1,5 @@
 {
-  "schema_kind": "loupe-resource-envelope-budgets",
+  "schema_kind": "loop-resource-envelope-budgets",
   "schema_version": 2,
   "policy": "two-tier",
   "description": "Checked-in safety caps are blocking. Baseline deltas are reported until both platform baselines exist.",

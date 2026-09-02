@@ -59,8 +59,8 @@ class RecordWidgetsFreeReleaseEvidenceTest(unittest.TestCase):
             (build / "CMakeCache.txt").write_text(
                 "\n".join(
                     [
-                        "LOUPE_LOUPE_DISTRIBUTION:BOOL=ON",
-                        "LOUPE_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
+                        "LOOP_LOOP_DISTRIBUTION:BOOL=ON",
+                        "LOOP_CONFIGURE_REQUIRES_WIDGETS:INTERNAL=OFF",
                         f"Qt6_DIR:PATH={filtered / 'lib' / 'cmake' / 'Qt6'}",
                     ]
                 )

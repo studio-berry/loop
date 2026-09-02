@@ -17,7 +17,7 @@ RETIRED_FROM_INSTALL = frozenset(
         "AudioBookPlugin",
         "DimensionsPlugin",
         "EditorPlugin",
-        "LoupePreflightPlugin",
+        "LoopPreflightPlugin",
         "ObjectInspectorPlugin",
         "OcrPlugin",
         "OutputPreviewPlugin",
@@ -66,7 +66,7 @@ def _replacement_owner_ids(product: dict) -> frozenset[str]:
         if (
             row.get("kind") == "application"
             and row.get("artifact_scope") == "install"
-            and row.get("profiles", {}).get("loupe-release") == "present"
+            and row.get("profiles", {}).get("loop-release") == "present"
             and not row.get("replacement_surface")
             and row.get("id")
         ):
@@ -83,7 +83,7 @@ def _disposition_plugins(disposition: dict) -> dict[str, dict]:
 
 
 def _has_install_rule(plugin: str) -> bool:
-    cmake = ROOT / "LoupeEditorPlugins" / plugin / "CMakeLists.txt"
+    cmake = ROOT / "LoopEditorPlugins" / plugin / "CMakeLists.txt"
     if not cmake.is_file():
         return False
     text = cmake.read_text(encoding="utf-8")
@@ -109,7 +109,7 @@ def _expect_shell_disposition(product_row: dict, shell_row: dict) -> None:
 
 
 def validate_plugin_policies(root: Path) -> None:
-    shell = _load_json(root / "docs" / "loupe-shell.json")
+    shell = _load_json(root / "docs" / "loop-shell.json")
     product = _load_json(root / "docs" / "product-surface.json")
     disposition = _load_json(root / "docs/generated/phase5-widgets-disposition.json")
     product_plugins = _plugin_product_rows(product)
@@ -143,8 +143,8 @@ def validate_plugin_policies(root: Path) -> None:
 
         if product_row.get("artifact_scope") != "build":
             raise PolicyError(f"{plugin} must be build-only")
-        if product_row.get("profiles", {}).get("loupe-release") != "absent":
-            raise PolicyError(f"{plugin} must be absent from loupe-release profile")
+        if product_row.get("profiles", {}).get("loop-release") != "absent":
+            raise PolicyError(f"{plugin} must be absent from loop-release profile")
         if _has_install_rule(plugin):
             raise PolicyError(f"{plugin} still has install() rule")
         if evidence and evidence.get("disposition") not in {"DELETE", "HEADLESS-REPLACE", "BLOCKED", "RETAIN-NON-PRODUCT"}:
@@ -165,7 +165,7 @@ def main() -> int:
     except PolicyError as exc:
         print(f"Plugin surface policies FAILED: {exc}", file=sys.stderr)
         return 1
-    print("Plugin surface policies verified: all 12 plugins are build-only and absent from loupe-release")
+    print("Plugin surface policies verified: all 12 plugins are build-only and absent from loop-release")
     return 0
 
 

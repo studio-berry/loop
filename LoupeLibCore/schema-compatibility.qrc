@@ -1,5 +1,0 @@
-<RCC>
-    <qresource prefix="/loupe">
-        <file alias="schema-compatibility.json">../docs/schema-compatibility.json</file>
-    </qresource>
-</RCC>
