@@ -6,6 +6,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfdocumentsearch.h"
 #include "pdfdocumentsession.h"
+#include "pdfform.h"
 #include "pdfoutline.h"
 #include "pdfpage.h"
 #include "pdfutils.h"
