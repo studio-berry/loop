@@ -347,6 +347,8 @@ struct LOOPLIBCORESHARED_EXPORT PreflightCheckStatus
     qint64 budgetLimit = 0;
     qint64 budgetAttempted = 0;
     QString budgetContext;
+    qint64 budgetObservedBytes = 0;
+    qint64 budgetCompressedBytes = 0;
 };
 
 /// Result of a preflight run.
