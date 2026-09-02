@@ -225,6 +225,14 @@ jobs:
           fi
           mkdir -p "$(dirname "$qml_dest")"
           cp -a "$loop_quick_src" "$qml_dest"
+          loop_canvas_src="$GITHUB_WORKSPACE/loop/build/LoopLibQuick/Loop/Canvas"
+          qml_canvas_dest="install/usr/lib/qml/Loop/Canvas"
+          if [ ! -d "$loop_canvas_src" ]; then
+            echo "::error::Built Loop.Canvas QML module was not found: $loop_canvas_src"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$qml_canvas_dest")"
+          cp -a "$loop_canvas_src" "$qml_canvas_dest"
           # Headless PdfTool smoke runs with QT_QPA_PLATFORM=offscreen and strips
           # developer Qt env vars. Bundle the offscreen QPA plugin and qt.conf so
           # the packaged tree is self-describing (WindowsInstall.yml does the same).
