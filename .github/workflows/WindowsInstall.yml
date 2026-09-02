@@ -281,7 +281,7 @@ jobs:
             }
           }
 
-          $builtLoupeQuick = Join-Path $env:GITHUB_WORKSPACE "loupe\build\Loupe\Quick"
+          $builtLoupeQuick = Join-Path $env:GITHUB_WORKSPACE "loupe\build\LoupeEditor\Loupe\Quick"
           $qmlLoupeQuick = Join-Path $installBin "qml\Loupe\Quick"
           if (-not (Test-Path -LiteralPath $builtLoupeQuick)) {
             throw "Built Loupe.Quick QML module was not found: $builtLoupeQuick"

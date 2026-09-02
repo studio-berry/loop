@@ -455,6 +455,7 @@
         "UnitTestsRepairOperation",
         "UnitTestsRepairOperatorAcceptance",
         "UnitTestsResourceBudget",
+        "UnitTestsRevisionStress",
         "UnitTestsRgbToCmyk",
         "UnitTestsSafeFileWriter",
         "UnitTestsSchemaEvolution",
@@ -2582,6 +2583,46 @@
     },
     {
       "id": "UnitTestsResourceBudget",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoupeLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoupeLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsRevisionStress",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
       "profile_enabled": false,

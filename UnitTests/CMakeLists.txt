@@ -78,6 +78,21 @@ set_target_properties(UnitTestsJobScheduler PROPERTIES
 
 add_test(UnitTestsJobScheduler "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsJobScheduler")
 
+add_executable(UnitTestsRevisionStress
+    tst_revisionstresstest.cpp
+)
+
+target_link_libraries(UnitTestsRevisionStress PRIVATE LoupeLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+set_target_properties(UnitTestsRevisionStress PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}
+)
+
+add_test(UnitTestsRevisionStress "${CMAKE_BINARY_DIR}/${LOUPE_INSTALL_BIN_DIR}/UnitTestsRevisionStress")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase4-tests.cmake)
 
 
