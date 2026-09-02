@@ -34,8 +34,27 @@ if (-not $cli -or -not $cli.assetId -or -not $cli.sha256 -or -not $cli.upstream)
 }
 
 $org = if ($env:SENTRY_ORG) { $env:SENTRY_ORG } else { "berry-studios" }
-$project = if ($env:SENTRY_PROJECT) { $env:SENTRY_PROJECT } else { "4511866328449104" }
 $url = if ($env:SENTRY_URL) { $env:SENTRY_URL } else { "https://de.sentry.io" }
+
+function Resolve-SentryProject([string]$Root) {
+    if ($env:SENTRY_PROJECT) {
+        return [string]$env:SENTRY_PROJECT
+    }
+    $cmakePath = Join-Path $Root "CMakeLists.txt"
+    if (-not (Test-Path -LiteralPath $cmakePath)) {
+        throw "upload_sentry_debug_files.ps1: CMakeLists.txt not found; cannot resolve Sentry project id."
+    }
+    $dsnMatch = [regex]::Match(
+        (Get-Content -LiteralPath $cmakePath -Raw),
+        'ingest\.de\.sentry\.io/(\d+)'
+    )
+    if (-not $dsnMatch.Success) {
+        throw "upload_sentry_debug_files.ps1: LOOP_SENTRY_DSN in CMakeLists.txt has no ingest project id."
+    }
+    return $dsnMatch.Groups[1].Value
+}
+
+$project = Resolve-SentryProject $repoRoot
 
 $cliPath = Join-Path $env:RUNNER_TEMP "sentry-cli-Windows-x86_64.exe"
 if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
