@@ -143,7 +143,7 @@ jobs:
 
       - name: 'VCPKG: Install Project Dependencies'
         run: |
-          ./vcpkg/vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
+          ./vcpkg install --triplet x64-linux-release --x-manifest-root=${{ github.workspace }}/loop --x-install-root=$VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
 
       - name: Install Qt
