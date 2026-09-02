@@ -214,6 +214,21 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     add_test(UnitTestsP4S9Interaction "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsP4S9Interaction")
 
     if(LOOP_BUILD_QUICK_CANVAS)
+        add_executable(UnitTestsQuickDocumentModel
+            tst_quickdocumentmodeltest.cpp
+        )
+
+        target_link_libraries(UnitTestsQuickDocumentModel PRIVATE LoopEditorQuick LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        set_target_properties(UnitTestsQuickDocumentModel PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsQuickDocumentModel "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsQuickDocumentModel")
+        set_tests_properties(UnitTestsQuickDocumentModel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
         add_executable(UnitTestsQuickAccessibility
             tst_quickaccessibilitytest.cpp
         )

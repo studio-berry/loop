@@ -23,7 +23,7 @@ and re-run the mapped tests. A clean merge is not verification.
 |------|----------------|----------|-------|-------|
 | Processing budgets | `PDFProcessingBudget` bounds decode, raster, and graph work; exhaustion is incomplete | No equivalent named pools | `UnitTestsProcessingBudget`, `UnitTestsBudgetExhaustion` | #242 / #243 |
 | Plugin ABI | Manifest ABI/capabilities inspected before `QPluginLoader::instance()`; packaged plugin dir only | Loads any plugin after `load()` | `UnitTestsPluginAbi` | #269 |
-| Revision fence | `PDFRevisionIdentity` discards stale async/cache results | Viewer caches are not revision-fenced | `UnitTestsDocumentSession`, `UnitTestsJobScheduler` | #236 |
+| Revision fence | `PDFRevisionIdentity` discards stale async/cache results | Viewer caches are not revision-fenced | `UnitTestsDocumentSession`, `UnitTestsJobScheduler`, `UnitTestsRevisionStress` | #236 |
 | Incremental save | Source digest mismatch refuses a silent rewrite | Writer may overwrite | `UnitTestsIncrementalSave` | #239 |
 | Render fidelity | Standard rendering reports cached overprint content as an explicit approximation; preflight and separation policies prohibit approximation | Standard renderer has no fidelity diagnostic | `UnitTestsOverprint` | #49 / #52 |
 

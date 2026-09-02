@@ -5,10 +5,12 @@ on:
     branches:
       - stable
       - dev
+      - unstable
   pull_request:
     branches:
       - stable
       - dev
+      - unstable
   workflow_dispatch:
 
 permissions:

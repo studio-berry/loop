@@ -9,13 +9,19 @@
     "qt_minimum": {"type": "string"},
     "branches": {
       "type": "object",
-      "required": ["default", "integration", "release", "topic_source", "protected"],
+      "required": ["default", "integration", "qualification", "release", "topic_source", "promotion_chain", "protected"],
       "properties": {
         "default": {"type": "string"},
         "integration": {"type": "string"},
+        "qualification": {"type": "string"},
         "release": {"type": "string"},
         "topic_source": {"type": "string"},
         "topic_branch_patterns": {"type": "array", "items": {"type": "string"}},
+        "promotion_chain": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 2
+        },
         "protected": {"type": "array", "items": {"type": "string"}, "minItems": 1}
       }
     },

@@ -1,0 +1,82 @@
+{
+  "schema_kind": "loop-interaction-scenario",
+  "schema_version": 1,
+  "scenario_id": "hover-dense",
+  "description": "Pointer sweeps across a page holding 4000 findings. The assertion that matters is the index candidate count, not latency: a spatial index that stopped narrowing looks identical to a heavier page in a frame-time percentile.",
+  "fixture": {
+    "page_count": 4,
+    "page_size_mm": {
+      "width": 210.0,
+      "height": 297.0
+    },
+    "pixel_per_mm": 2.0,
+    "device_pixel_ratio": 1.0,
+    "initial_zoom": 1.0,
+    "viewport_size_px": {
+      "width": 1200,
+      "height": 800
+    },
+    "page_layout": "single-page",
+    "generated_targets": {
+      "kind": "finding",
+      "count": 4000,
+      "page_index": 0,
+      "id_prefix": "d-",
+      "grid": {
+        "columns": 80,
+        "rows": 50,
+        "origin": {
+          "x": 5.0,
+          "y": 5.0
+        },
+        "stride": {
+          "width": 2.5,
+          "height": 5.8
+        },
+        "size": {
+          "width": 2.0,
+          "height": 4.0
+        }
+      }
+    }
+  },
+  "cost_model": {
+    "base_frame_ns": 500000,
+    "hit_test_ns_per_candidate": 20000,
+    "overlay_ns_per_primitive": 3000,
+    "page_surface_admit_ns": 400000,
+    "cache_miss_ns": 2000000,
+    "external_present_ns": 1500000
+  },
+  "budgets": {
+    "refresh_rate_hz": 60.0,
+    "frame_p95_ms": 16.667,
+    "input_to_frame_p95_ms": 16.667,
+    "max_slow_frames": 0,
+    "max_dropped_frames": 0,
+    "variance_band_multiplier": 2.5
+  },
+  "expected": {
+    "selected_id": "",
+    "drag_completed": 0,
+    "request_generation_changed": false,
+    "cancellations": [],
+    "unbalanced_frames": 0,
+    "pending_inputs": 0
+  },
+  "input_script": [
+    {
+      "kind": "hover-sweep",
+      "at_px": {
+        "x": 30,
+        "y": 200
+      },
+      "to_px": {
+        "x": 780,
+        "y": 200
+      },
+      "steps": 200,
+      "interval_ns": 16666667
+    }
+  ]
+}
