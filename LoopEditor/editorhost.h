@@ -159,7 +159,9 @@ public:
     /// the document stays open.
     Q_INVOKABLE void toggleCurrentPageFidelity();
     Q_INVOKABLE void goToPage(int pageIndex);
+    Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
+    Q_INVOKABLE void acknowledgeSearchPanel();
 
     Q_INVOKABLE QVariantList commandDescriptors() const;
     Q_INVOKABLE bool isCommandEnabled(const QString& commandId) const;

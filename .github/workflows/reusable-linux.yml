@@ -76,7 +76,7 @@ jobs:
         working-directory: loop
         run: python3 scripts/ci/check_version_policy.py
       - name: Verify processing-budget exhaustion corpus
-        working-directory: loupe
+        working-directory: loop
         run: python3 scripts/budget_exhaustion/generate_corpus.py --check
 
       - name: Prepare vcpkg directories

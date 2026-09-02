@@ -78,7 +78,9 @@ Item {
                             width: outlineView.width
                             text: model.display !== undefined ? model.display : title
                             Accessible.name: text
-                            onClicked: if (root.host && model.index !== undefined) root.host.goToOutlineIndex(model.index)
+                            enabled: page >= 0
+                            onClicked: if (root.host && page >= 0)
+                                root.host.goToOutlinePage(page)
                         }
 
                         Label {
@@ -162,8 +164,10 @@ Item {
     Connections {
         target: root.host
         function onPresentationChanged() {
-            if (root.host && root.host.searchPanelVisible)
+            if (root.host && root.host.searchPanelVisible) {
                 root.revealSearch()
+                root.host.acknowledgeSearchPanel()
+            }
         }
     }
 }

@@ -66,6 +66,7 @@ public:
     {
         TitleRole = Qt::UserRole + 1,
         HasChildrenRole,
+        PageRole,
     };
 
     explicit QuickOutlineModel(QObject* parent = nullptr);

@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / "UnitTests" / "testdata" / "budget-exhaustion"
-SCHEMA_KIND = "loupe-processing-budget-exhaustion-corpus"
+SCHEMA_KIND = "loop-processing-budget-exhaustion-corpus"
 SCHEMA_VERSION = 2
 
 
