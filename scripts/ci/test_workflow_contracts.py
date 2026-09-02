@@ -88,6 +88,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("build\\LoopEditor\\Loop\\Quick", windows)
         self.assertIn("plugins/sqldrivers", linux)
         self.assertIn("build/LoopEditor/Loop/Quick", linux)
+        self.assertIn('-qmldir="$GITHUB_WORKSPACE/loop/LoopEditor/qml"', linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", windows)
         self.assertIn("./vcpkg_installed", windows)
         self.assertIn("./vcpkg-binary-cache", windows)

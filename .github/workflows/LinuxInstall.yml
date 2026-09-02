@@ -212,7 +212,7 @@ jobs:
             exit 1
           fi
           mkdir -p "$(dirname "$qml_dest")"
-          cp -a "$loop_quick_src" "$qml_dest"
+          cp -a "$loop_quick_src/." "$qml_dest/"
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
@@ -226,6 +226,7 @@ jobs:
           ./deploy.AppImage --appimage-extract-and-run \
             install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop \
             -executable-dir=install/usr/bin \
+            -qmldir="$GITHUB_WORKSPACE/loop/LoopEditor/qml" \
             -extra-plugins=iconengines,imageformats,texttospeech 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
