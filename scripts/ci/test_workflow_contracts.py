@@ -92,6 +92,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("LoopLibQuick\\Loop\\Canvas", windows)
         self.assertIn("qoffscreen.dll", windows)
         self.assertIn("plugins/sqldrivers", linux)
+        self.assertIn("install/usr/lib/sqldrivers/libqsqlite.so", linux)
         self.assertIn("build/LoopEditor/Loop/Quick", linux)
         self.assertIn("build/LoopLibQuick/Loop/Canvas", linux)
         self.assertIn("libqoffscreen.so", linux)

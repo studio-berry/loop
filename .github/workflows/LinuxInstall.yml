@@ -253,6 +253,14 @@ jobs:
             'Prefix=..' \
             'Plugins=lib' \
             'Qml2Imports=lib/qml' > install/usr/bin/qt.conf
+          sqlite_driver="$QT_ROOT_DIR/plugins/sqldrivers/libqsqlite.so"
+          if [[ ! -e "$sqlite_driver" ]]; then
+            echo "::error::Required Qt SQLite driver is missing: $sqlite_driver"
+            exit 1
+          fi
+          mkdir -p install/usr/lib/sqldrivers
+          cp -f "$sqlite_driver" install/usr/lib/sqldrivers/libqsqlite.so
+          echo "Staged Qt SQL driver: libqsqlite.so" | tee -a "$evidence_dir/linuxdeployqt.txt"
           # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
           # not bundle. Remove them so deploy does not fail on missing vendor libs.
           rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
