@@ -154,6 +154,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFJobSnapshot
 struct LOOPLIBCORESHARED_EXPORT PDFJobTraceEvent
 {
     QString jobId;
+    PDFJobKind kind = PDFJobKind::Other;
     PDFJobStatus status = PDFJobStatus::Queued;
     PDFJobPriority priority = PDFJobPriority::Background;
     int queueDepth = 0;

@@ -238,6 +238,11 @@ void JobSchedulerTest::cancellationIsTerminalAndMeasured()
     const QList<pdf::PDFJobTraceEvent> events = scheduler.trace(jobId);
     QVERIFY(std::any_of(events.cbegin(), events.cend(), [](const pdf::PDFJobTraceEvent& event)
                         { return event.status == pdf::PDFJobStatus::Cancelled; }));
+
+    // issue #144 AC7: traces identify the async job by type.
+    QVERIFY(!events.isEmpty());
+    QVERIFY(std::all_of(events.cbegin(), events.cend(), [](const pdf::PDFJobTraceEvent& event)
+                        { return event.kind == pdf::PDFJobKind::Preflight; }));
 }
 
 void JobSchedulerTest::staleRevisionIsDiscardedBeforeWorkRuns()
