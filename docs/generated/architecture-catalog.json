@@ -408,6 +408,7 @@
     "UnitTestsIncrementalSave",
     "UnitTestsInteractionBoundary",
     "UnitTestsInteractionController",
+    "UnitTestsInteractionTraceContract",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
