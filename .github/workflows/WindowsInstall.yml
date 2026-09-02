@@ -319,6 +319,15 @@ jobs:
           Copy-Item -LiteralPath $offscreenPlugin -Destination (Join-Path $platformDir "qoffscreen.dll") -Force
           Write-Host "Staged Qt platform plugin: qoffscreen.dll" | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
 
+          $sqliteDriver = Join-Path $env:QT_ROOT_DIR "plugins\sqldrivers\qsqlite.dll"
+          if (-not (Test-Path -LiteralPath $sqliteDriver)) {
+            throw "Required Qt SQLite driver is missing: $sqliteDriver"
+          }
+          $sqlDriversDir = Join-Path $installBin "sqldrivers"
+          New-Item -ItemType Directory -Force -Path $sqlDriversDir | Out-Null
+          Copy-Item -LiteralPath $sqliteDriver -Destination (Join-Path $sqlDriversDir "qsqlite.dll") -Force
+          Write-Host "Staged Qt SQL driver: qsqlite.dll" | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
+
           # The clean installed-artifact smoke intentionally removes developer
           # Qt environment variables. Make the staged tree self-describing so
           # Qt resolves its bundled QML imports and plugins without the runner's
