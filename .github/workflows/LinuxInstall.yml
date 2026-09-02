@@ -226,6 +226,18 @@ jobs:
               rm -f "$driver"
             fi
           done
+          platform_dir="install/usr/lib/platforms"
+          mkdir -p "$platform_dir"
+          for platform_plugin in libqoffscreen.so libqminimal.so; do
+            source_plugin="$QT_ROOT_DIR/plugins/platforms/$platform_plugin"
+            if [[ -e "$source_plugin" ]]; then
+              cp -f "$source_plugin" "$platform_dir/$platform_plugin"
+              echo "Staged Qt platform plugin: $platform_plugin" | tee -a "$evidence_dir/linuxdeployqt.txt"
+            elif [[ "$platform_plugin" == "libqoffscreen.so" ]]; then
+              echo "::error::Required Qt platform plugin is missing: $source_plugin"
+              exit 1
+            fi
+          done
           cat > install/usr/bin/qt.conf <<'EOF'
           [Paths]
           Prefix=..
