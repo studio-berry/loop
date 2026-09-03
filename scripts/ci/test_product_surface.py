@@ -129,6 +129,32 @@ class ProductSurfaceContractTests(unittest.TestCase):
         errors = validate_install(install, self.manifest, "loop-release", install_manifest)
         self.assertTrue(any("CMake install manifest lists missing files" in error for error in errors))
 
+    def test_deployed_qt_module_tree_is_not_first_party(self):
+        # qt_generate_deploy_qml_app_script stages the Qt closure at
+        # usr/lib/qml/<Module>/... and plugins/<type>/..., where the file names are
+        # lib<something>plugin.so. Those collide with the lib*Plugin* glob that exists
+        # to catch Loop's own plugins, so the deployed tree must be ignored by path.
+        install = self._make_install_tree()
+        for relative in (
+            "usr/lib/qml/QtQuick/libqtquick2plugin.so",
+            "usr/lib/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so",
+            "plugins/generic/libqevdevmouseplugin.so",
+            "plugins/wayland-shell-integration/libwl-shell-plugin.so",
+        ):
+            path = install / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture")
+        self.assertEqual(validate_install(install, self.manifest, "loop-release"), [])
+
+    def test_loop_own_plugins_are_still_first_party(self):
+        # The ignore patterns above must not swallow Loop's plugin directories.
+        install = self._make_install_tree()
+        path = install / "usr" / "lib" / "loop" / "libActionListPlugin.so"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fixture")
+        errors = validate_install(install, self.manifest, "loop-release")
+        self.assertTrue(any("ActionListPlugin" in error for error in errors))
+
     def test_install_manifest_preserves_final_symlink_name(self):
         install = self._make_install_tree()
         real = install / "real.dll"

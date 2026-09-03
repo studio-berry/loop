@@ -541,7 +541,9 @@
       "iconengines/*",
       "imageformats/*",
       "styles/*",
-      "texttospeech/*"
+      "texttospeech/*",
+      "usr/lib/qml/*",
+      "plugins/*"
     ]
   },
   "cli": {
