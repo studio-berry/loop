@@ -86,6 +86,7 @@ install(TARGETS LoopEditor
 qt_generate_deploy_qml_app_script(
     TARGET LoopEditor
     OUTPUT_SCRIPT loop_editor_deploy_script
+    NO_TRANSLATIONS
     INCLUDE_PLUGIN_TYPES platforms sqldrivers
     INCLUDE_PLUGINS qoffscreen
 )

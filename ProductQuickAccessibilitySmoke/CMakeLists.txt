@@ -2,6 +2,14 @@ qt_policy(SET QTP0001 NEW)
 
 qt_add_executable(ProductQuickAccessibilitySmoke
     main.cpp
+    ../LoopEditor/editorhost.cpp
+    ../LoopEditor/editorhost.h
+    ../LoopEditor/focusrestoration.cpp
+    ../LoopEditor/focusrestoration.h
+    ../LoopEditor/quickdocumentmodel.cpp
+    ../LoopEditor/quickdocumentmodel.h
+    ../LoopEditor/documentviewsession.cpp
+    ../LoopEditor/documentviewsession.h
 )
 
 qt_add_qml_module(ProductQuickAccessibilitySmoke
@@ -27,6 +35,10 @@ target_link_libraries(ProductQuickAccessibilitySmoke
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+)
+
+target_include_directories(ProductQuickAccessibilitySmoke PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoopEditor
 )
 
 qt_import_qml_plugins(ProductQuickAccessibilitySmoke)
