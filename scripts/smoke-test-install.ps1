@@ -13,7 +13,9 @@
     calls this script.
 
 .PARAMETER InstallDir
-    Directory containing LoopEditor.exe and PdfTool.exe.
+    Directory containing the LoopEditor and PdfTool executables. On Windows this
+    defaults to the LOOP directory under Program Files; on other platforms it is
+    required.
 
 .PARAMETER ProfilesDir
     Override for the preflight profiles directory. When omitted the script probes
@@ -30,12 +32,13 @@
     C++/Qt only, so this is off by default and the scan fails when it is found.
 
 .PARAMETER AllowOcrPlugin
-    Permit OcrPlugin.dll to be present. V1 ships OCR as CLI-only (PdfTool ocr) --
+    Permit the platform's OcrPlugin shared library to be present. V1 ships OCR as
+    CLI-only (PdfTool ocr) --
     the Editor OCR UI plugin is not part of the V1 release surface (MIC-343), so
     this is off by default and the scan fails when it is found.
 #>
 param(
-    [string]$InstallDir = "${env:ProgramFiles}\LOOP",
+    [string]$InstallDir = "",
     [string]$ProfilesDir = "",
     [string]$TestPdf = "",
     [string]$SourceSha = "",
@@ -46,6 +49,23 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# $IsWindows is not defined by Windows PowerShell 5.1. OSVersion.Platform works
+# in both Windows PowerShell and cross-platform PowerShell.
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+$executableSuffix = if ($isWindowsPlatform) { ".exe" } else { "" }
+$sharedLibraryPrefix = if ($isWindowsPlatform) { "" } else { "lib" }
+$sharedLibrarySuffix = if ($isWindowsPlatform) { ".dll" } else { ".so" }
+
+if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+    if (-not $isWindowsPlatform) {
+        throw "InstallDir is required on non-Windows platforms. Pass the directory containing LoopEditor and PdfTool."
+    }
+    if ([string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        throw "InstallDir was not provided and ProgramFiles is unavailable. Pass -InstallDir explicitly."
+    }
+    $InstallDir = [IO.Path]::Combine($env:ProgramFiles, "LOOP")
+}
 
 if (-not [string]::IsNullOrWhiteSpace($SourceSha)) {
     if ($SourceSha -notmatch "^[0-9a-fA-F]{40}$") {
@@ -74,16 +94,19 @@ function Resolve-ProfilesDir {
     $parent = Split-Path -Parent $InstallDir
 
     $candidates = @(
-        (Join-Path $InstallDir "share\loop\profiles"),
-        (Join-Path $InstallDir "usr\share\loop\profiles"),
-        # Pre-MIC-301 assumption, kept so an old layout still resolves.
-        (Join-Path $env:ProgramFiles "share\loop\profiles")
+        ([IO.Path]::Combine($InstallDir, "share", "loop", "profiles")),
+        ([IO.Path]::Combine($InstallDir, "usr", "share", "loop", "profiles"))
     )
+
+    # Pre-MIC-301 assumption, kept so an old Windows layout still resolves.
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates += [IO.Path]::Combine($env:ProgramFiles, "share", "loop", "profiles")
+    }
 
     # $InstallDir can be a drive root, in which case there is no parent to probe.
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
-        $candidates += (Join-Path $parent "share\loop\profiles")
-        $candidates += (Join-Path $parent "usr\share\loop\profiles")
+        $candidates += [IO.Path]::Combine($parent, "share", "loop", "profiles")
+        $candidates += [IO.Path]::Combine($parent, "usr", "share", "loop", "profiles")
     }
 
     foreach ($candidate in $candidates) {
@@ -105,13 +128,19 @@ function Test-ForbiddenPayload {
     param([string[]]$Roots, [switch]$AllowOcr)
 
     $rules = @(
-        @{ Label = "Ghostscript"; Patterns = @("gswin*.exe", "gsdll*.dll", "gs.exe") },
-        @{ Label = "Java runtime"; Patterns = @("java.exe", "javaw.exe", "jvm.dll", "*.jar") },
-        @{ Label = "Python runtime"; Patterns = @("python*.exe", "python3*.dll", "*.whl") },
+        @{ Label = "Ghostscript"; Patterns = @("gswin*.exe", "gsdll*.dll", "gs.exe", "gs", "libgs.so", "libgs.so.*") },
+        @{ Label = "Java runtime"; Patterns = @("java.exe", "javaw.exe", "jvm.dll", "java", "javaw", "libjvm.so", "*.jar") },
+        @{ Label = "Python runtime"; Patterns = @(
+            "python*.exe", "python3*.dll", "python", "python2", "python2.*", "python3", "python3.*",
+            "libpython*.so", "libpython*.so.*", "*.whl"
+        ) },
         @{ Label = "Widgets-bound Qt"; Patterns = @(
             "Qt6Widgets.dll", "Qt6Widgets*.dll",
             "Qt6QuickWidgets.dll", "Qt6QuickWidgets*.dll",
-            "Qt6PrintSupport.dll", "Qt6PrintSupport*.dll"
+            "Qt6PrintSupport.dll", "Qt6PrintSupport*.dll",
+            "libQt6Widgets.so", "libQt6Widgets.so.*",
+            "libQt6QuickWidgets.so", "libQt6QuickWidgets.so.*",
+            "libQt6PrintSupport.so", "libQt6PrintSupport.so.*"
         ) }
     )
 
@@ -139,7 +168,7 @@ function Test-ForbiddenPayload {
             foreach ($pattern in $rule.Patterns) {
                 $hits = @(Get-ChildItem -LiteralPath $resolved -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue)
                 foreach ($hit in $hits) {
-                    $isOcrSidecar = $hit.FullName -like "*\LoopOcrService\*"
+                    $isOcrSidecar = $hit.FullName -match '(^|[\\/])LoopOcrService([\\/]|$)'
                     if ($isOcrSidecar -and $AllowOcr) {
                         continue
                     }
@@ -165,7 +194,17 @@ function Test-ForbiddenPayload {
     Write-Host "OK: no Ghostscript / JRE / Python / Widgets-bound Qt payload in the default bundle (scanned: $($scanned -join ', '))"
 }
 
-$pluginsDir = Join-Path $InstallDir "pdfplugins"
+$installTreeRoot = $InstallDir
+$installDirParent = Split-Path -Parent $InstallDir
+if ((Split-Path -Leaf $InstallDir) -eq "bin" -and
+    (Split-Path -Leaf $installDirParent) -eq "usr") {
+    $installTreeRoot = Split-Path -Parent $installDirParent
+}
+$pluginsDir = if ($isWindowsPlatform) {
+    Join-Path $InstallDir "pdfplugins"
+} else {
+    Join-Path $installTreeRoot "plugins"
+}
 
 if ([string]::IsNullOrWhiteSpace($ProfilesDir)) {
     $ProfilesDir = Resolve-ProfilesDir -InstallDir $InstallDir
@@ -174,11 +213,11 @@ Write-Host "Smoke-testing install at $InstallDir"
 Write-Host "Resolved preflight profiles to $ProfilesDir"
 
 $requiredFiles = @(
-    @{ Path = (Join-Path $InstallDir "LoopEditor.exe"); Label = "Editor" },
-    @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
+    @{ Path = (Join-Path $InstallDir ("LoopEditor" + $executableSuffix)); Label = "Editor" },
+    @{ Path = (Join-Path $InstallDir ("PdfTool" + $executableSuffix)); Label = "PdfTool" },
     @{ Path = (Join-Path $ProfilesDir "loop-default.json"); Label = "Default preflight profile" },
-    @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
-    @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
+    @{ Path = ([IO.Path]::Combine($ProfilesDir, "schemas", "profile.schema.json")); Label = "Profile schema" },
+    @{ Path = ([IO.Path]::Combine($ProfilesDir, "schemas", "report.schema.json")); Label = "Report schema" }
 )
 
 foreach ($item in $requiredFiles) {
@@ -186,7 +225,7 @@ foreach ($item in $requiredFiles) {
     Write-Host "OK: $($item.Label)"
 }
 
-$pdfTool = Join-Path $InstallDir "PdfTool.exe"
+$pdfTool = Join-Path $InstallDir ("PdfTool" + $executableSuffix)
 
 $versionOutput = @(& $pdfTool --version 2>&1)
 $versionExit = $LASTEXITCODE
@@ -214,7 +253,7 @@ if ($capabilities.data.product.name -ne "PdfTool" -or
 }
 Write-Host "OK: PdfTool capabilities report the Loop PdfTool identity"
 
-$legacyEditor = Join-Path $InstallDir ("Lo" + "upeEditor.exe")
+$legacyEditor = Join-Path $InstallDir (("Lo" + "upeEditor") + $executableSuffix)
 if (Test-Path -LiteralPath $legacyEditor) {
     throw "Legacy editor executable still present in the install: $legacyEditor"
 }
@@ -223,23 +262,24 @@ Write-Host "OK: legacy editor executable absent"
 # V1 ships OCR as CLI-only (PdfTool ocr); the Editor OCR UI plugin is not part of
 # the V1 release surface (MIC-343). Its presence in a release bundle is packaging
 # drift, not an optional extra -- fail loudly rather than silently reporting it.
-$ocrPlugin = Join-Path $pluginsDir "OcrPlugin.dll"
+$ocrPluginName = $sharedLibraryPrefix + "OcrPlugin" + $sharedLibrarySuffix
+$ocrPlugin = Join-Path $pluginsDir $ocrPluginName
 if (Test-Path -LiteralPath $ocrPlugin) {
     if ($AllowOcrPlugin) {
-        Write-Host "OK: OcrPlugin.dll present (explicitly allowed via -AllowOcrPlugin)"
+        Write-Host "OK: $ocrPluginName present (explicitly allowed via -AllowOcrPlugin)"
     } else {
-        $ocrPluginMessage = "OcrPlugin.dll found at $ocrPlugin. V1 ships OCR as CLI-only (MIC-343) -- " +
+        $ocrPluginMessage = "$ocrPluginName found at $ocrPlugin. V1 ships OCR as CLI-only (MIC-343) -- " +
             "this plugin must not be in a release bundle. Build with -DLOOP_PLUGIN_OCR=OFF, " +
             "or re-run with -AllowOcrPlugin if this is an intentional non-V1 build."
         throw $ocrPluginMessage
     }
 } else {
-    Write-Host "OK: OcrPlugin.dll absent (V1 CLI-only OCR surface, MIC-343)"
+    Write-Host "OK: $ocrPluginName absent (V1 CLI-only OCR surface, MIC-343)"
 }
 
 if ([string]::IsNullOrWhiteSpace($TestPdf)) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $candidate = Join-Path $repoRoot "loop-preflight\testdata\fixtures\bleed-adequate.pdf"
+    $candidate = [IO.Path]::Combine($repoRoot, "loop-preflight", "testdata", "fixtures", "bleed-adequate.pdf")
     if (Test-Path -LiteralPath $candidate) {
         $TestPdf = $candidate
     }
@@ -250,7 +290,7 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
 }
 
 $profilePath = Join-Path $ProfilesDir "loop-default.json"
-$editor = Join-Path $InstallDir "LoopEditor.exe"
+$editor = Join-Path $InstallDir ("LoopEditor" + $executableSuffix)
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
 $qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOOP_QT_ROOT) |
@@ -318,18 +358,22 @@ if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
 }
 Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
 
-$ocrSidecar = Join-Path $InstallDir "LoopOcrService\LoopOcrService.exe"
+$ocrSidecar = [IO.Path]::Combine($InstallDir, "LoopOcrService", ("LoopOcrService" + $executableSuffix))
 if (Test-Path -LiteralPath $ocrSidecar) {
-    $repoRoot = Split-Path -Parent $PSScriptRoot
-    $mockSidecar = Join-Path $repoRoot "loop-ocr\tools\mock_ocr_sidecar.cmd"
-    $scanFixture = Join-Path $repoRoot "loop-preflight\testdata\fixtures\image-dpi-low.pdf"
-    if ((Test-Path -LiteralPath $mockSidecar) -and (Test-Path -LiteralPath $scanFixture)) {
-        $ocrOutput = & $pdfTool ocr $scanFixture --console-format json --sidecar $mockSidecar 2>&1
-        $ocrExit = $LASTEXITCODE
-        if ($ocrExit -ne 0 -and $ocrExit -ne 1) {
-            throw "PdfTool ocr failed with unexpected exit code $ocrExit`: $ocrOutput"
+    if ($isWindowsPlatform) {
+        $repoRoot = Split-Path -Parent $PSScriptRoot
+        $mockSidecar = [IO.Path]::Combine($repoRoot, "loop-ocr", "tools", "mock_ocr_sidecar.cmd")
+        $scanFixture = [IO.Path]::Combine($repoRoot, "loop-preflight", "testdata", "fixtures", "image-dpi-low.pdf")
+        if ((Test-Path -LiteralPath $mockSidecar) -and (Test-Path -LiteralPath $scanFixture)) {
+            $ocrOutput = & $pdfTool ocr $scanFixture --console-format json --sidecar $mockSidecar 2>&1
+            $ocrExit = $LASTEXITCODE
+            if ($ocrExit -ne 0 -and $ocrExit -ne 1) {
+                throw "PdfTool ocr failed with unexpected exit code $ocrExit`: $ocrOutput"
+            }
+            Write-Host "OK: PdfTool ocr completed with mock sidecar (exit $ocrExit)"
         }
-        Write-Host "OK: PdfTool ocr completed with mock sidecar (exit $ocrExit)"
+    } else {
+        Write-Host "SKIP: Windows .cmd mock OCR sidecar exercise is not supported on this platform"
     }
     Write-Host "OK: LoopOcrService bundle present"
 }
@@ -337,17 +381,22 @@ if (Test-Path -LiteralPath $ocrSidecar) {
 # Run the bundle-policy gate before the editor launch: it is a packaging
 # assertion that does not depend on the GUI, and running it last meant any
 # earlier failure silently skipped it entirely.
-# Scan the binaries and the sibling share\ tree the installer also writes.
+# Scan the binaries and the sibling share tree the installer also writes.
 $shareRoot = $ProfilesDir
 for ($i = 0; $i -lt 2; $i++) {
     $parentCandidate = Split-Path -Parent $shareRoot
     if ([string]::IsNullOrWhiteSpace($parentCandidate)) { break }
     $shareRoot = $parentCandidate
 }
-Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidecar
+$forbiddenPayloadRoots = @($InstallDir, $shareRoot)
+if (-not $isWindowsPlatform) {
+    $forbiddenPayloadRoots += [IO.Path]::Combine($installTreeRoot, "usr", "lib")
+    $forbiddenPayloadRoots += [IO.Path]::Combine($installTreeRoot, "plugins")
+}
+Test-ForbiddenPayload -Roots $forbiddenPayloadRoots -AllowOcr:$AllowOcrSidecar
 
 if (-not $SkipEditorLaunch) {
-    $editor = Join-Path $InstallDir "LoopEditor.exe"
+    $editor = Join-Path $InstallDir ("LoopEditor" + $executableSuffix)
     $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
     Start-Sleep -Seconds 5
     if ($editorProcess.HasExited) {
