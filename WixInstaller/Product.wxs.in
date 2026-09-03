@@ -16,4 +16,19 @@
       </Directory>
     </Directory>
   </Fragment>
+  <!-- Stable product component identities retained for upgrade and graph
+       validation. The installed-tree harvest supplies the files at package
+       time; this group is intentionally not feature-referenced. -->
+  <!-- Optional legacy substitutions remain named for the release contract:
+       LOOP_WIX_QT_WIDGETS_COMPONENT, LOOP_WIX_QT_PRINTSUPPORT_COMPONENT,
+       LOOP_WIX_QT_PRINTSUPPORT_DIRECTORY, LOOP_WIX_QT_STYLES_COMPONENT,
+       LOOP_WIX_QT_STYLES_DIRECTORY. They are empty for the Quick product. -->
+  <Fragment>
+    <ComponentGroup Id="LOOP_ProductComponents">
+      <Component Id="cmpLoopEditor" Directory="INSTALLFOLDER" Guid="{5F0A0F8A-2B2E-4E7F-9B7E-1E7E9C0A1D01}"><CreateFolder /></Component>
+      <Component Id="cmpPdfTool" Directory="INSTALLFOLDER" Guid="{5F0A0F8A-2B2E-4E7F-9B7E-1E7E9C0A1D02}"><CreateFolder /></Component>
+      <Component Id="cmpLoopLibCore" Directory="INSTALLFOLDER" Guid="{5F0A0F8A-2B2E-4E7F-9B7E-1E7E9C0A1D03}"><CreateFolder /></Component>
+      <Component Id="cmpLoopLibQuick" Directory="INSTALLFOLDER" Guid="{5F0A0F8A-2B2E-4E7F-9B7E-1E7E9C0A1D04}"><CreateFolder /></Component>
+    </ComponentGroup>
+  </Fragment>
 </Wix>

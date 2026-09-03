@@ -4,11 +4,20 @@ qt_add_executable(ProductQuickAccessibilitySmoke
     main.cpp
 )
 
+qt_add_qml_module(ProductQuickAccessibilitySmoke
+    URI Loop.Quick
+    VERSION 1.0
+    QML_FILES
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/Main.qml
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/Workspace.qml
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/PreflightPane.qml
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/InspectorPane.qml
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/DocumentPane.qml
+        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/CanvasPane.qml
+)
+
 target_link_libraries(ProductQuickAccessibilitySmoke
     PRIVATE
-        LoopEditorQuick
-        LoopEditorQuickplugin
-        LoopEditorQuickplugin_init
         LoopLibQuick
         LoopLibInteraction
         LoopLibCore
