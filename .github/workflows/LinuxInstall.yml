@@ -181,7 +181,7 @@ jobs:
           cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
           cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
-          pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
+          pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install/usr/bin" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
       - name: Smoke relocated installed tree
         working-directory: loop

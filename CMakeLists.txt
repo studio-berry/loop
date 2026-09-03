@@ -397,7 +397,7 @@ message("CMAKE_TOOLCHAIN_FILE = " ${CMAKE_TOOLCHAIN_FILE})
 configure_file(version.txt.in version.txt)
 
 if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
-    install(FILES ${LOOP_QM_FILES}
+    install(FILES ${LOOP_QM_FILES} OPTIONAL
             DESTINATION ${LOOP_INSTALL_TRANS_DIR})
 
     if(WIN32)
