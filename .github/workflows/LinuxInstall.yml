@@ -180,10 +180,14 @@ jobs:
       - name: Build Project
         working-directory: loop
         run: |
-          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
           cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
-          pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install/usr/bin" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
+          # Scan the whole install tree: on Linux the product libraries land in
+          # usr/lib, not usr/bin (LOOP_INSTALL_LIB_DIR).  Only Windows collapses
+          # both onto usr/bin.
+          pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
+          python3 scripts/verify-widgets-free-release-profile.py --install-dir build/install
 
       - name: Smoke relocated installed tree
         working-directory: loop

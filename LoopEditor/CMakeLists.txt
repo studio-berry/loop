@@ -93,12 +93,19 @@ qt_generate_deploy_qml_app_script(
 # Qt's deployment helpers default to a flat prefix (bin/, lib/, qml/).  Loop
 # installs product payloads below usr/, so establish the same prefix-relative
 # layout before the generated script computes imports, plugins, and qt.conf.
-install(CODE [[
-    set(QT_DEPLOY_BIN_DIR "usr/bin")
-    set(QT_DEPLOY_LIB_DIR "usr/lib")
-    set(QT_DEPLOY_QML_DIR "usr/lib/qml")
-]])
-install(SCRIPT ${loop_editor_deploy_script})
+#
+# LOOP_INSTALL_QT_DEPENDENCIES stays authoritative for whether Loop ships its
+# own Qt closure at all: the Flatpak manifest, the Dockerfile, the fuzz job and
+# the reusable Linux qualification build all configure with it OFF because the
+# runtime Qt comes from the platform there.
+if(LOOP_INSTALL_QT_DEPENDENCIES)
+    install(CODE [[
+        set(QT_DEPLOY_BIN_DIR "usr/bin")
+        set(QT_DEPLOY_LIB_DIR "usr/lib")
+        set(QT_DEPLOY_QML_DIR "usr/lib/qml")
+    ]])
+    install(SCRIPT ${loop_editor_deploy_script})
+endif()
 
 if(LOOP_ENABLE_SENTRY)
     loop_deploy_sentry_crashpad(LoopEditor)

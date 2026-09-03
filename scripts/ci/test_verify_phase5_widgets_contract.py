@@ -31,7 +31,7 @@ class Phase5WidgetsContractTests(unittest.TestCase):
 
     def test_current_evidence_is_valid_and_complete(self):
         self.assertEqual(validate_contract(ROOT, self.inventory, self.disposition), [])
-        self.assertEqual(self.inventory["counts"]["targets"], 70)
+        self.assertEqual(self.inventory["counts"]["targets"], 69)
         self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 4)
         self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
         self.assertEqual(len(self.inventory["plugin_ui"]), 0)

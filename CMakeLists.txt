@@ -457,7 +457,12 @@ if(LOOP_INSTALL_DEPENDENCIES AND NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
     if(WIN32 AND MSVC AND LOOP_INSTALL_MSVC_REDISTRIBUTABLE)
         if(DEFINED ENV{MSVC_REDISTRIBUTABLES_PATH})
-            set(MSVC_REDISTRIBUTABLES_PATH $ENV{MSVC_REDISTRIBUTABLES_PATH})
+            # The workflow exports a native Windows path.  Embedding its
+            # backslashes verbatim makes the generated cmake_install.cmake fail
+            # to parse: "C:\Program Files\..." raises "Invalid character
+            # escape '\P'" at install time.  Normalise to CMake separators,
+            # matching the get_filename_component() branch below.
+            file(TO_CMAKE_PATH "$ENV{MSVC_REDISTRIBUTABLES_PATH}" MSVC_REDISTRIBUTABLES_PATH)
             message(STATUS "Using existing MSVC Redistributable Package Path = ${MSVC_REDISTRIBUTABLES_PATH}")
         else()
             get_filename_component(MSVC_REDISTRIBUTABLES_PATH $ENV{VCToolsRedistDir}/$ENV{VSCMD_ARG_TGT_ARCH}/Microsoft.VC${MSVC_TOOLSET_VERSION}.CRT/ ABSOLUTE)

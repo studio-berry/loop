@@ -92,8 +92,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         (install / "platforms" / "qwindows.dll").write_bytes(b"fixture")
         self.assertEqual(validate_install(install, self.manifest, "loop-release"), [])
 
-    def test_install_manifest_drift_fails_closed(self):
-        install = self._make_install_tree()
+    def _write_install_manifest(self, install: Path) -> Path:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         install_manifest = Path(temporary.name) / "install_manifest.txt"
@@ -102,9 +101,33 @@ class ProductSurfaceContractTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        (install / "unexpected.txt").write_text("fixture", encoding="utf-8")
+        return install_manifest
+
+    def test_install_manifest_drift_fails_closed(self):
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "LoopUnmanifested.dll").write_bytes(b"fixture")
         errors = validate_install(install, self.manifest, "loop-release", install_manifest)
         self.assertTrue(any("absent from CMake install manifest" in error for error in errors))
+
+    def test_qt_deployment_output_is_not_manifest_drift(self):
+        # qt_generate_deploy_qml_app_script and windeployqt copy the Qt closure
+        # and write qt.conf outside install(), so install_manifest.txt can never
+        # list them.  Only first-party payload is held to the manifest.
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "qt.conf").write_text("[Paths]\n", encoding="utf-8")
+        (install / "Qt6Core.dll").write_bytes(b"fixture")
+        (install / "libQt6Quick.so.6").write_bytes(b"fixture")
+        errors = validate_install(install, self.manifest, "loop-release", install_manifest)
+        self.assertEqual([error for error in errors if "absent from CMake install manifest" in error], [])
+
+    def test_install_manifest_missing_file_still_fails_closed(self):
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "LoopLibQuick.dll").unlink()
+        errors = validate_install(install, self.manifest, "loop-release", install_manifest)
+        self.assertTrue(any("CMake install manifest lists missing files" in error for error in errors))
 
     def test_install_manifest_preserves_final_symlink_name(self):
         install = self._make_install_tree()
