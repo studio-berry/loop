@@ -57,6 +57,7 @@
         "LoopLibCore/**",
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_budgetcorpustest.cpp",
+        "UnitTests/tst_budgetexhaustiontest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_overprinttest.cpp",
@@ -153,10 +154,11 @@
         "UnitTests/tst_productoperatorloop.cpp",
         "UnitTests/tst_quickaccessibilitytest.cpp",
         "UnitTests/tst_shellkeyboardtest.cpp",
+        "UnitTests/tst_loopstatevisualtest.cpp",
         "ProductQuickAccessibilitySmoke/**"
       ],
       "targets": ["LoopLibQuick", "LoopEditor", "LoopEditorQuick", "ProductQuickAccessibilitySmoke"],
-      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction"]
+      "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction", "UnitTestsLoopStateVisual"]
     },
     "developer_widgets": {
       "paths": [
