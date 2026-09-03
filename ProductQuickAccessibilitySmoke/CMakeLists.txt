@@ -15,6 +15,7 @@ qt_add_executable(ProductQuickAccessibilitySmoke
 qt_add_qml_module(ProductQuickAccessibilitySmoke
     URI Loop.Quick
     VERSION 1.0
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loop/Quick"
     QML_FILES
         ../LoopEditor/qml/Main.qml
         ../LoopEditor/qml/Workspace.qml
