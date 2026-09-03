@@ -95,6 +95,8 @@ jobs:
 
       - name: Download verified AppImage runtime
         working-directory: loop
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           # appimagetool otherwise resolves the *latest* type-2 runtime on its own.
           # Supply the exact pinned runtime so packaging never resolves a mutable
