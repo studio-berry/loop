@@ -1,4 +1,4 @@
-Category: fixed
-Audience: packagers
+Category: internal
+Audience: maintainers
 Breaking-Change: no
-Summary: Make the installed-tree smoke test portable across Windows PowerShell and PowerShell on Linux.
+Summary: Update the relocated-install smoke script to support Windows and Linux, and run it after installation during Linux packaging.
