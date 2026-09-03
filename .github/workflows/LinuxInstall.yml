@@ -183,6 +183,17 @@ jobs:
           cmake --install build
           pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
+      - name: Smoke relocated installed tree
+        working-directory: loop
+        env:
+          QT_DEBUG_PLUGINS: "1"
+          QML_IMPORT_TRACE: "1"
+        run: |
+          relocated="$RUNNER_TEMP/loop-installed-smoke"
+          rm -rf "$relocated"
+          cp -a build/install "$relocated"
+          pwsh ./scripts/smoke-test-install.ps1 -InstallDir "$relocated/install/usr/bin" -SourceSha "$LOOP_SOURCE_SHA" -SkipEditorLaunch
+
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loop
         run: |

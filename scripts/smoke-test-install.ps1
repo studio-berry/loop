@@ -255,7 +255,8 @@ $editor = Join-Path $InstallDir "LoopEditor.exe"
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
 $qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOOP_QT_ROOT) |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-$pathParts = @($env:PATH -split ';' | Where-Object {
+$pathSeparator = [IO.Path]::PathSeparator
+$pathParts = @($env:PATH -split [regex]::Escape([string]$pathSeparator) | Where-Object {
     $part = $_
     if ([string]::IsNullOrWhiteSpace($part)) { return $false }
     foreach ($root in $qtRoots) {
@@ -274,7 +275,7 @@ $savedQtRootDir = $env:QT_ROOT_DIR
 $savedQt6Dir = $env:Qt6_DIR
 $savedLoopQtRoot = $env:LOOP_QT_ROOT
 $savedQuickBackend = $env:QT_QUICK_BACKEND
-$env:PATH = ($pathParts -join ';')
+$env:PATH = ($pathParts -join $pathSeparator)
 Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QML_IMPORT_PATH -ErrorAction SilentlyContinue

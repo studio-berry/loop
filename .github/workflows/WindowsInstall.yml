@@ -267,6 +267,17 @@ jobs:
           cmake --install build --config Release
           .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
 
+      - name: Smoke relocated installed tree
+        shell: pwsh
+        env:
+          QT_DEBUG_PLUGINS: "1"
+          QML_IMPORT_TRACE: "1"
+        run: |
+          $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
+          if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
+          Copy-Item -LiteralPath "${env:GITHUB_WORKSPACE}\loop\build\install" -Destination $relocated -Recurse
+          & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "install\usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
+
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
         # conditionals and the workflow file fails to parse. The script no-ops
@@ -348,7 +359,7 @@ jobs:
           $wixDir = "$env:GITHUB_WORKSPACE\wix"
           Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
 
-          foreach ($required in "candle.exe", "light.exe", "WiXUIExtension.dll") {
+          foreach ($required in "candle.exe", "light.exe", "heat.exe", "WiXUIExtension.dll") {
             if (-not (Test-Path (Join-Path $wixDir $required))) {
               throw "Pinned WiX toolset is missing $required under $wixDir"
             }

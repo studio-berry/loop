@@ -8,12 +8,12 @@ qt_add_qml_module(ProductQuickAccessibilitySmoke
     URI Loop.Quick
     VERSION 1.0
     QML_FILES
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/Main.qml
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/Workspace.qml
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/PreflightPane.qml
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/InspectorPane.qml
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/DocumentPane.qml
-        ${CMAKE_SOURCE_DIR}/LoopEditor/qml/CanvasPane.qml
+        ../LoopEditor/qml/Main.qml
+        ../LoopEditor/qml/Workspace.qml
+        ../LoopEditor/qml/PreflightPane.qml
+        ../LoopEditor/qml/InspectorPane.qml
+        ../LoopEditor/qml/DocumentPane.qml
+        ../LoopEditor/qml/CanvasPane.qml
 )
 
 target_link_libraries(ProductQuickAccessibilitySmoke
