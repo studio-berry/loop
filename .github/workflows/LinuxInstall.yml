@@ -195,6 +195,22 @@ jobs:
           pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
           python3 scripts/verify-widgets-free-release-profile.py --install-dir build/install
 
+      - name: Smoke relocated installed tree
+        working-directory: loop
+        shell: pwsh
+        env:
+          QT_DEBUG_PLUGINS: "1"
+          QML_IMPORT_TRACE: "1"
+        run: |
+          $sourceInstall = Join-Path (Join-Path (Get-Location) "build") "install"
+          $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
+          if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
+          New-Item -Path $relocated -ItemType Directory | Out-Null
+          Copy-Item -LiteralPath $sourceInstall -Destination $relocated -Recurse
+          $relocatedBin = Join-Path (Join-Path (Join-Path $relocated "install") "usr") "bin"
+          $smokeTest = Join-Path (Join-Path (Get-Location) "scripts") "smoke-test-install.ps1"
+          & $smokeTest -InstallDir $relocatedBin -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
+
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loop
         run: |
