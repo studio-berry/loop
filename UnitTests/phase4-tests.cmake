@@ -67,9 +67,19 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsEditorHost
             tst_editorhosttest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
         )
 
-        target_link_libraries(UnitTestsEditorHost PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsEditorHost PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsEditorHost PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
         set_target_properties(UnitTestsEditorHost PROPERTIES
             WIN32_EXECUTABLE OFF
@@ -82,9 +92,19 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
         add_executable(UnitTestsProductOperatorLoop
             tst_productoperatorloop.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
         )
 
-        target_link_libraries(UnitTestsProductOperatorLoop PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsProductOperatorLoop PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsProductOperatorLoop PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
         target_compile_definitions(UnitTestsProductOperatorLoop PRIVATE
             LOOP_UNITTEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
@@ -135,9 +155,13 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
     add_executable(UnitTestsDocumentViewSession
         tst_documentviewsessiontest.cpp
+        ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+        ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
     )
 
-    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoopEditorQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+    target_link_libraries(UnitTestsDocumentViewSession PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    target_include_directories(UnitTestsDocumentViewSession PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
     set_target_properties(UnitTestsDocumentViewSession PROPERTIES
         WIN32_EXECUTABLE OFF
@@ -216,9 +240,13 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsQuickDocumentModel
             tst_quickdocumentmodeltest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
         )
 
-        target_link_libraries(UnitTestsQuickDocumentModel PRIVATE LoopEditorQuick LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsQuickDocumentModel PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsQuickDocumentModel PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
         set_target_properties(UnitTestsQuickDocumentModel PROPERTIES
             WIN32_EXECUTABLE OFF
@@ -231,9 +259,13 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
         add_executable(UnitTestsQuickAccessibility
             tst_quickaccessibilitytest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
         )
 
-        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore LoopEditorQuick LoopEditorQuickplugin LoopEditorQuickplugin_init Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+        target_link_libraries(UnitTestsQuickAccessibility PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsQuickAccessibility PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
         set_target_properties(UnitTestsQuickAccessibility PROPERTIES
             WIN32_EXECUTABLE OFF
@@ -246,9 +278,19 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
         add_executable(UnitTestsShellKeyboard
             tst_shellkeyboardtest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
         )
 
-        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoopEditorQuick LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+
+        target_include_directories(UnitTestsShellKeyboard PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
         set_target_properties(UnitTestsShellKeyboard PROPERTIES
             WIN32_EXECUTABLE OFF
