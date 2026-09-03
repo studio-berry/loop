@@ -97,6 +97,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFBudgetExceeded
     PDFBudgetPool pool = PDFBudgetPool::DocumentModel;
     std::uint64_t limit = 0;
     std::uint64_t attempted = 0;
+    // Populated for decompression-ratio failures so reports retain the byte
+    // measurements while `attempted` remains ratio-valued.
+    std::uint64_t observedBytes = 0;
+    std::uint64_t compressedBytes = 0;
     QString context;
 };
 
@@ -176,7 +180,9 @@ private:
     [[noreturn]] void fail(PDFBudgetKind kind,
                            std::uint64_t limit,
                            std::uint64_t attempted,
-                           const QString& context) const;
+                           const QString& context,
+                           std::uint64_t observedBytes = 0,
+                           std::uint64_t compressedBytes = 0) const;
 
     PDFProcessingLimits m_limits;
     ClockNow m_now;
