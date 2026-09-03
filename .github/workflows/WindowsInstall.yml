@@ -262,157 +262,10 @@ jobs:
         working-directory: loop
         shell: pwsh
         run: |
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUNDLE_OCR_SERVICE=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke LoopLibQuickplugin release_translations --config Release -j6
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUNDLE_OCR_SERVICE=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
           cmake --install build --config Release
           .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
-
-      - name: Deploy Qt runtime closure to staged install tree
-        working-directory: loop
-        shell: pwsh
-        run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
-          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          $installBin = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\usr\bin"
-          $buildDir = Join-Path $env:GITHUB_WORKSPACE "loop\build"
-          $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
-          if (-not (Test-Path -LiteralPath $windeployqt)) {
-            throw "Qt deployment tool was not found: $windeployqt"
-          }
-
-          foreach ($name in @("LoopEditor.exe", "PdfTool.exe")) {
-            $target = Join-Path $installBin $name
-            if (-not (Test-Path -LiteralPath $target)) {
-              throw "Expected staged executable was not found: $target"
-            }
-            $output = @(& $windeployqt --release --no-compiler-runtime --no-translations `
-              --qmldir (Join-Path $env:GITHUB_WORKSPACE "loop\LoopEditor\qml") `
-              --qmldir (Join-Path $buildDir "LoopEditor\Loop\Quick") `
-              --qmldir (Join-Path $buildDir "LoopLibQuick\Loop\Canvas") `
-              --dir $installBin $target 2>&1)
-            $exitCode = $LASTEXITCODE
-            $output | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-$name.txt")
-            if ($exitCode -ne 0) {
-              throw "windeployqt failed for $name with exit code $exitCode"
-            }
-          }
-
-          $builtLoopQuick = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopEditor\Loop\Quick"
-          $qmlLoopQuick = Join-Path $installBin "qml\Loop\Quick"
-          if (-not (Test-Path -LiteralPath $builtLoopQuick)) {
-            throw "Built Loop.Quick QML module was not found: $builtLoopQuick"
-          }
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopQuick) | Out-Null
-          Copy-Item -Recurse -Force -LiteralPath $builtLoopQuick -Destination $qmlLoopQuick
-
-          $builtLoopCanvas = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopLibQuick\Loop\Canvas"
-          $qmlLoopCanvas = Join-Path $installBin "qml\Loop\Canvas"
-          if (-not (Test-Path -LiteralPath $builtLoopCanvas)) {
-            throw "Built Loop.Canvas QML module was not found: $builtLoopCanvas"
-          }
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopCanvas) | Out-Null
-          Copy-Item -Recurse -Force -LiteralPath $builtLoopCanvas -Destination $qmlLoopCanvas
-
-          function Assert-BuiltQmlModule {
-            param(
-              [string]$BuiltModuleDir,
-              [string]$ModuleLabel
-            )
-
-            $qmldir = Join-Path $BuiltModuleDir "qmldir"
-            if (-not (Test-Path -LiteralPath $qmldir)) {
-              throw "Built $ModuleLabel QML module is missing qmldir: $qmldir"
-            }
-            $typeInfo = Get-ChildItem -LiteralPath $BuiltModuleDir -File -Filter "*.qmltypes" |
-              Select-Object -First 1
-            if (-not $typeInfo) {
-              throw "Built $ModuleLabel QML module is missing a .qmltypes file under $BuiltModuleDir"
-            }
-          }
-
-          function Copy-BuiltSharedQmlPlugin {
-            param(
-              [string]$PluginBaseName,
-              [string]$BuiltModuleDir,
-              [string]$StagedModuleDir,
-              [string]$InstallBin,
-              [string]$BuildDir
-            )
-
-            $plugin = Get-ChildItem -LiteralPath $BuiltModuleDir -File -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
-              Select-Object -First 1
-            if (-not $plugin) {
-              $plugin = Get-ChildItem -LiteralPath $BuildDir -Recurse -File |
-                Where-Object { $_.Name -ieq "$PluginBaseName.dll" } |
-                Sort-Object FullName |
-                Select-Object -First 1
-            }
-            if (-not $plugin) {
-              throw "Built shared QML plugin was not found for $PluginBaseName in $BuiltModuleDir or below $BuildDir"
-            }
-
-            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $StagedModuleDir $plugin.Name) -Force
-            Copy-Item -LiteralPath $plugin.FullName -Destination (Join-Path $InstallBin $plugin.Name) -Force
-            Write-Host "Staged shared QML plugin: $($plugin.Name) -> $StagedModuleDir and $InstallBin" |
-              Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
-          }
-
-          Assert-BuiltQmlModule -BuiltModuleDir $builtLoopQuick -ModuleLabel "Loop.Quick"
-          Assert-BuiltQmlModule -BuiltModuleDir $builtLoopCanvas -ModuleLabel "Loop.Canvas"
-          Copy-BuiltSharedQmlPlugin `
-            -PluginBaseName "LoopLibQuickplugin" `
-            -BuiltModuleDir $builtLoopCanvas `
-            -StagedModuleDir $qmlLoopCanvas `
-            -InstallBin $installBin `
-            -BuildDir $buildDir
-
-          $platformDir = Join-Path $installBin "platforms"
-          $offscreenPlugin = Join-Path $env:QT_ROOT_DIR "plugins\platforms\qoffscreen.dll"
-          if (-not (Test-Path -LiteralPath $offscreenPlugin)) {
-            throw "Required Qt platform plugin is missing: $offscreenPlugin"
-          }
-          New-Item -ItemType Directory -Force -Path $platformDir | Out-Null
-          Copy-Item -LiteralPath $offscreenPlugin -Destination (Join-Path $platformDir "qoffscreen.dll") -Force
-          Write-Host "Staged Qt platform plugin: qoffscreen.dll" | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
-
-          $sqliteDriver = Join-Path $env:QT_ROOT_DIR "plugins\sqldrivers\qsqlite.dll"
-          if (-not (Test-Path -LiteralPath $sqliteDriver)) {
-            throw "Required Qt SQLite driver is missing: $sqliteDriver"
-          }
-          $sqlDriversDir = Join-Path $installBin "sqldrivers"
-          New-Item -ItemType Directory -Force -Path $sqlDriversDir | Out-Null
-          Copy-Item -LiteralPath $sqliteDriver -Destination (Join-Path $sqlDriversDir "qsqlite.dll") -Force
-          Write-Host "Staged Qt SQL driver: qsqlite.dll" | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-LoopEditor.exe.txt") -Append
-
-          # The clean installed-artifact smoke intentionally removes developer
-          # Qt environment variables. Make the staged tree self-describing so
-          # Qt resolves its bundled QML imports and plugins without the runner's
-          # Qt installation. Write the file literally: the prior array writer
-          # dropped the ";." suffix from Qml2Imports on hosted PowerShell.
-          $qtConfPath = Join-Path $installBin "qt.conf"
-          $qtConf = "[Paths]`r`nPrefix=.`r`nPlugins=.`r`nQml2Imports=qml;.`r`n"
-          [System.IO.File]::WriteAllText($qtConfPath, $qtConf)
-          Copy-Item -LiteralPath $qtConfPath -Destination (Join-Path $evidenceDir "qt.conf")
-
-      - name: Regenerate WiX manifest after staging built QML modules
-        working-directory: loop
-        shell: pwsh
-        run: |
-          $qtQmlRoot = Join-Path $env:QT_ROOT_DIR "qml"
-          foreach ($module in @("Loop\Quick", "Loop\Canvas")) {
-            $source = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopEditor\$module"
-            if ($module -eq "Loop\Canvas") { $source = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopLibQuick\$module" }
-            $destination = Join-Path $qtQmlRoot $module
-            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
-            Copy-Item -Recurse -Force -LiteralPath $source -Destination $destination
-          }
-          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_DEPENDENCIES=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-        env:
-          VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
-          VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
-          MSVC_TOOLSET_VERSION: ${{ env.MSVC_TOOLSET_VERSION }}
-          MSVC_REDISTRIBUTABLES_PATH: ${{ env.MSVC_REDISTRIBUTABLES_PATH }}
 
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
@@ -504,21 +357,14 @@ jobs:
           echo "wixdir=$wixDir" >> $env:GITHUB_ENV
           echo "wixuiextpath=$wixDir\WiXUIExtension.dll" >> $env:GITHUB_ENV
 
-      - name: Inject missing install DLLs into Product.wxs
-        shell: pwsh
-        run: |
-          # cmake --install stages runtime DLLs that the hand-maintained Product.wxs.in
-          # may omit. Light only packages listed files — close the gap before candle.
-          & "${env:GITHUB_WORKSPACE}\loop\scripts\Inject-WixMissingDlls.ps1" `
-            -ProductWxs "${env:GITHUB_WORKSPACE}\loop\build\WixInstaller\Product.wxs" `
-            -InstallBinDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin"
-
       - name: Create MSI Package
         working-directory: loop\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
+          & "$wixBin\heat.exe" dir "${env:GITHUB_WORKSPACE}\loop\build\install" -cg LOOP_InstalledTree -dr INSTALLFOLDER -gg -sfrag -srd -out HarvestedInstall.wxs
           & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj
+          & "$wixBin\candle.exe" -v -out obj\Release\ -arch x64 HarvestedInstall.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj obj\Release\HarvestedInstall.wixobj
 
       - name: Sign MSI Package
         shell: pwsh

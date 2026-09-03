@@ -15,8 +15,7 @@ permissions:
 
 jobs:
   build_ubuntu:
-    # linuxdeployqt is pinned to a glibc-2.35-compatible build. Keep the
-    # packaging runner aligned with that oldest-supported deployment tool.
+    # The AppImage runtime is pinned for Ubuntu 22.04 compatibility.
     runs-on: ubuntu-22.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
@@ -74,8 +73,6 @@ jobs:
               "APPIMAGETOOL_SHA256": pins["appimagetool"]["sha256"],
               "RUNTIME_ASSET_ID": str(pins["appimageRuntime"]["assetId"]),
               "RUNTIME_SHA256": pins["appimageRuntime"]["sha256"],
-              "LINUXDEPLOYQT_ASSET_ID": str(pins["linuxdeployqt"]["assetId"]),
-              "LINUXDEPLOYQT_SHA256": pins["linuxdeployqt"]["sha256"],
           }
 
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
@@ -181,8 +178,8 @@ jobs:
       - name: Build Project
         working-directory: loop
         run: |
-          cmake -B build -S . -DLOOP_INSTALL_QT_DEPENDENCIES=0 -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
-          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke LoopLibQuickplugin release_translations -j6
+          cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=../vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6
           cmake --install build
           pwsh ./scripts/verify-loop-surface.ps1 -InstallDir "$GITHUB_WORKSPACE/loop/build/install" -Profile loop-release -BuildDir build -InstallManifestPath build/install_manifest.txt
 
@@ -212,136 +209,6 @@ jobs:
           echo "appimagefilename=Loop-pdf-$version-x86_64.AppImage" >> $GITHUB_ENV
           echo "appimage_update_info=gh-releases-zsync|mberrys|Loop-pdf|latest|Loop-pdf-*-x86_64.AppImage.zsync" >> $GITHUB_ENV
           echo "AppImage file name: Loop-pdf-$version-x86_64.AppImage"
-
-      - name: 'Linux Deploy Qt'
-        working-directory: loop/build
-        run: |
-          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
-          mkdir -p "$evidence_dir"
-          set -o pipefail
-          loop_quick_src="$GITHUB_WORKSPACE/loop/build/LoopEditor/Loop/Quick"
-          qml_dest="install/usr/lib/qml/Loop/Quick"
-          if [ ! -d "$loop_quick_src" ]; then
-            echo "::error::Built Loop.Quick QML module was not found: $loop_quick_src"
-            exit 1
-          fi
-          mkdir -p "$(dirname "$qml_dest")"
-          cp -a "$loop_quick_src" "$qml_dest"
-          for required in qmldir; do
-            if [[ ! -f "$loop_quick_src/$required" ]]; then
-              echo "::error::Built Loop.Quick QML module is missing $required"
-              exit 1
-            fi
-          done
-          if ! compgen -G "$loop_quick_src/*.qmltypes" > /dev/null; then
-            echo "::error::Built Loop.Quick QML module is missing a .qmltypes file"
-            exit 1
-          fi
-          loop_canvas_src="$GITHUB_WORKSPACE/loop/build/LoopLibQuick/Loop/Canvas"
-          qml_canvas_dest="install/usr/lib/qml/Loop/Canvas"
-          if [ ! -d "$loop_canvas_src" ]; then
-            echo "::error::Built Loop.Canvas QML module was not found: $loop_canvas_src"
-            exit 1
-          fi
-          canvas_plugin="$(find "$loop_canvas_src" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | sort | head -n1)"
-          if [[ -z "$canvas_plugin" ]]; then
-            canvas_plugin="$(find "$GITHUB_WORKSPACE/loop/build/LoopLibQuick" -name 'libLoopLibQuickplugin.so*' -type f | sort | head -n1)"
-          fi
-          if [[ -z "$canvas_plugin" ]]; then
-            echo "::error::Built Loop.Canvas shared QML plugin was not found under $loop_canvas_src or loop/build/LoopLibQuick"
-            exit 1
-          fi
-          mkdir -p "$(dirname "$qml_canvas_dest")"
-          cp -a "$loop_canvas_src" "$qml_canvas_dest"
-          for required in qmldir; do
-            if [[ ! -f "$qml_canvas_dest/$required" ]]; then
-              echo "::error::Staged Loop.Canvas QML module is missing $required"
-              exit 1
-            fi
-          done
-          if ! compgen -G "$qml_canvas_dest/*.qmltypes" > /dev/null; then
-            echo "::error::Staged Loop.Canvas QML module is missing a .qmltypes file"
-            exit 1
-          fi
-          if ! find "$qml_canvas_dest" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | grep -q .; then
-            cp -f "$canvas_plugin" "$qml_canvas_dest/"
-            echo "Staged Loop.Canvas shared QML plugin: $canvas_plugin -> $qml_canvas_dest" | tee -a "$evidence_dir/linuxdeployqt.txt"
-          fi
-          if ! find "$qml_canvas_dest" -maxdepth 1 \( -name 'libLoopLibQuickplugin.so' -o -name 'libLoopLibQuickplugin.so.*' \) -type f | grep -q .; then
-            echo "::error::Staged Loop.Canvas shared QML plugin was not found under $qml_canvas_dest"
-            exit 1
-          fi
-          # Headless PdfTool smoke runs with QT_QPA_PLATFORM=offscreen and strips
-          # developer Qt env vars. Bundle the offscreen QPA plugin and qt.conf so
-          # the packaged tree is self-describing (WindowsInstall.yml does the same).
-          platform_dir="install/usr/lib/platforms"
-          mkdir -p "$platform_dir"
-          for platform_plugin in libqoffscreen.so libqminimal.so; do
-            source_plugin="$QT_ROOT_DIR/plugins/platforms/$platform_plugin"
-            if [[ -e "$source_plugin" ]]; then
-              cp -f "$source_plugin" "$platform_dir/$platform_plugin"
-              echo "Staged Qt platform plugin: $platform_plugin" | tee -a "$evidence_dir/linuxdeployqt.txt"
-            elif [[ "$platform_plugin" == "libqoffscreen.so" ]]; then
-              echo "::error::Required Qt platform plugin is missing: $source_plugin"
-              exit 1
-            fi
-          done
-          printf '%s\n' \
-            '[Paths]' \
-            'Prefix=..' \
-            'Plugins=lib' \
-            'Qml2Imports=lib/qml' > install/usr/bin/qt.conf
-          sqlite_driver="$QT_ROOT_DIR/plugins/sqldrivers/libqsqlite.so"
-          if [[ ! -e "$sqlite_driver" ]]; then
-            echo "::error::Required Qt SQLite driver is missing: $sqlite_driver"
-            exit 1
-          fi
-          mkdir -p install/usr/lib/sqldrivers
-          cp -f "$sqlite_driver" install/usr/lib/sqldrivers/libqsqlite.so
-          echo "Staged Qt SQL driver: libqsqlite.so" | tee -a "$evidence_dir/linuxdeployqt.txt"
-          # Qt 6.11 ships optional SQL drivers that linuxdeployqt probes but we do
-          # not bundle. Remove them so deploy does not fail on missing vendor libs.
-          rm -rf "${QT_ROOT_DIR}/plugins/sqldrivers"
-          cp install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loop-pdf.svg install/io.github.mberrys.Loop-pdf.svg
-          bash "$GITHUB_WORKSPACE/loop/scripts/ci/download_verified.sh" \
-            --gh-asset "probonopd/linuxdeployqt" \
-            "$LINUXDEPLOYQT_ASSET_ID" \
-            deploy.AppImage \
-            "$LINUXDEPLOYQT_SHA256"
-          chmod +x deploy.AppImage
-          loop_editor_qml="$GITHUB_WORKSPACE/loop/LoopEditor/qml"
-          if [ ! -d "$loop_editor_qml" ]; then
-            echo "::error::LoopEditor QML sources were not found: $loop_editor_qml"
-            exit 1
-          fi
-          ./deploy.AppImage --appimage-extract-and-run \
-            install/usr/share/applications/io.github.mberrys.Loop-pdf.desktop \
-            -executable-dir=install/usr/bin \
-            -qmldir="$loop_editor_qml" \
-            -qmldir="$loop_quick_src" \
-            -qmldir="$loop_canvas_src" \
-            -extra-plugins=iconengines,imageformats,texttospeech,platforms 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
-          controls_src="$QT_ROOT_DIR/qml/QtQuick/Controls"
-          controls_dest="install/usr/lib/qml/QtQuick/Controls"
-          controls_plugin_src="$controls_src/libqtquickcontrols2plugin.so"
-          if [[ ! -d "$controls_src" ]]; then
-            echo "::error::Required Qt QML module is missing: $controls_src"
-            exit 1
-          fi
-          if [[ ! -f "$controls_plugin_src" ]]; then
-            echo "::error::Required QtQuick.Controls plugin is missing: $controls_plugin_src"
-            exit 1
-          fi
-          mkdir -p "$(dirname "$controls_dest")"
-          cp -a "$controls_src" "$controls_dest"
-          echo "Staged Qt QML module: QtQuick/Controls" | tee -a "$evidence_dir/linuxdeployqt.txt"
-          echo "Staged QtQuick.Controls plugin: libqtquickcontrols2plugin.so" | tee -a "$evidence_dir/linuxdeployqt.txt"
-          controls_plugin="$(find install/usr/lib/qml -name 'libqtquickcontrols2plugin.so' -print -quit)"
-          if [ -z "$controls_plugin" ]; then
-            echo "::error::QtQuick.Controls plugin was not bundled into the AppImage tree"
-            exit 1
-          fi
-          echo "Bundled QtQuick.Controls plugin: $controls_plugin" | tee -a "$evidence_dir/linuxdeployqt.txt"
 
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'
