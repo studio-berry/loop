@@ -12,10 +12,30 @@ qt_add_executable(ProductQuickAccessibilitySmoke
     ../LoopEditor/documentviewsession.h
 )
 
+set_source_files_properties(
+    ../LoopEditor/qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml
+)
+set_source_files_properties(
+    ../LoopEditor/qml/Workspace.qml PROPERTIES QT_RESOURCE_ALIAS Workspace.qml
+)
+set_source_files_properties(
+    ../LoopEditor/qml/PreflightPane.qml PROPERTIES QT_RESOURCE_ALIAS PreflightPane.qml
+)
+set_source_files_properties(
+    ../LoopEditor/qml/InspectorPane.qml PROPERTIES QT_RESOURCE_ALIAS InspectorPane.qml
+)
+set_source_files_properties(
+    ../LoopEditor/qml/DocumentPane.qml PROPERTIES QT_RESOURCE_ALIAS DocumentPane.qml
+)
+set_source_files_properties(
+    ../LoopEditor/qml/CanvasPane.qml PROPERTIES QT_RESOURCE_ALIAS CanvasPane.qml
+)
+
 qt_add_qml_module(ProductQuickAccessibilitySmoke
     URI Loop.Quick
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loop/Quick"
+    NO_GENERATE_EXTRA_QMLDIRS
     QML_FILES
         ../LoopEditor/qml/Main.qml
         ../LoopEditor/qml/Workspace.qml
