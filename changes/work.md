@@ -1,4 +1,4 @@
 Category: internal
-Audience: release engineers and maintainers
+Audience: maintainers
 Breaking-Change: no
-Summary: Smoke-test the relocated Linux install tree before packaging.
+Summary: Update the relocated-install smoke script to support Windows and Linux, and run it after installation during Linux packaging.
