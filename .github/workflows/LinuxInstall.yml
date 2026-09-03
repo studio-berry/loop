@@ -230,9 +230,15 @@ jobs:
             echo "::error::Expected installed desktop entry is missing: $desktop_entry"
             exit 1
           fi
+          icon="install/usr/share/icons/hicolor/scalable/apps/io.github.mberrys.Loop-pdf.svg"
+          if [[ ! -f "$icon" ]]; then
+            echo "::error::Expected installed AppImage icon is missing: $icon"
+            exit 1
+          fi
           # appimagetool requires the desktop entry at the AppDir root, while
           # the installed Linux tree keeps the FHS location under usr/share.
           cp "$desktop_entry" install/
+          cp "$icon" install/
 
       - name: Prepare GPG home
         if: vars.SIGN_APPIMAGE == 'true'
