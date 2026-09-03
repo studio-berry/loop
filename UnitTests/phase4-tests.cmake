@@ -288,7 +288,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
         )
 
-        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Test)
+        target_link_libraries(UnitTestsShellKeyboard PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
 
         target_include_directories(UnitTestsShellKeyboard PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
