@@ -70,11 +70,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("./vcpkg/vcpkg integrate install", linux)
         self.assertNotIn("./vcpkg integrate install", linux)
         self.assertIn("libfontconfig1-dev", linux)
+        # Deliberate: the AppImage glibc floor is whatever this runner ships. Raising it
+        # raises the oldest distro Loop runs on, so change it as a decision, not to make
+        # this assertion pass.
         self.assertIn("runs-on: ubuntu-22.04", linux)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
-        self.assertIn("cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6", linux)
+        # Pin the target list, not the exact command string: -j6 and the ordering are
+        # incidental, and pinning them turns routine edits into contract failures.
+        for target in ("LoopEditor", "PdfTool", "ProductQuickAccessibilitySmoke", "release_translations"):
+            self.assertRegex(linux, rf"cmake --build build --target[^\n]*\b{target}\b")
         self.assertNotIn("--target all", linux)
         self.assertNotIn("ctest --test-dir build", linux)
         for workflow in (linux, windows):
@@ -87,14 +93,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", windows)
         self.assertIn("./vcpkg_installed", windows)
         self.assertIn("./vcpkg-binary-cache", windows)
-        self.assertIn("cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6", windows)
+        for target in ("LoopEditor", "PdfTool", "ProductQuickAccessibilitySmoke", "release_translations"):
+            self.assertRegex(windows, rf"cmake --build build --target[^\n]*\b{target}\b")
+        self.assertIn("--config Release", windows)
         self.assertNotIn("--target all", windows)
         self.assertNotIn("ctest --test-dir build", windows)
         self.assertIn("appimagetool", linux)
         for workflow in (linux, windows):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
-            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("inputs.source_sha", workflow)
+            self.assertIn("pull_request:", workflow)
             self.assertIn("Verify exact source SHA", workflow)
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)

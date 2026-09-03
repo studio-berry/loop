@@ -1,6 +1,12 @@
 name: Linux_AppImage
 
 on:
+  # Packaging runs on every pull request as well, so a change that breaks the MSI or
+  # the AppImage fails here instead of surviving until someone dispatches a run by
+  # hand. Narrow this with a `paths:` filter if the runner cost becomes a problem.
+  pull_request:
+
+  # Keep manual packaging qualification available for exact source SHAs.
   workflow_dispatch:
     inputs:
       source_sha:
@@ -34,13 +40,13 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loop
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Verify exact source SHA
         working-directory: loop
         env:
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
         run: |
           if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "::error::source_sha must be a full 40-character Git SHA"
