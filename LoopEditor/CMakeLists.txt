@@ -82,13 +82,15 @@ install(TARGETS LoopEditor
 # LoopEditor owns the Loop.Quick module, so Qt can scan its QML import graph
 # and install the complete runtime closure beside the product.  In particular,
 # this covers transitive controls imports and the dynamically loaded platform
-# and SQLite plugins used by the clean-tree smoke.
+# and SQLite plugins used by the clean-tree smoke.  Selecting the SQLite plugin
+# explicitly avoids bundling optional SQL drivers whose vendor client libraries
+# are not part of the product package.
 qt_generate_deploy_qml_app_script(
     TARGET LoopEditor
     OUTPUT_SCRIPT loop_editor_deploy_script
     NO_TRANSLATIONS
-    INCLUDE_PLUGIN_TYPES platforms sqldrivers
-    INCLUDE_PLUGINS qoffscreen
+    INCLUDE_PLUGIN_TYPES platforms
+    INCLUDE_PLUGINS qoffscreen qsqlite
 )
 # Qt's deployment helpers default to a flat prefix (bin/, lib/, qml/).  Loop
 # installs product payloads below usr/, so establish the same prefix-relative
