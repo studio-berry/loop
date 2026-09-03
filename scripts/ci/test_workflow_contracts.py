@@ -121,6 +121,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("-qmldir=", linux)
         self.assertIn("LoopEditor/qml", linux)
         self.assertIn("libqtquickcontrols2plugin.so", linux)
+        self.assertIn('QT_ROOT_DIR/qml/QtQuick/Controls', linux)
+        self.assertIn('install/usr/lib/qml/QtQuick/Controls', linux)
         self.assertIn("libLoopLibQuickplugin.so", linux)
         self.assertIn("LoopLibQuickplugin release_translations", linux)
         for workflow in (linux, windows):

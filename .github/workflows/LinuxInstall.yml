@@ -321,6 +321,21 @@ jobs:
             -qmldir="$loop_quick_src" \
             -qmldir="$loop_canvas_src" \
             -extra-plugins=iconengines,imageformats,texttospeech,platforms 2>&1 | tee "$evidence_dir/linuxdeployqt.txt"
+          controls_src="$QT_ROOT_DIR/qml/QtQuick/Controls"
+          controls_dest="install/usr/lib/qml/QtQuick/Controls"
+          controls_plugin_src="$controls_src/libqtquickcontrols2plugin.so"
+          if [[ ! -d "$controls_src" ]]; then
+            echo "::error::Required Qt QML module is missing: $controls_src"
+            exit 1
+          fi
+          if [[ ! -f "$controls_plugin_src" ]]; then
+            echo "::error::Required QtQuick.Controls plugin is missing: $controls_plugin_src"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$controls_dest")"
+          cp -a "$controls_src" "$controls_dest"
+          echo "Staged Qt QML module: QtQuick/Controls" | tee -a "$evidence_dir/linuxdeployqt.txt"
+          echo "Staged QtQuick.Controls plugin: libqtquickcontrols2plugin.so" | tee -a "$evidence_dir/linuxdeployqt.txt"
           controls_plugin="$(find install/usr/lib/qml -name 'libqtquickcontrols2plugin.so' -print -quit)"
           if [ -z "$controls_plugin" ]; then
             echo "::error::QtQuick.Controls plugin was not bundled into the AppImage tree"
