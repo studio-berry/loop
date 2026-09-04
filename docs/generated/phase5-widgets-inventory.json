@@ -21,7 +21,6 @@
       "CodeGenerator/CMakeLists.txt",
       "JBIG2_Viewer/CMakeLists.txt",
       "LoopEditor/CMakeLists.txt",
-      "LoopEditor/CMakeLists.txt",
       "LoopLibCore/CMakeLists.txt",
       "LoopLibInteraction/CMakeLists.txt",
       "LoopLibQuick/CMakeLists.txt",
@@ -232,53 +231,6 @@
       "installed_in_profile": true,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoopEditorQuick",
-        "LoopEditorQuickplugin",
-        "LoopEditorQuickplugin_init",
-        "Qt6::Core",
-        "Qt6::Gui",
-        "Qt6::Qml",
-        "Qt6::Quick",
-        "Qt6::QuickControls2",
-        "Qt6::QuickDialogs2"
-      ],
-      "direct_qt_modules": [
-        "Core",
-        "Gui",
-        "Qml",
-        "Quick",
-        "QuickControls2",
-        "QuickDialogs2"
-      ],
-      "transitive_targets": [
-        "LoopEditorQuick",
-        "LoopLibCore",
-        "LoopLibInteraction",
-        "LoopLibQuick"
-      ],
-      "transitive_qt_modules": [],
-      "qt_modules": [
-        "Core",
-        "Gui",
-        "Qml",
-        "Quick",
-        "QuickControls2",
-        "QuickDialogs2"
-      ],
-      "widgets_linkage": "none",
-      "widgets_paths": [],
-      "consumers": []
-    },
-    {
-      "id": "LoopEditorQuick",
-      "kind": "library",
-      "cmake": "LoopEditor/CMakeLists.txt",
-      "profile_enabled": true,
-      "profile_condition": "LOOP_BUILD_QUICK_CANVAS=ON from docs/product-surface.json",
-      "install_rule": false,
-      "installed_in_profile": false,
-      "build_only_in_profile": true,
-      "direct_links": [
         "LoopLibCore",
         "LoopLibInteraction",
         "LoopLibQuick",
@@ -313,10 +265,7 @@
       ],
       "widgets_linkage": "none",
       "widgets_paths": [],
-      "consumers": [
-        "LoopEditor",
-        "ProductQuickAccessibilitySmoke"
-      ]
+      "consumers": []
     },
     {
       "id": "LoopGenerateFixtures",
@@ -412,7 +361,6 @@
         "CodeGenerator",
         "JBIG2_VIEWER",
         "LoopEditor",
-        "LoopEditorQuick",
         "LoopGenerateFixtures",
         "LoopLibInteraction",
         "LoopLibQuick",
@@ -510,7 +458,6 @@
       "widgets_paths": [],
       "consumers": [
         "LoopEditor",
-        "LoopEditorQuick",
         "LoopLibQuick",
         "ProductQuickAccessibilitySmoke"
       ]
@@ -560,7 +507,6 @@
       "widgets_paths": [],
       "consumers": [
         "LoopEditor",
-        "LoopEditorQuick",
         "ProductQuickAccessibilitySmoke"
       ]
     },
@@ -659,9 +605,6 @@
       "installed_in_profile": false,
       "build_only_in_profile": false,
       "direct_links": [
-        "LoopEditorQuick",
-        "LoopEditorQuickplugin",
-        "LoopEditorQuickplugin_init",
         "LoopLibCore",
         "LoopLibInteraction",
         "LoopLibQuick",
@@ -681,7 +624,6 @@
         "QuickDialogs2"
       ],
       "transitive_targets": [
-        "LoopEditorQuick",
         "LoopLibCore",
         "LoopLibInteraction",
         "LoopLibQuick"
@@ -3080,9 +3022,9 @@
     }
   ],
   "counts": {
-    "targets": 70,
+    "targets": 69,
     "installed_in_profile": 4,
-    "build_only_in_profile": 3,
+    "build_only_in_profile": 2,
     "widgets_surfaces": 4,
     "legacy_executables": 4,
     "plugin_ui_groups": 0,

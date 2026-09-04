@@ -109,7 +109,9 @@ def validate_packaging_pins_data(path: Path, pins: Any) -> list[PinViolation]:
     if pins.get("schemaVersion") != 1:
         errors.append(PinViolation(path, "schemaVersion must be 1"))
 
-    for tool in ("appimagetool", "appimageRuntime", "linuxdeployqt", "sentryCli"):
+    # linuxdeployqt was retired with the workflow step that used it; the packaging
+    # workflows now deploy Qt through qt_generate_deploy_qml_app_script.
+    for tool in ("appimagetool", "appimageRuntime", "sentryCli"):
         _validate_asset_pin(path, tool, pins.get(tool), errors)
 
     wix = pins.get("wix")

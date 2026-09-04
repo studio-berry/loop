@@ -1,6 +1,7 @@
 // MIT License
 #include "quickdocumentmodel.h"
 
+#include "pdfaction.h"
 #include "pdfcatalog.h"
 #include "pdfdocument.h"
 #include "pdfdocumentcontext.h"
@@ -138,12 +139,29 @@ QVariant QuickOutlineModel::data(const QModelIndex& index, int role) const
         return node->item->getTitle();
     if (role == HasChildrenRole)
         return !node->children.empty();
+    if (role == PageRole)
+    {
+        const pdf::PDFAction* action = node->item->getAction();
+        if (!action)
+            return -1;
+        if (action->getType() == pdf::ActionType::GoTo)
+        {
+            const auto* goTo = static_cast<const pdf::PDFActionGoTo*>(action);
+            const pdf::PDFDestination& dest = goTo->getDestination();
+            if (dest.isValid() && !dest.isNamedDestination())
+                return static_cast<int>(dest.getPageIndex());
+            const pdf::PDFDestination& structDest = goTo->getStructureDestination();
+            if (structDest.isValid() && !structDest.isNamedDestination())
+                return static_cast<int>(structDest.getPageIndex());
+        }
+        return -1;
+    }
     return {};
 }
 
 QHash<int, QByteArray> QuickOutlineModel::roleNames() const
 {
-    return { { TitleRole, "title" }, { HasChildrenRole, "hasChildren" } };
+    return { { TitleRole, "title" }, { HasChildrenRole, "hasChildren" }, { PageRole, "page" } };
 }
 
 void QuickOutlineModel::build(Node* parent, const pdf::PDFOutlineItem* item)

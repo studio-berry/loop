@@ -33,7 +33,8 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
         const PDFPage* page = catalog->getPage(pageIndex);
         PDFTextLayoutGenerator generator(features, page, document,
                                          session->getFontCache(), session->getCMS(),
-                                         session->getOptionalContentActivity(), QTransform(), meshQuality);
+                                         session->getOptionalContentActivity(), QTransform(), meshQuality,
+                                         session->getProcessingBudget());
         generator.processContents();
         const PDFTextFlows flows = PDFTextFlow::createTextFlows(
             generator.createTextLayout(),

@@ -21,7 +21,6 @@ inline. Its layout:
 |-----|---------|------|
 | `appimagetool` | `LinuxInstall.yml` | upstream repo, commit, release-asset ID, SHA-256 |
 | `appimageRuntime` | `LinuxInstall.yml` | upstream repo, commit, release-asset ID, SHA-256 |
-| `linuxdeployqt` | `LinuxInstall.yml` | upstream repo, commit, release-asset ID, SHA-256 |
 | `wix` | `WindowsInstall.yml` | versioned release URL + SHA-256 |
 | `windowsSdk` | `WindowsInstall.yml` | MakeAppx.exe SHA-256 per SDK version |
 | `digicertKeylocker` | `WindowsInstall.yml` | KeyLocker toolset URL + SHA-256 (signing only) |
