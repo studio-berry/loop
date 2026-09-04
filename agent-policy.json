@@ -155,7 +155,7 @@
         "UnitTests/tst_shellkeyboardtest.cpp",
         "ProductQuickAccessibilitySmoke/**"
       ],
-      "targets": ["LoopLibQuick", "LoopEditor", "LoopEditorQuick", "ProductQuickAccessibilitySmoke"],
+      "targets": ["LoopLibQuick", "LoopEditor", "ProductQuickAccessibilitySmoke"],
       "tests": ["UnitTestsQuickCanvas", "UnitTestsCanvasParity", "UnitTestsEditorHost", "UnitTestsDocumentViewSession", "UnitTestsProductOperatorLoop", "UnitTestsQuickAccessibility", "UnitTestsShellKeyboard", "UnitTestsP4S9Interaction"]
     },
     "developer_widgets": {
