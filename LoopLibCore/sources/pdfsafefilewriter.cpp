@@ -38,12 +38,11 @@ PDFOperationResult PDFSafeFileWriter::writeData(const QString& fileName, const Q
                                                 OverwritePolicy policy)
 {
     return writeDevice(fileName, [&data](QIODevice* device) -> bool
-    {
+                       {
         // A short write (disk full, quota) must not be reported as success — that
         // leaves a silently truncated file where a valid output should be.
         const qint64 written = device->write(data);
-        return written == data.size();
-    }, policy);
+        return written == data.size(); }, policy);
 }
 
 PDFOperationResult PDFSafeFileWriter::writeDevice(const QString& fileName,
@@ -93,7 +92,7 @@ QList<PDFOutputConflict> PDFSafeFileWriter::findOutputConflicts(const QStringLis
     {
         if (fileName.isEmpty())
         {
-            conflicts.append({fileName, QStringLiteral("output.empty-path")});
+            conflicts.append({ fileName, QStringLiteral("output.empty-path") });
             continue;
         }
 
@@ -104,7 +103,7 @@ QList<PDFOutputConflict> PDFSafeFileWriter::findOutputConflicts(const QStringLis
 
         if (seenPaths.contains(normalizedPath))
         {
-            conflicts.append({fileName, QStringLiteral("output.duplicate-planned-path")});
+            conflicts.append({ fileName, QStringLiteral("output.duplicate-planned-path") });
         }
         else
         {
@@ -114,9 +113,9 @@ QList<PDFOutputConflict> PDFSafeFileWriter::findOutputConflicts(const QStringLis
         const QFileInfo info(fileName);
         if (info.exists() && (rejectExisting || info.isDir()))
         {
-            conflicts.append({fileName, info.isDir()
-                                      ? QStringLiteral("output.destination-is-directory")
-                                      : QStringLiteral("output.destination-exists")});
+            conflicts.append({ fileName, info.isDir()
+                                             ? QStringLiteral("output.destination-is-directory")
+                                             : QStringLiteral("output.destination-exists") });
         }
     }
 

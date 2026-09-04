@@ -113,8 +113,8 @@ bool PDFFilenameSanitizer::isPathContained(const QString& resolvedPath, const QS
 
     const QString canonicalFilePath = QFileInfo(resolvedPath).canonicalFilePath();
     const QString canonicalFile = canonicalFilePath.isEmpty()
-            ? QDir::cleanPath(QFileInfo(resolvedPath).absoluteFilePath())
-            : canonicalFilePath;
+                                      ? QDir::cleanPath(QFileInfo(resolvedPath).absoluteFilePath())
+                                      : canonicalFilePath;
 
     // The file path must start with the target directory path followed by a separator
     if (canonicalFile == canonicalTarget)
@@ -122,8 +122,7 @@ bool PDFFilenameSanitizer::isPathContained(const QString& resolvedPath, const QS
         return false;
     }
 
-    return canonicalFile.startsWith(canonicalTarget + QLatin1Char('/'))
-        || canonicalFile.startsWith(canonicalTarget + QLatin1Char('\\'));
+    return canonicalFile.startsWith(canonicalTarget + QLatin1Char('/')) || canonicalFile.startsWith(canonicalTarget + QLatin1Char('\\'));
 }
 
 }   // namespace pdf

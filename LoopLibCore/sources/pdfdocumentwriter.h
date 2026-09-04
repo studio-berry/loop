@@ -155,4 +155,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFDOCUMENTWRITER_H
+#endif   // PDFDOCUMENTWRITER_H

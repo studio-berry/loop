@@ -627,6 +627,8 @@ add_executable(UnitTestsFilenameSanitizer
 )
 
 target_link_libraries(UnitTestsFilenameSanitizer PRIVATE LoopLibCore Qt6::Core Qt6::Test)
+target_include_directories(UnitTestsFilenameSanitizer PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/UnitTestsFilenameSanitizer_autogen/include)
 
 set_target_properties(UnitTestsFilenameSanitizer PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -641,6 +643,8 @@ add_executable(UnitTestsSafeFileWriter
 )
 
 target_link_libraries(UnitTestsSafeFileWriter PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(UnitTestsSafeFileWriter PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/UnitTestsSafeFileWriter_autogen/include)
 
 set_target_properties(UnitTestsSafeFileWriter PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -669,6 +673,8 @@ add_executable(UnitTestsJbig2Decoder
 )
 
 target_link_libraries(UnitTestsJbig2Decoder PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(UnitTestsJbig2Decoder PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/UnitTestsJbig2Decoder_autogen/include)
 
 set_target_properties(UnitTestsJbig2Decoder PROPERTIES
     WIN32_EXECUTABLE OFF

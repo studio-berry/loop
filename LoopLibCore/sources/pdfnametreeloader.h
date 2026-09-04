@@ -33,7 +33,7 @@ namespace pdf
 {
 
 /// This class can load a number tree into the array
-template<typename Type>
+template <typename Type>
 class PDFNameTreeLoader
 {
 public:
@@ -129,7 +129,7 @@ private:
             }
 
             // Then, follow the kids
-            const PDFObject&  kids = storage->getObject(dictionary->get("Kids"));
+            const PDFObject& kids = storage->getObject(dictionary->get("Kids"));
             if (kids.isArray())
             {
                 const PDFArray* kidsArray = kids.getArray();
@@ -145,4 +145,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFNAMETREELOADER_H
+#endif   // PDFNAMETREELOADER_H

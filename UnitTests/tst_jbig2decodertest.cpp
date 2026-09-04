@@ -48,16 +48,16 @@ void Jbig2DecoderTest::test_codeTables_rejectsOversizedRangeBitLength()
     // Segment header (7.2) + "Tables" segment body (7.4.3), hand-built to match
     // PDFJBIG2SegmentHeader::read()'s exact field layout:
     static const unsigned char data[] = {
-        0x00, 0x00, 0x00, 0x00, // segment number = 0
-        0x35,                   // flags: type = 53 (Tables), 1-byte page association
-        0x00,                   // retention field: 0 referred-to segments
-        0x01,                   // page association = 1
-        0x00, 0x00, 0x00, 0x0B, // segment data length = 11 bytes (body below)
+        0x00, 0x00, 0x00, 0x00,   // segment number = 0
+        0x35,   // flags: type = 53 (Tables), 1-byte page association
+        0x00,   // retention field: 0 referred-to segments
+        0x01,   // page association = 1
+        0x00, 0x00, 0x00, 0x0B,   // segment data length = 11 bytes (body below)
         // --- segment body: processCodeTables ---
-        0x70,                   // flags: hasOOB=0, htps=1, htrs=8
-        0x00, 0x00, 0x00, 0x00, // htLow = 0
-        0x7F, 0xFF, 0xFF, 0xFF, // htHigh = 0x7FFFFFFF
-        0x7F, 0x80               // first entry: prefixBitLength=0, rangeBitLength=255 (invalid)
+        0x70,   // flags: hasOOB=0, htps=1, htrs=8
+        0x00, 0x00, 0x00, 0x00,   // htLow = 0
+        0x7F, 0xFF, 0xFF, 0xFF,   // htHigh = 0x7FFFFFFF
+        0x7F, 0x80   // first entry: prefixBitLength=0, rangeBitLength=255 (invalid)
     };
 
     QByteArray stream(reinterpret_cast<const char*>(data), sizeof(data));
@@ -78,7 +78,7 @@ void Jbig2DecoderTest::test_codeTables_rejectsOversizedRangeBitLength()
     }
 
     QVERIFY2(threw, "A huffman table entry with an out-of-range bit length must be rejected, "
-                     "not fed into an undefined-behavior shift / overflowing accumulation.");
+                    "not fed into an undefined-behavior shift / overflowing accumulation.");
     QVERIFY2(message.contains(QStringLiteral("range bit length")), qPrintable(message));
 }
 
@@ -88,16 +88,16 @@ void Jbig2DecoderTest::test_codeTables_acceptsValidSmallTable()
     // single entry with rangeBitLength=1) to confirm the added validation
     // doesn't reject legitimate custom huffman tables.
     static const unsigned char data[] = {
-        0x00, 0x00, 0x00, 0x00, // segment number = 0
-        0x35,                   // flags: type = 53 (Tables), 1-byte page association
-        0x00,                   // retention field: 0 referred-to segments
-        0x01,                   // page association = 1
-        0x00, 0x00, 0x00, 0x0A, // segment data length = 10 bytes (body below)
+        0x00, 0x00, 0x00, 0x00,   // segment number = 0
+        0x35,   // flags: type = 53 (Tables), 1-byte page association
+        0x00,   // retention field: 0 referred-to segments
+        0x01,   // page association = 1
+        0x00, 0x00, 0x00, 0x0A,   // segment data length = 10 bytes (body below)
         // --- segment body: processCodeTables ---
-        0x00,                   // flags: hasOOB=0, htps=1, htrs=1
-        0x00, 0x00, 0x00, 0x00, // htLow = 0
-        0x00, 0x00, 0x00, 0x02, // htHigh = 2
-        0x40                     // entry prefixBitLength=0, rangeBitLength=1, low/high prefixBitLength=0
+        0x00,   // flags: hasOOB=0, htps=1, htrs=1
+        0x00, 0x00, 0x00, 0x00,   // htLow = 0
+        0x00, 0x00, 0x00, 0x02,   // htHigh = 2
+        0x40   // entry prefixBitLength=0, rangeBitLength=1, low/high prefixBitLength=0
     };
 
     QByteArray stream(reinterpret_cast<const char*>(data), sizeof(data));

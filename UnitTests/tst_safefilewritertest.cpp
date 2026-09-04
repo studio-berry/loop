@@ -200,7 +200,7 @@ void SafeFileWriterTest::findOutputConflicts_rejectsDuplicateNormalizedPaths()
     const QString alias = QDir(temporaryDirectory.path()).filePath(QStringLiteral("nested/../report.pdf"));
 
     const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts(
-        {path, alias}, false);
+        { path, alias }, false);
     QCOMPARE(conflicts.size(), 1);
     QCOMPARE(conflicts.constFirst().code, QStringLiteral("output.duplicate-planned-path"));
 }
@@ -212,7 +212,7 @@ void SafeFileWriterTest::findOutputConflicts_rejectsExistingDestinationsWithoutO
     const QString path = temporaryDirectory.filePath(QStringLiteral("existing.bin"));
     QVERIFY(writeRawContent(path, QByteArrayLiteral("keep")));
 
-    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({path}, true);
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({ path }, true);
     QCOMPARE(conflicts.size(), 1);
     QCOMPARE(conflicts.constFirst().code, QStringLiteral("output.destination-exists"));
 }
@@ -224,7 +224,7 @@ void SafeFileWriterTest::findOutputConflicts_allowsExistingDestinationsWithOverw
     const QString path = temporaryDirectory.filePath(QStringLiteral("existing.bin"));
     QVERIFY(writeRawContent(path, QByteArrayLiteral("keep")));
 
-    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({path}, false);
+    const QList<pdf::PDFOutputConflict> conflicts = pdf::PDFSafeFileWriter::findOutputConflicts({ path }, false);
     QVERIFY(conflicts.isEmpty());
 }
 

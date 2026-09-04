@@ -53,7 +53,6 @@ public:
         m_order(0),
         m_tool(tool)
     {
-
     }
 
 protected:
@@ -84,7 +83,7 @@ bool PDFImageContentExtractorProcessor::isContentKindSuppressed(ContentKind kind
 
         case ContentKind::Tiling:
         case ContentKind::Images:
-            return false; // Tiling can have images
+            return false;   // Tiling can have images
 
         default:
         {
@@ -267,9 +266,8 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
         // Atomic write: serialize into a QSaveFile and rename only after the image
         // bytes are durable, so a crash or short write cannot leave a truncated image.
         QString imageWriterError;
-        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(image.fileName,
-            [&options, &image, &imageWriterError](QIODevice* device) -> bool
-            {
+        const pdf::PDFOperationResult writeResult = pdf::PDFSafeFileWriter::writeDevice(image.fileName, [&options, &image, &imageWriterError](QIODevice* device) -> bool
+                                                                                        {
                 QImageWriter imageWriter(device, options.imageWriterSettings.getCurrentFormat());
                 imageWriter.setSubType(options.imageWriterSettings.getCurrentSubtype());
                 imageWriter.setCompression(options.imageWriterSettings.getCompression());
@@ -283,8 +281,7 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
                     return false;
                 }
 
-                return true;
-            }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+                return true; }, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
 
         if (!writeResult)
         {
@@ -294,17 +291,15 @@ PDFToolExitCode PDFToolFetchImages::execute(const PDFToolOptions& options)
                              QStringLiteral("output.write-failed"),
                              PDFToolTranslationContext::tr("Cannot write page image to file '%1', because: %2.")
                                  .arg(image.fileName, imageWriterError.isEmpty() ? writeResult.getErrorMessage() : imageWriterError),
-                             QJsonObject{{QStringLiteral("path"), image.fileName}});
+                             QJsonObject{ { QStringLiteral("path"), image.fileName } });
         }
 
         if (options.executionContext)
         {
-            options.executionContext->addOutput({
-                QStringLiteral("file"),
-                QStringLiteral("fetch-images"),
-                image.fileName,
-                writeResult ? QStringLiteral("written") : QStringLiteral("partial")
-            });
+            options.executionContext->addOutput({ QStringLiteral("file"),
+                                                  QStringLiteral("fetch-images"),
+                                                  image.fileName,
+                                                  writeResult ? QStringLiteral("written") : QStringLiteral("partial") });
         }
     };
 
@@ -340,7 +335,8 @@ void PDFToolFetchImages::onImageExtracted(pdf::PDFInteger pageIndex, pdf::PDFInt
     QByteArray hash = hasher.result();
 
     QMutexLocker lock(&m_mutex);
-    auto it = std::find_if(m_images.begin(), m_images.end(), [&hash](const Image& image) { return image.hash == hash; });
+    auto it = std::find_if(m_images.begin(), m_images.end(), [&hash](const Image& image)
+                           { return image.hash == hash; });
     if (it == m_images.cend())
     {
         Image imageStructure;
