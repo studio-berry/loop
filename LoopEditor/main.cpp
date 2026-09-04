@@ -330,14 +330,10 @@ int main(int argc, char* argv[])
 
     const QString exeDir = executableDirectory(argv[0]);
 
-    // Package smoke strips developer Qt env vars. Linux AppImage needs explicit
-    // plugin roots. Windows matches PdfTool: search the executable directory for
-    // platforms/qoffscreen.dll after install copies that plugin beside LoopEditor.
-#if defined(Q_OS_WIN)
-    QCoreApplication::setLibraryPaths(QStringList{ exeDir } + QCoreApplication::libraryPaths());
-#else
+    // Package smoke strips developer Qt env vars. Search install-root plugin trees
+    // only: adding usr/bin itself to libraryPaths() on Windows makes Qt treat
+    // product DLLs as plugins and can fault during later initialization.
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
-#endif
 
     if (quickSmokeRequested)
     {
