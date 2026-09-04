@@ -64,27 +64,29 @@ function Assert-FileExists {
 function Resolve-ProfilesDir {
     <#
         LOOP_PREFLIGHT_PROFILES_DIR is ${LOOP_INSTALL_SHARE_DIR}/loop/profiles
-        (LoopEditorPlugins/LoopPreflightPlugin/CMakeLists.txt). LOOP_INSTALL_TO_USR=ON
-        -- used by the Windows CI and MSI builds -- prefixes that with usr/, so the share
-        tree can sit beside the bin directory or one level above it depending on how the
-        installer flattens the staged prefix. Probe rather than assume.
+        (PdfTool/CMakeLists.txt). LOOP_INSTALL_TO_USR=ON -- used by the Windows
+        CI and MSI builds -- prefixes that with usr/, so the share tree can sit
+        beside the bin directory (staged .../install/usr/bin keeps profiles at
+        .../install/usr/share) or below an install root (MSI InstallDir
+        C:\Program Files\LOOP keeps profiles at ...\LOOP\usr\share).
+        $InstallDir may name either the bin directory or the install root, so
+        walk upward from it instead of assuming one depth. Probe rather than
+        assume.
     #>
     param([string]$InstallDir)
 
-    $parent = Split-Path -Parent $InstallDir
-
-    $candidates = @(
-        (Join-Path $InstallDir "share\loop\profiles"),
-        (Join-Path $InstallDir "usr\share\loop\profiles"),
-        # Pre-MIC-301 assumption, kept so an old layout still resolves.
-        (Join-Path $env:ProgramFiles "share\loop\profiles")
-    )
-
-    # $InstallDir can be a drive root, in which case there is no parent to probe.
-    if (-not [string]::IsNullOrWhiteSpace($parent)) {
-        $candidates += (Join-Path $parent "share\loop\profiles")
-        $candidates += (Join-Path $parent "usr\share\loop\profiles")
+    $candidates = @()
+    $anchor = $InstallDir
+    for ($depth = 0; $depth -lt 4; $depth++) {
+        if ([string]::IsNullOrWhiteSpace($anchor)) { break }
+        $candidates += (Join-Path $anchor "share\loop\profiles")
+        $candidates += (Join-Path $anchor "usr\share\loop\profiles")
+        # A drive root has no parent; stop the walk there.
+        $anchor = Split-Path -Parent $anchor
     }
+
+    # Pre-MIC-301 assumption, kept so an old layout still resolves.
+    $candidates += (Join-Path $env:ProgramFiles "share\loop\profiles")
 
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath (Join-Path $candidate "loop-default.json")) {
@@ -165,7 +167,20 @@ function Test-ForbiddenPayload {
     Write-Host "OK: no Ghostscript / JRE / Python / Widgets-bound Qt payload in the default bundle (scanned: $($scanned -join ', '))"
 }
 
-$pluginsDir = Join-Path $InstallDir "pdfplugins"
+# -InstallDir may name the directory holding the executables (staged tree
+# .../install/usr/bin) or the install root above it (MSI C:\Program Files\LOOP
+# with binaries at ...\LOOP\usr\bin). Normalize to the directory that actually
+# holds the executables so every binary-relative path below resolves the same
+# way for both spellings; a missing executable in both places stays a loud
+# failure in Assert-FileExists rather than silently probing the wrong tree.
+$binDir = $InstallDir
+if (-not (Test-Path -LiteralPath (Join-Path $binDir "LoopEditor.exe")) -and
+    (Test-Path -LiteralPath (Join-Path $binDir "usr\bin\LoopEditor.exe"))) {
+    $binDir = Join-Path $binDir "usr\bin"
+    Write-Host "Resolved product binaries to $binDir"
+}
+
+$pluginsDir = Join-Path $binDir "pdfplugins"
 
 if ([string]::IsNullOrWhiteSpace($ProfilesDir)) {
     $ProfilesDir = Resolve-ProfilesDir -InstallDir $InstallDir
@@ -174,8 +189,8 @@ Write-Host "Smoke-testing install at $InstallDir"
 Write-Host "Resolved preflight profiles to $ProfilesDir"
 
 $requiredFiles = @(
-    @{ Path = (Join-Path $InstallDir "LoopEditor.exe"); Label = "Editor" },
-    @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
+    @{ Path = (Join-Path $binDir "LoopEditor.exe"); Label = "Editor" },
+    @{ Path = (Join-Path $binDir "PdfTool.exe"); Label = "PdfTool" },
     @{ Path = (Join-Path $ProfilesDir "loop-default.json"); Label = "Default preflight profile" },
     @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
     @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
@@ -186,7 +201,7 @@ foreach ($item in $requiredFiles) {
     Write-Host "OK: $($item.Label)"
 }
 
-$pdfTool = Join-Path $InstallDir "PdfTool.exe"
+$pdfTool = Join-Path $binDir "PdfTool.exe"
 
 $versionOutput = @(& $pdfTool --version 2>&1)
 $versionExit = $LASTEXITCODE
@@ -214,7 +229,7 @@ if ($capabilities.data.product.name -ne "PdfTool" -or
 }
 Write-Host "OK: PdfTool capabilities report the Loop PdfTool identity"
 
-$legacyEditor = Join-Path $InstallDir ("Lo" + "upeEditor.exe")
+$legacyEditor = Join-Path $binDir ("Lo" + "upeEditor.exe")
 if (Test-Path -LiteralPath $legacyEditor) {
     throw "Legacy editor executable still present in the install: $legacyEditor"
 }
@@ -250,7 +265,7 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
 }
 
 $profilePath = Join-Path $ProfilesDir "loop-default.json"
-$editor = Join-Path $InstallDir "LoopEditor.exe"
+$editor = Join-Path $binDir "LoopEditor.exe"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
 $qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOOP_QT_ROOT) |
@@ -318,7 +333,7 @@ if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
 }
 Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
 
-$ocrSidecar = Join-Path $InstallDir "LoopOcrService\LoopOcrService.exe"
+$ocrSidecar = Join-Path $binDir "LoopOcrService\LoopOcrService.exe"
 if (Test-Path -LiteralPath $ocrSidecar) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
     $mockSidecar = Join-Path $repoRoot "loop-ocr\tools\mock_ocr_sidecar.cmd"
@@ -347,7 +362,7 @@ for ($i = 0; $i -lt 2; $i++) {
 Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidecar
 
 if (-not $SkipEditorLaunch) {
-    $editor = Join-Path $InstallDir "LoopEditor.exe"
+    $editor = Join-Path $binDir "LoopEditor.exe"
     $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
     Start-Sleep -Seconds 5
     if ($editorProcess.HasExited) {

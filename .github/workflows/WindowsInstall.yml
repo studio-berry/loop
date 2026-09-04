@@ -281,8 +281,12 @@ jobs:
         run: |
           $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
           if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
+          # Copy-Item to a destination that does not exist copies the source
+          # *contents* directly into it (no extra `install` level), so the
+          # relocated binaries live at $relocated\usr\bin, not
+          # $relocated\install\usr\bin.
           Copy-Item -LiteralPath "${env:GITHUB_WORKSPACE}\loop\build\install" -Destination $relocated -Recurse
-          & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "install\usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
+          & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
 
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in

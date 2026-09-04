@@ -12,16 +12,24 @@ qt_add_executable(ProductQuickAccessibilitySmoke
     ../LoopEditor/documentviewsession.h
 )
 
+# The QML sources below intentionally mirror LoopEditor/qml/ file-for-file.
+# QML_FILES must stay inside this directory: a `..` entry makes Qt derive a
+# qmlcache path containing `..` (ProductQuickAccessibilitySmoke_.._LoopEditor),
+# which MSBuild rejects with MSB3191 and which also misplaces the embedded
+# resource (qrc:/qt/qml/Loop/LoopEditor/qml/Main.qml instead of
+# qrc:/qt/qml/Loop/Quick/qml/Main.qml, so loadFromModule("Loop.Quick", "Main")
+# fails). LoopEditor/qml/ remains the single source of truth; keep every
+# mirror byte-identical when either side changes.
 qt_add_qml_module(ProductQuickAccessibilitySmoke
     URI Loop.Quick
     VERSION 1.0
     QML_FILES
-        ../LoopEditor/qml/Main.qml
-        ../LoopEditor/qml/Workspace.qml
-        ../LoopEditor/qml/PreflightPane.qml
-        ../LoopEditor/qml/InspectorPane.qml
-        ../LoopEditor/qml/DocumentPane.qml
-        ../LoopEditor/qml/CanvasPane.qml
+        qml/Main.qml
+        qml/Workspace.qml
+        qml/PreflightPane.qml
+        qml/InspectorPane.qml
+        qml/DocumentPane.qml
+        qml/CanvasPane.qml
 )
 
 target_link_libraries(ProductQuickAccessibilitySmoke
