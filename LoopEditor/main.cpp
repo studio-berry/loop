@@ -309,6 +309,7 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
                      });
 
     engine.loadFromModule(QStringLiteral("Loop.Quick"), QStringLiteral("Main"));
+    logQuickSmokeStage("after_load_from_module", exeDir);
 
     if (engine.rootObjects().isEmpty())
     {
@@ -347,14 +348,6 @@ int main(int argc, char* argv[])
     QGuiApplication application(argc, argv);
 
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
-
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_qguiapplication", exeDir);
-        QQuickStyle::setStyle(QStringLiteral("Fusion"));
-        EditorHost host;
-        return runQuickSmoke(application, host, exeDir);
-    }
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
@@ -399,6 +392,7 @@ int main(int argc, char* argv[])
 
     if (parser.isSet(quickSmoke))
     {
+        logQuickSmokeStage("before_run_quick_smoke", exeDir);
         return runQuickSmoke(application, host, exeDir);
     }
 

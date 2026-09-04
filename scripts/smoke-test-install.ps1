@@ -331,12 +331,6 @@ try {
     # Distribution LoopEditor is a console binary, but force stderr logging so a
     # QML/plugin failure is visible when "2>&1" captures process output.
     $env:QT_FORCE_STDERR_LOGGING = "1"
-    $nativeOutput = @(& $editor --quick-smoke 2>&1)
-    $nativeExit = $LASTEXITCODE
-    if ($nativeExit -ne 0) {
-        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
-    }
-    Write-Host "OK: LoopEditor native Quick startup"
     $env:QT_QUICK_BACKEND = "software"
     $softwareOutput = @(& $editor --quick-smoke 2>&1)
     $softwareExit = $LASTEXITCODE
@@ -344,6 +338,13 @@ try {
         throw "LoopEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
     }
     Write-Host "OK: LoopEditor software Quick startup"
+    Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    $nativeOutput = @(& $editor --quick-smoke 2>&1)
+    $nativeExit = $LASTEXITCODE
+    if ($nativeExit -ne 0) {
+        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+    }
+    Write-Host "OK: LoopEditor native Quick startup"
 } finally {
     $env:PATH = $savedPath
     if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }
