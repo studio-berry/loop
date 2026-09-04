@@ -45,13 +45,39 @@
 #include <QUrl>
 
 #include <cstdio>
+#include <cstring>
 
 #if defined(Q_OS_WIN)
+#include <io.h>
 #include <windows.h>
 #endif
 
 namespace
 {
+
+bool argvContainsQuickSmoke(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::strcmp(argv[i], "--quick-smoke") == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+#if defined(Q_OS_WIN)
+void attachConsoleForQuickSmoke()
+{
+    if (::AttachConsole(ATTACH_PARENT_PROCESS))
+    {
+        (void)freopen("CONOUT$", "w", stdout);
+        (void)freopen("CONOUT$", "w", stderr);
+    }
+}
+#endif
 
 QString executableDirectory(const char* argv0)
 {
@@ -267,6 +293,14 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
 
 int main(int argc, char* argv[])
 {
+    const bool quickSmokeRequested = argvContainsQuickSmoke(argc, argv);
+#if defined(Q_OS_WIN)
+    if (quickSmokeRequested)
+    {
+        attachConsoleForQuickSmoke();
+    }
+#endif
+
     const QString exeDir = executableDirectory(argv[0]);
 
     // Package smoke strips developer Qt env vars. Search the install directory
@@ -318,13 +352,14 @@ int main(int argc, char* argv[])
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     EditorHost host;
-    QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
 
     if (parser.isSet(quickSmoke))
     {
         return runQuickSmoke(application, host, exeDir);
     }
+
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)

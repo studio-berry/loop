@@ -40,8 +40,7 @@ public:
                                     const PDFMeshQualitySettings& meshQualitySettings,
                                     PDFProcessingBudget* processingBudget = nullptr) :
         BaseClass(page, document, fontCache, cms, optionalContentActivity, pagePointToDevicePointMatrix, meshQualitySettings, processingBudget),
-        m_features(features)
-    {}
+        m_features(features) {}
 
     /// Creates text layout from the text
     PDFTextLayout createTextLayout();
