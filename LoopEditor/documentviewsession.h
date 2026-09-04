@@ -75,14 +75,16 @@ public:
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
 private:
-    // Reset explicitly in the destructor so every worker is joined while the
-    // loader, writer, and renderer captured by jobs are still alive.
-    std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
-    pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
+    // Catalog and context initialize before the job scheduler so worker threads
+    // never overlap Qt resource registration on Windows packaging smoke.
     pdfinteraction::CommandCatalog m_catalog;
     pdf::PDFDocumentContext m_context;
     pdfinteraction::PDFReaderDocumentLoader m_loader;
     pdfinteraction::PDFDocumentFileWriter m_writer;
+    // Reset explicitly in the destructor so every worker is joined while the
+    // loader, writer, and renderer captured by jobs are still alive.
+    std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
+    pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
     std::unique_ptr<pdfinteraction::DocumentFacade> m_facade;
     std::unique_ptr<pdfinteraction::PDFDocumentContextSource> m_revisionSource;
     pdfinteraction::ViewportController m_viewport;

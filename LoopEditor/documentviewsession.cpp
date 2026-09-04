@@ -78,13 +78,14 @@ std::unique_ptr<pdfinteraction::DocumentFacade> makeDocumentFacade(pdf::PDFDocum
                                                                    pdfinteraction::CommandCatalog& catalog,
                                                                    QObject* parent)
 {
+    logDocumentViewSessionInit("catalog_context_done");
     logDocumentViewSessionInit("facade_begin");
     auto facade = std::make_unique<pdfinteraction::DocumentFacade>(context,
-                                                                     submitter,
-                                                                     loader,
-                                                                     writer,
-                                                                     catalog,
-                                                                     parent);
+                                                                   submitter,
+                                                                   loader,
+                                                                   writer,
+                                                                   catalog,
+                                                                   parent);
     logDocumentViewSessionInit("facade_end");
     return facade;
 }
@@ -93,9 +94,10 @@ std::unique_ptr<pdfinteraction::DocumentFacade> makeDocumentFacade(pdf::PDFDocum
 
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
+    m_catalog((logDocumentViewSessionInit("catalog_begin"), pdfinteraction::CommandCatalog(this))),
+    m_context((logDocumentViewSessionInit("context_begin"), pdf::PDFDocumentContext(nullptr, this))),
     m_scheduler(makeDocumentViewScheduler()),
-    m_submitter(*m_scheduler),
-    m_context(nullptr),
+    m_submitter((logDocumentViewSessionInit("submitter"), pdfinteraction::PDFJobSchedulerSubmitter(*m_scheduler))),
     m_facade(makeDocumentFacade(m_context, m_submitter, m_loader, m_writer, m_catalog, this)),
     m_renderer((logDocumentViewSessionInit("renderer"), m_context)),
     m_commandBridge((logDocumentViewSessionInit("command_bridge"), m_catalog), *m_facade, m_viewport, this),
