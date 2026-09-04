@@ -45,6 +45,8 @@
 #include <QScreen>
 #include <QUrl>
 
+#include <cstdio>
+
 #include <optional>
 
 namespace
@@ -115,6 +117,8 @@ EditorHost::EditorHost(QObject* parent) :
     m_session(std::make_unique<DocumentViewSession>(this)),
     m_preflight(&m_session->scheduler(), this)
 {
+    fprintf(stderr, "loop-editor editorhost after session+preflight\n");
+    fflush(stderr);
     connectFacade();
     connectViewport();
     connectCatalog();
@@ -122,10 +126,15 @@ EditorHost::EditorHost(QObject* parent) :
     connectSurfaces();
     registerShellHandlers();
     registerFeatureHandlers();
+    fprintf(stderr, "loop-editor editorhost after handlers\n");
+    fflush(stderr);
 
     m_preflightOverlayBridge.setFindingsModel(m_preflight.findingsModel());
     m_preflightOverlayBridge.setOverlayBuilder(m_session->overlays());
     m_preflightOverlayBridge.setInteractionController(m_session->interaction());
+
+    fprintf(stderr, "loop-editor editorhost constructed\n");
+    fflush(stderr);
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
     connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);

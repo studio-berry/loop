@@ -11,6 +11,8 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+#include <cstdio>
+
 namespace
 {
 
@@ -33,6 +35,28 @@ bool headlessQpaPlatformRequested()
     return false;
 }
 
+void applyInitialViewportScreenMetrics(pdfinteraction::ViewportController& viewport)
+{
+#if defined(Q_OS_WIN)
+    // Windows headless packaging smoke can fault inside primaryScreen() metrics even
+    // when QT_QPA_PLATFORM=offscreen. ViewportController is designed for injected DPI.
+    Q_UNUSED(headlessQpaPlatformRequested);
+    viewport.setPixelPerMM(96.0 / 25.4);
+    viewport.setDevicePixelRatio(1.0);
+#else
+    if (headlessQpaPlatformRequested())
+    {
+        viewport.setPixelPerMM(96.0 / 25.4);
+        viewport.setDevicePixelRatio(1.0);
+    }
+    else if (QScreen* screen = QGuiApplication::primaryScreen())
+    {
+        viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
+        viewport.setDevicePixelRatio(screen->devicePixelRatio());
+    }
+#endif
+}
+
 }   // namespace
 
 DocumentViewSession::DocumentViewSession(QObject* parent) :
@@ -53,6 +77,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
 {
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
+    fprintf(stderr, "loop-editor documentviewsession before surfaces\n");
+    fflush(stderr);
     m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
                                                                           m_submitter,
                                                                           m_renderer,
@@ -61,6 +87,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           this);
     m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
     setCacheLimit(DefaultCacheLimit);
+    fprintf(stderr, "loop-editor documentviewsession after surfaces\n");
+    fflush(stderr);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
                                                                             m_viewport,
@@ -69,20 +97,11 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                             this);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
-    // Headless packaging smoke runs with QT_QPA_PLATFORM=offscreen. On Windows the
-    // offscreen QPA can expose a primaryScreen() that faults when probed for DPI.
-    if (headlessQpaPlatformRequested())
-    {
-        m_viewport.setPixelPerMM(96.0 / 25.4);
-        m_viewport.setDevicePixelRatio(1.0);
-    }
-    else if (QScreen* screen = QGuiApplication::primaryScreen())
-    {
-        m_viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
-        m_viewport.setDevicePixelRatio(screen->devicePixelRatio());
-    }
+    applyInitialViewportScreenMetrics(m_viewport);
 
     m_commandBridge.setCoordinator(m_surfaces.get());
+    fprintf(stderr, "loop-editor documentviewsession constructed\n");
+    fflush(stderr);
 }
 
 DocumentViewSession::~DocumentViewSession()
