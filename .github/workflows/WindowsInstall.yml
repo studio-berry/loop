@@ -281,6 +281,7 @@ jobs:
         run: |
           $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
           if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
+          New-Item -Path $relocated -ItemType Directory | Out-Null
           Copy-Item -LiteralPath "${env:GITHUB_WORKSPACE}\loop\build\install" -Destination $relocated -Recurse
           & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "install\usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
 

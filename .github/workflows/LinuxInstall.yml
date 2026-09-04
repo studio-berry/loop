@@ -207,9 +207,21 @@ jobs:
           if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
           New-Item -Path $relocated -ItemType Directory | Out-Null
           Copy-Item -LiteralPath $sourceInstall -Destination $relocated -Recurse
+          Write-Host "=== source install layout (first 100) ==="
+          Get-ChildItem -LiteralPath $sourceInstall -Recurse | Select-Object -First 100
+          Write-Host "=== relocated layout (first 100) ==="
+          Get-ChildItem -LiteralPath $relocated -Recurse | Select-Object -First 100
+          # Copy-Item onto an existing directory nests ($relocated/install/...),
+          # onto a missing one it clones; accept either so the bin probe is exact.
           $relocatedBin = Join-Path (Join-Path (Join-Path $relocated "install") "usr") "bin"
+          if (-not (Test-Path -LiteralPath $relocatedBin)) {
+            $flatBin = Join-Path (Join-Path $relocated "usr") "bin"
+            if (Test-Path -LiteralPath $flatBin) { $relocatedBin = $flatBin }
+          }
+          $sourceSha = $env:LOOP_SOURCE_SHA
+          if ([string]::IsNullOrWhiteSpace($sourceSha)) { $sourceSha = (git rev-parse HEAD).Trim() }
           $smokeTest = Join-Path (Join-Path (Get-Location) "scripts") "smoke-test-install.ps1"
-          & $smokeTest -InstallDir $relocatedBin -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
+          & $smokeTest -InstallDir $relocatedBin -SourceSha $sourceSha -SkipEditorLaunch
 
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loop

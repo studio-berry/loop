@@ -13,7 +13,10 @@
     calls this script.
 
 .PARAMETER InstallDir
-    Directory containing LoopEditor.exe and PdfTool.exe.
+    Directory containing the LoopEditor and PdfTool executables
+    (LoopEditor.exe / PdfTool.exe on Windows, extensionless on Linux).
+    When omitted, defaults to the 64-bit Program Files LOOP directory;
+    on platforms without ProgramFiles an explicit path is required.
 
 .PARAMETER ProfilesDir
     Override for the preflight profiles directory. When omitted the script probes
@@ -35,7 +38,7 @@
     this is off by default and the scan fails when it is found.
 #>
 param(
-    [string]$InstallDir = "${env:ProgramFiles}\LOOP",
+    [string]$InstallDir = "",
     [string]$ProfilesDir = "",
     [string]$TestPdf = "",
     [string]$SourceSha = "",
@@ -46,6 +49,14 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $InstallDir = Join-Path $env:ProgramFiles "LOOP"
+    } else {
+        throw "InstallDir is required on this platform (ProgramFiles is not set). Pass -InstallDir explicitly."
+    }
+}
 
 if (-not [string]::IsNullOrWhiteSpace($SourceSha)) {
     if ($SourceSha -notmatch "^[0-9a-fA-F]{40}$") {
@@ -61,6 +72,25 @@ function Assert-FileExists {
     }
 }
 
+function Resolve-InstallBinary {
+    <#
+        Returns the platform's executable name: LoopEditor.exe / PdfTool.exe on
+        Windows, extensionless LoopEditor / PdfTool on Linux. Probes the bin
+        directory so one script covers both CI layouts.
+    #>
+    param([string]$Directory, [string]$BaseName)
+    foreach ($candidateName in @("$BaseName.exe", $BaseName)) {
+        $candidatePath = Join-Path $Directory $candidateName
+        if (Test-Path -LiteralPath $candidatePath) {
+            return $candidatePath
+        }
+    }
+    if ($env:OS -eq "Windows_NT") {
+        return (Join-Path $Directory "$BaseName.exe")
+    }
+    return (Join-Path $Directory $BaseName)
+}
+
 function Resolve-ProfilesDir {
     <#
         LOOP_PREFLIGHT_PROFILES_DIR is ${LOOP_INSTALL_SHARE_DIR}/loop/profiles
@@ -73,17 +103,23 @@ function Resolve-ProfilesDir {
 
     $parent = Split-Path -Parent $InstallDir
 
+    # Forward slashes keep Join-Path portable: Windows accepts them and Linux
+    # treats backslashes as literal filename characters, not separators.
     $candidates = @(
-        (Join-Path $InstallDir "share\loop\profiles"),
-        (Join-Path $InstallDir "usr\share\loop\profiles"),
-        # Pre-MIC-301 assumption, kept so an old layout still resolves.
-        (Join-Path $env:ProgramFiles "share\loop\profiles")
+        (Join-Path $InstallDir "share/loop/profiles"),
+        (Join-Path $InstallDir "usr/share/loop/profiles")
     )
+
+    # Pre-MIC-301 assumption, kept so an old layout still resolves.
+    # ProgramFiles is unset on Linux runners, where Join-Path $null throws.
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates += (Join-Path $env:ProgramFiles "share/loop/profiles")
+    }
 
     # $InstallDir can be a drive root, in which case there is no parent to probe.
     if (-not [string]::IsNullOrWhiteSpace($parent)) {
-        $candidates += (Join-Path $parent "share\loop\profiles")
-        $candidates += (Join-Path $parent "usr\share\loop\profiles")
+        $candidates += (Join-Path $parent "share/loop/profiles")
+        $candidates += (Join-Path $parent "usr/share/loop/profiles")
     }
 
     foreach ($candidate in $candidates) {
@@ -174,11 +210,11 @@ Write-Host "Smoke-testing install at $InstallDir"
 Write-Host "Resolved preflight profiles to $ProfilesDir"
 
 $requiredFiles = @(
-    @{ Path = (Join-Path $InstallDir "LoopEditor.exe"); Label = "Editor" },
-    @{ Path = (Join-Path $InstallDir "PdfTool.exe"); Label = "PdfTool" },
+    @{ Path = (Resolve-InstallBinary -Directory $InstallDir -BaseName "LoopEditor"); Label = "Editor" },
+    @{ Path = (Resolve-InstallBinary -Directory $InstallDir -BaseName "PdfTool"); Label = "PdfTool" },
     @{ Path = (Join-Path $ProfilesDir "loop-default.json"); Label = "Default preflight profile" },
-    @{ Path = (Join-Path $ProfilesDir "schemas\profile.schema.json"); Label = "Profile schema" },
-    @{ Path = (Join-Path $ProfilesDir "schemas\report.schema.json"); Label = "Report schema" }
+    @{ Path = (Join-Path (Join-Path $ProfilesDir "schemas") "profile.schema.json"); Label = "Profile schema" },
+    @{ Path = (Join-Path (Join-Path $ProfilesDir "schemas") "report.schema.json"); Label = "Report schema" }
 )
 
 foreach ($item in $requiredFiles) {
@@ -186,7 +222,7 @@ foreach ($item in $requiredFiles) {
     Write-Host "OK: $($item.Label)"
 }
 
-$pdfTool = Join-Path $InstallDir "PdfTool.exe"
+$pdfTool = Resolve-InstallBinary -Directory $InstallDir -BaseName "PdfTool"
 
 $versionOutput = @(& $pdfTool --version 2>&1)
 $versionExit = $LASTEXITCODE
@@ -214,8 +250,10 @@ if ($capabilities.data.product.name -ne "PdfTool" -or
 }
 Write-Host "OK: PdfTool capabilities report the Loop PdfTool identity"
 
-$legacyEditor = Join-Path $InstallDir ("Lo" + "upeEditor.exe")
-if (Test-Path -LiteralPath $legacyEditor) {
+$legacyEditorExe = Join-Path $InstallDir ("Lo" + "upeEditor.exe")
+$legacyEditorBare = Join-Path $InstallDir ("Lo" + "upeEditor")
+if ((Test-Path -LiteralPath $legacyEditorExe) -or (Test-Path -LiteralPath $legacyEditorBare)) {
+    $legacyEditor = if (Test-Path -LiteralPath $legacyEditorExe) { $legacyEditorExe } else { $legacyEditorBare }
     throw "Legacy editor executable still present in the install: $legacyEditor"
 }
 Write-Host "OK: legacy editor executable absent"
@@ -239,7 +277,7 @@ if (Test-Path -LiteralPath $ocrPlugin) {
 
 if ([string]::IsNullOrWhiteSpace($TestPdf)) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $candidate = Join-Path $repoRoot "loop-preflight\testdata\fixtures\bleed-adequate.pdf"
+    $candidate = Join-Path $repoRoot "loop-preflight/testdata/fixtures/bleed-adequate.pdf"
     if (Test-Path -LiteralPath $candidate) {
         $TestPdf = $candidate
     }
@@ -250,7 +288,7 @@ if ([string]::IsNullOrWhiteSpace($TestPdf) -or -not (Test-Path -LiteralPath $Tes
 }
 
 $profilePath = Join-Path $ProfilesDir "loop-default.json"
-$editor = Join-Path $InstallDir "LoopEditor.exe"
+$editor = Resolve-InstallBinary -Directory $InstallDir -BaseName "LoopEditor"
 # Strip Qt from PATH so preflight cannot silently resolve ICU/Qt deps from a
 # developer or CI toolchain install — the bundle must be self-contained (MIC-301).
 $qtRoots = @($env:QT_ROOT_DIR, $env:Qt6_DIR, $env:LOOP_QT_ROOT) |
@@ -318,11 +356,11 @@ if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
 }
 Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
 
-$ocrSidecar = Join-Path $InstallDir "LoopOcrService\LoopOcrService.exe"
+$ocrSidecar = Join-Path (Join-Path $InstallDir "LoopOcrService") "LoopOcrService.exe"
 if (Test-Path -LiteralPath $ocrSidecar) {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $mockSidecar = Join-Path $repoRoot "loop-ocr\tools\mock_ocr_sidecar.cmd"
-    $scanFixture = Join-Path $repoRoot "loop-preflight\testdata\fixtures\image-dpi-low.pdf"
+    $mockSidecar = Join-Path $repoRoot "loop-ocr/tools/mock_ocr_sidecar.cmd"
+    $scanFixture = Join-Path $repoRoot "loop-preflight/testdata/fixtures/image-dpi-low.pdf"
     if ((Test-Path -LiteralPath $mockSidecar) -and (Test-Path -LiteralPath $scanFixture)) {
         $ocrOutput = & $pdfTool ocr $scanFixture --console-format json --sidecar $mockSidecar 2>&1
         $ocrExit = $LASTEXITCODE
@@ -347,7 +385,7 @@ for ($i = 0; $i -lt 2; $i++) {
 Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidecar
 
 if (-not $SkipEditorLaunch) {
-    $editor = Join-Path $InstallDir "LoopEditor.exe"
+    $editor = Resolve-InstallBinary -Directory $InstallDir -BaseName "LoopEditor"
     $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
     Start-Sleep -Seconds 5
     if ($editorProcess.HasExited) {
