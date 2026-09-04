@@ -95,12 +95,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
     m_scheduler(makeDocumentViewScheduler()),
     m_submitter(*m_scheduler),
-    m_context(([]() {
-        logDocumentViewSessionInit("context_begin");
-        pdf::PDFDocumentContext context(nullptr);
-        logDocumentViewSessionInit("context_end");
-        return context;
-    }())),
+    m_context(nullptr),
     m_facade(makeDocumentFacade(m_context, m_submitter, m_loader, m_writer, m_catalog, this)),
     m_renderer((logDocumentViewSessionInit("renderer"), m_context)),
     m_commandBridge((logDocumentViewSessionInit("command_bridge"), m_catalog), *m_facade, m_viewport, this),
