@@ -290,6 +290,7 @@ $savedQtRootDir = $env:QT_ROOT_DIR
 $savedQt6Dir = $env:Qt6_DIR
 $savedLoopQtRoot = $env:LOOP_QT_ROOT
 $savedQuickBackend = $env:QT_QUICK_BACKEND
+$savedForceStderrLogging = $env:QT_FORCE_STDERR_LOGGING
 $env:PATH = ($pathParts -join $pathSeparator)
 Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
@@ -303,6 +304,12 @@ try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    # LoopEditor is built WIN32_EXECUTABLE (GUI subsystem), so it has no console.
+    # Qt's default message handler then writes qDebug/qWarning/qFatal to
+    # OutputDebugString instead of stderr, and "2>&1" captures nothing -- every
+    # startup failure here has reported an empty message. Force the handler to
+    # stderr so a crash or a QML/plugin error says why.
+    $env:QT_FORCE_STDERR_LOGGING = "1"
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
     $nativeExit = $LASTEXITCODE
     if ($nativeExit -ne 0) {
@@ -327,6 +334,7 @@ try {
     if ($null -ne $savedQt6Dir) { $env:Qt6_DIR = $savedQt6Dir } else { Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue }
     if ($null -ne $savedLoopQtRoot) { $env:LOOP_QT_ROOT = $savedLoopQtRoot } else { Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue }
     if ($null -ne $savedQuickBackend) { $env:QT_QUICK_BACKEND = $savedQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
+    if ($null -ne $savedForceStderrLogging) { $env:QT_FORCE_STDERR_LOGGING = $savedForceStderrLogging } else { Remove-Item Env:QT_FORCE_STDERR_LOGGING -ErrorAction SilentlyContinue }
 }
 if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
     throw "PdfTool preflight failed with unexpected exit code $preflightExit`: $preflightOutput"
