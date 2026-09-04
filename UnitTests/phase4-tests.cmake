@@ -165,6 +165,24 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     )
     add_test(UnitTestsInteractionController "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsInteractionController")
 
+    # Issue #146 AC7: the fixed-order contract evaluator a trace harness folds
+    # its recorded outcomes into. No InteractionController, no replay, no
+    # scheduler -- just the ordered checklist and the phase-attribution table
+    # from docs/INTERACTION_CONTRACT.md.
+    add_executable(UnitTestsInteractionTraceContract
+        tst_interactiontracecontracttest.cpp
+    )
+
+    target_link_libraries(UnitTestsInteractionTraceContract PRIVATE LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+
+    set_target_properties(UnitTestsInteractionTraceContract PROPERTIES
+        WIN32_EXECUTABLE OFF
+        MACOSX_BUNDLE OFF
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+    )
+    add_test(UnitTestsInteractionTraceContract "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsInteractionTraceContract")
+
     # Issue #145: the spatial index used by EvidenceHitTestSource and
     # FindingListHitTestSource, and their hit-testing/precedence contracts
     # once queries are index-backed instead of a linear scan.

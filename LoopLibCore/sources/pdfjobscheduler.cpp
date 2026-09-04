@@ -591,6 +591,7 @@ void PDFJobScheduler::appendTrace(const std::shared_ptr<JobEntry>& job,
 {
     PDFJobTraceEvent event;
     event.jobId = job->spec.jobId;
+    event.kind = job->spec.kind;
     event.status = status;
     event.priority = job->spec.priority;
     event.queueDepth = job->queueDepth;

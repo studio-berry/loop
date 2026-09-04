@@ -32,6 +32,7 @@
 #include "preflightcontroller.h"
 #include "previewstatemodel.h"
 
+#include "pdfblockingthreadguard.h"
 #include "pdfpage.h"
 #include "pdftransparencyrenderer.h"
 
@@ -115,6 +116,12 @@ EditorHost::EditorHost(QObject* parent) :
     m_session(std::make_unique<DocumentViewSession>(this)),
     m_preflight(&m_session->scheduler(), this)
 {
+    // Registers this constructing thread -- the one QML dispatches pointer
+    // and frame callbacks on -- as the thread blocking service adapters
+    // (PreflightEngine::run, and future OCR/AI/file-I/O adapters) must
+    // refuse to run on (issue #144).
+    pdf::PDFBlockingThreadGuard::registerInteractiveThread();
+
     connectFacade();
     connectViewport();
     connectCatalog();

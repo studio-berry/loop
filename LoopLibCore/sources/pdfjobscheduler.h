@@ -153,6 +153,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFJobSnapshot
 struct LOOPLIBCORESHARED_EXPORT PDFJobTraceEvent
 {
     QString jobId;
+    PDFJobKind kind = PDFJobKind::Other;
     PDFJobStatus status = PDFJobStatus::Queued;
     PDFJobPriority priority = PDFJobPriority::Background;
     int queueDepth = 0;
@@ -254,7 +255,7 @@ private:
     std::vector<std::thread> m_workers;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_METATYPE(pdf::PDFJobPriority)
 Q_DECLARE_METATYPE(pdf::PDFJobKind)
@@ -262,4 +263,4 @@ Q_DECLARE_METATYPE(pdf::PDFJobStatus)
 Q_DECLARE_METATYPE(pdf::PDFJobSnapshot)
 Q_DECLARE_METATYPE(pdf::PDFJobTraceEvent)
 
-#endif // PDFJOBSCHEDULER_H
+#endif   // PDFJOBSCHEDULER_H
