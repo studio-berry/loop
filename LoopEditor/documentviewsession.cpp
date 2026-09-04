@@ -11,6 +11,30 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+namespace
+{
+
+bool headlessQpaPlatformRequested()
+{
+    const QByteArray requested = qgetenv("QT_QPA_PLATFORM");
+    if (requested.isEmpty())
+    {
+        return QGuiApplication::platformName() == QLatin1String("offscreen");
+    }
+
+    for (const QByteArray& part : requested.split(','))
+    {
+        if (part.trimmed() == "offscreen")
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+}   // namespace
+
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
     m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
@@ -47,7 +71,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     // Headless packaging smoke runs with QT_QPA_PLATFORM=offscreen. On Windows the
     // offscreen QPA can expose a primaryScreen() that faults when probed for DPI.
-    if (QGuiApplication::platformName() == QLatin1String("offscreen"))
+    if (headlessQpaPlatformRequested())
     {
         m_viewport.setPixelPerMM(96.0 / 25.4);
         m_viewport.setDevicePixelRatio(1.0);

@@ -349,9 +349,19 @@ int main(int argc, char* argv[])
 
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_identity", exeDir);
+    }
+
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
     const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("editor.session"), "ui.session");
+
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_sentry", exeDir);
+    }
 
     QCommandLineOption noDrm(QStringLiteral("no-drm"), QStringLiteral("Disable DRM settings of documents."));
     QCommandLineOption lightGui(QStringLiteral("theme-light"), QStringLiteral("Use a light theme for the GUI."));
@@ -371,8 +381,17 @@ int main(int argc, char* argv[])
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The PDF file to open."));
     parser.process(application);
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_parser", exeDir);
+    }
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
     pdf::PDFSettings::migrateLegacySettings();
+
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_settings", exeDir);
+    }
 
     const pdf::PDFLogSession logSession(QStringLiteral("editor"));
 
@@ -385,10 +404,25 @@ int main(int argc, char* argv[])
     translator.loadSettings();
     translator.installTranslator();
 
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_translator", exeDir);
+    }
+
     applyColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_qquickstyle", exeDir);
+    }
+
     EditorHost host;
+
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_editorhost", exeDir);
+    }
 
     if (parser.isSet(quickSmoke))
     {
