@@ -66,6 +66,10 @@ target_include_directories(LoopEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 qt_import_qml_plugins(LoopEditor)
 
+# Packaging builds LoopEditor explicitly; ensure the Loop.Canvas plugin module is
+# built before install copies it into usr/lib/qml/Loop/Canvas.
+add_dependencies(LoopEditor LoopLibQuickplugin)
+
 set_target_properties(LoopEditor PROPERTIES
     WIN32_EXECUTABLE ON
     MACOSX_BUNDLE ON
