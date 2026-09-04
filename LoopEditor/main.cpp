@@ -82,6 +82,13 @@ void attachConsoleForQuickSmoke()
 }
 #endif
 
+void logQuickSmokeStage(const char* stage, const QString& exeDir)
+{
+    const QByteArray exeDirText = QDir::toNativeSeparators(exeDir).toLocal8Bit();
+    fprintf(stderr, "loop-editor quick_smoke stage=%s exe_dir=%s\n", stage, exeDirText.constData());
+    fflush(stderr);
+}
+
 QString executableDirectory(const char* argv0)
 {
 #if defined(Q_OS_WIN)
@@ -262,11 +269,14 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
 
 int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString& exeDir)
 {
+    logQuickSmokeStage("run_quick_smoke_begin", exeDir);
+
     QQmlApplicationEngine engine;
     for (const QString& importPath : packagedQmlImportPaths(exeDir))
     {
         engine.addImportPath(importPath);
     }
+    logQuickSmokeStage("qml_import_paths_configured", exeDir);
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)
@@ -340,14 +350,25 @@ int main(int argc, char* argv[])
 
     const QString exeDir = executableDirectory(argv[0]);
 
-    // Package smoke strips developer Qt env vars. Search the install directory
-    // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
+    // Linux AppImage smoke strips developer Qt env vars and needs explicit
+    // plugin roots. On Windows, setLibraryPaths() overrides qt.conf paths that
+    // windeployqt writes beside LoopEditor.exe, so rely on qt.conf there.
+#if !defined(Q_OS_WIN)
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
+#endif
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
 
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
+
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("after_qguiapplication", exeDir);
+        QQuickStyle::setStyle(QStringLiteral("Fusion"));
+        EditorHost host;
+        return runQuickSmoke(application, host, exeDir);
+    }
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));

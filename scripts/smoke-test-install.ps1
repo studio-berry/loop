@@ -302,12 +302,24 @@ Remove-Item Env:QTDIR -ErrorAction SilentlyContinue
 Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue
-Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue
-Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue
 try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue
+    Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue
+    $qtConfPath = Join-Path $binDir "qt.conf"
+    if (Test-Path -LiteralPath $qtConfPath) {
+        Write-Host "qt.conf:"
+        Get-Content -LiteralPath $qtConfPath | ForEach-Object { Write-Host "  $_" }
+    } else {
+        Write-Host "qt.conf missing at $qtConfPath"
+    }
+    $installRoot = (Resolve-Path -LiteralPath (Join-Path $binDir "..\..")).Path
+    $offscreenPlugin = Join-Path $installRoot "plugins\platforms\qoffscreen.dll"
+    Write-Host "offscreen plugin present: $((Test-Path -LiteralPath $offscreenPlugin)) ($offscreenPlugin)"
+    $loopCanvasPlugin = Join-Path $installRoot "usr\lib\qml\Loop\Canvas\LoopLibQuickplugin.dll"
+    Write-Host "Loop.Canvas plugin present: $((Test-Path -LiteralPath $loopCanvasPlugin)) ($loopCanvasPlugin)"
     # Distribution LoopEditor is a console binary, but force stderr logging so a
     # QML/plugin failure is visible when "2>&1" captures process output.
     $env:QT_FORCE_STDERR_LOGGING = "1"
