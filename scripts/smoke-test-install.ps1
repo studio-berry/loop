@@ -308,11 +308,8 @@ try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
-    # LoopEditor is built WIN32_EXECUTABLE (GUI subsystem), so it has no console.
-    # Qt's default message handler then writes qDebug/qWarning/qFatal to
-    # OutputDebugString instead of stderr, and "2>&1" captures nothing -- every
-    # startup failure here has reported an empty message. Force the handler to
-    # stderr so a crash or a QML/plugin error says why.
+    # Distribution LoopEditor is a console binary, but force stderr logging so a
+    # QML/plugin failure is visible when "2>&1" captures process output.
     $env:QT_FORCE_STDERR_LOGGING = "1"
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
     $nativeExit = $LASTEXITCODE

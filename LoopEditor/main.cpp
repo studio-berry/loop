@@ -106,7 +106,15 @@ QStringList packagedLibraryPaths(const QString& exeDir)
 {
     QStringList paths;
     const QDir exeDirQ(exeDir);
+
+#if !defined(Q_OS_WIN)
     paths << exeDirQ.absolutePath();
+#else
+    // Windows ships product DLLs beside LoopEditor.exe. Adding usr/bin to
+    // libraryPaths() makes Qt treat them as plugins and crashes with 0xC0000005
+    // during QPA startup. windeployqt stages platform plugins under install-root
+    // plugins/ instead, which packagedLibraryPaths resolves below.
+#endif
 
     const auto appendIfExists = [&paths](const QString& candidate)
     {
@@ -334,23 +342,12 @@ int main(int argc, char* argv[])
 
     // Package smoke strips developer Qt env vars. Search the install directory
     // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
-#if defined(Q_OS_WIN)
-    QCoreApplication::setLibraryPaths(QStringList{ exeDir } + QCoreApplication::libraryPaths());
-#else
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
-#endif
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
 
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
-
-    if (quickSmokeRequested)
-    {
-        QQuickStyle::setStyle(QStringLiteral("Fusion"));
-        EditorHost host;
-        return runQuickSmoke(application, host, exeDir);
-    }
 
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
