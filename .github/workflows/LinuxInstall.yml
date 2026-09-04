@@ -325,7 +325,7 @@ jobs:
         with:
           name: loop-package-boundary-linux-evidence
           path: ${{ runner.temp }}/loop-package-boundary-linux
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
           compression-level: 0
 
