@@ -75,15 +75,27 @@ public:
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
 private:
+    // Logs a DocumentViewSession member-init stage without copy-constructing
+    // non-copyable QObject members (MSVC C2280).
+    struct InitStage
+    {
+        explicit InitStage(const char* stage);
+    };
+
     // Catalog and context initialize before the job scheduler so worker threads
     // never overlap Qt resource registration on Windows packaging smoke.
+    InitStage m_logCatalogBegin;
     pdfinteraction::CommandCatalog m_catalog;
+    InitStage m_logCatalogEnd;
+    InitStage m_logContextBegin;
     pdf::PDFDocumentContext m_context;
+    InitStage m_logContextEnd;
     pdfinteraction::PDFReaderDocumentLoader m_loader;
     pdfinteraction::PDFDocumentFileWriter m_writer;
     // Reset explicitly in the destructor so every worker is joined while the
     // loader, writer, and renderer captured by jobs are still alive.
     std::unique_ptr<pdf::PDFJobScheduler> m_scheduler;
+    InitStage m_logSubmitter;
     pdfinteraction::PDFJobSchedulerSubmitter m_submitter;
     std::unique_ptr<pdfinteraction::DocumentFacade> m_facade;
     std::unique_ptr<pdfinteraction::PDFDocumentContextSource> m_revisionSource;

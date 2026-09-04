@@ -78,7 +78,6 @@ std::unique_ptr<pdfinteraction::DocumentFacade> makeDocumentFacade(pdf::PDFDocum
                                                                    pdfinteraction::CommandCatalog& catalog,
                                                                    QObject* parent)
 {
-    logDocumentViewSessionInit("catalog_context_done");
     logDocumentViewSessionInit("facade_begin");
     auto facade = std::make_unique<pdfinteraction::DocumentFacade>(context,
                                                                    submitter,
@@ -92,15 +91,25 @@ std::unique_ptr<pdfinteraction::DocumentFacade> makeDocumentFacade(pdf::PDFDocum
 
 }   // namespace
 
+DocumentViewSession::InitStage::InitStage(const char* stage)
+{
+    logDocumentViewSessionInit(stage);
+}
+
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
-    m_catalog((logDocumentViewSessionInit("catalog_begin"), pdfinteraction::CommandCatalog(this))),
-    m_context((logDocumentViewSessionInit("context_begin"), pdf::PDFDocumentContext(nullptr, this))),
+    m_logCatalogBegin("catalog_begin"),
+    m_catalog(this),
+    m_logCatalogEnd("catalog_end"),
+    m_logContextBegin("context_begin"),
+    m_context(nullptr, this),
+    m_logContextEnd("context_end"),
     m_scheduler(makeDocumentViewScheduler()),
-    m_submitter((logDocumentViewSessionInit("submitter"), pdfinteraction::PDFJobSchedulerSubmitter(*m_scheduler))),
+    m_logSubmitter("submitter"),
+    m_submitter(*m_scheduler),
     m_facade(makeDocumentFacade(m_context, m_submitter, m_loader, m_writer, m_catalog, this)),
-    m_renderer((logDocumentViewSessionInit("renderer"), m_context)),
-    m_commandBridge((logDocumentViewSessionInit("command_bridge"), m_catalog), *m_facade, m_viewport, this),
+    m_renderer(m_context),
+    m_commandBridge(m_catalog, *m_facade, m_viewport, this),
     m_pageBoxSource(&m_context),
     m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
