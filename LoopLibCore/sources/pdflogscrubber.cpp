@@ -148,6 +148,59 @@ QString scrubRemainingAbsolutePaths(const QString& text)
     return result;
 }
 
+/// Replaces credential material with a placeholder. Three shapes are covered,
+/// all of which are routinely logged verbatim by libraries that assume their
+/// own configuration is not sensitive:
+///   - URL userinfo ("https://key:secret@host/..."), which is the shape of a
+///     Sentry DSN and of most ingest/webhook endpoints;
+///   - HTTP authorization values ("Bearer <token>", "Basic <base64>"), as they
+///     appear in request dumps;
+///   - key/value pairs whose key names a secret ("token=", "\"api_key\": ...",
+///     "password => ..."), in JSON, assignment, or query-string form.
+/// The key is kept and only the value is replaced - knowing *which* setting was
+/// misconfigured is the diagnostic value; the value after it is what has to go.
+/// The key vocabulary matches isSensitiveKey() in pdfartifactidentity.cpp, minus
+/// the path-shaped keys that the absolute-path pass already covers.
+QString scrubCredentials(const QString& text)
+{
+    static const QString secretKey = QStringLiteral(
+        "[A-Za-z0-9_.-]*(?:password|passwd|pswd|passphrase|secret|token|api[_.-]?key|apikey|"
+        "access[_.-]?key|private[_.-]?key|credential|authorization|dsn|license[_.-]?key)[A-Za-z0-9_.-]*");
+
+    // Auth scheme prefixes are consumed together with the token that follows
+    // them, so "Authorization: Bearer abc" collapses to a single placeholder
+    // instead of redacting "Bearer" and leaving "abc" behind.
+    static const QString authScheme = QStringLiteral("(?:Bearer|Basic|Token|Digest|APIKey)\\s+");
+
+    // The same scheme list minus "Token", for the unanchored pass below: after
+    // a secret-named key the word is unambiguous, but on its own "token" is
+    // ordinary English ("Unexpected token appeared") and redacting it would
+    // eat parser diagnostics.
+    static const QString bareAuthScheme = QStringLiteral("(?:Bearer|Basic|Digest|APIKey)\\s+");
+
+    // '<' and '>' are excluded from every value class so an already-substituted
+    // "<CREDENTIAL>" is never matched again - scrub() must stay idempotent.
+    static const QRegularExpression urlUserInfoPattern(
+        QStringLiteral(R"((?<![\w.+-])([A-Za-z][A-Za-z0-9+.-]*://)[^\s/@:"'<]+(?::[^\s/@"'<]*)?@)"),
+        QRegularExpression::CaseInsensitiveOption);
+
+    static const QRegularExpression secretKeyValuePattern(
+        QStringLiteral(R"(\b(%1)("?\s*(?:=>|[:=])\s*"?)(?:%2)?[^\s"',;&}\]<>]+)").arg(secretKey, authScheme),
+        QRegularExpression::CaseInsensitiveOption);
+
+    // The lookahead requires at least one non-letter character, so a scheme word
+    // used as prose ("Basic rendering enabled") is not mistaken for a header.
+    static const QRegularExpression authorizationPattern(
+        QStringLiteral(R"(\b(%1)(?=[A-Za-z0-9._~+/=-]*[0-9._~+/=-])[A-Za-z0-9._~+/=-]{8,})").arg(bareAuthScheme),
+        QRegularExpression::CaseInsensitiveOption);
+
+    QString result = text;
+    result.replace(urlUserInfoPattern, QStringLiteral("\\1<CREDENTIAL>@"));
+    result.replace(secretKeyValuePattern, QStringLiteral("\\1\\2<CREDENTIAL>"));
+    result.replace(authorizationPattern, QStringLiteral("\\1<CREDENTIAL>"));
+    return result;
+}
+
 QString scrubEmailAddresses(const QString& text)
 {
     static const QRegularExpression emailPattern(
@@ -201,6 +254,12 @@ QString PDFLogScrubber::scrub(const QString& text)
 
     result = replaceToken(result, loginName(), QStringLiteral("<USER>"));
     result = replaceToken(result, QSysInfo::machineHostName(), QStringLiteral("<HOST>"));
+
+    // Credentials before the path/email passes: a DSN like
+    // "https://key@ingest.example.com/42" would otherwise have its key eaten by
+    // the email pass (leaving "<EMAIL>", which reads like user data rather than
+    // a leaked secret) and its project id eaten by the path pass.
+    result = scrubCredentials(result);
 
     result = scrubRemainingAbsolutePaths(result);
     result = scrubEmailAddresses(result);
