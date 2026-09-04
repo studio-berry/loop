@@ -30,6 +30,9 @@
 #include "pdfsettings.h"
 
 #include <QCommandLineParser>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -43,8 +46,32 @@
 
 #include <cstdio>
 
+#if defined(Q_OS_WIN)
+#include <windows.h>
+#endif
+
 namespace
 {
+
+QString executableDirectory(const char* argv0)
+{
+#if defined(Q_OS_WIN)
+    wchar_t modulePath[MAX_PATH] = {};
+    const DWORD length = ::GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    if (length > 0 && length < MAX_PATH)
+    {
+        return QFileInfo(QString::fromWCharArray(modulePath, int(length))).absolutePath();
+    }
+#endif
+
+    const QFileInfo argvInfo(QString::fromLocal8Bit(argv0));
+    if (argvInfo.isAbsolute())
+    {
+        return argvInfo.absolutePath();
+    }
+
+    return QDir::currentPath();
+}
 
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
@@ -186,6 +213,10 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host)
 
 int main(int argc, char* argv[])
 {
+    // Package smoke strips developer Qt env vars. Search the install directory
+    // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
+    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
+
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
 

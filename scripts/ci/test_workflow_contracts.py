@@ -70,36 +70,40 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("./vcpkg/vcpkg integrate install", linux)
         self.assertNotIn("./vcpkg integrate install", linux)
         self.assertIn("libfontconfig1-dev", linux)
+        # Deliberate: the AppImage glibc floor is whatever this runner ships. Raising it
+        # raises the oldest distro Loop runs on, so change it as a decision, not to make
+        # this assertion pass.
         self.assertIn("runs-on: ubuntu-22.04", linux)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
-        self.assertIn("cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations -j6", linux)
+        # Pin the target list, not the exact command string: -j6 and the ordering are
+        # incidental, and pinning them turns routine edits into contract failures.
+        for target in ("LoopEditor", "PdfTool", "ProductQuickAccessibilitySmoke", "release_translations"):
+            self.assertRegex(linux, rf"cmake --build build --target[^\n]*\b{target}\b")
         self.assertNotIn("--target all", linux)
         self.assertNotIn("ctest --test-dir build", linux)
-        self.assertIn("Deploy Qt runtime closure to staged install tree", windows)
-        self.assertIn("windeployqt.exe", windows)
-        self.assertIn("--no-compiler-runtime", windows)
-        self.assertIn("--qmldir", windows)
-        self.assertIn("windeployqt-$name.txt", windows)
-        self.assertIn("LoopEditor.exe", windows)
-        self.assertIn("Qml2Imports=qml", windows)
-        self.assertIn('Join-Path $installBin "qt.conf"', windows)
-        self.assertIn("build\\LoopEditor\\Loop\\Quick", windows)
-        self.assertIn("plugins/sqldrivers", linux)
-        self.assertIn("build/LoopEditor/Loop/Quick", linux)
+        for workflow in (linux, windows):
+            self.assertNotIn("windeployqt", workflow)
+            self.assertNotIn("linuxdeployqt", workflow)
+            self.assertNotIn("LoopEditorQuickplugin", workflow)
+            self.assertNotIn("LoopLibQuickplugin", workflow)
+            self.assertNotIn("qoffscreen", workflow)
+            self.assertNotIn("qsqlite", workflow)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", windows)
         self.assertIn("./vcpkg_installed", windows)
         self.assertIn("./vcpkg-binary-cache", windows)
-        self.assertIn("cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6", windows)
+        for target in ("LoopEditor", "PdfTool", "ProductQuickAccessibilitySmoke", "release_translations"):
+            self.assertRegex(windows, rf"cmake --build build --target[^\n]*\b{target}\b")
+        self.assertIn("--config Release", windows)
         self.assertNotIn("--target all", windows)
         self.assertNotIn("ctest --test-dir build", windows)
-        self.assertIn("--appimage-extract-and-run", linux)
-        self.assertIn("linuxdeployqt.txt", linux)
+        self.assertIn("appimagetool", linux)
         for workflow in (linux, windows):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
-            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("inputs.source_sha", workflow)
+            self.assertIn("pull_request:", workflow)
             self.assertIn("Verify exact source SHA", workflow)
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)
@@ -147,8 +151,8 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_release_profile_does_not_stage_qt_style_plugins(self):
         root = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
-        self.assertIn("if(NOT LOOP_LOOP_DISTRIBUTION)", root)
-        self.assertIn("plugins/styles/", root)
+        self.assertNotIn("plugins/styles/", root)
+        self.assertNotIn("install(DIRECTORY ${LOOP_QT_ROOT}/", root)
 
     def test_wix_package_uses_the_64_bit_program_files_directory(self):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")

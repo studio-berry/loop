@@ -38,7 +38,6 @@ FORBIDDEN_EDITOR_LIBS = frozenset(
 )
 REQUIRED_EDITOR_LIBS = frozenset(
     {
-        "LoopEditorQuick",
         "Qt6::Quick",
         "Qt6::QuickControls2",
     }
@@ -119,6 +118,15 @@ def main() -> int:
 
         if not re.search(r"install\s*\([^)]*\bLoopEditor\b", cmake_text, re.DOTALL):
             raise ContractError("LoopEditor must remain an installed product target")
+
+        if not re.search(r"qt_add_qml_module\s*\(\s*LoopEditor\b", cmake_text):
+            raise ContractError("LoopEditor must directly own the Loop.Quick QML module")
+        if re.search(r"\bLoopEditorQuick\b", cmake_text):
+            raise ContractError("retired LoopEditorQuick target remains in the product graph")
+        if not re.search(r"qt_generate_deploy_qml_app_script\s*\(\s*TARGET\s+LoopEditor\b", cmake_text, re.DOTALL):
+            raise ContractError("LoopEditor must generate its Qt QML deployment script")
+        if not re.search(r"install\s*\(\s*SCRIPT\s+\$\{loop_editor_deploy_script\}", cmake_text):
+            raise ContractError("LoopEditor deployment script must run during installation")
 
         validate_sole_interactive_product(ROOT)
 
