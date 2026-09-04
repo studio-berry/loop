@@ -48,7 +48,6 @@
 #include <cstring>
 
 #if defined(Q_OS_WIN)
-#include <io.h>
 #include <windows.h>
 #endif
 
@@ -67,20 +66,6 @@ bool argvContainsQuickSmoke(int argc, char* argv[])
 
     return false;
 }
-
-#if defined(Q_OS_WIN)
-void attachConsoleForQuickSmoke()
-{
-    if (!::AttachConsole(ATTACH_PARENT_PROCESS))
-    {
-        (void)::AllocConsole();
-    }
-    (void)freopen("CONOUT$", "w", stdout);
-    (void)freopen("CONOUT$", "w", stderr);
-    (void)fflush(stdout);
-    (void)fflush(stderr);
-}
-#endif
 
 void logQuickSmokeStage(const char* stage, const QString& exeDir)
 {
@@ -341,21 +326,22 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
 int main(int argc, char* argv[])
 {
     const bool quickSmokeRequested = argvContainsQuickSmoke(argc, argv);
-#if defined(Q_OS_WIN)
-    if (quickSmokeRequested)
-    {
-        attachConsoleForQuickSmoke();
-    }
-#endif
 
     const QString exeDir = executableDirectory(argv[0]);
 
-    // Linux AppImage smoke strips developer Qt env vars and needs explicit
-    // plugin roots. On Windows, setLibraryPaths() overrides qt.conf paths that
-    // windeployqt writes beside LoopEditor.exe, so rely on qt.conf there.
-#if !defined(Q_OS_WIN)
+    // Package smoke strips developer Qt env vars. Linux AppImage needs explicit
+    // plugin roots. Windows matches PdfTool: search the executable directory for
+    // platforms/qoffscreen.dll after install copies that plugin beside LoopEditor.
+#if defined(Q_OS_WIN)
+    QCoreApplication::setLibraryPaths(QStringList{ exeDir } + QCoreApplication::libraryPaths());
+#else
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 #endif
+
+    if (quickSmokeRequested)
+    {
+        logQuickSmokeStage("before_qguiapplication", exeDir);
+    }
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);

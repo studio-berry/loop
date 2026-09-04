@@ -320,6 +320,14 @@ try {
     Write-Host "offscreen plugin present: $((Test-Path -LiteralPath $offscreenPlugin)) ($offscreenPlugin)"
     $loopCanvasPlugin = Join-Path $installRoot "usr\lib\qml\Loop\Canvas\LoopLibQuickplugin.dll"
     Write-Host "Loop.Canvas plugin present: $((Test-Path -LiteralPath $loopCanvasPlugin)) ($loopCanvasPlugin)"
+    $localOffscreen = Join-Path $binDir "platforms\qoffscreen.dll"
+    Write-Host "local offscreen plugin present: $((Test-Path -LiteralPath $localOffscreen)) ($localOffscreen)"
+    $helpOutput = @(& $editor --help 2>&1)
+    $helpExit = $LASTEXITCODE
+    if ($helpExit -ne 0) {
+        throw "LoopEditor --help failed with exit code ${helpExit}: $helpOutput"
+    }
+    Write-Host "OK: LoopEditor --help"
     # Distribution LoopEditor is a console binary, but force stderr logging so a
     # QML/plugin failure is visible when "2>&1" captures process output.
     $env:QT_FORCE_STDERR_LOGGING = "1"

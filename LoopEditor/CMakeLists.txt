@@ -126,6 +126,26 @@ if(LOOP_INSTALL_QT_DEPENDENCIES)
         "${CMAKE_BINARY_DIR}/LoopLibQuick/Loop/Canvas/LoopLibQuick.qmltypes"
         DESTINATION usr/lib/qml/Loop/Canvas
     )
+    if(WIN32)
+        # Relocated Windows smoke strips developer Qt env vars. windeployqt stages
+        # qoffscreen under install-root plugins/, but qt.conf omits Plugins= and
+        # PdfTool already copies qoffscreen beside the executable for headless QPA.
+        install(CODE [[
+            set(_offscreen "${CMAKE_INSTALL_PREFIX}/plugins/platforms/qoffscreen.dll")
+            set(_platforms_dir "${CMAKE_INSTALL_PREFIX}/usr/bin/platforms")
+            if(EXISTS "${_offscreen}")
+                file(MAKE_DIRECTORY "${_platforms_dir}")
+                file(COPY "${_offscreen}" DESTINATION "${_platforms_dir}")
+            endif()
+            set(_qt_conf "${CMAKE_INSTALL_PREFIX}/usr/bin/qt.conf")
+            if(EXISTS "${_qt_conf}")
+                file(READ "${_qt_conf}" _qt_conf_contents)
+                if(NOT _qt_conf_contents MATCHES "[Pp]lugins")
+                    file(APPEND "${_qt_conf}" "Plugins = plugins\n")
+                endif()
+            endif()
+        ]])
+    endif()
 endif()
 
 if(LOOP_ENABLE_SENTRY)
