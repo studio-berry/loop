@@ -25,6 +25,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn(".\\scripts\\verify-loop-surface.ps1", workflow)
         self.assertNotIn(".\\loop\\scripts\\verify-loop-surface.ps1", workflow)
 
+    def test_windows_msi_build_project_fails_on_cmake_exit_codes(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn('throw "cmake configure failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "cmake --build failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "cmake --install failed after 3 attempts."', workflow)
+        self.assertIn('throw "verify-loop-surface.ps1 failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "verify-widgets-free-release-profile.py failed with exit code $LASTEXITCODE."', workflow)
+
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)

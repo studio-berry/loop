@@ -267,11 +267,36 @@ jobs:
         working-directory: loop
         shell: pwsh
         run: |
+          # pwsh, unlike bash's default -e, does not stop on a non-zero exit code from
+          # an external command (cmake here) -- it just keeps going to the next line.
+          # That previously let a real "cmake --build" compile failure fall through
+          # into "cmake --install" on a tree that never produced PdfTool.exe, which
+          # then looked like a missing loop-default.json smoke failure.
           cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_VCPKG_BUILD_TYPE=Release -DLOOP_INSTALL_QT_DEPENDENCIES=ON -DLOOP_INSTALL_DEPENDENCIES=ON -DCMAKE_TOOLCHAIN_FILE="${env:GITHUB_WORKSPACE}\vcpkg\scripts\buildsystems\vcpkg.cmake" -DLOOP_QT_ROOT="${env:QT_ROOT_DIR}" -DLOOP_INSTALL_MSVC_REDISTRIBUTABLE=ON -DLOOP_INSTALL_PREPARE_WIX_INSTALLER=ON -DLOOP_INSTALL_TO_USR=ON -DLOOP_LOOP_DISTRIBUTION=ON -DLOOP_PLUGIN_OCR=OFF -DLOOP_BUNDLE_OCR_SERVICE=OFF -DLOOP_BUILD_PRODUCT_QUICK_A11Y_SMOKE=ON
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE." }
+
           cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
-          cmake --install build --config Release
+          if ($LASTEXITCODE -ne 0) { throw "cmake --build failed with exit code $LASTEXITCODE." }
+
+          $installSucceeded = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+              cmake --install build --config Release
+              if ($LASTEXITCODE -eq 0) {
+                  $installSucceeded = $true
+                  break
+              }
+              Write-Host "cmake --install attempt $attempt failed with exit code $LASTEXITCODE; retrying after a short delay."
+              Start-Sleep -Seconds (5 * $attempt)
+          }
+          if (-not $installSucceeded) {
+              throw "cmake --install failed after 3 attempts."
+          }
+
           .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
+          if ($LASTEXITCODE -ne 0) { throw "verify-loop-surface.ps1 failed with exit code $LASTEXITCODE." }
+
           python scripts\verify-widgets-free-release-profile.py --install-dir .\build\install
+          if ($LASTEXITCODE -ne 0) { throw "verify-widgets-free-release-profile.py failed with exit code $LASTEXITCODE." }
 
       - name: Smoke relocated installed tree
         shell: pwsh
