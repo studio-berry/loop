@@ -70,8 +70,16 @@ qt_import_qml_plugins(LoopEditor)
 # built before install copies it into usr/lib/qml/Loop/Canvas.
 add_dependencies(LoopEditor LoopLibQuickplugin)
 
+# Headless packaging smoke runs LoopEditor with QT_QPA_PLATFORM=offscreen. A
+# WINDOWS-subsystem binary crashes there with 0xC0000005 before Quick startup;
+# PdfTool and ProductQuickAccessibilitySmoke already ship as console binaries.
+set(_loop_editor_win32_executable ON)
+if(WIN32 AND LOOP_LOOP_DISTRIBUTION)
+    set(_loop_editor_win32_executable OFF)
+endif()
+
 set_target_properties(LoopEditor PROPERTIES
-    WIN32_EXECUTABLE ON
+    WIN32_EXECUTABLE ${_loop_editor_win32_executable}
     MACOSX_BUNDLE ON
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
