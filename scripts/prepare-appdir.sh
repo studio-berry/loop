@@ -54,6 +54,14 @@ fi
 cp "$DESKTOP_SRC" "${INSTALL_DIR}/${DESKTOP_NAME}"
 cp "$ICON_SRC" "${INSTALL_DIR}/${ICON_NAME}.${ICON_EXT}"
 
+# The Qt deploy script only needs QSQLITE for preflight history writes. Optional
+# vendor SQL drivers reference libraries we do not ship and fail package-boundary
+# inspection (libqsqlmimer.so -> libmimerapi.so, libqsqloci.so -> libclntsh).
+sql_dir="${INSTALL_DIR}/plugins/sqldrivers"
+if [[ -d "$sql_dir" ]]; then
+    find "$sql_dir" -maxdepth 1 -type f ! -name 'libqsqlite.so' -delete
+fi
+
 cat > "${INSTALL_DIR}/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"

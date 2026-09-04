@@ -87,8 +87,8 @@ qt_generate_deploy_qml_app_script(
     TARGET LoopEditor
     OUTPUT_SCRIPT loop_editor_deploy_script
     NO_TRANSLATIONS
-    INCLUDE_PLUGIN_TYPES platforms sqldrivers
-    INCLUDE_PLUGINS qoffscreen
+    INCLUDE_PLUGIN_TYPES platforms
+    INCLUDE_PLUGINS qoffscreen qsqlite
 )
 # Qt's deployment helpers default to a flat prefix (bin/, lib/, qml/).  Loop
 # installs product payloads below usr/, so establish the same prefix-relative

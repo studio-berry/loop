@@ -73,6 +73,56 @@ QString executableDirectory(const char* argv0)
     return QDir::currentPath();
 }
 
+QStringList packagedLibraryPaths(const QString& exeDir)
+{
+    QStringList paths;
+    const QDir exeDirQ(exeDir);
+    paths << exeDirQ.absolutePath();
+
+    const auto appendIfExists = [&paths](const QString& candidate)
+    {
+        if (!QFileInfo::exists(candidate))
+        {
+            return;
+        }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!paths.contains(absolute))
+        {
+            paths << absolute;
+        }
+    };
+
+    appendIfExists(exeDirQ.filePath(QStringLiteral("platforms")));
+    appendIfExists(exeDirQ.filePath(QStringLiteral("qml")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendIfExists(QDir(root).filePath(QStringLiteral("plugins")));
+        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib")));
+        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib/qml")));
+    }
+
+    return paths;
+}
+
+QStringList packagedQmlImportPaths(const QString& exeDir)
+{
+    QStringList importPaths;
+    for (const QString& path : packagedLibraryPaths(exeDir))
+    {
+        if (path.endsWith(QStringLiteral("/qml")) || path.endsWith(QStringLiteral("\\qml")))
+        {
+            importPaths << path;
+        }
+    }
+    return importPaths;
+}
+
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
 {
     switch (api)
@@ -147,9 +197,13 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
     }
 }
 
-int runQuickSmoke(QGuiApplication& application, EditorHost& host)
+int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString& exeDir)
 {
     QQmlApplicationEngine engine;
+    for (const QString& importPath : packagedQmlImportPaths(exeDir))
+    {
+        engine.addImportPath(importPath);
+    }
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)
@@ -213,9 +267,11 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host)
 
 int main(int argc, char* argv[])
 {
+    const QString exeDir = executableDirectory(argv[0]);
+
     // Package smoke strips developer Qt env vars. Search the install directory
     // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
+    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
@@ -267,7 +323,7 @@ int main(int argc, char* argv[])
 
     if (parser.isSet(quickSmoke))
     {
-        return runQuickSmoke(application, host);
+        return runQuickSmoke(application, host, exeDir);
     }
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
