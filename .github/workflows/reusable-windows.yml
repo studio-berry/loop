@@ -89,7 +89,7 @@ jobs:
             --page-count 256 --operations 256 --family pathological-vector
 
       - name: Verify processing-budget exhaustion corpus
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         run: python scripts\budget_exhaustion\generate_corpus.py --check
 

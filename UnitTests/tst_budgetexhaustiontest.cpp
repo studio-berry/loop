@@ -130,7 +130,7 @@ QList<CorpusFixture> loadCorpus()
     }
 
     const QJsonObject root = document.object();
-    if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loupe-processing-budget-exhaustion-corpus") || root.value(QStringLiteral("schema_version")).toInt() != 2)
+    if (root.value(QStringLiteral("schema_kind")).toString() != QLatin1String("loop-processing-budget-exhaustion-corpus") || root.value(QStringLiteral("schema_version")).toInt() != 2)
     {
         qFatal("Unexpected generated budget exhaustion corpus schema");
     }

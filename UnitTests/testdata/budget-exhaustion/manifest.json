@@ -187,6 +187,6 @@
     }
   ],
   "generated_by": "scripts/budget_exhaustion/generate_corpus.py",
-  "schema_kind": "loupe-processing-budget-exhaustion-corpus",
+  "schema_kind": "loop-processing-budget-exhaustion-corpus",
   "schema_version": 2
 }
