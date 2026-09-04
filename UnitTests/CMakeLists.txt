@@ -177,6 +177,8 @@ add_executable(UnitTestsDiagnostics
 )
 
 target_link_libraries(UnitTestsDiagnostics PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(UnitTestsDiagnostics PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/UnitTestsDiagnostics_autogen/include)
 
 set_target_properties(UnitTestsDiagnostics PROPERTIES
     WIN32_EXECUTABLE OFF
@@ -187,6 +189,12 @@ set_target_properties(UnitTestsDiagnostics PROPERTIES
 # Test name is lower-case (unlike sibling targets) so it matches
 # `ctest -R diagnostics` as documented in docs/PRODUCTION_RUNBOOK.md.
 add_test(diagnostics  "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDiagnostics")
+# Alias matching the target name so agent-fast policy entry
+# `UnitTestsDiagnostics` both builds and selects this test via
+# `ctest -R ^UnitTestsDiagnostics$`. Keeps the documented `diagnostics`
+# name intact while letting check-change.py (which uses one list for
+# both `cmake --build --target <name>` and `ctest -R <name>`) cover it.
+add_test(UnitTestsDiagnostics "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsDiagnostics")
 
 add_executable(UnitTestsContentEditor
 	tst_contenteditortest.cpp
