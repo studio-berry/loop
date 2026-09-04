@@ -45,7 +45,14 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                             this);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
-    if (QScreen* screen = QGuiApplication::primaryScreen())
+    // Headless packaging smoke runs with QT_QPA_PLATFORM=offscreen. On Windows the
+    // offscreen QPA can expose a primaryScreen() that faults when probed for DPI.
+    if (QGuiApplication::platformName() == QLatin1String("offscreen"))
+    {
+        m_viewport.setPixelPerMM(96.0 / 25.4);
+        m_viewport.setDevicePixelRatio(1.0);
+    }
+    else if (QScreen* screen = QGuiApplication::primaryScreen())
     {
         m_viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
         m_viewport.setDevicePixelRatio(screen->devicePixelRatio());
