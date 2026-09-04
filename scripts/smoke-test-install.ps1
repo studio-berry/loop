@@ -291,6 +291,8 @@ $savedQt6Dir = $env:Qt6_DIR
 $savedLoopQtRoot = $env:LOOP_QT_ROOT
 $savedQuickBackend = $env:QT_QUICK_BACKEND
 $savedForceStderrLogging = $env:QT_FORCE_STDERR_LOGGING
+$savedQtDebugPlugins = $env:QT_DEBUG_PLUGINS
+$savedQmlImportTrace = $env:QML_IMPORT_TRACE
 $env:PATH = ($pathParts -join $pathSeparator)
 Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
@@ -300,6 +302,8 @@ Remove-Item Env:QTDIR -ErrorAction SilentlyContinue
 Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue
+Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue
+Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue
 try {
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
@@ -335,6 +339,8 @@ try {
     if ($null -ne $savedLoopQtRoot) { $env:LOOP_QT_ROOT = $savedLoopQtRoot } else { Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue }
     if ($null -ne $savedQuickBackend) { $env:QT_QUICK_BACKEND = $savedQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
     if ($null -ne $savedForceStderrLogging) { $env:QT_FORCE_STDERR_LOGGING = $savedForceStderrLogging } else { Remove-Item Env:QT_FORCE_STDERR_LOGGING -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQtDebugPlugins) { $env:QT_DEBUG_PLUGINS = $savedQtDebugPlugins } else { Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQmlImportTrace) { $env:QML_IMPORT_TRACE = $savedQmlImportTrace } else { Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue }
 }
 if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
     throw "PdfTool preflight failed with unexpected exit code $preflightExit`: $preflightOutput"

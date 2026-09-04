@@ -71,11 +71,14 @@ bool argvContainsQuickSmoke(int argc, char* argv[])
 #if defined(Q_OS_WIN)
 void attachConsoleForQuickSmoke()
 {
-    if (::AttachConsole(ATTACH_PARENT_PROCESS))
+    if (!::AttachConsole(ATTACH_PARENT_PROCESS))
     {
-        (void)freopen("CONOUT$", "w", stdout);
-        (void)freopen("CONOUT$", "w", stderr);
+        (void)::AllocConsole();
     }
+    (void)freopen("CONOUT$", "w", stdout);
+    (void)freopen("CONOUT$", "w", stderr);
+    (void)fflush(stdout);
+    (void)fflush(stderr);
 }
 #endif
 

@@ -275,9 +275,6 @@ jobs:
 
       - name: Smoke relocated installed tree
         shell: pwsh
-        env:
-          QT_DEBUG_PLUGINS: "1"
-          QML_IMPORT_TRACE: "1"
         run: |
           $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
           if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
