@@ -235,6 +235,17 @@ class CheckChangeTests(unittest.TestCase):
             )
         self.assertEqual([item.result for item in evidence], ["incomplete", "incomplete"])
 
+    def test_clang_tidy_skips_manual_moc_includes(self) -> None:
+        self.assertEqual(
+            MODULE.clang_tidy_sources(
+                [
+                    "LoopLibCore/sources/example.cpp",
+                    "UnitTests/tst_budgetexhaustiontest.cpp",
+                ]
+            ),
+            ["LoopLibCore/sources/example.cpp"],
+        )
+
     def test_classify_still_uses_deleted_paths(self) -> None:
         policy = {
             "module_boundaries": {
