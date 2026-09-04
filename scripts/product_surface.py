@@ -533,11 +533,22 @@ def validate_install(
 
     if install_manifest_path is not None:
         expected_files = _install_manifest_entries(install_manifest_path, install_dir)
-        actual_files = {path.relative_to(install_dir).as_posix() for path in files}
-        extra = sorted(actual_files - expected_files)
-        missing = sorted(expected_files - actual_files)
+        actual = {path.relative_to(install_dir).as_posix(): path for path in files}
+        # Qt's deployment tooling (qt_generate_deploy_qml_app_script on Linux,
+        # windeployqt on Windows) copies the third-party runtime closure and
+        # writes qt.conf without routing through install(), so none of it can
+        # reach install_manifest.txt.  The manifest stays authoritative for the
+        # first-party payload; the deployer owns the Qt closure.
+        extra = sorted(
+            relative
+            for relative, path in actual.items()
+            if relative not in expected_files and _first_party_file(path, relative, packaging)
+        )
+        missing = sorted(expected_files - set(actual))
         if extra:
-            errors.append(f"install tree contains files absent from CMake install manifest: {', '.join(extra[:5])}")
+            errors.append(
+                f"install tree contains first-party files absent from CMake install manifest: {', '.join(extra[:5])}"
+            )
         if missing:
             errors.append(f"CMake install manifest lists missing files: {', '.join(missing[:5])}")
 

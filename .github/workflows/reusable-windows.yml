@@ -89,7 +89,7 @@ jobs:
             --page-count 256 --operations 256 --family pathological-vector
 
       - name: Verify processing-budget exhaustion corpus
-        working-directory: loupe
+        working-directory: loop
         shell: pwsh
         run: python scripts\budget_exhaustion\generate_corpus.py --check
 
@@ -411,7 +411,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_ORG: berry-studios
-          SENTRY_PROJECT: loop-pdf
           SENTRY_URL: https://de.sentry.io
         run: |
           .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loop\build"

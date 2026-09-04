@@ -1,6 +1,11 @@
 name: Windows_MSI
 
 on:
+  # Packaging runs on every pull request as well, so a change that breaks the MSI or
+  # the AppImage fails here instead of surviving until someone dispatches a run by
+  # hand. Narrow this with a `paths:` filter if the runner cost becomes a problem.
+  pull_request:
+
   # Keep manual packaging qualification available for exact source SHAs.
   workflow_dispatch:
     inputs:
@@ -30,14 +35,14 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loop
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Verify exact source SHA
         working-directory: loop
         shell: pwsh
         env:
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
         run: |
           if ($env:EXPECTED_SOURCE_SHA -notmatch "^[0-9a-fA-F]{40}$") {
             throw "source_sha must be a full 40-character Git SHA"
@@ -201,6 +206,18 @@ jobs:
 
       - name: 'VCPKG: Install project dependencies'
         run: |
+          # Seed the two GNU archives through the primary GNU host.  The
+          # vcpkg portfiles prefer ftpmirror.gnu.org, which intermittently
+          # returned 502/503 during package qualification; a verified
+          # filename in downloads lets vcpkg reuse the archive and keeps the
+          # existing portfile hash verification authoritative.
+          New-Item -ItemType Directory -Force -Path downloads | Out-Null
+          curl.exe --fail --location --retry 5 --retry-delay 5 --retry-all-errors `
+            --output downloads\automake-1.17.tar.gz `
+            https://ftp.gnu.org/gnu/automake/automake-1.17.tar.gz
+          curl.exe --fail --location --retry 5 --retry-delay 5 --retry-all-errors `
+            --output downloads\gperf-3.3.tar.gz `
+            https://ftp.gnu.org/gnu/gperf/gperf-3.3.tar.gz
           $manifestRoot = Join-Path $env:GITHUB_WORKSPACE 'loop'
           .\vcpkg.exe install --triplet x64-windows --x-manifest-root=$manifestRoot --x-install-root=$env:VCPKG_INSTALLED_DIR --clean-buildtrees-after-build --clean-packages-after-build
         working-directory: vcpkg
@@ -254,58 +271,19 @@ jobs:
           cmake --build build --target LoopEditor PdfTool ProductQuickAccessibilitySmoke release_translations --config Release -j6
           cmake --install build --config Release
           .\scripts\verify-loop-surface.ps1 -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" -Profile loop-release -BuildDir .\build -InstallManifestPath .\build\install_manifest.txt
+          python scripts\verify-widgets-free-release-profile.py --install-dir .\build\install
 
-      - name: Deploy Qt runtime closure to staged install tree
-        working-directory: loop
+      - name: Smoke relocated installed tree
         shell: pwsh
         run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
-          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
-          $installBin = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\usr\bin"
-          $windeployqt = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
-          if (-not (Test-Path -LiteralPath $windeployqt)) {
-            throw "Qt deployment tool was not found: $windeployqt"
-          }
-
-          foreach ($name in @("LoopEditor.exe", "PdfTool.exe")) {
-            $target = Join-Path $installBin $name
-            if (-not (Test-Path -LiteralPath $target)) {
-              throw "Expected staged executable was not found: $target"
-            }
-            $output = @(& $windeployqt --release --no-compiler-runtime --no-translations `
-              --qmldir (Join-Path $env:GITHUB_WORKSPACE "loop\LoopEditor\qml") `
-              --dir $installBin $target 2>&1)
-            $exitCode = $LASTEXITCODE
-            $output | Tee-Object -FilePath (Join-Path $evidenceDir "windeployqt-$name.txt")
-            if ($exitCode -ne 0) {
-              throw "windeployqt failed for $name with exit code $exitCode"
-            }
-          }
-
-          $builtLoopQuick = Join-Path $env:GITHUB_WORKSPACE "loop\build\LoopEditor\Loop\Quick"
-          $qmlLoopQuick = Join-Path $installBin "qml\Loop\Quick"
-          if (-not (Test-Path -LiteralPath $builtLoopQuick)) {
-            throw "Built Loop.Quick QML module was not found: $builtLoopQuick"
-          }
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $qmlLoopQuick) | Out-Null
-          Copy-Item -Recurse -Force -LiteralPath $builtLoopQuick -Destination $qmlLoopQuick
-
-          # The clean installed-artifact smoke intentionally removes developer
-          # Qt environment variables. Make the staged tree self-describing so
-          # Qt resolves its bundled QML imports and plugins without the runner's
-          # Qt installation.
-          @"
-          [Paths]
-          Prefix=.
-          Plugins=.
-          Qml2Imports=qml
-          "@ | Set-Content -LiteralPath (Join-Path $installBin "qt.conf") -Encoding ascii
-          Copy-Item -LiteralPath (Join-Path $installBin "qt.conf") -Destination (Join-Path $evidenceDir "qt.conf")
-        env:
-          VCToolsRedistDir: ${{ env.VCToolsRedistDir }}
-          VSCMD_ARG_TGT_ARCH: ${{ env.VSCMD_ARG_TGT_ARCH }}
-          MSVC_TOOLSET_VERSION: ${{ env.MSVC_TOOLSET_VERSION }}
-          MSVC_REDISTRIBUTABLES_PATH: ${{ env.MSVC_REDISTRIBUTABLES_PATH }}
+          $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
+          if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
+          # Copy-Item to a destination that does not exist copies the source
+          # *contents* directly into it (no extra `install` level), so the
+          # relocated binaries live at $relocated\usr\bin, not
+          # $relocated\install\usr\bin.
+          Copy-Item -LiteralPath "${env:GITHUB_WORKSPACE}\loop\build\install" -Destination $relocated -Recurse
+          & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
 
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
@@ -317,7 +295,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_ORG: berry-studios
-          SENTRY_PROJECT: loop-pdf
           SENTRY_URL: https://de.sentry.io
         run: |
           .\scripts\ci\upload_sentry_debug_files.ps1 -BuildDir "${env:GITHUB_WORKSPACE}\loop\build"
@@ -389,7 +366,7 @@ jobs:
           $wixDir = "$env:GITHUB_WORKSPACE\wix"
           Expand-Archive -Path $wixZip -DestinationPath $wixDir -Force
 
-          foreach ($required in "candle.exe", "light.exe", "WiXUIExtension.dll") {
+          foreach ($required in "candle.exe", "light.exe", "heat.exe", "WiXUIExtension.dll") {
             if (-not (Test-Path (Join-Path $wixDir $required))) {
               throw "Pinned WiX toolset is missing $required under $wixDir"
             }
@@ -398,21 +375,14 @@ jobs:
           echo "wixdir=$wixDir" >> $env:GITHUB_ENV
           echo "wixuiextpath=$wixDir\WiXUIExtension.dll" >> $env:GITHUB_ENV
 
-      - name: Inject missing install DLLs into Product.wxs
-        shell: pwsh
-        run: |
-          # cmake --install stages runtime DLLs that the hand-maintained Product.wxs.in
-          # may omit. Light only packages listed files — close the gap before candle.
-          & "${env:GITHUB_WORKSPACE}\loop\scripts\Inject-WixMissingDlls.ps1" `
-            -ProductWxs "${env:GITHUB_WORKSPACE}\loop\build\WixInstaller\Product.wxs" `
-            -InstallBinDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin"
-
       - name: Create MSI Package
         working-directory: loop\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
+          & "$wixBin\heat.exe" dir "${env:GITHUB_WORKSPACE}\loop\build\install" -cg LOOP_InstalledTree -dr INSTALLFOLDER -gg -sfrag -srd -out HarvestedInstall.wxs
           & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj
+          & "$wixBin\candle.exe" -v -out obj\Release\ -arch x64 HarvestedInstall.wxs
+          & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj obj\Release\HarvestedInstall.wixobj
 
       - name: Sign MSI Package
         shell: pwsh

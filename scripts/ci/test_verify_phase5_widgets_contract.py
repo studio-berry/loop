@@ -31,7 +31,9 @@ class Phase5WidgetsContractTests(unittest.TestCase):
 
     def test_current_evidence_is_valid_and_complete(self):
         self.assertEqual(validate_contract(ROOT, self.inventory, self.disposition), [])
-        self.assertEqual(self.inventory["counts"]["targets"], 70)
+        # No assertion on counts["targets"]: it is the size of an inventory that grows
+        # with ordinary development, so pinning it only reports target churn as a
+        # contract breach. validate_contract() above checks what the evidence means.
         self.assertEqual(self.inventory["counts"]["widgets_surfaces"], 4)
         self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
         self.assertEqual(len(self.inventory["plugin_ui"]), 0)
@@ -127,12 +129,11 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             for row in product["surfaces"]
             if row.get("kind") == "plugin" and row.get("artifact")
         ]
-        self.assertEqual(len(plugin_rows), 12)
         for row in plugin_rows:
             self.assertEqual(row["artifact_scope"], "build", row["artifact"])
             self.assertEqual(row["profiles"]["loop-release"], "absent", row["artifact"])
         inventory_ids = {row["id"] for row in self.inventory["targets"]}
-        for plugin in (
+        retired_plugins = (
             "ActionListPlugin",
             "DimensionsPlugin",
             "EditorPlugin",
@@ -145,7 +146,11 @@ class Phase5WidgetsContractTests(unittest.TestCase):
             "SoftProofingPlugin",
             "AudioBookPlugin",
             "OcrPlugin",
-        ):
+        )
+        # Assert the set, not its size: a thirteenth plugin then names itself instead
+        # of arriving as "13 != 12".
+        self.assertEqual({row["artifact"] for row in plugin_rows}, set(retired_plugins))
+        for plugin in retired_plugins:
             self.assertNotIn(plugin, inventory_ids, plugin)
 
     def test_loop_editor_is_sole_installed_interactive_product(self):
@@ -169,7 +174,6 @@ class Phase5WidgetsContractTests(unittest.TestCase):
     def test_developer_tool_ui_forms_match_ledger(self):
         shell = json.loads((ROOT / "docs/loop-shell.json").read_text(encoding="utf-8"))
         legacy = shell["legacy_surface_disposition"]
-        self.assertEqual(len(legacy), 2)
         repo_ui = sorted(
             str(path.relative_to(ROOT)).replace("\\", "/")
             for path in ROOT.rglob("*.ui")
@@ -177,7 +181,9 @@ class Phase5WidgetsContractTests(unittest.TestCase):
         )
         ledger_paths = sorted(entry["path"] for entry in legacy)
         self.assertEqual(repo_ui, ledger_paths)
-        self.assertEqual(self.inventory["counts"]["ui_forms"], 2)
+        # Tied to the ledger the test just compared against, not to a literal that has
+        # to be hand-updated alongside it.
+        self.assertEqual(self.inventory["counts"]["ui_forms"], len(ledger_paths))
         self.assertEqual(len(self.disposition["rows"]), 6)
 
 

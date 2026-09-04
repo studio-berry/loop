@@ -22,7 +22,10 @@
 
 qt_policy(SET QTP0001 NEW)
 
-add_library(LoopEditorQuick STATIC
+qt_add_executable(LoopEditor
+    main.cpp
+    icon.rc
+    app.qrc
     documentviewsession.cpp
     documentviewsession.h
     editorhost.cpp
@@ -33,7 +36,7 @@ add_library(LoopEditorQuick STATIC
     quickdocumentmodel.h
 )
 
-qt_add_qml_module(LoopEditorQuick
+qt_add_qml_module(LoopEditor
     URI Loop.Quick
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Loop/Quick"
@@ -46,8 +49,8 @@ qt_add_qml_module(LoopEditorQuick
         qml/InspectorPane.qml
 )
 
-target_link_libraries(LoopEditorQuick
-    PUBLIC
+target_link_libraries(LoopEditor
+    PRIVATE
         LoopLibQuick
         LoopLibInteraction
         LoopLibCore
@@ -59,33 +62,24 @@ target_link_libraries(LoopEditorQuick
         Qt6::QuickDialogs2
 )
 
-set_target_properties(LoopEditorQuick PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-target_include_directories(LoopEditorQuick PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-qt_add_executable(LoopEditor
-    main.cpp
-    icon.rc
-    app.qrc
-)
-
-target_link_libraries(LoopEditor
-    PRIVATE
-        LoopEditorQuick
-        LoopEditorQuickplugin
-        LoopEditorQuickplugin_init
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Qml
-        Qt6::Quick
-        Qt6::QuickControls2
-        Qt6::QuickDialogs2
-)
+target_include_directories(LoopEditor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 qt_import_qml_plugins(LoopEditor)
 
+# Packaging builds LoopEditor explicitly; ensure the Loop.Canvas plugin module is
+# built before install copies it into usr/lib/qml/Loop/Canvas.
+add_dependencies(LoopEditor LoopLibQuickplugin)
+
+# Headless packaging smoke runs LoopEditor with QT_QPA_PLATFORM=offscreen. A
+# WINDOWS-subsystem binary crashes there with 0xC0000005 before Quick startup;
+# PdfTool and ProductQuickAccessibilitySmoke already ship as console binaries.
+set(_loop_editor_win32_executable ON)
+if(WIN32 AND LOOP_LOOP_DISTRIBUTION)
+    set(_loop_editor_win32_executable OFF)
+endif()
+
 set_target_properties(LoopEditor PROPERTIES
-    WIN32_EXECUTABLE ON
+    WIN32_EXECUTABLE ${_loop_editor_win32_executable}
     MACOSX_BUNDLE ON
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
@@ -96,6 +90,43 @@ install(TARGETS LoopEditor
     LIBRARY DESTINATION ${LOOP_INSTALL_LIB_DIR}
     ARCHIVE DESTINATION ${LOOP_INSTALL_LIB_DIR}
 )
+
+# LoopEditor owns the Loop.Quick module, so Qt can scan its QML import graph
+# and install the complete runtime closure beside the product.  In particular,
+# this covers transitive controls imports and the dynamically loaded platform
+# and SQLite plugins used by the clean-tree smoke.
+qt_generate_deploy_qml_app_script(
+    TARGET LoopEditor
+    OUTPUT_SCRIPT loop_editor_deploy_script
+    NO_TRANSLATIONS
+    INCLUDE_PLUGIN_TYPES platforms
+    INCLUDE_PLUGINS qoffscreen qsqlite
+)
+# Qt's deployment helpers default to a flat prefix (bin/, lib/, qml/).  Loop
+# installs product payloads below usr/, so establish the same prefix-relative
+# layout before the generated script computes imports, plugins, and qt.conf.
+#
+# LOOP_INSTALL_QT_DEPENDENCIES stays authoritative for whether Loop ships its
+# own Qt closure at all: the Flatpak manifest, the Dockerfile, the fuzz job and
+# the reusable Linux qualification build all configure with it OFF because the
+# runtime Qt comes from the platform there.
+if(LOOP_INSTALL_QT_DEPENDENCIES)
+    install(CODE [[
+        set(QT_DEPLOY_BIN_DIR "usr/bin")
+        set(QT_DEPLOY_LIB_DIR "usr/lib")
+        set(QT_DEPLOY_QML_DIR "usr/lib/qml")
+    ]])
+    install(SCRIPT ${loop_editor_deploy_script})
+    # Packaged Quick smoke resolves Loop.Canvas from the import tree after CI strips
+    # developer Qt env vars. install(FILES) copies the plugin without registering an
+    # install(TARGETS) entry that Phase 5 would treat as an unmanifested product target.
+    install(FILES
+        "$<TARGET_FILE:LoopLibQuickplugin>"
+        "${CMAKE_BINARY_DIR}/LoopLibQuick/Loop/Canvas/qmldir"
+        "${CMAKE_BINARY_DIR}/LoopLibQuick/Loop/Canvas/LoopLibQuick.qmltypes"
+        DESTINATION usr/lib/qml/Loop/Canvas
+    )
+endif()
 
 if(LOOP_ENABLE_SENTRY)
     loop_deploy_sentry_crashpad(LoopEditor)

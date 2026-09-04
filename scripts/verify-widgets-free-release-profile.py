@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -76,15 +75,11 @@ def validate_cmake_release_profile() -> None:
         raise ContractError("CMake must gate find_package(Qt6 Widgets) behind _LOOP_REQUIRES_WIDGETS")
     if "REQUIRED COMPONENTS Core Gui Svg Xml Sql TextToSpeech Concurrent" not in text:
         raise ContractError("Widgets-free configure must not request Qt6::PrintSupport")
-    release_regex = re.search(
-        r"if\(LOOP_LOOP_DISTRIBUTION\)\s*"
-        r"set\(_LOOP_QT_DLL_REGEX \"([^\"]+)\"",
-        text,
-    )
-    if release_regex is None:
-        raise ContractError("CMake must define a release-profile Qt install regex")
-    if "Qt6Widgets" in release_regex.group(1) or "Qt6PrintSupport" in release_regex.group(1):
-        raise ContractError("release-profile Qt install regex must omit Widgets-bound Qt modules")
+    # The release Qt closure is produced by qt_generate_deploy_qml_app_script,
+    # not by a hand-maintained install(DIRECTORY ... REGEX) block, so there is
+    # no source-level regex left to inspect.  The Widgets-free guarantee is
+    # enforced against the real deployed tree instead -- see scan_install_tree()
+    # and the --install-dir scan run by the packaging workflows.
     if "set(_LOOP_BUILD_CODE_GENERATOR_DEFAULT OFF)" not in text:
         raise ContractError("LOOP_LOOP_DISTRIBUTION must default developer Widgets tools OFF")
 

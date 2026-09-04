@@ -75,12 +75,12 @@
       "artifact": "LoopEditorQuick",
       "artifact_scope": "build",
       "artifact_patterns": ["LoopEditorQuick", "LoopEditorQuick.*", "libLoopEditorQuick.*"],
-      "build_option": "LOOP_BUILD_QUICK_CANVAS",
-      "source_status": "maintained",
+      "build_option": null,
+      "source_status": "deleted",
       "disposition": "ABSORB",
       "owner": "m.berry",
       "rationale": "Static QML shell module linked into LoopEditor; it is an implementation target and must not become a separately installed product artifact.",
-      "profiles": { "developer": "present", "loop-release": "present" },
+      "profiles": { "developer": "absent", "loop-release": "absent" },
       "replacement_surface": "loop-editor",
       "dependencies": ["LoopLibQuick", "LoopLibInteraction"],
       "validation_evidence": "LoopEditor/CMakeLists.txt",
@@ -541,7 +541,9 @@
       "iconengines/*",
       "imageformats/*",
       "styles/*",
-      "texttospeech/*"
+      "texttospeech/*",
+      "usr/lib/qml/*",
+      "plugins/*"
     ]
   },
   "cli": {

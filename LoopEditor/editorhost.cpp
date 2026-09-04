@@ -225,6 +225,13 @@ void EditorHost::goToPage(int pageIndex)
     bumpPresentation();
 }
 
+void EditorHost::goToOutlinePage(int pageIndex)
+{
+    // Outline navigation reuses the implemented viewport path; separate entry
+    // keeps QML from depending on an unimplemented goToOutlineIndex.
+    goToPage(pageIndex);
+}
+
 void EditorHost::acknowledgeWorkspaceRequest()
 {
     if (m_workspaceRequest < 0)
@@ -233,6 +240,17 @@ void EditorHost::acknowledgeWorkspaceRequest()
     }
 
     m_workspaceRequest = -1;
+    Q_EMIT presentationChanged();
+}
+
+void EditorHost::acknowledgeSearchPanel()
+{
+    if (!m_searchPanelVisible)
+    {
+        return;
+    }
+
+    m_searchPanelVisible = false;
     Q_EMIT presentationChanged();
 }
 

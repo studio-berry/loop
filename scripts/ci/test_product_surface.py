@@ -92,8 +92,7 @@ class ProductSurfaceContractTests(unittest.TestCase):
         (install / "platforms" / "qwindows.dll").write_bytes(b"fixture")
         self.assertEqual(validate_install(install, self.manifest, "loop-release"), [])
 
-    def test_install_manifest_drift_fails_closed(self):
-        install = self._make_install_tree()
+    def _write_install_manifest(self, install: Path) -> Path:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         install_manifest = Path(temporary.name) / "install_manifest.txt"
@@ -102,9 +101,59 @@ class ProductSurfaceContractTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        (install / "unexpected.txt").write_text("fixture", encoding="utf-8")
+        return install_manifest
+
+    def test_install_manifest_drift_fails_closed(self):
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "LoopUnmanifested.dll").write_bytes(b"fixture")
         errors = validate_install(install, self.manifest, "loop-release", install_manifest)
         self.assertTrue(any("absent from CMake install manifest" in error for error in errors))
+
+    def test_qt_deployment_output_is_not_manifest_drift(self):
+        # qt_generate_deploy_qml_app_script and windeployqt copy the Qt closure
+        # and write qt.conf outside install(), so install_manifest.txt can never
+        # list them.  Only first-party payload is held to the manifest.
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "qt.conf").write_text("[Paths]\n", encoding="utf-8")
+        (install / "Qt6Core.dll").write_bytes(b"fixture")
+        (install / "libQt6Quick.so.6").write_bytes(b"fixture")
+        errors = validate_install(install, self.manifest, "loop-release", install_manifest)
+        self.assertEqual([error for error in errors if "absent from CMake install manifest" in error], [])
+
+    def test_install_manifest_missing_file_still_fails_closed(self):
+        install = self._make_install_tree()
+        install_manifest = self._write_install_manifest(install)
+        (install / "LoopLibQuick.dll").unlink()
+        errors = validate_install(install, self.manifest, "loop-release", install_manifest)
+        self.assertTrue(any("CMake install manifest lists missing files" in error for error in errors))
+
+    def test_deployed_qt_module_tree_is_not_first_party(self):
+        # qt_generate_deploy_qml_app_script stages the Qt closure at
+        # usr/lib/qml/<Module>/... and plugins/<type>/..., where the file names are
+        # lib<something>plugin.so. Those collide with the lib*Plugin* glob that exists
+        # to catch Loop's own plugins, so the deployed tree must be ignored by path.
+        install = self._make_install_tree()
+        for relative in (
+            "usr/lib/qml/QtQuick/libqtquick2plugin.so",
+            "usr/lib/qml/QtQuick/Controls/Material/libqtquickcontrols2materialstyleplugin.so",
+            "plugins/generic/libqevdevmouseplugin.so",
+            "plugins/wayland-shell-integration/libwl-shell-plugin.so",
+        ):
+            path = install / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture")
+        self.assertEqual(validate_install(install, self.manifest, "loop-release"), [])
+
+    def test_loop_own_plugins_are_still_first_party(self):
+        # The ignore patterns above must not swallow Loop's plugin directories.
+        install = self._make_install_tree()
+        path = install / "usr" / "lib" / "loop" / "libActionListPlugin.so"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fixture")
+        errors = validate_install(install, self.manifest, "loop-release")
+        self.assertTrue(any("ActionListPlugin" in error for error in errors))
 
     def test_install_manifest_preserves_final_symlink_name(self):
         install = self._make_install_tree()
