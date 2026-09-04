@@ -400,6 +400,15 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     install(FILES ${LOOP_QM_FILES} OPTIONAL
             DESTINATION ${LOOP_INSTALL_TRANS_DIR})
 
+    # The preflight profile store is part of the installed product surface;
+    # keep it beside the deployed translations so PdfTool and the Editor can
+    # resolve the default profile and its schemas from a relocated tree.
+    set(LOOP_PREFLIGHT_PROFILES_DIR ${LOOP_INSTALL_SHARE_DIR}/loop/profiles)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/loop-preflight/profiles/loop-default.json
+            DESTINATION ${LOOP_PREFLIGHT_PROFILES_DIR})
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/loop-preflight/schemas/
+            DESTINATION ${LOOP_PREFLIGHT_PROFILES_DIR}/schemas)
+
     if(WIN32)
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Desktop/44x44/
                 RUNTIME DESTINATION ${LOOP_INSTALL_BIN_DIR}/assets/44x44
