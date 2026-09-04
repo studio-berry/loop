@@ -132,8 +132,13 @@ QStringList packagedLibraryPaths(const QString& exeDir)
          })
     {
         appendIfExists(QDir(root).filePath(QStringLiteral("plugins")));
+#if !defined(Q_OS_WIN)
+        // Linux AppImage smoke strips developer Qt env vars; the install-root lib
+        // tree can hold arch-specific plugin fallbacks. On Windows, adding usr/lib
+        // to QCoreApplication::libraryPaths() makes Qt treat product DLLs as
+        // plugins and crashes with 0xC0000005 during QPA startup.
         appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib")));
-        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib/qml")));
+#endif
     }
 
     return paths;
@@ -142,13 +147,34 @@ QStringList packagedLibraryPaths(const QString& exeDir)
 QStringList packagedQmlImportPaths(const QString& exeDir)
 {
     QStringList importPaths;
-    for (const QString& path : packagedLibraryPaths(exeDir))
+    const QDir exeDirQ(exeDir);
+
+    const auto appendQmlIfExists = [&importPaths](const QString& candidate)
     {
-        if (path.endsWith(QStringLiteral("/qml")) || path.endsWith(QStringLiteral("\\qml")))
+        if (!QFileInfo::exists(candidate))
         {
-            importPaths << path;
+            return;
         }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!importPaths.contains(absolute))
+        {
+            importPaths << absolute;
+        }
+    };
+
+    appendQmlIfExists(exeDirQ.filePath(QStringLiteral("qml")));
+    appendQmlIfExists(exeDirQ.filePath(QStringLiteral("../lib/qml")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendQmlIfExists(QDir(root).filePath(QStringLiteral("usr/lib/qml")));
     }
+
     return importPaths;
 }
 
