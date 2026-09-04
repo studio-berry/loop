@@ -98,8 +98,7 @@ inline bool validateSidecarBbox(const QJsonValue& value, QString* errorMessage)
         }
     }
 
-    if (bbox.value(QStringLiteral("width")).toDouble() < 0.0
-        || bbox.value(QStringLiteral("height")).toDouble() < 0.0)
+    if (bbox.value(QStringLiteral("width")).toDouble() < 0.0 || bbox.value(QStringLiteral("height")).toDouble() < 0.0)
     {
         return setValidationError(errorMessage, QStringLiteral("OCR sidecar bbox width and height must be non-negative."));
     }
@@ -110,8 +109,7 @@ inline bool validateSidecarResponse(const QJsonObject& response,
                                     int expectedPage,
                                     QString* errorMessage = nullptr)
 {
-    if (!isFiniteNumber(response.value(QStringLiteral("page")))
-        || response.value(QStringLiteral("page")).toDouble() != expectedPage)
+    if (!isFiniteNumber(response.value(QStringLiteral("page"))) || response.value(QStringLiteral("page")).toDouble() != expectedPage)
     {
         return setValidationError(errorMessage, QStringLiteral("OCR sidecar returned the wrong page number."));
     }
@@ -124,16 +122,14 @@ inline bool validateSidecarResponse(const QJsonObject& response,
 
     if (!okValue.toBool())
     {
-        if (!response.value(QStringLiteral("error")).isString()
-            || response.value(QStringLiteral("error")).toString().trimmed().isEmpty())
+        if (!response.value(QStringLiteral("error")).isString() || response.value(QStringLiteral("error")).toString().trimmed().isEmpty())
         {
             return setValidationError(errorMessage, QStringLiteral("OCR sidecar failure response missing error text."));
         }
         return true;
     }
 
-    if (!response.value(QStringLiteral("text")).isString()
-        || !response.value(QStringLiteral("lines")).isArray())
+    if (!response.value(QStringLiteral("text")).isString() || !response.value(QStringLiteral("lines")).isArray())
     {
         return setValidationError(errorMessage, QStringLiteral("Malformed successful OCR sidecar response."));
     }
@@ -147,8 +143,7 @@ inline bool validateSidecarResponse(const QJsonObject& response,
         }
 
         const QJsonObject line = lineValue.toObject();
-        if (!line.value(QStringLiteral("text")).isString()
-            || !isFiniteNumber(line.value(QStringLiteral("confidence"))))
+        if (!line.value(QStringLiteral("text")).isString() || !isFiniteNumber(line.value(QStringLiteral("confidence"))))
         {
             return setValidationError(errorMessage, QStringLiteral("Malformed OCR sidecar line."));
         }
@@ -164,4 +159,4 @@ inline bool validateSidecarResponse(const QJsonObject& response,
 
 }   // namespace pdftool::ocr
 
-#endif // OCRSIDECARPROTOCOL_H
+#endif   // OCRSIDECARPROTOCOL_H

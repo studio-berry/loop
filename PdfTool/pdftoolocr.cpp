@@ -211,22 +211,18 @@ bool renderPageToPng(pdf::PDFDocument* document,
         rendered = true;
     };
 
-    rasterizerPool.render(pageIndices,
-                          [&](const pdf::PDFPage* renderPage) -> QSize
+    rasterizerPool.render(pageIndices, [&](const pdf::PDFPage* renderPage) -> QSize
                           {
                               Q_UNUSED(renderPage);
-                              return imageSize;
-                          },
-                          onRendered,
-                          nullptr);
+                              return imageSize; }, onRendered, nullptr);
 
     fontCache.setCacheShrinkEnabled(nullptr, true);
 
     if (!rendered)
     {
         errorMessage = renderError.isEmpty()
-            ? PDFToolTranslationContext::tr("Failed to render page %1.").arg(pageIndex + 1)
-            : renderError;
+                           ? PDFToolTranslationContext::tr("Failed to render page %1.").arg(pageIndex + 1)
+                           : renderError;
         return false;
     }
 
@@ -524,8 +520,7 @@ PDFToolExitCode PDFToolOcrApplication::execute(const PDFToolOptions& options)
     if (options.executionContext)
     {
         options.executionContext->setData(QJsonObject{
-            { QStringLiteral("report"), report.toJson() }
-        });
+            { QStringLiteral("report"), report.toJson() } });
     }
 
     if (cancelled)

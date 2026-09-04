@@ -252,7 +252,7 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
     PDFDictionary trailerDictionary = *document->getTrailerDictionary();
     PDFDictionary newTrailerDictionary;
 
-    for (const char* entry : { "Size", "Root", "Encrypt", "Info", "ID"})
+    for (const char* entry : { "Size", "Root", "Encrypt", "Info", "ID" })
     {
         PDFObject object = trailerDictionary.get(entry);
         if (!object.isNull())
@@ -538,8 +538,8 @@ PDFOperationResult PDFDocumentWriter::writeIncremental(QIODevice* device,
 }
 
 PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PDFDocument* sourceDocument,
-                                                                          bool requiresFullRewrite,
-                                                                          bool saveAsNewOutput)
+                                                                        bool requiresFullRewrite,
+                                                                        bool saveAsNewOutput)
 {
     return getRecommendedWriteMode(sourceDocument,
                                    requiresFullRewrite
@@ -549,8 +549,8 @@ PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PD
 }
 
 PDFDocumentWriter::WriteMode PDFDocumentWriter::getRecommendedWriteMode(const PDFDocument* sourceDocument,
-                                                                          const PDFOperationSavePolicy& policy,
-                                                                          bool saveAsNewOutput)
+                                                                        const PDFOperationSavePolicy& policy,
+                                                                        bool saveAsNewOutput)
 {
     if (policy.mode != PDFSaveMode::IncrementalAppend || saveAsNewOutput || !sourceDocument)
     {
@@ -644,7 +644,7 @@ qint64 getPreviousXrefOffset(const QByteArray& data)
     return ok ? result : -1;
 }
 
-} // namespace
+}   // namespace
 
 class PDFSizeCounterIODevice : public QIODevice
 {
@@ -652,7 +652,6 @@ public:
     explicit PDFSizeCounterIODevice(QObject* parent) :
         QIODevice(parent)
     {
-
     }
 
     virtual bool isSequential() const override;

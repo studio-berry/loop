@@ -326,7 +326,8 @@ PDFObject PDFDocumentReader::getObjectFromXrefTable(PDFXRefTable* xrefTable, PDF
 PDFObject PDFDocumentReader::readDamagedTrailerDictionary() const
 {
     PDFObject object = PDFObject::createDictionary(std::make_shared<PDFDictionary>(PDFDictionary()));
-    PDFParsingContext context([](PDFParsingContext*, PDFObjectReference){ return PDFObject(); });
+    PDFParsingContext context([](PDFParsingContext*, PDFObjectReference)
+                              { return PDFObject(); });
 
     int offset = 0;
     while (offset < m_source.size())
@@ -363,7 +364,8 @@ PDFObject PDFDocumentReader::readDamagedTrailerDictionary() const
 
 PDFDocumentReader::Result PDFDocumentReader::processReferenceTableEntries(PDFXRefTable* xrefTable, const std::vector<PDFXRefTable::Entry>& occupiedEntries, PDFObjectStorage::PDFObjects& objects)
 {
-    auto objectFetcher = [this, xrefTable](PDFParsingContext* context, PDFObjectReference reference) { return getObjectFromXrefTable(xrefTable, context, reference); };
+    auto objectFetcher = [this, xrefTable](PDFParsingContext* context, PDFObjectReference reference)
+    { return getObjectFromXrefTable(xrefTable, context, reference); };
     auto processEntry = [this, &objectFetcher, &objects](const PDFXRefTable::Entry& entry)
     {
         Q_ASSERT(entry.type == PDFXRefTable::EntryType::Occupied);
@@ -516,8 +518,9 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
         objectStreams.insert(entry.objectStream);
     }
 
-    auto objectFetcher = [this, xrefTable](PDFParsingContext* context, PDFObjectReference reference) { return getObjectFromXrefTable(xrefTable, context, reference); };
-    auto processObjectStream = [this, &objectFetcher, &objects, &objectStreamEntries] (const PDFObjectReference& objectStreamReference)
+    auto objectFetcher = [this, xrefTable](PDFParsingContext* context, PDFObjectReference reference)
+    { return getObjectFromXrefTable(xrefTable, context, reference); };
+    auto processObjectStream = [this, &objectFetcher, &objects, &objectStreamEntries](const PDFObjectReference& objectStreamReference)
     {
         if (m_result != Result::OK)
         {
@@ -616,7 +619,8 @@ void PDFDocumentReader::processObjectStreams(PDFXRefTable* xrefTable, PDFObjectS
                 parser.seek(offset);
 
                 PDFObject currentObject = parser.getObject();
-                auto predicate = [objectNumber, objectStreamReference](const PDFXRefTable::Entry& entry) -> bool { return entry.reference.objectNumber == objectNumber && entry.objectStream == objectStreamReference; };
+                auto predicate = [objectNumber, objectStreamReference](const PDFXRefTable::Entry& entry) -> bool
+                { return entry.reference.objectNumber == objectNumber && entry.objectStream == objectStreamReference; };
                 if (std::find_if(objectStreamEntries.cbegin(), objectStreamEntries.cend(), predicate) != objectStreamEntries.cend())
                 {
                     QMutexLocker lock(&m_mutex);
@@ -721,7 +725,7 @@ PDFDocument PDFDocumentReader::readFromBuffer(const QByteArray& buffer)
         m_warnings << m_errorMessage;
         return PDFDocument();
     }
-    catch (const PDFException &parserException)
+    catch (const PDFException& parserException)
     {
         m_result = Result::Failed;
         m_errorMessage = parserException.getMessage();
@@ -943,7 +947,7 @@ PDFDocument PDFDocumentReader::readDamagedDocumentFromBuffer(const QByteArray& b
         // is most likely.
         return PDFDocument(std::move(storage), m_version, hash(buffer));
     }
-    catch (const PDFException &parserException)
+    catch (const PDFException& parserException)
     {
         m_result = Result::Failed;
         m_warnings << parserException.getMessage();

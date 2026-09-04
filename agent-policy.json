@@ -58,9 +58,12 @@
         "UnitTests/tst_bleedfixuptest.cpp",
         "UnitTests/tst_budgetcorpustest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
+        "UnitTests/tst_filenamesanitizertest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
+        "UnitTests/tst_jbig2decodertest.cpp",
         "UnitTests/tst_overprinttest.cpp",
-        "UnitTests/tst_revisionstresstest.cpp"
+        "UnitTests/tst_revisionstresstest.cpp",
+        "UnitTests/tst_safefilewritertest.cpp"
       ],
       "targets": ["LoopLibCore"],
       "tests": [
@@ -72,10 +75,12 @@
         "UnitTestsConversionOracle",
         "UnitTestsDocumentSession",
         "UnitTestsEvidenceGraph",
+        "UnitTestsFilenameSanitizer",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsApplicationIdentity",
         "UnitTestsIdentitySeparation",
         "UnitTestsIncrementalSave",
+        "UnitTestsJbig2Decoder",
         "UnitTestsJobScheduler",
         "UnitTestsLifecycle",
         "UnitTestsOperationHistory",
@@ -88,6 +93,7 @@
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
         "UnitTestsRevisionStress",
+        "UnitTestsSafeFileWriter",
         "UnitTestsSchemaEvolution",
         "UnitTestsStandardOracle",
         "UnitTestsWorkloadEnvelope"
