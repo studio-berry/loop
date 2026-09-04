@@ -119,21 +119,3 @@ install(TARGETS LoopLibQuick
     LIBRARY DESTINATION ${LOOP_INSTALL_LIB_DIR}
     ARCHIVE DESTINATION ${LOOP_INSTALL_LIB_DIR}
 )
-
-# Packaged Quick smoke resolves Loop.Canvas from the import tree after CI strips
-# developer Qt env vars. The deploy script covers Qt modules; this ships our plugin.
-if(LOOP_INSTALL_QT_DEPENDENCIES)
-    set(_loop_canvas_qml_dir usr/lib/qml/Loop/Canvas)
-    if(NOT LOOP_INSTALL_TO_USR)
-        set(_loop_canvas_qml_dir ${LOOP_INSTALL_LIB_DIR}/qml/Loop/Canvas)
-    endif()
-    install(TARGETS LoopLibQuickplugin
-        RUNTIME DESTINATION ${_loop_canvas_qml_dir}
-        LIBRARY DESTINATION ${_loop_canvas_qml_dir}
-    )
-    install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/Loop/Canvas/qmldir"
-        "${CMAKE_CURRENT_BINARY_DIR}/Loop/Canvas/LoopLibQuick.qmltypes"
-        DESTINATION ${_loop_canvas_qml_dir}
-    )
-endif()

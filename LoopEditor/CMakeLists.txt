@@ -105,6 +105,15 @@ if(LOOP_INSTALL_QT_DEPENDENCIES)
         set(QT_DEPLOY_QML_DIR "usr/lib/qml")
     ]])
     install(SCRIPT ${loop_editor_deploy_script})
+    # Packaged Quick smoke resolves Loop.Canvas from the import tree after CI strips
+    # developer Qt env vars. install(FILES) copies the plugin without registering an
+    # install(TARGETS) entry that Phase 5 would treat as an unmanifested product target.
+    install(FILES
+        "$<TARGET_FILE:LoopLibQuickplugin>"
+        "${CMAKE_BINARY_DIR}/LoopLibQuick/Loop/Canvas/qmldir"
+        "${CMAKE_BINARY_DIR}/LoopLibQuick/Loop/Canvas/LoopLibQuick.qmltypes"
+        DESTINATION usr/lib/qml/Loop/Canvas
+    )
 endif()
 
 if(LOOP_ENABLE_SENTRY)
