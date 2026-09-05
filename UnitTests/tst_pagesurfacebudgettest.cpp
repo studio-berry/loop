@@ -262,6 +262,7 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
     coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
+    coordinator.setCacheLimit(total);
     QCOMPARE(coordinator.cacheLimit(), total);
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
              static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(total)));

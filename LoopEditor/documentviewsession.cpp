@@ -226,7 +226,7 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
     m_renderer.setCacheLimit(normalized);
     if (m_surfaces)
     {
-        m_surfaces->refreshPageCacheBudget();
+        m_surfaces->setCacheLimit(normalized);
     }
 }
 

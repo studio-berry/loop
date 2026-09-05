@@ -215,12 +215,6 @@ void PDFSessionPageSurfaceRenderer::setCacheLimit(qsizetype totalBytes)
     if (pdf::PDFDocumentSession* session = m_context->tryGetSession())
     {
         session->setCacheLimit(totalBytes);
-        return;
-    }
-
-    if (std::shared_ptr<pdf::PDFPageCacheBudget> budget = m_context->getSharedPageCacheBudget())
-    {
-        budget->setTotal(pdf::PDFPageCacheBudget::total(totalBytes));
     }
 }
 

@@ -113,7 +113,6 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
 {
     if (m_pageCacheBudget == budget)
     {
-        syncPageCacheBudgetLimits();
         if (m_initialSnapshotPrimed)
         {
             refreshPageCacheBudget();
@@ -127,17 +126,23 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
         clearCache();
     }
     m_pageCacheBudget = std::move(budget);
-    syncPageCacheBudgetLimits();
     if (m_initialSnapshotPrimed)
     {
+        syncPageCacheBudgetLimits();
         refreshPageCacheBudget();
         rebuildSnapshot();
     }
 }
 
+void PageSurfaceCoordinator::applyProjectedPageCacheLimit(qsizetype normalizedTotal)
+{
+    m_cacheLimit = normalizedTotal;
+    m_bounds.maxAdmittedBytes = pdf::PDFPageCacheBudget::pageSurfaces(normalizedTotal);
+}
+
 void PageSurfaceCoordinator::syncPageCacheBudgetLimits()
 {
-    if (!m_pageCacheBudget)
+    if (!m_pageCacheBudget || !m_initialSnapshotPrimed)
     {
         return;
     }
@@ -148,17 +153,12 @@ void PageSurfaceCoordinator::syncPageCacheBudgetLimits()
 
 void PageSurfaceCoordinator::refreshPageCacheBudget()
 {
-    if (!m_pageCacheBudget)
+    if (!m_pageCacheBudget || !m_initialSnapshotPrimed)
     {
         return;
     }
 
     syncPageCacheBudgetLimits();
-    if (!m_initialSnapshotPrimed)
-    {
-        return;
-    }
-
     if (trimCacheToBudget())
     {
         rebuildSnapshot();
@@ -183,20 +183,19 @@ void PageSurfaceCoordinator::setRenderSettings(PageSurfaceRenderSettings setting
 void PageSurfaceCoordinator::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
+    applyProjectedPageCacheLimit(normalized);
 
-    if (m_pageCacheBudget)
+    if (!m_pageCacheBudget)
     {
-        m_pageCacheBudget->setTotal(normalized);
-        refreshPageCacheBudget();
+        trimCacheToBudget();
         return;
     }
 
-    const qsizetype surfaces = pdf::PDFPageCacheBudget::pageSurfaces(normalized);
-    m_cacheLimit = normalized;
-    m_bounds.maxAdmittedBytes = surfaces;
-    trimCacheToBudget();
-    // Standalone coordinators have no session to share an authority with. The
-    // production path attaches a PDFPageCacheBudget before setting the total.
+    m_pageCacheBudget->setTotal(normalized);
+    if (m_initialSnapshotPrimed)
+    {
+        refreshPageCacheBudget();
+    }
 }
 
 void PageSurfaceCoordinator::onDemandChanged()

@@ -162,10 +162,7 @@ public:
     /// Receives the production total cache budget. The shared object is the
     /// authority for both compiled pages and admitted surfaces.
     void setCacheLimit(qsizetype totalBytes);
-    qsizetype cacheLimit() const noexcept
-    {
-        return m_pageCacheBudget ? m_pageCacheBudget->total() : m_cacheLimit;
-    }
+    qsizetype cacheLimit() const noexcept { return m_cacheLimit; }
 
     /// Attaches the document session's shared resource authority. Existing
     /// admitted surfaces are dropped when the authority changes so the new
@@ -182,7 +179,6 @@ public:
     /// Refreshes the diagnostic surface projection and trims after the shared
     /// authority's total changes.
     void refreshPageCacheBudget();
-    void syncPageCacheBudgetLimits();
 
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
@@ -290,6 +286,8 @@ private:
     void countTerminal(SurfaceTerminalState state);
     void scheduleSurfaceRetry();
     void resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state);
+    void syncPageCacheBudgetLimits();
+    void applyProjectedPageCacheLimit(qsizetype normalizedTotal);
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;
