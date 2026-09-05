@@ -39,6 +39,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <mutex>
 #include <queue>
 #include <thread>
 #include <unordered_map>
@@ -234,6 +235,7 @@ private:
     };
 
     void workerLoop();
+    void ensureWorkersStarted();
     void finishJob(const std::shared_ptr<JobEntry>& job, PDFJobStatus status, QString errorMessage = {});
     void appendTrace(const std::shared_ptr<JobEntry>& job, PDFJobStatus status, qint64 elapsedMs = 0);
     bool isStale(const PDFJobSpec& spec) const;
@@ -252,6 +254,7 @@ private:
     std::unordered_map<QString, QString, PDFJobStringHash> m_currentRevisions;
     std::unordered_map<QString, QList<PDFJobTraceEvent>, PDFJobStringHash> m_traces;
     std::vector<std::thread> m_workers;
+    std::once_flag m_workersOnce;
 };
 
 } // namespace pdf

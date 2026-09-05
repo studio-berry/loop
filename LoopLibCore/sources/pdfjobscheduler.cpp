@@ -201,13 +201,18 @@ PDFJobScheduler::PDFJobScheduler(int workerCount, QObject* parent) :
     qRegisterMetaType<pdf::PDFJobStatus>();
     qRegisterMetaType<pdf::PDFJobSnapshot>();
     qRegisterMetaType<pdf::PDFJobTraceEvent>();
+}
 
-    m_workers.reserve(static_cast<size_t>(m_workerCount));
-    for (int index = 0; index < m_workerCount; ++index)
-    {
-        m_workers.emplace_back([this]
-                               { workerLoop(); });
-    }
+void PDFJobScheduler::ensureWorkersStarted()
+{
+    std::call_once(m_workersOnce, [this]
+                   {
+        m_workers.reserve(static_cast<size_t>(m_workerCount));
+        for (int index = 0; index < m_workerCount; ++index)
+        {
+            m_workers.emplace_back([this]
+                                   { workerLoop(); });
+        } });
 }
 
 PDFJobScheduler::~PDFJobScheduler()
@@ -248,6 +253,8 @@ QString PDFJobScheduler::submit(PDFJobSpec spec,
     {
         return {};
     }
+
+    ensureWorkersStarted();
 
     auto job = std::make_shared<JobEntry>();
     job->spec = std::move(spec);
