@@ -25,27 +25,14 @@
 #include "pdfdocumentsession.h"
 #include "pdfoperationcontrol.h"
 
-#include <cstdio>
 #include <memory>
 
 namespace pdf
 {
 
-namespace
-{
-
-void logPreflightStage(const char* stage)
-{
-    fprintf(stderr, "loop-pdftool preflight stage=%s\n", stage);
-    fflush(stderr);
-}
-
-}   // namespace
-
 PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectionRequest& request)
 {
     PreflightFileInspectionOutcome outcome;
-    logPreflightStage("begin");
 
     bool isFirstPasswordAttempt = true;
     const auto passwordCallback = [&request, &isFirstPasswordAttempt](bool* ok) -> QString
@@ -56,7 +43,6 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
     };
 
     PDFDocumentReader reader(nullptr, passwordCallback, request.permissiveReading, false);
-    logPreflightStage("before_read");
     std::unique_ptr<PDFDocument, void (*)(PDFDocument*)> document(reader.readFromFileOnHeap(request.documentPath),
                                                                   &PDFDocumentReader::destroyDocument);
 
@@ -66,35 +52,29 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
     outcome.documentReadOk = outcome.readResult == PDFDocumentReader::Result::OK;
     if (!outcome.documentReadOk)
     {
-        logPreflightStage("read_failed");
         return outcome;
     }
 
     outcome.sourceData = reader.getSource();
-    logPreflightStage("after_read");
 
     std::unique_ptr<PDFDocumentSession, void (*)(PDFDocumentSession*)> session(
         PDFDocumentSession::createForInspection(document.get()),
         &PDFDocumentSession::destroy);
-    logPreflightStage("after_session");
 
     PreflightEngine engine(session.get());
     engine.setOperationControl(request.cancellation);
 
-    logPreflightStage("before_run");
     if (!PDFOperationControl::isOperationCancelled(request.cancellation))
     {
         outcome.report = engine.run(request.profile, request.jobSpec, request.cliBindings, request.plan);
         outcome.inspectionRan = true;
     }
-    logPreflightStage("after_run");
 
 #if defined(Q_OS_WIN)
     document.release();
     session.release();
 #endif
 
-    logPreflightStage("end");
     return outcome;
 }
 

@@ -29,7 +29,6 @@
 #include "pdfpagecachebudget.h"
 #include "pdfprocessingbudget.h"
 
-#include <cstdio>
 #include <functional>
 #include <limits>
 #include <tuple>
@@ -49,12 +48,6 @@ constexpr qsizetype PDFDocumentSession::ShedCompiledCacheByteLimit;
 
 namespace
 {
-
-void logSessionCtorStage(const char* stage)
-{
-    fprintf(stderr, "loop-pdftool session stage=%s\n", stage);
-    fflush(stderr);
-}
 
 qsizetype estimateDocumentModelBytesImpl(const PDFDocument* document)
 {
@@ -218,9 +211,6 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
     m_compiledCachePressureLimit(admission == PDFDocumentSessionAdmission::Managed ? m_pageCacheBudget->compiledLimit()
                                                                                    : CompiledCacheByteLimitDefault)
 {
-    logSessionCtorStage(admission == PDFDocumentSessionAdmission::Managed ? "ctor_managed_enter"
-                                                                          : "ctor_inspection_enter");
-
     if (admission == PDFDocumentSessionAdmission::Managed)
     {
         // The page-cache budget is the authority for the combined compiled-page
@@ -230,9 +220,7 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
         m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
         m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
 
-        logSessionCtorStage("ctor_before_model_estimate");
         const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
-        logSessionCtorStage("ctor_after_model_estimate");
         if (modelBytes > 0)
         {
             m_documentModelReservation = m_resourceBudget->reserveShared(m_resourceBudget,
@@ -241,16 +229,11 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                                                          PDFResourcePriority::Interaction,
                                                                          QStringLiteral("active document model"));
         }
-        logSessionCtorStage("ctor_after_model_reserve");
     }
     else
     {
         m_streamCacheByteLimit = 256 * PDFResourceBudgetConfig::MiB;
-        logSessionCtorStage("ctor_inspection_ready");
     }
-
-    logSessionCtorStage(admission == PDFDocumentSessionAdmission::Managed ? "ctor_managed_exit"
-                                                                          : "ctor_inspection_exit");
 }
 
 bool PDFDocumentSession::hasManagedAdmission() const noexcept
@@ -272,19 +255,12 @@ PDFDocumentSession* PDFDocumentSession::create(PDFDocument* document,
                                                PDFDocumentContext* context,
                                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget)
 {
-    logSessionCtorStage("create_before_new");
-    PDFDocumentSession* session = new PDFDocumentSession(document, context, std::move(pageCacheBudget));
-    logSessionCtorStage("create_after_new");
-    return session;
+    return new PDFDocumentSession(document, context, std::move(pageCacheBudget));
 }
 
 PDFDocumentSession* PDFDocumentSession::createForInspection(PDFDocument* document)
 {
-    logSessionCtorStage("create_inspection_before_new");
-    PDFDocumentSession* session =
-        new PDFDocumentSession(document, nullptr, nullptr, PDFDocumentSessionAdmission::Inspection);
-    logSessionCtorStage("create_inspection_after_new");
-    return session;
+    return new PDFDocumentSession(document, nullptr, nullptr, PDFDocumentSessionAdmission::Inspection);
 }
 
 void PDFDocumentSession::destroy(PDFDocumentSession* session) noexcept
