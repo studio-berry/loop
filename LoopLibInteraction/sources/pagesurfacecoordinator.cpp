@@ -109,7 +109,7 @@ void PageSurfaceCoordinator::setResourceBudget(std::shared_ptr<pdf::PDFResourceB
     rebuildSnapshot();
 }
 
-void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget)
+void PageSurfaceCoordinator::setPageCacheBudget(pdf::PDFPageCacheBudget* budget)
 {
     if (m_pageCacheBudget == budget)
     {
@@ -125,7 +125,7 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
         cancelInFlight();
         clearCache();
     }
-    m_pageCacheBudget = std::move(budget);
+    m_pageCacheBudget = budget;
     if (m_initialSnapshotPrimed)
     {
         syncPageCacheBudgetLimits();

@@ -174,8 +174,8 @@ public:
     /// bounds() is derived from the total via PDFPageCacheBudget partition;
     /// prefer cacheLimit()/setCacheLimit() as the authority and treat
     /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
-    void setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget);
-    std::shared_ptr<pdf::PDFPageCacheBudget> sharedPageCacheBudget() const noexcept { return m_pageCacheBudget; }
+    void setPageCacheBudget(pdf::PDFPageCacheBudget* budget);
+    pdf::PDFPageCacheBudget* pageCacheBudget() const noexcept { return m_pageCacheBudget; }
     /// Refreshes the diagnostic surface projection and trims after the shared
     /// authority's total changes.
     void refreshPageCacheBudget();
@@ -296,7 +296,7 @@ private:
 
     PageSurfaceBounds m_bounds;
     qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
-    std::shared_ptr<pdf::PDFPageCacheBudget> m_pageCacheBudget;
+    pdf::PDFPageCacheBudget* m_pageCacheBudget = nullptr;
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
     std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;

@@ -261,13 +261,13 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     bounds.maxNearViewportRequests = 1;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
-    coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
+    coordinator.setPageCacheBudget(context.getPageCacheBudget());
     coordinator.setCacheLimit(total);
     coordinator.primeInitialSnapshot();
     QCOMPARE(coordinator.cacheLimit(), total);
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
              static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(total)));
-    QCOMPARE(coordinator.sharedPageCacheBudget(), session->getSharedPageCacheBudget());
+    QCOMPARE(coordinator.pageCacheBudget(), session->getPageCacheBudget());
     coordinator.setDocumentKey(QStringLiteral("doc-1"));
     coordinator.requestSurfaces();
     QCoreApplication::processEvents();
@@ -326,14 +326,14 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
     context.setPageCacheTotal(totalBytes);
     session->setCacheLimit(totalBytes);
-    coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
+    coordinator.setPageCacheBudget(context.getPageCacheBudget());
     coordinator.setCacheLimit(totalBytes);
     coordinator.primeInitialSnapshot();
     QCOMPARE(coordinator.cacheLimit(), pdf::PDFPageCacheBudget::total(totalBytes));
     QCOMPARE(session->cacheLimit(), pdf::PDFPageCacheBudget::total(totalBytes));
     QCOMPARE(session->compiledCacheByteLimit(), pdf::PDFPageCacheBudget::compiledPages(totalBytes));
     QCOMPARE(coordinator.bounds().maxAdmittedBytes, static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(totalBytes)));
-    QCOMPARE(session->getSharedPageCacheBudget(), coordinator.sharedPageCacheBudget());
+    QCOMPARE(session->getPageCacheBudget(), coordinator.pageCacheBudget());
     QCOMPARE(pdf::PDFPageCacheBudget::compiledPages(totalBytes) + pdf::PDFPageCacheBudget::pageSurfaces(totalBytes),
              pdf::PDFPageCacheBudget::total(totalBytes));
     QVERIFY(session->getPageCacheBudget()->total() == totalBytes);

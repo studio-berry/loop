@@ -11,6 +11,8 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+#include <cstdio>
+
 namespace
 {
 
@@ -91,7 +93,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
-    m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
+    m_surfaces->setPageCacheBudget(m_context.getPageCacheBudget());
     setCacheLimit(DefaultCacheLimit);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
@@ -104,8 +106,12 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     applyInitialViewportScreenMetrics(m_viewport);
 
     m_commandBridge.setCoordinator(m_surfaces.get());
+    fprintf(stderr, "loop-editor documentviewsession before_prime\n");
+    fflush(stderr);
     m_context.setPageCacheTotal(m_cacheLimit);
     m_surfaces->primeInitialSnapshot();
+    fprintf(stderr, "loop-editor documentviewsession constructed\n");
+    fflush(stderr);
 }
 
 DocumentViewSession::~DocumentViewSession()
