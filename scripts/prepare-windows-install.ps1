@@ -7,6 +7,7 @@
     The Qt deploy script only needs QSQLITE for preflight history writes. Optional
     vendor SQL drivers reference libraries we do not ship and fail package-boundary
     inspection (qsqlibase.dll -> fbclient.dll, qsqloci.dll -> OCI.dll).
+    See docs/WINDOWS_MSI_PACKAGING.md.
 #>
 param(
     [Parameter(Mandatory = $true)]

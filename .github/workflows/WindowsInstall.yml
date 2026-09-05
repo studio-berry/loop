@@ -368,6 +368,7 @@ jobs:
         run: |
           # Drop optional Qt SQL drivers that reference vendor client libraries we
           # do not ship. Linux performs the same prune in prepare-appdir.sh.
+          # Regression traps: docs/WINDOWS_MSI_PACKAGING.md
           .\loop\scripts\prepare-windows-install.ps1 `
             -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install"
 
@@ -415,6 +416,7 @@ jobs:
           $installDir = "${env:GITHUB_WORKSPACE}\loop\build\install"
           # heat emits relative Source paths; bind them to the staged install tree so
           # light does not look under loop\build\WixInstaller\SourceDir.
+          # Regression traps: docs/WINDOWS_MSI_PACKAGING.md
           & "$wixBin\heat.exe" dir $installDir -cg LOOP_InstalledTree -dr INSTALLFOLDER -gg -sfrag -srd -var var.SourceDir -out HarvestedInstall.wxs
           & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
           & "$wixBin\candle.exe" -v -d"SourceDir=$installDir" -out obj\Release\ -arch x64 HarvestedInstall.wxs

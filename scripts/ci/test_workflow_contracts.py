@@ -142,6 +142,16 @@ class WorkflowContractTests(unittest.TestCase):
         prepare = (ROOT / "scripts/prepare-windows-install.ps1").read_text(encoding="utf-8")
         self.assertIn("qsqlite.dll", prepare)
 
+    def test_windows_msi_packaging_regression_doc_exists(self):
+        doc = (ROOT / "docs/WINDOWS_MSI_PACKAGING.md").read_text(encoding="utf-8")
+        self.assertIn("var.SourceDir", doc)
+        self.assertIn("prepare-windows-install.ps1", doc)
+        self.assertIn("LGHT0103", doc)
+        self.assertIn("windows_system_dependency", doc)
+        self.assertIn("usr/bin", doc)
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn("WINDOWS_MSI_PACKAGING.md", (ROOT / "docs/SESSION_07_PACKAGE_BOUNDARY.md").read_text(encoding="utf-8"))
+
     def test_release_draft_pairs_evidence_and_keeps_it_out_of_assets(self):
         workflow = (ROOT / ".github/workflows/CreateReleaseDraft.yml").read_text(encoding="utf-8")
         self.assertIn("source_sha:", workflow)

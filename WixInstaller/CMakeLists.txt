@@ -3,6 +3,9 @@
 # The MSI is harvested from the tree produced by cmake --install. Keeping
 # this project free of Qt-SDK file discovery prevents the installer manifest
 # from drifting away from the install graph.
+#
+# Packaging regression traps (WiX SourceDir binding, SQL-driver prune, relocated
+# smoke): docs/WINDOWS_MSI_PACKAGING.md
 # The historical release contract retains the conditional names
 # LOOP_WIX_QT_WIDGETS_COMPONENT, LOOP_WIX_QT_PRINTSUPPORT_COMPONENT,
 # LOOP_WIX_QT_PRINTSUPPORT_DIRECTORY, LOOP_WIX_QT_STYLES_COMPONENT, and
