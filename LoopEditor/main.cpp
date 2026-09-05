@@ -369,18 +369,10 @@ int main(int argc, char* argv[])
     applyColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
-    if (parser.isSet(quickSmoke))
-    {
-        fprintf(stderr, "loop-editor quick_smoke before_host\n");
-        fflush(stderr);
-    }
-
     EditorHost host;
 
     if (parser.isSet(quickSmoke))
     {
-        fprintf(stderr, "loop-editor quick_smoke after_host\n");
-        fflush(stderr);
         return runQuickSmoke(application, host, exeDir);
     }
 
