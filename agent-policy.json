@@ -66,6 +66,7 @@
       "tests": [
         "UnitTests",
         "UnitTestsBenchmarkIdentity",
+        "UnitTestsBlockingThreadGuard",
         "UnitTestsBleedFixup",
         "UnitTestsBudgetCorpus",
         "UnitTestsBudgetExhaustion",
