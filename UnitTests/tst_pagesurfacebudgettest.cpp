@@ -348,8 +348,7 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(coordinator.counters().shed > 0);
     QVERIFY(renderer.shedCalls > 0);
     QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::ShedCompileCacheLimit);
-    QVERIFY(session->compiledCacheByteLimit() == pdf::PDFDocumentSession::ShedCompiledCacheByteLimit
-            || session->compiledCacheByteLimit() <= pdf::PDFDocumentSession::CompiledCacheByteLimitDefault);
+    QVERIFY(session->compiledCacheByteLimit() == pdf::PDFDocumentSession::ShedCompiledCacheByteLimit || session->compiledCacheByteLimit() <= pdf::PDFDocumentSession::CompiledCacheByteLimitDefault);
     QVERIFY(session->compiledCacheBytes() <= session->compiledCacheByteLimit());
     QVERIFY(coordinator.counters().admittedBytes <= coordinator.bounds().maxAdmittedBytes);
     QVERIFY(coordinator.counters().admittedBytes <= pdf::PDFPageCacheBudget::pageSurfaces(totalBytes));
@@ -384,8 +383,7 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(coordinator.counters().admittedBytes <= pdf::PDFPageCacheBudget::pageSurfaces(recoveredTotal));
     QVERIFY(session->compiledCacheBytes() + coordinator.counters().admittedBytes <= recoveredTotal);
     QVERIFY(session->getPageCacheBudget()->residentBytes() <= recoveredTotal);
-    QVERIFY(session->getPageCacheBudget()->residentBytes()
-            == session->compiledCacheBytes() + coordinator.counters().admittedBytes);
+    QVERIFY(session->getPageCacheBudget()->residentBytes() == session->compiledCacheBytes() + coordinator.counters().admittedBytes);
 
     const qsizetype largerRecovery = 8 * 1024 * 1024;
     coordinator.setCacheLimit(largerRecovery);
