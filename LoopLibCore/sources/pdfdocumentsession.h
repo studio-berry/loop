@@ -66,12 +66,21 @@ class PDFProcessingBudget;
 /// Thread-safety: the session is not thread-safe. Writes (compile, decode)
 /// and invalidate() must not be called concurrently. Const reads from the
 /// cache after writes complete are safe.
+enum class PDFDocumentSessionAdmission : unsigned char
+{
+    /// Reserve document-model bytes and wire the full resource envelope.
+    Managed,
+    /// Lightweight inspection session for unattended PdfTool preflight.
+    Inspection
+};
+
 class LOOPLIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
     explicit PDFDocumentSession(PDFDocument* document,
                                 PDFDocumentContext* context = nullptr,
-                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
+                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr,
+                                PDFDocumentSessionAdmission admission = PDFDocumentSessionAdmission::Managed);
     ~PDFDocumentSession();
 
     /// Allocate and destroy sessions from LoopLibCore so MSVC never frees a
@@ -79,6 +88,7 @@ public:
     static PDFDocumentSession* create(PDFDocument* document,
                                       PDFDocumentContext* context = nullptr,
                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
+    static PDFDocumentSession* createForInspection(PDFDocument* document);
     static void destroy(PDFDocumentSession* session) noexcept;
 
     /// Estimates the resident model owned by a parsed document, including raw

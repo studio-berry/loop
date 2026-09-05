@@ -74,7 +74,7 @@ PreflightFileInspectionOutcome inspectPreflightFile(const PreflightFileInspectio
     logPreflightStage("after_read");
 
     std::unique_ptr<PDFDocumentSession, void (*)(PDFDocumentSession*)> session(
-        PDFDocumentSession::create(document.get()),
+        PDFDocumentSession::createForInspection(document.get()),
         &PDFDocumentSession::destroy);
     logPreflightStage("after_session");
 
