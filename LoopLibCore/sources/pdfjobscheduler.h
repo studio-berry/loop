@@ -257,7 +257,7 @@ private:
     std::once_flag m_workersOnce;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
 Q_DECLARE_METATYPE(pdf::PDFJobPriority)
 Q_DECLARE_METATYPE(pdf::PDFJobKind)
@@ -265,4 +265,4 @@ Q_DECLARE_METATYPE(pdf::PDFJobStatus)
 Q_DECLARE_METATYPE(pdf::PDFJobSnapshot)
 Q_DECLARE_METATYPE(pdf::PDFJobTraceEvent)
 
-#endif // PDFJOBSCHEDULER_H
+#endif   // PDFJOBSCHEDULER_H

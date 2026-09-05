@@ -73,6 +73,7 @@ void PageSurfaceCoordinator::primeInitialSnapshot()
     }
 
     m_initialSnapshotPrimed = true;
+    refreshPageCacheBudget();
     rebuildSnapshot();
 }
 
@@ -112,23 +113,29 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
 {
     if (m_pageCacheBudget == budget)
     {
-        refreshPageCacheBudget();
+        if (m_initialSnapshotPrimed)
+        {
+            refreshPageCacheBudget();
+        }
         return;
     }
 
-    cancelInFlight();
-    clearCache();
+    if (m_pageCacheBudget)
+    {
+        cancelInFlight();
+        clearCache();
+    }
     m_pageCacheBudget = std::move(budget);
-    refreshPageCacheBudget();
     if (m_initialSnapshotPrimed)
     {
+        refreshPageCacheBudget();
         rebuildSnapshot();
     }
 }
 
 void PageSurfaceCoordinator::refreshPageCacheBudget()
 {
-    if (!m_pageCacheBudget)
+    if (!m_pageCacheBudget || !m_initialSnapshotPrimed)
     {
         return;
     }
