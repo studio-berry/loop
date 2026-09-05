@@ -235,6 +235,18 @@ PDFDocumentSession::~PDFDocumentSession()
     clearDecodedStreamCache();
 }
 
+PDFDocumentSession* PDFDocumentSession::create(PDFDocument* document,
+                                               PDFDocumentContext* context,
+                                               std::shared_ptr<PDFPageCacheBudget> pageCacheBudget)
+{
+    return new PDFDocumentSession(document, context, std::move(pageCacheBudget));
+}
+
+void PDFDocumentSession::destroy(PDFDocumentSession* session) noexcept
+{
+    delete session;
+}
+
 PDFDocument* PDFDocumentSession::getDocument() const
 {
     return m_document;

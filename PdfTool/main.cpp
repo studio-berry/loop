@@ -38,6 +38,7 @@
 #include <QStringConverter>
 
 #include <csignal>
+#include <cstdlib>
 
 #if defined(Q_OS_WIN)
 #include <windows.h>
@@ -351,7 +352,14 @@ int main(int argc, char* argv[])
 
     if (options.outputStyle == pdftool::PDFOutputFormatter::Style::Json)
     {
-        return writeJsonEnvelope(context, exitCode);
+        const int code = writeJsonEnvelope(context, exitCode);
+#if defined(Q_OS_WIN)
+        if (command == QStringLiteral("preflight"))
+        {
+            std::_Exit(code);
+        }
+#endif
+        return code;
     }
 
     return static_cast<int>(exitCode);

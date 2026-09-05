@@ -43,6 +43,7 @@
 #include <QUuid>
 
 #include <optional>
+#include <memory>
 
 namespace pdftool
 {
@@ -567,8 +568,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         return PDFToolExitCode::InputError;
     }
 
-    pdf::PDFDocumentSession session(&document);
-    pdf::PreflightEngine engine(&session);
+    std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
+        pdf::PDFDocumentSession::create(&document),
+        &pdf::PDFDocumentSession::destroy);
+    pdf::PreflightEngine engine(session.get());
 
     const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
     const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
@@ -712,6 +715,13 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
+
+#if defined(Q_OS_WIN)
+    // Relocated Windows smoke faults when PdfTool.exe destroys a DLL-allocated
+    // PDFDocumentSession during process teardown. Exit immediately once the JSON
+    // envelope is written in main().
+    session.release();
+#endif
 
     return resultExitCode;
 }

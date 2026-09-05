@@ -74,6 +74,13 @@ public:
                                 std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
     ~PDFDocumentSession();
 
+    /// Allocate and destroy sessions from LoopLibCore so MSVC never frees a
+    /// DLL-owned object from the host executable frame.
+    static PDFDocumentSession* create(PDFDocument* document,
+                                      PDFDocumentContext* context = nullptr,
+                                      std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
+    static void destroy(PDFDocumentSession* session) noexcept;
+
     /// Estimates the resident model owned by a parsed document, including raw
     /// object content and parsed catalog containers. The same estimate is used
     /// by editor admission and unattended PdfTool qualification.
