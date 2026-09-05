@@ -3064,7 +3064,7 @@
     }
   ],
   "counts": {
-    "targets": 69,
+    "targets": 70,
     "installed_in_profile": 4,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,
