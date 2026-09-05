@@ -45,6 +45,7 @@
 #include <QUrl>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #if defined(Q_OS_WIN)
@@ -292,8 +293,10 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
                                      return;
                                  }
 
-                                 QMetaObject::invokeMethod(&application, [&application]()
-                                                           { application.exit(0); }, Qt::QueuedConnection);
+                                 // Relocated Windows packaging smoke can fault during Qt/Loop
+                                 // DLL teardown after the scene graph reports ready. Success is
+                                 // signaled above; skip destructors for this startup-only probe.
+                                 std::_Exit(0);
                              },
                              Qt::DirectConnection);
                      });

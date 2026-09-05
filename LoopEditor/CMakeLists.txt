@@ -145,6 +145,9 @@ if(LOOP_INSTALL_QT_DEPENDENCIES)
                 endif()
             endif()
         ]])
+        install(DIRECTORY "${CMAKE_SOURCE_DIR}/LoopLibCore/liberation-fonts-ttf/"
+            DESTINATION usr/lib/fonts
+            FILES_MATCHING PATTERN "*.ttf")
     endif()
 endif()
 
