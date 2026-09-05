@@ -22,8 +22,7 @@
 
 #include "pdftoolpreflight.h"
 
-#include "pdfdocumentsession.h"
-#include "pdfdocumentreader.h"
+#include "preflightclirun.h"
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
@@ -42,9 +41,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUuid>
-
-#include <optional>
-#include <memory>
 
 namespace pdftool
 {
@@ -562,21 +558,6 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         }
     }
 
-    std::unique_ptr<pdf::PDFDocument, void (*)(pdf::PDFDocument*)> document(nullptr, &pdf::PDFDocumentReader::destroyDocument);
-    QByteArray sourceData;
-    if (!readDocumentOnHeap(options, document, &sourceData, false))
-    {
-        return PDFToolExitCode::InputError;
-    }
-
-    std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
-        pdf::PDFDocumentSession::create(document.get()),
-        &pdf::PDFDocumentSession::destroy);
-    pdf::PreflightEngine engine(session.get());
-
-    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
-    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
-
     pdf::PDFRevalidationPlan revalidationPlan;
     if (options.preflightCheckFilter.isEmpty())
     {
@@ -599,21 +580,64 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     };
 
     CliCancellationControl cancellationControl;
-    engine.setOperationControl(&cancellationControl);
 
-    std::optional<pdf::PreflightResult> outcome;
-    if (!cancellationControl.isOperationCancelled())
+    pdf::PreflightFileInspectionRequest inspectionRequest;
+    inspectionRequest.documentPath = options.document;
+    inspectionRequest.password = options.password;
+    inspectionRequest.permissiveReading = options.permissiveReading;
+    inspectionRequest.profile = runProfile;
+    inspectionRequest.jobSpec = jobSpec;
+    inspectionRequest.cliBindings = cliBindings;
+    inspectionRequest.plan = revalidationPlan;
+    inspectionRequest.cancellation = &cancellationControl;
+
+    const pdf::PreflightFileInspectionOutcome inspection = pdf::inspectPreflightFile(inspectionRequest);
+    if (!inspection.documentReadOk)
     {
-        outcome = engine.run(runProfile, jobSpec, cliBindings, revalidationPlan);
+        switch (inspection.readResult)
+        {
+            case pdf::PDFDocumentReader::Result::Cancelled:
+                reportDiagnostic(options,
+                                 PDFToolDiagnosticSeverity::Error,
+                                 QStringLiteral("pdf.invalid-password"),
+                                 PDFToolTranslationContext::tr("Invalid password provided."));
+                break;
+
+            case pdf::PDFDocumentReader::Result::Failed:
+                reportDiagnostic(options,
+                                 PDFToolDiagnosticSeverity::Error,
+                                 QStringLiteral("pdf.document-unreadable"),
+                                 PDFToolTranslationContext::tr("Error occured during document reading. %1")
+                                     .arg(inspection.readErrorMessage));
+                break;
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+        return PDFToolExitCode::InputError;
     }
 
+    for (const QString& warning : inspection.readWarnings)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("pdf.reader-warning"),
+                         PDFToolTranslationContext::tr("Warning: %1").arg(warning));
+    }
+
+    const QByteArray& sourceData = inspection.sourceData;
+    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
+
     const bool cancelled = cancellationControl.isOperationCancelled();
-    const bool jobSucceeded = !cancelled && outcome.has_value();
+    const bool jobSucceeded = !cancelled && inspection.inspectionRan;
 
     pdf::PreflightResult result;
     if (jobSucceeded)
     {
-        result = std::move(*outcome);
+        result = inspection.report;
     }
     else
     {
@@ -716,14 +740,6 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
                          historyError);
         return PDFToolExitCode::ProcessingFailure;
     }
-
-#if defined(Q_OS_WIN)
-    // Relocated Windows smoke faults when PdfTool.exe destroys DLL-allocated
-    // PDF state during process teardown. Exit immediately once the JSON
-    // envelope is written in main().
-    document.release();
-    session.release();
-#endif
 
     return resultExitCode;
 }

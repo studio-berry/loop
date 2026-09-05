@@ -69,8 +69,8 @@ public:
 
     enum class Result
     {
-        OK,         ///< Document was successfully loaded
-        Failed,     ///< Error occured during document reading
+        OK,   ///< Document was successfully loaded
+        Failed,   ///< Error occured during document reading
         Cancelled   ///< User cancelled document reading
     };
 
@@ -211,4 +211,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFDOCUMENTREADER_H
+#endif   // PDFDOCUMENTREADER_H
