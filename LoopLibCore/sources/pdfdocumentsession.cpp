@@ -196,33 +196,49 @@ qsizetype PDFDocumentSession::estimateDocumentModelBytes(const PDFDocument* docu
 
 PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                        PDFDocumentContext* context,
-                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget) :
+                                       std::shared_ptr<PDFPageCacheBudget> pageCacheBudget,
+                                       PDFDocumentSessionAdmission admission) :
     m_document(document),
     m_context(context),
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>()),
-    m_resourceBudget(std::make_shared<PDFResourceBudget>()),
-    m_pageCacheBudget(pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>()),
-    m_compiledCachePressureLimit(m_pageCacheBudget->compiledLimit())
+    m_resourceBudget(admission == PDFDocumentSessionAdmission::Managed ? std::make_shared<PDFResourceBudget>() : nullptr),
+    m_pageCacheBudget(admission == PDFDocumentSessionAdmission::Managed
+                          ? (pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>())
+                          : nullptr),
+    m_admission(admission),
+    m_compiledCachePressureLimit(admission == PDFDocumentSessionAdmission::Managed ? m_pageCacheBudget->compiledLimit()
+                                                                                   : CompiledCacheByteLimitDefault)
 {
-    // The page-cache budget is the authority for the combined compiled-page
-    // and surface ceiling. The broader resource envelope still records those
-    // bytes alongside document and stream resources, but its matching pool
-    // limit follows the authoritative page-cache partition.
-    m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
-    m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
-
-    const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
-    if (modelBytes > 0)
+    if (admission == PDFDocumentSessionAdmission::Managed)
     {
-        m_documentModelReservation = m_resourceBudget->reserveShared(m_resourceBudget,
-                                                                     PDFResourcePool::ActiveDocumentModel,
-                                                                     modelBytes,
-                                                                     PDFResourcePriority::Interaction,
-                                                                     QStringLiteral("active document model"));
+        // The page-cache budget is the authority for the combined compiled-page
+        // and surface ceiling. The broader resource envelope still records those
+        // bytes alongside document and stream resources, but its matching pool
+        // limit follows the authoritative page-cache partition.
+        m_resourceBudget->setLimit(PDFResourcePool::CompiledEvidenceCache, m_pageCacheBudget->compiledLimit());
+        m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
+
+        const qsizetype modelBytes = estimateDocumentModelBytes(m_document);
+        if (modelBytes > 0)
+        {
+            m_documentModelReservation = m_resourceBudget->reserveShared(m_resourceBudget,
+                                                                         PDFResourcePool::ActiveDocumentModel,
+                                                                         modelBytes,
+                                                                         PDFResourcePriority::Interaction,
+                                                                         QStringLiteral("active document model"));
+        }
     }
-    initializeRendering();
+    else
+    {
+        m_streamCacheByteLimit = 256 * PDFResourceBudgetConfig::MiB;
+    }
+}
+
+bool PDFDocumentSession::hasManagedAdmission() const noexcept
+{
+    return m_admission == PDFDocumentSessionAdmission::Managed;
 }
 
 PDFDocumentSession::~PDFDocumentSession()
@@ -233,6 +249,23 @@ PDFDocumentSession::~PDFDocumentSession()
     // resident bytes and eventually refuses valid work.
     clearCompiledCache();
     clearDecodedStreamCache();
+}
+
+PDFDocumentSession* PDFDocumentSession::create(PDFDocument* document,
+                                               PDFDocumentContext* context,
+                                               std::shared_ptr<PDFPageCacheBudget> pageCacheBudget)
+{
+    return new PDFDocumentSession(document, context, std::move(pageCacheBudget));
+}
+
+PDFDocumentSession* PDFDocumentSession::createForInspection(PDFDocument* document)
+{
+    return new PDFDocumentSession(document, nullptr, nullptr, PDFDocumentSessionAdmission::Inspection);
+}
+
+void PDFDocumentSession::destroy(PDFDocumentSession* session) noexcept
+{
+    delete session;
 }
 
 PDFDocument* PDFDocumentSession::getDocument() const
@@ -437,6 +470,14 @@ void PDFDocumentSession::trimCachesToLimits()
 
 void PDFDocumentSession::clearCompiledCache()
 {
+    if (!hasManagedAdmission())
+    {
+        m_compileCache.clear();
+        m_compileCacheOrder.clear();
+        m_compileCacheBytes.clear();
+        return;
+    }
+
     for (const auto& [key, bytes] : m_compileCacheBytes)
     {
         Q_UNUSED(key);
@@ -450,6 +491,14 @@ void PDFDocumentSession::clearCompiledCache()
 
 void PDFDocumentSession::clearDecodedStreamCache()
 {
+    if (!hasManagedAdmission())
+    {
+        m_streamCache.clear();
+        m_streamCacheOrder.clear();
+        m_streamCacheBytes = 0;
+        return;
+    }
+
     for (const auto& [key, decoded] : m_streamCache)
     {
         Q_UNUSED(key);
@@ -467,17 +516,32 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         return nullptr;
     }
 
-    const PageCacheKey key{ getRevision(), pageIndex };
-    auto it = m_compileCache.find(key);
-    if (it != m_compileCache.cend())
-    {
-        return &it->second;
-    }
+    ensureRenderingInitialized();
 
     const PDFCatalog* catalog = m_document->getCatalog();
     if (!catalog || pageIndex >= static_cast<size_t>(catalog->getPageCount()))
     {
         return nullptr;
+    }
+
+    if (!hasManagedAdmission())
+    {
+        PDFPrecompiledPage compiledPage;
+        m_renderer->compile(&compiledPage, pageIndex);
+        if (!compiledPage.isValid())
+        {
+            return nullptr;
+        }
+
+        m_inspectionCompileScratch = std::move(compiledPage);
+        return &m_inspectionCompileScratch;
+    }
+
+    const PageCacheKey key{ getRevision(), pageIndex };
+    auto it = m_compileCache.find(key);
+    if (it != m_compileCache.cend())
+    {
+        return &it->second;
     }
 
     PDFPrecompiledPage compiledPage;
@@ -551,6 +615,17 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
         return QByteArray();
     }
 
+    if (!hasManagedAdmission())
+    {
+        const PDFObject& object = m_document->getObjectByReference(reference);
+        if (!object.isStream())
+        {
+            return QByteArray();
+        }
+
+        return m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
+    }
+
     const StreamCacheKey key{ getRevision(), reference };
     auto it = m_streamCache.find(key);
     if (it != m_streamCache.cend())
@@ -616,30 +691,46 @@ void PDFDocumentSession::invalidate()
 
 PDFRenderer* PDFDocumentSession::getRenderer() const
 {
+    ensureRenderingInitialized();
     return m_renderer.get();
 }
 
 PDFFontCache* PDFDocumentSession::getFontCache() const
 {
+    ensureRenderingInitialized();
     return m_fontCache.get();
 }
 
 PDFCMS* PDFDocumentSession::getCMS() const
 {
+    ensureRenderingInitialized();
     return m_cms.get();
 }
 
 PDFOptionalContentActivity* PDFDocumentSession::getOptionalContentActivity() const
 {
+    ensureRenderingInitialized();
     return m_optionalContentActivity.get();
+}
+
+void PDFDocumentSession::ensureRenderingInitialized() const
+{
+    if (m_renderingInitialized)
+    {
+        return;
+    }
+
+    const_cast<PDFDocumentSession*>(this)->initializeRendering();
 }
 
 void PDFDocumentSession::initializeRendering()
 {
-    if (!isValid())
+    if (m_renderingInitialized || !isValid())
     {
         return;
     }
+
+    m_renderingInitialized = true;
 
     m_optionalContentActivity = std::make_unique<PDFOptionalContentActivity>(m_document, OCUsage::Export, nullptr);
 

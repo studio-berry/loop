@@ -11,11 +11,66 @@
 #include <QGuiApplication>
 #include <QScreen>
 
+namespace
+{
+
+bool headlessQpaPlatformRequested()
+{
+    const QByteArray requested = qgetenv("QT_QPA_PLATFORM");
+    if (requested.isEmpty())
+    {
+        return QGuiApplication::platformName() == QLatin1String("offscreen");
+    }
+
+    for (const QByteArray& part : requested.split(','))
+    {
+        if (part.trimmed() == "offscreen")
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void applyInitialViewportScreenMetrics(pdfinteraction::ViewportController& viewport)
+{
+#if defined(Q_OS_WIN)
+    // Windows headless packaging smoke can fault inside primaryScreen() metrics even
+    // when QT_QPA_PLATFORM=offscreen. ViewportController is designed for injected DPI.
+    Q_UNUSED(headlessQpaPlatformRequested());
+    viewport.setPixelPerMM(96.0 / 25.4);
+    viewport.setDevicePixelRatio(1.0);
+#else
+    if (headlessQpaPlatformRequested())
+    {
+        viewport.setPixelPerMM(96.0 / 25.4);
+        viewport.setDevicePixelRatio(1.0);
+    }
+    else if (QScreen* screen = QGuiApplication::primaryScreen())
+    {
+        viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
+        viewport.setDevicePixelRatio(screen->devicePixelRatio());
+    }
+#endif
+}
+
+}   // namespace
+
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
+    m_logCatalogBegin("catalog_begin"),
+    m_catalog(this),
+    m_logCatalogEnd("catalog_end"),
+    m_logContextBegin("context_begin"),
+    // Avoid parenting PDFDocumentContext during member initialization: Windows
+    // relocated smoke faults when the session is created under a partially
+    // constructed DocumentViewSession parent.
+    m_context(nullptr, nullptr, DefaultCacheLimit),
+    m_logContextEnd("context_end"),
     m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
+    m_logSubmitter("submitter"),
     m_submitter(*m_scheduler),
-    m_context(nullptr),
     m_facade(std::make_unique<pdfinteraction::DocumentFacade>(m_context,
                                                               m_submitter,
                                                               m_loader,
@@ -27,6 +82,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     m_pageBoxSource(&m_context),
     m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
+    m_context.setParent(this);
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
     m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
@@ -35,8 +91,11 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
-    m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
-    setCacheLimit(DefaultCacheLimit);
+    m_surfaces->setPageCacheBudget(m_context.getPageCacheBudget());
+    if (m_surfaces)
+    {
+        m_surfaces->setCacheLimit(m_cacheLimit);
+    }
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
                                                                             m_viewport,
@@ -45,13 +104,10 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                             this);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
-    if (QScreen* screen = QGuiApplication::primaryScreen())
-    {
-        m_viewport.setPixelPerMM(screen->physicalDotsPerInchX() / 25.4);
-        m_viewport.setDevicePixelRatio(screen->devicePixelRatio());
-    }
+    applyInitialViewportScreenMetrics(m_viewport);
 
     m_commandBridge.setCoordinator(m_surfaces.get());
+    m_surfaces->primeInitialSnapshot();
 }
 
 DocumentViewSession::~DocumentViewSession()
@@ -71,6 +127,7 @@ DocumentViewSession::~DocumentViewSession()
 
 void DocumentViewSession::prepareDocumentView()
 {
+    m_context.getSession();
     m_interaction->invalidate();
     m_geometry = std::make_unique<pdfinteraction::PDFDocumentPageGeometrySource>(&m_context);
     m_viewport.setGeometrySource(m_geometry.get());
@@ -110,7 +167,8 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
     m_cacheLimit = normalized;
-    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    m_context.setPageCacheTotal(normalized);
+    if (pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         if (m_surfaces)
         {
@@ -123,13 +181,13 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
     m_renderer.setCacheLimit(normalized);
     if (m_surfaces)
     {
-        m_surfaces->refreshPageCacheBudget();
+        m_surfaces->setCacheLimit(normalized);
     }
 }
 
 qsizetype DocumentViewSession::cacheLimit() const noexcept
 {
-    if (const pdf::PDFDocumentSession* session = m_context.getSession())
+    if (const pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         return session->cacheLimit();
     }

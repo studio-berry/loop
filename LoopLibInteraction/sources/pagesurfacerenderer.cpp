@@ -25,6 +25,7 @@
 #include "pdfdocument.h"
 #include "pdfdocumentsession.h"
 #include "pdfexception.h"
+#include "pdfpagecachebudget.h"
 #include "pdfpainter.h"
 #include "pdfprocessingbudget.h"
 #include "pdfrenderer.h"
@@ -206,12 +207,14 @@ void PDFSessionPageSurfaceRenderer::shedPrefetchAndQuality()
 void PDFSessionPageSurfaceRenderer::setCacheLimit(qsizetype totalBytes)
 {
     std::lock_guard lock(m_mutex);
-    if (m_context)
+    if (!m_context)
     {
-        if (pdf::PDFDocumentSession* session = m_context->getSession())
-        {
-            session->setCacheLimit(totalBytes);
-        }
+        return;
+    }
+
+    if (pdf::PDFDocumentSession* session = m_context->tryGetSession())
+    {
+        session->setCacheLimit(totalBytes);
     }
 }
 

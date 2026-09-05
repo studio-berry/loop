@@ -59,26 +59,52 @@ QString PDFRevisionIdentity::toString() const
         .arg(effectiveProfileIdentity);
 }
 
-PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent) :
+PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent, qsizetype pageCacheTotal) :
     QObject(parent),
     m_document(document),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(document)),
-    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>()),
-    m_session(std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget))
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>(pageCacheTotal))
 {
+    if (document != nullptr)
+    {
+        m_session = std::make_unique<PDFDocumentSession>(document, this, m_pageCacheBudget);
+    }
 }
 
-PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* parent) :
+PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* parent, qsizetype pageCacheTotal) :
     QObject(parent),
     m_documentPointer(std::move(document)),
     m_document(m_documentPointer.data()),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(m_document)),
-    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>()),
-    m_session(std::make_unique<PDFDocumentSession>(m_document, this, m_pageCacheBudget))
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>(pageCacheTotal))
 {
+    if (m_document != nullptr)
+    {
+        m_session = std::make_unique<PDFDocumentSession>(m_document, this, m_pageCacheBudget);
+    }
 }
 
 PDFDocumentContext::~PDFDocumentContext() = default;
+
+void PDFDocumentContext::ensureSession()
+{
+    if (!m_session)
+    {
+        m_session = std::make_unique<PDFDocumentSession>(m_document, this, m_pageCacheBudget);
+    }
+}
+
+PDFDocumentSession* PDFDocumentContext::getSession()
+{
+    ensureSession();
+    return m_session.get();
+}
+
+const PDFDocumentSession* PDFDocumentContext::getSession() const
+{
+    const_cast<PDFDocumentContext*>(this)->ensureSession();
+    return m_session.get();
+}
 
 PDFRevisionIdentity PDFDocumentContext::getRevision() const
 {
@@ -195,6 +221,11 @@ void PDFDocumentContext::replaceDocument(PDFDocument* document, PDFDocumentPoint
 void PDFDocumentContext::emitRevisionChanged(const PDFRevisionIdentity& previous)
 {
     Q_EMIT revisionChanged(previous, getRevision());
+}
+
+void PDFDocumentContext::setPageCacheTotal(qsizetype requested) noexcept
+{
+    m_pageCacheBudget->setTotal(PDFPageCacheBudget::total(requested));
 }
 
 }   // namespace pdf

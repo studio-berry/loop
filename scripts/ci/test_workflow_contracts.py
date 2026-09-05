@@ -25,6 +25,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn(".\\scripts\\verify-loop-surface.ps1", workflow)
         self.assertNotIn(".\\loop\\scripts\\verify-loop-surface.ps1", workflow)
 
+    def test_windows_msi_build_project_fails_on_cmake_exit_codes(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn('throw "cmake configure failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "cmake --build failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "cmake --install failed after 3 attempts."', workflow)
+        self.assertIn('throw "verify-loop-surface.ps1 failed with exit code $LASTEXITCODE."', workflow)
+        self.assertIn('throw "verify-widgets-free-release-profile.py failed with exit code $LASTEXITCODE."', workflow)
+
     def test_ci_runs_phase5_widgets_evidence_and_contract(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("python3 scripts/generate_phase5_widgets_evidence.py --check", workflow)
@@ -121,6 +129,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn('-arch x86', workflow)
         self.assertNotIn('ProgramFilesX86', workflow)
         self.assertIn('GetFolderPath("ProgramFiles")', workflow)
+
+    def test_windows_msi_harvest_binds_source_dir_to_install_tree(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn("-var var.SourceDir", workflow)
+        self.assertIn('-d"SourceDir=$installDir"', workflow)
+        self.assertIn('$installDir = "${env:GITHUB_WORKSPACE}\\loop\\build\\install"', workflow)
 
     def test_release_draft_pairs_evidence_and_keeps_it_out_of_assets(self):
         workflow = (ROOT / ".github/workflows/CreateReleaseDraft.yml").read_text(encoding="utf-8")

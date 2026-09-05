@@ -69,8 +69,8 @@ public:
 
     enum class Result
     {
-        OK,         ///< Document was successfully loaded
-        Failed,     ///< Error occured during document reading
+        OK,   ///< Document was successfully loaded
+        Failed,   ///< Error occured during document reading
         Cancelled   ///< User cancelled document reading
     };
 
@@ -78,6 +78,11 @@ public:
     /// cannot be opened or contain invalid pdf, empty PDF file is returned.
     /// No exception is thrown.
     PDFDocument readFromFile(const QString& fileName);
+
+    /// Heap wrapper for host executables: allocate and destroy inside LoopLibCore
+    /// so MSVC never moves a parsed PDFDocument across the DLL boundary.
+    PDFDocument* readFromFileOnHeap(const QString& fileName);
+    static void destroyDocument(PDFDocument* document) noexcept;
 
     /// Reads a PDF document from the specified device. If device is not opened
     /// for reading, then function tries it to open for reading. If it is opened,
@@ -206,4 +211,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFDOCUMENTREADER_H
+#endif   // PDFDOCUMENTREADER_H

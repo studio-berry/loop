@@ -66,13 +66,30 @@ class PDFProcessingBudget;
 /// Thread-safety: the session is not thread-safe. Writes (compile, decode)
 /// and invalidate() must not be called concurrently. Const reads from the
 /// cache after writes complete are safe.
+enum class PDFDocumentSessionAdmission : unsigned char
+{
+    /// Reserve document-model bytes and wire the full resource envelope.
+    Managed,
+    /// Lightweight inspection session for unattended PdfTool preflight.
+    Inspection
+};
+
 class LOOPLIBCORESHARED_EXPORT PDFDocumentSession
 {
 public:
     explicit PDFDocumentSession(PDFDocument* document,
                                 PDFDocumentContext* context = nullptr,
-                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
+                                std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr,
+                                PDFDocumentSessionAdmission admission = PDFDocumentSessionAdmission::Managed);
     ~PDFDocumentSession();
+
+    /// Allocate and destroy sessions from LoopLibCore so MSVC never frees a
+    /// DLL-owned object from the host executable frame.
+    static PDFDocumentSession* create(PDFDocument* document,
+                                      PDFDocumentContext* context = nullptr,
+                                      std::shared_ptr<PDFPageCacheBudget> pageCacheBudget = nullptr);
+    static PDFDocumentSession* createForInspection(PDFDocument* document);
+    static void destroy(PDFDocumentSession* session) noexcept;
 
     /// Estimates the resident model owned by a parsed document, including raw
     /// object content and parsed catalog containers. The same estimate is used
@@ -188,6 +205,8 @@ private:
         }
     };
 
+    void ensureRenderingInitialized() const;
+    bool hasManagedAdmission() const noexcept;
     void initializeRendering();
     void trimCachesToLimits();
     void clearCompiledCache();
@@ -214,6 +233,8 @@ private:
     qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
+    PDFDocumentSessionAdmission m_admission = PDFDocumentSessionAdmission::Managed;
+    bool m_renderingInitialized = false;
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;
     PDFCMSPointer m_cms;
@@ -224,6 +245,7 @@ private:
     std::deque<PageCacheKey> m_compileCacheOrder;
     std::map<StreamCacheKey, QByteArray> m_streamCache;
     std::deque<StreamCacheKey> m_streamCacheOrder;
+    mutable PDFPrecompiledPage m_inspectionCompileScratch;
 };
 
 }   // namespace pdf

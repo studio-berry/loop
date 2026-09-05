@@ -129,6 +129,16 @@ if(WIN32 AND DEFINED LOOP_QT_ROOT AND EXISTS "${LOOP_QT_ROOT}/plugins/platforms/
             "${LOOP_QT_ROOT}/plugins/platforms/qoffscreen.dll"
             "$<TARGET_FILE_DIR:PdfTool>/platforms/qoffscreen.dll"
         COMMENT "Copy qoffscreen.dll for headless PdfTool")
+    if(LOOP_INSTALL_QT_DEPENDENCIES)
+        install(CODE [[
+            set(_offscreen "${CMAKE_INSTALL_PREFIX}/plugins/platforms/qoffscreen.dll")
+            set(_platforms_dir "${CMAKE_INSTALL_PREFIX}/usr/bin/platforms")
+            if(EXISTS "${_offscreen}")
+                file(MAKE_DIRECTORY "${_platforms_dir}")
+                file(COPY "${_offscreen}" DESTINATION "${_platforms_dir}")
+            endif()
+        ]])
+    endif()
 endif()
 
 if(LOOP_ENABLE_SENTRY)

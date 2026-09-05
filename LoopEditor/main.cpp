@@ -45,10 +45,10 @@
 #include <QUrl>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #if defined(Q_OS_WIN)
-#include <io.h>
 #include <windows.h>
 #endif
 
@@ -67,20 +67,6 @@ bool argvContainsQuickSmoke(int argc, char* argv[])
 
     return false;
 }
-
-#if defined(Q_OS_WIN)
-void attachConsoleForQuickSmoke()
-{
-    if (!::AttachConsole(ATTACH_PARENT_PROCESS))
-    {
-        (void)::AllocConsole();
-    }
-    (void)freopen("CONOUT$", "w", stdout);
-    (void)freopen("CONOUT$", "w", stderr);
-    (void)fflush(stdout);
-    (void)fflush(stderr);
-}
-#endif
 
 QString executableDirectory(const char* argv0)
 {
@@ -307,8 +293,10 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
                                      return;
                                  }
 
-                                 QMetaObject::invokeMethod(&application, [&application]()
-                                                           { application.exit(0); }, Qt::QueuedConnection);
+                                 // Relocated Windows packaging smoke can fault during Qt/Loop
+                                 // DLL teardown after the scene graph reports ready. Success is
+                                 // signaled above; skip destructors for this startup-only probe.
+                                 std::_Exit(0);
                              },
                              Qt::DirectConnection);
                      });
@@ -330,18 +318,11 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
 
 int main(int argc, char* argv[])
 {
-    const bool quickSmokeRequested = argvContainsQuickSmoke(argc, argv);
-#if defined(Q_OS_WIN)
-    if (quickSmokeRequested)
-    {
-        attachConsoleForQuickSmoke();
-    }
-#endif
-
     const QString exeDir = executableDirectory(argv[0]);
 
-    // Package smoke strips developer Qt env vars. Search the install directory
-    // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
+    // Package smoke strips developer Qt env vars. Search install-root plugin trees
+    // only: adding usr/bin itself to libraryPaths() on Windows makes Qt treat
+    // product DLLs as plugins and can fault during later initialization.
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);

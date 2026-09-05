@@ -5,7 +5,7 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of Loop is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Feature Id="feature_LOOP" Title="Loop" Level="1" ConfigurableDirectory="INSTALLFOLDER" Absent="disallow" AllowAdvertise="no">
-      <!-- Generated from cmake --install immediately before candle/light. -->
+      <!-- Generated from the cmake install tree immediately before candle/light. -->
       <ComponentGroupRef Id="LOOP_InstalledTree" />
     </Feature>
   </Product>

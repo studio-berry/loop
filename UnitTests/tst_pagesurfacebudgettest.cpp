@@ -261,11 +261,13 @@ void PageSurfaceBudgetTest::partitionsSingleLimit()
     bounds.maxNearViewportRequests = 1;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
-    coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
+    coordinator.setPageCacheBudget(context.getPageCacheBudget());
+    coordinator.setCacheLimit(total);
+    coordinator.primeInitialSnapshot();
     QCOMPARE(coordinator.cacheLimit(), total);
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
              static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(total)));
-    QCOMPARE(coordinator.sharedPageCacheBudget(), session->getSharedPageCacheBudget());
+    QCOMPARE(coordinator.pageCacheBudget(), session->getPageCacheBudget());
     coordinator.setDocumentKey(QStringLiteral("doc-1"));
     coordinator.requestSurfaces();
     QCoreApplication::processEvents();
@@ -322,13 +324,16 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     bounds.maxNearViewportRequests = 1;
 
     pdfinteraction::PageSurfaceCoordinator coordinator(revisions, submitter, renderer, viewport, bounds);
-    coordinator.setPageCacheBudget(context.getSharedPageCacheBudget());
+    context.setPageCacheTotal(totalBytes);
+    session->setCacheLimit(totalBytes);
+    coordinator.setPageCacheBudget(context.getPageCacheBudget());
     coordinator.setCacheLimit(totalBytes);
+    coordinator.primeInitialSnapshot();
     QCOMPARE(coordinator.cacheLimit(), pdf::PDFPageCacheBudget::total(totalBytes));
     QCOMPARE(session->cacheLimit(), pdf::PDFPageCacheBudget::total(totalBytes));
     QCOMPARE(session->compiledCacheByteLimit(), pdf::PDFPageCacheBudget::compiledPages(totalBytes));
     QCOMPARE(coordinator.bounds().maxAdmittedBytes, static_cast<qint64>(pdf::PDFPageCacheBudget::pageSurfaces(totalBytes)));
-    QCOMPARE(session->getSharedPageCacheBudget(), coordinator.sharedPageCacheBudget());
+    QCOMPARE(session->getPageCacheBudget(), coordinator.pageCacheBudget());
     QCOMPARE(pdf::PDFPageCacheBudget::compiledPages(totalBytes) + pdf::PDFPageCacheBudget::pageSurfaces(totalBytes),
              pdf::PDFPageCacheBudget::total(totalBytes));
     QVERIFY(session->getPageCacheBudget()->total() == totalBytes);
@@ -347,8 +352,7 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(coordinator.counters().shed > 0);
     QVERIFY(renderer.shedCalls > 0);
     QCOMPARE(session->compileCacheLimit(), pdf::PDFDocumentSession::ShedCompileCacheLimit);
-    QVERIFY(session->compiledCacheByteLimit() == pdf::PDFDocumentSession::ShedCompiledCacheByteLimit
-            || session->compiledCacheByteLimit() <= pdf::PDFDocumentSession::CompiledCacheByteLimitDefault);
+    QVERIFY(session->compiledCacheByteLimit() == pdf::PDFDocumentSession::ShedCompiledCacheByteLimit || session->compiledCacheByteLimit() <= pdf::PDFDocumentSession::CompiledCacheByteLimitDefault);
     QVERIFY(session->compiledCacheBytes() <= session->compiledCacheByteLimit());
     QVERIFY(coordinator.counters().admittedBytes <= coordinator.bounds().maxAdmittedBytes);
     QVERIFY(coordinator.counters().admittedBytes <= pdf::PDFPageCacheBudget::pageSurfaces(totalBytes));
@@ -359,6 +363,8 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(session->compiledCacheBytes() + coordinator.counters().admittedBytes <= totalBytes);
 
     const qsizetype oversizeTotal = 1024;
+    context.setPageCacheTotal(oversizeTotal);
+    session->setCacheLimit(oversizeTotal);
     coordinator.setCacheLimit(oversizeTotal);
     QCOMPARE(coordinator.cacheLimit(), pdf::PDFPageCacheBudget::total(oversizeTotal));
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
@@ -371,6 +377,8 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(coordinator.counters().rejectedOversize > 0 || coordinator.counters().admittedBytes == 0);
 
     const qsizetype recoveredTotal = SurfaceBytes * 6;
+    context.setPageCacheTotal(recoveredTotal);
+    session->setCacheLimit(recoveredTotal);
     coordinator.setCacheLimit(recoveredTotal);
     QCOMPARE(coordinator.cacheLimit(), pdf::PDFPageCacheBudget::total(recoveredTotal));
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,
@@ -383,10 +391,11 @@ void PageSurfaceBudgetTest::combinedResidentStaysBounded()
     QVERIFY(coordinator.counters().admittedBytes <= pdf::PDFPageCacheBudget::pageSurfaces(recoveredTotal));
     QVERIFY(session->compiledCacheBytes() + coordinator.counters().admittedBytes <= recoveredTotal);
     QVERIFY(session->getPageCacheBudget()->residentBytes() <= recoveredTotal);
-    QVERIFY(session->getPageCacheBudget()->residentBytes()
-            == session->compiledCacheBytes() + coordinator.counters().admittedBytes);
+    QVERIFY(session->getPageCacheBudget()->residentBytes() == session->compiledCacheBytes() + coordinator.counters().admittedBytes);
 
     const qsizetype largerRecovery = 8 * 1024 * 1024;
+    context.setPageCacheTotal(largerRecovery);
+    session->setCacheLimit(largerRecovery);
     coordinator.setCacheLimit(largerRecovery);
     QCOMPARE(session->compiledCacheByteLimit(), pdf::PDFPageCacheBudget::compiledPages(largerRecovery));
     QCOMPARE(coordinator.bounds().maxAdmittedBytes,

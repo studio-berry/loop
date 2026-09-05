@@ -162,10 +162,7 @@ public:
     /// Receives the production total cache budget. The shared object is the
     /// authority for both compiled pages and admitted surfaces.
     void setCacheLimit(qsizetype totalBytes);
-    qsizetype cacheLimit() const noexcept
-    {
-        return m_pageCacheBudget ? m_pageCacheBudget->total() : m_cacheLimit;
-    }
+    qsizetype cacheLimit() const noexcept { return m_cacheLimit; }
 
     /// Attaches the document session's shared resource authority. Existing
     /// admitted surfaces are dropped when the authority changes so the new
@@ -177,8 +174,8 @@ public:
     /// bounds() is derived from the total via PDFPageCacheBudget partition;
     /// prefer cacheLimit()/setCacheLimit() as the authority and treat
     /// PageSurfaceBounds::maxAdmittedBytes as the surface half.
-    void setPageCacheBudget(std::shared_ptr<pdf::PDFPageCacheBudget> budget);
-    std::shared_ptr<pdf::PDFPageCacheBudget> sharedPageCacheBudget() const noexcept { return m_pageCacheBudget; }
+    void setPageCacheBudget(pdf::PDFPageCacheBudget* budget);
+    pdf::PDFPageCacheBudget* pageCacheBudget() const noexcept { return m_pageCacheBudget; }
     /// Refreshes the diagnostic surface projection and trims after the shared
     /// authority's total changes.
     void refreshPageCacheBudget();
@@ -186,6 +183,11 @@ public:
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
     void requestSurfaces();
+
+    /// Builds the first empty snapshot once the owning session shell is ready.
+    /// Windows relocated smoke faults when this runs during coordinator
+    /// construction before the view session finishes wiring.
+    void primeInitialSnapshot();
 
     /// Cancels everything in flight and supersedes it. The cache survives -- a
     /// cancelled request says nothing about the pixels already admitted.
@@ -284,6 +286,9 @@ private:
     void countTerminal(SurfaceTerminalState state);
     void scheduleSurfaceRetry();
     void resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state);
+    void syncPageCacheBudgetLimits();
+    void applyProjectedPageCacheLimit(qsizetype normalizedTotal);
+    qsizetype pageSurfacesByteLimit() const noexcept;
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;
@@ -292,7 +297,7 @@ private:
 
     PageSurfaceBounds m_bounds;
     qsizetype m_cacheLimit = 0;   // normalized total received from the production authority
-    std::shared_ptr<pdf::PDFPageCacheBudget> m_pageCacheBudget;
+    pdf::PDFPageCacheBudget* m_pageCacheBudget = nullptr;
     PageSurfaceRenderSettings m_settings;
     QString m_documentKey;
     std::shared_ptr<pdf::PDFResourceBudget> m_resourceBudget;
@@ -311,6 +316,7 @@ private:
     CanvasSnapshot m_snapshot;
     PageSurfaceCounters m_counters;
     bool m_retrySurfaceRequest = false;
+    bool m_initialSnapshotPrimed = false;
 };
 
 }   // namespace pdfinteraction
