@@ -128,9 +128,13 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
+    fprintf(stderr, "loop-editor documentviewsession after surface_ctor\n");
+    fflush(stderr);
     m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
+    fprintf(stderr, "loop-editor documentviewsession after surface_budget\n");
+    fflush(stderr);
     setCacheLimit(DefaultCacheLimit);
-    fprintf(stderr, "loop-editor documentviewsession after surfaces\n");
+    fprintf(stderr, "loop-editor documentviewsession after surface_cache_limit\n");
     fflush(stderr);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
@@ -143,6 +147,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     applyInitialViewportScreenMetrics(m_viewport);
 
     m_commandBridge.setCoordinator(m_surfaces.get());
+    m_surfaces->primeInitialSnapshot();
     fprintf(stderr, "loop-editor documentviewsession constructed\n");
     fflush(stderr);
 }
@@ -164,6 +169,7 @@ DocumentViewSession::~DocumentViewSession()
 
 void DocumentViewSession::prepareDocumentView()
 {
+    m_context.getSession();
     m_interaction->invalidate();
     m_geometry = std::make_unique<pdfinteraction::PDFDocumentPageGeometrySource>(&m_context);
     m_viewport.setGeometrySource(m_geometry.get());
@@ -203,7 +209,11 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
     m_cacheLimit = normalized;
-    if (pdf::PDFDocumentSession* session = m_context.getSession())
+    if (std::shared_ptr<pdf::PDFPageCacheBudget> budget = m_context.getSharedPageCacheBudget())
+    {
+        budget->setTotal(normalized);
+    }
+    if (pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         if (m_surfaces)
         {
@@ -222,9 +232,13 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 
 qsizetype DocumentViewSession::cacheLimit() const noexcept
 {
-    if (const pdf::PDFDocumentSession* session = m_context.getSession())
+    if (const pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         return session->cacheLimit();
+    }
+    if (std::shared_ptr<pdf::PDFPageCacheBudget> budget = m_context.getSharedPageCacheBudget())
+    {
+        return budget->total();
     }
     return m_cacheLimit;
 }

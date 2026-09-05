@@ -63,9 +63,16 @@ PageSurfaceCoordinator::PageSurfaceCoordinator(IDocumentRevisionSource& revision
 {
     connect(m_viewport, &ViewportController::demandChanged, this, &PageSurfaceCoordinator::onDemandChanged);
     connect(m_viewport, &ViewportController::placementsChanged, this, &PageSurfaceCoordinator::rebuildSnapshot);
+}
 
-    // Stamp the snapshot token before the first admission so the presenter does
-    // not treat the initial empty state as a replaced document.
+void PageSurfaceCoordinator::primeInitialSnapshot()
+{
+    if (m_initialSnapshotPrimed)
+    {
+        return;
+    }
+
+    m_initialSnapshotPrimed = true;
     rebuildSnapshot();
 }
 
@@ -113,7 +120,10 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
     clearCache();
     m_pageCacheBudget = std::move(budget);
     refreshPageCacheBudget();
-    rebuildSnapshot();
+    if (m_initialSnapshotPrimed)
+    {
+        rebuildSnapshot();
+    }
 }
 
 void PageSurfaceCoordinator::refreshPageCacheBudget()
@@ -125,7 +135,7 @@ void PageSurfaceCoordinator::refreshPageCacheBudget()
 
     m_cacheLimit = m_pageCacheBudget->total();
     m_bounds.maxAdmittedBytes = m_pageCacheBudget->pageSurfacesLimit();
-    if (trimCacheToBudget())
+    if (m_initialSnapshotPrimed && trimCacheToBudget())
     {
         rebuildSnapshot();
     }

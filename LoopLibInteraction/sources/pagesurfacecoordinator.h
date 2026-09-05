@@ -187,6 +187,11 @@ public:
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.
     void requestSurfaces();
 
+    /// Builds the first empty snapshot once the owning session shell is ready.
+    /// Windows relocated smoke faults when this runs during coordinator
+    /// construction before the view session finishes wiring.
+    void primeInitialSnapshot();
+
     /// Cancels everything in flight and supersedes it. The cache survives -- a
     /// cancelled request says nothing about the pixels already admitted.
     void cancelInFlight();
@@ -311,6 +316,7 @@ private:
     CanvasSnapshot m_snapshot;
     PageSurfaceCounters m_counters;
     bool m_retrySurfaceRequest = false;
+    bool m_initialSnapshotPrimed = false;
 };
 
 }   // namespace pdfinteraction

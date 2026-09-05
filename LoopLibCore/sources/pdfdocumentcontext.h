@@ -93,6 +93,8 @@ public:
     PDFRevisionIdentity getRevision() const;
     PDFDocumentSession* getSession();
     const PDFDocumentSession* getSession() const;
+    PDFDocumentSession* tryGetSession() noexcept { return m_session.get(); }
+    const PDFDocumentSession* tryGetSession() const noexcept { return m_session.get(); }
     PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
     std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
