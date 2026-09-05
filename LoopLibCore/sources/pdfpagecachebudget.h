@@ -50,10 +50,7 @@ public:
 
     static constexpr qsizetype DefaultTotal = 128ll * 1024 * 1024;
 
-    explicit PDFPageCacheBudget(qsizetype requested = DefaultTotal) noexcept :
-        m_total(total(requested))
-    {
-    }
+    explicit PDFPageCacheBudget(qsizetype requested = DefaultTotal) noexcept;
 
     PDFPageCacheBudget(const PDFPageCacheBudget&) = delete;
     PDFPageCacheBudget& operator=(const PDFPageCacheBudget&) = delete;
@@ -66,90 +63,20 @@ public:
         return t - compiledPages(t);
     }
 
-    qsizetype total() const noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        return m_total;
-    }
-
-    qsizetype compiledLimit() const noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        return compiledPages(m_total);
-    }
-
-    qsizetype pageSurfacesLimit() const noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        return pageSurfaces(m_total);
-    }
+    qsizetype total() const noexcept;
+    qsizetype compiledLimit() const noexcept;
+    qsizetype pageSurfacesLimit() const noexcept;
 
     /// Changes the configured ceiling.  Consumers trim their own caches after
     /// this call; existing reservations remain visible until they are released.
-    void setTotal(qsizetype requested) noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        m_total = total(requested);
-    }
+    void setTotal(qsizetype requested) noexcept;
 
     /// Reserves resident bytes in one partition.  The pool limit and the
     /// combined resident ceiling are checked atomically.
-    bool tryReserve(Pool pool, qsizetype bytes) noexcept
-    {
-        if (bytes <= 0)
-        {
-            return true;
-        }
-
-        std::lock_guard lock(m_mutex);
-        const std::size_t i = index(pool);
-        if (i >= m_current.size())
-        {
-            return false;
-        }
-
-        const qsizetype limit = i == index(Pool::CompiledPages) ? compiledPages(m_total) : pageSurfaces(m_total);
-        if (bytes > limit || m_current[i] > limit - bytes || bytes > m_total || m_resident > m_total - bytes)
-        {
-            return false;
-        }
-
-        m_current[i] += bytes;
-        m_resident += bytes;
-        return true;
-    }
-
-    void release(Pool pool, qsizetype bytes) noexcept
-    {
-        if (bytes <= 0)
-        {
-            return;
-        }
-
-        std::lock_guard lock(m_mutex);
-        const std::size_t i = index(pool);
-        if (i >= m_current.size())
-        {
-            return;
-        }
-
-        const qsizetype released = qMin(bytes, m_current[i]);
-        m_current[i] -= released;
-        m_resident -= qMin(released, m_resident);
-    }
-
-    qsizetype usage(Pool pool) const noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        const std::size_t i = index(pool);
-        return i < m_current.size() ? m_current[i] : 0;
-    }
-
-    qsizetype residentBytes() const noexcept
-    {
-        std::lock_guard lock(m_mutex);
-        return m_resident;
-    }
+    bool tryReserve(Pool pool, qsizetype bytes) noexcept;
+    void release(Pool pool, qsizetype bytes) noexcept;
+    qsizetype usage(Pool pool) const noexcept;
+    qsizetype residentBytes() const noexcept;
 
 private:
     static constexpr std::size_t index(Pool pool) noexcept

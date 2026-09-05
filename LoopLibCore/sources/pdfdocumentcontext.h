@@ -80,8 +80,12 @@ class LOOPLIBCORESHARED_EXPORT PDFDocumentContext : public QObject
     Q_OBJECT
 
 public:
-    explicit PDFDocumentContext(PDFDocument* document, QObject* parent = nullptr);
-    explicit PDFDocumentContext(PDFDocumentPointer document, QObject* parent = nullptr);
+    explicit PDFDocumentContext(PDFDocument* document,
+                                QObject* parent = nullptr,
+                                qsizetype pageCacheTotal = PDFPageCacheBudget::DefaultTotal);
+    explicit PDFDocumentContext(PDFDocumentPointer document,
+                                QObject* parent = nullptr,
+                                qsizetype pageCacheTotal = PDFPageCacheBudget::DefaultTotal);
     ~PDFDocumentContext() override;
 
     PDFDocumentContext(const PDFDocumentContext&) = delete;
@@ -91,9 +95,16 @@ public:
     PDFDocumentPointer getDocumentPointer() const { return m_documentPointer; }
     PDFDocumentIdentity getDocumentIdentity() const { return m_documentIdentity; }
     PDFRevisionIdentity getRevision() const;
-    PDFDocumentSession* getSession() const { return m_session.get(); }
+    PDFDocumentSession* getSession();
+    const PDFDocumentSession* getSession() const;
+    PDFDocumentSession* tryGetSession() noexcept { return m_session.get(); }
+    const PDFDocumentSession* tryGetSession() const noexcept { return m_session.get(); }
     PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
     std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
+
+    /// Publish a total resident budget. Mutations stay inside LoopLibCore so
+    /// Windows packaging smoke does not fault across the LoopLibCore DLL boundary.
+    void setPageCacheTotal(qsizetype requested) noexcept;
 
     /// Returns whether a cache or job result belongs to the active revision.
     bool isCurrent(const PDFRevisionIdentity& revision) const { return revision == getRevision(); }
@@ -116,6 +127,7 @@ signals:
     void revisionChanged(const pdf::PDFRevisionIdentity& previous, const pdf::PDFRevisionIdentity& current);
 
 private:
+    void ensureSession();
     void replaceDocument(PDFDocument* document, PDFDocumentPointer owner);
     void emitRevisionChanged(const PDFRevisionIdentity& previous);
 

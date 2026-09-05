@@ -331,8 +331,26 @@ def windows_system_dependency(name: str) -> bool:
         "ws2_32.dll",
         "windowscodecs.dll",
         "wtsapi32.dll",
+        "authz.dll",
+        "dbghelp.dll",
+        "d3d9.dll",
+        "dwrite.dll",
+        "dxgi.dll",
+        "imagehlp.dll",
+        "mpr.dll",
+        "mscms.dll",
+        "ncrypt.dll",
+        "netapi32.dll",
+        "odbc32.dll",
+        "uiautomationcore.dll",
+        "userenv.dll",
+        "winhttp.dll",
+        "icuuc.dll",
+        "icuin.dll",
     }
     if folded in system_names or folded == "ucrtbase.dll":
+        return True
+    if re.fullmatch(r"icudt\d+\.dll", folded):
         return True
     # These are Microsoft runtime components supplied by the OS or the
     # supported VC++ redistributable, not unresolved application dependencies.

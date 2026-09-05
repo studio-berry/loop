@@ -38,6 +38,7 @@
 #include <QStringConverter>
 
 #include <csignal>
+#include <cstdlib>
 
 #if defined(Q_OS_WIN)
 #include <windows.h>
@@ -66,6 +67,51 @@ QString executableDirectory(const char* argv0)
     // Bare argv[0] (PATH lookup) is not the process CWD — fall back to CWD only
     // after absolute-path resolution fails so plugin dirs still work for local runs.
     return QDir::currentPath();
+}
+
+QStringList packagedLibraryPaths(const QString& exeDir)
+{
+    QStringList paths;
+    const QDir exeDirQ(exeDir);
+
+#if !defined(Q_OS_WIN)
+    paths << exeDirQ.absolutePath();
+#else
+    // Windows ships product DLLs beside PdfTool.exe. Adding usr/bin to
+    // libraryPaths() makes Qt treat them as plugins and crashes with 0xC0000005
+    // during QPA startup. windeployqt stages platform plugins under install-root
+    // plugins/ instead, which packagedLibraryPaths resolves below.
+#endif
+
+    const auto appendIfExists = [&paths](const QString& candidate)
+    {
+        if (!QFileInfo::exists(candidate))
+        {
+            return;
+        }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!paths.contains(absolute))
+        {
+            paths << absolute;
+        }
+    };
+
+    appendIfExists(exeDirQ.filePath(QStringLiteral("platforms")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendIfExists(QDir(root).filePath(QStringLiteral("plugins")));
+#if !defined(Q_OS_WIN)
+        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib")));
+#endif
+    }
+
+    return paths;
 }
 
 /// Pre-scan the raw command line for a JSON console-format request. This must be
@@ -164,9 +210,25 @@ void handleTerminationSignal(int)
 
 int main(int argc, char* argv[])
 {
-    // Prefer offscreen when requested; ensure the exe dir is searched for plugins
-    // (platforms/qoffscreen.dll) before QGuiApplication constructs the QPA plugin.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
+    // Resolve packaged Qt plugin dirs before QGuiApplication constructs the QPA
+    // plugin. On Windows, do not add usr/bin itself to libraryPaths().
+    const QString exeDir = executableDirectory(argv[0]);
+    QStringList defaultLibraryPaths = QCoreApplication::libraryPaths();
+#if defined(Q_OS_WIN)
+    const QString exeDirAbsolute = QDir(exeDir).absolutePath();
+    QStringList filteredDefaultLibraryPaths;
+    filteredDefaultLibraryPaths.reserve(defaultLibraryPaths.size());
+    for (const QString& path : defaultLibraryPaths)
+    {
+        if (QDir(path).absolutePath().compare(exeDirAbsolute, Qt::CaseInsensitive) == 0)
+        {
+            continue;
+        }
+        filteredDefaultLibraryPaths << path;
+    }
+    defaultLibraryPaths = std::move(filteredDefaultLibraryPaths);
+#endif
+    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + defaultLibraryPaths);
 
     QGuiApplication a(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
@@ -290,7 +352,14 @@ int main(int argc, char* argv[])
 
     if (options.outputStyle == pdftool::PDFOutputFormatter::Style::Json)
     {
-        return writeJsonEnvelope(context, exitCode);
+        const int code = writeJsonEnvelope(context, exitCode);
+#if defined(Q_OS_WIN)
+        if (command == QStringLiteral("preflight"))
+        {
+            std::_Exit(code);
+        }
+#endif
+        return code;
     }
 
     return static_cast<int>(exitCode);

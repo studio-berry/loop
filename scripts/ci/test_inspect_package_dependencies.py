@@ -58,6 +58,21 @@ Image has the following dependencies:
         )
         self.assertEqual(dependencies, ["Qt6Core.dll", "KERNEL32.dll", "LoopLibCore.dll"])
 
+    def test_windows_system_dependencies_include_qt_platform_apis(self):
+        for name in (
+            "DWrite.dll",
+            "d3d9.dll",
+            "dxgi.dll",
+            "WINHTTP.dll",
+            "ODBC32.dll",
+            "icuuc.dll",
+            "icudt74.dll",
+            "UIAutomationCore.DLL",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(INSPECTOR.windows_system_dependency(name), name)
+        self.assertFalse(INSPECTOR.windows_system_dependency("fbclient.dll"))
+
     def test_pe_fixture_architecture_is_x64(self):
         image = bytearray(96)
         image[:2] = b"MZ"

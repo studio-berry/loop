@@ -80,6 +80,7 @@ add_library(LoopLibCore SHARED
     sources/pdfocrpagegate.h
     sources/pdfocrreport.cpp
     sources/pdfocrreport.h
+    sources/pdfpagecachebudget.cpp
     sources/pdfpagecachebudget.h
     sources/pdfresourcebudget.cpp
     sources/pdfresourcebudget.h
@@ -103,6 +104,8 @@ add_library(LoopLibCore SHARED
     sources/pdfoperationimpact.h
     sources/preflightengine.cpp
     sources/preflightengine.h
+    sources/preflightclirun.cpp
+    sources/preflightclirun.h
     sources/pdfpreflightverdict.cpp
     sources/pdfpreflightverdict.h
     sources/preflightprofileresolver.cpp

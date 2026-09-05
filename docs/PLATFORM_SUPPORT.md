@@ -174,5 +174,6 @@ entry criteria for adding it in a later release, not as a V1 checklist.
 | `docs/CI.md` | Which OS jobs run in GitHub Actions |
 | `docs/PACKAGING_LICENSING.md` | License / SBOM / default-bundle rules |
 | `docs/SESSION_07_PACKAGE_BOUNDARY.md` | Exact-SHA package evidence and clean-VM gate |
+| `docs/WINDOWS_MSI_PACKAGING.md` | Windows MSI / relocated-smoke regression traps (read before packaging changes) |
 | `docs/PRODUCTION_RUNBOOK.md` | Deploy / rollback / support |
 | `AGENTS.md` | Contributor note: plugin dirs per OS |

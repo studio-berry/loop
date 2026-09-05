@@ -49,6 +49,7 @@
 #include <QStringConverter>
 
 #include <vector>
+#include <memory>
 
 class QCommandLineParser;
 
@@ -441,6 +442,12 @@ protected:
     /// \param[out] sourceData Pointer, to which source data are stored
     /// \param authorizeOwnerOnly Require to authorize as owner
     bool readDocument(const PDFToolOptions& options, pdf::PDFDocument& document, QByteArray* sourceData, bool authorizeOwnerOnly);
+
+    /// Like readDocument, but keeps the parsed PDFDocument on the LoopLibCore heap.
+    bool readDocumentOnHeap(const PDFToolOptions& options,
+                            std::unique_ptr<pdf::PDFDocument, void (*)(pdf::PDFDocument*)>& document,
+                            QByteArray* sourceData,
+                            bool authorizeOwnerOnly);
 
     /// Returns a list of available encodings
     static QList<QByteArray> getAvailableEncodings();

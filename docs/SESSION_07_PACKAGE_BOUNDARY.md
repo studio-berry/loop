@@ -66,3 +66,11 @@ developer paths:
 6. Record the package digest, source SHA, operator/accessibility transcript, and
    uninstall result. Only then may Issues LOUPE-22, LOUPE-23, LOUPE-24 and the
    Session 07 exit gate be marked complete in Notion.
+
+## Windows MSI regression traps
+
+The `Windows_MSI` workflow fails in three independent stages (relocated smoke,
+WiX MSI build, package-boundary inspection). **Read
+`docs/WINDOWS_MSI_PACKAGING.md` before changing WiX, install staging, relocated
+smoke, or the boundary inspector** — that document lists mandatory workflow
+steps, failure signatures, and MSVC/Qt pitfalls that must not be reintroduced.
