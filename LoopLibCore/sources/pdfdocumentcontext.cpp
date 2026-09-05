@@ -223,4 +223,9 @@ void PDFDocumentContext::emitRevisionChanged(const PDFRevisionIdentity& previous
     Q_EMIT revisionChanged(previous, getRevision());
 }
 
+void PDFDocumentContext::setPageCacheTotal(qsizetype requested) noexcept
+{
+    m_pageCacheBudget->setTotal(PDFPageCacheBudget::total(requested));
+}
+
 }   // namespace pdf

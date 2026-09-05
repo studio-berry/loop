@@ -38,7 +38,7 @@ void applyInitialViewportScreenMetrics(pdfinteraction::ViewportController& viewp
 #if defined(Q_OS_WIN)
     // Windows headless packaging smoke can fault inside primaryScreen() metrics even
     // when QT_QPA_PLATFORM=offscreen. ViewportController is designed for injected DPI.
-    Q_UNUSED(headlessQpaPlatformRequested);
+    Q_UNUSED(headlessQpaPlatformRequested());
     viewport.setPixelPerMM(96.0 / 25.4);
     viewport.setDevicePixelRatio(1.0);
 #else
@@ -104,6 +104,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     applyInitialViewportScreenMetrics(m_viewport);
 
     m_commandBridge.setCoordinator(m_surfaces.get());
+    m_context.setPageCacheTotal(m_cacheLimit);
     m_surfaces->primeInitialSnapshot();
 }
 
@@ -164,10 +165,7 @@ void DocumentViewSession::setCacheLimit(qsizetype totalBytes)
 {
     const qsizetype normalized = pdf::PDFPageCacheBudget::total(totalBytes);
     m_cacheLimit = normalized;
-    if (std::shared_ptr<pdf::PDFPageCacheBudget> budget = m_context.getSharedPageCacheBudget())
-    {
-        budget->setTotal(normalized);
-    }
+    m_context.setPageCacheTotal(normalized);
     if (pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         if (m_surfaces)
@@ -190,10 +188,6 @@ qsizetype DocumentViewSession::cacheLimit() const noexcept
     if (const pdf::PDFDocumentSession* session = m_context.tryGetSession())
     {
         return session->cacheLimit();
-    }
-    if (std::shared_ptr<pdf::PDFPageCacheBudget> budget = m_context.getSharedPageCacheBudget())
-    {
-        return budget->total();
     }
     return m_cacheLimit;
 }

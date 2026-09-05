@@ -147,8 +147,9 @@ void PageSurfaceCoordinator::syncPageCacheBudgetLimits()
         return;
     }
 
-    m_cacheLimit = m_pageCacheBudget->total();
-    m_bounds.maxAdmittedBytes = m_pageCacheBudget->pageSurfacesLimit();
+    // cacheLimit() is the authority here. Reading the shared PDFPageCacheBudget
+    // from LoopLibInteraction faults on Windows when LoopLibCore is a DLL.
+    m_bounds.maxAdmittedBytes = pdf::PDFPageCacheBudget::pageSurfaces(m_cacheLimit);
 }
 
 void PageSurfaceCoordinator::refreshPageCacheBudget()
@@ -191,7 +192,6 @@ void PageSurfaceCoordinator::setCacheLimit(qsizetype totalBytes)
         return;
     }
 
-    m_pageCacheBudget->setTotal(normalized);
     if (m_initialSnapshotPrimed)
     {
         refreshPageCacheBudget();

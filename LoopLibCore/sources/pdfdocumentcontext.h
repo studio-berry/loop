@@ -98,6 +98,10 @@ public:
     PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
     std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
+    /// Publish a total resident budget. Mutations stay inside LoopLibCore so
+    /// Windows packaging smoke does not fault across the LoopLibCore DLL boundary.
+    void setPageCacheTotal(qsizetype requested) noexcept;
+
     /// Returns whether a cache or job result belongs to the active revision.
     bool isCurrent(const PDFRevisionIdentity& revision) const { return revision == getRevision(); }
 
