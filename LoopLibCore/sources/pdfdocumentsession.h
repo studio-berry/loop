@@ -195,6 +195,7 @@ private:
         }
     };
 
+    void ensureRenderingInitialized() const;
     void initializeRendering();
     void trimCachesToLimits();
     void clearCompiledCache();
@@ -221,6 +222,7 @@ private:
     qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
+    bool m_renderingInitialized = false;
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;
     PDFCMSPointer m_cms;

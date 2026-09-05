@@ -222,7 +222,6 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
                                                                      PDFResourcePriority::Interaction,
                                                                      QStringLiteral("active document model"));
     }
-    initializeRendering();
 }
 
 PDFDocumentSession::~PDFDocumentSession()
@@ -479,6 +478,8 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
         return nullptr;
     }
 
+    ensureRenderingInitialized();
+
     const PageCacheKey key{ getRevision(), pageIndex };
     auto it = m_compileCache.find(key);
     if (it != m_compileCache.cend())
@@ -628,30 +629,46 @@ void PDFDocumentSession::invalidate()
 
 PDFRenderer* PDFDocumentSession::getRenderer() const
 {
+    ensureRenderingInitialized();
     return m_renderer.get();
 }
 
 PDFFontCache* PDFDocumentSession::getFontCache() const
 {
+    ensureRenderingInitialized();
     return m_fontCache.get();
 }
 
 PDFCMS* PDFDocumentSession::getCMS() const
 {
+    ensureRenderingInitialized();
     return m_cms.get();
 }
 
 PDFOptionalContentActivity* PDFDocumentSession::getOptionalContentActivity() const
 {
+    ensureRenderingInitialized();
     return m_optionalContentActivity.get();
+}
+
+void PDFDocumentSession::ensureRenderingInitialized() const
+{
+    if (m_renderingInitialized)
+    {
+        return;
+    }
+
+    const_cast<PDFDocumentSession*>(this)->initializeRendering();
 }
 
 void PDFDocumentSession::initializeRendering()
 {
-    if (!isValid())
+    if (m_renderingInitialized || !isValid())
     {
         return;
     }
+
+    m_renderingInitialized = true;
 
     m_optionalContentActivity = std::make_unique<PDFOptionalContentActivity>(m_document, OCUsage::Export, nullptr);
 
