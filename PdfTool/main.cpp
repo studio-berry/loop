@@ -68,6 +68,51 @@ QString executableDirectory(const char* argv0)
     return QDir::currentPath();
 }
 
+QStringList packagedLibraryPaths(const QString& exeDir)
+{
+    QStringList paths;
+    const QDir exeDirQ(exeDir);
+
+#if !defined(Q_OS_WIN)
+    paths << exeDirQ.absolutePath();
+#else
+    // Windows ships product DLLs beside PdfTool.exe. Adding usr/bin to
+    // libraryPaths() makes Qt treat them as plugins and crashes with 0xC0000005
+    // during QPA startup. windeployqt stages platform plugins under install-root
+    // plugins/ instead, which packagedLibraryPaths resolves below.
+#endif
+
+    const auto appendIfExists = [&paths](const QString& candidate)
+    {
+        if (!QFileInfo::exists(candidate))
+        {
+            return;
+        }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!paths.contains(absolute))
+        {
+            paths << absolute;
+        }
+    };
+
+    appendIfExists(exeDirQ.filePath(QStringLiteral("platforms")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendIfExists(QDir(root).filePath(QStringLiteral("plugins")));
+#if !defined(Q_OS_WIN)
+        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib")));
+#endif
+    }
+
+    return paths;
+}
+
 /// Pre-scan the raw command line for a JSON console-format request. This must be
 /// done before parsing so malformed command lines still produce a valid JSON
 /// error envelope when the caller asked for JSON.
@@ -164,9 +209,10 @@ void handleTerminationSignal(int)
 
 int main(int argc, char* argv[])
 {
-    // Prefer offscreen when requested; ensure the exe dir is searched for plugins
-    // (platforms/qoffscreen.dll) before QGuiApplication constructs the QPA plugin.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
+    // Resolve packaged Qt plugin dirs before QGuiApplication constructs the QPA
+    // plugin. On Windows, do not add usr/bin itself to libraryPaths().
+    const QString exeDir = executableDirectory(argv[0]);
+    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 
     QGuiApplication a(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
