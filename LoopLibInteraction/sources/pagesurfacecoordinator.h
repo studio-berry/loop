@@ -182,6 +182,7 @@ public:
     /// Refreshes the diagnostic surface projection and trims after the shared
     /// authority's total changes.
     void refreshPageCacheBudget();
+    void syncPageCacheBudgetLimits();
 
     /// Submits what the viewport wants and cancels what it no longer wants.
     /// Idempotent: calling it twice with an unchanged viewport submits nothing.

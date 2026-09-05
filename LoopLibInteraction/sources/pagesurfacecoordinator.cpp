@@ -113,6 +113,7 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
 {
     if (m_pageCacheBudget == budget)
     {
+        syncPageCacheBudgetLimits();
         if (m_initialSnapshotPrimed)
         {
             refreshPageCacheBudget();
@@ -126,6 +127,7 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
         clearCache();
     }
     m_pageCacheBudget = std::move(budget);
+    syncPageCacheBudgetLimits();
     if (m_initialSnapshotPrimed)
     {
         refreshPageCacheBudget();
@@ -133,16 +135,31 @@ void PageSurfaceCoordinator::setPageCacheBudget(std::shared_ptr<pdf::PDFPageCach
     }
 }
 
-void PageSurfaceCoordinator::refreshPageCacheBudget()
+void PageSurfaceCoordinator::syncPageCacheBudgetLimits()
 {
-    if (!m_pageCacheBudget || !m_initialSnapshotPrimed)
+    if (!m_pageCacheBudget)
     {
         return;
     }
 
     m_cacheLimit = m_pageCacheBudget->total();
     m_bounds.maxAdmittedBytes = m_pageCacheBudget->pageSurfacesLimit();
-    if (m_initialSnapshotPrimed && trimCacheToBudget())
+}
+
+void PageSurfaceCoordinator::refreshPageCacheBudget()
+{
+    if (!m_pageCacheBudget)
+    {
+        return;
+    }
+
+    syncPageCacheBudgetLimits();
+    if (!m_initialSnapshotPrimed)
+    {
+        return;
+    }
+
+    if (trimCacheToBudget())
     {
         rebuildSnapshot();
     }
