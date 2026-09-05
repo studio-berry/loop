@@ -303,8 +303,18 @@ Remove-Item Env:QT_ROOT_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue
 try {
+    $capabilitiesIsolatedOutput = @(& $pdfTool capabilities --console-format json 2>&1)
+    $capabilitiesIsolatedExit = $LASTEXITCODE
+    if ($capabilitiesIsolatedExit -ne 0) {
+        throw "PdfTool capabilities failed in isolated Qt env with exit code $($capabilitiesIsolatedExit): $capabilitiesIsolatedOutput"
+    }
+    Write-Host "OK: PdfTool capabilities in isolated Qt env"
     $preflightOutput = & $pdfTool preflight $TestPdf --profile $profilePath --console-format json 2>&1
     $preflightExit = $LASTEXITCODE
+    if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
+        throw "PdfTool preflight failed with unexpected exit code $preflightExit`: $preflightOutput"
+    }
+    Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
     Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue
     Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue
@@ -340,11 +350,6 @@ try {
     if ($null -ne $savedQtDebugPlugins) { $env:QT_DEBUG_PLUGINS = $savedQtDebugPlugins } else { Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue }
     if ($null -ne $savedQmlImportTrace) { $env:QML_IMPORT_TRACE = $savedQmlImportTrace } else { Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue }
 }
-if ($preflightExit -ne 0 -and $preflightExit -ne 1) {
-    throw "PdfTool preflight failed with unexpected exit code $preflightExit`: $preflightOutput"
-}
-Write-Host "OK: PdfTool preflight completed (exit $preflightExit)"
-
 $ocrSidecar = Join-Path $binDir "LoopOcrService\LoopOcrService.exe"
 if (Test-Path -LiteralPath $ocrSidecar) {
     $repoRoot = Split-Path -Parent $PSScriptRoot

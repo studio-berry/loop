@@ -28,8 +28,9 @@
 #include "pdfpreflightverdict.h"
 #include "pdfoperationimpact.h"
 #include "pdfartifactstore.h"
-#include "pdfjobscheduler.h"
+#include "pdfoperationcontrol.h"
 #include "pdfoperationhistorystore.h"
+#include "pdftoolcancel.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -585,63 +586,46 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         revalidationPlan.reason = QStringLiteral("cli-check-filter");
     }
 
-    struct PreflightJobOutcome
+    struct CliCancellationControl final : public pdf::PDFOperationControl
     {
-        std::optional<pdf::PreflightResult> result;
+        bool isOperationCancelled() const override
+        {
+            return pdftool::isCancelRequested();
+        }
     };
-    PreflightJobOutcome outcome;
 
-    pdf::PDFJobScheduler scheduler(1);
-    pdf::PDFJobSpec spec;
-    spec.kind = pdf::PDFJobKind::Preflight;
-    spec.priority = pdf::PDFJobPriority::Operator;
-    spec.documentRevision = revisionDigest;
-    spec.operationId = QStringLiteral("preflight");
-    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, revalidationPlan, &outcome](pdf::PDFJobContext& context)
-                                           {
-        if (context.isCancellationRequested())
-        {
-            return;
-        }
-        engine.setOperationControl(context.operationControl());
-        pdf::PreflightResult runResult = engine.run(runProfile, jobSpec, cliBindings, revalidationPlan);
-        if (context.isCancellationRequested())
-        {
-            return;
-        }
-        outcome.result = std::move(runResult); });
+    CliCancellationControl cancellationControl;
+    engine.setOperationControl(&cancellationControl);
 
-    constexpr int preflightTimeoutMs = 300000;
-    if (!scheduler.waitForFinished(jobId, preflightTimeoutMs))
+    std::optional<pdf::PreflightResult> outcome;
+    if (!cancellationControl.isOperationCancelled())
     {
-        scheduler.cancel(jobId);
-        scheduler.waitForFinished(jobId, 30000);
+        outcome = engine.run(runProfile, jobSpec, cliBindings, revalidationPlan);
     }
-    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+
+    const bool cancelled = cancellationControl.isOperationCancelled();
+    const bool jobSucceeded = !cancelled && outcome.has_value();
 
     pdf::PreflightResult result;
-    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome.result.has_value())
+    if (jobSucceeded)
     {
-        result = std::move(*outcome.result);
+        result = std::move(*outcome);
     }
     else
     {
-        if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+        if (cancelled)
         {
             result.inspectionComplete = false;
             result.errorCode = QStringLiteral("cancelled");
             result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
         }
-        else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+        else
         {
             result.inspectionComplete = false;
             if (result.errorCode.isEmpty())
             {
                 result.errorCode = QStringLiteral("preflight-job-failed");
-                result.errorMessage = snapshot.errorMessage.isEmpty()
-                                          ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
-                                          : snapshot.errorMessage;
+                result.errorMessage = PDFToolTranslationContext::tr("Preflight job did not succeed.");
             }
         }
     }
@@ -669,7 +653,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             resultExitCode = PDFToolExitCode::PreflightError;
             break;
     }
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    if (cancelled)
     {
         resultExitCode = PDFToolExitCode::Cancelled;
     }
@@ -688,10 +672,6 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             resultExitCode = PDFToolExitCode::Success;
         }
     }
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
-    {
-        resultExitCode = PDFToolExitCode::Cancelled;
-    }
 
     if (!exportDecisions(options.preflightDecisionsExportPath, result.decisions, decisionsError))
     {
@@ -709,11 +689,11 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     }
 
     pdf::PDFOperationHistoryStatus historyStatus = pdf::PDFOperationHistoryStatus::Accepted;
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    if (cancelled)
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Cancelled;
     }
-    else if (verdict.state == pdf::PreflightVerdictState::Error || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    else if (verdict.state == pdf::PreflightVerdictState::Error || !jobSucceeded)
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Failed;
     }

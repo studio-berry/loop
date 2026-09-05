@@ -212,7 +212,22 @@ int main(int argc, char* argv[])
     // Resolve packaged Qt plugin dirs before QGuiApplication constructs the QPA
     // plugin. On Windows, do not add usr/bin itself to libraryPaths().
     const QString exeDir = executableDirectory(argv[0]);
-    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
+    QStringList defaultLibraryPaths = QCoreApplication::libraryPaths();
+#if defined(Q_OS_WIN)
+    const QString exeDirAbsolute = QDir(exeDir).absolutePath();
+    QStringList filteredDefaultLibraryPaths;
+    filteredDefaultLibraryPaths.reserve(defaultLibraryPaths.size());
+    for (const QString& path : defaultLibraryPaths)
+    {
+        if (QDir(path).absolutePath().compare(exeDirAbsolute, Qt::CaseInsensitive) == 0)
+        {
+            continue;
+        }
+        filteredDefaultLibraryPaths << path;
+    }
+    defaultLibraryPaths = std::move(filteredDefaultLibraryPaths);
+#endif
+    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + defaultLibraryPaths);
 
     QGuiApplication a(argc, argv);
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::PdfTool);
