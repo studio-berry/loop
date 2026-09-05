@@ -102,7 +102,10 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     m_catalog(this),
     m_logCatalogEnd("catalog_end"),
     m_logContextBegin("context_begin"),
-    m_context(nullptr, this),
+    // Avoid parenting PDFDocumentContext during member initialization: Windows
+    // relocated smoke faults when the session is created under a partially
+    // constructed DocumentViewSession parent.
+    m_context(nullptr),
     m_logContextEnd("context_end"),
     m_scheduler(makeDocumentViewScheduler()),
     m_logSubmitter("submitter"),
@@ -114,6 +117,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
     logDocumentViewSessionInit("body_begin");
+    m_context.setParent(this);
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
     fprintf(stderr, "loop-editor documentviewsession before surfaces\n");

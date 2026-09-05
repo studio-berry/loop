@@ -91,7 +91,8 @@ public:
     PDFDocumentPointer getDocumentPointer() const { return m_documentPointer; }
     PDFDocumentIdentity getDocumentIdentity() const { return m_documentIdentity; }
     PDFRevisionIdentity getRevision() const;
-    PDFDocumentSession* getSession() const { return m_session.get(); }
+    PDFDocumentSession* getSession();
+    const PDFDocumentSession* getSession() const;
     PDFPageCacheBudget* getPageCacheBudget() const { return m_pageCacheBudget.get(); }
     std::shared_ptr<PDFPageCacheBudget> getSharedPageCacheBudget() const { return m_pageCacheBudget; }
 
@@ -116,6 +117,7 @@ signals:
     void revisionChanged(const pdf::PDFRevisionIdentity& previous, const pdf::PDFRevisionIdentity& current);
 
 private:
+    void ensureSession();
     void replaceDocument(PDFDocument* document, PDFDocumentPointer owner);
     void emitRevisionChanged(const PDFRevisionIdentity& previous);
 
