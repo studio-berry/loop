@@ -210,8 +210,11 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
     m_localDocumentIdentity(PDFDocumentIdentity::fromDocument(document)),
     m_features(PDFRenderer::getDefaultFeatures()),
     m_processingBudget(std::make_unique<PDFProcessingBudget>()),
-    m_resourceBudget(std::make_shared<PDFResourceBudget>()),
-    m_pageCacheBudget(pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>()),
+    m_resourceBudget(admission == PDFDocumentSessionAdmission::Managed ? std::make_shared<PDFResourceBudget>() : nullptr),
+    m_pageCacheBudget(admission == PDFDocumentSessionAdmission::Managed
+                          ? (pageCacheBudget ? std::move(pageCacheBudget) : std::make_shared<PDFPageCacheBudget>())
+                          : nullptr),
+    m_admission(admission),
     m_compiledCachePressureLimit(admission == PDFDocumentSessionAdmission::Managed ? m_pageCacheBudget->compiledLimit()
                                                                                    : CompiledCacheByteLimitDefault)
 {
@@ -242,12 +245,17 @@ PDFDocumentSession::PDFDocumentSession(PDFDocument* document,
     }
     else
     {
-        m_streamCacheByteLimit = m_resourceBudget->limit(PDFResourcePool::DecodedStreamImageCache);
+        m_streamCacheByteLimit = 256 * PDFResourceBudgetConfig::MiB;
         logSessionCtorStage("ctor_inspection_ready");
     }
 
     logSessionCtorStage(admission == PDFDocumentSessionAdmission::Managed ? "ctor_managed_exit"
                                                                           : "ctor_inspection_exit");
+}
+
+bool PDFDocumentSession::hasManagedAdmission() const noexcept
+{
+    return m_admission == PDFDocumentSessionAdmission::Managed;
 }
 
 PDFDocumentSession::~PDFDocumentSession()
@@ -486,6 +494,14 @@ void PDFDocumentSession::trimCachesToLimits()
 
 void PDFDocumentSession::clearCompiledCache()
 {
+    if (!hasManagedAdmission())
+    {
+        m_compileCache.clear();
+        m_compileCacheOrder.clear();
+        m_compileCacheBytes.clear();
+        return;
+    }
+
     for (const auto& [key, bytes] : m_compileCacheBytes)
     {
         Q_UNUSED(key);
@@ -499,6 +515,14 @@ void PDFDocumentSession::clearCompiledCache()
 
 void PDFDocumentSession::clearDecodedStreamCache()
 {
+    if (!hasManagedAdmission())
+    {
+        m_streamCache.clear();
+        m_streamCacheOrder.clear();
+        m_streamCacheBytes = 0;
+        return;
+    }
+
     for (const auto& [key, decoded] : m_streamCache)
     {
         Q_UNUSED(key);
@@ -518,17 +542,30 @@ const PDFPrecompiledPage* PDFDocumentSession::compilePage(size_t pageIndex)
 
     ensureRenderingInitialized();
 
+    const PDFCatalog* catalog = m_document->getCatalog();
+    if (!catalog || pageIndex >= static_cast<size_t>(catalog->getPageCount()))
+    {
+        return nullptr;
+    }
+
+    if (!hasManagedAdmission())
+    {
+        PDFPrecompiledPage compiledPage;
+        m_renderer->compile(&compiledPage, pageIndex);
+        if (!compiledPage.isValid())
+        {
+            return nullptr;
+        }
+
+        m_inspectionCompileScratch = std::move(compiledPage);
+        return &m_inspectionCompileScratch;
+    }
+
     const PageCacheKey key{ getRevision(), pageIndex };
     auto it = m_compileCache.find(key);
     if (it != m_compileCache.cend())
     {
         return &it->second;
-    }
-
-    const PDFCatalog* catalog = m_document->getCatalog();
-    if (!catalog || pageIndex >= static_cast<size_t>(catalog->getPageCount()))
-    {
-        return nullptr;
     }
 
     PDFPrecompiledPage compiledPage;
@@ -600,6 +637,17 @@ QByteArray PDFDocumentSession::getDecodedStream(PDFObjectReference reference)
     if (!isValid())
     {
         return QByteArray();
+    }
+
+    if (!hasManagedAdmission())
+    {
+        const PDFObject& object = m_document->getObjectByReference(reference);
+        if (!object.isStream())
+        {
+            return QByteArray();
+        }
+
+        return m_document->getStorage().getDecodedStream(object.getStream(), m_processingBudget.get());
     }
 
     const StreamCacheKey key{ getRevision(), reference };

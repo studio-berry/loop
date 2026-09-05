@@ -206,6 +206,7 @@ private:
     };
 
     void ensureRenderingInitialized() const;
+    bool hasManagedAdmission() const noexcept;
     void initializeRendering();
     void trimCachesToLimits();
     void clearCompiledCache();
@@ -232,6 +233,7 @@ private:
     qsizetype m_compiledCachePressureLimit = CompiledCacheByteLimitDefault;
     std::map<PageCacheKey, qsizetype> m_compileCacheBytes;
 
+    PDFDocumentSessionAdmission m_admission = PDFDocumentSessionAdmission::Managed;
     bool m_renderingInitialized = false;
     std::unique_ptr<PDFOptionalContentActivity> m_optionalContentActivity;
     std::unique_ptr<PDFCMSManager> m_cmsManager;
@@ -243,6 +245,7 @@ private:
     std::deque<PageCacheKey> m_compileCacheOrder;
     std::map<StreamCacheKey, QByteArray> m_streamCache;
     std::deque<StreamCacheKey> m_streamCacheOrder;
+    mutable PDFPrecompiledPage m_inspectionCompileScratch;
 };
 
 }   // namespace pdf
