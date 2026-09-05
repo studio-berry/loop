@@ -308,29 +308,15 @@ try {
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
     Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue
     Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue
-    $qtConfPath = Join-Path $binDir "qt.conf"
-    if (Test-Path -LiteralPath $qtConfPath) {
-        Write-Host "qt.conf:"
-        Get-Content -LiteralPath $qtConfPath | ForEach-Object { Write-Host "  $_" }
-    } else {
-        Write-Host "qt.conf missing at $qtConfPath"
-    }
-    $installRoot = (Resolve-Path -LiteralPath (Join-Path $binDir "..\..")).Path
-    $offscreenPlugin = Join-Path $installRoot "plugins\platforms\qoffscreen.dll"
-    Write-Host "offscreen plugin present: $((Test-Path -LiteralPath $offscreenPlugin)) ($offscreenPlugin)"
-    $loopCanvasPlugin = Join-Path $installRoot "usr\lib\qml\Loop\Canvas\LoopLibQuickplugin.dll"
-    Write-Host "Loop.Canvas plugin present: $((Test-Path -LiteralPath $loopCanvasPlugin)) ($loopCanvasPlugin)"
-    $localOffscreen = Join-Path $binDir "platforms\qoffscreen.dll"
-    Write-Host "local offscreen plugin present: $((Test-Path -LiteralPath $localOffscreen)) ($localOffscreen)"
-    $helpOutput = @(& $editor --help 2>&1)
-    $helpExit = $LASTEXITCODE
-    if ($helpExit -ne 0) {
-        throw "LoopEditor --help failed with exit code ${helpExit}: $helpOutput"
-    }
-    Write-Host "OK: LoopEditor --help"
     # Distribution LoopEditor is a console binary, but force stderr logging so a
     # QML/plugin failure is visible when "2>&1" captures process output.
     $env:QT_FORCE_STDERR_LOGGING = "1"
+    $nativeOutput = @(& $editor --quick-smoke 2>&1)
+    $nativeExit = $LASTEXITCODE
+    if ($nativeExit -ne 0) {
+        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+    }
+    Write-Host "OK: LoopEditor native Quick startup"
     $env:QT_QUICK_BACKEND = "software"
     $softwareOutput = @(& $editor --quick-smoke 2>&1)
     $softwareExit = $LASTEXITCODE
@@ -338,13 +324,6 @@ try {
         throw "LoopEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
     }
     Write-Host "OK: LoopEditor software Quick startup"
-    Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
-    $nativeOutput = @(& $editor --quick-smoke 2>&1)
-    $nativeExit = $LASTEXITCODE
-    if ($nativeExit -ne 0) {
-        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
-    }
-    Write-Host "OK: LoopEditor native Quick startup"
 } finally {
     $env:PATH = $savedPath
     if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }

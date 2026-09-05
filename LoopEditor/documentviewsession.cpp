@@ -11,8 +11,6 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-#include <cstdio>
-
 namespace
 {
 
@@ -57,44 +55,7 @@ void applyInitialViewportScreenMetrics(pdfinteraction::ViewportController& viewp
 #endif
 }
 
-void logDocumentViewSessionInit(const char* stage)
-{
-    fprintf(stderr, "loop-editor documentviewsession init %s\n", stage);
-    fflush(stderr);
-}
-
-std::unique_ptr<pdf::PDFJobScheduler> makeDocumentViewScheduler()
-{
-    logDocumentViewSessionInit("scheduler_begin");
-    auto scheduler = std::make_unique<pdf::PDFJobScheduler>();
-    logDocumentViewSessionInit("scheduler_end");
-    return scheduler;
-}
-
-std::unique_ptr<pdfinteraction::DocumentFacade> makeDocumentFacade(pdf::PDFDocumentContext& context,
-                                                                   pdfinteraction::PDFJobSchedulerSubmitter& submitter,
-                                                                   pdfinteraction::PDFReaderDocumentLoader& loader,
-                                                                   pdfinteraction::PDFDocumentFileWriter& writer,
-                                                                   pdfinteraction::CommandCatalog& catalog,
-                                                                   QObject* parent)
-{
-    logDocumentViewSessionInit("facade_begin");
-    auto facade = std::make_unique<pdfinteraction::DocumentFacade>(context,
-                                                                   submitter,
-                                                                   loader,
-                                                                   writer,
-                                                                   catalog,
-                                                                   parent);
-    logDocumentViewSessionInit("facade_end");
-    return facade;
-}
-
 }   // namespace
-
-DocumentViewSession::InitStage::InitStage(const char* stage)
-{
-    logDocumentViewSessionInit(stage);
-}
 
 DocumentViewSession::DocumentViewSession(QObject* parent) :
     QObject(parent),
@@ -107,35 +68,31 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     // constructed DocumentViewSession parent.
     m_context(nullptr),
     m_logContextEnd("context_end"),
-    m_scheduler(makeDocumentViewScheduler()),
+    m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
     m_logSubmitter("submitter"),
     m_submitter(*m_scheduler),
-    m_facade(makeDocumentFacade(m_context, m_submitter, m_loader, m_writer, m_catalog, this)),
+    m_facade(std::make_unique<pdfinteraction::DocumentFacade>(m_context,
+                                                              m_submitter,
+                                                              m_loader,
+                                                              m_writer,
+                                                              m_catalog,
+                                                              this)),
     m_renderer(m_context),
     m_commandBridge(m_catalog, *m_facade, m_viewport, this),
     m_pageBoxSource(&m_context),
     m_cacheLimit(pdf::PDFPageCacheBudget::total(DefaultCacheLimit))
 {
-    logDocumentViewSessionInit("body_begin");
     m_context.setParent(this);
     m_revisionSource = std::make_unique<pdfinteraction::PDFDocumentContextSource>(&m_context, this);
     m_hitTest = std::make_unique<pdfinteraction::HitTestDispatcher>();
-    fprintf(stderr, "loop-editor documentviewsession before surfaces\n");
-    fflush(stderr);
     m_surfaces = std::make_unique<pdfinteraction::PageSurfaceCoordinator>(*m_revisionSource,
                                                                           m_submitter,
                                                                           m_renderer,
                                                                           m_viewport,
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
-    fprintf(stderr, "loop-editor documentviewsession after surface_ctor\n");
-    fflush(stderr);
     m_surfaces->setPageCacheBudget(m_context.getSharedPageCacheBudget());
-    fprintf(stderr, "loop-editor documentviewsession after surface_budget\n");
-    fflush(stderr);
     setCacheLimit(DefaultCacheLimit);
-    fprintf(stderr, "loop-editor documentviewsession after surface_cache_limit\n");
-    fflush(stderr);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
                                                                             m_viewport,
@@ -148,8 +105,6 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
 
     m_commandBridge.setCoordinator(m_surfaces.get());
     m_surfaces->primeInitialSnapshot();
-    fprintf(stderr, "loop-editor documentviewsession constructed\n");
-    fflush(stderr);
 }
 
 DocumentViewSession::~DocumentViewSession()

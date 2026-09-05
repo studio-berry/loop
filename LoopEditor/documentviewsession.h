@@ -75,11 +75,11 @@ public:
     void setSurfaceRenderFeatures(pdf::PDFRenderer::Features features);
 
 private:
-    // Logs a DocumentViewSession member-init stage without copy-constructing
+    // Forces DocumentViewSession member-init order without copy-constructing
     // non-copyable QObject members (MSVC C2280).
     struct InitStage
     {
-        explicit InitStage(const char* stage);
+        explicit InitStage(const char* /*stage*/) {}
     };
 
     // Catalog and context initialize before the job scheduler so worker threads

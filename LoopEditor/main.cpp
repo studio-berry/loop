@@ -67,13 +67,6 @@ bool argvContainsQuickSmoke(int argc, char* argv[])
     return false;
 }
 
-void logQuickSmokeStage(const char* stage, const QString& exeDir)
-{
-    const QByteArray exeDirText = QDir::toNativeSeparators(exeDir).toLocal8Bit();
-    fprintf(stderr, "loop-editor quick_smoke stage=%s exe_dir=%s\n", stage, exeDirText.constData());
-    fflush(stderr);
-}
-
 QString executableDirectory(const char* argv0)
 {
 #if defined(Q_OS_WIN)
@@ -254,14 +247,11 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
 
 int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString& exeDir)
 {
-    logQuickSmokeStage("run_quick_smoke_begin", exeDir);
-
     QQmlApplicationEngine engine;
     for (const QString& importPath : packagedQmlImportPaths(exeDir))
     {
         engine.addImportPath(importPath);
     }
-    logQuickSmokeStage("qml_import_paths_configured", exeDir);
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)
@@ -309,7 +299,6 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
                      });
 
     engine.loadFromModule(QStringLiteral("Loop.Quick"), QStringLiteral("Main"));
-    logQuickSmokeStage("after_load_from_module", exeDir);
 
     if (engine.rootObjects().isEmpty())
     {
@@ -326,8 +315,6 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString&
 
 int main(int argc, char* argv[])
 {
-    const bool quickSmokeRequested = argvContainsQuickSmoke(argc, argv);
-
     const QString exeDir = executableDirectory(argv[0]);
 
     // Package smoke strips developer Qt env vars. Search install-root plugin trees
@@ -335,29 +322,14 @@ int main(int argc, char* argv[])
     // product DLLs as plugins and can fault during later initialization.
     QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("before_qguiapplication", exeDir);
-    }
-
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
 
     pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_identity", exeDir);
-    }
-
     const pdf::PDFSentrySession sentrySession(QStringLiteral("editor"));
     pdf::PDFSentrySession::traceStartup(QStringLiteral("editor"));
     const pdf::PDFSentryTransaction sentryTransaction(QStringLiteral("editor.session"), "ui.session");
-
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_sentry", exeDir);
-    }
 
     QCommandLineOption noDrm(QStringLiteral("no-drm"), QStringLiteral("Disable DRM settings of documents."));
     QCommandLineOption lightGui(QStringLiteral("theme-light"), QStringLiteral("Use a light theme for the GUI."));
@@ -377,17 +349,8 @@ int main(int argc, char* argv[])
     parser.addVersionOption();
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The PDF file to open."));
     parser.process(application);
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_parser", exeDir);
-    }
     pdf::PDFSettings::applyCommandLineSettingsPath(parser);
     pdf::PDFSettings::migrateLegacySettings();
-
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_settings", exeDir);
-    }
 
     const pdf::PDFLogSession logSession(QStringLiteral("editor"));
 
@@ -400,29 +363,13 @@ int main(int argc, char* argv[])
     translator.loadSettings();
     translator.installTranslator();
 
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_translator", exeDir);
-    }
-
     applyColorScheme(parser.isSet(lightGui), parser.isSet(darkGui));
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_qquickstyle", exeDir);
-    }
-
     EditorHost host;
-
-    if (quickSmokeRequested)
-    {
-        logQuickSmokeStage("after_editorhost", exeDir);
-    }
 
     if (parser.isSet(quickSmoke))
     {
-        logQuickSmokeStage("before_run_quick_smoke", exeDir);
         return runQuickSmoke(application, host, exeDir);
     }
 
