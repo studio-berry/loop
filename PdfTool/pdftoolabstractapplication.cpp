@@ -30,6 +30,7 @@
 #include <QFile>
 #include <QDir>
 #include <algorithm>
+#include <memory>
 #include <utility>
 
 #include <algorithm>
@@ -2265,6 +2266,68 @@ bool PDFToolAbstractApplication::readDocument(const PDFToolOptions& options, pdf
     };
     pdf::PDFDocumentReader reader(nullptr, passwordCallback, options.permissiveReading, authorizeOwnerOnly);
     document = reader.readFromFile(options.document);
+
+    switch (reader.getReadingResult())
+    {
+        case pdf::PDFDocumentReader::Result::OK:
+        {
+            if (sourceData)
+            {
+                *sourceData = reader.getSource();
+            }
+            break;
+        }
+
+        case pdf::PDFDocumentReader::Result::Cancelled:
+        {
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("pdf.invalid-password"),
+                             PDFToolTranslationContext::tr("Invalid password provided."));
+            return false;
+        }
+
+        case pdf::PDFDocumentReader::Result::Failed:
+        {
+            reportDiagnostic(options,
+                             PDFToolDiagnosticSeverity::Error,
+                             QStringLiteral("pdf.document-unreadable"),
+                             PDFToolTranslationContext::tr("Error occured during document reading. %1").arg(reader.getErrorMessage()));
+            return false;
+        }
+
+        default:
+        {
+            Q_ASSERT(false);
+            return false;
+        }
+    }
+
+    for (const QString& warning : reader.getWarnings())
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("pdf.reader-warning"),
+                         PDFToolTranslationContext::tr("Warning: %1").arg(warning));
+    }
+
+    return true;
+}
+
+bool PDFToolAbstractApplication::readDocumentOnHeap(const PDFToolOptions& options,
+                                                    std::unique_ptr<pdf::PDFDocument, void (*)(pdf::PDFDocument*)>& document,
+                                                    QByteArray* sourceData,
+                                                    bool authorizeOwnerOnly)
+{
+    bool isFirstPasswordAttempt = true;
+    auto passwordCallback = [&options, &isFirstPasswordAttempt](bool* ok) -> QString
+    {
+        *ok = isFirstPasswordAttempt;
+        isFirstPasswordAttempt = false;
+        return options.password;
+    };
+    pdf::PDFDocumentReader reader(nullptr, passwordCallback, options.permissiveReading, authorizeOwnerOnly);
+    document.reset(reader.readFromFileOnHeap(options.document));
 
     switch (reader.getReadingResult())
     {

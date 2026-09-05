@@ -23,6 +23,7 @@
 #include "pdftoolpreflight.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfdocumentreader.h"
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
@@ -561,15 +562,15 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         }
     }
 
-    pdf::PDFDocument document;
+    std::unique_ptr<pdf::PDFDocument, void (*)(pdf::PDFDocument*)> document(nullptr, &pdf::PDFDocumentReader::destroyDocument);
     QByteArray sourceData;
-    if (!readDocument(options, document, &sourceData, false))
+    if (!readDocumentOnHeap(options, document, &sourceData, false))
     {
         return PDFToolExitCode::InputError;
     }
 
     std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
-        pdf::PDFDocumentSession::create(&document),
+        pdf::PDFDocumentSession::create(document.get()),
         &pdf::PDFDocumentSession::destroy);
     pdf::PreflightEngine engine(session.get());
 
@@ -717,9 +718,10 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     }
 
 #if defined(Q_OS_WIN)
-    // Relocated Windows smoke faults when PdfTool.exe destroys a DLL-allocated
-    // PDFDocumentSession during process teardown. Exit immediately once the JSON
+    // Relocated Windows smoke faults when PdfTool.exe destroys DLL-allocated
+    // PDF state during process teardown. Exit immediately once the JSON
     // envelope is written in main().
+    document.release();
     session.release();
 #endif
 

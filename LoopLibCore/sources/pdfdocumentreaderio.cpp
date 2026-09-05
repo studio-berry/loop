@@ -35,4 +35,14 @@ PDFDocument PDFDocumentReader::readFromFile(const QString& fileName)
     return readFromDevice(&file);
 }
 
+PDFDocument* PDFDocumentReader::readFromFileOnHeap(const QString& fileName)
+{
+    return new PDFDocument(readFromFile(fileName));
+}
+
+void PDFDocumentReader::destroyDocument(PDFDocument* document) noexcept
+{
+    delete document;
+}
+
 }   // namespace pdf

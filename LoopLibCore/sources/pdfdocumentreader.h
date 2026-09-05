@@ -79,6 +79,11 @@ public:
     /// No exception is thrown.
     PDFDocument readFromFile(const QString& fileName);
 
+    /// Heap wrapper for host executables: allocate and destroy inside LoopLibCore
+    /// so MSVC never moves a parsed PDFDocument across the DLL boundary.
+    PDFDocument* readFromFileOnHeap(const QString& fileName);
+    static void destroyDocument(PDFDocument* document) noexcept;
+
     /// Reads a PDF document from the specified device. If device is not opened
     /// for reading, then function tries it to open for reading. If it is opened,
     /// but not for reading, empty PDF document is returned. This also occurs
