@@ -363,6 +363,14 @@ jobs:
           .\loop\scripts\generate-third-party-notices.ps1 `
             -OutputPath "${env:GITHUB_WORKSPACE}\loop\build\install\THIRD_PARTY_NOTICES.txt"
 
+      - name: Prepare Windows install tree for MSI
+        shell: pwsh
+        run: |
+          # Drop optional Qt SQL drivers that reference vendor client libraries we
+          # do not ship. Linux performs the same prune in prepare-appdir.sh.
+          .\loop\scripts\prepare-windows-install.ps1 `
+            -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install"
+
       - name: Read version
         id: get_version
         shell: pwsh

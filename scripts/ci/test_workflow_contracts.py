@@ -136,6 +136,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('-d"SourceDir=$installDir"', workflow)
         self.assertIn('$installDir = "${env:GITHUB_WORKSPACE}\\loop\\build\\install"', workflow)
 
+    def test_windows_install_prunes_optional_sql_drivers_before_msi(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        self.assertIn("prepare-windows-install.ps1", workflow)
+        prepare = (ROOT / "scripts/prepare-windows-install.ps1").read_text(encoding="utf-8")
+        self.assertIn("qsqlite.dll", prepare)
+
     def test_release_draft_pairs_evidence_and_keeps_it_out_of_assets(self):
         workflow = (ROOT / ".github/workflows/CreateReleaseDraft.yml").read_text(encoding="utf-8")
         self.assertIn("source_sha:", workflow)
