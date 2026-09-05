@@ -80,8 +80,12 @@ class LOOPLIBCORESHARED_EXPORT PDFDocumentContext : public QObject
     Q_OBJECT
 
 public:
-    explicit PDFDocumentContext(PDFDocument* document, QObject* parent = nullptr);
-    explicit PDFDocumentContext(PDFDocumentPointer document, QObject* parent = nullptr);
+    explicit PDFDocumentContext(PDFDocument* document,
+                                QObject* parent = nullptr,
+                                qsizetype pageCacheTotal = PDFPageCacheBudget::DefaultTotal);
+    explicit PDFDocumentContext(PDFDocumentPointer document,
+                                QObject* parent = nullptr,
+                                qsizetype pageCacheTotal = PDFPageCacheBudget::DefaultTotal);
     ~PDFDocumentContext() override;
 
     PDFDocumentContext(const PDFDocumentContext&) = delete;

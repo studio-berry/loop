@@ -59,11 +59,11 @@ QString PDFRevisionIdentity::toString() const
         .arg(effectiveProfileIdentity);
 }
 
-PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent) :
+PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent, qsizetype pageCacheTotal) :
     QObject(parent),
     m_document(document),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(document)),
-    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>())
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>(pageCacheTotal))
 {
     if (document != nullptr)
     {
@@ -71,12 +71,12 @@ PDFDocumentContext::PDFDocumentContext(PDFDocument* document, QObject* parent) :
     }
 }
 
-PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* parent) :
+PDFDocumentContext::PDFDocumentContext(PDFDocumentPointer document, QObject* parent, qsizetype pageCacheTotal) :
     QObject(parent),
     m_documentPointer(std::move(document)),
     m_document(m_documentPointer.data()),
     m_documentIdentity(PDFDocumentIdentity::fromDocument(m_document)),
-    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>())
+    m_pageCacheBudget(std::make_shared<PDFPageCacheBudget>(pageCacheTotal))
 {
     if (m_document != nullptr)
     {

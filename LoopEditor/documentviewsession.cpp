@@ -68,7 +68,7 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     // Avoid parenting PDFDocumentContext during member initialization: Windows
     // relocated smoke faults when the session is created under a partially
     // constructed DocumentViewSession parent.
-    m_context(nullptr),
+    m_context(nullptr, nullptr, DefaultCacheLimit),
     m_logContextEnd("context_end"),
     m_scheduler(std::make_unique<pdf::PDFJobScheduler>()),
     m_logSubmitter("submitter"),
@@ -94,13 +94,20 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
                                                                           pdfinteraction::PageSurfaceBounds::conservativeDefaults(),
                                                                           this);
     m_surfaces->setPageCacheBudget(m_context.getPageCacheBudget());
-    setCacheLimit(DefaultCacheLimit);
+    if (m_surfaces)
+    {
+        m_surfaces->setCacheLimit(m_cacheLimit);
+    }
+    fprintf(stderr, "loop-editor documentviewsession after_surfaces\n");
+    fflush(stderr);
     m_overlays = std::make_unique<pdfinteraction::OverlayBuilder>(m_viewport, m_surfaces->renderSettings());
     m_interaction = std::make_unique<pdfinteraction::InteractionController>(*m_revisionSource,
                                                                             m_viewport,
                                                                             *m_hitTest,
                                                                             *m_overlays,
                                                                             this);
+    fprintf(stderr, "loop-editor documentviewsession after_interaction\n");
+    fflush(stderr);
 
     m_viewport.setPageLayout(pdfinteraction::PageLayout::SinglePage);
     applyInitialViewportScreenMetrics(m_viewport);
@@ -108,7 +115,6 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     m_commandBridge.setCoordinator(m_surfaces.get());
     fprintf(stderr, "loop-editor documentviewsession before_prime\n");
     fflush(stderr);
-    m_context.setPageCacheTotal(m_cacheLimit);
     m_surfaces->primeInitialSnapshot();
     fprintf(stderr, "loop-editor documentviewsession constructed\n");
     fflush(stderr);
