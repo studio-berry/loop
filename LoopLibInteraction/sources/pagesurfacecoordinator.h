@@ -288,6 +288,7 @@ private:
     void resetAuthoritativePageAfterFailure(const PageSurfaceKey& key, SurfaceTerminalState state);
     void syncPageCacheBudgetLimits();
     void applyProjectedPageCacheLimit(qsizetype normalizedTotal);
+    qsizetype pageSurfacesByteLimit() const noexcept;
 
     IJobSubmitter* m_submitter = nullptr;
     IPageSurfaceRenderer* m_renderer = nullptr;

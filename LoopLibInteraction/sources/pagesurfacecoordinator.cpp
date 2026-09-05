@@ -140,6 +140,16 @@ void PageSurfaceCoordinator::applyProjectedPageCacheLimit(qsizetype normalizedTo
     m_bounds.maxAdmittedBytes = pdf::PDFPageCacheBudget::pageSurfaces(normalizedTotal);
 }
 
+qsizetype PageSurfaceCoordinator::pageSurfacesByteLimit() const noexcept
+{
+    if (m_bounds.maxAdmittedBytes > 0)
+    {
+        return m_bounds.maxAdmittedBytes;
+    }
+
+    return pdf::PDFPageCacheBudget::pageSurfaces(m_cacheLimit);
+}
+
 void PageSurfaceCoordinator::syncPageCacheBudgetLimits()
 {
     if (!m_pageCacheBudget || !m_initialSnapshotPrimed)
@@ -697,7 +707,7 @@ bool PageSurfaceCoordinator::insertIntoCache(const PageSurfaceKey& key,
         return false;
     }
 
-    const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
+    const qsizetype surfaceLimit = pageSurfacesByteLimit();
     if (pixels->byteSize > surfaceLimit)
     {
         // An entry that cannot fit is refused outright. Evicting the whole cache
@@ -822,8 +832,8 @@ void PageSurfaceCoordinator::trimCacheForIncoming(qsizetype bytes)
         bool pageCacheOverflow = false;
         if (m_pageCacheBudget)
         {
-            const qsizetype limit = m_pageCacheBudget->pageSurfacesLimit();
-            const qsizetype current = m_pageCacheBudget->usage(pdf::PDFPageCacheBudget::Pool::PageSurfaces);
+            const qsizetype limit = pageSurfacesByteLimit();
+            const qsizetype current = m_counters.admittedBytes;
             pageCacheOverflow = bytes > limit || current > limit - bytes;
         }
 
@@ -854,7 +864,7 @@ void PageSurfaceCoordinator::trimCacheForIncoming(qsizetype bytes)
 bool PageSurfaceCoordinator::trimCacheToBudget()
 {
     bool trimmed = false;
-    const qsizetype surfaceLimit = m_pageCacheBudget ? m_pageCacheBudget->pageSurfacesLimit() : m_bounds.maxAdmittedBytes;
+    const qsizetype surfaceLimit = pageSurfacesByteLimit();
     while (m_counters.admittedBytes > surfaceLimit && !m_cache.empty())
     {
         if (!evictOldestCacheEntry())

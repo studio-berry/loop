@@ -116,6 +116,8 @@ DocumentViewSession::DocumentViewSession(QObject* parent) :
     fprintf(stderr, "loop-editor documentviewsession before_prime\n");
     fflush(stderr);
     m_surfaces->primeInitialSnapshot();
+    fprintf(stderr, "loop-editor documentviewsession after_prime\n");
+    fflush(stderr);
     fprintf(stderr, "loop-editor documentviewsession constructed\n");
     fflush(stderr);
 }
