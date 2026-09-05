@@ -404,9 +404,12 @@ jobs:
         working-directory: loop\build\WixInstaller
         run: |
           $wixBin = "$env:wixdir"
-          & "$wixBin\heat.exe" dir "${env:GITHUB_WORKSPACE}\loop\build\install" -cg LOOP_InstalledTree -dr INSTALLFOLDER -gg -sfrag -srd -out HarvestedInstall.wxs
+          $installDir = "${env:GITHUB_WORKSPACE}\loop\build\install"
+          # heat emits relative Source paths; bind them to the staged install tree so
+          # light does not look under loop\build\WixInstaller\SourceDir.
+          & "$wixBin\heat.exe" dir $installDir -cg LOOP_InstalledTree -dr INSTALLFOLDER -gg -sfrag -srd -var var.SourceDir -out HarvestedInstall.wxs
           & "$wixBin\candle.exe" -v -d"SolutionDir=." -d"SolutionExt=.sln" -d"SolutionFileName=LOOP.sln" -d"SolutionName=LOOP" -d"SolutionPath=LOOP.sln" -d"Configuration=Release" -d"OutDir=bin\Release\" -d"Platform=x64" -d"ProjectDir=." -d"ProjectExt=.wixproj" -d"ProjectFileName=LOOP.wixproj" -d"ProjectName=LOOP" -d"ProjectPath=LOOP.wixproj" -d"TargetDir=bin\Release\" -d"TargetExt=.msi" -d"TargetFileName=${{ env.msipackagefilename }}" -d"TargetName=LOOP" -d"TargetPath=bin\Release\${{ env.msipackagefilename }}" -out obj\Release\ -arch x64 -ext $env:wixuiextpath Product.wxs
-          & "$wixBin\candle.exe" -v -out obj\Release\ -arch x64 HarvestedInstall.wxs
+          & "$wixBin\candle.exe" -v -d"SourceDir=$installDir" -out obj\Release\ -arch x64 HarvestedInstall.wxs
           & "$wixBin\light.exe" -v -out ${{ github.workspace }}\loop\build\install\${{ env.msipackagefilename }} -pdbout .\bin\Release\LOOP.wixpdb -cultures:null -ext "$env:wixuiextpath" -contentsfile obj\Release\LOOP.wixproj.BindContentsFileListnull.txt -outputsfile obj\Release\LOOP.wixproj.BindOutputsFileListnull.txt -builtoutputsfile obj\Release\LOOP.wixproj.BindBuiltOutputsFileListnull.txt -wixprojectfile .\LOOP.wixproj obj\Release\Product.wixobj obj\Release\HarvestedInstall.wixobj
 
       - name: Sign MSI Package
