@@ -109,7 +109,7 @@
       "replacement_target": "loop-inspect",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes DimensionsPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Inspect owns capability via loop-inspect.",
       "follow_up_issue": 193
     },
     {
@@ -120,7 +120,7 @@
       "replacement_target": "loop-inspect",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes ObjectInspectorPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Inspect owns capability via loop-inspect.",
       "follow_up_issue": 193
     },
     {
@@ -131,7 +131,7 @@
       "replacement_target": "loop-production-preview",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes OutputPreviewPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Production owns capability via loop-production-preview.",
       "follow_up_issue": 193
     },
     {
@@ -142,7 +142,7 @@
       "replacement_target": "loop-production-preview",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes SoftProofingPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Production owns capability via loop-production-preview.",
       "follow_up_issue": 193
     },
     {
@@ -153,7 +153,7 @@
       "replacement_target": "loop-fix",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes RedactPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Fix owns capability via loop-fix. Product decision remains OPEN on issue #66.",
       "follow_up_issue": 66
     },
     {
@@ -164,7 +164,7 @@
       "replacement_target": "loop-inspect",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes SignaturePlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability."
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Inspect owns capability via loop-inspect."
     },
     {
       "plugin": "EditorPlugin",
@@ -174,7 +174,7 @@
       "replacement_target": "loop-document",
       "required_test": "UnitTests/tst_editorhosttest.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes EditorPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Document owns capability via loop-document.",
       "follow_up_issue": 193
     },
     {
@@ -185,7 +185,7 @@
       "replacement_target": "loop-preflight",
       "required_test": "UnitTests/tst_p4s9interaction.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes LoopPreflightPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Preflight owns capability via loop-preflight.",
       "follow_up_issue": 195
     },
     {
@@ -196,7 +196,7 @@
       "replacement_target": "loop-document",
       "required_test": "UnitTests/tst_editorhosttest.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes ScannerPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability."
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Document owns capability via loop-document."
     },
     {
       "plugin": "AudioBookPlugin",
@@ -206,7 +206,7 @@
       "replacement_target": null,
       "required_test": "scripts/verify-loop-shell-contract.ps1",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Delete source and .ui after STOP-SHIPPING install retirement; LoopEditor is the sole interactive product."
+      "deletion_condition": "Deleted in Phase 5 Issue 17; STOP-SHIPPING. LoopEditor is the sole interactive product."
     },
     {
       "plugin": "OcrPlugin",
@@ -216,7 +216,7 @@
       "replacement_target": "loop-cli",
       "required_test": "PdfTool capabilities --console-format json",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Delete Widgets UI after loop-cli owns OCR; plugin is absent from the loop-release install graph.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; loop-cli owns OCR. Plugin is absent from the loop-release install graph.",
       "follow_up_issue": 41
     },
     {
@@ -227,7 +227,7 @@
       "replacement_target": "loop-fix",
       "required_test": "UnitTests/tst_editorhosttest.cpp",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 removes ActionListPlugin QWidget surface after Quick Fix/Inspect workspace absorbs capability.",
+      "deletion_condition": "Deleted in Phase 5 Issue 17; Quick workspace Fix owns capability via loop-fix.",
       "follow_up_issue": 30
     }
   ],
@@ -239,7 +239,7 @@
       "replacement_target": "loop-cli",
       "required_test": "scripts/verify-loop-shell-contract.ps1",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 deletes source after Quick replacement is proven for CodeGenerator/generatormainwindow.ui.",
+      "deletion_condition": "Terminal: retained HEADLESS developer form; absent from loop-release install graph.",
       "rationale": "Developer fixture generator; not a product surface."
     },
     {
@@ -249,7 +249,7 @@
       "replacement_target": "loop-inspect",
       "required_test": "scripts/verify-loop-shell-contract.ps1",
       "evidence_artifact": "docs/loop-shell.json",
-      "deletion_condition": "Phase 5 deletes source after Quick replacement is proven for JBIG2_Viewer/mainwindow.ui.",
+      "deletion_condition": "Terminal: retained HEADLESS developer form; absent from loop-release install graph.",
       "rationale": "Developer JBIG2 probe; not a product surface."
     }
   ]

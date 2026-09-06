@@ -1,0 +1,14 @@
+{
+  "attempted": 4,
+  "budget_kind": "rollback-artifacts",
+  "budget_pool": "rollback",
+  "context": "synthetic/rollback-artifacts",
+  "id": "rollback-artifacts",
+  "limit": 3,
+  "operation": "charge-rollback-artifacts",
+  "payload": {
+    "artifacts": 4
+  },
+  "pdf_file": "rollback-artifacts.pdf",
+  "pdf_shape": "basic"
+}

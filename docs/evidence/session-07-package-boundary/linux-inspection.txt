@@ -1,0 +1,9 @@
+status: passed
+platform: linux
+source_sha: b47c62b263a3fd7fb36940856866e589bbc8be10
+package: Loop-pdf-0.2.0-alpha-x86_64.AppImage
+package_sha256: 6cac0b88b0a1f8df49b85808f3b51d538bdfcc63665d64cf50a0197150d2dfa1
+payload_files: 358
+binaries: 171
+runtime_plugin_candidates: 123
+findings:

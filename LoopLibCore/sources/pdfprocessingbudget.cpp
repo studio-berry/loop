@@ -241,12 +241,16 @@ void PDFProcessingBudget::checkDecodedStreamSize(std::uint64_t decodedBytes,
     {
         if (decodedBytes != 0)
         {
-            fail(PDFBudgetKind::DecompressionRatio, 0, decodedBytes, context);
+            fail(PDFBudgetKind::DecompressionRatio, 0, decodedBytes, context, decodedBytes, compressedBytes);
         }
     }
     else if (compressedBytes != 0 && (compressedBytes > std::numeric_limits<std::uint64_t>::max() / ratio || decodedBytes > compressedBytes * ratio))
     {
-        fail(PDFBudgetKind::DecompressionRatio, ratio, decodedBytes, context);
+        // Report the observed ratio in the same units as the configured limit.
+        // Keep attempted comparable to the ratio-valued limit; preserve the
+        // byte measurements separately for structured reports.
+        const std::uint64_t attemptedRatio = decodedBytes / compressedBytes + (decodedBytes % compressedBytes != 0 ? 1 : 0);
+        fail(PDFBudgetKind::DecompressionRatio, ratio, attemptedRatio, context, decodedBytes, compressedBytes);
     }
 }
 
@@ -349,9 +353,11 @@ PDFProcessingBudget::DepthScope::~DepthScope()
 [[noreturn]] void PDFProcessingBudget::fail(PDFBudgetKind kind,
                                             std::uint64_t limit,
                                             std::uint64_t attempted,
-                                            const QString& context) const
+                                            const QString& context,
+                                            std::uint64_t observedBytes,
+                                            std::uint64_t compressedBytes) const
 {
-    throw PDFBudgetExceededException({ kind, budgetPoolFor(kind), limit, attempted, context });
+    throw PDFBudgetExceededException({ kind, budgetPoolFor(kind), limit, attempted, observedBytes, compressedBytes, context });
 }
 
 }   // namespace pdf

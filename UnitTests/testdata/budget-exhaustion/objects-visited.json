@@ -1,0 +1,14 @@
+{
+  "attempted": 4,
+  "budget_kind": "objects-visited",
+  "budget_pool": "document-model",
+  "context": "synthetic/objects-visited",
+  "id": "objects-visited",
+  "limit": 3,
+  "operation": "charge-objects",
+  "payload": {
+    "objects": 4
+  },
+  "pdf_file": "objects-visited.pdf",
+  "pdf_shape": "many-objects"
+}

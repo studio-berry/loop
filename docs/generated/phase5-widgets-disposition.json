@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "evidence_kind": "phase5-widgets-disposition",
-  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "qualified_baseline_sha": "e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1",
   "inventory": "docs/generated/phase5-widgets-inventory.json",
   "policy_inputs": [
     "docs/loop-shell.json",
@@ -71,7 +71,7 @@
       "consumer": "loop-cli",
       "rationale": "Developer fixture generator; not a product surface.",
       "disposition": "RETAIN-NON-PRODUCT",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for CodeGenerator/generatormainwindow.ui.",
+      "testable_condition": "Terminal: retained HEADLESS developer form; absent from loop-release install graph.",
       "source_disposition": "HEADLESS",
       "source": "docs/loop-shell.json:legacy_surface_disposition",
       "replacement_target": "loop-cli"
@@ -84,7 +84,7 @@
       "consumer": "loop-inspect",
       "rationale": "Developer JBIG2 probe; not a product surface.",
       "disposition": "RETAIN-NON-PRODUCT",
-      "testable_condition": "Phase 5 deletes source after Quick replacement is proven for JBIG2_Viewer/mainwindow.ui.",
+      "testable_condition": "Terminal: retained HEADLESS developer form; absent from loop-release install graph.",
       "source_disposition": "HEADLESS",
       "source": "docs/loop-shell.json:legacy_surface_disposition",
       "replacement_target": "loop-inspect"

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "phase5-terminal-closeout",
+  "session": 9,
+  "qualified_baseline_sha": "e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1",
+  "session_09_sha": "1c3f9d6d2312045264134f07b4d00e26de2058bf",
+  "branch": "cursor/session-09-ledger-closeout",
+  "counts": {
+    "targets": 69,
+    "installed_in_profile": 4,
+    "widgets_surfaces": 4,
+    "ui_forms": 2,
+    "disposition_rows": 6,
+    "deletion_safe": true
+  },
+  "open_gates": [
+    "E-01",
+    "T-01",
+    "T-02",
+    "T-03",
+    "R-01",
+    "L-01",
+    "P-02",
+    "E-02",
+    "E-03",
+    "Q-05"
+  ],
+  "verifiers": [
+    {
+      "command": "python scripts/ci/check_source_integrity.py",
+      "result": "pass",
+      "output": "Source integrity policy passed."
+    },
+    {
+      "command": "python scripts/ci/check_phase5_residue.py",
+      "result": "pass",
+      "output": "Phase 5 residue check passed: deleted product surfaces are absent from maintained paths."
+    },
+    {
+      "command": "python scripts/generate_phase5_widgets_evidence.py --check",
+      "result": "pass",
+      "output": "Phase 5 Widgets evidence verified: 69 targets, 2 UI forms, 6 disposition rows."
+    },
+    {
+      "command": "python scripts/verify_phase5_widgets_contract.py",
+      "result": "pass",
+      "output": "Phase 5 Widgets contract verified: 4 Widgets targets, 2 UI forms, 6 explicit dispositions, baseline e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1."
+    },
+    {
+      "command": "python scripts/generate_widgets_library_consumer_graph.py --check",
+      "result": "pass",
+      "output": "Widgets library consumer graph verified: 0 consumers, 0 neutral-code rows, 0 installed blockers."
+    },
+    {
+      "command": "python scripts/verify-widgets-library-consumer-graph.py",
+      "result": "pass",
+      "output": "Widgets library consumer graph ok"
+    },
+    {
+      "command": "python scripts/verify-widgets-free-release-profile.py",
+      "result": "pass",
+      "output": "Widgets-free release profile verified: CMake omits Widgets-bound Qt modules for loop-release"
+    },
+    {
+      "command": "python scripts/verify-loop-shell-contract.py",
+      "result": "pass",
+      "output": "Loop shell contract verified: 7 workspaces, 107 Editor actions, 12 plugin policies, 2 legacy UI dispositions; Quick product shell admitted."
+    },
+    {
+      "command": "python scripts/verify-plugin-form-accounting.py",
+      "result": "pass",
+      "output": "Plugin/form accounting verified: shell ledger, plugin policies, CMake .ui references, and retired install boundaries are fail-closed"
+    },
+    {
+      "command": "python scripts/verify-plugin-surface-policies.py",
+      "result": "pass",
+      "output": "Plugin surface policies verified: all 12 plugins are build-only and absent from loop-release"
+    },
+    {
+      "command": "python scripts/ci/validate_product_surface.py",
+      "result": "pass",
+      "output": "product-surface source contract verified for developer and loop-release"
+    },
+    {
+      "command": "python scripts/generate-architecture-catalogs.py --check",
+      "result": "pass"
+    }
+  ]
+}

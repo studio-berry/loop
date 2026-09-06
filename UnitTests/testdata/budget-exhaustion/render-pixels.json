@@ -1,0 +1,14 @@
+{
+  "attempted": 65,
+  "budget_kind": "render-pixels",
+  "budget_pool": "raster-tile",
+  "context": "synthetic/render-pixels",
+  "id": "render-pixels",
+  "limit": 64,
+  "operation": "charge-render-pixels",
+  "payload": {
+    "pixels": 65
+  },
+  "pdf_file": "render-pixels.pdf",
+  "pdf_shape": "huge-image"
+}

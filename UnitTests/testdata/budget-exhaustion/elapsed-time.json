@@ -1,0 +1,14 @@
+{
+  "attempted": 2,
+  "budget_kind": "elapsed-time",
+  "budget_pool": "document-model",
+  "context": "synthetic/elapsed-time",
+  "id": "elapsed-time",
+  "limit": 1,
+  "operation": "check-elapsed",
+  "payload": {
+    "elapsed_ms": 2
+  },
+  "pdf_file": "elapsed-time.pdf",
+  "pdf_shape": "basic"
+}

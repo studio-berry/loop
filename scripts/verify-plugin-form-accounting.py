@@ -59,12 +59,40 @@ def _resolve_ui_path(cmake: Path, root: Path, token: str) -> str:
     return cmake.parent.relative_to(root).joinpath(normalized).as_posix().replace("\\", "/")
 
 
+def _tracked_paths(root: Path, *pathspecs: str) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *pathspecs]
+            if pathspecs[:1] == ("*.ui",) or pathspecs == ("*.ui", "**/*.ui")
+            else ["git", "ls-files", "--", *pathspecs],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        tracked = [line.replace("\\", "/") for line in output.splitlines() if line]
+        if tracked:
+            return tracked
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        pass
+    if pathspecs == ("*.ui", "**/*.ui"):
+        return sorted(
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*.ui")
+            if path.is_file() and ".git" not in path.parts and ".claude" not in path.parts
+        )
+    return sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("CMakeLists.txt")
+        if ".git" not in path.parts and ".claude" not in path.parts
+    )
+
+
 def _tracked_ui_references(root: Path) -> list[tuple[str, str]]:
     references: list[tuple[str, str]] = []
-    for cmake in root.rglob("CMakeLists.txt"):
-        if ".git" in cmake.parts:
+    for relative in _tracked_paths(root, "CMakeLists.txt", "**/CMakeLists.txt"):
+        cmake = root / relative
+        if not cmake.is_file():
             continue
-        relative = cmake.relative_to(root).as_posix()
         for line in cmake.read_text(encoding="utf-8").splitlines():
             code = line.split("#", 1)[0]
             if ".ui" not in code:
@@ -84,11 +112,7 @@ def validate_accounting(root: Path) -> None:
     if len(ledger) != expected_ledger_count:
         raise AccountingError(f"expected {expected_ledger_count} ledgered .ui forms, found {len(ledger)}")
 
-    repo_ui = {
-        path.relative_to(root).as_posix()
-        for path in root.rglob("*.ui")
-        if path.is_file() and ".git" not in path.parts
-    }
+    repo_ui = set(_tracked_paths(root, "*.ui", "**/*.ui"))
     ledger_only = sorted(ledger - repo_ui)
     repo_only = sorted(repo_ui - ledger)
     if ledger_only or repo_only:

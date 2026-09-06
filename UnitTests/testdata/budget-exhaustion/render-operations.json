@@ -1,0 +1,14 @@
+{
+  "attempted": 4,
+  "budget_kind": "render-operations",
+  "budget_pool": "raster-tile",
+  "context": "synthetic/render-operations",
+  "id": "render-operations",
+  "limit": 3,
+  "operation": "charge-render-operations",
+  "payload": {
+    "operations": 4
+  },
+  "pdf_file": "render-operations.pdf",
+  "pdf_shape": "many-drawing-operations"
+}

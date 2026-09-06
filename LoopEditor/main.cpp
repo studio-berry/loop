@@ -45,6 +45,8 @@
 #include <QUrl>
 
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #if defined(Q_OS_WIN)
 #include <windows.h>
@@ -52,6 +54,19 @@
 
 namespace
 {
+
+bool argvContainsQuickSmoke(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::strcmp(argv[i], "--quick-smoke") == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 QString executableDirectory(const char* argv0)
 {
@@ -71,6 +86,90 @@ QString executableDirectory(const char* argv0)
     }
 
     return QDir::currentPath();
+}
+
+QStringList packagedLibraryPaths(const QString& exeDir)
+{
+    QStringList paths;
+    const QDir exeDirQ(exeDir);
+
+#if !defined(Q_OS_WIN)
+    paths << exeDirQ.absolutePath();
+#else
+    // Windows ships product DLLs beside LoopEditor.exe. Adding usr/bin to
+    // libraryPaths() makes Qt treat them as plugins and crashes with 0xC0000005
+    // during QPA startup. windeployqt stages platform plugins under install-root
+    // plugins/ instead, which packagedLibraryPaths resolves below.
+#endif
+
+    const auto appendIfExists = [&paths](const QString& candidate)
+    {
+        if (!QFileInfo::exists(candidate))
+        {
+            return;
+        }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!paths.contains(absolute))
+        {
+            paths << absolute;
+        }
+    };
+
+    appendIfExists(exeDirQ.filePath(QStringLiteral("platforms")));
+    appendIfExists(exeDirQ.filePath(QStringLiteral("qml")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendIfExists(QDir(root).filePath(QStringLiteral("plugins")));
+#if !defined(Q_OS_WIN)
+        // Linux AppImage smoke strips developer Qt env vars; the install-root lib
+        // tree can hold arch-specific plugin fallbacks. On Windows, adding usr/lib
+        // to QCoreApplication::libraryPaths() makes Qt treat product DLLs as
+        // plugins and crashes with 0xC0000005 during QPA startup.
+        appendIfExists(QDir(root).filePath(QStringLiteral("usr/lib")));
+#endif
+    }
+
+    return paths;
+}
+
+QStringList packagedQmlImportPaths(const QString& exeDir)
+{
+    QStringList importPaths;
+    const QDir exeDirQ(exeDir);
+
+    const auto appendQmlIfExists = [&importPaths](const QString& candidate)
+    {
+        if (!QFileInfo::exists(candidate))
+        {
+            return;
+        }
+
+        const QString absolute = QDir(candidate).absolutePath();
+        if (!importPaths.contains(absolute))
+        {
+            importPaths << absolute;
+        }
+    };
+
+    appendQmlIfExists(exeDirQ.filePath(QStringLiteral("qml")));
+    appendQmlIfExists(exeDirQ.filePath(QStringLiteral("../lib/qml")));
+
+    for (const QString& root : {
+             exeDirQ.absoluteFilePath(QStringLiteral("../..")),
+             exeDirQ.absoluteFilePath(QStringLiteral("..")),
+             exeDirQ.absolutePath(),
+         })
+    {
+        appendQmlIfExists(QDir(root).filePath(QStringLiteral("usr/lib/qml")));
+    }
+
+    return importPaths;
 }
 
 QString graphicsApiName(QSGRendererInterface::GraphicsApi api)
@@ -147,9 +246,13 @@ void applyColorScheme(bool cliLightTheme, bool cliDarkTheme)
     }
 }
 
-int runQuickSmoke(QGuiApplication& application, EditorHost& host)
+int runQuickSmoke(QGuiApplication& application, EditorHost& host, const QString& exeDir)
 {
     QQmlApplicationEngine engine;
+    for (const QString& importPath : packagedQmlImportPaths(exeDir))
+    {
+        engine.addImportPath(importPath);
+    }
     engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)
@@ -190,8 +293,10 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host)
                                      return;
                                  }
 
-                                 QMetaObject::invokeMethod(&application, [&application]()
-                                                           { application.exit(0); }, Qt::QueuedConnection);
+                                 // Relocated Windows packaging smoke can fault during Qt/Loop
+                                 // DLL teardown after the scene graph reports ready. Success is
+                                 // signaled above; skip destructors for this startup-only probe.
+                                 std::_Exit(0);
                              },
                              Qt::DirectConnection);
                      });
@@ -213,9 +318,12 @@ int runQuickSmoke(QGuiApplication& application, EditorHost& host)
 
 int main(int argc, char* argv[])
 {
-    // Package smoke strips developer Qt env vars. Search the install directory
-    // for bundled platform/QML/SQL plugins before QGuiApplication loads QPA.
-    QCoreApplication::setLibraryPaths(QStringList{ executableDirectory(argv[0]) } + QCoreApplication::libraryPaths());
+    const QString exeDir = executableDirectory(argv[0]);
+
+    // Package smoke strips developer Qt env vars. Search install-root plugin trees
+    // only: adding usr/bin itself to libraryPaths() on Windows makes Qt treat
+    // product DLLs as plugins and can fault during later initialization.
+    QCoreApplication::setLibraryPaths(packagedLibraryPaths(exeDir) + QCoreApplication::libraryPaths());
 
     QGuiApplication::setAttribute(Qt::AA_CompressHighFrequencyEvents, true);
     QGuiApplication application(argc, argv);
@@ -262,13 +370,14 @@ int main(int argc, char* argv[])
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
 
     EditorHost host;
-    QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
 
     if (parser.isSet(quickSmoke))
     {
-        return runQuickSmoke(application, host);
+        return runQuickSmoke(application, host, exeDir);
     }
+
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("editorHost"), &host);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated, &application,
                      [&application](QObject* object, const QUrl& url)

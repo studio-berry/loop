@@ -1,0 +1,14 @@
+{
+  "attempted": 3,
+  "budget_kind": "object-depth",
+  "budget_pool": "document-model",
+  "context": "synthetic/object-depth",
+  "id": "object-depth",
+  "limit": 2,
+  "operation": "enter-depth",
+  "payload": {
+    "depth": 3
+  },
+  "pdf_file": "object-depth.pdf",
+  "pdf_shape": "nested-arrays"
+}

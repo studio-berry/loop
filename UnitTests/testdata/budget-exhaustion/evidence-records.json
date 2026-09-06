@@ -1,0 +1,14 @@
+{
+  "attempted": 4,
+  "budget_kind": "evidence-records",
+  "budget_pool": "evidence-cache",
+  "context": "synthetic/evidence-records",
+  "id": "evidence-records",
+  "limit": 3,
+  "operation": "charge-evidence-records",
+  "payload": {
+    "records": 4
+  },
+  "pdf_file": "evidence-records.pdf",
+  "pdf_shape": "basic"
+}

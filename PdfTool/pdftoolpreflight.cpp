@@ -22,14 +22,15 @@
 
 #include "pdftoolpreflight.h"
 
-#include "pdfdocumentsession.h"
+#include "preflightclirun.h"
 #include "preflightprofileresolver.h"
 #include "preflightengine.h"
 #include "pdfpreflightverdict.h"
 #include "pdfoperationimpact.h"
 #include "pdfartifactstore.h"
-#include "pdfjobscheduler.h"
+#include "pdfoperationcontrol.h"
 #include "pdfoperationhistorystore.h"
+#include "pdftoolcancel.h"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -40,8 +41,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUuid>
-
-#include <optional>
 
 namespace pdftool
 {
@@ -559,19 +558,6 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         }
     }
 
-    pdf::PDFDocument document;
-    QByteArray sourceData;
-    if (!readDocument(options, document, &sourceData, false))
-    {
-        return PDFToolExitCode::InputError;
-    }
-
-    pdf::PDFDocumentSession session(&document);
-    pdf::PreflightEngine engine(&session);
-
-    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
-    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
-
     pdf::PDFRevalidationPlan revalidationPlan;
     if (options.preflightCheckFilter.isEmpty())
     {
@@ -585,63 +571,89 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         revalidationPlan.reason = QStringLiteral("cli-check-filter");
     }
 
-    struct PreflightJobOutcome
+    struct CliCancellationControl final : public pdf::PDFOperationControl
     {
-        std::optional<pdf::PreflightResult> result;
+        bool isOperationCancelled() const override
+        {
+            return pdftool::isCancelRequested();
+        }
     };
-    PreflightJobOutcome outcome;
 
-    pdf::PDFJobScheduler scheduler(1);
-    pdf::PDFJobSpec spec;
-    spec.kind = pdf::PDFJobKind::Preflight;
-    spec.priority = pdf::PDFJobPriority::Operator;
-    spec.documentRevision = revisionDigest;
-    spec.operationId = QStringLiteral("preflight");
-    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
-    const QString jobId = scheduler.submit(spec, [&engine, runProfile, jobSpec, cliBindings, revalidationPlan, &outcome](pdf::PDFJobContext& context)
-                                           {
-        if (context.isCancellationRequested())
-        {
-            return;
-        }
-        engine.setOperationControl(context.operationControl());
-        pdf::PreflightResult runResult = engine.run(runProfile, jobSpec, cliBindings, revalidationPlan);
-        if (context.isCancellationRequested())
-        {
-            return;
-        }
-        outcome.result = std::move(runResult); });
+    CliCancellationControl cancellationControl;
 
-    constexpr int preflightTimeoutMs = 300000;
-    if (!scheduler.waitForFinished(jobId, preflightTimeoutMs))
+    pdf::PreflightFileInspectionRequest inspectionRequest;
+    inspectionRequest.documentPath = options.document;
+    inspectionRequest.password = options.password;
+    inspectionRequest.permissiveReading = options.permissiveReading;
+    inspectionRequest.profile = runProfile;
+    inspectionRequest.jobSpec = jobSpec;
+    inspectionRequest.cliBindings = cliBindings;
+    inspectionRequest.plan = revalidationPlan;
+    inspectionRequest.cancellation = &cancellationControl;
+
+    const pdf::PreflightFileInspectionOutcome inspection = pdf::inspectPreflightFile(inspectionRequest);
+    if (!inspection.documentReadOk)
     {
-        scheduler.cancel(jobId);
-        scheduler.waitForFinished(jobId, 30000);
+        switch (inspection.readResult)
+        {
+            case pdf::PDFDocumentReader::Result::Cancelled:
+                reportDiagnostic(options,
+                                 PDFToolDiagnosticSeverity::Error,
+                                 QStringLiteral("pdf.invalid-password"),
+                                 PDFToolTranslationContext::tr("Invalid password provided."));
+                break;
+
+            case pdf::PDFDocumentReader::Result::Failed:
+                reportDiagnostic(options,
+                                 PDFToolDiagnosticSeverity::Error,
+                                 QStringLiteral("pdf.document-unreadable"),
+                                 PDFToolTranslationContext::tr("Error occured during document reading. %1")
+                                     .arg(inspection.readErrorMessage));
+                break;
+
+            default:
+                Q_ASSERT(false);
+                break;
+        }
+
+        return PDFToolExitCode::InputError;
     }
-    const pdf::PDFJobSnapshot snapshot = scheduler.snapshot(jobId);
+
+    for (const QString& warning : inspection.readWarnings)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Warning,
+                         QStringLiteral("pdf.reader-warning"),
+                         PDFToolTranslationContext::tr("Warning: %1").arg(warning));
+    }
+
+    const QByteArray& sourceData = inspection.sourceData;
+    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
+    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
+
+    const bool cancelled = cancellationControl.isOperationCancelled();
+    const bool jobSucceeded = !cancelled && inspection.inspectionRan;
 
     pdf::PreflightResult result;
-    if (snapshot.status == pdf::PDFJobStatus::Succeeded && outcome.result.has_value())
+    if (jobSucceeded)
     {
-        result = std::move(*outcome.result);
+        result = inspection.report;
     }
     else
     {
-        if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+        if (cancelled)
         {
             result.inspectionComplete = false;
             result.errorCode = QStringLiteral("cancelled");
             result.errorMessage = PDFToolTranslationContext::tr("Preflight was cancelled.");
         }
-        else if (snapshot.status != pdf::PDFJobStatus::Succeeded)
+        else
         {
             result.inspectionComplete = false;
             if (result.errorCode.isEmpty())
             {
                 result.errorCode = QStringLiteral("preflight-job-failed");
-                result.errorMessage = snapshot.errorMessage.isEmpty()
-                                          ? PDFToolTranslationContext::tr("Preflight job did not succeed.")
-                                          : snapshot.errorMessage;
+                result.errorMessage = PDFToolTranslationContext::tr("Preflight job did not succeed.");
             }
         }
     }
@@ -669,7 +681,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             resultExitCode = PDFToolExitCode::PreflightError;
             break;
     }
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    if (cancelled)
     {
         resultExitCode = PDFToolExitCode::Cancelled;
     }
@@ -688,10 +700,6 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
             resultExitCode = PDFToolExitCode::Success;
         }
     }
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
-    {
-        resultExitCode = PDFToolExitCode::Cancelled;
-    }
 
     if (!exportDecisions(options.preflightDecisionsExportPath, result.decisions, decisionsError))
     {
@@ -709,11 +717,11 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     }
 
     pdf::PDFOperationHistoryStatus historyStatus = pdf::PDFOperationHistoryStatus::Accepted;
-    if (snapshot.status == pdf::PDFJobStatus::Cancelled || snapshot.status == pdf::PDFJobStatus::Stale)
+    if (cancelled)
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Cancelled;
     }
-    else if (verdict.state == pdf::PreflightVerdictState::Error || snapshot.status != pdf::PDFJobStatus::Succeeded)
+    else if (verdict.state == pdf::PreflightVerdictState::Error || !jobSucceeded)
     {
         historyStatus = pdf::PDFOperationHistoryStatus::Failed;
     }

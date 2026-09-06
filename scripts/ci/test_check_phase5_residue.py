@@ -47,6 +47,20 @@ class Phase5ResidueTests(unittest.TestCase):
                 findings = check_phase5_residue.violations(root)
         self.assertEqual(len(findings), 1)
 
+    def test_session_handoff_docs_are_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "docs"
+            path.mkdir()
+            (path / "SESSION_08_HANDOFF.md").write_text("LoopViewer is gone.\n", encoding="utf-8")
+            with mock.patch.object(
+                check_phase5_residue,
+                "tracked_paths",
+                return_value=["docs/SESSION_08_HANDOFF.md"],
+            ):
+                findings = check_phase5_residue.violations(root)
+        self.assertEqual(len(findings), 1)
+
     def test_validation_scripts_are_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

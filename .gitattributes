@@ -13,3 +13,5 @@ LoopLibCore/cmaps/** binary
 LoopLibCore/liberation-fonts-ttf/** -whitespace
 3rdparty_licenses/** -whitespace
 WixInstaller/explic.rtf -whitespace
+UnitTests/testdata/budget_exhaustion/** text eol=lf
+UnitTests/testdata/budget-exhaustion/** text eol=lf

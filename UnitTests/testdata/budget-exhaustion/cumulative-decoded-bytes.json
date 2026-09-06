@@ -1,0 +1,14 @@
+{
+  "attempted": 65,
+  "budget_kind": "cumulative-decoded-bytes",
+  "budget_pool": "decoded-streams",
+  "context": "synthetic/cumulative-decoded-bytes",
+  "id": "cumulative-decoded-bytes",
+  "limit": 64,
+  "operation": "charge-decoded-bytes",
+  "payload": {
+    "decoded_bytes": 65
+  },
+  "pdf_file": "cumulative-decoded-bytes.pdf",
+  "pdf_shape": "many-flate-streams"
+}
