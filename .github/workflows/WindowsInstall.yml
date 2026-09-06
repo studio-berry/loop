@@ -446,6 +446,18 @@ jobs:
           $inspectorOutput | Tee-Object -FilePath (Join-Path $evidenceDir "inspector.txt")
           if ($LASTEXITCODE -ne 0) { throw "MSI package boundary inspection failed." }
 
+      - name: Generate final-artifact SBOM and notices
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          python ".\loop\scripts\ci\generate_package_sbom.py" `
+            --evidence (Join-Path $evidenceDir "evidence.json") `
+            --output (Join-Path $evidenceDir "components.spdx.json")
+          python ".\loop\scripts\ci\generate_package_third_party_notices.py" `
+            --evidence (Join-Path $evidenceDir "evidence.json") `
+            --output (Join-Path $evidenceDir "THIRD_PARTY_NOTICES.txt")
+          if ($LASTEXITCODE -ne 0) { throw "Final-artifact notices generation failed." }
+
       - name: Run MSI lifecycle smoke test
         shell: pwsh
         run: |
@@ -459,6 +471,16 @@ jobs:
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
             -SkipEditorLaunch
+
+      - name: Run Qt LGPL relink test
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
+          & ".\loop\scripts\ci\run_qt_relink_test.ps1" `
+            -InstallDir $installDir `
+            -SourceSha $env:LOOP_SOURCE_SHA `
+            -OutputPath (Join-Path $evidenceDir "qt-relink.txt")
 
 
       - name: Upload Windows package boundary evidence
