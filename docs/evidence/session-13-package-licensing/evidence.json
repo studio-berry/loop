@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "loop-package-licensing-evidence",
+  "generated_at": "2026-09-06T00:00:00Z",
+  "source_sha": "pending-hosted-package-build",
+  "status": "incomplete",
+  "session": 13,
+  "policy": "docs/PACKAGING_LICENSING.md",
+  "procedure": "docs/SESSION_13_PACKAGE_LICENSING.md",
+  "artifacts": {
+    "linux": {
+      "boundary_evidence": null,
+      "sbom": null,
+      "third_party_notices": null,
+      "qt_relink_transcript": null,
+      "clean_machine_smoke": null
+    },
+    "windows": {
+      "boundary_evidence": null,
+      "sbom": null,
+      "third_party_notices": null,
+      "qt_relink_transcript": null
+    },
+    "paired_boundary": null
+  },
+  "release_gates": {
+    "final_artifact_sbom": "open",
+    "third_party_notices": "partial",
+    "clean_machine_package_smoke": "open",
+    "qt_relink_test": "open"
+  },
+  "known_limitations": [
+    "Windows Server 2022 pristine VM clean-machine proof remains deferred to 1.0 per Session 07.",
+    "Session 07 package evidence on b47c62b2 does not transfer; all artifacts must bind to the Session 14 candidate SHA.",
+    "Hosted Linux_AppImage and Windows_MSI workflow_dispatch runs are required to populate this directory."
+  ]
+}
