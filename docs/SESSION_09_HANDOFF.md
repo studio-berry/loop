@@ -49,9 +49,10 @@ Deleted Phase 5 identities remain recorded in `docs/product-surface.json` with
 packaging and budget work beyond this ledger-closeout diff; qualification lanes
 should not treat it as the Session 09 ledger baseline.
 
-**Dev integration:** `origin/dev` remains at Session 08 (`e7f7e0c3…`) until a
-backport PR lands these two ledger commits on `dev`. Sessions 10–13 must record
-`candidate_sha` from the accepted `dev` merge, not from `stable` alone.
+**Dev integration:** `origin/dev` remains at Session 08 (`e7f7e0c3…`) until
+[PR #535](https://github.com/studio-berry/loop/pull/535) lands these ledger
+commits on `dev`. Sessions 10–13 must record `candidate_sha` from the
+accepted `dev` merge, not from `stable` alone.
 
 Local verifier stack (clean tracked tree):
 
