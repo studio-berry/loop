@@ -19,9 +19,7 @@ provenance and negative contract fixtures remain explicitly non-authoritative.
 
 ## Verification record
 
-**Post-residue candidate SHA:** recorded on the accepted closeout branch after
-PR #533 merge. Qualification below was executed on closeout branch commits
-starting from Session 07 acceptance at `1c412698`.
+**Post-residue candidate SHA:** `4cafceec` on branch `cursor/session-08-residue-closeout` (PR #533).
 
 ### Session 07 package evidence (accepted prerequisite)
 
@@ -103,15 +101,13 @@ Closeout fixes on the candidate branch:
   (historical evidence, non-executable)
 - Extend `CURRENT_DOCS` for session handoffs and packaging guidance (Issue 26)
 
-### Hosted CI (PR #533)
+### Hosted CI (PR #533 @ `4cafceec`)
 
-- `source_integrity` — PASS
-- Supply Chain Policy — PASS
-- Documentation truth (`architecture-docs`) — PASS
-- `agent-fast` — required PR lane (see PR checks for exact run ID)
-
-Prior `dev` push at `1c412698` failed `source_integrity` on the loop-identity
-contract; closeout branch resolves that finding.
+- CI workflow run `34062232627` — **SUCCESS**
+  - `source_integrity` — PASS
+  - `agent-fast` — PASS (8m25s)
+- Supply Chain Policy run `34062232509` — PASS
+- Documentation truth run `34062232524` — PASS
 
 ## Exit gate
 
