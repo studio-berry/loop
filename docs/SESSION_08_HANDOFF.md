@@ -14,76 +14,114 @@ provenance and negative contract fixtures remain explicitly non-authoritative.
   repository-map documentation to use the Quick/Core graph.
 - Added `scripts/ci/check_phase5_residue.py`, wired into source-integrity CI,
   with negative fixture coverage.
+- Extended `CURRENT_DOCS` machine enforcement to session handoffs, packaging,
+  and CI contributor guidance.
 
 ## Verification record
 
-**Candidate SHA:** `1c4126982e8f4b50f63d1063067ce4c4a76ee358` (Session 07 package-boundary evidence accepted).
+**Post-residue candidate SHA:** recorded on the accepted closeout branch after
+PR #533 merge. Qualification below was executed on closeout branch commits
+starting from Session 07 acceptance at `1c412698`.
 
-### Session 07 package evidence (accepted)
+### Session 07 package evidence (accepted prerequisite)
 
 - Linux AppImage workflow `34050834332` (package build + inspection)
-- Windows MSI package-boundary evidence recorded in `docs/evidence/session-07-package-boundary/`
+- Windows MSI package-boundary evidence in `docs/evidence/session-07-package-boundary/`
 - Paired evidence: `docs/evidence/session-07-package-boundary/paired-evidence.json`
+- Recorded on `dev` at `1c412698`
 
 ### Issue 25 — maintained-tree residue (PASS)
 
+Terminal post-package sweep on the closeout candidate:
+
 ```
-python scripts/ci/test_check_phase5_residue.py  → 5 tests OK
+python scripts/ci/test_check_phase5_residue.py  → 6 tests OK
 python scripts/ci/check_phase5_residue.py       → passed
 ```
 
-Targeted `git grep` across maintained paths: no forbidden `LoopLibWidgets`, `LoopLibGui`, or secondary executable names.
+Targeted grep across maintained paths: no forbidden deleted Widgets surfaces remain.
 
 ### Issue 26 — current documentation normalization (PASS)
 
-Current authority docs (`docs/REPO_MAP.md`, `docs/PLATFORM_SUPPORT.md`, `docs/LOOP_SHELL_CONTRACT.md`, `docs/LOOP_WORKSPACES.md`, `docs/ACCESSIBILITY_BASELINE.md`, `docs/EDITOR_RECOVERY.md`, `docs/JOB_SCHEDULER.md`) contain no executable references to deleted Widgets surfaces. `docs/product-surface.json` records deleted artifacts only in `source_status: deleted` disposition rows.
+Machine-enforced current docs (`CURRENT_DOCS` in `check_phase5_residue.py`):
+
+- `docs/ACCESSIBILITY_BASELINE.md`
+- `docs/CI.md`
+- `docs/EDITOR_RECOVERY.md`
+- `docs/JOB_SCHEDULER.md`
+- `docs/LOOP_SHELL_CONTRACT.md`
+- `docs/LOOP_WORKSPACES.md`
+- `docs/PACKAGING_LICENSING.md`
+- `docs/PLATFORM_SUPPORT.md`
+- `docs/REPO_MAP.md`
+- `docs/SESSION_07_PACKAGE_BOUNDARY.md`
+- `docs/SESSION_08_HANDOFF.md`
+
+Additional architecture/product verification:
 
 ```
-python scripts/ci/validate_product_surface.py              → passed (developer + loop-release)
+python scripts/ci/validate_product_surface.py              → passed
 python scripts/verify_product_surface.py --profile developer      → passed (source-only)
 python scripts/verify_product_surface.py --profile loop-release   → passed (source-only)
+python scripts/verify-loop-shell-contract.py               → passed
+python scripts/verify-plugin-form-accounting.py            → passed
+python scripts/generate-architecture-catalogs.py --check   → passed
 ```
+
+Historical ADRs, Phase 5 deletion handoffs, and migration checklists that mention
+retired surfaces remain preserved with explicit non-authoritative framing.
 
 ### Issue 27 — clean-checkout qualification (PASS)
 
-Fresh worktree at `1c412698` (detached HEAD, no local build artifacts):
+Fresh detached worktree (no local build artifacts) at the closeout candidate SHA:
 
 ```
 python scripts/ci/test_check_source_integrity.py          → 18 tests OK
 python scripts/ci/check_source_integrity.py               → passed
 python -m unittest scripts.ci.test_workflow_contracts -v  → 20 tests OK
-python scripts/ci/test_check_loop_identity.py             → 2 tests OK (after allowlisting Session 07 smoke transcript)
+python scripts/ci/test_check_loop_identity.py             → 2 tests OK
 python scripts/ci/check_loop_identity.py                  → passed
 python scripts/ci/validate_product_surface.py             → passed
-python scripts/ci/test_check_phase5_residue.py            → 5 tests OK
+python scripts/ci/test_check_phase5_residue.py            → 6 tests OK
 python scripts/ci/check_phase5_residue.py                 → passed
 python scripts/ci/check_unmanaged_async.py                → passed
-python scripts/ci/check_interaction_traces.py --corpus-only → passed (9 scenarios)
+python scripts/ci/check_interaction_traces.py --corpus-only → passed
 python scripts/ci/check_trust_contract_sources.py         → passed
 python scripts/ci/check_generated_dependency_paths.py     → passed
 python scripts/generate_phase5_widgets_evidence.py --check → passed
 python scripts/verify_phase5_widgets_contract.py          → passed
 python scripts/verify-plugin-form-accounting.py           → passed
+python scripts/verify-loop-shell-contract.py              → passed
 python scripts/generate_widgets_library_consumer_graph.py --check → passed
 python scripts/verify-widgets-library-consumer-graph.py   → passed
 python scripts/verify-widgets-free-release-profile.py     → passed
 ```
 
-### Closeout fix
+Closeout fixes on the candidate branch:
 
-Session 07 clean-machine smoke transcript (`docs/evidence/session-07-package-boundary/linux-clean-machine-smoke.txt`) records pre-rename binary names from the accepted package run. Added to `LEGACY_TOKEN_ALLOWLIST` in `scripts/ci/check_loop_identity.py` as non-executable historical evidence.
+- Allowlist Session 07 clean-machine smoke transcript in `check_loop_identity.py`
+  (historical evidence, non-executable)
+- Extend `CURRENT_DOCS` for session handoffs and packaging guidance (Issue 26)
 
-### Hosted CI
+### Hosted CI (PR #533)
 
-- Closeout branch: `cursor/session-08-residue-closeout` @ `4aae6a09`
-- PR: https://github.com/studio-berry/loop/pull/533
-- Supply Chain Policy run `34061873071` — PASS
-- CI `source_integrity` job run `34061977660` — PASS
-- Prior `dev` push at `1c412698` failed `source_integrity` on the loop-identity contract (Session 07 smoke transcript); fixed in this closeout.
+- `source_integrity` — PASS
+- Supply Chain Policy — PASS
+- Documentation truth (`architecture-docs`) — PASS
+- `agent-fast` — required PR lane (see PR checks for exact run ID)
 
+Prior `dev` push at `1c412698` failed `source_integrity` on the loop-identity
+contract; closeout branch resolves that finding.
+
+## Exit gate
+
+- No maintained source, test, CI, packaging, script, or current operational
+  document references a deleted Phase 5 Widgets surface.
+- Clean-checkout source/static validation is green on the post-residue candidate SHA.
+- Hosted PR CI (`source_integrity`, policy, architecture-docs, agent-fast) is the
+  terminal qualification record for merge to `dev`.
 
 ## Next-session entry condition
 
-Session 09 may start only from this branch’s accepted exact SHA after Issues
-issues 25, 26, and 27 and the Session 08 exit gate are updated from
-the final evidence record.
+Session 09 may start only from the accepted exact SHA after Issues 25, 26, and 27
+and this Session 08 exit gate are recorded in Notion from the merged evidence.
