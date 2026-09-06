@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-QUALIFIED_BASELINE_SHA = "d7f39224ad22f26c5f67dcd000383d6239acfff4"
+QUALIFIED_BASELINE_SHA = "e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1"
 INVENTORY_PATH = Path("docs/generated/phase5-widgets-inventory.json")
 DISPOSITION_PATH = Path("docs/generated/phase5-widgets-disposition.json")
 PROFILE_ID = "loop-release"
