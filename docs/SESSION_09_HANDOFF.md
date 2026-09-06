@@ -40,7 +40,7 @@ Deleted Phase 5 identities remain recorded in `docs/product-surface.json` with
 **Qualified baseline SHA:** `e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1`
 (`origin/dev` after Session 08 / PR #533).
 
-**Candidate SHA:** recorded after the Session 09 commit on
+**Candidate SHA:** `1c3f9d6d2312045264134f07b4d00e26de2058bf` on
 `cursor/session-09-ledger-closeout`. Frozen evidence:
 `docs/evidence/phase5-terminal-closeout/evidence.json`.
 

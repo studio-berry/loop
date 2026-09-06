@@ -3,6 +3,7 @@
   "evidence_kind": "phase5-terminal-closeout",
   "session": 9,
   "qualified_baseline_sha": "e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1",
+  "session_09_sha": "1c3f9d6d2312045264134f07b4d00e26de2058bf",
   "branch": "cursor/session-09-ledger-closeout",
   "counts": {
     "targets": 69,
