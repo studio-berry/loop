@@ -199,6 +199,12 @@ Sources: [QPDF license](https://qpdf.readthedocs.io/en/stable/license.html), [PD
 - [ ] SBOM and third-party notices generated from final artifact
 - [ ] Clean-machine install, upgrade, rollback, and uninstall pass without system Java or other prerequisites
 - [ ] Session 07 clean-VM proof passes on disposable Ubuntu 24.04 and Windows Server 2022 machines: install, launch, external-PDF operator flow, preflight state/findings, Quick/accessibility checklist, clean exit, and uninstall
+  > **Session 07 deferral (2026-09-06):** for 0.2.0 the Windows Server 2022 pristine-VM
+  > half is **deferred** to release-hardening and is **required before 1.0** — see
+  > `docs/SESSION_07_PACKAGE_BOUNDARY.md` (§0.2.0 gate hierarchy). The Ubuntu 24.04
+  > clean-machine proof and the hosted same-SHA Linux/Windows package evidence are
+  > complete and bound to `b47c62b2…`; the Server 2022 isolation run must be executed
+  > before the 1.0 gate, not dropped.
 - [ ] Final legal review complete before commercial ship
 
 ## Suggested Linear issue rewrite

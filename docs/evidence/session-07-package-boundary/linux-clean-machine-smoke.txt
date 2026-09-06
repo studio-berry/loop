@@ -1,0 +1,21 @@
+LOUPE_SOURCE_SHA=b47c62b263a3fd7fb36940856866e589bbc8be10
+Package: Loop-pdf-0.2.0-alpha-x86_64.AppImage (sha256 6cac0b88b0a1f8df49b85808f3b51d538bdfcc63665d64cf50a0197150d2dfa1)
+Environment: disposable Docker ubuntu:24.04, no Qt/MSVC/Python/dev paths; standard desktop graphics libraries only.
+Evidence run: Linux_AppImage workflow 34050834332 (package) + clean-machine smoke (this transcript).
+
+RESULT: PASS
+- Editor present
+- PdfTool present
+- Default preflight profile present
+- Profile schema present
+- Report schema present
+- OcrPlugin absent (V1 CLI-only, MIC-343)
+- LoupeOcrService sidecar absent
+- PdfTool preflight completed (exit 0)
+- PdfTool help
+- LoupeEditor native Quick startup OK
+- LoupeEditor software Quick startup OK
+- LoupeEditor operator launch remained alive for 5 seconds (open external test PDF bleed-adequate.pdf via --operator mode)
+- no Ghostscript / JRE / Python payload
+- no Widgets-bound Qt payload
+AppImage smoke test passed. (exit 0)
