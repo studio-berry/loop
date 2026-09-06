@@ -25,7 +25,7 @@ provenance and negative contract fixtures remain explicitly non-authoritative.
 - Windows MSI package-boundary evidence recorded in `docs/evidence/session-07-package-boundary/`
 - Paired evidence: `docs/evidence/session-07-package-boundary/paired-evidence.json`
 
-### LOUPE-25 — maintained-tree residue (PASS)
+### Issue 25 — maintained-tree residue (PASS)
 
 ```
 python scripts/ci/test_check_phase5_residue.py  → 5 tests OK
@@ -34,7 +34,7 @@ python scripts/ci/check_phase5_residue.py       → passed
 
 Targeted `git grep` across maintained paths: no forbidden `LoopLibWidgets`, `LoopLibGui`, or secondary executable names.
 
-### LOUPE-26 — current documentation normalization (PASS)
+### Issue 26 — current documentation normalization (PASS)
 
 Current authority docs (`docs/REPO_MAP.md`, `docs/PLATFORM_SUPPORT.md`, `docs/LOOP_SHELL_CONTRACT.md`, `docs/LOOP_WORKSPACES.md`, `docs/ACCESSIBILITY_BASELINE.md`, `docs/EDITOR_RECOVERY.md`, `docs/JOB_SCHEDULER.md`) contain no executable references to deleted Widgets surfaces. `docs/product-surface.json` records deleted artifacts only in `source_status: deleted` disposition rows.
 
@@ -44,7 +44,7 @@ python scripts/verify_product_surface.py --profile developer      → passed (so
 python scripts/verify_product_surface.py --profile loop-release   → passed (source-only)
 ```
 
-### LOUPE-27 — clean-checkout qualification (PASS)
+### Issue 27 — clean-checkout qualification (PASS)
 
 Fresh worktree at `1c412698` (detached HEAD, no local build artifacts):
 
