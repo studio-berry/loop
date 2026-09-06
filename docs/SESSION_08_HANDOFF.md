@@ -75,7 +75,11 @@ Session 07 clean-machine smoke transcript (`docs/evidence/session-07-package-bou
 
 ### Hosted CI
 
-Prior `dev` push at `1c412698` failed `source_integrity` on the loop-identity contract (same smoke-transcript finding). Closeout branch re-runs CI after the allowlist fix.
+- Closeout branch: `cursor/session-08-residue-closeout` @ `4aae6a09`
+- PR: https://github.com/studio-berry/loop/pull/533
+- Supply Chain Policy run `34061873071` — PASS
+- CI `source_integrity` job run `34061977660` — PASS
+- Prior `dev` push at `1c412698` failed `source_integrity` on the loop-identity contract (Session 07 smoke transcript); fixed in this closeout.
 
 
 ## Next-session entry condition
