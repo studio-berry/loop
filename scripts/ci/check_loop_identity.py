@@ -47,6 +47,7 @@ LEGACY_TOKEN_ALLOWLIST = frozenset(
         "changes/cdx-" + LEGACY_PRODUCT_TOKEN + "-to-loop-rebrand.md",
         "docs/SESSION_07_PACKAGE_BOUNDARY.md",
         "docs/evidence/phase5-widgets-parity-evidence.json",
+        "docs/evidence/session-07-package-boundary/linux-clean-machine-smoke.txt",
     }
 )
 
