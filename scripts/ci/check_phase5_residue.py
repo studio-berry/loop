@@ -40,6 +40,7 @@ CURRENT_DOCS = {
     "docs/REPO_MAP.md",
     "docs/SESSION_07_PACKAGE_BOUNDARY.md",
     "docs/SESSION_08_HANDOFF.md",
+    "docs/SESSION_09_HANDOFF.md",
 }
 FORBIDDEN = (
     re.compile(r"\bLoopLibWidgets(?:/|\\|\b)"),

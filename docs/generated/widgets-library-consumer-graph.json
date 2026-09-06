@@ -2,7 +2,7 @@
   "schema_version": 1,
   "evidence_kind": "widgets-library-consumer-graph",
   "issue": 17,
-  "qualified_baseline_sha": "d7f39224ad22f26c5f67dcd000383d6239acfff4",
+  "qualified_baseline_sha": "e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1",
   "profile": {
     "id": "loop-release",
     "options": {

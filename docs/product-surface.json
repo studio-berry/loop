@@ -262,7 +262,7 @@
       "source_status": "deleted",
       "disposition": "OPEN",
       "owner": "m.berry",
-      "rationale": "Redaction product commitment remains blocked on the existing security and product decision; the former plugin source is absent.",
+      "rationale": "Redaction product commitment remains OPEN on issue #66; the Widgets plugin source was deleted in Phase 5 Issue 17 and is not a remaining deletion gate.",
       "profiles": { "developer": "absent", "loop-release": "absent" },
       "replacement_surface": "loop-fix",
       "dependencies": ["PdfTool redact"],
