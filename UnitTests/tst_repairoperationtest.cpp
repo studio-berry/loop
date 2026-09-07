@@ -188,6 +188,7 @@ void RepairOperationTest::addBleedExpectedChanges_areMeasuredWithoutUnexpectedDi
     QVERIFY(transaction.plans().first().expectedChanges.metadata);
     QVERIFY(transaction.plans().first().expectedChanges.pageBoxes);
     QVERIFY(transaction.plans().first().expectedChanges.pageContent);
+    QVERIFY(transaction.plans().first().expectedChanges.images);
     QVERIFY(transaction.apply());
 
     QTemporaryDir directory;
