@@ -85,6 +85,7 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loop-preflight/tools/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loop-shell.json",
@@ -393,6 +394,7 @@
         "UnitTestsJbig2Decoder",
         "UnitTestsJobScheduler",
         "UnitTestsLifecycle",
+        "UnitTestsLoopStateVisual",
         "UnitTestsOcrPageGate",
         "UnitTestsOperationHistory",
         "UnitTestsOperationImpact",
@@ -1721,6 +1723,46 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsLoopStateVisual",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsOcrCli",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -3022,7 +3064,7 @@
     }
   ],
   "counts": {
-    "targets": 69,
+    "targets": 70,
     "installed_in_profile": 4,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,

@@ -205,6 +205,13 @@
         "UnitTestsQuickAccessibility"
       ],
       "title": "The Quick canvas accessible tree has one privacy-safe canvas node and no tile-level children"
+    },
+    {
+      "id": "I28",
+      "test_targets": [
+        "UnitTestsLoopStateVisual"
+      ],
+      "title": "Incomplete inspection and waived findings never render as passed"
     }
   ],
   "branch_policy": {
@@ -410,6 +417,7 @@
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
+    "UnitTestsLoopStateVisual",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",

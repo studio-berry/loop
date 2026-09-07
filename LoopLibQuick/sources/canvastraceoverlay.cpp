@@ -23,6 +23,8 @@
 
 #include "canvastraceoverlay.h"
 
+#include "looptokens.h"
+
 #include <QFont>
 #include <QFontMetrics>
 #include <QPainter>
@@ -33,11 +35,8 @@ namespace pdfquick
 namespace
 {
 
-/// docs/quick-design-tokens.json, typography.small_px.
-constexpr int SmallTextPx = 12;
-
-/// docs/quick-design-tokens.json, spacing.values_px.
-constexpr int PanelPaddingPx = 8;
+constexpr int SmallTextPx = tokens::TypeSmallPx;
+constexpr int PanelPaddingPx = tokens::SpaceS;
 
 QString formatMs(const QJsonValue& value)
 {
