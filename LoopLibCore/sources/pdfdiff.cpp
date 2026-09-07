@@ -28,9 +28,10 @@
 #include "pdfcms.h"
 #include "pdfconstants.h"
 #include "pdfalgorithmlcs.h"
+#include "pdfjobscheduler.h"
 #include "pdfpainter.h"
 
-#include <QtConcurrent/QtConcurrent>
+#include <QUuid>
 
 #include "pdfdbgheap.h"
 
@@ -138,12 +139,38 @@ void PDFDiff::start()
 
     if (m_options.testFlag(Asynchronous))
     {
-        m_futureWatcher = std::nullopt;
-        m_futureWatcher.emplace();
+        if (m_jobFinishedConnection)
+        {
+            disconnect(m_jobFinishedConnection);
+            m_jobFinishedConnection = {};
+        }
 
-        m_future = QtConcurrent::run(std::bind(&PDFDiff::perform, this));
-        connect(&*m_futureWatcher, &QFutureWatcher<PDFDiffResult>::finished, this, &PDFDiff::onComparationPerformed);
-        m_futureWatcher->setFuture(m_future);
+        pdf::PDFJobSpec spec;
+        spec.jobId = QStringLiteral("pdf-diff-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+        spec.kind = pdf::PDFJobKind::Batch;
+        spec.priority = pdf::PDFJobPriority::Background;
+        spec.operationId = QStringLiteral("pdf.diff");
+
+        m_activeJobId = pdf::PDFJobScheduler::global().submit(spec, [this](pdf::PDFJobContext& context)
+                                                                {
+            if (context.isCancellationRequested())
+            {
+                m_cancelled = true;
+                return;
+            }
+            m_result = perform(); });
+
+        m_jobFinishedConnection = connect(&pdf::PDFJobScheduler::global(),
+                                          &pdf::PDFJobScheduler::jobFinished,
+                                          this,
+                                          [this](const pdf::PDFJobSnapshot& snapshot)
+                                          {
+                                              if (snapshot.jobId != m_activeJobId)
+                                              {
+                                                  return;
+                                              }
+                                              onComparationPerformed(snapshot.status == pdf::PDFJobStatus::Cancelled);
+                                          });
     }
     else
     {
@@ -155,12 +182,20 @@ void PDFDiff::start()
 
 void PDFDiff::stop()
 {
-    if (m_futureWatcher && !m_futureWatcher->isFinished())
+    if (m_activeJobId.isEmpty())
     {
-        // Do stop only if process doesn't finished already.
-        // If we are finished, we do not want to set cancelled state.
-        m_cancelled = true;
-        m_futureWatcher->waitForFinished();
+        return;
+    }
+
+    const QString jobId = m_activeJobId;
+    m_cancelled = true;
+    pdf::PDFJobScheduler::global().cancel(jobId);
+    pdf::PDFJobScheduler::global().waitForFinished(jobId);
+    m_activeJobId.clear();
+    if (m_jobFinishedConnection)
+    {
+        disconnect(m_jobFinishedConnection);
+        m_jobFinishedConnection = {};
     }
 }
 
@@ -900,10 +935,15 @@ void PDFDiff::finalizeGraphicsPieces(PDFDiffPageContext& context)
     std::copy(hash.data(), hash.data() + size, context.pageHash.data());
 }
 
-void PDFDiff::onComparationPerformed()
+void PDFDiff::onComparationPerformed(bool cancelled)
 {
-    m_cancelled = false;
-    m_result = m_future.result();
+    m_cancelled = cancelled;
+    m_activeJobId.clear();
+    if (m_jobFinishedConnection)
+    {
+        disconnect(m_jobFinishedConnection);
+        m_jobFinishedConnection = {};
+    }
     Q_EMIT comparationFinished();
 }
 
