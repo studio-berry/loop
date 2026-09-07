@@ -60,10 +60,15 @@ jobs:
           echo "loop_version=$version" >> $GITHUB_ENV
 
       - name: Stop if release already exists
+        env:
+          LOOP_VERSION: ${{ env.loop_version }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ALLOW_EXISTING_RELEASE: ${{ inputs.allow_existing_release }}
+          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
         run: |
-          tag="v${{ env.loop_version }}"
-          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            if [ "${{ inputs.allow_existing_release }}" != "true" ]; then
+          tag="v${LOOP_VERSION}"
+          if gh release view "$tag" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            if [ "${ALLOW_EXISTING_RELEASE}" != "true" ]; then
               echo "::error::Release $tag already exists. Refusing to upload assets because this would modify an existing release."
               echo "::error::Rerun this workflow with allow_existing_release=true only if updating that release is intentional."
               exit 1
@@ -72,8 +77,6 @@ jobs:
           else
             echo "Release $tag does not exist, continuing."
           fi
-        env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
       # Both installer workflows are workflow_dispatch-only. The commit filter and
       # head-SHA check keep unrelated artifacts out of the release tag.
@@ -140,6 +143,9 @@ jobs:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Download and validate package boundary evidence
+        env:
+          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           mkdir -p package-evidence/linux package-evidence/windows
@@ -148,10 +154,8 @@ jobs:
           python3 scripts/ci/compare_package_boundary_evidence.py \
             --linux package-evidence/linux/evidence.json \
             --windows package-evidence/windows/evidence.json \
-            --source-sha "${{ inputs.source_sha }}" \
+            --source-sha "${EXPECTED_SOURCE_SHA}" \
             --output package-evidence/pair.json 2>&1 | tee package-evidence/pair.txt
-        env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
       - name: Upload package boundary pair evidence
         if: always()

@@ -41,6 +41,8 @@ DOCUMENTED_INTEGRATION_WORKFLOW = re.compile(
 DOCUMENTED_INTEGRATION_PR_BRANCHES = re.compile(
     r"^[-*]\s+Integration pull_request branches:\s*(.+)$", re.MULTILINE
 )
+GITHUB_REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+GITHUB_BRANCH_NAME_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
 @dataclass(frozen=True)
@@ -427,6 +429,11 @@ def fetch_branch_protection(
     repo: str, branch: str, token: str | None
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Return protection JSON or an error code of ``403`` / ``404`` / message."""
+    if not GITHUB_REPO_SLUG_RE.fullmatch(repo):
+        return None, f"invalid repository slug: {repo}"
+    if not GITHUB_BRANCH_NAME_RE.fullmatch(branch):
+        return None, f"invalid branch name: {branch}"
+
     request = urllib.request.Request(
         f"{GITHUB_API}/repos/{repo}/branches/{branch}/protection",
         headers={

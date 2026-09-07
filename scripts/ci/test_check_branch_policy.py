@@ -4,6 +4,7 @@ from pathlib import Path
 
 from scripts.ci.check_branch_policy import (
     GITHUB_ACTIONS_APP_ID,
+    fetch_branch_protection,
     parse_documented_policy,
     parse_documented_policy_full,
     parse_on_events,
@@ -278,6 +279,16 @@ jobs:
             policy=policy,
         )
         self.assertTrue(any("dev must not require status checks" in item for item in violations))
+
+    def test_fetch_branch_protection_rejects_untrusted_repo_slug(self):
+        payload, error = fetch_branch_protection("../../etc/passwd", "stable", "token")
+        self.assertIsNone(payload)
+        self.assertIn("invalid repository slug", error or "")
+
+    def test_fetch_branch_protection_rejects_untrusted_branch_name(self):
+        payload, error = fetch_branch_protection("studio-berry/loop", "stable;rm -rf /", "token")
+        self.assertIsNone(payload)
+        self.assertIn("invalid branch name", error or "")
 
 
 if __name__ == "__main__":
