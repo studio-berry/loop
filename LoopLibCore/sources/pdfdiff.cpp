@@ -32,6 +32,7 @@
 #include "pdfpainter.h"
 
 #include <QUuid>
+#include <QXmlStreamWriter>
 
 #include "pdfdbgheap.h"
 
@@ -90,7 +91,6 @@ PDFDiff::PDFDiff(QObject* parent) :
     m_cancelled(false),
     m_textAnalysisAlgorithm(PDFDocumentTextFlowFactory::Algorithm::Layout)
 {
-
 }
 
 PDFDiff::~PDFDiff()
@@ -152,7 +152,7 @@ void PDFDiff::start()
         spec.operationId = QStringLiteral("pdf.diff");
 
         m_activeJobId = pdf::PDFJobScheduler::global().submit(spec, [this](pdf::PDFJobContext& context)
-                                                                {
+                                                              {
             if (context.isCancellationRequested())
             {
                 m_cancelled = true;
@@ -259,7 +259,7 @@ void PDFDiff::stepProgress()
 struct PDFDiffPageContext
 {
     PDFInteger pageIndex = 0;
-    std::array<uint8_t, 64> pageHash = { };
+    std::array<uint8_t, 64> pageHash = {};
     PDFPrecompiledPage::GraphicPieceInfos graphicPieces;
     PDFDocumentTextFlow text;
 };
@@ -377,13 +377,13 @@ void PDFDiff::performSteps(const std::vector<PDFInteger>& leftPages,
     std::vector<PDFDiffPageContext> rightPreparedPages;
 
     PDFDiffHelper::PageSequence pageSequence;
-    std::map<size_t, size_t> pageMatches; // Indices are real page indices, not indices to page contexts
+    std::map<size_t, size_t> pageMatches;   // Indices are real page indices, not indices to page contexts
 
     auto createDiffPageContext = [](auto pageIndex)
     {
-       PDFDiffPageContext context;
-       context.pageIndex = pageIndex;
-       return context;
+        PDFDiffPageContext context;
+        context.pageIndex = pageIndex;
+        return context;
     };
     std::transform(leftPages.cbegin(), leftPages.cend(), std::back_inserter(leftPreparedPages), createDiffPageContext);
     std::transform(rightPages.cbegin(), rightPages.cend(), std::back_inserter(rightPreparedPages), createDiffPageContext);
@@ -731,7 +731,7 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                                                        compareCharacters);
         algorithm.perform();
         PDFAlgorithmLongestCommonSubsequenceBase::Sequence sequence = algorithm.getSequence();
-        PDFAlgorithmLongestCommonSubsequenceBase::markSequence(sequence, { }, { });
+        PDFAlgorithmLongestCommonSubsequenceBase::markSequence(sequence, {}, {});
         PDFAlgorithmLongestCommonSubsequenceBase::SequenceItemRanges modifiedRanges = PDFAlgorithmLongestCommonSubsequenceBase::getModifiedRanges(sequence);
 
         // Merge modified sequences separated by just space
@@ -813,9 +813,9 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                         pageIndex1 = textItem->pageIndex;
                     }
 
-                    if (static_cast< std::size_t >( textCompareItem.charIndex ) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
+                    if (static_cast<std::size_t>(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
                     {
-                        const size_t startIndex =  textCompareItem.charIndex;
+                        const size_t startIndex = textCompareItem.charIndex;
                         const size_t endIndex = startIndex + textCompareItem.charCount;
 
                         for (size_t i = startIndex; i < endIndex; ++i)
@@ -841,9 +841,9 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                         pageIndex2 = textItem->pageIndex;
                     }
 
-                    if (static_cast< std::size_t >(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
+                    if (static_cast<std::size_t>(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
                     {
-                        const size_t startIndex =  textCompareItem.charIndex;
+                        const size_t startIndex = textCompareItem.charIndex;
                         const size_t endIndex = startIndex + textCompareItem.charCount;
 
                         for (size_t i = startIndex; i < endIndex; ++i)
@@ -973,7 +973,6 @@ void PDFDiff::setTextAnalysisAlgorithm(PDFDocumentTextFlowFactory::Algorithm tex
 PDFDiffResult::PDFDiffResult() :
     m_result(true)
 {
-
 }
 
 void PDFDiffResult::addPageMoved(PDFInteger pageIndex1, PDFInteger pageIndex2)
@@ -1839,12 +1838,10 @@ PDFDiffResultNavigator::PDFDiffResultNavigator(QObject* parent) :
     m_diffResult(nullptr),
     m_currentIndex(0)
 {
-
 }
 
 PDFDiffResultNavigator::~PDFDiffResultNavigator()
 {
-
 }
 
 void PDFDiffResultNavigator::setResult(const PDFDiffResult* diffResult)

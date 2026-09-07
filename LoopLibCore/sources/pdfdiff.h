@@ -49,21 +49,21 @@ public:
 
     enum class Type : uint32_t
     {
-        Invalid                         = 0x0000,
-        PageMoved                       = 0x0001,
-        PageAdded                       = 0x0002,
-        PageRemoved                     = 0x0004,
-        RemovedTextCharContent          = 0x0008,
-        RemovedVectorGraphicContent     = 0x0010,
-        RemovedImageContent             = 0x0020,
-        RemovedShadingContent           = 0x0040,
-        AddedTextCharContent            = 0x0080,
-        AddedVectorGraphicContent       = 0x0100,
-        AddedImageContent               = 0x0200,
-        AddedShadingContent             = 0x0400,
-        TextReplaced                    = 0x0800,
-        TextAdded                       = 0x1000,
-        TextRemoved                     = 0x2000,
+        Invalid = 0x0000,
+        PageMoved = 0x0001,
+        PageAdded = 0x0002,
+        PageRemoved = 0x0004,
+        RemovedTextCharContent = 0x0008,
+        RemovedVectorGraphicContent = 0x0010,
+        RemovedImageContent = 0x0020,
+        RemovedShadingContent = 0x0040,
+        AddedTextCharContent = 0x0080,
+        AddedVectorGraphicContent = 0x0100,
+        AddedImageContent = 0x0200,
+        AddedShadingContent = 0x0400,
+        TextReplaced = 0x0800,
+        TextAdded = 0x1000,
+        TextRemoved = 0x2000,
     };
 
     struct PageSequenceItem
@@ -232,7 +232,7 @@ private:
     void addRectRight(Difference& difference, QRectF rect);
 
     Differences m_differences;
-    RectInfos m_rects; ///< Rectangles with page indices
+    RectInfos m_rects;   ///< Rectangles with page indices
     PDFOperationResult m_result;
     QStringList m_strings;
     uint32_t m_typeFlags = 0;
@@ -300,14 +300,14 @@ public:
 
     enum Option
     {
-        None                    = 0x0000,
-        Asynchronous            = 0x0001,   ///< Compare document asynchronously
-        PC_Text                 = 0x0002,   ///< Use text to compare pages (determine, which pages correspond to each other)
-        PC_VectorGraphics       = 0x0004,   ///< Use vector graphics to compare pages (determine, which pages correspond to each other)
-        PC_Images               = 0x0008,   ///< Use images to compare pages (determine, which pages correspond to each other)
-        PC_Mesh                 = 0x0010,   ///< Use mesh to compare pages (determine, which pages correspond to each other)
-        CompareTextsAsVector    = 0x0020,   ///< Compare texts as vector graphics
-        CompareWords            = 0x0040,   ///< Compare words, not just characters
+        None = 0x0000,
+        Asynchronous = 0x0001,   ///< Compare document asynchronously
+        PC_Text = 0x0002,   ///< Use text to compare pages (determine, which pages correspond to each other)
+        PC_VectorGraphics = 0x0004,   ///< Use vector graphics to compare pages (determine, which pages correspond to each other)
+        PC_Images = 0x0008,   ///< Use images to compare pages (determine, which pages correspond to each other)
+        PC_Mesh = 0x0010,   ///< Use mesh to compare pages (determine, which pages correspond to each other)
+        CompareTextsAsVector = 0x0020,   ///< Compare texts as vector graphics
+        CompareWords = 0x0040,   ///< Compare words, not just characters
     };
     Q_DECLARE_FLAGS(Options, Option)
 
@@ -356,7 +356,6 @@ signals:
     void comparationFinished();
 
 private:
-
     enum Steps
     {
         StepExtractContentLeftDocument,
@@ -409,4 +408,4 @@ private:
 
 }   // namespace pdf
 
-#endif // PDFDIFF_H
+#endif   // PDFDIFF_H
