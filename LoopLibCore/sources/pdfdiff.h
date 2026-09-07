@@ -29,9 +29,8 @@
 #include "pdfalgorithmlcs.h"
 #include "pdfdocumenttextflow.h"
 
+#include <QMetaObject>
 #include <QObject>
-#include <QFuture>
-#include <QFutureWatcher>
 
 #include <atomic>
 
@@ -385,7 +384,7 @@ private:
                         PDFDiffResult& result);
     void finalizeGraphicsPieces(PDFDiffPageContext& context);
 
-    void onComparationPerformed();
+    void onComparationPerformed(bool cancelled);
 
     /// Calculates real epsilon for a page. Epsilon is used in page
     /// comparation process, where points closer that epsilon
@@ -404,8 +403,8 @@ private:
     PDFDiffResult m_result;
     PDFDocumentTextFlowFactory::Algorithm m_textAnalysisAlgorithm;
 
-    QFuture<PDFDiffResult> m_future;
-    std::optional<QFutureWatcher<PDFDiffResult>> m_futureWatcher;
+    QString m_activeJobId;
+    QMetaObject::Connection m_jobFinishedConnection;
 };
 
 }   // namespace pdf
