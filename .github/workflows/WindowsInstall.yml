@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build_windows:
-    runs-on: windows-2022
+    runs-on: blacksmith-4vcpu-windows-2025
     env:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
