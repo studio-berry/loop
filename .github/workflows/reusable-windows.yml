@@ -26,6 +26,11 @@ jobs:
         with:
           path: loop
 
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.12"
+
       - name: Exclude workspace from Windows Defender real-time scanning
         # CMake's install() does an atomic rename of freshly-built DLLs; Defender's
         # real-time scanner can hold a brief lock on them right after MSBuild writes
