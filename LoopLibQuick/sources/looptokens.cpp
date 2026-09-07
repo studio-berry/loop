@@ -158,8 +158,13 @@ QColor colorHighContrast(ColorRole role)
             return QColor(Qt::white);
 
         case ColorRole::SeverityError:
-        case ColorRole::DestructiveAction:
             return QColor(Qt::red);
+
+        // Button fill with white label text: Qt::red is only ~4.0:1 against
+        // white, below the 4.5:1 text minimum. Keep a saturated red that clears
+        // the text threshold (same value as the light-theme fill).
+        case ColorRole::DestructiveAction:
+            return hex(LightDestructiveAction);
 
         case ColorRole::SeverityWarning:
         case ColorRole::FocusRing:

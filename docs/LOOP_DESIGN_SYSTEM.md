@@ -93,11 +93,13 @@ asserted by `UnitTestsLoopStateVisual`.
 | `StateIncomplete` | `#94A3B8` | `#475569` | white | 6.92:1 / 7.58:1 |
 | `StateNotChecked` | `#64748B` | `#64748B` | white | 3.73:1 / 4.76:1 |
 | `FocusRing` | `#C4B5FD` | `#6D28D9` | yellow | 9.61:1 / 7.10:1 |
-| `DestructiveAction` | `#DC2626` | `#B91C1C` | red | — (button fill; see below) |
+| `DestructiveAction` | `#DC2626` | `#B91C1C` | `#B91C1C` | — (button fill; see below) |
 
 `DestructiveAction` is a fill colour, not a foreground-on-`SurfaceBase` pair:
-white text on `#DC2626` (dark) is 4.83:1, white text on `#B91C1C` (light) is
-6.47:1, both above the 4.5:1 text minimum.
+white text on `#DC2626` (dark) is 4.83:1; white text on `#B91C1C` (light and
+high contrast) is 6.47:1; both are above the 4.5:1 text minimum. High-contrast
+stroke red (`Qt::red`) is reserved for `SeverityError`; it is not used as a
+button fill because white-on-`#FF0000` is only ~4.0:1.
 
 `FocusRing` is deliberately a distinct hue (violet) from `SeverityWarning`
 (amber) in both themes. `CanvasPalette` currently reuses one colour
