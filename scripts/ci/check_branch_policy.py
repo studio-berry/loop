@@ -41,6 +41,12 @@ DOCUMENTED_INTEGRATION_WORKFLOW = re.compile(
 DOCUMENTED_INTEGRATION_PR_BRANCHES = re.compile(
     r"^[-*]\s+Integration pull_request branches:\s*(.+)$", re.MULTILINE
 )
+DOCUMENTED_PACKAGING_WORKFLOWS = re.compile(
+    r"^[-*]\s+Packaging workflows:\s*(.+)$", re.MULTILINE
+)
+DOCUMENTED_PACKAGING_EVENTS = re.compile(
+    r"^[-*]\s+Packaging events:\s*(.+)$", re.MULTILINE
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,8 @@ class DocumentedPolicy:
     release_gate_pull_request_branches: tuple[str, ...]
     integration_workflow: str
     integration_pull_request_branches: tuple[str, ...]
+    packaging_workflows: tuple[str, ...]
+    packaging_events: tuple[str, ...]
 
 
 def _branch_names(value: str) -> tuple[str, ...]:
@@ -115,6 +123,14 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
     )
     if not integration_pr:
         raise ValueError("policy declares no integration pull_request branches")
+    packaging_workflows = _branch_names(
+        required(DOCUMENTED_PACKAGING_WORKFLOWS, "Packaging workflows:")
+    )
+    if not packaging_workflows:
+        raise ValueError("policy declares no packaging workflows")
+    packaging_events = _branch_names(required(DOCUMENTED_PACKAGING_EVENTS, "Packaging events:"))
+    if not packaging_events:
+        raise ValueError("policy declares no packaging events")
     return DocumentedPolicy(
         ci_branches=ci_branches,
         protected_branches=protected,
@@ -127,6 +143,8 @@ def parse_documented_policy_full(text: str) -> DocumentedPolicy:
         release_gate_pull_request_branches=release_pr,
         integration_workflow=integration_workflow,
         integration_pull_request_branches=integration_pr,
+        packaging_workflows=packaging_workflows,
+        packaging_events=packaging_events,
     )
 
 
@@ -331,6 +349,45 @@ def validate_integration_workflow(path: Path, text: str, policy: DocumentedPolic
             violations.append(
                 f"{path}: {job_name} job must run for workflow_dispatch"
             )
+        elif "refs/heads/stable" not in block:
+            violations.append(
+                f"{path}: {job_name} job must stay on stable push or workflow_dispatch"
+            )
+    return violations
+
+
+def validate_packaging_workflows(root: Path, policy: DocumentedPolicy) -> list[str]:
+    """Keep MSI/AppImage qualification on exact-SHA workflow_dispatch only."""
+    violations: list[str] = []
+    if policy.packaging_events != ("workflow_dispatch",):
+        violations.append(
+            "docs/BRANCH_POLICY.md: packaging events must be workflow_dispatch only, "
+            f"got {list(policy.packaging_events)}"
+        )
+    expected = {
+        ".github/workflows/LinuxInstall.yml",
+        ".github/workflows/WindowsInstall.yml",
+    }
+    if set(policy.packaging_workflows) != expected:
+        violations.append(
+            "docs/BRANCH_POLICY.md: packaging workflows must be "
+            f"{sorted(expected)}, got {list(policy.packaging_workflows)}"
+        )
+    for rel in policy.packaging_workflows:
+        path = root / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            violations.append(f"{path}: {exc}")
+            continue
+        events = parse_on_events(text)
+        if "workflow_dispatch" not in events:
+            violations.append(f"{path}: packaging must listen for workflow_dispatch")
+        for event in events:
+            if event != "workflow_dispatch":
+                violations.append(f"{path}: packaging must not trigger on `{event}`")
+        if "github.event.pull_request" in text:
+            violations.append(f"{path}: packaging checkout must use inputs.source_sha only")
     return violations
 
 
@@ -488,6 +545,8 @@ def validate_repository(
         violations.append(f"{release_gate}: {exc}")
     else:
         violations.extend(validate_release_gate_workflow(release_gate, release_text, policy))
+
+    violations.extend(validate_packaging_workflows(root, policy))
 
     codeql = root / ".github/workflows/codeql.yml"
     try:

@@ -82,6 +82,7 @@ class WorkflowContractTests(unittest.TestCase):
         # raises the oldest distro Loop runs on, so change it as a decision, not to make
         # this assertion pass.
         self.assertIn("runs-on: blacksmith-4vcpu-ubuntu-2204", linux)
+        self.assertIn("runs-on: windows-2022", windows)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
@@ -111,7 +112,11 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
             self.assertIn("inputs.source_sha", workflow)
-            self.assertIn("pull_request:", workflow)
+            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("workflow_dispatch:", workflow)
+            self.assertNotIn("pull_request:", workflow)
+            self.assertNotIn("github.event.pull_request", workflow)
+            self.assertNotRegex(workflow, r"(?m)^  push:")
             self.assertIn("Verify exact source SHA", workflow)
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)

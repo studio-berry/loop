@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from scripts.ci.check_branch_policy import (
     parse_workflow_branch_triggers,
     validate_integration_workflow,
     validate_live_protection,
+    validate_packaging_workflows,
     validate_release_gate_workflow,
     validate_repository,
     validate_workflow_branches,
@@ -41,6 +43,14 @@ class BranchPolicyTests(unittest.TestCase):
         self.assertEqual(policy.release_gate_pull_request_branches, ("stable",))
         self.assertEqual(policy.integration_workflow, ".github/workflows/ci.yml")
         self.assertEqual(policy.integration_pull_request_branches, ("dev", "unstable"))
+        self.assertEqual(
+            policy.packaging_workflows,
+            (
+                ".github/workflows/LinuxInstall.yml",
+                ".github/workflows/WindowsInstall.yml",
+            ),
+        )
+        self.assertEqual(policy.packaging_events, ("workflow_dispatch",))
 
     def test_current_ci_workflow_matches_policy(self):
         policy = parse_documented_policy_full(
@@ -181,6 +191,63 @@ jobs:
         violations = validate_integration_workflow(Path("ci.yml"), stale, policy)
         self.assertTrue(any("linux job must run for workflow_dispatch" in item for item in violations))
         self.assertTrue(any("windows job must run for workflow_dispatch" in item for item in violations))
+
+    def test_rejects_full_platform_jobs_on_every_push(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        stale = """on:
+  push:
+    branches: [dev, unstable, stable]
+  pull_request:
+    branches: [dev, unstable]
+  workflow_dispatch:
+
+jobs:
+  agent-fast:
+    uses: ./.github/workflows/reusable-linux.yml
+  linux:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    uses: ./.github/workflows/reusable-linux.yml
+  windows:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    uses: ./.github/workflows/reusable-windows.yml
+"""
+        violations = validate_integration_workflow(Path("ci.yml"), stale, policy)
+        self.assertTrue(
+            any("linux job must stay on stable push or workflow_dispatch" in item for item in violations)
+        )
+        self.assertTrue(
+            any("windows job must stay on stable push or workflow_dispatch" in item for item in violations)
+        )
+
+    def test_current_packaging_workflows_are_dispatch_only(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        self.assertEqual(validate_packaging_workflows(ROOT, policy), [])
+
+    def test_rejects_packaging_pull_request_trigger(self):
+        policy = parse_documented_policy_full(
+            (ROOT / "docs" / "BRANCH_POLICY.md").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            linux = root / ".github/workflows/LinuxInstall.yml"
+            windows = root / ".github/workflows/WindowsInstall.yml"
+            linux.parent.mkdir(parents=True)
+            linux.write_text(
+                "on:\n  pull_request:\n  workflow_dispatch:\n    inputs:\n      source_sha:\n",
+                encoding="utf-8",
+            )
+            windows.write_text(
+                "on:\n  workflow_dispatch:\n    inputs:\n      source_sha:\n",
+                encoding="utf-8",
+            )
+            violations = validate_packaging_workflows(root, policy)
+            self.assertTrue(
+                any("must not trigger on `pull_request`" in item for item in violations)
+            )
 
     def test_live_protection_rejects_ci_ok_and_unbound_app(self):
         policy = parse_documented_policy_full(
