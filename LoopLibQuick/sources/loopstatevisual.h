@@ -60,13 +60,13 @@ enum class StateKind
 /// a badge, it never becomes indistinguishable from a plain warning.
 enum class StateIcon
 {
-    FilledCircle,     // Error
+    FilledCircle,   // Error
     FilledTriangle,   // Warning
-    FilledSquare,     // Info
-    Hatched,          // Incomplete
-    Outline,          // Not checked
-    Checkmark,        // Passed
-    BadgeOverlay      // Waived
+    FilledSquare,   // Info
+    Hatched,   // Incomplete
+    Outline,   // Not checked
+    Checkmark,   // Passed
+    BadgeOverlay   // Waived
 };
 
 struct LoopStateVisual
