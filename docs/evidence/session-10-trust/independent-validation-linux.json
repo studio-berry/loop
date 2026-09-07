@@ -1,0 +1,42 @@
+{
+  "schema": "loop.independent-validation-evidence",
+  "schema_version": 1,
+  "status": "incomplete",
+  "input": {
+    "path": "loop-preflight/testdata/fixtures/bleed-missing.pdf",
+    "bytes": 674,
+    "sha256": "09a1f682ab81ed54599bbf708df428cb3d0af77e6884e2855da0c58644740ff1"
+  },
+  "validators": [
+    {
+      "claim": "structural",
+      "program": "qpdf",
+      "program_path": null,
+      "configured_arguments": ["--check", "{input}"],
+      "status": "incomplete",
+      "reason_code": "validator-not-installed"
+    },
+    {
+      "claim": "signature",
+      "program": "pdfsig",
+      "program_path": null,
+      "configured_arguments": ["{input}"],
+      "status": "incomplete",
+      "reason_code": "validator-not-installed"
+    },
+    {
+      "claim": "standards",
+      "program": "verapdf",
+      "program_path": null,
+      "configured_arguments": ["validate", "--format", "text", "{input}"],
+      "status": "incomplete",
+      "reason_code": "validator-not-installed"
+    }
+  ],
+  "platform": {
+    "system": "Linux",
+    "release": "pending-hosted-runner",
+    "machine": "x86_64"
+  },
+  "candidate_sha": "pending-session-10-merge"
+}
