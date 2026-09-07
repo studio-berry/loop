@@ -3,4 +3,4 @@
 Category: internal
 Audience: developers
 Breaking-Change: no
-Summary: Run selected GitHub Actions workflows on Blacksmith runners while keeping Windows_MSI and Linux_AppImage as workflow_dispatch-only exact-SHA qualification, and keeping full linux/windows CI on the stable release-candidate path instead of every push to `dev`.
+Summary: Run Windows_MSI on Blacksmith to shorten the ~50-minute packaging gate while keeping every other workflow on GitHub-hosted runners, preserving workflow_dispatch-only exact-SHA MSI/AppImage qualification, and keeping full linux/windows CI on the stable release-candidate path instead of every push to `dev`.

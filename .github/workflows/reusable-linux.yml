@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/loop/vcpkg/overlays/linux:${{ github.workspace }}/loop/vcpkg/overlays/general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed
@@ -88,17 +88,17 @@ jobs:
           sudo apt update
           sudo apt install -y autoconf autoconf-archive automake libtool libcups2 libcups2-dev libfontconfig1-dev
 
-      - name: Install and verify pinned packaging version
+      - name: Verify runner packaging versions
         run: |
-          # Blacksmith's Ubuntu 24.04 image can trail the repository's recorded
-          # dpkg patch release. Install the exact pin rather than accepting image drift.
+          # The ubuntu-24.04 runner label is pinned at the job level; assert the
+          # dpkg version it ships matches the recorded pin (packaging-tools.json
+          # -> deb) so a runner image drift fails loudly.
           DEB_PIN="$(python3 - <<'PY'
           import json
           with open("loop/.github/pins/packaging-tools.json", encoding="utf-8") as f:
               print(json.load(f)["deb"]["dpkgVersion"])
           PY
           )"
-          sudo apt install -y "dpkg=$DEB_PIN"
           ACTUAL="$(dpkg-query -W -f='${Version}' dpkg)"
           test "$ACTUAL" = "$DEB_PIN" || {
               echo "::error::dpkg version drift: expected $DEB_PIN, runner has $ACTUAL"

@@ -17,8 +17,9 @@ permissions:
 
 jobs:
   build_windows:
-    # Packaging pins the exact MakeAppx.exe binary shipped by Windows 2022.
-    runs-on: windows-2022
+    # Blacksmith is reserved for this ~50-minute packaging gate; other Windows CI
+    # stays on GitHub-hosted windows-2022 to conserve Blacksmith minutes.
+    runs-on: blacksmith-4vcpu-windows-2025
     env:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg

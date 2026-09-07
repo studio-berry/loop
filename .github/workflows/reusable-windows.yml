@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: windows-2022
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}\loop\vcpkg\overlays\general
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
@@ -25,11 +25,6 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loop
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
-        with:
-          python-version: "3.12"
 
       - name: Exclude workspace from Windows Defender real-time scanning
         # CMake's install() does an atomic rename of freshly-built DLLs; Defender's

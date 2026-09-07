@@ -81,8 +81,8 @@ class WorkflowContractTests(unittest.TestCase):
         # Deliberate: the AppImage glibc floor is whatever this runner ships. Raising it
         # raises the oldest distro Loop runs on, so change it as a decision, not to make
         # this assertion pass.
-        self.assertIn("runs-on: blacksmith-4vcpu-ubuntu-2204", linux)
-        self.assertIn("runs-on: windows-2022", windows)
+        self.assertIn("runs-on: ubuntu-22.04", linux)
+        self.assertIn("runs-on: blacksmith-4vcpu-windows-2025", windows)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
@@ -125,6 +125,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expected-architecture x64", windows)
         self.assertIn("loop-package-boundary-linux-evidence", linux)
         self.assertIn("loop-package-boundary-windows-evidence", windows)
+
+    def test_blacksmith_is_reserved_for_windows_msi_only(self):
+        workflows_dir = ROOT / ".github/workflows"
+        blacksmith_workflows = []
+        for path in sorted(workflows_dir.glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            if "blacksmith" in text:
+                blacksmith_workflows.append(path.name)
+        self.assertEqual(blacksmith_workflows, ["WindowsInstall.yml"])
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")

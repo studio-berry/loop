@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   source_integrity:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -34,7 +34,7 @@ jobs:
         run: python3 scripts/ci/check_generated_dependency_paths.py
 
   agent_contract:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -64,7 +64,7 @@ jobs:
     uses: ./.github/workflows/reusable-windows.yml
 
   documentation:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -75,7 +75,7 @@ jobs:
     uses: ./.github/workflows/fuzz.yml
 
   package_contract:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -89,7 +89,7 @@ jobs:
         run: python3 scripts/ci/validate_product_surface.py
 
   supply_chain:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -113,7 +113,7 @@ jobs:
       - fuzz_regression
       - package_contract
       - supply_chain
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:

@@ -18,7 +18,7 @@ on:
 
 jobs:
   fuzz:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/vcpkg/overlays/linux:${{ github.workspace }}/vcpkg/overlays/general
