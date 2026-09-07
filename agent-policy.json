@@ -59,6 +59,7 @@
         "UnitTests/tst_budgetcorpustest.cpp",
         "UnitTests/tst_documentsessiontest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
+        "UnitTests/tst_lifecycletest.cpp",
         "UnitTests/tst_overprinttest.cpp",
         "UnitTests/tst_revisionstresstest.cpp"
       ],

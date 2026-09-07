@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfartifactstore.h"
+#include "pdfapplicationidentity.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
@@ -344,11 +345,11 @@ struct ReplayEnvironment
     QString activeJobId;
     TraceReplayProfile profile = TraceReplayProfile::None;
 
-    ReplayEnvironment()
-        : artifacts(temporary.path())
-        , history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3")))
-        , context(&document)
-        , scheduler(1)
+    ReplayEnvironment() :
+        artifacts(temporary.path()),
+        history(QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"))),
+        context(&document),
+        scheduler(1)
     {
         builder.appendPage(QRectF(0, 0, 100, 100));
         document = builder.build();
@@ -474,8 +475,8 @@ bool saveReopen(ReplayEnvironment& environment, quint64 argument)
         return false;
     }
     const pdf::PDFOperationSavePolicy policy = (argument % 2 == 0)
-        ? pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("edit"))
-        : pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("export"));
+                                                   ? pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("edit"))
+                                                   : pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("export"));
     environment.state.lastSaveMode = policy.mode;
     const QByteArray payload = QByteArray("lifecycle-source-v1-") + QByteArray::number(argument);
     const auto saved = environment.artifacts.importBytes(payload,
@@ -794,7 +795,11 @@ TraceReplayProfile profileFromName(const QString& name)
 
 void LifecycleTest::initTestCase()
 {
-    QCoreApplication::setApplicationName(QStringLiteral("UnitTestsLifecycle"));
+    // The Loop identity contract (scripts/ci/check_loop_identity.py) forbids
+    // direct QCoreApplication identity mutation outside
+    // LoopLibCore/sources/pdfapplicationidentity.cpp, so tests that need a
+    // stable QSettings namespace use the sanctioned core entry point instead.
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 }
 
 void LifecycleTest::boundedTraceGenerationIsDeterministic()
