@@ -31,7 +31,9 @@
 #include "pdfjobscheduler.h"
 #include "pdfpainter.h"
 
+#include <QCryptographicHash>
 #include <QUuid>
+#include <QXmlStreamWriter>
 
 #include "pdfdbgheap.h"
 
