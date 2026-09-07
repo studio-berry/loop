@@ -81,7 +81,7 @@ class WorkflowContractTests(unittest.TestCase):
         # Deliberate: the AppImage glibc floor is whatever this runner ships. Raising it
         # raises the oldest distro Loop runs on, so change it as a decision, not to make
         # this assertion pass.
-        self.assertIn("runs-on: ubuntu-22.04", linux)
+        self.assertIn("runs-on: blacksmith-4vcpu-ubuntu-2204", linux)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
