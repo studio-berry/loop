@@ -82,6 +82,7 @@ class WorkflowContractTests(unittest.TestCase):
         # raises the oldest distro Loop runs on, so change it as a decision, not to make
         # this assertion pass.
         self.assertIn("runs-on: ubuntu-22.04", linux)
+        self.assertIn("runs-on: blacksmith-4vcpu-windows-2025", windows)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
@@ -111,7 +112,11 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
             self.assertIn("inputs.source_sha", workflow)
-            self.assertIn("pull_request:", workflow)
+            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("workflow_dispatch:", workflow)
+            self.assertNotIn("pull_request:", workflow)
+            self.assertNotIn("github.event.pull_request", workflow)
+            self.assertNotRegex(workflow, r"(?m)^  push:")
             self.assertIn("Verify exact source SHA", workflow)
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)
@@ -120,6 +125,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("--expected-architecture x64", windows)
         self.assertIn("loop-package-boundary-linux-evidence", linux)
         self.assertIn("loop-package-boundary-windows-evidence", windows)
+
+    def test_blacksmith_is_reserved_for_windows_msi_only(self):
+        workflows_dir = ROOT / ".github/workflows"
+        blacksmith_workflows = []
+        for path in sorted(workflows_dir.glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            if "blacksmith" in text:
+                blacksmith_workflows.append(path.name)
+        self.assertEqual(blacksmith_workflows, ["WindowsInstall.yml"])
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
