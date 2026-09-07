@@ -10,10 +10,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from scripts.resource_envelope.run_matrix import FIXTURE_SPECS
 
 
-ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE = ROOT / "docs" / "evidence" / "session-11-resource-envelope" / "evidence.json"
 DEFAULT_MANIFEST = ROOT / "docs" / "evidence" / "session-11-resource-envelope" / "fixture-manifest.json"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
