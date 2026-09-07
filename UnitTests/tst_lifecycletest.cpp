@@ -396,7 +396,14 @@ bool openDocument(ReplayEnvironment& environment)
     }
     if (environment.profile == TraceReplayProfile::InjectSourceOverwrite)
     {
-        QFile file(environment.artifacts.pathFor(imported.artifact));
+        // importBytes publishes artifacts read-only, so re-enable the owner
+        // write bit before corrupting; a silently failed append would make
+        // the injected defect vanish on Unix-like hosts.
+        const QString artifactPath = environment.artifacts.pathFor(imported.artifact);
+        QFile::setPermissions(artifactPath,
+                              QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                                  QFileDevice::ReadGroup | QFileDevice::ReadOther);
+        QFile file(artifactPath);
         if (file.open(QIODevice::Append))
         {
             file.write("overwrite");
@@ -760,7 +767,7 @@ QJsonArray loadCorpusManifestSeeds()
     {
         return {};
     }
-    return manifest.value(QStringLiteral("seeds")).toArray();
+    return manifest.value(QStringLiteral("passing_traces")).toArray();
 }
 
 QJsonArray loadCorpusManifestFailures()
@@ -821,11 +828,11 @@ void LifecycleTest::boundedTraceGenerationIsDeterministic()
 void LifecycleTest::qualificationCorpusSchemasAreValid()
 {
     const QJsonArray seeds = loadCorpusManifestSeeds();
-    QVERIFY2(!seeds.isEmpty(), "lifecycle corpus manifest must list seeds");
+    QVERIFY2(!seeds.isEmpty(), "lifecycle corpus manifest must list passing_traces");
     for (const QJsonValue& seedEntry : seeds)
     {
         const QJsonObject entry = seedEntry.toObject();
-        const QString fileName = entry.value(QStringLiteral("file")).toString();
+        const QString fileName = entry.value(QStringLiteral("trace_file")).toString();
         QVERIFY(!fileName.isEmpty());
         const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + fileName;
         QString error;
@@ -840,7 +847,7 @@ void LifecycleTest::qualificationCorpusSchemasAreValid()
     for (const QJsonValue& failureEntry : failures)
     {
         const QJsonObject entry = failureEntry.toObject();
-        const QString fileName = entry.value(QStringLiteral("file")).toString();
+        const QString fileName = entry.value(QStringLiteral("trace_file")).toString();
         const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + fileName;
         QString error;
         const QJsonObject object = loadJsonObject(path, &error);
@@ -859,7 +866,7 @@ void LifecycleTest::qualificationCorpusSeedsMatchGoldenTraces()
         const quint64 seed = static_cast<quint64>(entry.value(QStringLiteral("seed")).toVariant().toULongLong());
         const QVector<TraceCommand> generated = generateTrace(seed);
         const QJsonObject generatedObject = traceToJson(seed, generated, QStringLiteral("invariants-held"), QJsonArray());
-        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("file")).toString();
+        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("trace_file")).toString();
         QString error;
         const QJsonObject goldenObject = loadJsonObject(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
@@ -874,7 +881,7 @@ void LifecycleTest::qualificationCorpusReplayPreservesInvariants()
     for (const QJsonValue& seedEntry : seeds)
     {
         const QJsonObject entry = seedEntry.toObject();
-        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("file")).toString();
+        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("trace_file")).toString();
         QString error;
         const QJsonObject object = loadJsonObject(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
@@ -915,14 +922,14 @@ void LifecycleTest::promotedFailureTracesMatchExpectedViolations()
     for (const QJsonValue& failureEntry : failures)
     {
         const QJsonObject entry = failureEntry.toObject();
-        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("file")).toString();
+        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("trace_file")).toString();
         QString error;
         const QJsonObject object = loadJsonObject(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
         const std::optional<QVector<TraceCommand>> trace = commandsFromJsonObject(object);
         QVERIFY(trace.has_value());
         const TraceReplayProfile profile = profileFromName(entry.value(QStringLiteral("replay_profile")).toString());
-        const QString expected = entry.value(QStringLiteral("first_violated_invariant")).toString();
+        const QString expected = entry.value(QStringLiteral("expected_violation")).toString();
         QCOMPARE(replayTrace(*trace, profile), expected);
         QCOMPARE(object.value(QStringLiteral("observed_result")).toString(), expected);
         const QJsonArray shrinkHistory = object.value(QStringLiteral("shrink_history")).toArray();
@@ -938,7 +945,7 @@ void LifecycleTest::crossPlatformCorpusReportIsStable()
     for (const QJsonValue& seedEntry : seeds)
     {
         const QJsonObject entry = seedEntry.toObject();
-        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("file")).toString();
+        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("trace_file")).toString();
         QString error;
         const QJsonObject object = loadJsonObject(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
@@ -947,7 +954,7 @@ void LifecycleTest::crossPlatformCorpusReportIsStable()
         const QString failure = replayTrace(*trace);
         seedResults.append(QJsonObject{
             { QStringLiteral("seed"), entry.value(QStringLiteral("seed")) },
-            { QStringLiteral("file"), entry.value(QStringLiteral("file")) },
+            { QStringLiteral("file"), entry.value(QStringLiteral("trace_file")) },
             { QStringLiteral("observed_result"), failure.isEmpty() ? QStringLiteral("invariants-held") : failure },
             { QStringLiteral("passed"), failure.isEmpty() },
         });
@@ -958,7 +965,7 @@ void LifecycleTest::crossPlatformCorpusReportIsStable()
     for (const QJsonValue& failureEntry : failures)
     {
         const QJsonObject entry = failureEntry.toObject();
-        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("file")).toString();
+        const QString path = lifecycleCorpusDirectory() + QStringLiteral("/") + entry.value(QStringLiteral("trace_file")).toString();
         QString error;
         const QJsonObject object = loadJsonObject(path, &error);
         QVERIFY2(error.isEmpty(), qPrintable(error));
@@ -967,9 +974,9 @@ void LifecycleTest::crossPlatformCorpusReportIsStable()
         const TraceReplayProfile profile = profileFromName(entry.value(QStringLiteral("replay_profile")).toString());
         const QString observed = replayTrace(*trace, profile);
         failureResults.append(QJsonObject{
-            { QStringLiteral("file"), entry.value(QStringLiteral("file")) },
-            { QStringLiteral("first_violated_invariant"), observed },
-            { QStringLiteral("passed"), observed == entry.value(QStringLiteral("first_violated_invariant")).toString() },
+            { QStringLiteral("file"), entry.value(QStringLiteral("trace_file")) },
+            { QStringLiteral("expected_violation"), observed },
+            { QStringLiteral("passed"), observed == entry.value(QStringLiteral("expected_violation")).toString() },
         });
     }
 
