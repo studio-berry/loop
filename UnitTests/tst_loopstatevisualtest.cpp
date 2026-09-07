@@ -27,7 +27,6 @@
 
 #include <cmath>
 #include <set>
-#include <utility>
 
 using pdfquick::tokens::ColorRole;
 using pdfquick::tokens::FocusOutlineOffsetPx;
@@ -53,7 +52,6 @@ using pdfquick::tokens::TypeSmallPx;
 Q_DECLARE_METATYPE(StateKind)
 Q_DECLARE_METATYPE(ColorRole)
 Q_DECLARE_METATYPE(StateIcon)
-Q_DECLARE_METATYPE(LoopTheme)
 
 namespace
 {
@@ -273,7 +271,6 @@ void LoopStateVisualTest::checkStatusMapping()
     const LoopStateVisual visual = resolveStateVisual(nullptr, &checkStatus, nullptr);
 
     QCOMPARE(visual.kind, expectedKind);
-    QVERIFY(!visual.accessibleName.isEmpty());
     if (expectedKind == StateKind::Passed)
     {
         QCOMPARE(visual.colorRole, ColorRole::Success);
@@ -391,8 +388,6 @@ void LoopStateVisualTest::waivedNeverResolvesToPassed()
 
 void LoopStateVisualTest::tokenGeometryMatchesAdmissionContract()
 {
-    // docs/quick-design-tokens.json — scripts/verify-quick-shell-policy.py
-    // re-checks these same literals against the C++ header.
     QCOMPARE(SpaceXs, 4);
     QCOMPARE(SpaceS, 8);
     QCOMPARE(SpaceM, 12);

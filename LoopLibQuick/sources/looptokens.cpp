@@ -29,11 +29,8 @@ namespace pdfquick::tokens
 namespace
 {
 
-// Dark theme values matching docs/quick-design-tokens.json `colors` for the
-// roles that existed there (issue #178). FocusRing is the one deliberate
-// divergence: the JSON `focus` token is reused by CanvasPalette for warning
-// strokes, so the design-system ring uses a distinct hue (violet) and leaves
-// canvas overlay restyle to #196.
+// Dark values match docs/quick-design-tokens.json where a role existed there.
+// FocusRing is violet, not the JSON `focus` colour CanvasPalette reuses for warnings.
 constexpr const char* DarkSurfaceBase = "#111827";
 constexpr const char* DarkSurfacePanel = "#1F2937";
 constexpr const char* DarkSurfaceOverlay = "#374151";
@@ -160,9 +157,7 @@ QColor colorHighContrast(ColorRole role)
         case ColorRole::SeverityError:
             return QColor(Qt::red);
 
-        // Button fill with white label text: Qt::red is only ~4.0:1 against
-        // white, below the 4.5:1 text minimum. Keep a saturated red that clears
-        // the text threshold (same value as the light-theme fill).
+        // White-on-Qt::red is ~4.0:1; use the light fill so button text stays at 4.5:1.
         case ColorRole::DestructiveAction:
             return hex(LightDestructiveAction);
 

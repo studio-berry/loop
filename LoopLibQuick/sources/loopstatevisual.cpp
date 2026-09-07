@@ -76,9 +76,6 @@ LoopStateVisual fromFinding(const pdf::PreflightFinding& finding)
         return makeVisual(StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare);
     }
 
-    // profile.schema.json admits only error/warning/info. Anything else is
-    // data this build does not understand, so it takes the never-green
-    // Incomplete treatment rather than silently falling through to Passed.
     return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
 }
 

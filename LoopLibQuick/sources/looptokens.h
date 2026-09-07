@@ -52,8 +52,7 @@ inline constexpr int FocusOutlineOffsetPx = 2;
 inline constexpr int MinimumPointerTargetPx = 44;
 inline constexpr int MinimumKeyboardTargetPx = 32;
 
-/// The theme a `ColorRole` resolves against. `HighContrast` is a distinct theme
-/// rather than a flag on `Dark`/`Light`: every role has a value in all three.
+/// `HighContrast` is a third theme, not a flag on Dark/Light.
 enum class LoopTheme
 {
     Dark,
@@ -61,9 +60,7 @@ enum class LoopTheme
     HighContrast
 };
 
-/// Semantic colour role. Named for what a surface or piece of text *is*, never
-/// for a colour. A call site that reaches for a raw QColor or a hex literal
-/// instead of a role is a design-system violation, not a shortcut.
+/// Semantic colour role. Call sites name a role, never a hex value.
 enum class ColorRole
 {
     SurfaceBase,
@@ -78,25 +75,20 @@ enum class ColorRole
     SeverityWarning,
     SeverityInfo,
 
-    /// The "no findings" treatment. Distinct from `StateIncomplete` and
-    /// `StateNotChecked` by more than hue — see resolveStateVisual().
+    /// Clean pass. Distinct from Incomplete and NotChecked by more than hue.
     Success,
 
-    /// A check that did not run to completion (budget exceeded, skipped,
-    /// unsupported). NOT a severity: never resolves to the `Success` role.
+    /// Check did not complete. Never the Success role.
     StateIncomplete,
 
-    /// No run exists yet for this revision. Never the `Success` role.
+    /// No run for this revision. Never the Success role.
     StateNotChecked,
 
     FocusRing,
     DestructiveAction
 };
 
-/// Resolves one semantic role to a concrete colour for `theme`. The only place
-/// in the Loop UI that is allowed to know a hex value; every other surface goes
-/// through this function (or through a component built on it, such as
-/// resolveStateVisual()).
+/// Resolves `role` for `theme`. Hex literals live only in looptokens.cpp.
 LOOPLIBQUICK_EXPORT QColor color(ColorRole role, LoopTheme theme);
 
 }   // namespace pdfquick::tokens

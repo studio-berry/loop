@@ -39,9 +39,6 @@ struct PreflightDecision;
 namespace pdfquick::tokens
 {
 
-/// The finding/check state a surface is presenting. Kept separate from
-/// `ColorRole` even though today it maps one-to-one, because a state is a fact
-/// about a finding and a colour role is a fact about a pixel.
 enum class StateKind
 {
     Error,
@@ -53,20 +50,16 @@ enum class StateKind
     Waived
 };
 
-/// Shape carries the state distinction alongside colour, so the mapping
-/// survives colour-blindness and greyscale printing (docs/ACCESSIBILITY_BASELINE.md,
-/// issue #25). `BadgeOverlay` is drawn in addition to the underlying severity
-/// treatment, not instead of it — a waived error still shows as an error with
-/// a badge, it never becomes indistinguishable from a plain warning.
+/// Non-colour shape. BadgeOverlay is drawn on top of the finding's severity treatment.
 enum class StateIcon
 {
-    FilledCircle,   // Error
-    FilledTriangle,   // Warning
-    FilledSquare,   // Info
-    Hatched,   // Incomplete
-    Outline,   // Not checked
-    Checkmark,   // Passed
-    BadgeOverlay   // Waived
+    FilledCircle,
+    FilledTriangle,
+    FilledSquare,
+    Hatched,
+    Outline,
+    Checkmark,
+    BadgeOverlay
 };
 
 struct LoopStateVisual
@@ -74,26 +67,12 @@ struct LoopStateVisual
     StateKind kind = StateKind::NotChecked;
     ColorRole colorRole = ColorRole::StateNotChecked;
     StateIcon icon = StateIcon::Outline;
-    /// Non-colour text cue. Surfaces must expose this (or a translation of it)
-    /// as the accessible name; colour is never the only state channel.
     QString accessibleName;
 };
 
-/// Stable English accessible name for `kind`. Used by resolveStateVisual() and
-/// by any surface that needs the label without a full visual mapping.
 LOOPLIBQUICK_EXPORT QString stateAccessibleName(StateKind kind);
 
-/// Single source of truth for finding/check presentation (issue #194). Every
-/// surface that draws a finding, a check row, or a run summary calls this;
-/// none derives its own colour, icon, or accessible name from `severity`,
-/// `status`, or a decision's kind directly.
-///
-/// Two invariants hold for every input combination and are asserted by
-/// tst_loopstatevisualtest.cpp:
-///
-///   - `StateKind::Incomplete` never resolves to the same colour role, icon,
-///     or accessible name as `StateKind::Passed`.
-///   - An active Waive decision never resolves to `StateKind::Passed`.
+/// Canonical finding/check presentation. Incomplete and active Waive never resolve as Passed.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolveStateVisual(const pdf::PreflightFinding* finding,
                                                        const pdf::PreflightCheckStatus* status,
                                                        const pdf::PreflightDecision* decision,

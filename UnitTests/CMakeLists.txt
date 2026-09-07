@@ -589,14 +589,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     add_test(UnitTestsOverprintRender "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsOverprintRender")
 endif()
 
-# Guarded the same way LoopLibQuick's own add_subdirectory() is: the
-# tools/legacy-host build (LOOP_BUILD_ONLY_CORE_LIBRARY, or LOOP_BUILD_QUICK_CANVAS
-# off) must not descend into anything that requires it.
-#
-# Compiles the design-system token/state-mapping sources directly rather than
-# linking the LoopLibQuick target: they depend on QColor only, not on Qt Quick/Qml,
-# and linking the SHARED LoopLibQuick library from a plain add_executable() test
-# would be the first such link edge in this file.
+# Token/state-mapping TUs need QColor, not Qt Quick; do not link LoopLibQuick.
 if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY AND LOOP_BUILD_QUICK_CANVAS)
     add_executable(UnitTestsLoopStateVisual
         tst_loopstatevisualtest.cpp

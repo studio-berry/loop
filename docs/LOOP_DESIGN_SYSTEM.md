@@ -144,12 +144,7 @@ this order:
    the **Incomplete** treatment rather than being silently dropped or shown
    as a pass.
 3. Otherwise, `status` is non-null → **Passed** only when `status == "ok"`;
-   every other literal (`failed`, `warning`, `skipped`, `incomplete`,
-   `unsupported`, and anything a future check adds) is **Incomplete**. This is
-   deliberately coarser than the run-level verdict in
-   `pdf::reducePreflightVerdict()` (`docs/PREFLIGHT_VERDICT.md`): a caller
-   presenting one check's completion without a specific finding only needs
-   "clean pass" separated from "not that".
+   every other literal is **Incomplete**.
 4. Otherwise → **Not checked**.
 
 The two invariants this table exists to guarantee — an incomplete check never
@@ -168,25 +163,15 @@ Incomplete presentation for it.
 
 ## Components
 
-Not delivered by this issue. `StateKind`, `ColorRole`, `StateIcon`, and
-`accessibleName` above are the contract a component needs; the reusable
-finding card, inspector row, canvas overlay, progress, empty-state,
-error-state, and destructive-confirm implementations described in issue
-#194 §3 have no consuming surface yet (`#193` shell, `#195` preflight
-workflow, `#196` canvas navigation, and `#127` Inspector are all still open).
-Building fixtures for components with no host would be speculative; each
-should land with its consuming surface, built on `resolveStateVisual()` and
-the token roles above, so the mapping is adopted rather than re-derived.
+Not in this change. Finding card, inspector row, overlay, progress, empty,
+error, and confirm implementations land with their consuming surfaces
+(`#193`, `#195`, `#196`, `#127`) on `resolveStateVisual()` and the tokens above.
 
 ## Theme and high-DPI
 
-Dark and light are both defined above with contrast checked against
-`SurfaceBase`; `LoopTheme::HighContrast` is a third theme rather than a
-toggle on either. Icon shapes in `StateIcon` are drawn by scene-graph/QML
-primitives (no bitmap icon assets), so 100%/150%/200% scaling verification is
-a rendering-path concern for whichever surface first consumes `StateIcon` —
-tracked with the components above, not exercised by this issue's (non-visual)
-token and mapping tests.
+Dark, light, and `HighContrast` are all defined above. `StateIcon` is drawn
+with scene-graph/QML primitives (no bitmap assets); 100%/150%/200% scaling
+is verified with the first consuming surface.
 
 ## Adoption
 
@@ -201,10 +186,9 @@ visual-regression coverage.
 
 Typography (`TypeSmallPx`), spacing (`SpaceS`), and focus geometry
 (`FocusOutlineWidthPx` / `FocusOutlineOffsetPx`) are already read by the
-canvas HUD and overlay palette so those values have one C++ home.
+canvas HUD and overlay palette.
 
-Issue #191 (product-surface manifest) is closed; there is no open inherited
-Widgets-dialog manifest for this document to extend.
+Issue #191 is closed; there is no open inherited-dialog manifest to extend.
 
 ## Integrated-candidate evidence
 
