@@ -151,10 +151,10 @@ The clean-VM acceptance gate remains:
 
 > **Deferred for 0.2.0 (2026-09-06).** The Windows Server 2022 pristine-VM run is
 > **deferred** to release-hardening and is **required before 1.0**; it is not a 0.2.0
-> blocker. The same-SHA package evidence (Linux AppImage + Windows MSI on
-> `b47c62b2…`), the Linux clean-machine Ubuntu 24.04 proof, and the Windows hosted
-> relocated/MSI-lifecycle smoke are complete. Before 1.0, execute this exact
-> fresh-VM procedure and record the SHA-bound transcript — see
+> blocker. The earlier same-SHA inspector pair on `b47c62b2…` is withdrawn (native a11y
+> was software-backed; Windows hosted smoke skipped Editor launch). Re-admit Session 07
+> from `Linux_AppImage` / `Windows_MSI` workflow_dispatch on the candidate SHA, then
+> `Create_Release_Draft` pairing with operator transcripts — see
 > `docs/SESSION_07_PACKAGE_BOUNDARY.md` (§0.2.0 gate hierarchy).
 
 **The profiles path is still a required observation:** `smoke-test-install.ps1` probes

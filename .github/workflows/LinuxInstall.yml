@@ -9,6 +9,11 @@ on:
         description: "Accepted Session 06 source commit to package"
         required: true
         type: string
+      operator_evidence:
+        description: "Session 07 native-graphics + operator Editor launch. Off unless promoting to stable."
+        required: false
+        type: boolean
+        default: false
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo and artifacts are
 # uploaded via the job token.
@@ -31,6 +36,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf autoconf-archive automake libtool libxcb-cursor0 libspeechd2 libfontconfig1-dev gnupg2 wget appstream libcups2 libcups2-dev
+
+      - name: Install Xvfb for operator evidence
+        if: ${{ inputs.operator_evidence }}
+        run: sudo apt-get install -y xvfb libgl1-mesa-dri libegl1
 
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
@@ -193,12 +202,18 @@ jobs:
 
       - name: Run product Quick accessibility qualification harness (native)
         working-directory: loop
+        env:
+          QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'xcb' || 'offscreen' }}
         run: |
           evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
           echo "source_sha=$LOOP_SOURCE_SHA" | tee "$evidence_dir/quick-a11y-native.txt"
-          pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+          if [ "${{ inputs.operator_evidence }}" = "true" ]; then
+            xvfb-run -a pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native -ExpectedGraphicsApi native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+          else
+            pwsh ./scripts/run-product-quick-a11y-smoke.ps1 -BuildDir build -Backend native 2>&1 | tee -a "$evidence_dir/quick-a11y-native.txt"
+          fi
 
       - name: Run product Quick accessibility qualification harness (software)
         working-directory: loop
@@ -278,13 +293,21 @@ jobs:
       - name: Run AppImage smoke test
         working-directory: loop
         env:
-          QT_QPA_PLATFORM: offscreen
+          LOOP_REQUIRE_NATIVE_GRAPHICS: ${{ inputs.operator_evidence && '1' || '' }}
         run: |
           chmod +x "build/${{ env.appimagefilename }}"
           evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
           mkdir -p "$evidence_dir"
           set -o pipefail
-          bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loop-preflight/testdata/fixtures/bleed-adequate.pdf" 2>&1 | tee "$evidence_dir/appimage-smoke.txt"
+          {
+            echo "source_sha=$LOOP_SOURCE_SHA"
+            if [ "${{ inputs.operator_evidence }}" = "true" ]; then
+              unset QT_QPA_PLATFORM
+              xvfb-run -a bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loop-preflight/testdata/fixtures/bleed-adequate.pdf" --operator
+            else
+              bash ./scripts/smoke-test-appimage.sh "build/${{ env.appimagefilename }}" "loop-preflight/testdata/fixtures/bleed-adequate.pdf"
+            fi
+          } 2>&1 | tee "$evidence_dir/appimage-smoke.txt"
 
       - name: Inspect AppImage package boundary
         working-directory: loop

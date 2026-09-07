@@ -24,6 +24,15 @@
     Optional full source SHA to record in the smoke transcript. Package workflows
     pass the required exact SHA; clean-VM runs should pass it as well.
 
+.PARAMETER SkipEditorLaunch
+    Skip the 5-second operator Editor launch. Integration PRs use this; Session 07
+    operator evidence on promotion to stable and exact-SHA dispatch must not.
+
+.PARAMETER RequireNativeGraphics
+    Fail native `--quick-smoke` if the scene graph selected software/null/unknown.
+    Offscreen QPA cannot satisfy this; callers must unset QT_QPA_PLATFORM or set a
+    native platform (windows/xcb).
+
 .PARAMETER AllowOcrSidecar
     Permit the LoopOcrService bundle (which carries a Python runtime) to be
     present. docs/PACKAGING_LICENSING.md requires the *default* bundle to be
@@ -40,6 +49,7 @@ param(
     [string]$TestPdf = "",
     [string]$SourceSha = "",
     [switch]$SkipEditorLaunch,
+    [switch]$RequireNativeGraphics,
     [switch]$AllowOcrSidecar,
     [switch]$AllowOcrPlugin
 )
@@ -59,6 +69,18 @@ function Assert-FileExists {
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "Missing $Label`: $Path"
     }
+}
+
+function Get-ReportedGraphicsApi {
+    param([object[]]$Output, [string]$Label)
+    $line = $Output | Where-Object { $_.ToString() -match "graphics_api=([a-z0-9]+)" } | Select-Object -First 1
+    if (-not $line) {
+        throw "$Label did not report a selected graphics API."
+    }
+    if ($line.ToString() -notmatch "graphics_api=([a-z0-9]+)") {
+        throw "$Label reported an unparseable graphics API: $line"
+    }
+    return $Matches[1]
 }
 
 function Resolve-ProfilesDir {
@@ -290,6 +312,7 @@ $savedQtRootDir = $env:QT_ROOT_DIR
 $savedQt6Dir = $env:Qt6_DIR
 $savedLoopQtRoot = $env:LOOP_QT_ROOT
 $savedQuickBackend = $env:QT_QUICK_BACKEND
+$savedQpaPlatform = $env:QT_QPA_PLATFORM
 $savedForceStderrLogging = $env:QT_FORCE_STDERR_LOGGING
 $savedQtDebugPlugins = $env:QT_DEBUG_PLUGINS
 $savedQmlImportTrace = $env:QML_IMPORT_TRACE
@@ -327,14 +350,29 @@ try {
     if ($softwareExit -ne 0) {
         throw "LoopEditor software Quick startup failed with exit code $($softwareExit): $softwareOutput"
     }
-    Write-Host "OK: LoopEditor software Quick startup"
+    $softwareApi = Get-ReportedGraphicsApi -Output $softwareOutput -Label "LoopEditor software Quick startup"
+    if ($softwareApi -ne "software") {
+        throw "LoopEditor software Quick startup selected graphics_api=$softwareApi; expected software"
+    }
+    Write-Host "OK: LoopEditor software Quick startup graphics_api=$softwareApi"
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    $savedNativeQpa = $env:QT_QPA_PLATFORM
+    if ($RequireNativeGraphics) {
+        Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    }
     $nativeOutput = @(& $editor --quick-smoke 2>&1)
     $nativeExit = $LASTEXITCODE
+    if ($RequireNativeGraphics) {
+        if ($null -ne $savedNativeQpa) { $env:QT_QPA_PLATFORM = $savedNativeQpa } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
+    }
     if ($nativeExit -ne 0) {
         throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
     }
-    Write-Host "OK: LoopEditor native Quick startup"
+    $nativeApi = Get-ReportedGraphicsApi -Output $nativeOutput -Label "LoopEditor native Quick startup"
+    if ($RequireNativeGraphics -and $nativeApi -in @("software", "null", "unknown")) {
+        throw "LoopEditor native Quick startup selected software/null graphics ($nativeApi)"
+    }
+    Write-Host "OK: LoopEditor native Quick startup graphics_api=$nativeApi"
 } finally {
     $env:PATH = $savedPath
     if ($null -ne $savedPluginPath) { $env:QT_PLUGIN_PATH = $savedPluginPath } else { Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue }
@@ -346,6 +384,7 @@ try {
     if ($null -ne $savedQt6Dir) { $env:Qt6_DIR = $savedQt6Dir } else { Remove-Item Env:Qt6_DIR -ErrorAction SilentlyContinue }
     if ($null -ne $savedLoopQtRoot) { $env:LOOP_QT_ROOT = $savedLoopQtRoot } else { Remove-Item Env:LOOP_QT_ROOT -ErrorAction SilentlyContinue }
     if ($null -ne $savedQuickBackend) { $env:QT_QUICK_BACKEND = $savedQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
+    if ($null -ne $savedQpaPlatform) { $env:QT_QPA_PLATFORM = $savedQpaPlatform } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
     if ($null -ne $savedForceStderrLogging) { $env:QT_FORCE_STDERR_LOGGING = $savedForceStderrLogging } else { Remove-Item Env:QT_FORCE_STDERR_LOGGING -ErrorAction SilentlyContinue }
     if ($null -ne $savedQtDebugPlugins) { $env:QT_DEBUG_PLUGINS = $savedQtDebugPlugins } else { Remove-Item Env:QT_DEBUG_PLUGINS -ErrorAction SilentlyContinue }
     if ($null -ne $savedQmlImportTrace) { $env:QML_IMPORT_TRACE = $savedQmlImportTrace } else { Remove-Item Env:QML_IMPORT_TRACE -ErrorAction SilentlyContinue }
@@ -380,13 +419,22 @@ Test-ForbiddenPayload -Roots @($InstallDir, $shareRoot) -AllowOcr:$AllowOcrSidec
 
 if (-not $SkipEditorLaunch) {
     $editor = Join-Path $binDir "LoopEditor.exe"
-    $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
-    Start-Sleep -Seconds 5
-    if ($editorProcess.HasExited) {
-        throw "LoopEditor exited early with code $($editorProcess.ExitCode)"
+    $savedOperatorQpa = $env:QT_QPA_PLATFORM
+    $savedOperatorBackend = $env:QT_QUICK_BACKEND
+    Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+    Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    try {
+        $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
+        Start-Sleep -Seconds 5
+        if ($editorProcess.HasExited) {
+            throw "LoopEditor exited early with code $($editorProcess.ExitCode)"
+        }
+        Stop-Process -Id $editorProcess.Id -Force
+        Write-Host "OK: LoopEditor launched without immediate crash"
+    } finally {
+        if ($null -ne $savedOperatorQpa) { $env:QT_QPA_PLATFORM = $savedOperatorQpa } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
+        if ($null -ne $savedOperatorBackend) { $env:QT_QUICK_BACKEND = $savedOperatorBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
     }
-    Stop-Process -Id $editorProcess.Id -Force
-    Write-Host "OK: LoopEditor launched without immediate crash"
 }
 
 Write-Host "Smoke test passed."

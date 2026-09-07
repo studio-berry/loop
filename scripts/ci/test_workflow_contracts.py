@@ -125,6 +125,25 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("loop-package-boundary-linux-evidence", linux)
         self.assertIn("loop-package-boundary-windows-evidence", windows)
 
+    def test_package_workflows_keep_operator_evidence_opt_in(self):
+        linux = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
+        windows = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        draft = (ROOT / ".github/workflows/CreateReleaseDraft.yml").read_text(encoding="utf-8")
+        for workflow in (linux, windows, draft):
+            self.assertIn("operator_evidence:", workflow)
+            self.assertIn("default: false", workflow)
+        self.assertIn("SkipEditorLaunch", windows)
+        self.assertIn("RequireNativeGraphics", windows)
+        self.assertIn("if: ${{ inputs.operator_evidence }}", linux)
+        self.assertIn("xvfb-run", linux)
+        self.assertIn("--operator", linux)
+        self.assertIn("LOOP_REQUIRE_NATIVE_GRAPHICS", linux)
+        self.assertIn("-ExpectedGraphicsApi native", linux)
+        self.assertIn("-ExpectedGraphicsApi", windows)
+        self.assertIn("d3d11", windows)
+        self.assertIn("msi-smoke.txt", windows)
+        self.assertIn("inputs.operator_evidence", draft)
+
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         self.assertIn('Platform=x64', workflow)
@@ -161,6 +180,9 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("source_sha:", workflow)
         self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
         self.assertIn("compare_package_boundary_evidence.py", workflow)
+        self.assertIn("operator_evidence:", workflow)
+        self.assertIn("--linux-dir package-evidence/linux", workflow)
+        self.assertIn("--windows-dir package-evidence/windows", workflow)
         self.assertIn("loop-package-boundary-linux-evidence", workflow)
         self.assertIn("loop-package-boundary-windows-evidence", workflow)
         self.assertIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)

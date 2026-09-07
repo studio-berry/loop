@@ -12,6 +12,11 @@ on:
         description: 'Accepted source commit used by both package workflows'
         required: true
         type: string
+      operator_evidence:
+        description: 'Require Session 07 native-graphics and operator Editor transcripts. Off unless promoting to stable.'
+        required: false
+        type: boolean
+        default: false
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo; release creation and
 # all gh calls use the MY_GITHUB_TOKEN PAT explicitly.
@@ -149,7 +154,9 @@ jobs:
             --linux package-evidence/linux/evidence.json \
             --windows package-evidence/windows/evidence.json \
             --source-sha "${{ inputs.source_sha }}" \
-            --output package-evidence/pair.json 2>&1 | tee package-evidence/pair.txt
+            --output package-evidence/pair.json \
+            ${{ inputs.operator_evidence && '--linux-dir package-evidence/linux --windows-dir package-evidence/windows' || '' }} \
+            2>&1 | tee package-evidence/pair.txt
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 

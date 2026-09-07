@@ -117,7 +117,9 @@ echo "OK: LoopOcrService sidecar absent (V1 CLI-only OCR surface)"
 # The package must be self-contained. Remove developer Qt/toolchain search
 # paths before every packaged process and do not inherit LD_LIBRARY_PATH.
 export PATH="/usr/bin:/bin"
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+if [[ "${LOOP_REQUIRE_NATIVE_GRAPHICS:-}" != "1" ]]; then
+    export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
+fi
 export LD_LIBRARY_PATH="$LIB_DIR:$LIB_DIR/x86_64-linux-gnu"
 unset QT_PLUGIN_PATH QML2_IMPORT_PATH QML_IMPORT_PATH QT_QPA_PLATFORM_PLUGIN_PATH
 unset QTDIR QT_ROOT_DIR Qt6_DIR LOOP_QT_ROOT
@@ -149,12 +151,30 @@ if [[ "$HELP_EXIT" -ne 0 ]]; then
 fi
 echo "OK: PdfTool help"
 
+reported_graphics_api() {
+    local output="$1"
+    local label="$2"
+    local api
+    api="$(printf '%s\n' "$output" | sed -n 's/.*graphics_api=\([a-z0-9][a-z0-9]*\).*/\1/p' | head -n 1)"
+    if [[ -z "$api" ]]; then
+        echo "${label} did not report a selected graphics API:" >&2
+        echo "$output" >&2
+        exit 1
+    fi
+    printf '%s\n' "$api"
+}
+
 run_quick_smoke() {
     local label="$1"
     local output
     local exit_code
+    local api
+    local saved_qpa="${QT_QPA_PLATFORM-}"
     if [[ "$label" == "native" ]]; then
         unset QT_QUICK_BACKEND
+        if [[ "${LOOP_REQUIRE_NATIVE_GRAPHICS:-}" == "1" ]]; then
+            unset QT_QPA_PLATFORM
+        fi
     else
         export QT_QUICK_BACKEND=software
     fi
@@ -162,12 +182,32 @@ run_quick_smoke() {
     output="$("${BIN_DIR}/LoopEditor" --quick-smoke 2>&1)"
     exit_code=$?
     set -e
+    if [[ "$label" == "native" && "${LOOP_REQUIRE_NATIVE_GRAPHICS:-}" == "1" ]]; then
+        if [[ -n "$saved_qpa" ]]; then
+            export QT_QPA_PLATFORM="$saved_qpa"
+        else
+            unset QT_QPA_PLATFORM
+        fi
+    fi
     if [[ "$exit_code" -ne 0 ]]; then
         echo "LoopEditor ${label} Quick startup failed with exit code ${exit_code}:" >&2
         echo "$output" >&2
         exit 1
     fi
-    echo "OK: LoopEditor ${label} Quick startup"
+    api="$(reported_graphics_api "$output" "LoopEditor ${label} Quick startup")"
+    if [[ "$label" == "software" && "$api" != "software" ]]; then
+        echo "LoopEditor software Quick startup selected graphics_api=${api}; expected software" >&2
+        echo "$output" >&2
+        exit 1
+    fi
+    if [[ "$label" == "native" && "${LOOP_REQUIRE_NATIVE_GRAPHICS:-}" == "1" ]]; then
+        if [[ "$api" == "software" || "$api" == "null" || "$api" == "unknown" ]]; then
+            echo "LoopEditor native Quick startup selected software/null graphics (${api})" >&2
+            echo "$output" >&2
+            exit 1
+        fi
+    fi
+    echo "OK: LoopEditor ${label} Quick startup graphics_api=${api}"
 }
 
 run_quick_smoke native
@@ -175,6 +215,8 @@ run_quick_smoke software
 unset QT_QUICK_BACKEND
 
 if [[ "$OPERATOR_MODE" == "--operator" ]]; then
+    unset QT_QPA_PLATFORM
+    unset QT_QUICK_BACKEND
     set +e
     "${BIN_DIR}/LoopEditor" "$TEST_PDF" >"${EXTRACT_ROOT}/LoopEditor-operator.log" 2>&1 &
     EDITOR_PID=$!

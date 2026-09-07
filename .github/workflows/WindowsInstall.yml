@@ -9,6 +9,11 @@ on:
         description: "Accepted Session 06 source commit to package"
         required: true
         type: string
+      operator_evidence:
+        description: "Session 07 native-graphics + operator Editor launch. Off unless promoting to stable."
+        required: false
+        type: boolean
+        default: false
 
 # Least privilege for GITHUB_TOKEN: checkout reads the repo, artifacts are uploaded
 # via the job token, and signing uses the DigiCert SM_* secrets rather than this token.
@@ -296,6 +301,8 @@ jobs:
 
       - name: Smoke relocated installed tree
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'windows' || 'offscreen' }}
         run: |
           $relocated = Join-Path $env:RUNNER_TEMP "loop-installed-smoke"
           if (Test-Path -LiteralPath $relocated) { Remove-Item -LiteralPath $relocated -Recurse -Force }
@@ -304,7 +311,16 @@ jobs:
           # relocated binaries live at $relocated\usr\bin, not
           # $relocated\install\usr\bin.
           Copy-Item -LiteralPath "${env:GITHUB_WORKSPACE}\loop\build\install" -Destination $relocated -Recurse
-          & ".\loop\scripts\smoke-test-install.ps1" -InstallDir (Join-Path $relocated "usr\bin") -SourceSha $env:LOOP_SOURCE_SHA -SkipEditorLaunch
+          $smokeArgs = @{
+            InstallDir = (Join-Path $relocated "usr\bin")
+            SourceSha = $env:LOOP_SOURCE_SHA
+          }
+          if ("${{ inputs.operator_evidence }}" -eq "true") {
+            $smokeArgs.RequireNativeGraphics = $true
+          } else {
+            $smokeArgs.SkipEditorLaunch = $true
+          }
+          & ".\loop\scripts\smoke-test-install.ps1" @smokeArgs
 
       - name: Upload Sentry debug files
         # Do not use `if: secrets.*` — GitHub rejects the secrets context in
@@ -322,11 +338,17 @@ jobs:
 
       - name: Run product Quick accessibility qualification harness (native)
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'windows' || 'offscreen' }}
         run: |
           $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path (Join-Path $evidenceDir "quick-a11y-native.txt")
-          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" -BuildDir ".\loop\build" -Backend native 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
+          $a11yArgs = @("-BuildDir", ".\loop\build", "-Backend", "native")
+          if ("${{ inputs.operator_evidence }}" -eq "true") {
+            $a11yArgs += @("-ExpectedGraphicsApi", "d3d11")
+          }
+          & ".\loop\scripts\run-product-quick-a11y-smoke.ps1" @a11yArgs 2>&1 | Tee-Object -FilePath (Join-Path $evidenceDir "quick-a11y-native.txt") -Append
           if ($LASTEXITCODE -ne 0) { throw "Native product Quick accessibility qualification harness failed." }
 
       - name: Run product Quick accessibility qualification harness (software)
@@ -340,16 +362,23 @@ jobs:
 
       - name: Validate staged install tree
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'windows' || 'offscreen' }}
         run: |
           # Verifies layout, profile/schema resolution and a real PdfTool preflight run
           # against the staged tree before it is packaged, and enforces the
           # docs/PACKAGING_LICENSING.md prohibition on Ghostscript / JRE / Python
           # payloads -- previously a manual checklist item with nothing checking it.
-          # Editor launch is skipped: no interactive desktop on the runner.
-          .\loop\scripts\smoke-test-install.ps1 `
-            -InstallDir "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin" `
-            -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
+          $smokeArgs = @{
+            InstallDir = "${env:GITHUB_WORKSPACE}\loop\build\install\usr\bin"
+            SourceSha = $env:LOOP_SOURCE_SHA
+          }
+          if ("${{ inputs.operator_evidence }}" -eq "true") {
+            $smokeArgs.RequireNativeGraphics = $true
+          } else {
+            $smokeArgs.SkipEditorLaunch = $true
+          }
+          .\loop\scripts\smoke-test-install.ps1 @smokeArgs
 
       - name: Generate third-party notices
         shell: pwsh
@@ -456,17 +485,30 @@ jobs:
 
       - name: Run MSI lifecycle smoke test
         shell: pwsh
+        env:
+          QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'windows' || 'offscreen' }}
         run: |
           # The release MSI is x64 and must install beneath 64-bit Program Files.
-          # The full editor operator launch is skipped on the hosted runner; the
-          # packaged native/software Quick startup is exercised by the smoke script.
+          # Operator Editor launch and native graphics are opt-in (operator_evidence)
+          # for Session 07 / stable promotion only.
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
           $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
-          & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
-            -MsiPath $msiPath `
-            -InstallDir $installDir `
-            -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
+          $smokeLog = Join-Path $evidenceDir "msi-smoke.txt"
+          "source_sha=$env:LOOP_SOURCE_SHA" | Set-Content -Path $smokeLog
+          $smokeArgs = @{
+            MsiPath = $msiPath
+            InstallDir = $installDir
+            SourceSha = $env:LOOP_SOURCE_SHA
+          }
+          if ("${{ inputs.operator_evidence }}" -eq "true") {
+            $smokeArgs.RequireNativeGraphics = $true
+          } else {
+            $smokeArgs.SkipEditorLaunch = $true
+          }
+          & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" @smokeArgs 2>&1 | Tee-Object -FilePath $smokeLog -Append
+          if ($LASTEXITCODE -ne 0) { throw "MSI lifecycle smoke test failed." }
 
       - name: Run Qt LGPL relink test
         shell: pwsh

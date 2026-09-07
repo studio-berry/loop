@@ -16,7 +16,10 @@ release qualification. These are the two platforms Loop V1 supports; **macOS**
 CI is a **post-V1** track under
 [MIC-336](https://linear.app/mbx2/issue/MIC-336) /
 [docs/PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md). Packaging artifacts are
-produced only for `stable` pushes and manual workflow runs.
+produced only for `stable` pushes and manual workflow runs. Native-graphics
+accessibility and operator Editor launch run only when those package workflows
+are dispatched with `operator_evidence=true` (stable promotion). Default
+dispatches keep the fast offscreen / skip-Editor path.
 
 The standalone `Documentation truth` workflow runs for the policy branches
 `dev`, `unstable`, and `stable` pull requests and pushes. It checks every ADR's verification

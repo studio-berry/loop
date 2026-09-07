@@ -42,6 +42,7 @@ param(
     [string]$SourceSha = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",
     [switch]$SkipEditorLaunch,
+    [switch]$RequireNativeGraphics,
     [switch]$AllowOcrSidecar
 )
 
@@ -99,6 +100,7 @@ function Invoke-Smoke {
     if (-not [string]::IsNullOrWhiteSpace($TestPdf)) { $smokeArgs.TestPdf = $TestPdf }
     if (-not [string]::IsNullOrWhiteSpace($SourceSha)) { $smokeArgs.SourceSha = $SourceSha }
     if ($SkipEditorLaunch.IsPresent) { $smokeArgs.SkipEditorLaunch = $true }
+    if ($RequireNativeGraphics.IsPresent) { $smokeArgs.RequireNativeGraphics = $true }
     if ($AllowOcrSidecar.IsPresent) { $smokeArgs.AllowOcrSidecar = $true }
 
     # smoke-test-install.ps1 sets $ErrorActionPreference = "Stop" and signals failure by
