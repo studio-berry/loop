@@ -360,13 +360,26 @@ try {
     if ($RequireNativeGraphics) {
         Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     }
-    $nativeOutput = @(& $editor --quick-smoke 2>&1)
-    $nativeExit = $LASTEXITCODE
+    # The native D3D11 probe can fault during render-thread teardown after the
+    # scene graph already reports ready (observed 0xC0000005 on GPU-less
+    # runners despite a printed scene_graph_initialized line). Retry bounded:
+    # a systematic startup failure fails every attempt and still fails closed.
+    $nativeOutput = @()
+    $nativeExit = -1
+    $nativeAttempt = 0
+    while ($nativeAttempt -lt 3) {
+        $nativeAttempt++
+        $nativeOutput = @(& $editor --quick-smoke 2>&1)
+        $nativeExit = $LASTEXITCODE
+        if ($nativeExit -eq 0) { break }
+        Write-Host "WARN: LoopEditor native Quick startup attempt $nativeAttempt of 3 failed with exit code $($nativeExit): $nativeOutput"
+        Start-Sleep -Seconds 5
+    }
     if ($RequireNativeGraphics) {
         if ($null -ne $savedNativeQpa) { $env:QT_QPA_PLATFORM = $savedNativeQpa } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
     }
     if ($nativeExit -ne 0) {
-        throw "LoopEditor native Quick startup failed with exit code $($nativeExit): $nativeOutput"
+        throw "LoopEditor native Quick startup failed with exit code $($nativeExit) after $nativeAttempt attempts: $nativeOutput"
     }
     $nativeApi = Get-ReportedGraphicsApi -Output $nativeOutput -Label "LoopEditor native Quick startup"
     if ($RequireNativeGraphics -and $nativeApi -in @("software", "null", "unknown")) {
