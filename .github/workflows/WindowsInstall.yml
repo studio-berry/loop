@@ -464,13 +464,16 @@ jobs:
           # The release MSI is x64 and must install beneath 64-bit Program Files.
           # The full editor operator launch is skipped on the hosted runner; the
           # packaged native/software Quick startup is exercised by the smoke script.
+          # Uninstall is deferred so the Qt LGPL relink step can exercise the
+          # installed tree before removal.
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
           $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
           & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
+            -SkipEditorLaunch `
+            -SkipUninstall
 
       - name: Run Qt LGPL relink test
         shell: pwsh
@@ -481,6 +484,16 @@ jobs:
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
             -OutputPath (Join-Path $evidenceDir "qt-relink.txt")
+
+      - name: Uninstall MSI after package evidence
+        shell: pwsh
+        run: |
+          $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
+          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
+          & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
+            -MsiPath $msiPath `
+            -InstallDir $installDir `
+            -UninstallOnly
 
 
       - name: Upload Windows package boundary evidence

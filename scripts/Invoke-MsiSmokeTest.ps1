@@ -31,6 +31,14 @@
 .PARAMETER LogDir
     Directory for verbose Windows Installer logs.
 
+.PARAMETER SkipUninstall
+    Stop after install and smoke checks, leaving the MSI tree on disk. Used when
+    downstream evidence steps (for example Qt LGPL relink) must run before removal.
+
+.PARAMETER UninstallOnly
+    Skip install and smoke; uninstall $MsiPath and verify removal. Requires an
+    installed tree at $InstallDir.
+
 .EXAMPLE
     .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loop-pdf_0.1.0.msi
 #>
@@ -42,7 +50,9 @@ param(
     [string]$SourceSha = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",
     [switch]$SkipEditorLaunch,
-    [switch]$AllowOcrSidecar
+    [switch]$AllowOcrSidecar,
+    [switch]$SkipUninstall,
+    [switch]$UninstallOnly
 )
 
 Set-StrictMode -Version Latest
@@ -107,12 +117,20 @@ function Invoke-Smoke {
     Write-Host "--- Smoke test passed ($Stage) ---"
 }
 
-if (Test-Path -LiteralPath $InstallDir) {
+if ($SkipUninstall.IsPresent -and $UninstallOnly.IsPresent) {
+    throw "SkipUninstall and UninstallOnly cannot be used together."
+}
+
+if ($UninstallOnly.IsPresent) {
+    if (-not (Test-Path -LiteralPath $InstallDir)) {
+        throw "UninstallOnly requires an installed tree at $InstallDir"
+    }
+} elseif (Test-Path -LiteralPath $InstallDir) {
     throw ("$InstallDir already exists. This test must run on a clean machine so that " +
            "a stale tree cannot mask a packaging defect. Remove it or snapshot back first.")
 }
 
-if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
+if (-not $UninstallOnly.IsPresent -and -not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
     Write-Host "=== Installing previous version for upgrade coverage ==="
     Invoke-Msi -Arguments "/i `"$PreviousMsiPath`"" -LogName "install-previous"
     Invoke-Smoke -Stage "previous version"
@@ -120,10 +138,16 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
     Write-Host "=== Upgrading to version under test ==="
     Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "upgrade"
     Invoke-Smoke -Stage "after upgrade"
-} else {
+} elseif (-not $UninstallOnly.IsPresent) {
     Write-Host "=== Installing version under test ==="
     Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "install"
     Invoke-Smoke -Stage "fresh install"
+}
+
+if ($SkipUninstall.IsPresent) {
+    Write-Host ""
+    Write-Host "MSI lifecycle smoke test passed (uninstall deferred)."
+    exit 0
 }
 
 Write-Host "=== Uninstalling ==="

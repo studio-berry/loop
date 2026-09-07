@@ -35,7 +35,15 @@ function Write-Transcript {
     Write-Host $Message
 }
 
-$editor = Join-Path $InstallDir "LoopEditor.exe"
+# -InstallDir may name the bin directory or the install root above usr\bin (MSI layout).
+$binDir = $InstallDir
+if (-not (Test-Path -LiteralPath (Join-Path $binDir "LoopEditor.exe")) -and
+    (Test-Path -LiteralPath (Join-Path $binDir "usr\bin\LoopEditor.exe"))) {
+    $binDir = Join-Path $binDir "usr\bin"
+    Write-Transcript "Resolved product binaries to $binDir"
+}
+
+$editor = Join-Path $binDir "LoopEditor.exe"
 if (-not (Test-Path -LiteralPath $editor)) {
     throw "LoopEditor not found under $InstallDir"
 }
