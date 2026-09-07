@@ -28,6 +28,8 @@
 #include <QStandardPaths>
 #include <QSysInfo>
 
+#include <mutex>
+
 namespace pdf
 {
 
@@ -185,6 +187,14 @@ QString scrubIPv6Literals(const QString& text)
 
 QString PDFLogScrubber::scrub(const QString& text)
 {
+    // The static matcher patterns below compile on first use. The message
+    // handler calls scrub() on whatever thread logs - including the render
+    // thread during scene-graph startup while the main thread logs too -
+    // so force that one-time compilation here, exactly once, before any
+    // thread can reach the shared patterns concurrently.
+    static std::once_flag patternsCompiled;
+    std::call_once(patternsCompiled, PDFLogScrubber::warmup);
+
     if (text.isEmpty())
     {
         return text;
@@ -208,6 +218,18 @@ QString PDFLogScrubber::scrub(const QString& text)
     result = scrubIPv6Literals(result);
 
     return result;
+}
+
+void PDFLogScrubber::warmup()
+{
+    // Exercise every shared static pattern once so its one-time compilation
+    // happens here, on a single thread, instead of racing with concurrent
+    // first use from the message handler. The inputs are fixed and cover
+    // each matcher; results are intentionally discarded.
+    (void)scrubRemainingAbsolutePaths(QStringLiteral("C:/warmup/boot.log"));
+    (void)scrubEmailAddresses(QStringLiteral("warmup@example.com"));
+    (void)scrubIPv4Literals(QStringLiteral("198.51.100.7"));
+    (void)scrubIPv6Literals(QStringLiteral("2001:db8::1"));
 }
 
 }   // namespace pdf
