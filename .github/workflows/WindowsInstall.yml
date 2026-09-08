@@ -301,6 +301,7 @@ jobs:
 
       - name: Smoke relocated installed tree
         shell: pwsh
+        timeout-minutes: 30
         env:
           QT_QPA_PLATFORM: ${{ inputs.operator_evidence && 'windows' || 'offscreen' }}
         run: |
