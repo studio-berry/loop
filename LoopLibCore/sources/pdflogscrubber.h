@@ -55,6 +55,13 @@ public:
     /// pass. Applying scrub() to already-scrubbed text is a no-op.
     /// \param text Text to scrub
     static QString scrub(const QString& text);
+
+    /// Compiles the shared matcher patterns once, on the calling thread.
+    /// scrub() invokes this exactly once process-wide (via std::call_once)
+    /// before the first real pass, so the one-time pattern compilation can
+    /// never race with log traffic from the render or worker threads inside
+    /// the installed message handler.
+    static void warmup();
 };
 
 }   // namespace pdf

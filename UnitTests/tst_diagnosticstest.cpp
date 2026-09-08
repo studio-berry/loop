@@ -38,6 +38,9 @@
 #include <QSysInfo>
 #include <QTemporaryDir>
 
+#include <thread>
+#include <vector>
+
 namespace
 {
 
@@ -99,6 +102,7 @@ private slots:
     void scrubber_posixAbsolutePath_dropsBasenameKeepsExtension();
     void scrubber_idempotent();
     void scrubber_passthroughWhenNoMatches();
+    void scrubber_concurrentUse_matchesSequentialResults();
 
     void rotation_rollsAtSizeCapAndPrunesOldFiles();
 
@@ -225,6 +229,45 @@ void DiagnosticsTest::scrubber_passthroughWhenNoMatches()
 {
     const QString text = QStringLiteral("Rendered page 3 of 10 in 42 ms");
     QCOMPARE(pdf::PDFLogScrubber::scrub(text), text);
+}
+
+void DiagnosticsTest::scrubber_concurrentUse_matchesSequentialResults()
+{
+    // The installed message handler scrubs on whatever thread logs, so the
+    // render thread and the main thread can reach the shared matcher
+    // patterns concurrently during startup. Concurrent scrubbing must be
+    // safe and must agree with the sequential result.
+    const QString text = QStringLiteral(
+        "User jane.doe@example.com opened /srv/documents/Report.pdf from 203.0.113.42 (2001:db8::42)");
+    const QString expected = pdf::PDFLogScrubber::scrub(text);
+
+    constexpr int threadCount = 8;
+    constexpr int iterationsPerThread = 50;
+    std::vector<QString> results(static_cast<size_t>(threadCount));
+    std::vector<std::thread> threads;
+    threads.reserve(threadCount);
+
+    for (int i = 0; i < threadCount; ++i)
+    {
+        threads.emplace_back([&, i]()
+                             {
+            QString last;
+            for (int n = 0; n < iterationsPerThread; ++n)
+            {
+                last = pdf::PDFLogScrubber::scrub(text);
+            }
+            results[static_cast<size_t>(i)] = last; });
+    }
+
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+
+    for (const QString& result : results)
+    {
+        QCOMPARE(result, expected);
+    }
 }
 
 void DiagnosticsTest::rotation_rollsAtSizeCapAndPrunesOldFiles()
