@@ -51,7 +51,8 @@ param(
     [switch]$SkipEditorLaunch,
     [switch]$RequireNativeGraphics,
     [switch]$AllowOcrSidecar,
-    [switch]$AllowOcrPlugin
+    [switch]$AllowOcrPlugin,
+    [int]$NativeQuickStartupTimeoutSec = 45
 )
 
 Set-StrictMode -Version Latest
@@ -362,17 +363,47 @@ try {
     }
     # The native D3D11 probe can fault during render-thread teardown after the
     # scene graph already reports ready (observed 0xC0000005 on GPU-less
-    # runners despite a printed scene_graph_initialized line). Retry bounded:
-    # a systematic startup failure fails every attempt and still fails closed.
+    # runners despite a printed scene_graph_initialized line), or it can hang
+    # outright without exiting (observed a 5h stalled native launch before
+    # this timeout existed). Retry bounded in both count and wall time: a
+    # systematic startup failure fails every attempt and still fails closed.
+    # A hung editor that neither exits nor faults is killed after
+    # $NativeQuickStartupTimeoutSec so the probe fails fast instead of
+    # stalling the whole job.
     $nativeOutput = @()
     $nativeExit = -1
     $nativeAttempt = 0
     while ($nativeAttempt -lt 3) {
         $nativeAttempt++
-        $nativeOutput = @(& $editor --quick-smoke 2>&1)
-        $nativeExit = $LASTEXITCODE
+        $nativeOutput = @()
+        $nativePid = $null
+        try {
+            $nativeProcess = Start-Process -FilePath $editor -ArgumentList @('--quick-smoke') -NoNewWindow -PassThru -RedirectStandardOutput "$env:TEMP\loop-native-quick-$nativeAttempt.out" -RedirectStandardError "$env:TEMP\loop-native-quick-$nativeAttempt.err"
+            $nativePid = $nativeProcess.Id
+            if (-not $nativeProcess.WaitForExit($NativeQuickStartupTimeoutSec * 1000)) {
+                Write-Host "WARN: LoopEditor native Quick startup attempt $nativeAttempt of 3 exceeded $NativeQuickStartupTimeoutSec s; terminating hung probe (pid $nativePid)"
+                Stop-Process -Id $nativePid -Force -ErrorAction SilentlyContinue
+                $nativeProcess.WaitForExit()
+                $nativeExit = 124   # sentinel: killed for hanging (timeout), not a real exit code
+            } else {
+                $nativeExit = $nativeProcess.ExitCode
+                if ($null -eq $nativeExit) { $nativeExit = 1 }
+            }
+            if (Test-Path "$env:TEMP\loop-native-quick-$nativeAttempt.out") {
+                $nativeOutput += Get-Content "$env:TEMP\loop-native-quick-$nativeAttempt.out"
+                Remove-Item "$env:TEMP\loop-native-quick-$nativeAttempt.out" -ErrorAction SilentlyContinue
+            }
+            if (Test-Path "$env:TEMP\loop-native-quick-$nativeAttempt.err") {
+                $nativeOutput += Get-Content "$env:TEMP\loop-native-quick-$nativeAttempt.err"
+                Remove-Item "$env:TEMP\loop-native-quick-$nativeAttempt.err" -ErrorAction SilentlyContinue
+            }
+        } catch {
+            if ($null -ne $nativePid) { Stop-Process -Id $nativePid -Force -ErrorAction SilentlyContinue }
+            $nativeOutput += "Failed to start native Quick probe: $($_.Exception.Message)"
+            $nativeExit = -3
+        }
         if ($nativeExit -eq 0) { break }
-        Write-Host "WARN: LoopEditor native Quick startup attempt $nativeAttempt of 3 failed with exit code $($nativeExit): $nativeOutput"
+        Write-Host "WARN: LoopEditor native Quick startup attempt $nativeAttempt of 3 failed (exit/hang code $nativeExit): $nativeOutput"
         Start-Sleep -Seconds 5
     }
     if ($RequireNativeGraphics) {
