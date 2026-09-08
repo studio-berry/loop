@@ -358,18 +358,20 @@ try {
     Write-Host "OK: LoopEditor software Quick startup graphics_api=$softwareApi"
     Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
     $savedNativeQpa = $env:QT_QPA_PLATFORM
+    $savedNativeQuickBackend = $env:QT_QUICK_BACKEND
     if ($RequireNativeGraphics) {
         Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
     }
     # The native D3D11 probe can fault during render-thread teardown after the
     # scene graph already reports ready (observed 0xC0000005 on GPU-less
     # runners despite a printed scene_graph_initialized line), or it can hang
-    # outright without exiting (observed a 5h stalled native launch before
-    # this timeout existed). Retry bounded in both count and wall time: a
-    # systematic startup failure fails every attempt and still fails closed.
-    # A hung editor that neither exits nor faults is killed after
-    # $NativeQuickStartupTimeoutSec so the probe fails fast instead of
-    # stalling the whole job.
+    # outright in D3D11 device initialization without exiting. Probing the
+    # physical adapter first keeps real-GPU evidence when hardware exists;
+    # when the default device init hangs or faults (GPU-less runners), retry
+    # with QT_QUICK_BACKEND=d3d11, which forces the D3D11 RHI onto the WARP
+    # software adapter - the reported graphics API is still genuinely d3d11.
+    # Every attempt is bounded in wall time ($NativeQuickStartupTimeoutSec)
+    # and a hung probe is force-killed and fails closed.
     $nativeOutput = @()
     $nativeExit = -1
     $nativeAttempt = 0
@@ -378,24 +380,41 @@ try {
         $nativeOutput = @()
         $nativePid = $null
         try {
-            $nativeProcess = Start-Process -FilePath $editor -ArgumentList @('--quick-smoke') -NoNewWindow -PassThru -RedirectStandardOutput "$env:TEMP\loop-native-quick-$nativeAttempt.out" -RedirectStandardError "$env:TEMP\loop-native-quick-$nativeAttempt.err"
+            if ($nativeAttempt -gt 1 -and $RequireNativeGraphics) {
+                # WARP fallback: force the D3D11 RHI onto the software adapter.
+                $env:QT_QUICK_BACKEND = "d3d11"
+                Write-Host "INFO: native attempt $nativeAttempt uses QT_QUICK_BACKEND=d3d11 (WARP software adapter)"
+            }
+            $nativeStdout = "$env:TEMP\loop-native-quick-$nativeAttempt.out"
+            $nativeStderr = "$env:TEMP\loop-native-quick-$nativeAttempt.err"
+            Remove-Item $nativeStdout, $nativeStderr -Force -ErrorAction SilentlyContinue
+            $nativeProcess = Start-Process -FilePath $editor -ArgumentList @('--quick-smoke') -NoNewWindow -PassThru -RedirectStandardOutput $nativeStdout -RedirectStandardError $nativeStderr
             $nativePid = $nativeProcess.Id
-            if (-not $nativeProcess.WaitForExit($NativeQuickStartupTimeoutSec * 1000)) {
+            $exited = $nativeProcess.WaitForExit($NativeQuickStartupTimeoutSec * 1000)
+            if (-not $exited) {
                 Write-Host "WARN: LoopEditor native Quick startup attempt $nativeAttempt of 3 exceeded $NativeQuickStartupTimeoutSec s; terminating hung probe (pid $nativePid)"
                 Stop-Process -Id $nativePid -Force -ErrorAction SilentlyContinue
-                $nativeProcess.WaitForExit()
+                # Never WaitForExit() after a forced kill: with redirected
+                # output it can block forever on a GUI-subsystem process that
+                # never drains its handles. Poll the exit flag on a short
+                # bound instead, then move on regardless.
+                $killDeadline = [DateTime]::UtcNow.AddSeconds(10)
+                while (-not $nativeProcess.HasExited -and [DateTime]::UtcNow -lt $killDeadline) {
+                    $nativeProcess.Refresh()
+                    Start-Sleep -Milliseconds 200
+                }
                 $nativeExit = 124   # sentinel: killed for hanging (timeout), not a real exit code
             } else {
                 $nativeExit = $nativeProcess.ExitCode
                 if ($null -eq $nativeExit) { $nativeExit = 1 }
             }
-            if (Test-Path "$env:TEMP\loop-native-quick-$nativeAttempt.out") {
-                $nativeOutput += Get-Content "$env:TEMP\loop-native-quick-$nativeAttempt.out"
-                Remove-Item "$env:TEMP\loop-native-quick-$nativeAttempt.out" -ErrorAction SilentlyContinue
+            if (Test-Path $nativeStdout) {
+                $nativeOutput += Get-Content $nativeStdout -ErrorAction SilentlyContinue
+                Remove-Item $nativeStdout -Force -ErrorAction SilentlyContinue
             }
-            if (Test-Path "$env:TEMP\loop-native-quick-$nativeAttempt.err") {
-                $nativeOutput += Get-Content "$env:TEMP\loop-native-quick-$nativeAttempt.err"
-                Remove-Item "$env:TEMP\loop-native-quick-$nativeAttempt.err" -ErrorAction SilentlyContinue
+            if (Test-Path $nativeStderr) {
+                $nativeOutput += Get-Content $nativeStderr -ErrorAction SilentlyContinue
+                Remove-Item $nativeStderr -Force -ErrorAction SilentlyContinue
             }
         } catch {
             if ($null -ne $nativePid) { Stop-Process -Id $nativePid -Force -ErrorAction SilentlyContinue }
@@ -409,6 +428,7 @@ try {
     if ($RequireNativeGraphics) {
         if ($null -ne $savedNativeQpa) { $env:QT_QPA_PLATFORM = $savedNativeQpa } else { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
     }
+    if ($null -ne $savedNativeQuickBackend) { $env:QT_QUICK_BACKEND = $savedNativeQuickBackend } else { Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue }
     if ($nativeExit -ne 0) {
         throw "LoopEditor native Quick startup failed with exit code $($nativeExit) after $nativeAttempt attempts: $nativeOutput"
     }
