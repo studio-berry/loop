@@ -486,10 +486,13 @@ if (-not $SkipEditorLaunch) {
     $savedOperatorQpa = $env:QT_QPA_PLATFORM
     $savedOperatorBackend = $env:QT_QUICK_BACKEND
     Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
-    Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+    # Same WARP route as the native Quick probe: force the D3D11 RHI onto the
+    # software adapter so the full editor session survives on GPU-less hosts
+    # (physical-adapter teardown faults with 0xC0000005 ~8s in).
+    $env:QT_QUICK_BACKEND = "d3d11"
     try {
         $editorProcess = Start-Process -FilePath $editor -ArgumentList @($TestPdf) -PassThru
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 8
         if ($editorProcess.HasExited) {
             throw "LoopEditor exited early with code $($editorProcess.ExitCode)"
         }
