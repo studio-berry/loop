@@ -460,24 +460,16 @@ jobs:
           # The release MSI is x64 and must install beneath 64-bit Program Files.
           # The full editor operator launch is skipped on the hosted runner; the
           # packaged native/software Quick startup is exercised by the smoke script.
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
           $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
           & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
-
-      - name: Run Qt LGPL relink test
-        shell: pwsh
-        run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
-          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
-          & ".\loop\scripts\ci\run_qt_relink_test.ps1" `
-            -InstallDir $installDir `
-            -SourceSha $env:LOOP_SOURCE_SHA `
-            -OutputPath (Join-Path $evidenceDir "qt-relink.txt")
-
+            -SkipEditorLaunch `
+            -QtRelinkTranscript (Join-Path $evidenceDir "qt-relink.txt")
 
       - name: Upload Windows package boundary evidence
         if: always()

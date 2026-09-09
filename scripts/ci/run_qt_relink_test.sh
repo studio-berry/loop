@@ -4,7 +4,7 @@
 # Usage:
 #   scripts/ci/run_qt_relink_test.sh /path/to/Loop-pdf-VERSION-x86_64.AppImage [--output transcript.txt]
 #
-# Replaces a shipped Qt6Core shared library with a recipient-controlled copy and
+# Copies a shipped Qt6Core shared library through a byte-identical replacement and
 # verifies LoopEditor still launches via --quick-smoke. Restores the original
 # library before exit.
 
@@ -58,10 +58,12 @@ fi
 
 log "Qt relink test: package=$(basename "$APPIMAGE_PATH")"
 if [[ -n "${LOOP_SOURCE_SHA:-}" ]]; then
-    log "source_sha=${LOOP_SOURCE_SHA,,}"
+    log "source_sha=$(printf '%s' "$LOOP_SOURCE_SHA" | tr '[:upper:]' '[:lower:]')"
 fi
 log "target_library=${QT_CORE#$ROOT/}"
 
+# This checks copying and launch, not that a rebuilt Qt library was loaded.
+log "replacement_kind=byte-identical-copy"
 BACKUP="${QT_CORE}.loop-relink-bak"
 REPLACEMENT="${QT_CORE}.loop-relink-replacement"
 cp -a "$QT_CORE" "$BACKUP"
@@ -89,5 +91,5 @@ if [[ "$SMOKE_EXIT" -ne 0 ]]; then
     exit 1
 fi
 
-log "Qt relink test PASSED: recipient-controlled Qt6Core replacement still launches"
+log "Qt relink test PASSED: byte-identical Qt6Core copy still launches"
 exit 0
