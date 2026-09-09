@@ -75,23 +75,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
 
-      # Both installer workflows are workflow_dispatch-only. The commit filter and
-      # head-SHA check keep unrelated artifacts out of the release tag.
+      # A workflow_dispatch run's headSha identifies the ref used to load the
+      # workflow, not the source_sha input checked out by the packaging job. Select
+      # by the immutable SHA embedded in run-name; the downloaded evidence below is
+      # the authoritative cross-platform provenance check.
       - name: Get latest run ID for Linux_AppImage
         id: get_linux_run_id
         run: |
           set -euo pipefail
           latest_run=$(gh run list --workflow=Linux_AppImage \
-            --commit "$EXPECTED_SOURCE_SHA" --status success \
-            --json databaseId,headSha --jq '.[0] // empty')
+            --event workflow_dispatch --status success --limit 100 \
+            --json databaseId,displayTitle \
+            | jq -c --arg title "Linux_AppImage (${EXPECTED_SOURCE_SHA})" \
+                'map(select(.displayTitle == $title))[0] // empty')
           if [ -z "$latest_run" ]; then
             echo "::error::No successful Linux_AppImage run found for source SHA ${EXPECTED_SOURCE_SHA}."
-            exit 1
-          fi
-          run_sha=$(echo "$latest_run" | jq -r .headSha)
-          if [ "${run_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
-            echo "::error::Linux_AppImage artifacts were built from ${run_sha}, but source_sha is ${EXPECTED_SOURCE_SHA}."
-            echo "::error::Re-run Linux_AppImage on this exact source commit before creating the release draft."
             exit 1
           fi
           echo "linux_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV
@@ -104,16 +102,12 @@ jobs:
         run: |
           set -euo pipefail
           latest_run=$(gh run list --workflow=Windows_MSI \
-            --commit "$EXPECTED_SOURCE_SHA" --status success \
-            --json databaseId,headSha --jq '.[0] // empty')
+            --event workflow_dispatch --status success --limit 100 \
+            --json databaseId,displayTitle \
+            | jq -c --arg title "Windows_MSI (${EXPECTED_SOURCE_SHA})" \
+                'map(select(.displayTitle == $title))[0] // empty')
           if [ -z "$latest_run" ]; then
             echo "::error::No successful Windows_MSI run found for source SHA ${EXPECTED_SOURCE_SHA}."
-            exit 1
-          fi
-          run_sha=$(echo "$latest_run" | jq -r .headSha)
-          if [ "${run_sha,,}" != "${EXPECTED_SOURCE_SHA,,}" ]; then
-            echo "::error::Windows_MSI artifacts were built from ${run_sha}, but source_sha is ${EXPECTED_SOURCE_SHA}."
-            echo "::error::Re-run Windows_MSI on this exact source commit before creating the release draft."
             exit 1
           fi
           echo "windows_run_id=$(echo "$latest_run" | jq -r .databaseId)" >> $GITHUB_ENV

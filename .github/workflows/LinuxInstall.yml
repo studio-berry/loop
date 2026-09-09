@@ -1,4 +1,5 @@
 name: Linux_AppImage
+run-name: Linux_AppImage (${{ inputs.source_sha }})
 
 on:
   # Dispatch-only. PRs targeting `dev` run ci.yml; MSI/AppImage qualification

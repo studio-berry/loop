@@ -1,4 +1,5 @@
 name: Windows_MSI
+run-name: Windows_MSI (${{ inputs.source_sha }})
 
 on:
   # Dispatch-only. PRs targeting `dev` run ci.yml; MSI/AppImage qualification
@@ -462,21 +463,13 @@ jobs:
           # packaged native/software Quick startup is exercised by the smoke script.
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
           $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
-
-      - name: Run Qt LGPL relink test
-        shell: pwsh
-        run: |
-          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
-          $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
-          & ".\loop\scripts\ci\run_qt_relink_test.ps1" `
-            -InstallDir $installDir `
-            -SourceSha $env:LOOP_SOURCE_SHA `
-            -OutputPath (Join-Path $evidenceDir "qt-relink.txt")
+            -SkipEditorLaunch `
+            -QtRelinkOutputPath (Join-Path $evidenceDir "qt-relink.txt")
 
 
       - name: Upload Windows package boundary evidence

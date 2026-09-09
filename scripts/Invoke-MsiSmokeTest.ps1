@@ -28,6 +28,10 @@
 .PARAMETER SourceSha
     Optional full source SHA to record in the lifecycle smoke transcript.
 
+.PARAMETER QtRelinkOutputPath
+    When supplied, run the Qt LGPL replacement/relink check against the live MSI
+    install before uninstall and write its transcript here.
+
 .PARAMETER LogDir
     Directory for verbose Windows Installer logs.
 
@@ -41,6 +45,7 @@ param(
     [string]$TestPdf = "",
     [string]$SourceSha = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",
+    [string]$QtRelinkOutputPath = "",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar
 )
@@ -124,6 +129,14 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
     Write-Host "=== Installing version under test ==="
     Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "install"
     Invoke-Smoke -Stage "fresh install"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($QtRelinkOutputPath)) {
+    Write-Host "=== Verifying Qt replacement/relink on installed MSI payload ==="
+    & (Join-Path $PSScriptRoot "ci\run_qt_relink_test.ps1") `
+        -InstallDir $InstallDir `
+        -SourceSha $SourceSha `
+        -OutputPath $QtRelinkOutputPath
 }
 
 Write-Host "=== Uninstalling ==="
