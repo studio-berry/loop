@@ -28,6 +28,10 @@
 .PARAMETER SourceSha
     Optional full source SHA to record in the lifecycle smoke transcript.
 
+.PARAMETER QtRelinkTranscript
+    When supplied, run the packaged Qt copy/launch check before uninstall and
+    write its transcript to this path. Cleanup still runs if the check fails.
+
 .PARAMETER LogDir
     Directory for verbose Windows Installer logs.
 
@@ -40,6 +44,7 @@ param(
     [string]$InstallDir = "${env:ProgramFiles}\LOOP",
     [string]$TestPdf = "",
     [string]$SourceSha = "",
+    [string]$QtRelinkTranscript = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",
     [switch]$SkipEditorLaunch,
     [switch]$AllowOcrSidecar
@@ -112,51 +117,76 @@ if (Test-Path -LiteralPath $InstallDir) {
            "a stale tree cannot mask a packaging defect. Remove it or snapshot back first.")
 }
 
-if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
-    Write-Host "=== Installing previous version for upgrade coverage ==="
-    Invoke-Msi -Arguments "/i `"$PreviousMsiPath`"" -LogName "install-previous"
-    Invoke-Smoke -Stage "previous version"
+# Preserve the qualification failure even when cleanup also reports an error.
+$qualificationFailure = $null
+$installedMsi = $null
+try {
+    if (-not [string]::IsNullOrWhiteSpace($PreviousMsiPath)) {
+        Write-Host "=== Installing previous version for upgrade coverage ==="
+        Invoke-Msi -Arguments "/i `"$PreviousMsiPath`"" -LogName "install-previous"
+        $installedMsi = $PreviousMsiPath
+        Invoke-Smoke -Stage "previous version"
 
-    Write-Host "=== Upgrading to version under test ==="
-    Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "upgrade"
-    Invoke-Smoke -Stage "after upgrade"
-} else {
-    Write-Host "=== Installing version under test ==="
-    Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "install"
-    Invoke-Smoke -Stage "fresh install"
-}
+        Write-Host "=== Upgrading to version under test ==="
+        Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "upgrade"
+        $installedMsi = $MsiPath
+        Invoke-Smoke -Stage "after upgrade"
+    } else {
+        Write-Host "=== Installing version under test ==="
+        Invoke-Msi -Arguments "/i `"$MsiPath`"" -LogName "install"
+        $installedMsi = $MsiPath
+        Invoke-Smoke -Stage "fresh install"
+    }
 
-Write-Host "=== Uninstalling ==="
-Invoke-Msi -Arguments "/x `"$MsiPath`"" -LogName "uninstall"
+    if ($QtRelinkTranscript) {
+        & (Join-Path $PSScriptRoot "ci/run_qt_relink_test.ps1") `
+            -InstallDir $InstallDir `
+            -SourceSha $SourceSha `
+            -OutputPath $QtRelinkTranscript
+    }
+} catch {
+    $qualificationFailure = $_
+} finally {
+    if ($null -ne $installedMsi) {
+        try {
+            Write-Host "=== Uninstalling ==="
+            Invoke-Msi -Arguments "/x `"$installedMsi`"" -LogName "uninstall"
 
-# The current WiX tree places share\loop below INSTALLFOLDER. Keep the
-# historical sibling location in the scan as well so an upgrade from an older
-# MSI cannot leave files behind unnoticed.
-$shareLeftoverRoots = @(
-    (Join-Path $InstallDir "share\loop"),
-    (Join-Path (Split-Path -Parent $InstallDir) "share\loop")
-)
-foreach ($shareLeftoverRoot in $shareLeftoverRoots | Select-Object -Unique) {
-    if (Test-Path -LiteralPath $shareLeftoverRoot) {
-        $shareLeftovers = @(Get-ChildItem -LiteralPath $shareLeftoverRoot -Recurse -File -ErrorAction SilentlyContinue)
-        if ($shareLeftovers.Count -gt 0) {
-            throw ("Uninstall left $($shareLeftovers.Count) file(s) behind in $shareLeftoverRoot`:`n  " +
-                   (($shareLeftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
+            # The current WiX tree places share\loop below INSTALLFOLDER. Keep the
+            # historical sibling location in the scan as well so an upgrade from an older
+            # MSI cannot leave files behind unnoticed.
+            $shareLeftoverRoots = @(
+                (Join-Path $InstallDir "share\loop"),
+                (Join-Path (Split-Path -Parent $InstallDir) "share\loop")
+            )
+            foreach ($shareLeftoverRoot in $shareLeftoverRoots | Select-Object -Unique) {
+                if (Test-Path -LiteralPath $shareLeftoverRoot) {
+                    $shareLeftovers = @(Get-ChildItem -LiteralPath $shareLeftoverRoot -Recurse -File -ErrorAction SilentlyContinue)
+                    if ($shareLeftovers.Count -gt 0) {
+                        throw ("Uninstall left $($shareLeftovers.Count) file(s) behind in $shareLeftoverRoot`:`n  " +
+                               (($shareLeftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
+                    }
+                    Write-Host "INFO: $shareLeftoverRoot remains as an empty directory after uninstall"
+                }
+            }
+
+            if (Test-Path -LiteralPath $InstallDir) {
+                $leftovers = @(Get-ChildItem -LiteralPath $InstallDir -Recurse -File -ErrorAction SilentlyContinue)
+                if ($leftovers.Count -gt 0) {
+                    throw ("Uninstall left $($leftovers.Count) file(s) behind in $InstallDir`:`n  " +
+                           (($leftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
+                }
+                Write-Host "INFO: $InstallDir remains as an empty directory after uninstall"
+            } else {
+                Write-Host "OK: install directory fully removed"
+            }
+        } catch {
+            if ($null -eq $qualificationFailure) { throw }
+            Write-Warning "MSI cleanup also failed: $_"
         }
-        Write-Host "INFO: $shareLeftoverRoot remains as an empty directory after uninstall"
     }
 }
-
-if (Test-Path -LiteralPath $InstallDir) {
-    $leftovers = @(Get-ChildItem -LiteralPath $InstallDir -Recurse -File -ErrorAction SilentlyContinue)
-    if ($leftovers.Count -gt 0) {
-        throw ("Uninstall left $($leftovers.Count) file(s) behind in $InstallDir`:`n  " +
-               (($leftovers | Select-Object -First 20 | ForEach-Object { $_.FullName }) -join "`n  "))
-    }
-    Write-Host "INFO: $InstallDir remains as an empty directory after uninstall"
-} else {
-    Write-Host "OK: install directory fully removed"
-}
+if ($null -ne $qualificationFailure) { throw $qualificationFailure }
 
 Write-Host ""
 Write-Host "MSI lifecycle smoke test passed. Attach this transcript to MIC-301."
