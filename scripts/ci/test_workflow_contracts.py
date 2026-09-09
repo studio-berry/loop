@@ -215,10 +215,10 @@ class WorkflowContractTests(unittest.TestCase):
     def test_windows_relink_runs_before_msi_uninstall(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
         smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
-        self.assertIn("-QtRelinkOutputPath", workflow)
+        self.assertIn('-QtRelinkTranscript (Join-Path $evidenceDir "qt-relink.txt")', workflow)
         self.assertNotIn("- name: Run Qt LGPL relink test", workflow)
         self.assertLess(
-            smoke.index("ci\\run_qt_relink_test.ps1"),
+            smoke.index("ci/run_qt_relink_test.ps1"),
             smoke.index('Write-Host "=== Uninstalling ==="'),
         )
 
