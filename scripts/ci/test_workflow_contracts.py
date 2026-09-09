@@ -120,6 +120,8 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)
             self.assertIn("source-sha", workflow)
+        self.assertIn("run-name: Linux_AppImage (${{ inputs.source_sha }})", linux)
+        self.assertIn("run-name: Windows_MSI (${{ inputs.source_sha }})", windows)
         self.assertIn("--expected-architecture x86-64", linux)
         self.assertIn("--expected-architecture x64", windows)
         self.assertIn("loop-package-boundary-linux-evidence", linux)
@@ -163,6 +165,8 @@ class WorkflowContractTests(unittest.TestCase):
         job = workflow.split("  package_script_tests:")[1].split("  source_integrity:")[0]
         self.assertIn("os: [ubuntu-22.04, windows-latest]", job)
         self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_test -v", job)
+        self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_linux -v", job)
+        self.assertIn("if: runner.os == 'Linux'", job)
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
@@ -202,9 +206,21 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("compare_package_boundary_evidence.py", workflow)
         self.assertIn("loop-package-boundary-linux-evidence", workflow)
         self.assertIn("loop-package-boundary-windows-evidence", workflow)
-        self.assertIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
+        self.assertIn('--arg title "Linux_AppImage (${EXPECTED_SOURCE_SHA})"', workflow)
+        self.assertIn('--arg title "Windows_MSI (${EXPECTED_SOURCE_SHA})"', workflow)
+        self.assertNotIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
         self.assertIn("Exclude CI evidence from release assets", workflow)
         self.assertIn("source_sha", workflow)
+
+    def test_windows_relink_runs_before_msi_uninstall(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertIn("-QtRelinkOutputPath", workflow)
+        self.assertNotIn("- name: Run Qt LGPL relink test", workflow)
+        self.assertLess(
+            smoke.index("ci\\run_qt_relink_test.ps1"),
+            smoke.index('Write-Host "=== Uninstalling ==="'),
+        )
 
     def test_release_wix_template_does_not_unconditionally_ship_widgets(self):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")
