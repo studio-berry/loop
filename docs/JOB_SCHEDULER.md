@@ -52,6 +52,34 @@ policy is `Discard`; the callback is not run for a stale queued job. This keeps
 late tile, overlay, preflight, OCR, and export results from being presented
 for a newer document revision.
 
+Each `PDFJobTraceEvent` carries the job's `PDFJobKind` alongside its status,
+priority, and timing, so a trace consumer can attribute time to preflight,
+OCR, rendering, and the other kinds without re-joining against the original
+`PDFJobSpec` (issue #144 AC7).
+
+## Interactive-thread boundary
+
+Issue #144 draws the line between what pointer handlers and frame callbacks
+may do directly and what must go through a submitted job. Allowed on the
+thread that owns input and frame callbacks: input normalization, small state
+transitions, frame scheduling, overlay composition, and applying an already-
+computed, bounded result. Not allowed there, even transitively: preflight,
+OCR, AI, PDF parsing, filesystem or network access, metadata/font scans, and
+unbounded image work -- these are exactly the `PDFJobKind` values a job
+carries, and every one of them belongs behind `PDFJobScheduler::submit()`.
+
+`pdf::PDFBlockingThreadGuard` gives that boundary a runtime check instead of
+leaving it as a convention. A host with an interactive canvas (`EditorHost`)
+registers its owning thread once, at construction, with
+`registerInteractiveThread()`. A blocking service adapter -- the entry point
+a job's work callback calls into, such as `PreflightEngine::run()` -- opens
+with `PDFBlockingThreadGuard::assertOffInteractiveThread(name)` and folds a
+`false` return into its own typed error result rather than doing the blocking
+work. A tool with no interactive thread (PdfTool, Fuzz, CLI tests) never
+registers one, so the guard is a no-op there: it has nothing to protect.
+`UnitTestsBlockingThreadGuard` covers the guard directly; `UnitTestsPreflightEngine`
+covers the `PreflightEngine::run()` integration.
+
 ## Migration inventory
 
 The scheduler contract is landed in Core. Callers migrate onto `PDFJobScheduler`
@@ -74,11 +102,9 @@ surface's typed result and UI lifecycle. A source audit can use the table to
 reject new unmanaged long-running work and to track the remaining conversions.
 
 `scripts/ci/check_unmanaged_async.py` is the CI guard for that boundary. It
-currently reports the 13 pre-existing `QtConcurrent::run` call sites above as
-known migration debt and fails on any new or multiplied unmanaged launch. The
-allowlist is a containment measure, not acceptance of #238; the issue remains
-open until those product paths are migrated and cancellation/stale-result
-evidence is recorded on both supported desktop platforms.
+reports zero legacy product `QtConcurrent::run` call sites after Session 10
+(`PDFDiff` migrated onto `PDFJobScheduler`) and fails on any new or multiplied
+unmanaged launch.
 
 ## Verification
 

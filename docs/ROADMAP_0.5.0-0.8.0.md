@@ -1,12 +1,22 @@
-# Loop roadmap extension — 0.5.0 → 0.10.0
+# Loop roadmap extension — 0.5.0 → 0.8.0 (consolidation amendment, 2026-09-06)
 
-> **Status: proposed extension, pending operator acceptance.**
+> **Status: amended 2026-09-06 — the canonical Notion Roadmap records the consolidation
+> amendment of the same date; this document is its accepted scope decomposition.**
 > The canonical [Notion Loop Roadmap](https://app.notion.com/p/38f9cb079ddb804a96dbe26b8d86e84f)
 > owns milestone sequencing and boundaries; per the change-control section of that page,
 > extending the named release train requires an explicit roadmap amendment. This document
 > is the scope, design, architecture, and orchestration decomposition for that amendment.
 > It creates no execution authority by itself: 0.2.0 remains the current milestone, and
 > 0.5.0 cannot activate before 0.4.0 release acceptance.
+>
+> **Consolidation amendment (2026-09-06).** The originally proposed six releases
+> (0.5.0–0.10.0) are consolidated into four: **0.6.0 absorbs the former 0.7.0**
+> (production outcome reconciliation) and **0.7.0 absorbs the former 0.9.0** (workflow
+> promotion and verified repeat automation); the former 0.10.0 renumbers to **0.8.0**.
+> Ceremony sessions (S00 reconcile openers, vertical-integration sessions, qualification
+> lanes) were folded into their owning sessions with sub-issue pointers; nothing was
+> dropped. Session maps below retain their original numbering as the scope decomposition;
+> the executable GitHub issues carry the folded, resequenced numbering noted per chapter.
 
 ## 1. Position in the release train
 
@@ -14,7 +24,7 @@ The accepted critical path through 0.4.0 is:
 
 **release correctness → semantic truth → operator interaction → governed correction → bounded automation**
 
-with the release train **0.1.0 → 0.1.1 → 0.2.0 → 0.3.0 → 0.4.0**. This extension continues
+with the release train **0.1.0 → 0.1.1 → 0.2.0 → 0.2.1 → 0.3.0 → 0.4.0**. This extension continues
 the same dependency-first logic — each milestone consumes guarantees from the left and may
 not recreate or weaken them:
 
@@ -25,9 +35,9 @@ not recreate or weaken them:
 | 0.5.0 | Job Spine & Job-Aware Production Context | H3 — job-aware workspace | — (substrate) |
 | 0.6.0 | Governed Intake — Scanned Specs, Page-Gated OCR & Request-to-JobSpec | H4 — OCR and intake | — (substrate) |
 | 0.7.0 | Production Outcome Reconciliation & Confirmed-Result Ledger | H5 — production learning | 1 — Observe |
-| 0.8.0 | Workflow Memory & Evidence-Backed Recommendations | H5 — production learning | 2 — Recommend, 3 — Draft workflow |
-| 0.9.0 | Workflow Promotion & Verified Repeat Automation | H5 — production learning | 4 — Approve, 5 — Run with verification |
-| 0.10.0 | Platform Hardening, Extension Ecosystem & 1.0 Readiness | GA preparation | (all stages hardened) |
+| 0.6.0 (cont.) | *(former 0.7.0) Production Outcome Reconciliation & Confirmed-Result Ledger* | H5 — production learning | 1 — Observe |
+| 0.7.0 | Workflow Memory, Recommendations & Verified Repeat Automation (consolidates the former 0.8.0 + 0.9.0) | H5 — production learning | 2–5 — Recommend, Draft workflow, Approve, Run with verification |
+| 0.8.0 | Platform Hardening, Extension Ecosystem & 1.0 Readiness (formerly titled 0.10.0) | GA preparation | all stages hardened |
 
 "Platform horizon" refers to the dependency-sequenced horizons H3–H5 in
 [Loop — Platform Evolution, Workflow Intelligence & Roadmap](https://app.notion.com/p/3b49cb079ddb81cea546c5146054a942);
@@ -41,21 +51,22 @@ canonical roadmap is placed exactly once in this train; nothing is silently drop
 | Thin encrypted job spine (request/job/artwork/output/status) | 0.5.0 |
 | Broader request-to-JobSpec intake | 0.6.0 |
 | Page-gated OCR and scanned-specification extraction | 0.6.0 |
-| Production/RIP/press event import and outcome matching | 0.7.0 |
-| Workflow recommendations from reconciled repeat jobs | 0.8.0 |
-| Approved workflow promotion and repeat automation | 0.9.0 |
-| Broader plugin/tool ecosystem | 0.10.0 |
-| macOS qualification if prioritized | 0.10.0 (explicit go/no-go decision session) |
+| Production/RIP/press event import and outcome matching | 0.6.0 (confirmed-result ledger) |
+| Workflow recommendations from reconciled repeat jobs | 0.7.0 |
+| Approved workflow promotion and repeat automation | 0.7.0 |
+| Broader plugin/tool ecosystem | 0.8.0 |
+| macOS qualification if prioritized | 0.8.0 (explicit go/no-go decision session) |
 
 ### Version-number notes
 
 - SemVer 2.0 continues to govern ([VERSIONING.md](VERSIONING.md)). Each milestone above is
   a feature minor; backward-compatible fixes ride the active minor as patches
-  (0.5.1, 0.5.2, …). `0.10.0` is the minor after `0.9.0` — minor `10` sorts after `9`;
-  no major bump is implied.
-- While the major version is `0`, minor bumps may still break; 0.10.0's contract-freeze
+  (0.5.1, 0.5.2, …). The consolidation renumbers the tail so the train runs gapless
+  0.5.0 → 0.6.0 → 0.7.0 → 0.8.0; the former 0.7.0/0.9.0/0.10.0 planning titles remain
+  aliases only.
+- While the major version is `0`, minor bumps may still break; 0.8.0's contract-freeze
   work exists precisely to convert that latitude into the 1.0 compatibility promise.
-- 1.0.0 is not one of these milestones. 0.10.0 *exits* with the 1.0 release-candidate
+- 1.0.0 is not one of these milestones. 0.8.0 *exits* with the 1.0 release-candidate
   criteria defined, demonstrated on an exact SHA, and a dossier ready for the operator
   to open the 1.0.0-rc train.
 
@@ -183,6 +194,8 @@ restated. The 0.5.0+ train adds:
 
 ### 4.1 · 0.5.0 — Job Spine & Job-Aware Production Context
 
+**Consolidation note.** Absorbs the former 0.4.0-B plan-compiler track (GitHub #34, #128) and the 0.2.1 job scheduler (#238). Ceremony sessions S00, S11, and S12 below were folded: reconciliation into S01, the vertical and hostile/scale lane into the S13 exit gate (GitHub #404, #416).
+
 **Horizon H3.** The operator loop gains a durable subject: work stops being "a PDF I
 opened" and becomes "a job I'm producing."
 
@@ -269,9 +282,13 @@ NO-GO. NO-GO means fix or extend the milestone, never ship the weakened spine.
 
 ---
 
-### 4.2 · 0.6.0 — Governed Intake: Scanned Specs, Page-Gated OCR & Request-to-JobSpec
+### 4.2 · 0.6.0 — Governed Intake & Confirmed Outcomes (absorbs the former 0.7.0)
 
-**Horizon H4.** Scanned or image-only inputs and unstructured requests become structured,
+**Consolidation note.** Executable on GitHub as sessions S01–S17 under milestone
+**0.6.0**: the intake arc below (S01–S10, issues #418–#429) runs first, then the former
+0.7.0 outcome arc (§4.3, GitHub S11–S17, issues #431–#441).
+
+**Horizon H4 → H5.** Scanned or image-only inputs and unstructured requests become structured,
 provenance-carrying JobSpec candidates — always operator-confirmed.
 
 **Objective.** Live-text-first page classification, page-gated OCR as an evidence
@@ -349,7 +366,10 @@ is NO-GO.
 
 ---
 
-### 4.3 · 0.7.0 — Production Outcome Reconciliation & Confirmed-Result Ledger
+### 4.3 · (former 0.7.0, absorbed into 0.6.0) — Production Outcome Reconciliation & Confirmed-Result Ledger
+
+**Consolidation note.** Retained verbatim as the scope decomposition for 0.6.0 sessions
+S11–S17 (GitHub issues #431–#441, milestone 0.6.0).
 
 **Horizon H5, automation stage 1 — Observe.** Loop learns what actually happened on
 press before it is allowed to suggest anything.
@@ -362,10 +382,12 @@ partials — to the job spine. Observe-mode only: record and display, recommend 
 
 **Value hypothesis.** The job record becomes trustworthy history — "what we actually ran
 and how it ended" — which operators value directly (job lookup, reprint context) and
-which is the sole legal training signal for 0.8.0. Signals: % of outputs with confirmed
+which is the sole legal training signal for the recommendation arc (0.7.0). Signals: % of outputs with confirmed
 outcomes; median time-to-reconcile; review-queue precision.
 
-**Entry gate.** 0.5.0 spine in production use; 0.6.0 accepted. At least one real
+**Entry gate.** Mid-milestone arc gate: the 0.5.0 spine is in production use and the
+0.6.0 intake arc (S01–S10) is accepted before the outcomes arc (S11–S17) activates. At
+least one real
 production event source (even a manually exported log) identified per pilot deployment —
 importers are built against measured availability, not imagined APIs.
 
@@ -389,7 +411,7 @@ importers are built against measured availability, not imagined APIs.
 - **Will not create:** press-vendor API clients as dependencies, automatic confirmation,
   any influence from unconfirmed events, scheduling/costing analytics.
 
-**Out of scope.** Recommendations (0.8.0), automation (0.9.0), bidirectional press
+**Out of scope.** Recommendations and automation (0.7.0), bidirectional press
 control, cost/wage analytics.
 
 **Session map.**
@@ -425,7 +447,10 @@ from this milestone is NO-GO.
 
 ---
 
-### 4.4 · 0.8.0 — Workflow Memory & Evidence-Backed Recommendations
+### 4.4 · 0.7.0 (part 1) — Workflow Memory & Evidence-Backed Recommendations
+
+**Consolidation note.** Formerly milestone 0.8.0; executable on GitHub as 0.7.0 sessions
+S01–S08 (issues #443–#453).
 
 **Horizon H5, automation stages 2–3 — Recommend & Draft workflow.** After one verified
 success, suggest; after repeated consistent successes, assemble a draft for review.
@@ -441,9 +466,9 @@ recommendation; accepted recommendations pre-fill the normal 0.3.0 governed path
 **Value hypothesis.** This is the retention engine: setup time on repeat jobs collapses,
 and the accept/edit/reject stream is a measurable quality signal. Signals:
 recommendation accept + accept-with-edit rate; repeat-job setup time; drafts promoted
-later in 0.9.0.
+later in the automation arc (0.7.0 part 2).
 
-**Entry gate.** 0.7.0 accepted **and** a minimum confirmed-outcome corpus exists (target
+**Entry gate.** The 0.6.0 confirmed-outcome ledger accepted **and** a minimum confirmed-outcome corpus exists (target
 per the platform page's experiment design: a reconciled dataset on the order of 200–500
 completed jobs, or the pilot-scaled equivalent recorded in the activation reconcile). If
 the corpus is too thin, the milestone pauses rather than lowering the evidence bar.
@@ -469,7 +494,7 @@ the corpus is too thin, the milestone pauses rather than lowering the evidence b
 - **Will not create:** opaque ML ranking, cross-customer data pooling, auto-applied
   recommendations, self-updating drafts.
 
-**Out of scope.** Promotion and any automatic execution (0.9.0); pricing/scheduling
+**Out of scope.** Promotion and any automatic execution (0.7.0 part 2); pricing/scheduling
 suggestions.
 
 **Session map.**
@@ -506,7 +531,10 @@ bar or hide assumptions. Any auto-execution affordance is NO-GO.
 
 ---
 
-### 4.5 · 0.9.0 — Workflow Promotion & Verified Repeat Automation
+### 4.5 · 0.7.0 (part 2) — Workflow Promotion & Verified Repeat Automation
+
+**Consolidation note.** Formerly milestone 0.9.0; executable on GitHub as 0.7.0 sessions
+S09–S17 (issues #455–#466).
 
 **Horizon H5, automation stages 4–5 — Approve & Run with verification.** The largest
 authority expansion in Loop's history, and therefore the most heavily gated.
@@ -526,7 +554,7 @@ on automation, but not automation with this provenance. Signals: % of matching r
 jobs run under approved workflows; pause precision (pauses that operators judge
 warranted); zero unsafe auto-runs — a hard metric, not a hope.
 
-**Entry gate.** 0.8.0 accepted with recommendation quality proven on the evaluation
+**Entry gate.** The 0.7.0 recommendation arc (part 1) accepted with recommendation quality proven on the evaluation
 corpus; promotion-policy decisions locked by ADR before implementation (trigger rules,
 stop conditions, confidence policy, safe-action tiers — the "decisions to lock" list
 from the platform vision).
@@ -591,7 +619,9 @@ milestone — automation ships late or not at all before it ships unverified.
 
 ---
 
-### 4.6 · 0.10.0 — Platform Hardening, Extension Ecosystem & 1.0 Readiness
+### 4.6 · 0.8.0 (formerly 0.10.0) — Platform Hardening, Extension Ecosystem & 1.0 Readiness
+
+**Consolidation note.** Formerly milestone 0.10.0; executable on GitHub as 0.8.0 sessions S01–S12 (issues #468–#479). Absorbs the 0.4.0-A operator-help content (#53, #159 into S10), the SBOM track (#263 into S07), distribution deferrals (#39, #40 into S07; #43 is the S08 go/no-go), and the 0.3.0 application-quality carryover register (#49, #144, #146, #155).
 
 **GA preparation.** Freeze what 1.0 will promise, open what the ecosystem needs, and
 prove the platform at production scale.
@@ -609,7 +639,7 @@ in place, extendable by third parties, documented for self-serve onboarding — 
 difference between an impressive tool and a sellable platform. Signals: onboarding
 completion rate, crash-free session rate, update adoption, first external plugins.
 
-**Entry gate.** 0.9.0 accepted. Open V1-era deferrals re-decided rather than inherited:
+**Entry gate.** 0.7.0 accepted. Open V1-era deferrals re-decided rather than inherited:
 installer signing (deferred post-V1 to the paid-distribution decision), macOS (deferred
 post-V1), overprint-simulation limitation disclosure posture.
 
@@ -719,6 +749,8 @@ At each milestone's activation (its predecessor's release acceptance):
 ## 8. References
 
 - Canonical roadmap (owns sequencing): https://app.notion.com/p/38f9cb079ddb804a96dbe26b8d86e84f
+- Consolidation amendment (2026-09-06): Notion Roadmap "After 0.4.0 — the amended planned
+  train (0.5.0 → 0.8.0)" section; retired GitHub milestone titles 0.9.0 and 0.10.0.
 - Orchestration hub: https://app.notion.com/p/3c09cb079ddb80cb9a31ee5dd083739d
 - 📐 Orchestration template: https://app.notion.com/p/3c39cb079ddb81eebf8dd8948612c365
 - Platform evolution & workflow intelligence vision: https://app.notion.com/p/3b49cb079ddb81cea546c5146054a942

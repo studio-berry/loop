@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +33,26 @@ EXPECTED_LEGACY_UI_COUNT = 2
 
 class ContractError(ValueError):
     pass
+
+
+def _tracked_ui_files(root: Path) -> list[str]:
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.ui", "**/*.ui"],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        tracked = sorted(line.replace("\\", "/") for line in output.splitlines() if line)
+        if tracked:
+            return tracked
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        pass
+    return sorted(
+        str(path.relative_to(root)).replace("\\", "/")
+        for path in root.rglob("*.ui")
+        if path.is_file() and ".git" not in path.parts and ".claude" not in path.parts
+    )
 
 
 def load_json(path: Path) -> dict:
@@ -138,11 +159,7 @@ def main() -> int:
             f"legacy_surface_disposition must contain {EXPECTED_LEGACY_UI_COUNT} entries, found {len(legacy)}"
         )
 
-    repo_ui = sorted(
-        str(p.relative_to(ROOT)).replace("\\", "/")
-        for p in ROOT.rglob("*.ui")
-        if p.is_file()
-    )
+    repo_ui = _tracked_ui_files(ROOT)
     ledger_only = sorted(set(ledger_paths) - set(repo_ui))
     repo_only = sorted(set(repo_ui) - set(ledger_paths))
     if ledger_only or repo_only:

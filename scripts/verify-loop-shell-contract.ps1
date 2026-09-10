@@ -145,9 +145,16 @@ if ($legacyLedger.Count -ne $ExpectedLegacyUiCount) {
     throw "legacy_surface_disposition must contain exactly $ExpectedLegacyUiCount tracked .ui forms, found $($legacyLedger.Count)"
 }
 
-$repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | ForEach-Object {
-    $_.FullName.Substring($RepoRoot.Length + 1).Replace("\", "/")
-} | Sort-Object)
+$repoUiFiles = @(
+    git -C $RepoRoot ls-files --cached --others --exclude-standard -- "*.ui" "**/*.ui" 2>$null
+)
+if (-not $repoUiFiles) {
+    $repoUiFiles = @(Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter "*.ui" -File | Where-Object {
+        $_.FullName -notmatch '[\\/]\.git[\\/]' -and $_.FullName -notmatch '[\\/]\.claude[\\/]'
+    } | ForEach-Object {
+        $_.FullName.Substring($RepoRoot.Length + 1).Replace("\", "/")
+    } | Sort-Object)
+}
 $ledgerOnly = @($legacyPaths | Where-Object { $repoUiFiles -notcontains $_ })
 $repoOnly = @($repoUiFiles | Where-Object { $legacyPaths -notcontains $_ })
 if ($ledgerOnly.Count -gt 0 -or $repoOnly.Count -gt 0) {
