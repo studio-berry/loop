@@ -300,9 +300,22 @@ def add_format_checks(
         )
 
 
+def uses_manual_moc_include(source: str, root: Path = ROOT) -> bool:
+    try:
+        text = (root / source).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return '#include "' in text and '.moc"' in text
+
+
 def clang_tidy_sources(sources: list[str]) -> list[str]:
     implementation_suffixes = {".c", ".cc", ".cpp", ".cxx"}
-    return [source for source in sources if Path(source).suffix.lower() in implementation_suffixes]
+    return [
+        source
+        for source in sources
+        if Path(source).suffix.lower() in implementation_suffixes
+        and not uses_manual_moc_include(source)
+    ]
 
 
 def add_clang_tidy_checks(
