@@ -161,8 +161,168 @@
     },
     {
       "index": 31,
+      "kind": "open",
+      "argument": "5013354945698045938"
+    },
+    {
+      "index": 32,
+      "kind": "cancel",
+      "argument": "11197343878333884823"
+    },
+    {
+      "index": 33,
+      "kind": "open",
+      "argument": "1066545918793467191"
+    },
+    {
+      "index": 34,
+      "kind": "open",
+      "argument": "11321594274765674640"
+    },
+    {
+      "index": 35,
+      "kind": "replace-revision",
+      "argument": "14283579915496753648"
+    },
+    {
+      "index": 36,
+      "kind": "cancel",
+      "argument": "17863176575058370743"
+    },
+    {
+      "index": 37,
+      "kind": "cancel",
+      "argument": "13685223271187027546"
+    },
+    {
+      "index": 38,
+      "kind": "rollback",
+      "argument": "6748766380856173228"
+    },
+    {
+      "index": 39,
+      "kind": "open",
+      "argument": "9604188461958675080"
+    },
+    {
+      "index": 40,
+      "kind": "rollback",
+      "argument": "976639850783419330"
+    },
+    {
+      "index": 41,
+      "kind": "rollback",
+      "argument": "11029822007145908066"
+    },
+    {
+      "index": 42,
+      "kind": "cancel",
+      "argument": "9746768580576956141"
+    },
+    {
+      "index": 43,
+      "kind": "cancel",
+      "argument": "2957123111136537141"
+    },
+    {
+      "index": 44,
+      "kind": "save-reopen",
+      "argument": "1534177130836295959"
+    },
+    {
+      "index": 45,
+      "kind": "rollback",
+      "argument": "11824983345393850086"
+    },
+    {
+      "index": 46,
+      "kind": "replace-revision",
+      "argument": "10514359223331479425"
+    },
+    {
+      "index": 47,
+      "kind": "cancel",
+      "argument": "14023964117627326189"
+    },
+    {
+      "index": 48,
+      "kind": "save-reopen",
+      "argument": "1159594577666376080"
+    },
+    {
+      "index": 49,
+      "kind": "cancel",
+      "argument": "5253177320728505183"
+    },
+    {
+      "index": 50,
+      "kind": "render-preflight",
+      "argument": "15684130718138178927"
+    },
+    {
+      "index": 51,
+      "kind": "save-reopen",
+      "argument": "17776524391223397062"
+    },
+    {
+      "index": 52,
+      "kind": "open",
+      "argument": "7526981500392177173"
+    },
+    {
+      "index": 53,
+      "kind": "cancel",
+      "argument": "6451505757555346948"
+    },
+    {
+      "index": 54,
+      "kind": "rollback",
+      "argument": "8369269387004969562"
+    },
+    {
+      "index": 55,
+      "kind": "render-preflight",
+      "argument": "16441652591749629825"
+    },
+    {
+      "index": 56,
+      "kind": "save-reopen",
+      "argument": "6520366602141516188"
+    },
+    {
+      "index": 57,
+      "kind": "open",
+      "argument": "17566257490975440028"
+    },
+    {
+      "index": 58,
+      "kind": "replace-revision",
+      "argument": "8693436164466649310"
+    },
+    {
+      "index": 59,
+      "kind": "rollback",
+      "argument": "10201475227484907525"
+    },
+    {
+      "index": 60,
+      "kind": "cancel",
+      "argument": "8702028942361848727"
+    },
+    {
+      "index": 61,
+      "kind": "cancel",
+      "argument": "7680792602989575571"
+    },
+    {
+      "index": 62,
+      "kind": "open",
+      "argument": "18431997874931135203"
+    },
+    {
+      "index": 63,
       "kind": "close",
-      "argument": "14977176080434032300"
+      "argument": "17475550920163749414"
     }
   ],
   "expected_invariants": [
@@ -170,5 +330,7 @@
     "cancel-is-terminal",
     "stale-results-rejected",
     "history-append-only"
-  ]
+  ],
+  "observed_result": "invariants-held",
+  "shrink_history": []
 }

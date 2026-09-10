@@ -1,0 +1,336 @@
+{
+  "schema_kind": "loop-lifecycle-trace",
+  "schema_version": 1,
+  "seed": 539365889,
+  "initial_artifact_digest": "161a1beb41c008069762349ccae021ac2276deb2314aed2cdcb746a485f4dbcf",
+  "commands": [
+    {
+      "index": 0,
+      "kind": "open",
+      "argument": "16054040628713633634"
+    },
+    {
+      "index": 1,
+      "kind": "render-preflight",
+      "argument": "13709248772244232181"
+    },
+    {
+      "index": 2,
+      "kind": "cancel",
+      "argument": "15061211214994535425"
+    },
+    {
+      "index": 3,
+      "kind": "replace-revision",
+      "argument": "6033347758867561771"
+    },
+    {
+      "index": 4,
+      "kind": "save-reopen",
+      "argument": "14743479986073434988"
+    },
+    {
+      "index": 5,
+      "kind": "rollback",
+      "argument": "10370917642072392039"
+    },
+    {
+      "index": 6,
+      "kind": "save-reopen",
+      "argument": "6972387814645228182"
+    },
+    {
+      "index": 7,
+      "kind": "rollback",
+      "argument": "15464864822259309587"
+    },
+    {
+      "index": 8,
+      "kind": "open",
+      "argument": "773992352547029268"
+    },
+    {
+      "index": 9,
+      "kind": "save-reopen",
+      "argument": "9707748779095730431"
+    },
+    {
+      "index": 10,
+      "kind": "rollback",
+      "argument": "9496772363638990753"
+    },
+    {
+      "index": 11,
+      "kind": "open",
+      "argument": "2214694760053319153"
+    },
+    {
+      "index": 12,
+      "kind": "cancel",
+      "argument": "14030004003817890535"
+    },
+    {
+      "index": 13,
+      "kind": "rollback",
+      "argument": "7583470035862913580"
+    },
+    {
+      "index": 14,
+      "kind": "render-preflight",
+      "argument": "12074258694667358269"
+    },
+    {
+      "index": 15,
+      "kind": "open",
+      "argument": "13761973405340247722"
+    },
+    {
+      "index": 16,
+      "kind": "save-reopen",
+      "argument": "5171938990575051653"
+    },
+    {
+      "index": 17,
+      "kind": "rollback",
+      "argument": "2345211413140230101"
+    },
+    {
+      "index": 18,
+      "kind": "save-reopen",
+      "argument": "1628523258763850760"
+    },
+    {
+      "index": 19,
+      "kind": "render-preflight",
+      "argument": "5038585513152486872"
+    },
+    {
+      "index": 20,
+      "kind": "render-preflight",
+      "argument": "253354491755752116"
+    },
+    {
+      "index": 21,
+      "kind": "render-preflight",
+      "argument": "7229688035849407956"
+    },
+    {
+      "index": 22,
+      "kind": "save-reopen",
+      "argument": "13044934373465555695"
+    },
+    {
+      "index": 23,
+      "kind": "rollback",
+      "argument": "10895625138792824209"
+    },
+    {
+      "index": 24,
+      "kind": "rollback",
+      "argument": "18260822582291749403"
+    },
+    {
+      "index": 25,
+      "kind": "rollback",
+      "argument": "2168527590852211366"
+    },
+    {
+      "index": 26,
+      "kind": "save-reopen",
+      "argument": "668363155651112498"
+    },
+    {
+      "index": 27,
+      "kind": "open",
+      "argument": "12560823782655447857"
+    },
+    {
+      "index": 28,
+      "kind": "rollback",
+      "argument": "7363036765673601358"
+    },
+    {
+      "index": 29,
+      "kind": "open",
+      "argument": "6489798371295961759"
+    },
+    {
+      "index": 30,
+      "kind": "open",
+      "argument": "9462842297514227416"
+    },
+    {
+      "index": 31,
+      "kind": "render-preflight",
+      "argument": "14844150999868734056"
+    },
+    {
+      "index": 32,
+      "kind": "render-preflight",
+      "argument": "16421023710682210765"
+    },
+    {
+      "index": 33,
+      "kind": "cancel",
+      "argument": "1544723242647003896"
+    },
+    {
+      "index": 34,
+      "kind": "cancel",
+      "argument": "2854918988201860765"
+    },
+    {
+      "index": 35,
+      "kind": "open",
+      "argument": "5988409256948600677"
+    },
+    {
+      "index": 36,
+      "kind": "cancel",
+      "argument": "10642396680245204812"
+    },
+    {
+      "index": 37,
+      "kind": "open",
+      "argument": "8794761475480588469"
+    },
+    {
+      "index": 38,
+      "kind": "replace-revision",
+      "argument": "11945211581858129974"
+    },
+    {
+      "index": 39,
+      "kind": "save-reopen",
+      "argument": "9658355568562264202"
+    },
+    {
+      "index": 40,
+      "kind": "cancel",
+      "argument": "1218796795764106474"
+    },
+    {
+      "index": 41,
+      "kind": "open",
+      "argument": "2130223485059635384"
+    },
+    {
+      "index": 42,
+      "kind": "replace-revision",
+      "argument": "8587225387843416840"
+    },
+    {
+      "index": 43,
+      "kind": "save-reopen",
+      "argument": "10591484320609480747"
+    },
+    {
+      "index": 44,
+      "kind": "render-preflight",
+      "argument": "4201101714001588171"
+    },
+    {
+      "index": 45,
+      "kind": "replace-revision",
+      "argument": "1167964152539473042"
+    },
+    {
+      "index": 46,
+      "kind": "render-preflight",
+      "argument": "5954331234777416219"
+    },
+    {
+      "index": 47,
+      "kind": "open",
+      "argument": "15264214914524986704"
+    },
+    {
+      "index": 48,
+      "kind": "render-preflight",
+      "argument": "13625014935478822327"
+    },
+    {
+      "index": 49,
+      "kind": "save-reopen",
+      "argument": "3124866179075240274"
+    },
+    {
+      "index": 50,
+      "kind": "open",
+      "argument": "10702406781575412905"
+    },
+    {
+      "index": 51,
+      "kind": "rollback",
+      "argument": "4749815308794565093"
+    },
+    {
+      "index": 52,
+      "kind": "render-preflight",
+      "argument": "2325484016830293738"
+    },
+    {
+      "index": 53,
+      "kind": "render-preflight",
+      "argument": "14778039963435660010"
+    },
+    {
+      "index": 54,
+      "kind": "rollback",
+      "argument": "6018898021606890206"
+    },
+    {
+      "index": 55,
+      "kind": "replace-revision",
+      "argument": "14574415953043251551"
+    },
+    {
+      "index": 56,
+      "kind": "render-preflight",
+      "argument": "17940381580291829945"
+    },
+    {
+      "index": 57,
+      "kind": "open",
+      "argument": "13517690949233321384"
+    },
+    {
+      "index": 58,
+      "kind": "replace-revision",
+      "argument": "8630776572484843022"
+    },
+    {
+      "index": 59,
+      "kind": "save-reopen",
+      "argument": "10155335922637887513"
+    },
+    {
+      "index": 60,
+      "kind": "open",
+      "argument": "899533631255863596"
+    },
+    {
+      "index": 61,
+      "kind": "open",
+      "argument": "3615294935064304551"
+    },
+    {
+      "index": 62,
+      "kind": "replace-revision",
+      "argument": "1533225401934010033"
+    },
+    {
+      "index": 63,
+      "kind": "close",
+      "argument": "11231086953340464765"
+    }
+  ],
+  "expected_invariants": [
+    "source-immutable",
+    "cancel-is-terminal",
+    "stale-results-rejected",
+    "history-append-only"
+  ],
+  "observed_result": "invariants-held",
+  "shrink_history": []
+}
