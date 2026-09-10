@@ -18,7 +18,9 @@ permissions:
 
 jobs:
   build_windows:
-    runs-on: windows-2022
+    # Blacksmith is reserved for this ~50-minute packaging gate; other Windows CI
+    # stays on GitHub-hosted windows-2022 to conserve Blacksmith minutes.
+    runs-on: blacksmith-4vcpu-windows-2025
     env:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
@@ -34,6 +36,11 @@ jobs:
           path: loop
           ref: ${{ inputs.source_sha }}
           fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: "3.12"
 
       - name: Verify exact source SHA
         working-directory: loop
