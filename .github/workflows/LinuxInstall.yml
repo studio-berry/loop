@@ -1,4 +1,5 @@
 name: Linux_AppImage
+run-name: Linux_AppImage (${{ inputs.source_sha }})
 
 on:
   # Dispatch-only. PRs targeting `dev` run ci.yml; MSI/AppImage qualification
@@ -300,6 +301,27 @@ jobs:
             --work-dir "$RUNNER_TEMP/loop-package-boundary-linux-work" \
             --output "$evidence_dir/evidence.json" \
             --report "$evidence_dir/inspection.txt" 2>&1 | tee "$evidence_dir/inspector.txt"
+
+      - name: Generate final-artifact SBOM and notices
+        working-directory: loop
+        run: |
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          python3 scripts/ci/generate_package_sbom.py \
+            --evidence "$evidence_dir/evidence.json" \
+            --output "$evidence_dir/components.spdx.json"
+          python3 scripts/ci/generate_package_third_party_notices.py \
+            --evidence "$evidence_dir/evidence.json" \
+            --output "$evidence_dir/THIRD_PARTY_NOTICES.txt"
+
+      - name: Run Qt LGPL relink test
+        working-directory: loop
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          bash scripts/ci/run_qt_relink_test.sh \
+            "build/${{ env.appimagefilename }}" \
+            --output "$evidence_dir/qt-relink.txt"
 
       - name: Upload Linux package boundary evidence
         if: always()

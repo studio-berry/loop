@@ -41,8 +41,19 @@ Deleted Phase 5 identities remain recorded in `docs/product-surface.json` with
 (`origin/dev` after Session 08 / PR #533).
 
 **Candidate SHA:** `1c3f9d6d2312045264134f07b4d00e26de2058bf` on
-`cursor/session-09-ledger-closeout`. Frozen evidence:
+`cursor/session-09-ledger-closeout` (branch tip `0c8947c1`). Frozen evidence:
 `docs/evidence/phase5-terminal-closeout/evidence.json`.
+
+**Stable merge (PR #534):** `bcd74744affece538258b2a232279f6f5df9ee08` on
+`origin/stable` (2026-09-06). That merge commit includes additional stable-only
+packaging and budget work beyond this ledger-closeout diff; qualification lanes
+should not treat it as the Session 09 ledger baseline.
+
+**Dev integration:** merged via [PR #535](https://github.com/studio-berry/loop/pull/535) @
+`1f69bdf8bff037e5cae2d37e3c2e3eae8b2ca6b5`. Session 13 scaffolding landed on
+`dev` via [PR #539](https://github.com/studio-berry/loop/pull/539) @
+`ebde8661bff037e5cae2d37e3c2e3eae8b2ca6b5` (current qualification
+`candidate_sha`).
 
 Local verifier stack (clean tracked tree):
 
@@ -79,7 +90,7 @@ session's exact SHA.
 ### Issue 30 — final Phase 5 validation and freeze (PASS locally)
 
 Command output is recorded in `docs/evidence/phase5-terminal-closeout/evidence.json`.
-Hosted CI on the Session 09 PR is the remaining hosted record; it is not E-01.
+PR #534 hosted CI is complete; that run is not E-01.
 
 ## Exit gate
 

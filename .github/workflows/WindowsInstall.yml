@@ -1,4 +1,5 @@
 name: Windows_MSI
+run-name: Windows_MSI (${{ inputs.source_sha }})
 
 on:
   # Dispatch-only. PRs targeting `dev` run ci.yml; MSI/AppImage qualification
@@ -449,20 +450,35 @@ jobs:
           $inspectorOutput | Tee-Object -FilePath (Join-Path $evidenceDir "inspector.txt")
           if ($LASTEXITCODE -ne 0) { throw "MSI package boundary inspection failed." }
 
+      - name: Generate final-artifact SBOM and notices
+        shell: pwsh
+        run: |
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          python ".\loop\scripts\ci\generate_package_sbom.py" `
+            --evidence (Join-Path $evidenceDir "evidence.json") `
+            --output (Join-Path $evidenceDir "components.spdx.json")
+          python ".\loop\scripts\ci\generate_package_third_party_notices.py" `
+            --evidence (Join-Path $evidenceDir "evidence.json") `
+            --output (Join-Path $evidenceDir "THIRD_PARTY_NOTICES.txt")
+          if ($LASTEXITCODE -ne 0) { throw "Final-artifact notices generation failed." }
+
       - name: Run MSI lifecycle smoke test
         shell: pwsh
         run: |
           # The release MSI is x64 and must install beneath 64-bit Program Files.
           # The full editor operator launch is skipped on the hosted runner; the
           # packaged native/software Quick startup is exercised by the smoke script.
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
+          New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
           $msiPath = Join-Path $env:GITHUB_WORKSPACE "loop\build\install\${{ env.msipackagefilename }}"
           $installDir = Join-Path ([Environment]::GetFolderPath("ProgramFiles")) "LOOP"
+          $evidenceDir = Join-Path $env:RUNNER_TEMP "loop-package-boundary-windows"
           & "${env:GITHUB_WORKSPACE}\loop\scripts\Invoke-MsiSmokeTest.ps1" `
             -MsiPath $msiPath `
             -InstallDir $installDir `
             -SourceSha $env:LOOP_SOURCE_SHA `
-            -SkipEditorLaunch
-
+            -SkipEditorLaunch `
+            -QtRelinkTranscript (Join-Path $evidenceDir "qt-relink.txt")
 
       - name: Upload Windows package boundary evidence
         if: always()

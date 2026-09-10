@@ -74,11 +74,9 @@ surface's typed result and UI lifecycle. A source audit can use the table to
 reject new unmanaged long-running work and to track the remaining conversions.
 
 `scripts/ci/check_unmanaged_async.py` is the CI guard for that boundary. It
-currently reports the 13 pre-existing `QtConcurrent::run` call sites above as
-known migration debt and fails on any new or multiplied unmanaged launch. The
-allowlist is a containment measure, not acceptance of #238; the issue remains
-open until those product paths are migrated and cancellation/stale-result
-evidence is recorded on both supported desktop platforms.
+reports zero legacy product `QtConcurrent::run` call sites after Session 10
+(`PDFDiff` migrated onto `PDFJobScheduler`) and fails on any new or multiplied
+unmanaged launch.
 
 ## Verification
 

@@ -28,9 +28,12 @@
 #include "pdfcms.h"
 #include "pdfconstants.h"
 #include "pdfalgorithmlcs.h"
+#include "pdfjobscheduler.h"
 #include "pdfpainter.h"
 
-#include <QtConcurrent/QtConcurrent>
+#include <QCryptographicHash>
+#include <QUuid>
+#include <QXmlStreamWriter>
 
 #include "pdfdbgheap.h"
 
@@ -89,7 +92,6 @@ PDFDiff::PDFDiff(QObject* parent) :
     m_cancelled(false),
     m_textAnalysisAlgorithm(PDFDocumentTextFlowFactory::Algorithm::Layout)
 {
-
 }
 
 PDFDiff::~PDFDiff()
@@ -138,12 +140,38 @@ void PDFDiff::start()
 
     if (m_options.testFlag(Asynchronous))
     {
-        m_futureWatcher = std::nullopt;
-        m_futureWatcher.emplace();
+        if (m_jobFinishedConnection)
+        {
+            disconnect(m_jobFinishedConnection);
+            m_jobFinishedConnection = {};
+        }
 
-        m_future = QtConcurrent::run(std::bind(&PDFDiff::perform, this));
-        connect(&*m_futureWatcher, &QFutureWatcher<PDFDiffResult>::finished, this, &PDFDiff::onComparationPerformed);
-        m_futureWatcher->setFuture(m_future);
+        pdf::PDFJobSpec spec;
+        spec.jobId = QStringLiteral("pdf-diff-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
+        spec.kind = pdf::PDFJobKind::Batch;
+        spec.priority = pdf::PDFJobPriority::Background;
+        spec.operationId = QStringLiteral("pdf.diff");
+
+        m_activeJobId = pdf::PDFJobScheduler::global().submit(spec, [this](pdf::PDFJobContext& context)
+                                                              {
+            if (context.isCancellationRequested())
+            {
+                m_cancelled = true;
+                return;
+            }
+            m_result = perform(); });
+
+        m_jobFinishedConnection = connect(&pdf::PDFJobScheduler::global(),
+                                          &pdf::PDFJobScheduler::jobFinished,
+                                          this,
+                                          [this](const pdf::PDFJobSnapshot& snapshot)
+                                          {
+                                              if (snapshot.jobId != m_activeJobId)
+                                              {
+                                                  return;
+                                              }
+                                              onComparationPerformed(snapshot.status == pdf::PDFJobStatus::Cancelled);
+                                          });
     }
     else
     {
@@ -155,12 +183,20 @@ void PDFDiff::start()
 
 void PDFDiff::stop()
 {
-    if (m_futureWatcher && !m_futureWatcher->isFinished())
+    if (m_activeJobId.isEmpty())
     {
-        // Do stop only if process doesn't finished already.
-        // If we are finished, we do not want to set cancelled state.
-        m_cancelled = true;
-        m_futureWatcher->waitForFinished();
+        return;
+    }
+
+    const QString jobId = m_activeJobId;
+    m_cancelled = true;
+    pdf::PDFJobScheduler::global().cancel(jobId);
+    pdf::PDFJobScheduler::global().waitForFinished(jobId);
+    m_activeJobId.clear();
+    if (m_jobFinishedConnection)
+    {
+        disconnect(m_jobFinishedConnection);
+        m_jobFinishedConnection = {};
     }
 }
 
@@ -224,7 +260,7 @@ void PDFDiff::stepProgress()
 struct PDFDiffPageContext
 {
     PDFInteger pageIndex = 0;
-    std::array<uint8_t, 64> pageHash = { };
+    std::array<uint8_t, 64> pageHash = {};
     PDFPrecompiledPage::GraphicPieceInfos graphicPieces;
     PDFDocumentTextFlow text;
 };
@@ -342,13 +378,13 @@ void PDFDiff::performSteps(const std::vector<PDFInteger>& leftPages,
     std::vector<PDFDiffPageContext> rightPreparedPages;
 
     PDFDiffHelper::PageSequence pageSequence;
-    std::map<size_t, size_t> pageMatches; // Indices are real page indices, not indices to page contexts
+    std::map<size_t, size_t> pageMatches;   // Indices are real page indices, not indices to page contexts
 
     auto createDiffPageContext = [](auto pageIndex)
     {
-       PDFDiffPageContext context;
-       context.pageIndex = pageIndex;
-       return context;
+        PDFDiffPageContext context;
+        context.pageIndex = pageIndex;
+        return context;
     };
     std::transform(leftPages.cbegin(), leftPages.cend(), std::back_inserter(leftPreparedPages), createDiffPageContext);
     std::transform(rightPages.cbegin(), rightPages.cend(), std::back_inserter(rightPreparedPages), createDiffPageContext);
@@ -696,7 +732,7 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                                                        compareCharacters);
         algorithm.perform();
         PDFAlgorithmLongestCommonSubsequenceBase::Sequence sequence = algorithm.getSequence();
-        PDFAlgorithmLongestCommonSubsequenceBase::markSequence(sequence, { }, { });
+        PDFAlgorithmLongestCommonSubsequenceBase::markSequence(sequence, {}, {});
         PDFAlgorithmLongestCommonSubsequenceBase::SequenceItemRanges modifiedRanges = PDFAlgorithmLongestCommonSubsequenceBase::getModifiedRanges(sequence);
 
         // Merge modified sequences separated by just space
@@ -778,9 +814,9 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                         pageIndex1 = textItem->pageIndex;
                     }
 
-                    if (static_cast< std::size_t >( textCompareItem.charIndex ) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
+                    if (static_cast<std::size_t>(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
                     {
-                        const size_t startIndex =  textCompareItem.charIndex;
+                        const size_t startIndex = textCompareItem.charIndex;
                         const size_t endIndex = startIndex + textCompareItem.charCount;
 
                         for (size_t i = startIndex; i < endIndex; ++i)
@@ -806,9 +842,9 @@ void PDFDiff::performCompare(const std::vector<PDFDiffPageContext>& leftPrepared
                         pageIndex2 = textItem->pageIndex;
                     }
 
-                    if (static_cast< std::size_t >(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
+                    if (static_cast<std::size_t>(textCompareItem.charIndex) + textCompareItem.charCount <= textItem->characterBoundingRects.size())
                     {
-                        const size_t startIndex =  textCompareItem.charIndex;
+                        const size_t startIndex = textCompareItem.charIndex;
                         const size_t endIndex = startIndex + textCompareItem.charCount;
 
                         for (size_t i = startIndex; i < endIndex; ++i)
@@ -900,10 +936,15 @@ void PDFDiff::finalizeGraphicsPieces(PDFDiffPageContext& context)
     std::copy(hash.data(), hash.data() + size, context.pageHash.data());
 }
 
-void PDFDiff::onComparationPerformed()
+void PDFDiff::onComparationPerformed(bool cancelled)
 {
-    m_cancelled = false;
-    m_result = m_future.result();
+    m_cancelled = cancelled;
+    m_activeJobId.clear();
+    if (m_jobFinishedConnection)
+    {
+        disconnect(m_jobFinishedConnection);
+        m_jobFinishedConnection = {};
+    }
     Q_EMIT comparationFinished();
 }
 
@@ -933,7 +974,6 @@ void PDFDiff::setTextAnalysisAlgorithm(PDFDocumentTextFlowFactory::Algorithm tex
 PDFDiffResult::PDFDiffResult() :
     m_result(true)
 {
-
 }
 
 void PDFDiffResult::addPageMoved(PDFInteger pageIndex1, PDFInteger pageIndex2)
@@ -1799,12 +1839,10 @@ PDFDiffResultNavigator::PDFDiffResultNavigator(QObject* parent) :
     m_diffResult(nullptr),
     m_currentIndex(0)
 {
-
 }
 
 PDFDiffResultNavigator::~PDFDiffResultNavigator()
 {
-
 }
 
 void PDFDiffResultNavigator::setResult(const PDFDiffResult* diffResult)
