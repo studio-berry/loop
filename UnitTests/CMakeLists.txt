@@ -635,6 +635,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY AND LOOP_BUILD_QUICK_CANVAS)
         ${CMAKE_SOURCE_DIR}/LoopLibQuick/sources
         ${CMAKE_BINARY_DIR}/${INSTALL_INCLUDEDIR}
     )
+    target_compile_definitions(UnitTestsLoopStateVisual PRIVATE LoopLibQuick_EXPORTS)
     target_link_libraries(UnitTestsLoopStateVisual PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
 
     set_target_properties(UnitTestsLoopStateVisual PROPERTIES

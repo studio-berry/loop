@@ -28,8 +28,36 @@
 namespace pdfquick::tokens
 {
 
+QString stateAccessibleName(StateKind kind)
+{
+    switch (kind)
+    {
+        case StateKind::Error:
+            return QStringLiteral("Error");
+        case StateKind::Warning:
+            return QStringLiteral("Warning");
+        case StateKind::Info:
+            return QStringLiteral("Info");
+        case StateKind::Incomplete:
+            return QStringLiteral("Incomplete");
+        case StateKind::NotChecked:
+            return QStringLiteral("Not checked");
+        case StateKind::Passed:
+            return QStringLiteral("Passed");
+        case StateKind::Waived:
+            return QStringLiteral("Waived");
+    }
+
+    return QStringLiteral("Not checked");
+}
+
 namespace
 {
+
+LoopStateVisual makeVisual(StateKind kind, ColorRole colorRole, StateIcon icon)
+{
+    return { kind, colorRole, icon, stateAccessibleName(kind) };
+}
 
 LoopStateVisual fromFinding(const pdf::PreflightFinding& finding)
 {
@@ -37,40 +65,28 @@ LoopStateVisual fromFinding(const pdf::PreflightFinding& finding)
 
     if (severity.compare(QLatin1String("error"), Qt::CaseInsensitive) == 0)
     {
-        return { StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle };
+        return makeVisual(StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle);
     }
     if (severity.compare(QLatin1String("warning"), Qt::CaseInsensitive) == 0)
     {
-        return { StateKind::Warning, ColorRole::SeverityWarning, StateIcon::FilledTriangle };
+        return makeVisual(StateKind::Warning, ColorRole::SeverityWarning, StateIcon::FilledTriangle);
     }
     if (severity.compare(QLatin1String("info"), Qt::CaseInsensitive) == 0)
     {
-        return { StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare };
+        return makeVisual(StateKind::Info, ColorRole::SeverityInfo, StateIcon::FilledSquare);
     }
 
-    // profile.schema.json admits only error/warning/info. A finding with
-    // anything else is data this build does not understand -- the safe
-    // reading is "cannot vouch for this", not "no problem here", so it takes
-    // the same never-green treatment as an incomplete check rather than
-    // silently falling through to Passed.
-    return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched };
+    return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
 }
 
 LoopStateVisual fromStatus(const pdf::PreflightCheckStatus& status)
 {
     if (status.status.compare(QLatin1String("ok"), Qt::CaseInsensitive) == 0)
     {
-        return { StateKind::Passed, ColorRole::Success, StateIcon::Checkmark };
+        return makeVisual(StateKind::Passed, ColorRole::Success, StateIcon::Checkmark);
     }
 
-    // Every other status literal this build emits -- failed, warning, skipped,
-    // incomplete, unsupported -- and any literal a future check adds all take
-    // this branch. That is deliberately coarser than the run-level verdict in
-    // pdf::reducePreflightVerdict(): a caller presenting one check's
-    // completion, without a specific finding to show, only ever needs to know
-    // "clean pass" from "not that", and the second must never render as the
-    // first.
-    return { StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched };
+    return makeVisual(StateKind::Incomplete, ColorRole::StateIncomplete, StateIcon::Hatched);
 }
 
 }   // namespace
@@ -81,18 +97,12 @@ LoopStateVisual resolveStateVisual(const pdf::PreflightFinding* finding,
                                    const QString& currentDocumentDigest,
                                    const QString& currentProfileDigest)
 {
-    // Checked first and unconditionally: a waived finding is presented as
-    // waived regardless of its severity or the check's completion status.
-    // resolveState() -- not the stored kind alone -- decides "active", so a
-    // decision recorded against a document revision or profile that no longer
-    // matches falls through instead of masking the finding (mirrors
-    // PreflightDecision::countsForSignoff(), issue #126).
     if (decision != nullptr && decision->kind == pdf::PreflightDecisionKind::Waive)
     {
         const pdf::PreflightDecisionState state = decision->resolveState(currentDocumentDigest, currentProfileDigest);
         if (state == pdf::PreflightDecisionState::Active)
         {
-            return { StateKind::Waived, ColorRole::SeverityWarning, StateIcon::BadgeOverlay };
+            return makeVisual(StateKind::Waived, ColorRole::SeverityWarning, StateIcon::BadgeOverlay);
         }
     }
 
@@ -106,9 +116,7 @@ LoopStateVisual resolveStateVisual(const pdf::PreflightFinding* finding,
         return fromStatus(*status);
     }
 
-    // No finding, no check status, no active waiver: nothing has run for this
-    // revision yet.
-    return { StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline };
+    return makeVisual(StateKind::NotChecked, ColorRole::StateNotChecked, StateIcon::Outline);
 }
 
 }   // namespace pdfquick::tokens

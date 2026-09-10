@@ -29,19 +29,8 @@ namespace pdfquick::tokens
 namespace
 {
 
-// Every literal below is duplicated, by design, in the table in
-// docs/LOOP_DESIGN_SYSTEM.md and is contrast-checked there against its paired
-// surface (WCAG 4.5:1 for text, 3:1 for icons/focus rings/large text). Values
-// are compiled constants rather than parsed from JSON for the same reason
-// CanvasPalette's are: a design-system component must be able to draw before
-// any file on disk has been read.
-//
-// Dark and High Contrast mirror docs/quick-design-tokens.json and
-// CanvasPalette::standard()/highContrast() (issue #178) where a role has an
-// equivalent there. Light is new: this is the first Loop surface with a light
-// theme.
-
-// Dark theme.
+// Dark values match docs/quick-design-tokens.json where a role existed there.
+// FocusRing is violet, not the JSON `focus` colour CanvasPalette reuses for warnings.
 constexpr const char* DarkSurfaceBase = "#111827";
 constexpr const char* DarkSurfacePanel = "#1F2937";
 constexpr const char* DarkSurfaceOverlay = "#374151";
@@ -57,7 +46,6 @@ constexpr const char* DarkStateNotChecked = "#64748B";
 constexpr const char* DarkFocusRing = "#C4B5FD";
 constexpr const char* DarkDestructiveAction = "#DC2626";
 
-// Light theme.
 constexpr const char* LightSurfaceBase = "#FFFFFF";
 constexpr const char* LightSurfacePanel = "#F1F5F9";
 constexpr const char* LightSurfaceOverlay = "#E2E8F0";
@@ -152,11 +140,6 @@ QColor colorLight(ColorRole role)
     return hex(LightTextPrimary);
 }
 
-// Pure black/white plus fully saturated hues, the same recipe
-// CanvasPalette::highContrast() uses: hue keeps distinguishing severities for a
-// reader who can see it, and every stroke/ring this feeds is widened at the
-// drawing site so the reader who cannot see it is carried by shape and width
-// instead (must_not_depend_on_color_alone).
 QColor colorHighContrast(ColorRole role)
 {
     switch (role)
@@ -172,8 +155,11 @@ QColor colorHighContrast(ColorRole role)
             return QColor(Qt::white);
 
         case ColorRole::SeverityError:
-        case ColorRole::DestructiveAction:
             return QColor(Qt::red);
+
+        // White-on-Qt::red is ~4.0:1; use the light fill so button text stays at 4.5:1.
+        case ColorRole::DestructiveAction:
+            return hex(LightDestructiveAction);
 
         case ColorRole::SeverityWarning:
         case ColorRole::FocusRing:
@@ -185,9 +171,6 @@ QColor colorHighContrast(ColorRole role)
         case ColorRole::Success:
             return QColor(Qt::green);
 
-        // Deliberately not a severity hue: high contrast must not make an
-        // incomplete check look like a coloured severity finding. Shape (hatch
-        // / outline) carries the distinction here, same as in the other themes.
         case ColorRole::StateIncomplete:
         case ColorRole::StateNotChecked:
             return QColor(Qt::white);

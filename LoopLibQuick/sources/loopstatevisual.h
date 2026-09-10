@@ -39,11 +39,6 @@ struct PreflightDecision;
 namespace pdfquick::tokens
 {
 
-/// The finding/check state a surface is presenting. Kept separate from
-/// `ColorRole` (below) even though today it maps one-to-one, because a state
-/// is a fact about a finding and a colour role is a fact about a pixel; a
-/// future high-contrast or print treatment that wants to give two states the
-/// same colour role must still tell them apart by `kind`.
 enum class StateKind
 {
     Error,
@@ -55,20 +50,16 @@ enum class StateKind
     Waived
 };
 
-/// Shape carries the state distinction alongside colour, so the mapping
-/// survives colour-blindness and greyscale printing (docs/ACCESSIBILITY_BASELINE.md,
-/// issue #25). `BadgeOverlay` is drawn in addition to the underlying severity
-/// treatment, not instead of it -- a waived error still shows as an error with
-/// a badge, it never becomes indistinguishable from a plain warning.
+/// Non-colour shape. BadgeOverlay is drawn on top of the finding's severity treatment.
 enum class StateIcon
 {
-    FilledCircle,   // Error
-    FilledTriangle,   // Warning
-    FilledSquare,   // Info
-    Hatched,   // Incomplete
-    Outline,   // Not checked
-    Checkmark,   // Passed
-    BadgeOverlay   // Waived
+    FilledCircle,
+    FilledTriangle,
+    FilledSquare,
+    Hatched,
+    Outline,
+    Checkmark,
+    BadgeOverlay
 };
 
 struct LoopStateVisual
@@ -76,34 +67,12 @@ struct LoopStateVisual
     StateKind kind = StateKind::NotChecked;
     ColorRole colorRole = ColorRole::StateNotChecked;
     StateIcon icon = StateIcon::Outline;
+    QString accessibleName;
 };
 
-/// Single source of truth for finding/check presentation (issue #194). Every
-/// surface that draws a finding, a check row, or a run summary -- finding
-/// cards, the report dock, canvas overlays, the Inspector (#127), the status
-/// bar -- calls this; none derives its own colour or icon from `severity`,
-/// `status`, or a decision's kind directly.
-///
-/// `finding` is the specific finding being presented, or null when the caller
-/// is presenting a check's overall status rather than one of its findings (for
-/// example, a check row with zero findings). `status` is the
-/// PreflightCheckStatus for the check `finding` belongs to (or the check being
-/// summarised), or null when no run exists yet for the current document
-/// revision. `decision` is the operator decision recorded against
-/// `finding->stableId()`, or null when none was recorded; `currentDocumentDigest`
-/// and `currentProfileDigest` are passed through to
-/// `PreflightDecision::resolveState()` so a decision made against a stale
-/// document or profile is never read as active (mirrors
-/// `PreflightDecision::countsForSignoff()`, issue #126).
-///
-/// Two invariants hold for every input combination and are asserted by
-/// tst_loopstatevisualtest.cpp:
-///
-///   - `StateKind::Incomplete` never resolves to the same colour role or icon
-///     as `StateKind::Passed`. An incomplete check must never render as a
-///     clean pass (issue #133).
-///   - An active Waive decision never resolves to `StateKind::Passed`. Waived
-///     always renders as `StateKind::Waived`, distinct from Passed.
+LOOPLIBQUICK_EXPORT QString stateAccessibleName(StateKind kind);
+
+/// Canonical finding/check presentation. Incomplete and active Waive never resolve as Passed.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolveStateVisual(const pdf::PreflightFinding* finding,
                                                        const pdf::PreflightCheckStatus* status,
                                                        const pdf::PreflightDecision* decision,
