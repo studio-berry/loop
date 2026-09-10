@@ -26,6 +26,7 @@
 #include "pdfdocumentwriter.h"
 #include "pdfstreamfilters.h"
 #include "pdfrgbtocmykfixup.h"
+#include "pdftransparencyflattener.h"
 #include "preflightengine.h"
 #include "pdfutils.h"
 #include "pdfworkloadenvelope.h"
@@ -55,6 +56,13 @@ bool isPDFX(PDFStandardTarget target)
 }
 
 bool normalizesColorByDefault(PDFStandardTarget target)
+{
+    return target == PDFStandardTarget::PDFX1a2001 || target == PDFStandardTarget::PDFX3_2002;
+}
+
+// PDF/X-1a and PDF/X-3 prohibit live transparency (see docs/PDFX_POLICY_MATRIX.md);
+// PDF/X-4 and PDF/A-2b permit it, so flattening is opt-in there.
+bool flattensTransparencyByDefault(PDFStandardTarget target)
 {
     return target == PDFStandardTarget::PDFX1a2001 || target == PDFStandardTarget::PDFX3_2002;
 }
@@ -217,13 +225,14 @@ void collectPreflightBlockers(const PDFStandardConversionSettings& settings,
     }
 
     const bool normalizeColor = settings.normalizeColor || normalizesColorByDefault(settings.target);
+    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
     for (const PDFXRuleResult& rule : result.pdfx->rules)
     {
         if (rule.state != PDFXRuleState::Failed && rule.state != PDFXRuleState::NotInspected)
         {
             continue;
         }
-        const bool fixable = rule.ruleId == QStringLiteral("pdfx.metadata.identification") || rule.ruleId == QStringLiteral("pdfx.output-intent.present") || rule.ruleId == QStringLiteral("pdfx.output-intent.identity") || rule.ruleId == QStringLiteral("pdfx.output-intent.subtype") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile-space") || rule.ruleId == QStringLiteral("pdfx.page.trim-box") || rule.ruleId == QStringLiteral("pdfx.page.bleed-box") || rule.ruleId == QStringLiteral("pdfx.document.version") || (rule.ruleId == QStringLiteral("pdfx.color.device-rgb") && normalizeColor);
+        const bool fixable = rule.ruleId == QStringLiteral("pdfx.metadata.identification") || rule.ruleId == QStringLiteral("pdfx.output-intent.present") || rule.ruleId == QStringLiteral("pdfx.output-intent.identity") || rule.ruleId == QStringLiteral("pdfx.output-intent.subtype") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile") || rule.ruleId == QStringLiteral("pdfx.output-intent.profile-space") || rule.ruleId == QStringLiteral("pdfx.page.trim-box") || rule.ruleId == QStringLiteral("pdfx.page.bleed-box") || rule.ruleId == QStringLiteral("pdfx.document.version") || (rule.ruleId == QStringLiteral("pdfx.color.device-rgb") && normalizeColor) || (rule.ruleId == QStringLiteral("pdfx.transparency.allowed") && flattenTransparency);
         if (!fixable)
         {
             report->blockers.append(rule.ruleId + QStringLiteral(": ") + rule.diagnostic);
@@ -402,7 +411,8 @@ QJsonObject PDFStandardConversionReport::toJson() const
         { QStringLiteral("changes"), changesArray },
         { QStringLiteral("blockers"), QJsonArray::fromStringList(blockers) },
         { QStringLiteral("warnings"), QJsonArray::fromStringList(warnings) },
-        { QStringLiteral("validator"), validator }
+        { QStringLiteral("validator"), validator },
+        { QStringLiteral("transparency_flatten"), transparencyFlatten }
     };
 }
 
@@ -419,6 +429,7 @@ PDFOperationResult PDFStandardConversion::preview(const PDFDocument* document,
     report->blockers.clear();
     report->warnings.clear();
     report->preflightBefore = QJsonObject();
+    report->transparencyFlatten = QJsonObject();
 
     const PDFOperationResult profileResult = validateIcc(settings);
     if (!profileResult)
@@ -451,6 +462,12 @@ PDFOperationResult PDFStandardConversion::preview(const PDFDocument* document,
         {
             report->blockers.append(item.reason);
         }
+    }
+
+    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
+    if (flattenTransparency && PDFTransparencyFlattener::hasLiveTransparency(document))
+    {
+        report->changes.append({ QStringLiteral("transparency.flatten"), QStringLiteral("live transparency"), QStringLiteral("flattened to opaque raster content") });
     }
 
     if (isPDFX(settings.target))
@@ -498,6 +515,20 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
         if (!colorResult)
         {
             return colorResult;
+        }
+    }
+
+    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
+    if (flattenTransparency)
+    {
+        PDFTransparencyFlattenSettings transparencySettings = settings.transparencyFlattenSettings;
+        transparencySettings.analyzeOnly = false;
+        PDFTransparencyFlattenReport transparencyReport;
+        const PDFOperationResult transparencyResult = PDFTransparencyFlattener::apply(&candidate, transparencySettings, &transparencyReport);
+        report->transparencyFlatten = transparencyReport.toJson();
+        if (!transparencyResult)
+        {
+            return transparencyResult;
         }
     }
 
