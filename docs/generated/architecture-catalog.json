@@ -412,6 +412,7 @@
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
+    "UnitTestsLoopStateVisual",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
