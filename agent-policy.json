@@ -62,6 +62,7 @@
         "UnitTests/tst_filenamesanitizertest.cpp",
         "UnitTests/tst_incrementalsavetest.cpp",
         "UnitTests/tst_jbig2decodertest.cpp",
+        "UnitTests/tst_lifecycletest.cpp",
         "UnitTests/tst_overprinttest.cpp",
         "UnitTests/tst_revisionstresstest.cpp",
         "UnitTests/tst_safefilewritertest.cpp"

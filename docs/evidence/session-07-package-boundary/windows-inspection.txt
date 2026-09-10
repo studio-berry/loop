@@ -1,0 +1,9 @@
+status: passed
+platform: windows
+source_sha: b47c62b263a3fd7fb36940856866e589bbc8be10
+package: mberrys.Loop-pdf_0.2.0-alpha.msi
+package_sha256: 859fe789e6ad1c202a0fa2b34dcad394c75f62dc458f9debc638c6b1e2808d40
+payload_files: 345
+binaries: 138
+runtime_plugin_candidates: 344
+findings:

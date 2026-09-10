@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "loop-package-boundary-pair",
+  "source_sha": "b47c62b263a3fd7fb36940856866e589bbc8be10",
+  "packages": {
+    "linux": {
+      "name": "Loop-pdf-0.2.0-alpha-x86_64.AppImage",
+      "format": "AppImage",
+      "sha256": "6cac0b88b0a1f8df49b85808f3b51d538bdfcc63665d64cf50a0197150d2dfa1",
+      "size": 53844472
+    },
+    "windows": {
+      "name": "mberrys.Loop-pdf_0.2.0-alpha.msi",
+      "format": "MSI",
+      "sha256": "859fe789e6ad1c202a0fa2b34dcad394c75f62dc458f9debc638c6b1e2808d40",
+      "size": 62875782
+    }
+  },
+  "status": "passed"
+}

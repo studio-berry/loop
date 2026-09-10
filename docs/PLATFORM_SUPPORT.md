@@ -149,6 +149,14 @@ The clean-VM acceptance gate remains:
 4. Attach the package/dependency evidence and operator/accessibility transcript before
    treating the Session 07 exit gate as passed.
 
+> **Deferred for 0.2.0 (2026-09-06).** The Windows Server 2022 pristine-VM run is
+> **deferred** to release-hardening and is **required before 1.0**; it is not a 0.2.0
+> blocker. The same-SHA package evidence (Linux AppImage + Windows MSI on
+> `b47c62b2…`), the Linux clean-machine Ubuntu 24.04 proof, and the Windows hosted
+> relocated/MSI-lifecycle smoke are complete. Before 1.0, execute this exact
+> fresh-VM procedure and record the SHA-bound transcript — see
+> `docs/SESSION_07_PACKAGE_BOUNDARY.md` (§0.2.0 gate hierarchy).
+
 **The profiles path is still a required observation:** `smoke-test-install.ps1` probes
 several layouts because `LOOP_INSTALL_TO_USR=ON` shifts the share tree. Record which
 candidate resolved and keep the layout table above synchronized with the VM evidence.

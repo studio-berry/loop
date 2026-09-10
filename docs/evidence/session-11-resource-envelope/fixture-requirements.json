@@ -1,0 +1,31 @@
+{
+  "schema_kind": "loop-resource-envelope-fixture-requirements",
+  "schema_version": 1,
+  "external_root": "C:\\.dev\\qualification\\session-11\\fixtures",
+  "required_fixtures": [
+    {
+      "fixture_id": "office-2mb",
+      "availability": "local",
+      "sha256": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9"
+    },
+    {
+      "fixture_id": "image-heavy-500mb",
+      "availability": "hosted-required"
+    },
+    {
+      "fixture_id": "ten-thousand-page",
+      "availability": "hosted-required",
+      "provenance": "div2k_workload.py from external DIV2K corpus"
+    },
+    {
+      "fixture_id": "pathological-vector",
+      "availability": "local",
+      "sha256": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f"
+    },
+    {
+      "fixture_id": "transparency-spots",
+      "availability": "local",
+      "sha256": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3"
+    }
+  ]
+}

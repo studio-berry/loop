@@ -111,15 +111,62 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("source_sha:", workflow)
             self.assertRegex(workflow, r"source_sha:\n\s+description:.*\n\s+required:\s+true")
             self.assertIn("inputs.source_sha", workflow)
-            self.assertIn("pull_request:", workflow)
+            self.assertIn("ref: ${{ inputs.source_sha }}", workflow)
+            self.assertIn("workflow_dispatch:", workflow)
+            self.assertNotIn("pull_request:", workflow)
+            self.assertNotIn("github.event.pull_request", workflow)
+            self.assertNotRegex(workflow, r"(?m)^  push:")
             self.assertIn("Verify exact source SHA", workflow)
             self.assertIn("LOOP_SOURCE_SHA", workflow)
             self.assertIn("inspect_package_dependencies.py", workflow)
             self.assertIn("source-sha", workflow)
+        self.assertIn("run-name: Linux_AppImage (${{ inputs.source_sha }})", linux)
+        self.assertIn("run-name: Windows_MSI (${{ inputs.source_sha }})", windows)
         self.assertIn("--expected-architecture x86-64", linux)
         self.assertIn("--expected-architecture x64", windows)
         self.assertIn("loop-package-boundary-linux-evidence", linux)
         self.assertIn("loop-package-boundary-windows-evidence", windows)
+
+    def test_linux_relink_uses_final_appimage_after_packaging(self):
+        workflow = (ROOT / ".github/workflows/LinuxInstall.yml").read_text(encoding="utf-8")
+        steps = workflow.split("      - name: ")
+        names = [step.splitlines()[0] for step in steps]
+        relink_index = names.index("Run Qt LGPL relink test")
+        for prerequisite in (
+            "Pack AppImage (unsigned — V1 default)", "Sign and Repack AppImage",
+            "Run AppImage smoke test", "Inspect AppImage package boundary",
+            "Generate final-artifact SBOM and notices",
+        ):
+            self.assertLess(names.index(prerequisite), relink_index)
+        self.assertLess(relink_index, names.index("Upload AppImage Package"))
+        relink = steps[relink_index]
+        self.assertIn('"build/${{ env.appimagefilename }}"', relink)
+        self.assertIn('--output "$evidence_dir/qt-relink.txt"', relink)
+        script = (ROOT / "scripts/ci/run_qt_relink_test.sh").read_text(encoding="utf-8")
+        self.assertIn("LOOP_SOURCE_SHA", script)
+        self.assertIn("source_sha=", script)
+
+    def test_windows_relink_is_owned_by_msi_lifecycle(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        lifecycle = workflow.split("      - name: Run MSI lifecycle smoke test")[1].split("      - name:")[0]
+        self.assertIn('-QtRelinkTranscript (Join-Path $evidenceDir "qt-relink.txt")', lifecycle)
+        self.assertIn("-SourceSha $env:LOOP_SOURCE_SHA", lifecycle)
+        self.assertNotIn("      - name: Run Qt LGPL relink test", workflow)
+        self.assertNotIn("-SkipUninstall", workflow)
+        script = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertLess(script.index('Invoke-Smoke -Stage "fresh install"'),
+                        script.index('if ($QtRelinkTranscript)'))
+        self.assertLess(script.index('ci/run_qt_relink_test.ps1'),
+                        script.index('Write-Host "=== Uninstalling ==="'))
+        self.assertIn("} finally {", script)
+
+    def test_fake_package_tests_run_on_linux_and_windows(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        job = workflow.split("  package_script_tests:")[1].split("  source_integrity:")[0]
+        self.assertIn("os: [ubuntu-22.04, windows-latest]", job)
+        self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_test -v", job)
+        self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_linux -v", job)
+        self.assertIn("if: runner.os == 'Linux'", job)
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
@@ -159,9 +206,21 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("compare_package_boundary_evidence.py", workflow)
         self.assertIn("loop-package-boundary-linux-evidence", workflow)
         self.assertIn("loop-package-boundary-windows-evidence", workflow)
-        self.assertIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
+        self.assertIn('--arg title "Linux_AppImage (${EXPECTED_SOURCE_SHA})"', workflow)
+        self.assertIn('--arg title "Windows_MSI (${EXPECTED_SOURCE_SHA})"', workflow)
+        self.assertNotIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
         self.assertIn("Exclude CI evidence from release assets", workflow)
         self.assertIn("source_sha", workflow)
+
+    def test_windows_relink_runs_before_msi_uninstall(self):
+        workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
+        smoke = (ROOT / "scripts/Invoke-MsiSmokeTest.ps1").read_text(encoding="utf-8")
+        self.assertIn('-QtRelinkTranscript (Join-Path $evidenceDir "qt-relink.txt")', workflow)
+        self.assertNotIn("- name: Run Qt LGPL relink test", workflow)
+        self.assertLess(
+            smoke.index("ci/run_qt_relink_test.ps1"),
+            smoke.index('Write-Host "=== Uninstalling ==="'),
+        )
 
     def test_release_wix_template_does_not_unconditionally_ship_widgets(self):
         product = (ROOT / "WixInstaller/Product.wxs.in").read_text(encoding="utf-8")

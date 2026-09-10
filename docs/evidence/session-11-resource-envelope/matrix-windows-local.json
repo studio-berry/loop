@@ -1,0 +1,853 @@
+{
+  "schema_kind": "loop-resource-envelope-matrix",
+  "schema_version": 2,
+  "candidate_sha": "6e65be48e261d14c64653694320c0185b84fc560",
+  "candidate_identity": {
+    "candidate_sha": "6e65be48e261d14c64653694320c0185b84fc560",
+    "source": "git-head",
+    "environment_sha": "",
+    "verified": true
+  },
+  "generated_at_utc": "2026-09-06T23:50:51.501345+00:00",
+  "fixtures": [
+    {
+      "fixture_id": "office-2mb",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\office-2mb.pdf",
+      "expected_page_count": null,
+      "workload": null,
+      "profile": {
+        "render_hw_accel": false,
+        "render_rasterizers": 8
+      },
+      "command": [
+        "C:\\.dev\\build\\loop-native-qml-deploy-msvc\\install\\usr\\bin\\PdfTool.exe",
+        "benchmark",
+        "C:\\.dev\\qualification\\session-11\\fixtures\\office-2mb.pdf",
+        "--render-hw-accel",
+        "0",
+        "--render-rasterizers",
+        "8",
+        "--console-format",
+        "json"
+      ],
+      "fixture_sha256": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+      "input_bytes": 2169858,
+      "provenance": "Session 11 synthetic office workload PDF",
+      "manifest_sha256": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+      "identity": {
+        "build": "Release",
+        "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+        "compiler": "msvc 1944",
+        "cpu": "x86_64",
+        "fixture_digest": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+        "gpu": "unspecified",
+        "operation_version": "resource-envelope-v2",
+        "os": "Windows 11 Version 25H2 10.0.26200",
+        "product_version": "0.2.0-alpha",
+        "profile_version": "",
+        "qt": "6.11.1",
+        "renderer": "loop"
+      },
+      "result": {
+        "cache_high_water_bytes": 103957205,
+        "cancellation_latency_ms": -1,
+        "elapsed_ms": 355,
+        "family": "benchmark-render",
+        "identity": {
+          "build": "Release",
+          "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+          "compiler": "msvc 1944",
+          "cpu": "x86_64",
+          "fixture_digest": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+          "gpu": "unspecified",
+          "operation_version": "resource-envelope-v2",
+          "os": "Windows 11 Version 25H2 10.0.26200",
+          "product_version": "0.2.0-alpha",
+          "profile_version": "",
+          "qt": "6.11.1",
+          "renderer": "loop"
+        },
+        "incomplete_reason": "resource-budget-exceeded",
+        "interaction_slot_held": false,
+        "open_to_first_view_ms": -1,
+        "page_count": 677,
+        "pages_materialized": 23,
+        "prefetch_shed": false,
+        "preflight_high_water_bytes": -1,
+        "pressure_shed_count": 654,
+        "process_commit_high_water_bytes": 160018432,
+        "recovery_ms": -1,
+        "resources": {
+          "config": {
+            "pool_limits_bytes": {
+              "active-document-model": 268435456,
+              "compiled-evidence-cache": 134217728,
+              "decoded-stream-image-cache": 268435456,
+              "gpu-texture-cache": 134217728,
+              "raster-tile-cache": 134217728,
+              "rollback-storage": 2147483648,
+              "undo-history": 268435456
+            },
+            "resident_limit_bytes": 805306368
+          },
+          "pools": {
+            "active-document-model": {
+              "current_bytes": 2973929,
+              "evictions": 0,
+              "high_water_bytes": 2973929,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "compiled-evidence-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 3276,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "decoded-stream-image-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "gpu-texture-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "raster-tile-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 100980000,
+              "limit_bytes": 134217728,
+              "shed": 654
+            },
+            "rollback-storage": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 2147483648,
+              "shed": 0
+            },
+            "undo-history": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            }
+          },
+          "pressure": "normal",
+          "resident_bytes": 2973929,
+          "resident_high_water_bytes": 103957205
+        },
+        "rss_high_water_bytes": 148635648,
+        "status": "budget-exceeded"
+      },
+      "statistics": {
+        "repetitions": 1,
+        "elapsed_ms": {
+          "median": 355,
+          "min": 355,
+          "max": 355
+        },
+        "rss_high_water_bytes": {
+          "median": 148635648,
+          "min": 148635648,
+          "max": 148635648
+        },
+        "unstable": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "status": "recorded",
+          "process_exit_code": 5,
+          "result": {
+            "cache_high_water_bytes": 103957205,
+            "cancellation_latency_ms": -1,
+            "elapsed_ms": 355,
+            "family": "benchmark-render",
+            "identity": {
+              "build": "Release",
+              "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+              "compiler": "msvc 1944",
+              "cpu": "x86_64",
+              "fixture_digest": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+              "gpu": "unspecified",
+              "operation_version": "resource-envelope-v2",
+              "os": "Windows 11 Version 25H2 10.0.26200",
+              "product_version": "0.2.0-alpha",
+              "profile_version": "",
+              "qt": "6.11.1",
+              "renderer": "loop"
+            },
+            "incomplete_reason": "resource-budget-exceeded",
+            "interaction_slot_held": false,
+            "open_to_first_view_ms": -1,
+            "page_count": 677,
+            "pages_materialized": 23,
+            "prefetch_shed": false,
+            "preflight_high_water_bytes": -1,
+            "pressure_shed_count": 654,
+            "process_commit_high_water_bytes": 160018432,
+            "recovery_ms": -1,
+            "resources": {
+              "config": {
+                "pool_limits_bytes": {
+                  "active-document-model": 268435456,
+                  "compiled-evidence-cache": 134217728,
+                  "decoded-stream-image-cache": 268435456,
+                  "gpu-texture-cache": 134217728,
+                  "raster-tile-cache": 134217728,
+                  "rollback-storage": 2147483648,
+                  "undo-history": 268435456
+                },
+                "resident_limit_bytes": 805306368
+              },
+              "pools": {
+                "active-document-model": {
+                  "current_bytes": 2973929,
+                  "evictions": 0,
+                  "high_water_bytes": 2973929,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "compiled-evidence-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 3276,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "decoded-stream-image-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "gpu-texture-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "raster-tile-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 100980000,
+                  "limit_bytes": 134217728,
+                  "shed": 654
+                },
+                "rollback-storage": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 2147483648,
+                  "shed": 0
+                },
+                "undo-history": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                }
+              },
+              "pressure": "normal",
+              "resident_bytes": 2973929,
+              "resident_high_water_bytes": 103957205
+            },
+            "rss_high_water_bytes": 148635648,
+            "status": "budget-exceeded"
+          }
+        }
+      ],
+      "validation_errors": [
+        "PdfTool identity commit does not match checkout HEAD",
+        "run 1: identity.commit '2d95b4a6019504d4e1ffbf658a0e078ab38e34df' does not match candidate '6e65be48e261d14c64653694320c0185b84fc560'"
+      ],
+      "regressions": [],
+      "status": "failed",
+      "required": true
+    },
+    {
+      "fixture_id": "image-heavy-500mb",
+      "status": "unavailable",
+      "reason": "fixture-not-supplied",
+      "result": null,
+      "runs": [],
+      "validation_errors": [],
+      "regressions": [],
+      "required": true
+    },
+    {
+      "fixture_id": "multi-gb",
+      "status": "unavailable",
+      "reason": "fixture-not-supplied-optional",
+      "result": null,
+      "runs": [],
+      "validation_errors": [],
+      "regressions": [],
+      "required": false
+    },
+    {
+      "fixture_id": "ten-thousand-page",
+      "status": "unavailable",
+      "reason": "fixture-not-supplied",
+      "result": null,
+      "runs": [],
+      "validation_errors": [],
+      "regressions": [],
+      "required": true
+    },
+    {
+      "fixture_id": "pathological-vector",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\pathological-vector.pdf",
+      "expected_page_count": 256,
+      "workload": "pathological-vector",
+      "profile": {
+        "render_hw_accel": false,
+        "render_rasterizers": 8
+      },
+      "command": [
+        "C:\\.dev\\build\\loop-native-qml-deploy-msvc\\install\\usr\\bin\\PdfTool.exe",
+        "benchmark",
+        "C:\\.dev\\qualification\\session-11\\fixtures\\pathological-vector.pdf",
+        "--render-hw-accel",
+        "0",
+        "--render-rasterizers",
+        "8",
+        "--console-format",
+        "json"
+      ],
+      "fixture_sha256": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+      "input_bytes": 6369566,
+      "provenance": "pathological_workload.py --family pathological-vector",
+      "manifest_sha256": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+      "identity": {
+        "build": "Release",
+        "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+        "compiler": "msvc 1944",
+        "cpu": "x86_64",
+        "fixture_digest": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+        "gpu": "unspecified",
+        "operation_version": "resource-envelope-v2",
+        "os": "Windows 11 Version 25H2 10.0.26200",
+        "product_version": "0.2.0-alpha",
+        "profile_version": "",
+        "qt": "6.11.1",
+        "renderer": "loop"
+      },
+      "result": {
+        "cache_high_water_bytes": 108754618,
+        "cancellation_latency_ms": -1,
+        "elapsed_ms": 303,
+        "family": "benchmark-render",
+        "identity": {
+          "build": "Release",
+          "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+          "compiler": "msvc 1944",
+          "cpu": "x86_64",
+          "fixture_digest": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+          "gpu": "unspecified",
+          "operation_version": "resource-envelope-v2",
+          "os": "Windows 11 Version 25H2 10.0.26200",
+          "product_version": "0.2.0-alpha",
+          "profile_version": "",
+          "qt": "6.11.1",
+          "renderer": "loop"
+        },
+        "incomplete_reason": "resource-budget-exceeded",
+        "interaction_slot_held": false,
+        "open_to_first_view_ms": -1,
+        "page_count": 256,
+        "pages_materialized": 9,
+        "prefetch_shed": false,
+        "preflight_high_water_bytes": -1,
+        "pressure_shed_count": 247,
+        "process_commit_high_water_bytes": 131481600,
+        "recovery_ms": -1,
+        "resources": {
+          "config": {
+            "pool_limits_bytes": {
+              "active-document-model": 268435456,
+              "compiled-evidence-cache": 134217728,
+              "decoded-stream-image-cache": 268435456,
+              "gpu-texture-cache": 134217728,
+              "raster-tile-cache": 134217728,
+              "rollback-storage": 2147483648,
+              "undo-history": 268435456
+            },
+            "resident_limit_bytes": 805306368
+          },
+          "pools": {
+            "active-document-model": {
+              "current_bytes": 6664198,
+              "evictions": 0,
+              "high_water_bytes": 6664198,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "compiled-evidence-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 1110420,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "decoded-stream-image-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "gpu-texture-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "raster-tile-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 100980000,
+              "limit_bytes": 134217728,
+              "shed": 247
+            },
+            "rollback-storage": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 2147483648,
+              "shed": 0
+            },
+            "undo-history": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            }
+          },
+          "pressure": "normal",
+          "resident_bytes": 6664198,
+          "resident_high_water_bytes": 108754618
+        },
+        "rss_high_water_bytes": 147341312,
+        "status": "budget-exceeded"
+      },
+      "statistics": {
+        "repetitions": 1,
+        "elapsed_ms": {
+          "median": 303,
+          "min": 303,
+          "max": 303
+        },
+        "rss_high_water_bytes": {
+          "median": 147341312,
+          "min": 147341312,
+          "max": 147341312
+        },
+        "unstable": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "status": "recorded",
+          "process_exit_code": 5,
+          "result": {
+            "cache_high_water_bytes": 108754618,
+            "cancellation_latency_ms": -1,
+            "elapsed_ms": 303,
+            "family": "benchmark-render",
+            "identity": {
+              "build": "Release",
+              "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+              "compiler": "msvc 1944",
+              "cpu": "x86_64",
+              "fixture_digest": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+              "gpu": "unspecified",
+              "operation_version": "resource-envelope-v2",
+              "os": "Windows 11 Version 25H2 10.0.26200",
+              "product_version": "0.2.0-alpha",
+              "profile_version": "",
+              "qt": "6.11.1",
+              "renderer": "loop"
+            },
+            "incomplete_reason": "resource-budget-exceeded",
+            "interaction_slot_held": false,
+            "open_to_first_view_ms": -1,
+            "page_count": 256,
+            "pages_materialized": 9,
+            "prefetch_shed": false,
+            "preflight_high_water_bytes": -1,
+            "pressure_shed_count": 247,
+            "process_commit_high_water_bytes": 131481600,
+            "recovery_ms": -1,
+            "resources": {
+              "config": {
+                "pool_limits_bytes": {
+                  "active-document-model": 268435456,
+                  "compiled-evidence-cache": 134217728,
+                  "decoded-stream-image-cache": 268435456,
+                  "gpu-texture-cache": 134217728,
+                  "raster-tile-cache": 134217728,
+                  "rollback-storage": 2147483648,
+                  "undo-history": 268435456
+                },
+                "resident_limit_bytes": 805306368
+              },
+              "pools": {
+                "active-document-model": {
+                  "current_bytes": 6664198,
+                  "evictions": 0,
+                  "high_water_bytes": 6664198,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "compiled-evidence-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 1110420,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "decoded-stream-image-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "gpu-texture-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "raster-tile-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 100980000,
+                  "limit_bytes": 134217728,
+                  "shed": 247
+                },
+                "rollback-storage": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 2147483648,
+                  "shed": 0
+                },
+                "undo-history": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                }
+              },
+              "pressure": "normal",
+              "resident_bytes": 6664198,
+              "resident_high_water_bytes": 108754618
+            },
+            "rss_high_water_bytes": 147341312,
+            "status": "budget-exceeded"
+          }
+        }
+      ],
+      "validation_errors": [
+        "PdfTool identity commit does not match checkout HEAD",
+        "run 1: identity.commit '2d95b4a6019504d4e1ffbf658a0e078ab38e34df' does not match candidate '6e65be48e261d14c64653694320c0185b84fc560'"
+      ],
+      "regressions": [],
+      "status": "failed",
+      "required": true
+    },
+    {
+      "fixture_id": "transparency-spots",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\transparency-spots.pdf",
+      "expected_page_count": 256,
+      "workload": null,
+      "profile": {
+        "render_hw_accel": false,
+        "render_rasterizers": 8
+      },
+      "command": [
+        "C:\\.dev\\build\\loop-native-qml-deploy-msvc\\install\\usr\\bin\\PdfTool.exe",
+        "benchmark",
+        "C:\\.dev\\qualification\\session-11\\fixtures\\transparency-spots.pdf",
+        "--render-hw-accel",
+        "0",
+        "--render-rasterizers",
+        "8",
+        "--console-format",
+        "json"
+      ],
+      "fixture_sha256": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+      "input_bytes": 3266105,
+      "provenance": "pathological_workload.py --family transparency-spots",
+      "manifest_sha256": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+      "identity": {
+        "build": "Release",
+        "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+        "compiler": "msvc 1944",
+        "cpu": "x86_64",
+        "fixture_digest": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+        "gpu": "unspecified",
+        "operation_version": "resource-envelope-v2",
+        "os": "Windows 11 Version 25H2 10.0.26200",
+        "product_version": "0.2.0-alpha",
+        "profile_version": "",
+        "qt": "6.11.1",
+        "renderer": "loop"
+      },
+      "result": {
+        "cache_high_water_bytes": 105247528,
+        "cancellation_latency_ms": -1,
+        "elapsed_ms": 226,
+        "family": "benchmark-render",
+        "identity": {
+          "build": "Release",
+          "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+          "compiler": "msvc 1944",
+          "cpu": "x86_64",
+          "fixture_digest": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+          "gpu": "unspecified",
+          "operation_version": "resource-envelope-v2",
+          "os": "Windows 11 Version 25H2 10.0.26200",
+          "product_version": "0.2.0-alpha",
+          "profile_version": "",
+          "qt": "6.11.1",
+          "renderer": "loop"
+        },
+        "incomplete_reason": "resource-budget-exceeded",
+        "interaction_slot_held": false,
+        "open_to_first_view_ms": -1,
+        "page_count": 256,
+        "pages_materialized": 3,
+        "prefetch_shed": false,
+        "preflight_high_water_bytes": -1,
+        "pressure_shed_count": 253,
+        "process_commit_high_water_bytes": 124989440,
+        "recovery_ms": -1,
+        "resources": {
+          "config": {
+            "pool_limits_bytes": {
+              "active-document-model": 268435456,
+              "compiled-evidence-cache": 134217728,
+              "decoded-stream-image-cache": 268435456,
+              "gpu-texture-cache": 134217728,
+              "raster-tile-cache": 134217728,
+              "rollback-storage": 2147483648,
+              "undo-history": 268435456
+            },
+            "resident_limit_bytes": 805306368
+          },
+          "pools": {
+            "active-document-model": {
+              "current_bytes": 3707748,
+              "evictions": 0,
+              "high_water_bytes": 3707748,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "compiled-evidence-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 559780,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "decoded-stream-image-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            },
+            "gpu-texture-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 134217728,
+              "shed": 0
+            },
+            "raster-tile-cache": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 100980000,
+              "limit_bytes": 134217728,
+              "shed": 253
+            },
+            "rollback-storage": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 2147483648,
+              "shed": 0
+            },
+            "undo-history": {
+              "current_bytes": 0,
+              "evictions": 0,
+              "high_water_bytes": 0,
+              "limit_bytes": 268435456,
+              "shed": 0
+            }
+          },
+          "pressure": "normal",
+          "resident_bytes": 3707748,
+          "resident_high_water_bytes": 105247528
+        },
+        "rss_high_water_bytes": 140754944,
+        "status": "budget-exceeded"
+      },
+      "statistics": {
+        "repetitions": 1,
+        "elapsed_ms": {
+          "median": 226,
+          "min": 226,
+          "max": 226
+        },
+        "rss_high_water_bytes": {
+          "median": 140754944,
+          "min": 140754944,
+          "max": 140754944
+        },
+        "unstable": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "status": "recorded",
+          "process_exit_code": 5,
+          "result": {
+            "cache_high_water_bytes": 105247528,
+            "cancellation_latency_ms": -1,
+            "elapsed_ms": 226,
+            "family": "benchmark-render",
+            "identity": {
+              "build": "Release",
+              "commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+              "compiler": "msvc 1944",
+              "cpu": "x86_64",
+              "fixture_digest": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+              "gpu": "unspecified",
+              "operation_version": "resource-envelope-v2",
+              "os": "Windows 11 Version 25H2 10.0.26200",
+              "product_version": "0.2.0-alpha",
+              "profile_version": "",
+              "qt": "6.11.1",
+              "renderer": "loop"
+            },
+            "incomplete_reason": "resource-budget-exceeded",
+            "interaction_slot_held": false,
+            "open_to_first_view_ms": -1,
+            "page_count": 256,
+            "pages_materialized": 3,
+            "prefetch_shed": false,
+            "preflight_high_water_bytes": -1,
+            "pressure_shed_count": 253,
+            "process_commit_high_water_bytes": 124989440,
+            "recovery_ms": -1,
+            "resources": {
+              "config": {
+                "pool_limits_bytes": {
+                  "active-document-model": 268435456,
+                  "compiled-evidence-cache": 134217728,
+                  "decoded-stream-image-cache": 268435456,
+                  "gpu-texture-cache": 134217728,
+                  "raster-tile-cache": 134217728,
+                  "rollback-storage": 2147483648,
+                  "undo-history": 268435456
+                },
+                "resident_limit_bytes": 805306368
+              },
+              "pools": {
+                "active-document-model": {
+                  "current_bytes": 3707748,
+                  "evictions": 0,
+                  "high_water_bytes": 3707748,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "compiled-evidence-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 559780,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "decoded-stream-image-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                },
+                "gpu-texture-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 134217728,
+                  "shed": 0
+                },
+                "raster-tile-cache": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 100980000,
+                  "limit_bytes": 134217728,
+                  "shed": 253
+                },
+                "rollback-storage": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 2147483648,
+                  "shed": 0
+                },
+                "undo-history": {
+                  "current_bytes": 0,
+                  "evictions": 0,
+                  "high_water_bytes": 0,
+                  "limit_bytes": 268435456,
+                  "shed": 0
+                }
+              },
+              "pressure": "normal",
+              "resident_bytes": 3707748,
+              "resident_high_water_bytes": 105247528
+            },
+            "rss_high_water_bytes": 140754944,
+            "status": "budget-exceeded"
+          }
+        }
+      ],
+      "validation_errors": [
+        "PdfTool identity commit does not match checkout HEAD",
+        "run 1: identity.commit '2d95b4a6019504d4e1ffbf658a0e078ab38e34df' does not match candidate '6e65be48e261d14c64653694320c0185b84fc560'"
+      ],
+      "regressions": [],
+      "status": "failed",
+      "required": true
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "measured": 0,
+    "flagged": 2,
+    "skipped": 1,
+    "failed": 3,
+    "candidate_sha_verified": true
+  }
+}

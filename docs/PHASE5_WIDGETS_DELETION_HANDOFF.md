@@ -1,8 +1,28 @@
 # Phase 5 Widgets deletion handoff
 
-**Status:** prepared by P4-S12 product cutover
+**Status:** terminalized — Session 09
 **Owner:** 0.2.0 Phase 5
-**Updated:** 2026-08-24
+**Updated:** 2026-09-06
+
+## Terminal state (Session 09)
+
+Phase 5 is closed as a deletion and ledger-freeze session. Repository ledgers
+describe one Widgets-free product graph. Unrelated 0.2.0 qualification gates
+(E-01, T-01–T-03, R-01, L-01, P-02, E-02, E-03, partial Q-05) remain open.
+
+Qualified baseline SHA: `e7f7e0c378c98f27d1c136996bdb08ba7bdbaea1`
+(`origin/dev` after Session 08 / PR #533).
+
+| Layer | Terminal state |
+| --- | --- |
+| Installed (`loop-release`) | `LoopEditor`, `PdfTool`, `LoopLibCore`, `LoopLibQuick` (4 targets) |
+| Deleted | Widgets libraries, all 12 Editor plugins, four secondary executables |
+| RETAIN-NON-PRODUCT Widgets | `CanvasBenchmark`, `CodeGenerator`, `JBIG2_VIEWER`, `PdfExampleGenerator` |
+| HEADLESS `.ui` forms | `CodeGenerator/generatormainwindow.ui`, `JBIG2_Viewer/mainwindow.ui` |
+| Generated evidence | 69 targets, 4 installed, 4 Widgets surfaces, 2 UI forms, 6 disposition rows all `RETAIN-NON-PRODUCT`, `deletion_safe: true` |
+
+Authorities: `docs/loop-shell.json`, `docs/product-surface.json`. Generated
+artifacts are derived evidence and do not replace those ledgers.
 
 ## Current source/manifest reconciliation (Issue #191)
 
@@ -20,7 +40,13 @@ The generated Phase 5 evidence is refreshed from the current CMake graph, and
 or CLI drift. This supersedes any earlier handoff wording below that describes
 retired targets or plugins as still buildable or installed.
 
-## Session 01 qualified inventory and disposition baseline
+## Historical sessions (archive)
+
+The sections below are Session 01–08 provenance. Counts such as 90 targets,
+34 forms, and 12 plugin directories describe earlier baselines, not the
+terminal graph in the Session 09 section above.
+
+### Session 01 qualified inventory and disposition baseline
 
 Session 01 is anchored to qualified `dev` SHA
 `d7f39224ad22f26c5f67dcd000383d6239acfff4`. The observed graph and the Phase 5
@@ -54,7 +80,7 @@ Consumer-first sequence for later sessions:
 The shell/product ledgers remain the policy inputs; the generated artifacts are
 the reconciled evidence and do not replace those authorities.
 
-## Session 02 parity retirement
+### Session 02 parity retirement
 
 Session 02 is complete on branch `cdx/retire-widgets-oracle` after Session 01's
 accepted output `fcabced047ee490e09fbd671939b3deecc1edba5`. The parity claim map,
@@ -72,7 +98,7 @@ mechanical Widgets removal from the maintained graph. This document lists
 remaining Widgets residue and deletion gates so Phase 5 is deletion and boundary
 proof rather than unfinished product migration.
 
-## Installed product boundary (Phase 4 exit)
+### Installed product boundary (Phase 4 exit)
 
 | Target | Phase 4 state | Phase 5 action |
 | --- | --- | --- |
@@ -84,18 +110,17 @@ proof rather than unfinished product migration.
 Evidence: `scripts/verify-installed-product-graph.py`; `UnitTestsProductOperatorLoop`;
 `docs/evidence/phase5-widgets-parity-evidence.json`.
 
-## Libraries to remove from the maintained product graph
+### Libraries removed from the maintained product graph (historical)
 
 | Library | Role today | Deletion gate |
 | --- | --- | --- |
 | `LoopLibWidgets` | Widgets canvas, dialogs, annotation helpers | No installed target links it; Quick workspaces cover required operator surfaces per `docs/loop-shell.json` |
 | Widgets-bound `LoopLibGui` | Editor/viewer windows, dialogs, chrome | Quick shell replaces `pdfeditormainwindow.ui` and related surfaces classified in `legacy_surface_disposition` |
 
-## Widgets executables still in the source tree
+### Widgets executables (historical)
 
 Session 03 removed the four secondary executables from the install and packaging
-graph. They remain optional non-installed build targets (`LOOP_BUILD_*` default
-OFF) until a later session deletes the sources.
+graph. Issue 17 later deleted the sources. They are absent from both profiles.
 
 | Executable | Disposition | Phase 5 route |
 | --- | --- | --- |
@@ -106,14 +131,13 @@ OFF) until a later session deletes the sources.
 
 See `docs/product-surface.json` and `docs/loop-shell.json`. Proven owners are artifacts, verbs, and APIs, not unbuilt workspace IDs.
 
-## Plugin directories (12)
+### Plugin directories (historical)
 
 Session 04 Issue 13 removed `AudioBookPlugin` and `OcrPlugin` from the install
 graph and verified all 12 plugin policy rows through
-`scripts/verify-plugin-surface-policies.py`. STOP-SHIPPING plugins are build-only;
-ABSORB plugins remain installed until Issue 14 retires their Widgets UI;
-ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
-`RedactPlugin` stays BLOCKED on issue #66.
+`scripts/verify-plugin-surface-policies.py`. Issue 17 deleted every plugin
+source. Product-ledger `OPEN` on Redact is a remaining product decision, not a
+Phase 5 Widgets deletion row.
 
 | Plugin | Target workspace | Notes |
 | --- | --- | --- |
@@ -130,7 +154,7 @@ ADVANCED plugins remain installed under an explicit RETAIN-NON-PRODUCT boundary;
 | `AudioBookPlugin` | — | STOP-SHIPPING; not installed; delete in Phase 5 |
 | `OcrPlugin` | CLI | STOP-SHIPPING UI; PdfTool owns OCR; not installed |
 
-## Legacy `.ui` inventory (34 retained forms)
+### Legacy `.ui` inventory (historical; 34 forms at Session 04)
 
 Session 04 Issue 14 deleted all 14 `RETIRE` forms for LoopDiff, LoopPageMaster,
 LoopLaunchPad, and the AudioBook plugin dock widget. Optional builds of the retired
@@ -151,7 +175,7 @@ Session 04 Issue 15 adds `scripts/verify-plugin-form-accounting.py`, wired into 
 `source_integrity` and Linux agent-fast, to reject unledgered `.ui` files, stale
 CMake `uic` references, and retired install boundaries.
 
-## Session 05 Issue 16 consumer trace
+### Session 05 Issue 16 consumer trace
 
 Session 05 Issue 16 adds `scripts/generate_widgets_library_consumer_graph.py` and
 `scripts/verify-widgets-library-consumer-graph.py`. The generated artifact
@@ -160,11 +184,11 @@ loop-release consumer of `LoopLibWidgets` and Widgets-bound `LoopLibGui`,
 classifies neutral relocation owners, and records the ten installed plugin
 blockers that must clear before Issue 17 deletes either library.
 
-## Session 05 Issue 17 library deletion
+### Session 05 Issue 17 library deletion
 
 Issue 17 deleted `LoopLibWidgets`, Widgets-bound `LoopLibGui`, all `LoopEditorPlugins` sources, and the retired secondary executables (`LoopViewer`, `LoopPageMaster`, `LoopDiff`, `LoopLaunchPad`). All twelve editor plugins are build-only and absent from the `loop-release` install graph; `widgets-library-consumer-graph.json` records `deletion_safe: true` with no installed product blockers. Linux CI now configures with `-DLOOP_LOOP_DISTRIBUTION=ON` so agent-fast matches production profile gates.
 
-## Configure and package proof required in Phase 5
+### Configure and package proof required in Phase 5
 
 1. Root CMake must not require `Qt6::Widgets` for the Loop release profile. **Done (static + configure + CI)** — `LOOP_LOOP_DISTRIBUTION=ON` defaults developer Widgets tools off and gates `find_package(Widgets)`; verified by `scripts/verify-widgets-free-release-profile.py` (static checks in source_integrity, configure probe in reusable-linux CI).
 2. `LoopEditor` install tree must not load `Qt6Widgets` at runtime. **Done** — static graph proof + package smoke scans.
@@ -173,14 +197,14 @@ Issue 17 deleted `LoopLibWidgets`, Widgets-bound `LoopLibGui`, all `LoopEditorPl
    - Windows: `scripts/Invoke-MsiSmokeTest.ps1`, `scripts/smoke-test-install.ps1` (now rejects `Qt6Widgets.dll`)
 4. Inspect installed artifacts for forbidden `Qt6Widgets` linkage. **Done** — smoke scripts + `verify-widgets-free-release-profile.py --install-dir`.
 
-## Explicitly not Phase 5 scope from P4-S12
+### Explicitly not Phase 5 scope from P4-S12
 
 - Trust envelope gates T-01–T03
 - Resource envelope R-01 and lifecycle L-01
 - Release Gate E-01 exact-SHA promotion
 - Phase 6 screen-reader certification (P4-S10 supplies architecture hooks only)
 
-## Evidence crosswalk
+### Evidence crosswalk
 
 | Artifact | Purpose |
 | --- | --- |
