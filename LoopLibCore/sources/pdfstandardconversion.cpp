@@ -28,6 +28,7 @@
 #include "pdfrgbtocmykfixup.h"
 #include "pdftransparencyflattener.h"
 #include "preflightengine.h"
+#include "pdfpreflightverdict.h"
 #include "pdfutils.h"
 #include "pdfworkloadenvelope.h"
 
@@ -562,9 +563,18 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
         PreflightEngine engine(&session);
         const PreflightResult postflight = engine.run(pdfxProfile(settings.target));
         report->postflightAfter = postflight.toJson();
-        report->postflightPassed = postflight.pass && postflight.inspectionComplete;
+        const PreflightVerdict verdict = reducePreflightVerdict(postflight);
+        report->postflightPassed = verdict.isPass();
         if (!report->postflightPassed)
         {
+            if (verdict.state == PreflightVerdictState::Incomplete)
+            {
+                return PDFTranslationContext::tr("Loop PDF/X postflight could not finish inspecting; the candidate was not committed.");
+            }
+            if (verdict.state == PreflightVerdictState::Error)
+            {
+                return PDFTranslationContext::tr("Loop PDF/X postflight error; the candidate was not committed.");
+            }
             return PDFTranslationContext::tr("Loop PDF/X postflight failed; the candidate was not committed.");
         }
     }

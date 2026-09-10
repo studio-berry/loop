@@ -1,4 +1,4 @@
-Category: fixed
-Audience: maintainers
+Category: changed
+Audience: operators
 Breaking-Change: no
-Summary: Pair dispatch-only packaging workflow runs by checked-out source SHA via run-name and displayTitle matching in CreateReleaseDraft, embed source_sha in Linux_AppImage run-name, and add hermetic Linux AppImage Qt relink regression coverage.
+Summary: Every preflight surface now consumes reducePreflightVerdict(); budget exhaustion with zero findings is Incomplete (exit 8), never PASS, including Editor copy, PageMaster gate messages, Action List postflight steps, and the certificate-issuance gate.

@@ -598,6 +598,7 @@ public:
         validation.summary = conversionResult ? QStringLiteral("Independent validator and postflight passed.")
                                               : conversionResult.getErrorMessage();
         result->validations.append(validation);
+        result->verdict = report.postflightAfter.value(QStringLiteral("verdict")).toObject();
         return conversionResult;
     }
 };

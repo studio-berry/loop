@@ -21,7 +21,13 @@ Pane {
         Label {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
-            text: host ? qsTr("Preflight status: %1").arg(host.preflightStateName) : ""
+            text: {
+                if (!host)
+                    return ""
+                if (host.preflightOperatorSummary)
+                    return host.preflightOperatorSummary
+                return qsTr("Preflight status: %1").arg(host.preflightStateName)
+            }
             Accessible.name: qsTr("Preflight status")
         }
 

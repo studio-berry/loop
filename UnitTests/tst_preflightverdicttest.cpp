@@ -21,7 +21,10 @@
 // SOFTWARE.
 
 #include "pdfpreflightverdict.h"
+#include "pdfactionlist.h"
+#include "preflightcontroller.h"
 
+#include <QDateTime>
 #include <QtTest>
 
 class PreflightVerdictTest : public QObject
@@ -42,6 +45,16 @@ private slots:
     void incompleteInspectionWithoutFindings_isNotPass();
     void cancellationMarkedIncomplete_isNotPass();
     void requiredCheckMissingStatus_isIncomplete();
+    void processExitCodes_matchPdfToolContract();
+    void budgetExceeded_neverAllowsCertificate();
+    void operatorSummary_distinguishesIncompleteFromPass();
+    void pageMasterGateMessage_distinguishesIncomplete();
+    void actionListStep_budgetExceededIsNotSucceeded();
+    void surfacesShareBudgetGuard();
+    void editorBudgetExceeded_isIncompleteNeverPass();
+    void editorWaivedBlocking_isPass();
+    void editorWarningsOnly_isPass();
+    void editorEngineError_isError();
 };
 
 namespace
@@ -57,6 +70,22 @@ pdf::PreflightFinding blockingFinding()
     finding.checkId = QStringLiteral("color-mode");
     finding.message = QStringLiteral("RGB content is not allowed.");
     return finding;
+}
+
+pdf::PreflightResult budgetExceededResult()
+{
+    pdf::PreflightResult result;
+    result.pass = true;
+    result.inspectionComplete = false;
+    result.checkStatuses.append({ QStringLiteral("ink-coverage"),
+                                  QStringLiteral("incomplete"),
+                                  QStringLiteral("budget-exceeded"),
+                                  QStringLiteral("raster-pixels"),
+                                  QStringLiteral("raster-tile"),
+                                  100,
+                                  101,
+                                  QStringLiteral("page 1") });
+    return result;
 }
 
 }   // namespace
@@ -247,6 +276,130 @@ void PreflightVerdictTest::requiredCheckMissingStatus_isIncomplete()
     QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
     QCOMPARE(verdict.reasonCode, QStringLiteral("required-check-not-run"));
     QVERIFY(!verdict.isPass());
+}
+
+void PreflightVerdictTest::processExitCodes_matchPdfToolContract()
+{
+    QCOMPARE(pdf::preflightVerdictProcessExitCode(pdf::PreflightVerdictState::Pass), 0);
+    QCOMPARE(pdf::preflightVerdictProcessExitCode(pdf::PreflightVerdictState::Fail), 1);
+    QCOMPARE(pdf::preflightVerdictProcessExitCode(pdf::PreflightVerdictState::Incomplete), 8);
+    QCOMPARE(pdf::preflightVerdictProcessExitCode(pdf::PreflightVerdictState::Error), 9);
+}
+
+void PreflightVerdictTest::budgetExceeded_neverAllowsCertificate()
+{
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(budgetExceededResult());
+    QVERIFY(!verdict.allowsCertificateIssuance());
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+}
+
+void PreflightVerdictTest::operatorSummary_distinguishesIncompleteFromPass()
+{
+    const pdf::PreflightVerdict pass = pdf::reducePreflightVerdict(pdf::PreflightResult());
+    QCOMPARE(pdf::preflightVerdictOperatorSummary(pass), QStringLiteral("No problems found."));
+
+    const pdf::PreflightVerdict incomplete = pdf::reducePreflightVerdict(budgetExceededResult());
+    QVERIFY(pdf::preflightVerdictOperatorSummary(incomplete).startsWith(QStringLiteral("Could not finish inspecting.")));
+}
+
+void PreflightVerdictTest::pageMasterGateMessage_distinguishesIncomplete()
+{
+    const QString message = pdf::preflightGateFailureMessage(QStringLiteral("job.pdf"),
+                                                             pdf::PreflightVerdictState::Incomplete,
+                                                             false);
+    QVERIFY(message.contains(QStringLiteral("could not finish inspecting")));
+    QVERIFY(!message.contains(QStringLiteral("failed for")));
+}
+
+void PreflightVerdictTest::actionListStep_budgetExceededIsNotSucceeded()
+{
+    pdf::PDFActionListStepResult step;
+    step.status = pdf::PDFActionListStepStatus::Succeeded;
+    pdf::applyCanonicalPreflightVerdict(&step, budgetExceededResult());
+    QCOMPARE(step.status, pdf::PDFActionListStepStatus::Failed);
+    QCOMPARE(step.verdict.value(QStringLiteral("state")).toString(), QStringLiteral("incomplete"));
+}
+
+void PreflightVerdictTest::surfacesShareBudgetGuard()
+{
+    const pdf::PreflightResult result = budgetExceededResult();
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QCOMPARE(verdict.state, pdf::PreflightVerdictState::Incomplete);
+    QCOMPARE(pdf::preflightVerdictProcessExitCode(verdict.state), 8);
+    QVERIFY(!verdict.allowsCertificateIssuance());
+    QVERIFY(!verdict.isPass());
+
+    pdf::PDFActionListStepResult step;
+    step.status = pdf::PDFActionListStepStatus::Succeeded;
+    pdf::applyCanonicalPreflightVerdict(&step, verdict);
+    QCOMPARE(step.status, pdf::PDFActionListStepStatus::Failed);
+
+    const QString gate = pdf::preflightGateFailureMessage(QStringLiteral("out.pdf"), verdict.state, false);
+    QVERIFY(gate.contains(QStringLiteral("could not finish inspecting")));
+}
+
+void PreflightVerdictTest::editorBudgetExceeded_isIncompleteNeverPass()
+{
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), budgetExceededResult()));
+    QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Incomplete);
+    QVERIFY(controller.operatorSummary().startsWith(QStringLiteral("Could not finish inspecting.")));
+}
+
+void PreflightVerdictTest::editorWaivedBlocking_isPass()
+{
+    const QString documentDigest(64, QLatin1Char('a'));
+    const QString profileDigest(64, QLatin1Char('b'));
+    pdf::PreflightResult result;
+    result.documentRevisionDigest = documentDigest;
+    result.effectiveProfileDigest = profileDigest;
+    result.errors.append(blockingFinding());
+    pdf::PreflightDecision decision;
+    decision.findingId = result.errors.first().stableId();
+    decision.kind = pdf::PreflightDecisionKind::Waive;
+    decision.justification = QStringLiteral("Approved by the client.");
+    decision.operatorIdentity = QStringLiteral("operator");
+    decision.timestampUtc = QDateTime::currentDateTimeUtc();
+    decision.documentRevisionDigest = documentDigest;
+    decision.effectiveProfileDigest = profileDigest;
+    result.decisions.append(decision);
+
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
+    QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Pass);
+}
+
+void PreflightVerdictTest::editorWarningsOnly_isPass()
+{
+    pdf::PreflightFinding warning;
+    warning.scope = QStringLiteral("page");
+    warning.page = 1;
+    warning.type = QStringLiteral("fonts");
+    warning.severity = QStringLiteral("warning");
+    warning.checkId = QStringLiteral("fonts");
+    warning.message = QStringLiteral("Embedded subset.");
+    pdf::PreflightResult result;
+    result.warnings.append(warning);
+
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
+    QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Pass);
+    QCOMPARE(controller.operatorSummary(), QStringLiteral("No problems found."));
+}
+
+void PreflightVerdictTest::editorEngineError_isError()
+{
+    pdf::PreflightResult result;
+    result.errorCode = QStringLiteral("profile-invalid");
+    result.errorMessage = QStringLiteral("Profile is malformed.");
+
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
+    QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Error);
 }
 
 QTEST_APPLESS_MAIN(PreflightVerdictTest)

@@ -88,6 +88,8 @@ QString preflightStateToString(pdfinteraction::PreflightController::State state)
             return QStringLiteral("stale");
         case pdfinteraction::PreflightController::State::Incomplete:
             return QStringLiteral("incomplete");
+        case pdfinteraction::PreflightController::State::Error:
+            return QStringLiteral("error");
     }
     return QStringLiteral("not-checked");
 }
@@ -264,6 +266,11 @@ void EditorHost::acknowledgeSearchPanel()
 QString EditorHost::preflightStateName() const
 {
     return preflightStateToString(m_preflight.state());
+}
+
+QString EditorHost::preflightOperatorSummary() const
+{
+    return m_preflight.operatorSummary();
 }
 
 QString EditorHost::previewSummary() const

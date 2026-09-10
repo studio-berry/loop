@@ -38,6 +38,7 @@ class PreflightController final : public QObject
     Q_OBJECT
 
     Q_PROPERTY(PreflightFindingsModel* findingsModel READ findingsModel CONSTANT)
+    Q_PROPERTY(QString operatorSummary READ operatorSummary NOTIFY stateChanged)
 
 public:
     enum class State
@@ -48,7 +49,8 @@ public:
         Pass,
         Findings,
         Stale,
-        Incomplete
+        Incomplete,
+        Error
     };
     Q_ENUM(State)
 
@@ -67,6 +69,7 @@ public:
     PreflightFindingsModel* findingsModel() { return &m_findings; }
     const PreflightFindingsModel* findingsModel() const { return &m_findings; }
     State state() const { return m_state; }
+    QString operatorSummary() const { return m_operatorSummary; }
     QString documentKey() const { return m_documentKey; }
     QString documentRevision() const { return m_documentRevision; }
     QString profileDigest() const { return m_profileDigest; }
@@ -90,6 +93,7 @@ private:
 
     PreflightFindingsModel m_findings;
     State m_state = State::NotChecked;
+    QString m_operatorSummary;
     QString m_documentKey;
     QString m_documentRevision;
     QString m_profileDigest;

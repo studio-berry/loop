@@ -322,7 +322,9 @@ add_executable(UnitTestsPreflightVerdict
     tst_preflightverdicttest.cpp
 )
 
-target_link_libraries(UnitTestsPreflightVerdict PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_link_libraries(UnitTestsPreflightVerdict PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(UnitTestsPreflightVerdict PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoopLibInteraction/sources)
 
 set_target_properties(UnitTestsPreflightVerdict PROPERTIES
     WIN32_EXECUTABLE OFF

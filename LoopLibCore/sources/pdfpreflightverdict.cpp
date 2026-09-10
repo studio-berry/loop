@@ -22,6 +22,9 @@
 
 #include "pdfpreflightverdict.h"
 
+#include <QCoreApplication>
+#include <QJsonArray>
+
 #include <algorithm>
 
 namespace pdf
@@ -112,6 +115,104 @@ QString preflightVerdictStateToString(PreflightVerdictState state)
             return QStringLiteral("error");
     }
     return QStringLiteral("error");
+}
+
+PreflightVerdict preflightVerdictFromJson(const QJsonObject& object)
+{
+    PreflightVerdict verdict;
+    const QString state = object.value(QStringLiteral("state")).toString();
+    if (state == QStringLiteral("pass"))
+    {
+        verdict.state = PreflightVerdictState::Pass;
+    }
+    else if (state == QStringLiteral("fail"))
+    {
+        verdict.state = PreflightVerdictState::Fail;
+    }
+    else if (state == QStringLiteral("incomplete"))
+    {
+        verdict.state = PreflightVerdictState::Incomplete;
+    }
+    else
+    {
+        verdict.state = PreflightVerdictState::Error;
+    }
+    verdict.reasonCode = object.value(QStringLiteral("reason_code")).toString();
+    verdict.reason = object.value(QStringLiteral("reason")).toString();
+    const QJsonArray blocking = object.value(QStringLiteral("blocking_finding_ids")).toArray();
+    for (const QJsonValue& value : blocking)
+    {
+        verdict.blockingFindingIds.append(value.toString());
+    }
+    const QJsonArray waived = object.value(QStringLiteral("waived_finding_ids")).toArray();
+    for (const QJsonValue& value : waived)
+    {
+        verdict.waivedFindingIds.append(value.toString());
+    }
+    return verdict;
+}
+
+int preflightVerdictProcessExitCode(PreflightVerdictState state)
+{
+    switch (state)
+    {
+        case PreflightVerdictState::Pass:
+            return 0;
+        case PreflightVerdictState::Fail:
+            return 1;
+        case PreflightVerdictState::Incomplete:
+            return 8;
+        case PreflightVerdictState::Error:
+            return 9;
+    }
+    return 9;
+}
+
+QString preflightVerdictOperatorSummary(const PreflightVerdict& verdict)
+{
+    switch (verdict.state)
+    {
+        case PreflightVerdictState::Pass:
+            return verdict.waivedFindingIds.isEmpty()
+                       ? QStringLiteral("No problems found.")
+                       : QStringLiteral("No problems found. Active dispositions cover previously blocking findings.");
+        case PreflightVerdictState::Fail:
+            return verdict.reason.isEmpty()
+                       ? QStringLiteral("Blocking findings require resolution or an active disposition.")
+                       : verdict.reason;
+        case PreflightVerdictState::Incomplete:
+            return QStringLiteral("Could not finish inspecting. %1").arg(
+                verdict.reason.isEmpty() ? QStringLiteral("Required inspection evidence was not collected.") : verdict.reason);
+        case PreflightVerdictState::Error:
+            return verdict.reason.isEmpty()
+                       ? QStringLiteral("The preflight engine could not complete the operation.")
+                       : verdict.reason;
+    }
+    return QStringLiteral("The preflight engine could not complete the operation.");
+}
+
+QString preflightGateFailureMessage(const QString& fileName,
+                                    PreflightVerdictState state,
+                                    bool revalidation)
+{
+    const QString prefix = revalidation ? QStringLiteral("Final preflight revalidation") : QStringLiteral("Preflight");
+    switch (state)
+    {
+        case PreflightVerdictState::Incomplete:
+            return QCoreApplication::translate("pdf::PreflightVerdict",
+                                               "%1 could not finish inspecting '%2'.")
+                .arg(prefix, fileName);
+        case PreflightVerdictState::Error:
+            return QCoreApplication::translate("pdf::PreflightVerdict",
+                                               "%1 error for '%2'.")
+                .arg(prefix, fileName);
+        case PreflightVerdictState::Fail:
+        case PreflightVerdictState::Pass:
+            break;
+    }
+    return QCoreApplication::translate("pdf::PreflightVerdict",
+                                       "%1 failed for '%2'.")
+        .arg(prefix, fileName);
 }
 
 QJsonObject PreflightVerdict::toJson() const

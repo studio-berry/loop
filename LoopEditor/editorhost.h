@@ -91,6 +91,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QObject* documentModel READ documentModel CONSTANT)
     Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
     Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QString preflightOperatorSummary READ preflightOperatorSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
     Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
@@ -129,6 +130,7 @@ public:
     FocusRestoration* focusRestoration() { return &m_focusRestoration; }
 
     QString preflightStateName() const;
+    QString preflightOperatorSummary() const;
     QString previewSummary() const;
     QString inspectorTitle() const;
     bool preferReducedMotion() const;

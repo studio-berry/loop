@@ -22,6 +22,8 @@
 
 #include "preflightcontroller.h"
 
+#include "pdfpreflightverdict.h"
+
 namespace pdfinteraction
 {
 
@@ -52,6 +54,7 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     if (changed && m_state != State::NotChecked)
     {
         setState(State::Stale);
+        m_operatorSummary = QStringLiteral("Preflight is stale for the current revision.");
     }
 }
 
@@ -78,6 +81,7 @@ void PreflightController::beginRun(QString documentKey,
     m_jobId = std::move(jobId);
     m_cancelRequested = false;
     m_findings.clear();
+    m_operatorSummary = QStringLiteral("Preflight is running.");
     setState(State::Running);
     Q_EMIT progressChanged(0);
 }
@@ -93,17 +97,22 @@ bool PreflightController::acceptResult(const QString& jobId,
 
     m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings);
     Q_EMIT progressChanged(100);
-    if (!result.inspectionComplete)
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
+    switch (verdict.state)
     {
-        setState(State::Incomplete);
-    }
-    else if (!result.errors.isEmpty() || !result.warnings.isEmpty())
-    {
-        setState(State::Findings);
-    }
-    else
-    {
-        setState(State::Pass);
+        case pdf::PreflightVerdictState::Pass:
+            setState(State::Pass);
+            break;
+        case pdf::PreflightVerdictState::Fail:
+            setState(State::Findings);
+            break;
+        case pdf::PreflightVerdictState::Incomplete:
+            setState(State::Incomplete);
+            break;
+        case pdf::PreflightVerdictState::Error:
+            setState(State::Error);
+            break;
     }
     return true;
 }
@@ -125,6 +134,7 @@ bool PreflightController::cancelRun(const QString& jobId)
         }
     }
     setState(State::Cancelled);
+    m_operatorSummary = QStringLiteral("Preflight was cancelled.");
     return true;
 }
 

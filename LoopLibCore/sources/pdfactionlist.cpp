@@ -22,6 +22,8 @@
 
 #include "pdfactionlist.h"
 
+#include "pdfpreflightverdict.h"
+
 #include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QJsonDocument>
@@ -328,6 +330,29 @@ void markRemaining(QVector<PDFActionListStepResult>* steps, int start, PDFAction
 
 } // namespace
 
+void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const PreflightVerdict& verdict)
+{
+    if (!step)
+    {
+        return;
+    }
+    step->verdict = verdict.toJson();
+    if (!verdict.isPass() && step->status == PDFActionListStepStatus::Succeeded)
+    {
+        step->status = PDFActionListStepStatus::Failed;
+        step->diagnostics.append(QJsonObject{
+            { QStringLiteral("code"), QStringLiteral("action-list.postflight-verdict") },
+            { QStringLiteral("severity"), QStringLiteral("error") },
+            { QStringLiteral("message"), preflightVerdictOperatorSummary(verdict) }
+        });
+    }
+}
+
+void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const PreflightResult& result)
+{
+    applyCanonicalPreflightVerdict(step, reducePreflightVerdict(result));
+}
+
 QString pdfActionListStepStatusName(PDFActionListStepStatus status)
 {
     switch (status)
@@ -427,6 +452,7 @@ QJsonObject PDFActionListStepResult::toJson() const
         { QStringLiteral("resolved_params"), resolvedParameters },
         { QStringLiteral("plan"), plan },
         { QStringLiteral("repair_result"), repairResult },
+        { QStringLiteral("verdict"), verdict },
         { QStringLiteral("diagnostics"), diagnostics },
         { QStringLiteral("affected_scope"), affectedScope }
     };
@@ -690,6 +716,14 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
             }
             stepResult.plan = currentPlan.toJson();
             stepResult.repairResult = repairResult.toJson();
+            if (!repairResult.verdict.isEmpty())
+            {
+                applyCanonicalPreflightVerdict(&stepResult, preflightVerdictFromJson(repairResult.verdict));
+                if (stepResult.status == PDFActionListStepStatus::Failed)
+                {
+                    hadFailure = true;
+                }
+            }
         }
         stepResult.durationMs = stepTimer.elapsed();
         statuses.insert(step.id, pdfActionListStepStatusName(stepResult.status));
