@@ -13,7 +13,7 @@
         "dpi": { "type": "integer", "minimum": 1, "maximum": 1200 },
         "languages": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string", "minLength": 1, "pattern": "^[a-z]{2,3}(_[a-z]{2,4})?$" }
         },
         "media_box": { "$ref": "#/$defs/mediaBox" },
         "rotation": { "type": "integer", "enum": [0, 90, 180, 270] }

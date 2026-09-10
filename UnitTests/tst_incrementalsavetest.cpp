@@ -35,6 +35,8 @@ class IncrementalSaveTest : public QObject
 private slots:
     void preservesOriginalPrefixAndChangedObjects();
     void rejectsChangedSourceBytes();
+    void reportsWhetherTheSaveAppendedOrOnlyCopied();
+    void refusalsNameTheirReason();
     void selectsSafeWritePolicy();
     void signedPdfIncrementalSave_preservesSignedPrefix();
     void explicitPoliciesCannotBeDowngradedToIncremental();
@@ -133,6 +135,76 @@ void IncrementalSaveTest::rejectsChangedSourceBytes()
     output.open(QIODevice::WriteOnly);
     QVERIFY(!writer.writeIncremental(&output, originalData + QByteArrayLiteral("changed"), &original, modified.data()));
     QVERIFY(output.data().isEmpty());
+}
+
+void IncrementalSaveTest::reportsWhetherTheSaveAppendedOrOnlyCopied()
+{
+    const QByteArray originalData = writeDocument(createDocument());
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    const pdf::PDFDocument original = reader.readFromBuffer(originalData);
+    QVERIFY(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
+
+    // A real change appends.
+    {
+        const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+        QVERIFY(modified);
+
+        pdf::PDFDocumentWriter writer(nullptr);
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+
+        auto outcome = pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged;
+        QVERIFY(writer.writeIncremental(&output, originalData, &original, modified.data(), &outcome));
+        QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::Appended);
+    }
+
+    // Saving a document against itself produces the right bytes, but it is a
+    // copy rather than an append - and the caller must be able to tell, because
+    // the two are indistinguishable from the success value alone.
+    {
+        pdf::PDFDocumentWriter writer(nullptr);
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+
+        auto outcome = pdf::PDFDocumentWriter::IncrementalWriteOutcome::Appended;
+        QVERIFY(writer.writeIncremental(&output, originalData, &original, &original, &outcome));
+        QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged);
+        QCOMPARE(output.data(), originalData);
+    }
+}
+
+void IncrementalSaveTest::refusalsNameTheirReason()
+{
+    // Every refusal to append must say which condition stopped it, not just
+    // "operation failed" - the caller has to know whether to retry as a full
+    // rewrite or to stop.
+    const QByteArray originalData = writeDocument(createDocument());
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    const pdf::PDFDocument original = reader.readFromBuffer(originalData);
+    const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+    QVERIFY(modified);
+
+    pdf::PDFDocumentWriter writer(nullptr);
+
+    {
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+        const pdf::PDFOperationResult result = writer.writeIncremental(&output, originalData + QByteArrayLiteral("changed"), &original, modified.data());
+        QVERIFY(!result);
+        QVERIFY2(result.getErrorMessage().contains(QStringLiteral("source PDF changed")),
+                 qPrintable(result.getErrorMessage()));
+    }
+
+    {
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+        const pdf::PDFOperationResult result = writer.writeIncremental(&output, QByteArrayLiteral("not a pdf"), &original, modified.data());
+        QVERIFY(!result);
+        QVERIFY2(result.getErrorMessage().contains(QStringLiteral("missing or invalid")),
+                 qPrintable(result.getErrorMessage()));
+    }
 }
 
 void IncrementalSaveTest::selectsSafeWritePolicy()
