@@ -20,7 +20,9 @@ the protected branches by the corresponding GitHub branch rules.
 The Release Gate workflow listens for `pull_request` targeting `stable` and for
 `merge_group` so an optional merge queue cannot wait on a check that never
 runs. It has no path filters. Integration PRs targeting `dev` or `unstable` run
-`ci.yml`. Merges into `unstable` must pass `agent-fast / build`.
+`ci.yml`. Merges into `unstable` must pass `agent-fast / build`. Windows_MSI
+and Linux_AppImage are `workflow_dispatch`-only exact-SHA qualification; they
+do not run on `push` or `pull_request`.
 
 The declarations below are intentionally machine-readable by
 `scripts/ci/check_branch_policy.py`. That check runs in CI, so a workflow
@@ -39,6 +41,8 @@ branch protection when a token can read it.
 - Release gate pull_request branches: `stable`
 - Integration workflow: `.github/workflows/ci.yml`
 - Integration pull_request branches: `dev`, `unstable`
+- Packaging workflows: `.github/workflows/LinuxInstall.yml`, `.github/workflows/WindowsInstall.yml`
+- Packaging events: `workflow_dispatch`
 
 `master` is not part of the Loop branch policy. It is retained only in older
 historical documents or upstream references; new workflow triggers must not

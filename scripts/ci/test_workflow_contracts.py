@@ -82,6 +82,7 @@ class WorkflowContractTests(unittest.TestCase):
         # raises the oldest distro Loop runs on, so change it as a decision, not to make
         # this assertion pass.
         self.assertIn("runs-on: ubuntu-22.04", linux)
+        self.assertIn("runs-on: blacksmith-4vcpu-windows-2025", windows)
         self.assertIn("VCPKG_DEFAULT_BINARY_CACHE", linux)
         self.assertIn("VCPKG_BINARY_SOURCES=clear;files", linux)
         self.assertIn("./vcpkg-binary-cache", linux)
@@ -167,6 +168,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_test -v", job)
         self.assertIn("python -m unittest scripts.ci.test_run_qt_relink_linux -v", job)
         self.assertIn("if: runner.os == 'Linux'", job)
+
+    def test_blacksmith_is_reserved_for_windows_msi_only(self):
+        workflows_dir = ROOT / ".github/workflows"
+        blacksmith_workflows = []
+        for path in sorted(workflows_dir.glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            if "blacksmith" in text:
+                blacksmith_workflows.append(path.name)
+        self.assertEqual(blacksmith_workflows, ["WindowsInstall.yml"])
 
     def test_windows_release_msi_is_x64_and_uses_64_bit_program_files(self):
         workflow = (ROOT / ".github/workflows/WindowsInstall.yml").read_text(encoding="utf-8")
