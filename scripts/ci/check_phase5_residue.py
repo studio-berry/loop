@@ -30,12 +30,17 @@ MAINTAINED_PREFIXES = (
 )
 CURRENT_DOCS = {
     "docs/ACCESSIBILITY_BASELINE.md",
+    "docs/CI.md",
     "docs/EDITOR_RECOVERY.md",
     "docs/JOB_SCHEDULER.md",
     "docs/LOOP_SHELL_CONTRACT.md",
     "docs/LOOP_WORKSPACES.md",
+    "docs/PACKAGING_LICENSING.md",
     "docs/PLATFORM_SUPPORT.md",
     "docs/REPO_MAP.md",
+    "docs/SESSION_07_PACKAGE_BOUNDARY.md",
+    "docs/SESSION_08_HANDOFF.md",
+    "docs/SESSION_09_HANDOFF.md",
 }
 FORBIDDEN = (
     re.compile(r"\bLoopLibWidgets(?:/|\\|\b)"),

@@ -28,9 +28,7 @@ LAUNCH_PATTERNS = {
 
 # These are known product debts, not a permission to add more work to the
 # files.  The count check makes the migration observable in every PR.
-KNOWN_QTCONCURRENT_COUNTS = {
-    "LoopLibCore/sources/pdfdiff.cpp": 1,
-}
+KNOWN_QTCONCURRENT_COUNTS: dict[str, int] = {}
 
 SCHEDULER_INTERNALS = {
     "LoopLibCore/sources/pdfjobscheduler.cpp",
@@ -127,7 +125,7 @@ def main() -> int:
             print(f"  {launch.path}:{launch.line}: {launch.kind}: {launch.text}", file=sys.stderr)
         return 1
 
-    print("Unmanaged async source audit passed; #238 legacy migration debt remains explicit.")
+    print("Unmanaged async source audit passed; no legacy product QtConcurrent launches remain.")
     return 0
 
 

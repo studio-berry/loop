@@ -1,6 +1,4 @@
-# Loop rebrand
-
-Category: changed
-Audience: Users and developers
-Breaking-Change: yes — product, module, target, macro, translation, packaging, and repository path identifiers are now Loop-branded.
-Summary: Rebrand repository-owned legacy identifiers and paths to Loop while retaining explicit upstream attribution and the upstream XML namespace compatibility string.
+Category: fixed
+Audience: maintainers
+Breaking-Change: no
+Summary: Pair dispatch-only packaging workflow runs by checked-out source SHA via run-name and displayTitle matching in CreateReleaseDraft, embed source_sha in Linux_AppImage run-name, and add hermetic Linux AppImage Qt relink regression coverage.

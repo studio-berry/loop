@@ -1,12 +1,9 @@
 name: Linux_AppImage
+run-name: Linux_AppImage (${{ inputs.source_sha }})
 
 on:
-  # Packaging runs on every pull request as well, so a change that breaks the MSI or
-  # the AppImage fails here instead of surviving until someone dispatches a run by
-  # hand. Narrow this with a `paths:` filter if the runner cost becomes a problem.
-  pull_request:
-
-  # Keep manual packaging qualification available for exact source SHAs.
+  # Dispatch-only. PRs targeting `dev` run ci.yml; MSI/AppImage qualification
+  # stays on the release-candidate path with an exact source SHA.
   workflow_dispatch:
     inputs:
       source_sha:
@@ -40,13 +37,13 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           path: loop
-          ref: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
 
       - name: Verify exact source SHA
         working-directory: loop
         env:
-          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
             echo "::error::source_sha must be a full 40-character Git SHA"
@@ -304,6 +301,27 @@ jobs:
             --work-dir "$RUNNER_TEMP/loop-package-boundary-linux-work" \
             --output "$evidence_dir/evidence.json" \
             --report "$evidence_dir/inspection.txt" 2>&1 | tee "$evidence_dir/inspector.txt"
+
+      - name: Generate final-artifact SBOM and notices
+        working-directory: loop
+        run: |
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          python3 scripts/ci/generate_package_sbom.py \
+            --evidence "$evidence_dir/evidence.json" \
+            --output "$evidence_dir/components.spdx.json"
+          python3 scripts/ci/generate_package_third_party_notices.py \
+            --evidence "$evidence_dir/evidence.json" \
+            --output "$evidence_dir/THIRD_PARTY_NOTICES.txt"
+
+      - name: Run Qt LGPL relink test
+        working-directory: loop
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          evidence_dir="$RUNNER_TEMP/loop-package-boundary-linux"
+          bash scripts/ci/run_qt_relink_test.sh \
+            "build/${{ env.appimagefilename }}" \
+            --output "$evidence_dir/qt-relink.txt"
 
       - name: Upload Linux package boundary evidence
         if: always()

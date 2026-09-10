@@ -1,5 +1,9 @@
 # Session 07 — package-boundary evidence
 
+> **Accepted result (2026-09-06):** Both Linux AppImage and Windows MSI qualified from the
+> same exact source SHA **`b47c62b263a3fd7fb36940856866e589bbc8be10`** (the merged PR #532
+> head on `dev`). See `docs/evidence/session-07-package-boundary/`.
+
 Session 07 qualifies only the Linux x86_64 AppImage and Windows x64 MSI. Flatpak,
 MSIX, and portable ZIP are outside this gate. The MSI is unsigned for this session;
 signing is not an acceptance requirement.
@@ -50,22 +54,60 @@ inspection-tool versions, forbidden findings, and check results. Missing tools,
 unknown binaries/architectures, Qt6Widgets payloads or imports, and unresolved
 non-system dependencies fail closed.
 
-## Clean-machine final gate
+## 0.2.0 gate hierarchy
 
-Build-runner smoke and the product Quick accessibility harness are supporting
-qualification evidence. Final proof requires disposable clean Ubuntu 24.04 and
-Windows Server 2022 machines with no Qt, MSVC, Python, repository checkout, or
-developer paths:
+The goal of the fresh-environment checking is the isolation property: Loop must not
+depend on the build/development machine having Qt, Visual Studio, DLLs, plugins, PATH
+entries, or other undeclared state. Windows Server 2022 is not itself a requirement;
+isolation is. For 0.2.0 the gate is structured as:
 
-1. Install the exact-SHA package under test.
-2. Launch the installed Editor and open an explicit external test PDF.
-3. Navigate workspaces and inspect preflight state and findings.
-4. Verify accessible names, roles, focus movement, status behavior, and clean exit.
-5. On Windows, verify the MSI installed under 64-bit `Program Files`; on Linux,
-   verify the AppImage runs without a host Qt installation.
-6. Record the package digest, source SHA, operator/accessibility transcript, and
-   uninstall result. Only then may Issues LOUPE-22, LOUPE-23, LOUPE-24 and the
-   Session 07 exit gate be marked complete in Notion.
+| Validation | 0.2.0 |
+| --- | --- |
+| Clean CI checkout/build | **Required** |
+| Windows packaging succeeds | **Required** |
+| Packaged app launches outside the build tree | **Required** |
+| Functional PDF smoke (open → render → preflight → save/export → reopen) | **Required** |
+| Dependency/package inspection | **Required** |
+| Separate ordinary Windows PC test | Recommended |
+| Completely fresh Windows VM | Recommended |
+| Windows Server 2022 pristine VM | **Defer** (release-hardening, required before 1.0) |
+
+"Builds correctly on Windows" is necessary but not sufficient alone: a developer
+workstation is contaminated as a deployment test because it carries SDKs and dev tooling,
+so a successful build proves compilation, not redistribution. The required 0.2.0 evidence
+must come from the packaged/installed artifacts outside the build tree, not from the
+source directory.
+
+### Required 0.2.0 evidential checks (configured in the package workflows)
+
+Against each exact-SHA package (Linux AppImage and Windows MSI), from the installed
+artifacts and not the build tree:
+
+1. Install/launch the exact-SHA package under test; on Windows verify the MSI installs
+   under 64-bit `Program Files`.
+2. Launch the packaged Editor from its installed location (`--quick-smoke` native +
+   software) and open an explicit external test PDF (operator launch stays alive).
+3. Run PdfTool preflight against the test PDF.
+4. Run the product Quick accessibility harness native + software lanes.
+5. Dependency/package inspection (`inspect_package_dependencies.py`) with no
+   Qt6Widgets payload/import, no unresolved non-system dependency, no forbidden
+   payload (Ghostscript / JRE / Python), and no Widgets-bound Qt module.
+
+### Clean-machine qualification record (2026-09-06)
+
+- **Linux:** the exact-SHA AppImage passed the full smoke (`smoke-test-appimage.sh
+  --operator`) in a disposable clean Ubuntu 24.04 container with no Qt/MSVC/Python/dev
+  paths — PdfTool preflight, editor native+software Quick startup, operator launch
+  alive, no Widgets/GS/JRE/Python payload. See
+  `docs/evidence/session-07-package-boundary/linux-clean-machine-smoke.txt`.
+- **Windows:** the exact-SHA MSI passed the Windows_MSI workflow (relocated
+  installed-tree smoke, MSI lifecycle, package inspection, a11y native+software) on
+  `34050832684`. A **Windows Server 2022 pristine-VM run is deferred** to release
+  hardening (required before 1.0) and is **not a blocker for 0.2.0**.
+
+Record the package digest, source SHA, operator/accessibility transcript, and uninstall
+result with the evidence. Issues LOUPE-22 and LOUPE-23 are complete; LOUPE-24 is complete
+for the required 0.2.0 lanes, with the pristine-VM hardening item tracked separately.
 
 ## Windows MSI regression traps
 

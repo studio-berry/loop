@@ -82,8 +82,9 @@ jobs:
         working-directory: loop
         shell: pwsh
         run: |
-          python -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload -v
+          python -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload scripts.resource_envelope.test_run_matrix scripts.resource_envelope.test_budget_exhaustion_corpus scripts.qualification.test_validate_resource_envelope_evidence -v
           python scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
+          python scripts/qualification/validate_resource_envelope_evidence.py
           python scripts/resource_envelope/pathological_workload.py `
             --output "$env:RUNNER_TEMP\loop-pathological-vector.pdf" `
             --page-count 256 --operations 256 --family pathological-vector
