@@ -37,6 +37,7 @@
 #include "documentviewsession.h"
 #include "editorhost.h"
 
+#include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
 #include "pdfworkloadenvelope.h"
@@ -102,12 +103,27 @@ class EditorHostTest : public QObject
     Q_OBJECT
 
 private slots:
+    void teardownClearsTheInteractiveThreadRegistration();
     void startsWithNoDocument();
     void exposesCatalogDescriptorsWithoutMutating();
     void navigationCommandsStayDisabledUntilOpen();
     void sessionTeardownDrainsWorkersBeforeAdapters();
     void openLargeDocument();
 };
+
+void EditorHostTest::teardownClearsTheInteractiveThreadRegistration()
+{
+    QVERIFY(!pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
+    {
+        EditorHost host;
+        QVERIFY(pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
+        QVERIFY(pdf::PDFBlockingThreadGuard::isCurrentThreadInteractive());
+    }
+    // The host registered its owning thread; it must take the registration with
+    // it, or a host recreated in the same process leaves a stale one behind that
+    // keeps refusing synchronous blocking work.
+    QVERIFY(!pdf::PDFBlockingThreadGuard::isInteractiveThreadRegistered());
+}
 
 void EditorHostTest::startsWithNoDocument()
 {

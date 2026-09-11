@@ -151,6 +151,15 @@ EditorHost::EditorHost(QObject* parent) :
 EditorHost::~EditorHost()
 {
     unbindCanvas();
+
+    // The guard registration is global process state owned by the thread that
+    // built this host, so pair it with the host's lifetime: a host destroyed and
+    // recreated in one process must not leave a registration behind that keeps
+    // refusing synchronous blocking work on that thread.
+    if (pdf::PDFBlockingThreadGuard::isCurrentThreadInteractive())
+    {
+        pdf::PDFBlockingThreadGuard::clearInteractiveThread();
+    }
 }
 
 QString EditorHost::documentState() const
