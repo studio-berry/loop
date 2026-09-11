@@ -533,8 +533,12 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
         }
     }
 
+    // The flattener rasterizes every selected page, so it must only run when
+    // there is live transparency to remove - the same condition preview() uses
+    // to advertise the change. Running it on an opaque document would replace
+    // vector and text content with full-page rasters for nothing.
     const bool flattenTransparency = flattensTransparency(settings);
-    if (flattenTransparency)
+    if (flattenTransparency && PDFTransparencyFlattener::hasLiveTransparency(&candidate))
     {
         PDFTransparencyFlattenSettings transparencySettings = settings.transparencyFlattenSettings;
         transparencySettings.analyzeOnly = false;

@@ -44,6 +44,7 @@ private slots:
     void unconvertiblePdfxHasNoMarker();
     void veraPdfLaneSkipsWhenMissing();
     void explicitTransparencyOptOutIsHonoured();
+    void opaqueDocumentIsNotRasterizedByTheFlattenPass();
 };
 
 namespace
@@ -256,6 +257,49 @@ void StandardOracleTest::explicitTransparencyOptOutIsHonoured()
     pdf::PDFStandardConversionReport report;
     pdf::PDFStandardConversion::apply(&document, settings, &report);
     QVERIFY(report.transparencyFlatten.isEmpty());
+}
+
+void StandardOracleTest::opaqueDocumentIsNotRasterizedByTheFlattenPass()
+{
+    if (loadCmykProfile().isEmpty())
+    {
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
+    }
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString script = writeExitStatusScript(directory, QStringLiteral("pdfa-pass"), 0);
+
+    pdf::PDFDocument document = emptyPage();
+    QVERIFY(!pdf::PDFTransparencyFlattener::hasLiveTransparency(&document));
+
+    // PDF/A-2b is deliberate: it takes the same flatten-and-CMYK apply path but
+    // has no PDF/X postflight, so apply() is guaranteed to commit and therefore
+    // to have reached the flatten stage. (A PDF/X target would make the
+    // precondition depend on the PDF/X rule set - see Task 13.)
+    pdf::PDFStandardConversionSettings settings;
+    settings.target = pdf::PDFStandardTarget::PDFA2b;
+    settings.transparencyFlatten = pdf::PDFTransparencyFlattenPolicy::Always;
+    settings.outputIntentIccData = loadCmykProfile();
+    settings.independentValidatorProgram = script;
+    settings.independentValidatorArguments = QStringList{ QStringLiteral("{input}") };
+
+    // The flattener really would rasterize this opaque document, so an empty
+    // transparency_flatten report below is evidence that it was never called.
+    {
+        pdf::PDFDocument probe = document;
+        pdf::PDFTransparencyFlattenSettings probeSettings;
+        probeSettings.rasterizationDpi = 72;
+        probeSettings.maxRasterPixels = 100000;
+        pdf::PDFTransparencyFlattenReport probeReport;
+        QVERIFY(pdf::PDFTransparencyFlattener::apply(&probe, probeSettings, &probeReport));
+        QVERIFY(probeReport.changed);
+    }
+
+    pdf::PDFStandardConversionReport report;
+    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::apply(&document, settings, &report);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QVERIFY2(report.transparencyFlatten.isEmpty(),
+             qPrintable(QString::fromUtf8(QJsonDocument(report.transparencyFlatten).toJson(QJsonDocument::Compact))));
 }
 
 QTEST_APPLESS_MAIN(StandardOracleTest)
