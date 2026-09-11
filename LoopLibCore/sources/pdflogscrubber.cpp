@@ -188,10 +188,17 @@ QString scrubCredentials(const QString& text)
         QStringLiteral(R"(\b(%1)("?\s*(?:=>|[:=])\s*"?)(?:%2)?[^\s"',;&}\]<>]+)").arg(secretKey, authScheme),
         QRegularExpression::CaseInsensitiveOption);
 
-    // The lookahead requires at least one non-letter character, so a scheme word
-    // used as prose ("Basic rendering enabled") is not mistaken for a header.
+    // Two shapes of scheme-delimited credential are recognized:
+    //   - a mixed token carrying at least one digit or punctuation character -
+    //     what a JWT, a base64 digest, or most API keys look like. The lookahead
+    //     keeps prose ("Basic rendering enabled") from reading as a header;
+    //   - a purely alphabetic token of 16 or more characters - what an opaque
+    //     credential looks like. Length is the only thing separating it from an
+    //     English word, so the floor is deliberately high: over-redacting a
+    //     16-letter word after a scheme name is the safe direction, leaking the
+    //     credential is not.
     static const QRegularExpression authorizationPattern(
-        QStringLiteral(R"(\b(%1)(?=[A-Za-z0-9._~+/=-]*[0-9._~+/=-])[A-Za-z0-9._~+/=-]{8,})").arg(bareAuthScheme),
+        QStringLiteral(R"(\b(%1)(?:(?=[A-Za-z0-9._~+/=-]*[0-9._~+/=-])[A-Za-z0-9._~+/=-]{8,}|[A-Za-z]{16,}))").arg(bareAuthScheme),
         QRegularExpression::CaseInsensitiveOption);
 
     QString result = text;

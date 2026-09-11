@@ -246,6 +246,12 @@ void DiagnosticsTest::scrubber_authorizationHeader()
     const QString bareScheme = pdf::PDFLogScrubber::scrub(QStringLiteral("Retrying with Basic dXNlcjpwYXNzd29yZA=="));
     QVERIFY(!bareScheme.contains(QStringLiteral("dXNlcjpwYXNzd29yZA==")));
     QVERIFY(bareScheme.contains(QStringLiteral("<CREDENTIAL>")));
+
+    // An opaque all-alphabetic credential has no digit or punctuation to give it
+    // away: the scheme prefix is the only marker, and it must be enough.
+    const QString alphabetic = pdf::PDFLogScrubber::scrub(QStringLiteral("Retrying with Bearer abcdefghijklmnop"));
+    QVERIFY(!alphabetic.contains(QStringLiteral("abcdefghijklmnop")));
+    QVERIFY(alphabetic.contains(QStringLiteral("<CREDENTIAL>")));
 }
 
 void DiagnosticsTest::scrubber_secretKeyValuePairs()
@@ -270,6 +276,10 @@ void DiagnosticsTest::scrubber_keepsNonSecretDiagnostics()
 {
     const QString text = QStringLiteral("Cannot read object. Unexpected token appeared. count=17");
     QCOMPARE(pdf::PDFLogScrubber::scrub(text), text);
+
+    // A scheme word used as prose, with ordinary words after it, is not a header.
+    const QString prose = QStringLiteral("Basic rendering and error handling enabled");
+    QCOMPARE(pdf::PDFLogScrubber::scrub(prose), prose);
 }
 
 void DiagnosticsTest::scrubber_idempotent()
