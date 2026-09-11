@@ -98,9 +98,12 @@ bool PreflightController::acceptResult(const QString& jobId,
         return false;
     }
 
-    m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings);
-    Q_EMIT progressChanged(100);
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    // The verdict knows which findings an active disposition covers; the model
+    // has to know too, or the list and overlays keep showing them as blockers
+    // while the operator is told the run passed.
+    m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings, verdict.waivedFindingIds);
+    Q_EMIT progressChanged(100);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
     switch (verdict.state)
     {

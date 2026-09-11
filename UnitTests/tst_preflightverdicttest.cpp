@@ -59,6 +59,7 @@ private slots:
     void editorEngineError_isError();
     void operatorSummaryIsTranslatable();
     void operatorSummaryIsCurrentWhenTheStateSignalFires();
+    void editorWaivedBlockingIsPresentedAsWaived();
 };
 
 namespace
@@ -476,6 +477,51 @@ void PreflightVerdictTest::operatorSummaryIsCurrentWhenTheStateSignalFires()
     QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
     QObject::disconnect(cancelledConnection);
     QCOMPARE(cancelledSummaryAtSignal, QStringLiteral("Preflight was cancelled."));
+}
+
+void PreflightVerdictTest::editorWaivedBlockingIsPresentedAsWaived()
+{
+    const QString documentDigest(64, QLatin1Char('a'));
+    const QString profileDigest(64, QLatin1Char('b'));
+    pdf::PreflightResult waived;
+    waived.documentRevisionDigest = documentDigest;
+    waived.effectiveProfileDigest = profileDigest;
+    waived.errors.append(blockingFinding());
+    pdf::PreflightDecision decision;
+    decision.findingId = waived.errors.first().stableId();
+    decision.kind = pdf::PreflightDecisionKind::Waive;
+    decision.justification = QStringLiteral("Approved by the client.");
+    decision.operatorIdentity = QStringLiteral("operator");
+    decision.timestampUtc = QDateTime::currentDateTimeUtc();
+    decision.documentRevisionDigest = documentDigest;
+    decision.effectiveProfileDigest = profileDigest;
+    waived.decisions.append(decision);
+
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), waived));
+    QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Pass);
+
+    pdfinteraction::PreflightFindingsModel* model = controller.findingsModel();
+    const pdfinteraction::PreflightFindingView* view = model->finding(waived.errors.first().stableId());
+    QVERIFY(view);
+    QVERIFY(view->waived);
+    QCOMPARE(model->data(model->index(0), pdfinteraction::PreflightFindingsModel::WaivedRole).toBool(), true);
+    QCOMPARE(model->severityMap().value(view->id), pdfinteraction::OverlaySeverity::Info);
+
+    // A finding with no active disposition keeps its blocking presentation, so
+    // this cannot pass by marking everything waived.
+    pdf::PreflightResult blocking;
+    blocking.errors.append(blockingFinding());
+    pdfinteraction::PreflightController blockingController;
+    blockingController.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    QVERIFY(blockingController.acceptResult(QStringLiteral("job-2"), QStringLiteral("rev-1"), blocking));
+    const pdfinteraction::PreflightFindingView* blockingView =
+        blockingController.findingsModel()->finding(blocking.errors.first().stableId());
+    QVERIFY(blockingView);
+    QVERIFY(!blockingView->waived);
+    QCOMPARE(blockingController.findingsModel()->severityMap().value(blockingView->id),
+             pdfinteraction::OverlaySeverity::Error);
 }
 
 QTEST_GUILESS_MAIN(PreflightVerdictTest)

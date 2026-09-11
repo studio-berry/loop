@@ -26,7 +26,10 @@ Certificate issuance (#133) may proceed only when
 fail, and error must not produce `CertificateIssued`.
 
 Editor copy uses `preflightVerdictOperatorSummary()` so operators see "No
-problems found." versus "Could not finish inspecting." PageMaster gates use
+problems found." versus "Could not finish inspecting." The Editor's findings
+model carries the verdict's waived finding IDs, so a waived finding keeps its
+place in the list — marked waived, and presented as non-blocking on the canvas —
+instead of contradicting the PASS verdict. PageMaster gates use
 `preflightGateFailureMessage()` so Incomplete is not labeled as a generic fail.
 Action List step results store the canonical `verdict` object and fail-close
 postflight that is not PASS via `applyCanonicalPreflightVerdict()`.
