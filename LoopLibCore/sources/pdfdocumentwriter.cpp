@@ -286,6 +286,14 @@ PDFOperationResult PDFDocumentWriter::write(QIODevice* device, const PDFDocument
 PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
                                                        const PDFDocument* originalDocument,
                                                        const PDFDocument* document,
+                                                       bool safeWrite)
+{
+    return writeIncremental(fileName, originalDocument, document, safeWrite, nullptr);
+}
+
+PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
+                                                       const PDFDocument* originalDocument,
+                                                       const PDFDocument* document,
                                                        bool safeWrite,
                                                        IncrementalWriteOutcome* outcome)
 {
@@ -347,6 +355,14 @@ PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
         *outcome = nestedOutcome;
     }
     return result;
+}
+
+PDFOperationResult PDFDocumentWriter::writeIncremental(QIODevice* device,
+                                                       const QByteArray& originalData,
+                                                       const PDFDocument* originalDocument,
+                                                       const PDFDocument* document)
+{
+    return writeIncremental(device, originalData, originalDocument, document, nullptr);
 }
 
 PDFOperationResult PDFDocumentWriter::writeIncremental(QIODevice* device,

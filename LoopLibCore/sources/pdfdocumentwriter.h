@@ -95,22 +95,38 @@ public:
     /// Appends an incremental update to an existing PDF. The original bytes
     /// are copied unchanged and only changed objects plus a new xref/trailer
     /// section are appended.
-    /// \param outcome Optional; set on success to what the save actually did
+    ///
+    /// This is the original four-argument entry point. It is kept as a real
+    /// exported overload (not a defaulted parameter on the reporting one) so
+    /// existing binaries keep resolving the same mangled symbol, and so a
+    /// four-argument call is not ambiguous.
+    PDFOperationResult writeIncremental(const QString& fileName,
+                                        const PDFDocument* originalDocument,
+                                        const PDFDocument* document,
+                                        bool safeWrite);
+
+    /// As above, and reports through \p outcome what the save actually did.
+    /// \p outcome is set only on success.
     PDFOperationResult writeIncremental(const QString& fileName,
                                         const PDFDocument* originalDocument,
                                         const PDFDocument* document,
                                         bool safeWrite,
-                                        IncrementalWriteOutcome* outcome = nullptr);
+                                        IncrementalWriteOutcome* outcome);
 
-    /// Writes an incremental update using the supplied original bytes. This
-    /// overload is useful for callers that already hold the source buffer and
-    /// for byte-preservation tests.
-    /// \param outcome Optional; set on success to what the save actually did
+    /// Writes an incremental update using the supplied original bytes. Kept for
+    /// the same binary-compatibility reason as the four-argument file overload.
+    PDFOperationResult writeIncremental(QIODevice* device,
+                                        const QByteArray& originalData,
+                                        const PDFDocument* originalDocument,
+                                        const PDFDocument* document);
+
+    /// As above, and reports through \p outcome what the save actually did.
+    /// \p outcome is set only on success.
     PDFOperationResult writeIncremental(QIODevice* device,
                                         const QByteArray& originalData,
                                         const PDFDocument* originalDocument,
                                         const PDFDocument* document,
-                                        IncrementalWriteOutcome* outcome = nullptr);
+                                        IncrementalWriteOutcome* outcome);
 
     /// Chooses the default save mode for an existing document. Save As and
     /// destructive operations must pass the corresponding opt-out flags.

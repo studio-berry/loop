@@ -30,6 +30,32 @@
 #include <QFile>
 #include <QTemporaryDir>
 
+namespace
+{
+
+// Both incremental-writer entry points must exist as distinct exported
+// functions: the original four-argument signatures are what existing binaries
+// link against, so giving them a defaulted fifth parameter (which changes the
+// mangled symbol and makes a four-argument call ambiguous) is a break even
+// though it compiles here.
+using FourArgumentFileWriter = pdf::PDFOperationResult (pdf::PDFDocumentWriter::*)(
+    const QString&, const pdf::PDFDocument*, const pdf::PDFDocument*, bool);
+using FiveArgumentFileWriter = pdf::PDFOperationResult (pdf::PDFDocumentWriter::*)(
+    const QString&, const pdf::PDFDocument*, const pdf::PDFDocument*, bool,
+    pdf::PDFDocumentWriter::IncrementalWriteOutcome*);
+using FourArgumentDeviceWriter = pdf::PDFOperationResult (pdf::PDFDocumentWriter::*)(
+    QIODevice*, const QByteArray&, const pdf::PDFDocument*, const pdf::PDFDocument*);
+using FiveArgumentDeviceWriter = pdf::PDFOperationResult (pdf::PDFDocumentWriter::*)(
+    QIODevice*, const QByteArray&, const pdf::PDFDocument*, const pdf::PDFDocument*,
+    pdf::PDFDocumentWriter::IncrementalWriteOutcome*);
+
+constexpr FourArgumentFileWriter fileWriterFour = static_cast<FourArgumentFileWriter>(&pdf::PDFDocumentWriter::writeIncremental);
+constexpr FiveArgumentFileWriter fileWriterFive = static_cast<FiveArgumentFileWriter>(&pdf::PDFDocumentWriter::writeIncremental);
+constexpr FourArgumentDeviceWriter deviceWriterFour = static_cast<FourArgumentDeviceWriter>(&pdf::PDFDocumentWriter::writeIncremental);
+constexpr FiveArgumentDeviceWriter deviceWriterFive = static_cast<FiveArgumentDeviceWriter>(&pdf::PDFDocumentWriter::writeIncremental);
+
+}   // namespace
+
 class IncrementalSaveTest : public QObject
 {
     Q_OBJECT
