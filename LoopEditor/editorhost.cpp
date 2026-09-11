@@ -31,6 +31,8 @@
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
 #include "previewstatemodel.h"
+#include "productionmodel.h"
+#include "interactiontarget.h"
 
 #include "pdfblockingthreadguard.h"
 #include "pdfpage.h"
@@ -94,6 +96,62 @@ QString preflightStateToString(pdfinteraction::PreflightController::State state)
     return QStringLiteral("not-checked");
 }
 
+QString shellMenuGroupForAction(const QString& id, const QString& target)
+{
+    static const QStringList fileActions = {
+        QStringLiteral("actionOpen"),
+        QStringLiteral("actionClose"),
+        QStringLiteral("actionSave"),
+        QStringLiteral("actionSave_As"),
+        QStringLiteral("actionQuit"),
+        QStringLiteral("actionPrint"),
+        QStringLiteral("actionSendByEmail"),
+        QStringLiteral("actionRenderToImages"),
+        QStringLiteral("actionClearRecentFileHistory"),
+        QStringLiteral("actionAutomaticDocumentRefresh"),
+    };
+    if (fileActions.contains(id))
+    {
+        return QStringLiteral("File");
+    }
+
+    if (id.startsWith(QStringLiteral("actionCopy")) || id.startsWith(QStringLiteral("actionCut")) ||
+        id.startsWith(QStringLiteral("actionPaste")) || id == QStringLiteral("actionUndo") ||
+        id == QStringLiteral("actionRedo"))
+    {
+        return QStringLiteral("Edit");
+    }
+
+    if (id.startsWith(QStringLiteral("actionZoom")) || id.startsWith(QStringLiteral("actionFit")) ||
+        id.startsWith(QStringLiteral("actionRotate")) || id.startsWith(QStringLiteral("actionPageLayout")) ||
+        id.startsWith(QStringLiteral("actionGoTo")) || id.startsWith(QStringLiteral("actionFind")) ||
+        id == QStringLiteral("actionFullscreenMode"))
+    {
+        return QStringLiteral("View");
+    }
+
+    if (id == QStringLiteral("actionAbout") || id == QStringLiteral("actionBecomeASponsor") ||
+        id == QStringLiteral("actionGet_Source"))
+    {
+        return QStringLiteral("Help");
+    }
+
+    if (target == QStringLiteral("Preflight"))
+    {
+        return QStringLiteral("Preflight");
+    }
+    if (target == QStringLiteral("Production") || target == QStringLiteral("Pages") || target == QStringLiteral("Fix"))
+    {
+        return QStringLiteral("Production");
+    }
+    if (target == QStringLiteral("Document") || target == QStringLiteral("Inspect"))
+    {
+        return QStringLiteral("Document");
+    }
+
+    return QStringLiteral("Document");
+}
+
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
 {
     QVariantMap entry;
@@ -101,6 +159,9 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     entry.insert(QStringLiteral("labelKey"), descriptor.labelKey);
     entry.insert(QStringLiteral("implemented"), descriptor.isImplemented());
     entry.insert(QStringLiteral("enabled"), enabled);
+    entry.insert(QStringLiteral("target"), descriptor.target);
+    entry.insert(QStringLiteral("disposition"), descriptor.disposition);
+    entry.insert(QStringLiteral("menuGroup"), shellMenuGroupForAction(descriptor.id, descriptor.target));
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
@@ -141,6 +202,7 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_production, &pdfinteraction::ProductionModel::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_documentModel, &QuickDocumentModel::searchChanged, this, [this]
             {
                 refreshFeatureAvailability();
@@ -250,6 +312,20 @@ void EditorHost::goToOutlinePage(int pageIndex)
     goToPage(pageIndex);
 }
 
+void EditorHost::setWorkspace(LoopWorkspace workspace)
+{
+    if (workspace == m_workspace)
+    {
+        return;
+    }
+
+    const LoopWorkspace previous = m_workspace;
+    m_workspace = workspace;
+    m_workspaceRequest = -1;
+    Q_EMIT workspaceChanged(previous, workspace);
+    bumpPresentation();
+}
+
 void EditorHost::acknowledgeWorkspaceRequest()
 {
     if (m_workspaceRequest < 0)
@@ -257,8 +333,44 @@ void EditorHost::acknowledgeWorkspaceRequest()
         return;
     }
 
+    const LoopWorkspace requested = static_cast<LoopWorkspace>(m_workspaceRequest);
     m_workspaceRequest = -1;
-    Q_EMIT presentationChanged();
+    setWorkspace(requested);
+}
+
+QString EditorHost::documentShellStatus() const
+{
+    return QString::fromLatin1(
+        pdfinteraction::getShellDocumentStatusName(m_session->facade().shellDocumentStatus()));
+}
+
+QString EditorHost::productionStateName() const
+{
+    if (!hasDocument())
+    {
+        return QStringLiteral("NOT_READY");
+    }
+
+    switch (m_session->facade().outputState())
+    {
+        case pdfinteraction::DocumentOutputState::Pending:
+            return QStringLiteral("OPERATION_PENDING");
+        case pdfinteraction::DocumentOutputState::Saved:
+            return QStringLiteral("OUTPUT_WRITTEN");
+        case pdfinteraction::DocumentOutputState::None:
+            break;
+    }
+
+    return pdfinteraction::ProductionModel::stateName(m_production.state());
+}
+
+bool EditorHost::allowDeveloperDiagnostics() const
+{
+#ifdef LOOP_LOOP_DISTRIBUTION_BUILD
+    return false;
+#else
+    return true;
+#endif
 }
 
 void EditorHost::acknowledgeSearchPanel()
@@ -593,6 +705,7 @@ void EditorHost::connectFacade()
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             {
                 syncDocumentLifecycle();
+                syncProductionState();
                 bumpPresentation(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
@@ -619,6 +732,10 @@ void EditorHost::connectViewport()
 
 void EditorHost::connectInteraction()
 {
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::selectionChanged,
+            this,
+            &EditorHost::onInteractionSelectionChanged);
     connect(m_session->interaction(),
             &pdfinteraction::InteractionController::dragCompleted,
             this,
@@ -677,13 +794,13 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionFind"), [this]
          {
              m_searchPanelVisible = true;
-             m_workspaceRequest = 0; });
+             setWorkspace(LoopWorkspace::Document); });
     bind(QStringLiteral("actionFindNext"), [this]
          { moveSearch(1); });
     bind(QStringLiteral("actionFindPrevious"), [this]
          { moveSearch(-1); });
     bind(QStringLiteral("actionProperties"), [this]
-         { m_workspaceRequest = 2; });
+         { setWorkspace(LoopWorkspace::Inspect); });
     refreshFeatureAvailability();
 }
 
@@ -762,6 +879,7 @@ void EditorHost::onDocumentReady()
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
+    applyEmptyCanvasInspectorSelection();
     announceDocumentState(tr("Document ready."));
 }
 
@@ -797,6 +915,7 @@ void EditorHost::onDocumentGone()
     m_documentModel.clear();
     m_searchRow = -1;
     m_preview.clear();
+    m_production.clear();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
     updateCanvasAccessibilitySummary();
@@ -839,6 +958,7 @@ void EditorHost::syncRevisionModels()
     m_preflight.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
+    m_production.setCurrentRevision(documentKey, documentRevision);
 
     if (hasDocument())
     {
@@ -848,7 +968,34 @@ void EditorHost::syncRevisionModels()
                            tr("Production preview is approximate until proof mode is active."),
                            tr("The current view uses the standard render path."),
                            QString());
+        syncProductionState();
     }
+}
+
+void EditorHost::syncProductionState()
+{
+    if (!m_session->revisionSource() || !hasDocument())
+    {
+        return;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    pdfinteraction::ProductionModel::State state = pdfinteraction::ProductionModel::State::Ready;
+    if (m_session->facade().outputState() == pdfinteraction::DocumentOutputState::Pending)
+    {
+        state = pdfinteraction::ProductionModel::State::OperationPending;
+    }
+    else if (m_session->facade().outputState() == pdfinteraction::DocumentOutputState::Saved)
+    {
+        state = pdfinteraction::ProductionModel::State::OutputWritten;
+    }
+    else if (m_preview.status() == pdfinteraction::PreviewStateModel::Status::Unavailable)
+    {
+        state = pdfinteraction::ProductionModel::State::NotReady;
+    }
+
+    m_production.setState(documentKey, documentRevision, state);
 }
 
 void EditorHost::updateCanvasAccessibilitySummary()
@@ -896,4 +1043,128 @@ void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
     {
         m_session->interaction()->refreshOverlay();
     }
+}
+
+void EditorHost::onInteractionSelectionChanged(pdfinteraction::InteractionTarget target)
+{
+    applyInspectorSelection(target);
+    bumpPresentation();
+}
+
+void EditorHost::applyEmptyCanvasInspectorSelection()
+{
+    if (!m_session->revisionSource() || !hasDocument())
+    {
+        m_inspector.clearSelection();
+        return;
+    }
+
+    pdfinteraction::InspectorModel::Selection selection;
+    selection.documentKey = m_session->revisionSource()->documentKey();
+    selection.documentRevision = m_session->facade().currentRevision().toString();
+    selection.selectionId = QStringLiteral("canvas");
+    selection.title = tr("Document canvas");
+    selection.kind = pdfinteraction::InspectorModel::SelectionKind::EmptyCanvas;
+    selection.properties = {
+        { QStringLiteral("document"), QStringLiteral("Document"), displayTitle() },
+        { QStringLiteral("pages"), QStringLiteral("Pages"), QString::number(pageCount()) },
+        { QStringLiteral("document-status"), QStringLiteral("Document status"), documentShellStatus() },
+        { QStringLiteral("preflight"), QStringLiteral("Preflight"), preflightStateName() },
+        { QStringLiteral("production"), QStringLiteral("Production"), productionStateName() },
+    };
+    m_inspector.setSelection(selection);
+}
+
+void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget& target)
+{
+    if (!m_session->revisionSource() || !hasDocument())
+    {
+        applyEmptyCanvasInspectorSelection();
+        return;
+    }
+
+    if (!target.isValid())
+    {
+        applyEmptyCanvasInspectorSelection();
+        return;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+
+    if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
+    {
+        m_inspector.setFindingSelection(*m_preflight.findingsModel(), target.id, documentRevision);
+        return;
+    }
+
+    if (target.id.startsWith(QStringLiteral("image:")))
+    {
+        pdfinteraction::InspectorModel::Selection selection;
+        selection.documentKey = documentKey;
+        selection.documentRevision = documentRevision;
+        selection.selectionId = target.id;
+        selection.title = tr("Image");
+        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Image;
+        selection.properties = {
+            { QStringLiteral("id"), QStringLiteral("Image"), target.id.mid(6) },
+            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("bounds"), QStringLiteral("Bounds"),
+              QStringLiteral("%1,%2 %3x%4")
+                  .arg(QString::number(target.pageBounds.x()),
+                       QString::number(target.pageBounds.y()),
+                       QString::number(target.pageBounds.width()),
+                       QString::number(target.pageBounds.height())) },
+            { QStringLiteral("dpi"), QStringLiteral("Effective DPI"), tr("pending") },
+            { QStringLiteral("colour-space"), QStringLiteral("Colour space"), tr("pending") },
+            { QStringLiteral("compression"), QStringLiteral("Compression"), tr("pending") },
+            { QStringLiteral("mask"), QStringLiteral("Mask"), tr("pending") },
+        };
+        m_inspector.setSelection(selection);
+        return;
+    }
+
+    if (target.id.startsWith(QStringLiteral("separation:")))
+    {
+        pdfinteraction::InspectorModel::Selection selection;
+        selection.documentKey = documentKey;
+        selection.documentRevision = documentRevision;
+        selection.selectionId = target.id;
+        selection.title = tr("Separation");
+        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Separation;
+        selection.properties = {
+            { QStringLiteral("name"), QStringLiteral("Ink"), target.id.mid(11) },
+            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("coverage"), QStringLiteral("Ink coverage"), tr("pending") },
+            { QStringLiteral("kind"), QStringLiteral("Process / spot"), tr("pending") },
+        };
+        m_inspector.setSelection(selection);
+        return;
+    }
+
+    if (target.kind == pdfinteraction::InteractionTargetKind::Page ||
+        target.kind == pdfinteraction::InteractionTargetKind::PageBox)
+    {
+        pdfinteraction::InspectorModel::Selection selection;
+        selection.documentKey = documentKey;
+        selection.documentRevision = documentRevision;
+        selection.selectionId = target.id.isEmpty() ? QStringLiteral("page") : target.id;
+        selection.title = target.kind == pdfinteraction::InteractionTargetKind::PageBox
+                              ? tr("Page box: %1").arg(target.id)
+                              : tr("Page %1").arg(target.pageIndex + 1);
+        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Page;
+        selection.properties = {
+            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
+            { QStringLiteral("box"), QStringLiteral("Box"), target.id },
+            { QStringLiteral("size"), QStringLiteral("Size"),
+              QStringLiteral("%1 x %2")
+                  .arg(QString::number(target.pageBounds.width()), QString::number(target.pageBounds.height())) },
+            { QStringLiteral("rotation"), QStringLiteral("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
+            { QStringLiteral("ocg"), QStringLiteral("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
+        };
+        m_inspector.setSelection(selection);
+        return;
+    }
+
+    applyEmptyCanvasInspectorSelection();
 }

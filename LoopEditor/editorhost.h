@@ -35,6 +35,7 @@
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
 #include "previewstatemodel.h"
+#include "productionmodel.h"
 #include "viewportcommandbridge.h"
 #include "viewportcontroller.h"
 
@@ -102,8 +103,24 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool searchPanelVisible READ searchPanelVisible NOTIFY presentationChanged)
     Q_PROPERTY(bool fullscreenRequested READ fullscreenRequested NOTIFY presentationChanged)
     Q_PROPERTY(int workspaceRequest READ workspaceRequest NOTIFY presentationChanged)
+    Q_PROPERTY(LoopWorkspace workspace READ workspace WRITE setWorkspace NOTIFY workspaceChanged)
+    Q_PROPERTY(QString documentShellStatus READ documentShellStatus NOTIFY presentationChanged)
+    Q_PROPERTY(QString productionStateName READ productionStateName NOTIFY presentationChanged)
+    Q_PROPERTY(bool allowDeveloperDiagnostics READ allowDeveloperDiagnostics CONSTANT)
 
 public:
+    enum LoopWorkspace
+    {
+        Document = 0,
+        Preflight = 1,
+        ProductionPreview = 2,
+        Pages = 3,
+        Inspect = 4,
+        Fix = 5,
+        Compare = 6
+    };
+    Q_ENUM(LoopWorkspace)
+
     explicit EditorHost(QObject* parent = nullptr);
     ~EditorHost() override;
 
@@ -138,6 +155,10 @@ public:
     bool searchPanelVisible() const noexcept { return m_searchPanelVisible; }
     bool fullscreenRequested() const noexcept { return m_fullscreenRequested; }
     int workspaceRequest() const noexcept { return m_workspaceRequest; }
+    LoopWorkspace workspace() const noexcept { return m_workspace; }
+    QString documentShellStatus() const;
+    QString productionStateName() const;
+    bool allowDeveloperDiagnostics() const;
 
     /// Overprint render fidelity for the currently displayed page (issue #49).
     /// True (and pageFidelityReason empty) when the page has no overprint
@@ -162,6 +183,7 @@ public:
     Q_INVOKABLE void toggleCurrentPageFidelity();
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
+    Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();
 
@@ -200,6 +222,7 @@ public:
 signals:
     void presentationChanged();
     void commandEpochChanged();
+    void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
 
 private:
     void connectFacade();
@@ -224,12 +247,17 @@ private:
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
     void onDragCompleted(pdfinteraction::DragSession session);
+    void onInteractionSelectionChanged(pdfinteraction::InteractionTarget target);
+    void syncProductionState();
+    void applyInspectorSelection(const pdfinteraction::InteractionTarget& target);
+    void applyEmptyCanvasInspectorSelection();
 
     std::unique_ptr<DocumentViewSession> m_session;
     pdfinteraction::PreflightController m_preflight;
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
+    pdfinteraction::ProductionModel m_production;
     QuickDocumentModel m_documentModel;
     FocusRestoration m_focusRestoration;
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
@@ -240,6 +268,7 @@ private:
     bool m_searchPanelVisible = false;
     bool m_fullscreenRequested = false;
     int m_workspaceRequest = -1;
+    LoopWorkspace m_workspace = LoopWorkspace::Document;
     int m_searchRow = -1;
 };
 
