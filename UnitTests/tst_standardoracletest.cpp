@@ -22,11 +22,16 @@
 
 #include "pdfdocumentbuilder.h"
 #include "pdfstandardconversion.h"
+#include "pdftransparencyflattener.h"   // hasLiveTransparency
 
 #include <QFile>
+#include <QJsonDocument>
+#include <QPainter>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+
+#include <algorithm>
 
 class StandardOracleTest : public QObject
 {
@@ -38,6 +43,7 @@ private slots:
     void alwaysPassValidatorCanCommitPdfa();
     void unconvertiblePdfxHasNoMarker();
     void veraPdfLaneSkipsWhenMissing();
+    void explicitTransparencyOptOutIsHonoured();
 };
 
 namespace
@@ -85,6 +91,23 @@ QString writeExitStatusScript(const QTemporaryDir& directory, const QString& bas
     file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
 #endif
     return path;
+}
+
+/// A page whose content carries live transparency (a 50 %-opacity rectangle),
+/// which is exactly what PDF/X-1a and PDF/X-3 forbid.
+pdf::PDFDocument pageWithLiveTransparency()
+{
+    pdf::PDFDocumentBuilder builder;
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 144, 144));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = contentBuilder.begin(page))
+    {
+        painter->setOpacity(0.5);
+        painter->fillRect(QRectF(18, 18, 108, 108), Qt::red);
+        contentBuilder.end(painter);
+    }
+    return builder.build();
 }
 
 pdf::PDFStandardConversionSettings pdfaSettings(const QString& program)
@@ -195,6 +218,44 @@ void StandardOracleTest::veraPdfLaneSkipsWhenMissing()
     {
         QSKIP("veraPDF is not installed; independent CI oracle lane is skip-if-missing.");
     }
+}
+
+void StandardOracleTest::explicitTransparencyOptOutIsHonoured()
+{
+    if (loadCmykProfile().isEmpty())
+    {
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
+    }
+
+    pdf::PDFDocument document = pageWithLiveTransparency();
+    QVERIFY(pdf::PDFTransparencyFlattener::hasLiveTransparency(&document));
+
+    pdf::PDFStandardConversionSettings settings;
+    settings.target = pdf::PDFStandardTarget::PDFX1a2001;
+    settings.outputIntentIccData = loadCmykProfile();
+    settings.transparencyFlatten = pdf::PDFTransparencyFlattenPolicy::Never;   // explicit opt-out
+
+    // The observable is the change report: with the boolean API an explicit
+    // false is indistinguishable from "unset", so the target default re-enables
+    // flattening and the preview advertises a change it should not.
+    pdf::PDFStandardConversionReport previewReport;
+    pdf::PDFStandardConversion::preview(&document, settings, &previewReport);
+    for (const pdf::PDFStandardConversionChange& change : previewReport.changes)
+    {
+        QVERIFY(change.id != QStringLiteral("transparency.flatten"));
+    }
+
+    // ... and the apply path must not run the flattener either.
+    //
+    // apply()'s own result is deliberately not asserted: on this branch every
+    // PDF/X conversion fails at postflight for an unrelated, pre-existing reason
+    // (pdfxProfile() builds a profile with no "checks" array, which
+    // PreflightEngine::parseProfile() rejects with "Profile must define at least
+    // one check." - see LoopLibCore/sources/preflightengine.cpp:6110). The
+    // transparency_flatten report is the observable this task changes.
+    pdf::PDFStandardConversionReport report;
+    pdf::PDFStandardConversion::apply(&document, settings, &report);
+    QVERIFY(report.transparencyFlatten.isEmpty());
 }
 
 QTEST_APPLESS_MAIN(StandardOracleTest)

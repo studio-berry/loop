@@ -226,7 +226,7 @@ void collectPreflightBlockers(const PDFStandardConversionSettings& settings,
     }
 
     const bool normalizeColor = settings.normalizeColor || normalizesColorByDefault(settings.target);
-    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
+    const bool flattenTransparency = flattensTransparency(settings);
     for (const PDFXRuleResult& rule : result.pdfx->rules)
     {
         if (rule.state != PDFXRuleState::Failed && rule.state != PDFXRuleState::NotInspected)
@@ -348,6 +348,20 @@ PDFOperationResult runIndependentValidator(const PDFDocument& document,
 
 }   // namespace
 
+bool flattensTransparency(const PDFStandardConversionSettings& settings)
+{
+    switch (settings.transparencyFlatten)
+    {
+        case PDFTransparencyFlattenPolicy::Always:
+            return true;
+        case PDFTransparencyFlattenPolicy::Never:
+            return false;
+        case PDFTransparencyFlattenPolicy::Automatic:
+            break;
+    }
+    return flattensTransparencyByDefault(settings.target);
+}
+
 QString pdfStandardTargetToString(PDFStandardTarget target)
 {
     switch (target)
@@ -465,7 +479,7 @@ PDFOperationResult PDFStandardConversion::preview(const PDFDocument* document,
         }
     }
 
-    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
+    const bool flattenTransparency = flattensTransparency(settings);
     if (flattenTransparency && PDFTransparencyFlattener::hasLiveTransparency(document))
     {
         report->changes.append({ QStringLiteral("transparency.flatten"), QStringLiteral("live transparency"), QStringLiteral("flattened to opaque raster content") });
@@ -519,7 +533,7 @@ PDFOperationResult PDFStandardConversion::apply(PDFDocument* document,
         }
     }
 
-    const bool flattenTransparency = settings.flattenTransparency || flattensTransparencyByDefault(settings.target);
+    const bool flattenTransparency = flattensTransparency(settings);
     if (flattenTransparency)
     {
         PDFTransparencyFlattenSettings transparencySettings = settings.transparencyFlattenSettings;

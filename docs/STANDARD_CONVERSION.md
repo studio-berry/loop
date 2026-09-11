@@ -19,16 +19,14 @@ PDF/X-3 normalization. Loop does not claim that fonts were embedded, actions
 removed, or other unsupported constructs repaired when the Core implementation
 cannot do so. Those findings remain blockers.
 
-PDF/X-1a:2001 and PDF/X-3:2002 forbid live transparency. `standards-convert`
-runs the shared `PDFTransparencyFlattener` operation (issue #164) against
-those two targets by default before the output-intent and page-box rewrite,
-so `pdfx.transparency.allowed` stops being an unconditional blocker; set the
-`flatten_transparency` parameter explicitly to override the default (`false`
-opts out for X-1a/X-3, `true` opts in for X-4, which otherwise permits live
-transparency). Flattening rasterizes affected page content — it is a real
-content change, reported under `transparency_flatten` in the conversion
-report, not a silent approximation. PDF/X-4 and PDF/A-2b do not flatten by
-default.
+PDF/X-1a:2001 and PDF/X-3:2002 forbid live transparency, and `standards-convert`
+flattens it for those two targets by default — and only for those two, since
+PDF/X-4 and PDF/A-2b permit it. That default is the `flatten_transparency`
+policy's `Automatic` value; the parameter is a three-state policy, so it
+overrides the default in both directions (`false` opts out for X-1a/X-3, `true`
+opts in for X-4) instead of being re-applied on top of it. Flattening rasterizes
+affected page content — a real content change, reported under
+`transparency_flatten` in the conversion report, never a silent approximation.
 
 Every non-dry-run conversion requires an independent validator command. The
 validator receives a temporary candidate through the `{input}` argument
