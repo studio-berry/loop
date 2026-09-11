@@ -317,6 +317,54 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
         )
         add_test(UnitTestsShellKeyboard "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellKeyboard")
+
+        add_executable(UnitTestsShellWorkspace
+            tst_shellworkspacetest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
+        )
+
+        target_link_libraries(UnitTestsShellWorkspace PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsShellWorkspace PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
+
+        set_target_properties(UnitTestsShellWorkspace PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsShellWorkspace "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellWorkspace")
+
+        add_executable(UnitTestsShellInspectorDispatch
+            tst_shellinspectordispatch.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/quickdocumentmodel.h
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/focusrestoration.h
+        )
+
+        target_link_libraries(UnitTestsShellInspectorDispatch PRIVATE LoopLibQuick LoopLibInteraction LoopLibCore Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::Test)
+
+        target_include_directories(UnitTestsShellInspectorDispatch PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
+
+        set_target_properties(UnitTestsShellInspectorDispatch PROPERTIES
+            WIN32_EXECUTABLE OFF
+            MACOSX_BUNDLE OFF
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+        )
+        add_test(UnitTestsShellInspectorDispatch "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsShellInspectorDispatch")
     endif()
 
     # Architecture invariant I25. The inverse of the five targets above: this one
