@@ -58,6 +58,7 @@ private slots:
     void editorWarningsOnly_isPass();
     void editorEngineError_isError();
     void operatorSummaryIsTranslatable();
+    void operatorSummaryIsCurrentWhenTheStateSignalFires();
 };
 
 namespace
@@ -438,6 +439,43 @@ void PreflightVerdictTest::operatorSummaryIsTranslatable()
     QCOMPARE(pdf::preflightVerdictOperatorSummary(pass), QStringLiteral("TRANSLATED-NO-PROBLEMS"));
 
     QCoreApplication::removeTranslator(&translator);
+}
+
+void PreflightVerdictTest::operatorSummaryIsCurrentWhenTheStateSignalFires()
+{
+    pdfinteraction::PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+
+    // stateChanged is operatorSummary's notifier: whatever it reads must already
+    // be the new value, or the pane shows the previous run's copy.
+    QString staleSummaryAtSignal;
+    const QMetaObject::Connection staleConnection = QObject::connect(
+        &controller, &pdfinteraction::PreflightController::stateChanged, &controller,
+        [&controller, &staleSummaryAtSignal](pdfinteraction::PreflightController::State state)
+        {
+            if (state == pdfinteraction::PreflightController::State::Stale)
+            {
+                staleSummaryAtSignal = controller.operatorSummary();
+            }
+        });
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
+    QObject::disconnect(staleConnection);
+    QCOMPARE(staleSummaryAtSignal, QStringLiteral("Preflight is stale for the current revision."));
+
+    QString cancelledSummaryAtSignal;
+    const QMetaObject::Connection cancelledConnection = QObject::connect(
+        &controller, &pdfinteraction::PreflightController::stateChanged, &controller,
+        [&controller, &cancelledSummaryAtSignal](pdfinteraction::PreflightController::State state)
+        {
+            if (state == pdfinteraction::PreflightController::State::Cancelled)
+            {
+                cancelledSummaryAtSignal = controller.operatorSummary();
+            }
+        });
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-3"), {}, QStringLiteral("job-2"));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QObject::disconnect(cancelledConnection);
+    QCOMPARE(cancelledSummaryAtSignal, QStringLiteral("Preflight was cancelled."));
 }
 
 QTEST_GUILESS_MAIN(PreflightVerdictTest)

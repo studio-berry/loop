@@ -53,8 +53,11 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     m_documentRevision = std::move(documentRevision);
     if (changed && m_state != State::NotChecked)
     {
-        setState(State::Stale);
+        // Assign before setState(): the state change is announced through
+        // stateChanged, which is also this property's notifier, so an observer
+        // reading the summary from that signal must not see the previous run's.
         m_operatorSummary = QStringLiteral("Preflight is stale for the current revision.");
+        setState(State::Stale);
     }
 }
 
@@ -133,8 +136,8 @@ bool PreflightController::cancelRun(const QString& jobId)
             m_scheduler->cancel(m_jobId);
         }
     }
-    setState(State::Cancelled);
     m_operatorSummary = QStringLiteral("Preflight was cancelled.");
+    setState(State::Cancelled);
     return true;
 }
 
