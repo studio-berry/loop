@@ -45,6 +45,7 @@ private slots:
     void veraPdfLaneSkipsWhenMissing();
     void explicitTransparencyOptOutIsHonoured();
     void opaqueDocumentIsNotRasterizedByTheFlattenPass();
+    void explicitTransparencyOptOutBlocksPdfXConversion();
 };
 
 namespace
@@ -300,6 +301,37 @@ void StandardOracleTest::opaqueDocumentIsNotRasterizedByTheFlattenPass()
     QVERIFY2(result, qPrintable(result.getErrorMessage()));
     QVERIFY2(report.transparencyFlatten.isEmpty(),
              qPrintable(QString::fromUtf8(QJsonDocument(report.transparencyFlatten).toJson(QJsonDocument::Compact))));
+}
+
+void StandardOracleTest::explicitTransparencyOptOutBlocksPdfXConversion()
+{
+    if (loadCmykProfile().isEmpty())
+    {
+        QSKIP("Synthetic CMYK ICC profile is unavailable.");
+    }
+
+    pdf::PDFDocument document = pageWithLiveTransparency();
+    QVERIFY(pdf::PDFTransparencyFlattener::hasLiveTransparency(&document));
+
+    pdf::PDFStandardConversionSettings settings;
+    settings.target = pdf::PDFStandardTarget::PDFX1a2001;
+    settings.outputIntentIccData = loadCmykProfile();
+    settings.transparencyFlatten = pdf::PDFTransparencyFlattenPolicy::Never;
+
+    pdf::PDFStandardConversionReport report;
+    const pdf::PDFOperationResult result = pdf::PDFStandardConversion::preview(&document, settings, &report);
+
+    // With flattening explicitly off, the target's prohibition on live
+    // transparency stands and must be reported as a blocker. This is the only
+    // observable that proves the PDF/X policy actually ran: blockers are appended
+    // from result.pdfx->rules, and those rules never exist while the profile
+    // the conversion builds is rejected by parseProfile().
+    QVERIFY(!result);
+    const bool blockedByTransparency = std::any_of(
+        report.blockers.cbegin(), report.blockers.cend(),
+        [](const QString& blocker)
+        { return blocker.startsWith(QStringLiteral("pdfx.transparency.allowed")); });
+    QVERIFY2(blockedByTransparency, qPrintable(report.blockers.join(QStringLiteral(" | "))));
 }
 
 QTEST_APPLESS_MAIN(StandardOracleTest)

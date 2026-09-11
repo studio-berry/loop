@@ -116,10 +116,21 @@ QByteArray xmpForTarget(PDFStandardTarget target)
 
 QJsonObject pdfxProfile(PDFStandardTarget target)
 {
+    // PreflightEngine::parseProfile() rejects a profile whose 'checks' array is
+    // empty before it looks at 'pdfx', so this profile must carry the shared
+    // checks a PDF/X policy layers onto - the same shape as
+    // loop-preflight/examples/profile-pdfx-x1a2001.json. The PDF/X rule set
+    // itself comes from the target, not from this list. Without them, no PDF/X
+    // rule ever ran: preview() reported no blockers for any PDF/X target and
+    // every apply() failed at postflight.
     return QJsonObject{
         { QStringLiteral("name"), QStringLiteral("Loop standard conversion preflight") },
-        { QStringLiteral("pdfx"), QJsonObject{
-                                      { QStringLiteral("target"), pdfStandardTargetToString(target) } } }
+        { QStringLiteral("checks"), QJsonArray{
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("color-inventory") },
+                                                     { QStringLiteral("severity"), QStringLiteral("info") } },
+                                        QJsonObject{ { QStringLiteral("id"), QStringLiteral("transparency-risk") },
+                                                     { QStringLiteral("severity"), QStringLiteral("warning") } } } },
+        { QStringLiteral("pdfx"), QJsonObject{ { QStringLiteral("target"), pdfStandardTargetToString(target) } } }
     };
 }
 
