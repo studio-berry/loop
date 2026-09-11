@@ -24,7 +24,9 @@
 #include "pdfactionlist.h"
 #include "preflightcontroller.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QTranslator>
 #include <QtTest>
 
 class PreflightVerdictTest : public QObject
@@ -55,6 +57,7 @@ private slots:
     void editorWaivedBlocking_isPass();
     void editorWarningsOnly_isPass();
     void editorEngineError_isError();
+    void operatorSummaryIsTranslatable();
 };
 
 namespace
@@ -87,6 +90,29 @@ pdf::PreflightResult budgetExceededResult()
                                   QStringLiteral("page 1") });
     return result;
 }
+
+/// A translator with no .qm file behind it: it answers one message in the
+/// Core verdict context, which is exactly what a shipped catalogue would do.
+class StubVerdictTranslator final : public QTranslator
+{
+public:
+    bool isEmpty() const override { return false; }
+
+    QString translate(const char* context,
+                      const char* sourceText,
+                      const char* disambiguation,
+                      int n) const override
+    {
+        Q_UNUSED(disambiguation);
+        Q_UNUSED(n);
+        if (QLatin1String(context) == QLatin1String("pdf::PreflightVerdict") &&
+            QLatin1String(sourceText) == QLatin1String("No problems found."))
+        {
+            return QStringLiteral("TRANSLATED-NO-PROBLEMS");
+        }
+        return {};
+    }
+};
 
 }   // namespace
 
@@ -402,6 +428,18 @@ void PreflightVerdictTest::editorEngineError_isError()
     QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Error);
 }
 
-QTEST_APPLESS_MAIN(PreflightVerdictTest)
+void PreflightVerdictTest::operatorSummaryIsTranslatable()
+{
+    StubVerdictTranslator translator;
+    QCoreApplication::installTranslator(&translator);
+
+    pdf::PreflightVerdict pass;
+    pass.state = pdf::PreflightVerdictState::Pass;
+    QCOMPARE(pdf::preflightVerdictOperatorSummary(pass), QStringLiteral("TRANSLATED-NO-PROBLEMS"));
+
+    QCoreApplication::removeTranslator(&translator);
+}
+
+QTEST_GUILESS_MAIN(PreflightVerdictTest)
 
 #include "tst_preflightverdicttest.moc"

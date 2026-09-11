@@ -170,25 +170,31 @@ int preflightVerdictProcessExitCode(PreflightVerdictState state)
 
 QString preflightVerdictOperatorSummary(const PreflightVerdict& verdict)
 {
+    // These strings are rendered verbatim by PreflightPane.qml, so they go
+    // through the same Core translation context as preflightGateFailureMessage()
+    // rather than being English-only literals.
+    const char* context = "pdf::PreflightVerdict";
     switch (verdict.state)
     {
         case PreflightVerdictState::Pass:
             return verdict.waivedFindingIds.isEmpty()
-                       ? QStringLiteral("No problems found.")
-                       : QStringLiteral("No problems found. Active dispositions cover previously blocking findings.");
+                       ? QCoreApplication::translate(context, "No problems found.")
+                       : QCoreApplication::translate(context, "No problems found. Active dispositions cover previously blocking findings.");
         case PreflightVerdictState::Fail:
             return verdict.reason.isEmpty()
-                       ? QStringLiteral("Blocking findings require resolution or an active disposition.")
+                       ? QCoreApplication::translate(context, "Blocking findings require resolution or an active disposition.")
                        : verdict.reason;
         case PreflightVerdictState::Incomplete:
-            return QStringLiteral("Could not finish inspecting. %1").arg(
-                verdict.reason.isEmpty() ? QStringLiteral("Required inspection evidence was not collected.") : verdict.reason);
+            return QCoreApplication::translate(context, "Could not finish inspecting. %1")
+                .arg(verdict.reason.isEmpty()
+                         ? QCoreApplication::translate(context, "Required inspection evidence was not collected.")
+                         : verdict.reason);
         case PreflightVerdictState::Error:
             return verdict.reason.isEmpty()
-                       ? QStringLiteral("The preflight engine could not complete the operation.")
+                       ? QCoreApplication::translate(context, "The preflight engine could not complete the operation.")
                        : verdict.reason;
     }
-    return QStringLiteral("The preflight engine could not complete the operation.");
+    return QCoreApplication::translate(context, "The preflight engine could not complete the operation.");
 }
 
 QString preflightGateFailureMessage(const QString& fileName,
