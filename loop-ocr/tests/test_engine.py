@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -41,6 +43,28 @@ class EngineContractTest(unittest.TestCase):
                     normalize_languages([code])
 
         self.assertEqual(normalize_languages(["ch_sim", "EN"]), ["ch_sim", "en"])
+
+    def test_request_schema_accepts_what_the_runtime_normalizes(self) -> None:
+        # The schema is the published wire contract; the service normalizes case
+        # before shape-checking. A value the runtime accepts must not be rejected
+        # by the schema, and junk that the runtime refuses must still be refused.
+        schema = json.loads(
+            (Path(__file__).resolve().parents[1] / "schemas" / "ocr-sidecar.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        pattern = schema["oneOf"][0]["properties"]["languages"]["items"]["pattern"]
+
+        for value in ["en", "EN", "ch_sim", "CH_SIM"]:
+            with self.subTest(value=value):
+                self.assertIsNotNone(re.match(pattern, value))
+                self.assertEqual(normalize_languages([value]), [value.strip().lower()])
+
+        for value in ["../../etc", "en-US", "e", "toolongcode"]:
+            with self.subTest(value=value):
+                self.assertIsNone(re.match(pattern, value))
+                with self.assertRaises(ValueError):
+                    normalize_languages([value])
 
     def test_staged_image_is_read_by_descriptor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
