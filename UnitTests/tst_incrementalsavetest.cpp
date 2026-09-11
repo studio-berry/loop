@@ -27,6 +27,8 @@
 #include <QtTest>
 #include <QBuffer>
 #include <QDateTime>
+#include <QFile>
+#include <QTemporaryDir>
 
 class IncrementalSaveTest : public QObject
 {
@@ -41,6 +43,7 @@ private slots:
     void signedPdfIncrementalSave_preservesSignedPrefix();
     void explicitPoliciesCannotBeDowngradedToIncremental();
     void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
+    void fileOverloadReportsWhatItDid();
 };
 
 namespace
@@ -304,6 +307,51 @@ void IncrementalSaveTest::unclassifiedAndRedactionPoliciesCannotSilentIncrementa
 
     const pdf::PDFOperationSavePolicy mergedUnclassified = pdf::mergePDFSavePolicies(incremental, unclassified);
     QCOMPARE(mergedUnclassified.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+}
+
+void IncrementalSaveTest::fileOverloadReportsWhatItDid()
+{
+    const QByteArray originalData = writeDocument(createDocument());
+    pdf::PDFDocumentReader reader(nullptr, [](bool*)
+                                  { return QString(); }, true, false);
+    const pdf::PDFDocument original = reader.readFromBuffer(originalData);
+    QVERIFY(reader.getReadingResult() == pdf::PDFDocumentReader::Result::OK);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("incremental.pdf"));
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(originalData), qint64(originalData.size()));
+    }
+
+    pdf::PDFDocumentWriter writer(nullptr);
+
+    // A real change appends, and the caller is told so.
+    {
+        const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+        QVERIFY(modified);
+        auto outcome = pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged;
+        QVERIFY(writer.writeIncremental(path, &original, modified.data(), true, &outcome));
+        QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::Appended);
+    }
+
+    // Saving a document against itself copies the bytes verbatim: success, but
+    // not an append, and the caller must be able to tell the two apart. The
+    // file is rewritten first: the append above changed the bytes on disk, and
+    // the writer refuses to touch a file that no longer matches the in-memory
+    // original it was handed.
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+        QCOMPARE(file.write(originalData), qint64(originalData.size()));
+        file.close();
+
+        auto outcome = pdf::PDFDocumentWriter::IncrementalWriteOutcome::Appended;
+        QVERIFY(writer.writeIncremental(path, &original, &original, true, &outcome));
+        QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged);
+    }
 }
 
 QTEST_MAIN(IncrementalSaveTest)

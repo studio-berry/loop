@@ -312,14 +312,23 @@ PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
             return tr("File '%1' can't be opened for incremental save. %2").arg(fileName, targetFile.errorString());
         }
 
-        const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document, outcome);
-        if (result && !targetFile.commit())
-        {
-            return tr("File '%1' can't be committed after incremental save. %2").arg(fileName, targetFile.errorString());
-        }
+        // The nested write reports what it did on success, but a successful
+        // write is not a successful save: commit() can still fail. Hold the
+        // outcome locally and publish it only once the rename has landed.
+        IncrementalWriteOutcome nestedOutcome = IncrementalWriteOutcome::CopiedUnchanged;
+        const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document, &nestedOutcome);
         if (!result)
         {
             targetFile.cancelWriting();
+            return result;
+        }
+        if (!targetFile.commit())
+        {
+            return tr("File '%1' can't be committed after incremental save. %2").arg(fileName, targetFile.errorString());
+        }
+        if (outcome)
+        {
+            *outcome = nestedOutcome;
         }
         return result;
     }
@@ -330,8 +339,13 @@ PDFOperationResult PDFDocumentWriter::writeIncremental(const QString& fileName,
         return tr("File '%1' can't be opened for incremental save. %2").arg(fileName, targetFile.errorString());
     }
 
-    const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document, outcome);
+    IncrementalWriteOutcome nestedOutcome = IncrementalWriteOutcome::CopiedUnchanged;
+    const PDFOperationResult result = writeIncremental(&targetFile, originalData, originalDocument, document, &nestedOutcome);
     targetFile.close();
+    if (result && outcome)
+    {
+        *outcome = nestedOutcome;
+    }
     return result;
 }
 
