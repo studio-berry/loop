@@ -104,20 +104,30 @@ bool verifyPreflightAccessibility(QQuickWindow* window)
 
     const bool hasName = !iface->text(QAccessible::Name).trimmed().isEmpty();
     const bool hasDescription = !iface->text(QAccessible::Description).trimmed().isEmpty();
+    const bool groupingRole = iface->role() == QAccessible::Grouping;
 
     fprintf(stdout,
             "product-quick-a11y-smoke preflight_accessible name=%d description=%d role_grouping=%d\n",
             hasName ? 1 : 0,
             hasDescription ? 1 : 0,
-            iface->role() == QAccessible::Grouping ? 1 : 0);
+            groupingRole ? 1 : 0);
 
+    // Every boolean above is folded into the result: a pane that loses its description or its
+    // Grouping role must fail this smoke, not merely print a 0.
     if (!hasName)
     {
         fprintf(stderr, "product-quick-a11y-smoke preflight_pane_not_accessible\n");
-        return false;
+    }
+    if (!hasDescription)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke preflight_pane_description_missing\n");
+    }
+    if (!groupingRole)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke preflight_pane_not_grouping_role\n");
     }
 
-    return true;
+    return hasName && hasDescription && groupingRole;
 }
 
 }   // namespace
