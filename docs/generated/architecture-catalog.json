@@ -438,6 +438,7 @@
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",
+    "UnitTestsPreflightInteraction",
     "UnitTestsPreflightProfileResolver",
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
