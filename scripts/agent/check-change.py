@@ -318,6 +318,24 @@ def clang_tidy_sources(sources: list[str]) -> list[str]:
     ]
 
 
+CLANG_TIDY_CANDIDATES = ("clang-tidy-18", "clang-tidy-19", "clang-tidy")
+
+
+def find_clang_tidy() -> str | None:
+    """Return the first available clang-tidy binary, or None.
+
+    CI installs the version the toolchain pins (`clang-tidy-18`), but a developer
+    machine may only carry an unversioned binary (both the LLVM installer and the
+    PyPI wheels ship `clang-tidy`), so try the pinned names first and fall back to
+    the plain one instead of reporting the whole lane unavailable.
+    """
+    for candidate in CLANG_TIDY_CANDIDATES:
+        executable = shutil.which(candidate)
+        if executable:
+            return executable
+    return None
+
+
 def add_clang_tidy_checks(
     evidence: list[Evidence], sources: list[str], build_dir: Path, *, dry_run: bool
 ) -> None:
@@ -327,19 +345,20 @@ def add_clang_tidy_checks(
             add_result(
                 evidence,
                 f"clang_tidy:{source}",
-                ["clang-tidy-18", "-p", str(build_dir), "--quiet", source],
+                [CLANG_TIDY_CANDIDATES[0], "-p", str(build_dir), "--quiet", source],
                 ROOT,
                 True,
             )
         return
 
     compile_db = build_dir / "compile_commands.json"
-    if compile_db.exists() and shutil.which("clang-tidy-18"):
+    clang_tidy = find_clang_tidy()
+    if compile_db.exists() and clang_tidy:
         for source in sources:
             add_result(
                 evidence,
                 f"clang_tidy:{source}",
-                ["clang-tidy-18", "-p", str(build_dir), "--quiet", source],
+                [clang_tidy, "-p", str(build_dir), "--quiet", source],
                 ROOT,
                 False,
             )
@@ -348,9 +367,9 @@ def add_clang_tidy_checks(
     evidence.append(
         Evidence(
             "clang_tidy",
-            ["clang-tidy-18", "-p", str(build_dir)],
+            [CLANG_TIDY_CANDIDATES[0], "-p", str(build_dir)],
             result="incomplete",
-            reason="compile_commands.json or clang-tidy-18 unavailable",
+            reason=f"compile_commands.json or clang-tidy unavailable (tried: {', '.join(CLANG_TIDY_CANDIDATES)})",
         )
     )
 
