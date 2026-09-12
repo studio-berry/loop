@@ -47,6 +47,7 @@
 #include "pdfjobscheduler.h"
 
 #include <QObject>
+#include <QHash>
 #include <QPointer>
 #include <QStyleHints>
 #include <QVariantMap>
@@ -176,6 +177,8 @@ public:
 
     Q_INVOKABLE void selectFinding(const QString& findingId);
     Q_INVOKABLE void announceDocumentState(const QString& message);
+    Q_INVOKABLE bool runPreflight();
+    Q_INVOKABLE bool cancelPreflight();
 
     /// Toggles the current page between the fast approximate render and the
     /// authoritative overprint-accurate one. Re-renders only that page;
@@ -243,6 +246,12 @@ private:
     void syncDocumentLifecycle();
     void bindCanvas();
     void unbindCanvas();
+    QStringList activeAsyncWorkKinds() const;
+    void acceptPreflightResult(const QString& jobId,
+                               const QString& documentRevision,
+                               const pdf::PreflightResult& result);
+    void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
+    void refreshCanvasTrace();
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
@@ -263,6 +272,10 @@ private:
     pdfinteraction::FindingListHitTestSource m_findingsHitTest;
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
+    QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
+    struct PreflightWorkerOutcome;
+    QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
+    bool m_acceptPreflightResults = true;
     int m_commandEpoch = 0;
     bool m_documentBound = false;
     bool m_searchPanelVisible = false;

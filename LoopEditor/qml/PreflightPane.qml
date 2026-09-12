@@ -31,6 +31,35 @@ Pane {
             Accessible.name: qsTr("Preflight status")
         }
 
+        RowLayout {
+            Layout.fillWidth: true
+
+            Button {
+                text: qsTr("Run Preflight")
+                enabled: root.host && root.host.hasDocument && root.host.preflightStateName !== "running"
+                Accessible.name: qsTr("Run preflight")
+                Accessible.description: qsTr("Runs the installed Loop Default preflight profile.")
+                onClicked: root.host.runPreflight()
+            }
+
+            Button {
+                text: qsTr("Cancel")
+                enabled: root.host && root.host.preflightStateName === "running"
+                Accessible.name: qsTr("Cancel preflight")
+                Accessible.description: qsTr("Cancels the running preflight job.")
+                onClicked: root.host.cancelPreflight()
+            }
+
+            ProgressBar {
+                Layout.fillWidth: true
+                from: 0
+                to: 100
+                value: root.host ? root.host.preflight.progress : 0
+                enabled: root.host && root.host.preflightStateName === "running"
+                Accessible.name: qsTr("Preflight progress")
+            }
+        }
+
         ListView {
             id: findingsView
             Layout.fillWidth: true

@@ -108,6 +108,7 @@ private slots:
     void exposesCatalogDescriptorsWithoutMutating();
     void navigationCommandsStayDisabledUntilOpen();
     void sessionTeardownDrainsWorkersBeforeAdapters();
+    void preflightRunsOffInteractiveThread();
     void openLargeDocument();
 };
 
@@ -188,6 +189,30 @@ void EditorHostTest::sessionTeardownDrainsWorkersBeforeAdapters()
     QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
     session.reset();
     QVERIFY(adapterReached.load(std::memory_order_acquire));
+}
+
+void EditorHostTest::preflightRunsOffInteractiveThread()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("preflight.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+    QVERIFY(host.runPreflight());
+    QCOMPARE(host.preflightStateName(), QStringLiteral("running"));
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
+    QVERIFY(host.preflightStateName() != QStringLiteral("error"));
+    QCOMPARE(host.preflight()->property("progress").toInt(), 100);
 }
 
 void EditorHostTest::openLargeDocument()

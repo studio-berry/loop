@@ -39,6 +39,7 @@ class PreflightController final : public QObject
 
     Q_PROPERTY(PreflightFindingsModel* findingsModel READ findingsModel CONSTANT)
     Q_PROPERTY(QString operatorSummary READ operatorSummary NOTIFY stateChanged)
+    Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
 
 public:
     enum class State
@@ -74,11 +75,13 @@ public:
     QString documentRevision() const { return m_documentRevision; }
     QString profileDigest() const { return m_profileDigest; }
     QString jobId() const { return m_jobId; }
+    int progress() const noexcept { return m_progress; }
 
     void setCurrentRevision(QString documentKey, QString documentRevision);
     void beginRun(QString documentKey, QString documentRevision, QString profileDigest, QString jobId);
     bool updateProgress(const QString& jobId, const QString& documentRevision, int progress);
     bool acceptResult(const QString& jobId, const QString& documentRevision, const pdf::PreflightResult& result);
+    bool failRun(const QString& jobId, const QString& documentRevision, QString errorMessage);
     bool cancelRun(const QString& jobId);
     bool navigationFor(const QString& findingId, EvidenceNavigationRequest* request) const;
     QVector<FindingOverlay> overlaysForPage(int page) const;
@@ -98,6 +101,7 @@ private:
     QString m_documentRevision;
     QString m_profileDigest;
     QString m_jobId;
+    int m_progress = 0;
     bool m_cancelRequested = false;
     pdf::PDFJobScheduler* m_scheduler = nullptr;
 };

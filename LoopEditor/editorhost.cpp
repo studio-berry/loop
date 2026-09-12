@@ -30,9 +30,12 @@
 #include "loopcanvasitem.h"
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
+#include "preflightengine.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
 #include "interactiontarget.h"
+
+#include "pdfdocumentsession.h"
 
 #include "pdfblockingthreadguard.h"
 #include "pdfpage.h"
@@ -42,18 +45,25 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QCoreApplication>
+#include <QFile>
 #include <QGuiApplication>
+#include <QJsonDocument>
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
+#include <QUuid>
 #include <QUrl>
 
+#include <algorithm>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 
 namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
+const QString DefaultPreflightProfileResource = QStringLiteral(":/profiles/loop-default.json");
 
 int rotationToDegrees(pdf::PageRotation rotation)
 {
@@ -174,6 +184,11 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 
 }   // namespace
 
+struct EditorHost::PreflightWorkerOutcome
+{
+    pdf::PreflightResult result;
+};
+
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
@@ -198,6 +213,7 @@ EditorHost::EditorHost(QObject* parent) :
     m_preflightOverlayBridge.setInteractionController(m_session->interaction());
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_preflight, &pdfinteraction::PreflightController::progressChanged, this, &EditorHost::bumpPresentation);
     connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
@@ -208,10 +224,25 @@ EditorHost::EditorHost(QObject* parent) :
                 refreshFeatureAvailability();
                 bumpPresentation();
                 bumpCommandEpoch(); });
+
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobQueued, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            {
+                m_activeAsyncJobs.insert(snapshot.jobId, snapshot.kind);
+                refreshCanvasTrace(); });
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobProgress, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            { m_preflight.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress); });
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            {
+                m_activeAsyncJobs.remove(snapshot.jobId);
+                finishPreflightJob(snapshot);
+                refreshCanvasTrace(); });
 }
 
 EditorHost::~EditorHost()
 {
+    m_acceptPreflightResults = false;
+    cancelPreflight();
+    QObject::disconnect(&m_session->scheduler(), nullptr, this, nullptr);
     unbindCanvas();
 
     // The guard registration is global process state owned by the thread that
@@ -513,6 +544,100 @@ void EditorHost::announceDocumentState(const QString& message)
     QAccessible::updateAccessibility(&event);
 }
 
+bool EditorHost::runPreflight()
+{
+    if (!hasDocument() || m_preflight.state() == pdfinteraction::PreflightController::State::Running ||
+        !m_session->revisionSource())
+    {
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document)
+    {
+        return false;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = documentKey;
+    spec.documentRevision = documentRevision;
+    spec.operationId = QStringLiteral("preflight.loop-default");
+    spec.checkId = QStringLiteral("loop-default");
+    spec.progressModel = QStringLiteral("preflight-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    m_preflight.beginRun(documentKey,
+                         documentRevision,
+                         QStringLiteral("0c32cc54154186f2d92a02804e4b8ac8ebd226863cca15e9670bf12f1c84c1a1"),
+                         jobId);
+    auto outcome = std::make_shared<PreflightWorkerOutcome>();
+    m_preflightOutcomes.insert(jobId, outcome);
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        [document, outcome](pdf::PDFJobContext& context)
+        {
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+
+            QFile profileFile(DefaultPreflightProfileResource);
+            if (!profileFile.open(QIODevice::ReadOnly))
+            {
+                throw std::runtime_error("Loop Default preflight profile is unavailable.");
+            }
+            QJsonParseError parseError;
+            const QJsonDocument profileDocument = QJsonDocument::fromJson(profileFile.readAll(), &parseError);
+            if (parseError.error != QJsonParseError::NoError || !profileDocument.isObject())
+            {
+                throw std::runtime_error("Loop Default preflight profile is invalid.");
+            }
+
+            pdf::PreflightProfileData profile;
+            QString profileError;
+            if (!pdf::PreflightEngine::parseProfile(profileDocument.object(), profile, profileError))
+            {
+                throw std::runtime_error(profileError.toStdString());
+            }
+            context.reportProgress(5);
+
+            std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
+                pdf::PDFDocumentSession::createForInspection(document.data()), &pdf::PDFDocumentSession::destroy);
+            pdf::PreflightEngine engine(session.get());
+            engine.setOperationControl(context.operationControl());
+            context.reportProgress(15);
+            outcome->result = engine.run(profile);
+            if (context.isCancellationRequested())
+            {
+                return;
+            }
+            context.reportProgress(95);
+            context.setResultSummary(QStringLiteral("Loop Default preflight completed."));
+        });
+    if (submittedId != jobId)
+    {
+        m_preflightOutcomes.remove(jobId);
+        m_preflight.failRun(jobId, documentRevision, tr("Unable to submit preflight work."));
+        return false;
+    }
+
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::cancelPreflight()
+{
+    return m_preflight.cancelRun(m_preflight.jobId());
+}
+
 QVariantList EditorHost::commandDescriptors() const
 {
     QVariantList descriptors;
@@ -587,6 +712,13 @@ void EditorHost::cancelPendingOperation()
 void EditorHost::attachCanvas(QObject* canvasObject)
 {
     m_canvas = qobject_cast<pdfquick::LoopCanvasItem*>(canvasObject);
+    if (m_canvas)
+    {
+        m_canvas->ensureTraceRecorder();
+        m_canvas->setAsyncWorkKindsProvider([this]
+                                            { return activeAsyncWorkKinds(); });
+        refreshCanvasTrace();
+    }
     if (m_documentBound)
     {
         bindCanvas();
@@ -596,6 +728,10 @@ void EditorHost::attachCanvas(QObject* canvasObject)
 void EditorHost::detachCanvas()
 {
     unbindCanvas();
+    if (m_canvas)
+    {
+        m_canvas->setAsyncWorkKindsProvider({});
+    }
     m_canvas.clear();
 }
 
@@ -682,6 +818,8 @@ void EditorHost::connectFacade()
             this,
             [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
             {
+                cancelPreflight();
+                syncRevisionModels();
                 if (m_documentBound)
                 {
                     m_documentModel.setDocument(&m_session->context());
@@ -908,6 +1046,7 @@ void EditorHost::syncDocumentLifecycle()
 
 void EditorHost::onDocumentGone()
 {
+    cancelPreflight();
     unbindCanvas();
     m_session->clearDocumentView();
     m_preflight.findingsModel()->clear();
@@ -944,6 +1083,73 @@ void EditorHost::unbindCanvas()
     }
 
     m_canvas->bind(nullptr, nullptr, nullptr);
+}
+
+QStringList EditorHost::activeAsyncWorkKinds() const
+{
+    QStringList kinds;
+    kinds.reserve(m_activeAsyncJobs.size());
+    for (auto it = m_activeAsyncJobs.cbegin(); it != m_activeAsyncJobs.cend(); ++it)
+    {
+        kinds.append(QString::fromLatin1(pdf::getPDFJobKindName(it.value())));
+    }
+    kinds.removeDuplicates();
+    std::sort(kinds.begin(), kinds.end());
+    return kinds;
+}
+
+void EditorHost::acceptPreflightResult(const QString& jobId,
+                                       const QString& documentRevision,
+                                       const pdf::PreflightResult& result)
+{
+    if (m_acceptPreflightResults && m_preflight.acceptResult(jobId, documentRevision, result))
+    {
+        refreshCanvasTrace();
+        bumpPresentation();
+    }
+}
+
+void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const std::shared_ptr<PreflightWorkerOutcome> outcome = m_preflightOutcomes.take(snapshot.jobId);
+    if (snapshot.jobId != m_preflight.jobId() || m_preflight.state() != pdfinteraction::PreflightController::State::Running)
+    {
+        return;
+    }
+
+    switch (snapshot.status)
+    {
+        case pdf::PDFJobStatus::Succeeded:
+            if (outcome)
+            {
+                acceptPreflightResult(snapshot.jobId, snapshot.documentRevision, outcome->result);
+            }
+            else
+            {
+                m_preflight.failRun(snapshot.jobId, snapshot.documentRevision, tr("Preflight result was unavailable."));
+            }
+            break;
+        case pdf::PDFJobStatus::Failed:
+            m_preflight.failRun(snapshot.jobId, snapshot.documentRevision, snapshot.errorMessage);
+            break;
+        case pdf::PDFJobStatus::Cancelled:
+            m_preflight.cancelRun(snapshot.jobId);
+            break;
+        case pdf::PDFJobStatus::Stale:
+            syncRevisionModels();
+            break;
+        case pdf::PDFJobStatus::Queued:
+        case pdf::PDFJobStatus::Running:
+            break;
+    }
+}
+
+void EditorHost::refreshCanvasTrace()
+{
+    if (m_canvas)
+    {
+        m_canvas->update();
+    }
 }
 
 void EditorHost::syncRevisionModels()

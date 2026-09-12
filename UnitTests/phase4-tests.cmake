@@ -67,6 +67,7 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
     if(LOOP_BUILD_QUICK_CANVAS)
         add_executable(UnitTestsEditorHost
             tst_editorhosttest.cpp
+            ${CMAKE_SOURCE_DIR}/LoopEditor/app.qrc
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.cpp
             ${CMAKE_SOURCE_DIR}/LoopEditor/editorhost.h
             ${CMAKE_SOURCE_DIR}/LoopEditor/documentviewsession.cpp

@@ -69,7 +69,12 @@ bool PreflightController::updateProgress(const QString& jobId,
     {
         return false;
     }
-    Q_EMIT progressChanged(qBound(0, progress, 100));
+    const int bounded = qBound(0, progress, 100);
+    if (bounded != m_progress)
+    {
+        m_progress = bounded;
+        Q_EMIT progressChanged(m_progress);
+    }
     return true;
 }
 
@@ -83,10 +88,11 @@ void PreflightController::beginRun(QString documentKey,
     m_profileDigest = std::move(profileDigest);
     m_jobId = std::move(jobId);
     m_cancelRequested = false;
+    m_progress = 0;
     m_findings.clear();
     m_operatorSummary = QStringLiteral("Preflight is running.");
     setState(State::Running);
-    Q_EMIT progressChanged(0);
+    Q_EMIT progressChanged(m_progress);
 }
 
 bool PreflightController::acceptResult(const QString& jobId,
@@ -103,7 +109,8 @@ bool PreflightController::acceptResult(const QString& jobId,
     // has to know too, or the list and overlays keep showing them as blockers
     // while the operator is told the run passed.
     m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings, verdict.waivedFindingIds);
-    Q_EMIT progressChanged(100);
+    m_progress = 100;
+    Q_EMIT progressChanged(m_progress);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
     switch (verdict.state)
     {
@@ -120,6 +127,18 @@ bool PreflightController::acceptResult(const QString& jobId,
             setState(State::Error);
             break;
     }
+    return true;
+}
+
+bool PreflightController::failRun(const QString& jobId, const QString& documentRevision, QString errorMessage)
+{
+    if (jobId != m_jobId || documentRevision != m_documentRevision || m_state != State::Running)
+    {
+        return false;
+    }
+
+    m_operatorSummary = QStringLiteral("Preflight failed: %1").arg(std::move(errorMessage));
+    setState(State::Error);
     return true;
 }
 
