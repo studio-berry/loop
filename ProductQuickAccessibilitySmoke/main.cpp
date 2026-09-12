@@ -79,6 +79,47 @@ bool verifyCanvasAccessibility(QQuickWindow* window)
     return hasName && hasDescription && canvasRole && noTileChildren;
 }
 
+bool verifyPreflightAccessibility(QQuickWindow* window)
+{
+    if (!window)
+    {
+        return false;
+    }
+
+    // #195 acceptance 1: the preflight workflow surface must be reachable and named. The pane owns
+    // the objectName; everything the operator reads off it comes from EditorHost.
+    QQuickItem* pane = window->findChild<QQuickItem*>(QStringLiteral("preflightPane"));
+    if (!pane)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke preflight_pane_missing\n");
+        return false;
+    }
+
+    QAccessibleInterface* iface = QAccessible::queryAccessibleInterface(pane);
+    if (!iface)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke preflight_pane_has_no_accessible_interface\n");
+        return false;
+    }
+
+    const bool hasName = !iface->text(QAccessible::Name).trimmed().isEmpty();
+    const bool hasDescription = !iface->text(QAccessible::Description).trimmed().isEmpty();
+
+    fprintf(stdout,
+            "product-quick-a11y-smoke preflight_accessible name=%d description=%d role_grouping=%d\n",
+            hasName ? 1 : 0,
+            hasDescription ? 1 : 0,
+            iface->role() == QAccessible::Grouping ? 1 : 0);
+
+    if (!hasName)
+    {
+        fprintf(stderr, "product-quick-a11y-smoke preflight_pane_not_accessible\n");
+        return false;
+    }
+
+    return true;
+}
+
 }   // namespace
 
 int main(int argc, char** argv)
@@ -132,7 +173,21 @@ int main(int argc, char** argv)
 
                                  const bool focusHelper = host.focusRestoration() != nullptr;
                                  const bool canvasAccessible = verifyCanvasAccessibility(window);
-                                 const bool passed = api != QSGRendererInterface::Unknown && focusHelper && canvasAccessible;
+                                 const bool preflightAccessible = verifyPreflightAccessibility(window);
+
+                                 // #195 acceptance 1 + 7: the shell starts on a freshly opened
+                                 // document, so the preflight surface must present its not-checked
+                                 // state - never a pass - before any run has been accepted.
+                                 const bool preflightFresh =
+                                     host.preflightStateName() == QStringLiteral("not-checked");
+                                 if (!preflightFresh)
+                                 {
+                                     fprintf(stderr,
+                                             "product-quick-a11y-smoke preflight_not_checked_missing state=%s\n",
+                                             host.preflightStateName().toLocal8Bit().constData());
+                                 }
+
+                                 const bool passed = api != QSGRendererInterface::Unknown && focusHelper && canvasAccessible && preflightAccessible && preflightFresh;
 
                                  fprintf(stdout, "product-quick-a11y-smoke status=%s\n", passed ? "pass" : "fail");
                                  fflush(stdout);

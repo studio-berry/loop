@@ -5,6 +5,8 @@ import QtQuick.Layouts
 Pane {
     id: root
 
+    objectName: "preflightPane"
+
     property var host: editorHost
     property var findingsModel: host ? host.preflight.findingsModel : null
 
@@ -18,17 +20,34 @@ Pane {
         anchors.fill: parent
         spacing: 8
 
-        Label {
+        // Canonical state badge. The colour and the accessible name are rendered from LoopLibQuick
+        // through EditorHost (preflightStateColor / preflightStateVisual); this file decides nothing
+        // about pass or severity, and invents no state wording of its own.
+        RowLayout {
+            id: stateBadge
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: {
-                if (!host)
-                    return ""
-                if (host.preflightOperatorSummary)
-                    return host.preflightOperatorSummary
-                return qsTr("Preflight status: %1").arg(host.preflightStateName)
+            spacing: 8
+
+            Rectangle {
+                width: 12
+                height: 12
+                radius: 6
+                color: root.host ? root.host.preflightStateColor : "transparent"
+                Accessible.ignored: true
             }
-            Accessible.name: qsTr("Preflight status")
+
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: {
+                    if (!host)
+                        return ""
+                    if (host.preflightOperatorSummary)
+                        return host.preflightOperatorSummary
+                    return qsTr("Preflight status: %1").arg(host.preflightStateName)
+                }
+                Accessible.name: root.host ? root.host.preflightStateVisual.accessibleName : qsTr("Preflight status")
+            }
         }
 
         ComboBox {
