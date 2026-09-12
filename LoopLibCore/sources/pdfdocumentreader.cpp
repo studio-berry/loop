@@ -688,6 +688,34 @@ PDFDocument PDFDocumentReader::readFromBuffer(const QByteArray& buffer)
             throw PDFException(tr("Empty xref table."));
         }
 
+        // The reader allocates a dense object table for every declared slot -
+        // including free and never-referenced ones - so the declared cardinality,
+        // not the number of occupied entries, is what must fit the document-model
+        // object budget. A sparse table otherwise turns a small file into a large
+        // allocation before a single object has been visited.
+        //
+        // The refusal is raised through the budget vocabulary the rest of the
+        // reader already uses (PDFBudgetExceededException, kind ObjectsVisited)
+        // rather than a bespoke message: it is the same budget a document whose
+        // object table grows past the limit trips while being read, so the failure
+        // stays attributable ("attempted N, limit L") and a budget failure still
+        // fails the read closed instead of being retried permissively. The detail
+        // is built directly because there is no bulk charge in the public budget
+        // API, and charging one object at a time up to the limit would make the
+        // refusal cost attacker-amplifiable work.
+        const std::uint64_t declaredObjectCount = xrefTable.getSize();
+        const std::uint64_t maximalObjectTableSize = m_processingBudget.limits().maxObjectsVisited;
+        if (declaredObjectCount > maximalObjectTableSize)
+        {
+            PDFBudgetExceeded detail;
+            detail.kind = PDFBudgetKind::ObjectsVisited;
+            detail.pool = budgetPoolFor(detail.kind);
+            detail.limit = maximalObjectTableSize;
+            detail.attempted = declaredObjectCount;
+            detail.context = tr("PDF object table");
+            throw PDFBudgetExceededException(std::move(detail));
+        }
+
         PDFObjectStorage::PDFObjects objects;
         objects.resize(xrefTable.getSize());
 
