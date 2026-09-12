@@ -410,6 +410,15 @@ def main() -> int:
     add_result(evidence, "source_integrity", [python, "scripts/ci/check_source_integrity.py"], ROOT, args.dry_run)
     add_result(evidence, "architecture_catalog", [python, "scripts/generate-architecture-catalogs.py", "--check"], ROOT, args.dry_run)
     add_result(evidence, "policy_adapters", [python, "scripts/agent/generate-adapters.py"], ROOT, args.dry_run)
+    # Whole-tree contract guards: they audit invariants of the tree, not just the
+    # diff, so they run on every change like source_integrity does.
+    add_result(
+        evidence,
+        "preflight_truth_source",
+        [python, "scripts/ci/check_preflight_truth_source.py"],
+        ROOT,
+        args.dry_run,
+    )
 
     if sources:
         add_format_checks(
