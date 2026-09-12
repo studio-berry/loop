@@ -419,6 +419,13 @@ def main() -> int:
         ROOT,
         args.dry_run,
     )
+    add_result(
+        evidence,
+        "qml_mirror_parity",
+        [python, "scripts/ci/check_qml_mirror_parity.py"],
+        ROOT,
+        args.dry_run,
+    )
 
     if sources:
         add_format_checks(
