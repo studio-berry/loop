@@ -67,6 +67,27 @@ ApplicationWindow {
         onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
     }
 
+    FileDialog {
+        id: preflightReportDialog
+        title: qsTr("Export Preflight Report")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("JSON files (*.json)")]
+        onAccepted: {
+            if (host) {
+                host.exportPreflightReportFileUrl(selectedFile)
+            }
+            if (host && host.focusRestoration) host.focusRestoration.restore()
+        }
+        onRejected: if (host && host.focusRestoration) host.focusRestoration.restore()
+    }
+
+    Connections {
+        target: host
+        function onPreflightReportExportRequested() {
+            preflightReportDialog.open()
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
