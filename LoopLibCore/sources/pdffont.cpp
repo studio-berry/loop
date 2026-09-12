@@ -3086,6 +3086,21 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
             return 0;
         };
 
+        // A truncated CMap is malformed input, not an empty one. PDFLexicalAnalyzer
+        // returns EndOfFile for every fetch past the end of the buffer, so a range
+        // operator whose terminator is missing would spin here forever and grow
+        // `entries` until the process is killed (hostile /ToUnicode stream). Every
+        // fetch inside a range operator therefore fails closed on EndOfFile.
+        auto fetchRequired = [&parser](const char* operatorName)
+        {
+            PDFLexicalAnalyzer::Token fetchedToken = parser.fetch();
+            if (fetchedToken.type == PDFLexicalAnalyzer::TokenType::EndOfFile)
+            {
+                throw PDFException(PDFTranslationContext::tr("CMap operator '%1' is not terminated.").arg(QString::fromLatin1(operatorName)));
+            }
+            return fetchedToken;
+        };
+
         if (token.type == PDFLexicalAnalyzer::TokenType::Command)
         {
             QByteArray command = token.data.toByteArray();
@@ -3104,7 +3119,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
             {
                 while (true)
                 {
-                    PDFLexicalAnalyzer::Token token1 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token1 = fetchRequired("beginbfrange");
 
                     if (token1.type == PDFLexicalAnalyzer::TokenType::Command &&
                         token1.data.toByteArray() == "endbfrange")
@@ -3112,8 +3127,8 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
                         break;
                     }
 
-                    PDFLexicalAnalyzer::Token token2 = parser.fetch();
-                    PDFLexicalAnalyzer::Token token3 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token2 = fetchRequired("beginbfrange");
+                    PDFLexicalAnalyzer::Token token3 = fetchRequired("beginbfrange");
 
                     std::pair<unsigned int, unsigned int> from = fetchCode(token1);
                     std::pair<unsigned int, unsigned int> to = fetchCode(token2);
@@ -3124,7 +3139,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
 
                         while (true)
                         {
-                            PDFLexicalAnalyzer::Token arrayToken = parser.fetch();
+                            PDFLexicalAnalyzer::Token arrayToken = fetchRequired("beginbfrange");
 
                             // Do we have end of array?
                             if (arrayToken.type == PDFLexicalAnalyzer::TokenType::ArrayEnd)
@@ -3148,7 +3163,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
             {
                 while (true)
                 {
-                    PDFLexicalAnalyzer::Token token1 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token1 = fetchRequired("begincidrange");
 
                     if (token1.type == PDFLexicalAnalyzer::TokenType::Command &&
                         token1.data.toByteArray() == "endcidrange")
@@ -3156,8 +3171,8 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
                         break;
                     }
 
-                    PDFLexicalAnalyzer::Token token2 = parser.fetch();
-                    PDFLexicalAnalyzer::Token token3 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token2 = fetchRequired("begincidrange");
+                    PDFLexicalAnalyzer::Token token3 = fetchRequired("begincidrange");
 
                     std::pair<unsigned int, unsigned int> from = fetchCode(token1);
                     std::pair<unsigned int, unsigned int> to = fetchCode(token2);
@@ -3170,7 +3185,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
             {
                 while (true)
                 {
-                    PDFLexicalAnalyzer::Token token1 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token1 = fetchRequired("begincidchar");
 
                     if (token1.type == PDFLexicalAnalyzer::TokenType::Command &&
                         token1.data.toByteArray() == "endcidchar")
@@ -3178,7 +3193,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
                         break;
                     }
 
-                    PDFLexicalAnalyzer::Token token2 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token2 = fetchRequired("begincidchar");
 
                     std::pair<unsigned int, unsigned int> code = fetchCode(token1);
                     CID cid = fetchCID(token2);
@@ -3190,7 +3205,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
             {
                 while (true)
                 {
-                    PDFLexicalAnalyzer::Token token1 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token1 = fetchRequired("beginbfchar");
 
                     if (token1.type == PDFLexicalAnalyzer::TokenType::Command &&
                         token1.data.toByteArray() == "endbfchar")
@@ -3198,7 +3213,7 @@ PDFFontCMap PDFFontCMap::createFromData(const QByteArray& data)
                         break;
                     }
 
-                    PDFLexicalAnalyzer::Token token2 = parser.fetch();
+                    PDFLexicalAnalyzer::Token token2 = fetchRequired("beginbfchar");
 
                     std::pair<unsigned int, unsigned int> code = fetchCode(token1);
                     CID cid = fetchUnicode(token2);

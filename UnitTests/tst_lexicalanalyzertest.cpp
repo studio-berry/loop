@@ -31,7 +31,9 @@
 #include "pdfdocument.h"
 #include "pdfexception.h"
 #include "pdfjbig2decoder.h"
+#include "pdffont.h"
 
+#include <QElapsedTimer>
 #include <regex>
 
 #ifdef LOOP_COMPILER_MSVC
@@ -65,6 +67,9 @@ private slots:
     void test_stitching_function();
     void test_postscript_function();
     void test_jbig2_arithmetic_decoder();
+    void test_truncatedCMapArrayRangeDoesNotLoop();
+    void test_truncatedCMapRangeOperatorsFailClosed_data();
+    void test_truncatedCMapRangeOperatorsFailClosed();
 
 private:
     void scanWholeStream(const char* stream);
@@ -1142,6 +1147,62 @@ void LexicalAnalyzerTest::test_postscript_function()
            { return qBound(0.0, 0.5 * x + std::pow(x, 2.0), 1.0); });
     test01("2.0 1 index exch div exch pop", [](double x)
            { return x / 2.0; });
+}
+
+void LexicalAnalyzerTest::test_truncatedCMapArrayRangeDoesNotLoop()
+{
+    // A nested array inside beginbfrange that is never closed. This is the one
+    // range loop that is genuinely unbounded today: its token comes from
+    // fetchUnicode(), which returns 0 for anything that is not a 2-byte string
+    // and never throws, so at the end of the buffer it spins on EndOfFile
+    // forever and appends one entry per iteration until the process is killed.
+    const QByteArray truncated = "1 beginbfrange\n<0000> <00FF> [\n";
+
+    QElapsedTimer timer;
+    timer.start();
+
+    QVERIFY_THROWS_EXCEPTION(pdf::PDFException, pdf::PDFFontCMap::createFromData(truncated));
+
+    // Fail-closed is not enough: it must also fail fast. Pre-fix this call never
+    // returns at all.
+    QVERIFY2(timer.elapsed() < 2000, "a truncated CMap array range must be rejected immediately");
+}
+
+void LexicalAnalyzerTest::test_truncatedCMapRangeOperatorsFailClosed_data()
+{
+    QTest::addColumn<QByteArray>("cmap");
+    QTest::addColumn<QByteArray>("operatorName");
+
+    // Each fixture opens a range operator with a well-formed first entry and no
+    // terminator. Pre-fix these loops stop only because fetchCode()/fetchCID()
+    // throw on the EndOfFile token they are handed; the fix makes the failure
+    // deliberate and names the operator that was left open.
+    QTest::newRow("begincidrange") << QByteArray("1 begincidrange\n<0000> <00FF> 1\n") << QByteArray("begincidrange");
+    QTest::newRow("begincidchar") << QByteArray("1 begincidchar\n<0000> 1\n") << QByteArray("begincidchar");
+    QTest::newRow("beginbfchar") << QByteArray("1 beginbfchar\n<0000> <0041>\n") << QByteArray("beginbfchar");
+    QTest::newRow("beginbfrange") << QByteArray("1 beginbfrange\n<0000> <00FF> <0041>\n") << QByteArray("beginbfrange");
+}
+
+void LexicalAnalyzerTest::test_truncatedCMapRangeOperatorsFailClosed()
+{
+    QFETCH(QByteArray, cmap);
+    QFETCH(QByteArray, operatorName);
+
+    bool threw = false;
+    QString message;
+    try
+    {
+        pdf::PDFFontCMap::createFromData(cmap);
+    }
+    catch (const pdf::PDFException& e)
+    {
+        threw = true;
+        message = e.getMessage();
+    }
+
+    QVERIFY2(threw, "a truncated CMap range operator must be rejected, not silently accepted");
+    QVERIFY2(message.contains(QStringLiteral("not terminated")) && message.contains(QString::fromLatin1(operatorName)),
+             qPrintable(message));
 }
 
 void LexicalAnalyzerTest::test_jbig2_arithmetic_decoder()
