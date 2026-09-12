@@ -70,6 +70,7 @@ private slots:
     void test_truncatedCMapArrayRangeDoesNotLoop();
     void test_truncatedCMapRangeOperatorsFailClosed_data();
     void test_truncatedCMapRangeOperatorsFailClosed();
+    void test_sampledFunctionRejectsMismatchedDomainAndEncodeArity();
 
 private:
     void scanWholeStream(const char* stream);
@@ -1203,6 +1204,32 @@ void LexicalAnalyzerTest::test_truncatedCMapRangeOperatorsFailClosed()
     QVERIFY2(threw, "a truncated CMap range operator must be rejected, not silently accepted");
     QVERIFY2(message.contains(QStringLiteral("not terminated")) && message.contains(QString::fromLatin1(operatorName)),
              qPrintable(message));
+}
+
+void LexicalAnalyzerTest::test_sampledFunctionRejectsMismatchedDomainAndEncodeArity()
+{
+    // /Size has two dimensions, so Domain/Encode must both carry 2 * 2 = 4
+    // numbers. The old check only compared Domain.size() with Encode.size(), so
+    // this dictionary passed validation and apply() then indexed
+    // m_domain[2], m_domain[3], m_encoder[2], m_encoder[3] past the end of two
+    // vectors - an out-of-bounds read in a release build, where the
+    // PDFSampledFunction Q_ASSERTs do not exist.
+    const char data[] = " << "
+                        "     /FunctionType 0 "
+                        "     /Domain [ 0 1 ] "
+                        "     /Encode [ 0 1 ] "
+                        "     /Range [ 0 1 ] "
+                        "     /Size [ 2 2 ] "
+                        "     /BitsPerSample 8 "
+                        "     /Order 1 "
+                        "     /Length 4 "
+                        " >> "
+                        " stream\n\000\377\200\300 endstream ";
+
+    pdf::PDFDocument document;
+    pdf::PDFParser parser(data, data + std::size(data), nullptr, pdf::PDFParser::AllowStreams);
+
+    QVERIFY_THROWS_EXCEPTION(pdf::PDFException, pdf::PDFFunction::createFunction(&document, parser.getObject()));
 }
 
 void LexicalAnalyzerTest::test_jbig2_arithmetic_decoder()

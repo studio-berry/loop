@@ -142,7 +142,12 @@ PDFFunctionPtr PDFFunction::createFunctionImpl(const PDFDocument* document, cons
                 throw PDFException(PDFParsingContext::tr("Sampled function hasn't any output."));
             }
 
-            if (domain.size() != encode.size())
+            // The PDF 1.7 specification defines Encode as 2 x m numbers and Decode
+            // as 2 x n numbers, and PDFSampledFunction indexes m_domain/m_encoder as
+            // 2 x m and m_range/m_decoder as 2 x n. Comparing Domain.size() with
+            // Encode.size() alone accepted arrays shorter than 2 x m, which the
+            // constructor only rejects with Q_ASSERT - i.e. not in a release build.
+            if (domain.size() != 2 * m || encode.size() != 2 * m)
             {
                 throw PDFException(PDFParsingContext::tr("Sampled function has invalid encode array."));
             }
