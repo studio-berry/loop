@@ -377,15 +377,38 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
     QCOMPARE(stateColor, pdfquick::tokens::color(pdfquick::tokens::ColorRole::StateNotChecked, theme));
     QVERIFY(stateColor != pdfquick::tokens::color(pdfquick::tokens::ColorRole::Success, theme));
 
-    // A completed run keeps the same shape, whatever Core decided.
+    // A completed run keeps the same shape, but the values must agree with the state Core actually
+    // reached. This half used to assert only key presence and a non-empty `kind`, which every
+    // reachable state satisfies - a regression that produced the wrong post-run visual still passed.
     QVERIFY(host.runPreflight());
     QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
 
+    const QString stateName = host.preflightStateName();
     const QVariantMap after = host.preflightStateVisual();
     QVERIFY2(after.contains(QStringLiteral("kind")) && after.contains(QStringLiteral("colorRole")) && after.contains(QStringLiteral("icon")) && after.contains(QStringLiteral("accessibleName")),
              "the visual must carry the full canonical treatment for QML to render");
-    QVERIFY(!after.value(QStringLiteral("kind")).toString().isEmpty());
-    QVERIFY(host.preflightStateColor().isValid());
+
+    const pdfquick::tokens::LoopStateVisual expected = pdfquick::tokens::resolvePreflightStateVisual(stateName);
+
+    // The visual is Core's own state rendered, never re-derived: only a real pass may look like one.
+    const bool coreSaysPass = stateName == QStringLiteral("pass");
+    QCOMPARE(after.value(QStringLiteral("kind")).toString() == QStringLiteral("Passed"), coreSaysPass);
+    if (!coreSaysPass)
+    {
+        QVERIFY(after.value(QStringLiteral("colorRole")).toString() != QStringLiteral("Success"));
+        QVERIFY(after.value(QStringLiteral("icon")).toString() != QStringLiteral("Checkmark"));
+        QVERIFY(after.value(QStringLiteral("accessibleName")).toString() != QStringLiteral("Passed"));
+    }
+
+    // Every field is the one the same map chose for the state name we just read...
+    QCOMPARE(after.value(QStringLiteral("kind")).toString(), pdfquick::tokens::stateKindName(expected.kind));
+    QCOMPARE(after.value(QStringLiteral("colorRole")).toString(), pdfquick::tokens::colorRoleName(expected.colorRole));
+    QCOMPARE(after.value(QStringLiteral("icon")).toString(), pdfquick::tokens::stateIconName(expected.icon));
+    QCOMPARE(after.value(QStringLiteral("accessibleName")).toString(), pdfquick::tokens::stateAccessibleName(expected.kind));
+
+    // ...and the resolved colour is color(role, theme) for that same role, exactly as the pre-run
+    // half asserts above.
+    QCOMPARE(host.preflightStateColor(), pdfquick::tokens::color(expected.colorRole, theme));
 }
 
 void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
