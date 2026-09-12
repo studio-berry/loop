@@ -91,6 +91,10 @@ enum class ColorRole
 /// Resolves `role` for `theme`. Hex literals live only in looptokens.cpp.
 LOOPLIBQUICK_EXPORT QColor color(ColorRole role, LoopTheme theme);
 
+/// Stable name for `role`. Colour is looked up by role name across the C++/QML boundary, never by
+/// enum value or hex literal.
+LOOPLIBQUICK_EXPORT QString colorRoleName(ColorRole role);
+
 }   // namespace pdfquick::tokens
 
 #endif   // LOOPTOKENS_H

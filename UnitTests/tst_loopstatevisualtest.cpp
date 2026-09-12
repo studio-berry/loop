@@ -215,6 +215,18 @@ private slots:
     void everyStateHasUniqueNonColorCues();
     void greyscaleCollisionRequiresDistinctIcon_data();
     void greyscaleCollisionRequiresDistinctIcon();
+
+    void stateKindName_data();
+    void stateKindName();
+    void stateIconName_data();
+    void stateIconName();
+    void colorRoleName_data();
+    void colorRoleName();
+
+    void preflightStateVisualMapping_data();
+    void preflightStateVisualMapping();
+    void preflightStateVisualNeverPassesWithoutAPass_data();
+    void preflightStateVisualNeverPassesWithoutAPass();
 };
 
 void LoopStateVisualTest::severityMapping_data()
@@ -531,6 +543,149 @@ void LoopStateVisualTest::greyscaleCollisionRequiresDistinctIcon()
             }
         }
     }
+}
+
+void LoopStateVisualTest::stateKindName_data()
+{
+    QTest::addColumn<StateKind>("kind");
+    QTest::addColumn<QString>("expectedName");
+
+    // The name is the stable, QML-facing key. It deliberately differs from the accessible name
+    // ("Not checked" vs "NotChecked"): one is read by the operator, the other is compared by code.
+    QTest::newRow("error") << StateKind::Error << QStringLiteral("Error");
+    QTest::newRow("warning") << StateKind::Warning << QStringLiteral("Warning");
+    QTest::newRow("info") << StateKind::Info << QStringLiteral("Info");
+    QTest::newRow("incomplete") << StateKind::Incomplete << QStringLiteral("Incomplete");
+    QTest::newRow("not-checked") << StateKind::NotChecked << QStringLiteral("NotChecked");
+    QTest::newRow("passed") << StateKind::Passed << QStringLiteral("Passed");
+    QTest::newRow("waived") << StateKind::Waived << QStringLiteral("Waived");
+}
+
+void LoopStateVisualTest::stateKindName()
+{
+    QFETCH(StateKind, kind);
+    QFETCH(QString, expectedName);
+
+    QCOMPARE(pdfquick::tokens::stateKindName(kind), expectedName);
+}
+
+void LoopStateVisualTest::stateIconName_data()
+{
+    QTest::addColumn<StateIcon>("icon");
+    QTest::addColumn<QString>("expectedName");
+
+    QTest::newRow("filled-circle") << StateIcon::FilledCircle << QStringLiteral("FilledCircle");
+    QTest::newRow("filled-triangle") << StateIcon::FilledTriangle << QStringLiteral("FilledTriangle");
+    QTest::newRow("filled-square") << StateIcon::FilledSquare << QStringLiteral("FilledSquare");
+    QTest::newRow("hatched") << StateIcon::Hatched << QStringLiteral("Hatched");
+    QTest::newRow("outline") << StateIcon::Outline << QStringLiteral("Outline");
+    QTest::newRow("checkmark") << StateIcon::Checkmark << QStringLiteral("Checkmark");
+    QTest::newRow("badge-overlay") << StateIcon::BadgeOverlay << QStringLiteral("BadgeOverlay");
+}
+
+void LoopStateVisualTest::stateIconName()
+{
+    QFETCH(StateIcon, icon);
+    QFETCH(QString, expectedName);
+
+    QCOMPARE(pdfquick::tokens::stateIconName(icon), expectedName);
+}
+
+void LoopStateVisualTest::colorRoleName_data()
+{
+    QTest::addColumn<ColorRole>("role");
+    QTest::addColumn<QString>("expectedName");
+
+    QTest::newRow("surface-base") << ColorRole::SurfaceBase << QStringLiteral("SurfaceBase");
+    QTest::newRow("surface-panel") << ColorRole::SurfacePanel << QStringLiteral("SurfacePanel");
+    QTest::newRow("surface-overlay") << ColorRole::SurfaceOverlay << QStringLiteral("SurfaceOverlay");
+    QTest::newRow("text-primary") << ColorRole::TextPrimary << QStringLiteral("TextPrimary");
+    QTest::newRow("text-secondary") << ColorRole::TextSecondary << QStringLiteral("TextSecondary");
+    QTest::newRow("text-disabled") << ColorRole::TextDisabled << QStringLiteral("TextDisabled");
+    QTest::newRow("severity-error") << ColorRole::SeverityError << QStringLiteral("SeverityError");
+    QTest::newRow("severity-warning") << ColorRole::SeverityWarning << QStringLiteral("SeverityWarning");
+    QTest::newRow("severity-info") << ColorRole::SeverityInfo << QStringLiteral("SeverityInfo");
+    QTest::newRow("success") << ColorRole::Success << QStringLiteral("Success");
+    QTest::newRow("state-incomplete") << ColorRole::StateIncomplete << QStringLiteral("StateIncomplete");
+    QTest::newRow("state-not-checked") << ColorRole::StateNotChecked << QStringLiteral("StateNotChecked");
+    QTest::newRow("focus-ring") << ColorRole::FocusRing << QStringLiteral("FocusRing");
+    QTest::newRow("destructive-action") << ColorRole::DestructiveAction << QStringLiteral("DestructiveAction");
+}
+
+void LoopStateVisualTest::colorRoleName()
+{
+    QFETCH(ColorRole, role);
+    QFETCH(QString, expectedName);
+
+    QCOMPARE(pdfquick::tokens::colorRoleName(role), expectedName);
+}
+
+void LoopStateVisualTest::preflightStateVisualMapping_data()
+{
+    QTest::addColumn<QString>("stateName");
+    QTest::addColumn<StateKind>("expectedKind");
+
+    // The names are pdf::preflightVerdictStateToString() / EditorHost::preflightStateName() output.
+    QTest::newRow("not-checked") << QStringLiteral("not-checked") << StateKind::NotChecked;
+    QTest::newRow("running") << QStringLiteral("running") << StateKind::Info;
+    QTest::newRow("pass") << QStringLiteral("pass") << StateKind::Passed;
+    QTest::newRow("findings") << QStringLiteral("findings") << StateKind::Error;
+    QTest::newRow("incomplete") << QStringLiteral("incomplete") << StateKind::Incomplete;
+    QTest::newRow("stale") << QStringLiteral("stale") << StateKind::Incomplete;
+    QTest::newRow("cancelled") << QStringLiteral("cancelled") << StateKind::NotChecked;
+    QTest::newRow("error") << QStringLiteral("error") << StateKind::Error;
+    QTest::newRow("unknown") << QStringLiteral("something-new") << StateKind::NotChecked;
+    QTest::newRow("empty") << QString() << StateKind::NotChecked;
+    // A caller may hand over a raw Core string; the mapping is still total and case/whitespace-safe.
+    QTest::newRow("pass with padding and case") << QStringLiteral("  PASS ") << StateKind::Passed;
+    QTest::newRow("stale with padding and case") << QStringLiteral(" Stale") << StateKind::Incomplete;
+}
+
+void LoopStateVisualTest::preflightStateVisualMapping()
+{
+    QFETCH(QString, stateName);
+    QFETCH(StateKind, expectedKind);
+
+    const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(stateName);
+
+    QCOMPARE(visual.kind, expectedKind);
+    QVERIFY2(!visual.accessibleName.isEmpty(), "every state needs an operator-readable name");
+
+    // The colour/icon pair must be the one #194 already assigns to that kind, not a new one.
+    const LoopStateVisual canonical = visualForKind(expectedKind);
+    QCOMPARE(visual.colorRole, canonical.colorRole);
+    QCOMPARE(visual.icon, canonical.icon);
+    QCOMPARE(visual.accessibleName, canonical.accessibleName);
+}
+
+void LoopStateVisualTest::preflightStateVisualNeverPassesWithoutAPass_data()
+{
+    QTest::addColumn<QString>("stateName");
+
+    // Every state the workflow can be in, other than a real pass.
+    QTest::newRow("not-checked") << QStringLiteral("not-checked");
+    QTest::newRow("running") << QStringLiteral("running");
+    QTest::newRow("findings") << QStringLiteral("findings");
+    QTest::newRow("incomplete") << QStringLiteral("incomplete");
+    QTest::newRow("stale") << QStringLiteral("stale");
+    QTest::newRow("cancelled") << QStringLiteral("cancelled");
+    QTest::newRow("error") << QStringLiteral("error");
+    QTest::newRow("empty") << QString();   // before any run / no accepted result
+}
+
+void LoopStateVisualTest::preflightStateVisualNeverPassesWithoutAPass()
+{
+    QFETCH(QString, stateName);
+
+    // #195 acceptance: "The GUI never displays PASS when inspectionComplete is false or any check
+    // status is not ok." The badge must therefore only ever be Passed for the pass state - including
+    // for the empty state, which is what a freshly opened document shows.
+    const LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(stateName);
+
+    QVERIFY(visual.kind != StateKind::Passed);
+    QVERIFY(visual.colorRole != ColorRole::Success);
+    QVERIFY(visual.icon != StateIcon::Checkmark);
+    QVERIFY(visual.accessibleName != QStringLiteral("Passed"));
 }
 
 QTEST_APPLESS_MAIN(LoopStateVisualTest)

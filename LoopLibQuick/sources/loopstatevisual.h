@@ -72,12 +72,27 @@ struct LoopStateVisual
 
 LOOPLIBQUICK_EXPORT QString stateAccessibleName(StateKind kind);
 
+/// Stable, QML-facing name for `kind`. Distinct from stateAccessibleName(): the accessible name is
+/// read by the operator ("Not checked"), this is compared by code ("NotChecked").
+LOOPLIBQUICK_EXPORT QString stateKindName(StateKind kind);
+LOOPLIBQUICK_EXPORT QString stateIconName(StateIcon icon);
+
 /// Canonical finding/check presentation. Incomplete and active Waive never resolve as Passed.
 LOOPLIBQUICK_EXPORT LoopStateVisual resolveStateVisual(const pdf::PreflightFinding* finding,
                                                        const pdf::PreflightCheckStatus* status,
                                                        const pdf::PreflightDecision* decision,
                                                        const QString& currentDocumentDigest = QString(),
                                                        const QString& currentProfileDigest = QString());
+
+/// Document-level preflight badge. `stateName` is the Core-owned state name - either
+/// pdf::preflightVerdictStateToString() (pass/fail/incomplete/error) or
+/// PreflightController::State rendered by EditorHost::preflightStateName()
+/// (not-checked/running/cancelled/pass/findings/stale/incomplete/error).
+///
+/// This is a rendering of Core's own state, never a derivation: a caller may not reach Passed
+/// unless Core reported a pass. Incomplete, stale, cancelled and unknown states all decline to
+/// look like one - use the operator summary for the words.
+LOOPLIBQUICK_EXPORT LoopStateVisual resolvePreflightStateVisual(const QString& stateName);
 
 }   // namespace pdfquick::tokens
 

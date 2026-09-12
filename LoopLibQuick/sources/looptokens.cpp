@@ -196,4 +196,41 @@ QColor color(ColorRole role, LoopTheme theme)
     return colorDark(role);
 }
 
+QString colorRoleName(ColorRole role)
+{
+    switch (role)
+    {
+        case ColorRole::SurfaceBase:
+            return QStringLiteral("SurfaceBase");
+        case ColorRole::SurfacePanel:
+            return QStringLiteral("SurfacePanel");
+        case ColorRole::SurfaceOverlay:
+            return QStringLiteral("SurfaceOverlay");
+        case ColorRole::TextPrimary:
+            return QStringLiteral("TextPrimary");
+        case ColorRole::TextSecondary:
+            return QStringLiteral("TextSecondary");
+        case ColorRole::TextDisabled:
+            return QStringLiteral("TextDisabled");
+        case ColorRole::SeverityError:
+            return QStringLiteral("SeverityError");
+        case ColorRole::SeverityWarning:
+            return QStringLiteral("SeverityWarning");
+        case ColorRole::SeverityInfo:
+            return QStringLiteral("SeverityInfo");
+        case ColorRole::Success:
+            return QStringLiteral("Success");
+        case ColorRole::StateIncomplete:
+            return QStringLiteral("StateIncomplete");
+        case ColorRole::StateNotChecked:
+            return QStringLiteral("StateNotChecked");
+        case ColorRole::FocusRing:
+            return QStringLiteral("FocusRing");
+        case ColorRole::DestructiveAction:
+            return QStringLiteral("DestructiveAction");
+    }
+
+    return QStringLiteral("StateNotChecked");
+}
+
 }   // namespace pdfquick::tokens
