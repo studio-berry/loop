@@ -299,6 +299,7 @@ private slots:
     // contracts that are still live in production and had no coverage left.
     void isNormalizedReport_requiresTheSidecarContract();
     void isNormalizedReport_acceptsSchemaV3InspectionIncompletePass();
+    void isNormalizedReport_rejectsPassWhenInspectionIsIncomplete();
     void isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict();
     void isNormalizedReport_rejectsInvalidScopeCombinations();
     void isImplementedFixupId_advertisesImplementedFixups();
@@ -983,6 +984,38 @@ void OperatorAcceptanceTest::isNormalizedReport_acceptsSchemaV3InspectionIncompl
                                                  { QStringLiteral("waived_finding_ids"), QJsonArray() } });
 
     QVERIFY(pdfplugin::preflight::isNormalizedReport(report));
+}
+
+void OperatorAcceptanceTest::isNormalizedReport_rejectsPassWhenInspectionIsIncomplete()
+{
+    // #195's central rule: a report whose inspection is incomplete must never present PASS. The
+    // schema-v3 validator enforces it structurally by deriving `pass` from verdict.state
+    // (UnitTests/support/preflight/preflightsidecarutils.h), so inspection_complete:false with
+    // pass:true is rejected even though every other field is a well-formed schema-v3 report.
+    //
+    // This is the case the restored isNormalizedReport_* slots did not pin: all four used
+    // pass:false (or a v2 report, where the consistency check does not exist), which is why the
+    // review could call them "the schema-level twin of #195's central rule" for coverage that did
+    // not actually assert it. The report is the accept-case above with exactly one field flipped.
+    QJsonObject report;
+    report.insert(QStringLiteral("schema_version"), 3);
+    report.insert(QStringLiteral("inspection_complete"), false);
+    report.insert(QStringLiteral("pass"), true);
+    report.insert(QStringLiteral("profile"), QStringLiteral("Loop Default"));
+    report.insert(QStringLiteral("errors"), QJsonArray());
+    report.insert(QStringLiteral("warnings"), QJsonArray());
+    report.insert(QStringLiteral("fixups_available"), QJsonArray());
+    report.insert(QStringLiteral("checks"), QJsonArray());
+    report.insert(QStringLiteral("verdict"), QJsonObject{
+                                                 { QStringLiteral("state"), QStringLiteral("incomplete") },
+                                                 { QStringLiteral("reason_code"), QStringLiteral("inspection-incomplete") },
+                                                 { QStringLiteral("reason"), QStringLiteral("Required inspection evidence was not collected.") },
+                                                 { QStringLiteral("blocking_finding_ids"), QJsonArray() },
+                                                 { QStringLiteral("waived_finding_ids"), QJsonArray() } });
+
+    QString errorMessage;
+    QVERIFY(!pdfplugin::preflight::validateNormalizedReport(report, &errorMessage));
+    QCOMPARE(errorMessage, QStringLiteral("pass must be derived from verdict.state."));
 }
 
 void OperatorAcceptanceTest::isNormalizedReport_rejectsSchemaV3WithoutCanonicalVerdict()
