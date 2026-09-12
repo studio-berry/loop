@@ -16,23 +16,44 @@ Pane {
     Accessible.name: qsTr("Preflight findings")
     Accessible.description: qsTr("Revision-bound preflight findings. Select a finding to inspect evidence on the canvas.")
 
+    // Token-name -> glyph for the canonical non-colour icon. The name is LoopLibQuick's
+    // stateIconName(), delivered through EditorHost as preflightStateVisual.icon; each canonical
+    // name maps 1:1 to exactly one glyph so the kinds the badge can reach (Checkmark,
+    // FilledCircle, FilledSquare, Hatched, Outline) stay visually distinct by shape wherever their
+    // colour tokens collide - in HighContrast, StateIncomplete and StateNotChecked are both white
+    // (#194). The mapping is presentation only and decides no state semantics: the colour and the
+    // accessible name remain Core's.
+    readonly property var preflightIconGlyphs: ({
+        "Checkmark": "\u2713",
+        "FilledCircle": "\u25CF",
+        "FilledSquare": "\u25A0",
+        "FilledTriangle": "\u25B2",
+        "Hatched": "\u25A8",
+        "Outline": "\u25CB",
+        "BadgeOverlay": "\u25C6"
+    })
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 8
 
-        // Canonical state badge. The colour and the accessible name are rendered from LoopLibQuick
-        // through EditorHost (preflightStateColor / preflightStateVisual); this file decides nothing
-        // about pass or severity, and invents no state wording of its own.
+        // Canonical state badge. The colour, the icon and the accessible name are rendered from
+        // LoopLibQuick through EditorHost (preflightStateColor / preflightStateVisual); this file
+        // decides nothing about pass or severity, and invents no state wording of its own. The icon
+        // is preflightIconGlyphs[preflightStateVisual.icon], that token-name -> glyph lookup, so the
+        // kinds stay distinct by shape where their colour tokens collide (HighContrast's white
+        // StateIncomplete and StateNotChecked, #194).
         RowLayout {
             id: stateBadge
             Layout.fillWidth: true
             spacing: 8
 
-            Rectangle {
-                width: 12
-                height: 12
-                radius: 6
+            Label {
+                id: stateBadgeIcon
+                Layout.alignment: Qt.AlignTop
+                font.pixelSize: 14
                 color: root.host ? root.host.preflightStateColor : "transparent"
+                text: root.host ? (root.preflightIconGlyphs[root.host.preflightStateVisual.icon] || "") : ""
                 Accessible.ignored: true
             }
 
