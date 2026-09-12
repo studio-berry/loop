@@ -173,10 +173,10 @@ QByteArray PDFInvisibleTextSanitizerHelper::sanitizeInvisibleTextInContent(const
             if (operatorIDPosition != -1 && operatorEIPosition != -1)
             {
                 PDFLexicalAnalyzer inlineImageLexicalAnalyzer(content.constBegin() + operatorBIPosition, content.constBegin() + operatorIDPosition);
-                PDFParser inlineImageParser([&inlineImageLexicalAnalyzer] { return inlineImageLexicalAnalyzer.fetch(); });
+                PDFParser inlineImageParser([&inlineImageLexicalAnalyzer]
+                                            { return inlineImageLexicalAnalyzer.fetch(); });
 
-                constexpr std::pair<const char*, const char*> replacements[] =
-                {
+                constexpr std::pair<const char*, const char*> replacements[] = {
                     { "BPC", "BitsPerComponent" },
                     { "CS", "ColorSpace" },
                     { "D", "Decode" },
@@ -562,7 +562,6 @@ public:
         PDFUpdateObjectVisitor(storage),
         m_counter(counter)
     {
-
     }
 
     virtual void visitDictionary(const PDFDictionary* dictionary) override;
@@ -600,7 +599,6 @@ PDFDocumentSanitizer::PDFDocumentSanitizer(SanitizationFlag flags, QObject* pare
     QObject(parent),
     m_flags(flags)
 {
-
 }
 
 void PDFDocumentSanitizer::sanitize()
@@ -691,7 +689,7 @@ void PDFDocumentSanitizer::performSanitizeMetadata()
 {
     std::atomic<PDFInteger> counter = 0;
 
-    PDFObjectStorage::PDFObjects objects =  m_storage.getObjects();
+    PDFObjectStorage::PDFObjects objects = m_storage.getObjects();
     auto processEntry = [this, &counter](PDFObjectStorage::Entry& entry)
     {
         PDFRemoveMetadataVisitor visitor(&m_storage, &counter);
@@ -919,7 +917,7 @@ void PDFDocumentSanitizer::performSanitizeInvisibleText()
     }
 }
 
-void PDFDocumentSanitizer::removeAnnotations(const std::function<bool (const PDFAnnotation*)>& filter,
+void PDFDocumentSanitizer::removeAnnotations(const std::function<bool(const PDFAnnotation*)>& filter,
                                              QString message)
 {
     PDFDocumentBuilder builder(m_storage, PDFVersion(2, 0));

@@ -60,13 +60,23 @@ pdf::PDFObject makeFormStreamObject(const QByteArray& content, const pdf::PDFObj
 {
     pdf::PDFObjectFactory factory;
     factory.beginDictionary();
-    factory.beginDictionaryItem("Type"); factory << pdf::WrapName("XObject"); factory.endDictionaryItem();
-    factory.beginDictionaryItem("Subtype"); factory << pdf::WrapName("Form"); factory.endDictionaryItem();
-    factory.beginDictionaryItem("FormType"); factory << pdf::PDFInteger(1); factory.endDictionaryItem();
-    factory.beginDictionaryItem("BBox"); factory << QRectF(0, 0, 100, 100); factory.endDictionaryItem();
+    factory.beginDictionaryItem("Type");
+    factory << pdf::WrapName("XObject");
+    factory.endDictionaryItem();
+    factory.beginDictionaryItem("Subtype");
+    factory << pdf::WrapName("Form");
+    factory.endDictionaryItem();
+    factory.beginDictionaryItem("FormType");
+    factory << pdf::PDFInteger(1);
+    factory.endDictionaryItem();
+    factory.beginDictionaryItem("BBox");
+    factory << QRectF(0, 0, 100, 100);
+    factory.endDictionaryItem();
     if (resources.isDictionary())
     {
-        factory.beginDictionaryItem("Resources"); factory << resources; factory.endDictionaryItem();
+        factory.beginDictionaryItem("Resources");
+        factory << resources;
+        factory.endDictionaryItem();
     }
     factory.endDictionary();
 
@@ -88,8 +98,12 @@ void setPageContent(pdf::PDFDocumentBuilder& builder, const pdf::PDFObjectRefere
 
     pdf::PDFObjectFactory factory;
     factory.beginDictionary();
-    factory.beginDictionaryItem("Contents"); factory << contentStreamReference; factory.endDictionaryItem();
-    factory.beginDictionaryItem("Resources"); factory << resources; factory.endDictionaryItem();
+    factory.beginDictionaryItem("Contents");
+    factory << contentStreamReference;
+    factory.endDictionaryItem();
+    factory.beginDictionaryItem("Resources");
+    factory << resources;
+    factory.endDictionaryItem();
     factory.endDictionary();
     builder.mergeTo(pageReference, factory.takeObject());
 }
@@ -241,8 +255,12 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
 
     pdf::PDFObjectFactory fontFactory;
     fontFactory.beginDictionary();
-    fontFactory.beginDictionaryItem("Type"); fontFactory << pdf::WrapName("Font"); fontFactory.endDictionaryItem();
-    fontFactory.beginDictionaryItem("Subtype"); fontFactory << pdf::WrapName("Type3"); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Type");
+    fontFactory << pdf::WrapName("Font");
+    fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Subtype");
+    fontFactory << pdf::WrapName("Type3");
+    fontFactory.endDictionaryItem();
 
     fontFactory.beginDictionaryItem("FontMatrix");
     fontFactory.beginArray();
@@ -256,8 +274,12 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
     fontFactory.endArray();
     fontFactory.endDictionaryItem();
 
-    fontFactory.beginDictionaryItem("FirstChar"); fontFactory << pdf::PDFInteger(0); fontFactory.endDictionaryItem();
-    fontFactory.beginDictionaryItem("LastChar"); fontFactory << pdf::PDFInteger(0); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("FirstChar");
+    fontFactory << pdf::PDFInteger(0);
+    fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("LastChar");
+    fontFactory << pdf::PDFInteger(0);
+    fontFactory.endDictionaryItem();
 
     fontFactory.beginDictionaryItem("Widths");
     fontFactory.beginArray();
@@ -267,13 +289,17 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
 
     fontFactory.beginDictionaryItem("CharProcs");
     fontFactory.beginDictionary();
-    fontFactory.beginDictionaryItem("A"); fontFactory << glyphReference; fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("A");
+    fontFactory << glyphReference;
+    fontFactory.endDictionaryItem();
     fontFactory.endDictionary();
     fontFactory.endDictionaryItem();
 
     fontFactory.beginDictionaryItem("Encoding");
     fontFactory.beginDictionary();
-    fontFactory.beginDictionaryItem("Type"); fontFactory << pdf::WrapName("Encoding"); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Type");
+    fontFactory << pdf::WrapName("Encoding");
+    fontFactory.endDictionaryItem();
     fontFactory.beginDictionaryItem("Differences");
     fontFactory.beginArray();
     fontFactory << pdf::PDFInteger(0) << pdf::PDFObject::createName(QByteArray("A"));
@@ -287,7 +313,9 @@ void ContentProcessorLimitsTest::test_recursiveType3Font_isRejected()
     fontFontResources.addEntry(pdf::PDFInplaceOrMemoryString("F"), pdf::PDFObject::createReference(fontReference));
     pdf::PDFDictionary fontResources;
     fontResources.addEntry(pdf::PDFInplaceOrMemoryString("Font"), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontFontResources))));
-    fontFactory.beginDictionaryItem("Resources"); fontFactory << pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontResources))); fontFactory.endDictionaryItem();
+    fontFactory.beginDictionaryItem("Resources");
+    fontFactory << pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(fontResources)));
+    fontFactory.endDictionaryItem();
 
     fontFactory.endDictionary();
     builder.setObject(fontReference, fontFactory.takeObject());
