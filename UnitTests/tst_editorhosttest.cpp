@@ -428,11 +428,17 @@ void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
     const QString profilePath = QDir(preflightSourceDir()).filePath(QStringLiteral("profiles/loop-default.json"));
     const QString bundledProfileId = QStringLiteral(":/profiles/loop-default.json");
 
-    if (!QFile::exists(documentPath) || !QFile::exists(profilePath))
-    {
-        QSKIP("Corpus fixture not generated yet. Run LoopGenerateFixtures and commit the output (see "
-              "loop-preflight/README.md, 'Golden corpus & CI').");
-    }
+    // The fixture is committed (see `git ls-files loop-preflight/testdata/fixtures`), so its absence
+    // can only mean a broken or sparse checkout - exactly when an anti-divergence guard must fail
+    // rather than skip. A QSKIP here let this row pass having compared nothing: QtTest's exit code
+    // counts only failing rows, so the slot skipped, the process exited 0 and ctest reported the
+    // suite as passed.
+    QVERIFY2(QFile::exists(documentPath) && QFile::exists(profilePath),
+             qPrintable(QStringLiteral("corpus fixture or profile missing; a deployed checkout must carry both, "
+                                       "so this is a broken/sparse checkout rather than a reason to skip the parity guard. "
+                                       "Regenerate with LoopGenerateFixtures and commit the output (see "
+                                       "loop-preflight/README.md, 'Golden corpus & CI'). missing: document='%1' profile='%2'")
+                            .arg(documentPath, profilePath)));
 
     // "The same profile" has to mean the same bytes, not the same name: the GUI can only select the
     // BUNDLED profile while the CLI is handed the file on disk.
