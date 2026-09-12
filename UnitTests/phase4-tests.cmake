@@ -82,6 +82,15 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
 
         target_include_directories(UnitTestsEditorHost PRIVATE ${CMAKE_SOURCE_DIR}/LoopEditor)
 
+        # Issue #195's GUI-to-CLI anti-divergence slot drives the built PdfTool
+        # as the CLI oracle, the same way UnitTestsPreflightCorpus does, and
+        # locates its fixture through the same source-dir definition.
+        add_dependencies(UnitTestsEditorHost PdfTool)
+        target_compile_definitions(UnitTestsEditorHost PRIVATE
+            LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+            PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
+        )
+
         set_target_properties(UnitTestsEditorHost PROPERTIES
             WIN32_EXECUTABLE OFF
             MACOSX_BUNDLE OFF

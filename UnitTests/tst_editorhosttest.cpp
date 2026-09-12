@@ -23,16 +23,24 @@
 #include <QtTest>
 
 #include <QDebug>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QSignalSpy>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QUrl>
 
 #include <atomic>
 #include <memory>
+
+#include "processoutputcapture.h"
 
 #include "documentviewsession.h"
 #include "editorhost.h"
@@ -99,6 +107,120 @@ pdfinteraction::PointerIntent makeMoveIntent(QPoint positionPx, quint64 sequence
     return intent;
 }
 
+// --- GUI-to-CLI preflight parity support (issue #195) -----------------------
+//
+// #195's anti-divergence test compares the two preflight surfaces, so the CLI
+// oracle invocation and the report normalisation below are copies of
+// UnitTestsPreflightCorpus (tst_preflightcorpus.cpp) rather than a second policy
+// of this file's own: one PdfTool runner shape, one set of normalised fields.
+
+QString preflightFixturesDir()
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/fixtures");
+}
+
+QString preflightSourceDir()
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR);
+}
+
+/// Runs the built `PdfTool preflight` and returns the report from the JSON
+/// envelope's data.report. See PreflightCorpusTest::runPreflight().
+void runPdfToolPreflight(const QString& pdfPath, const QString& profilePath, QJsonObject& report, int& exitCode)
+{
+    QProcess process;
+    // PdfTool constructs a QGuiApplication; force the offscreen platform so the
+    // child process can start on headless CI runners with no X display.
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    process.setProcessEnvironment(environment);
+    process.start(QStringLiteral(PDFTOOL_EXECUTABLE_PATH),
+                  { QStringLiteral("preflight"),
+                    pdfPath,
+                    QStringLiteral("--profile"),
+                    profilePath,
+                    QStringLiteral("--console-format"),
+                    QStringLiteral("json") });
+    QByteArray stdOut;
+    QByteArray stdErr;
+    QVERIFY2(test_support::waitForFinishedAndCapture(process, 30000, stdOut, stdErr),
+             qPrintable(QStringLiteral("PdfTool preflight timed out: %1\nstderr: %2").arg(process.errorString(), QString::fromUtf8(stdErr))));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(stdOut, &parseError);
+    QVERIFY2(parseError.error == QJsonParseError::NoError,
+             qPrintable(QStringLiteral("Invalid report JSON: %1\nstderr: %2").arg(parseError.errorString(), QString::fromUtf8(stdErr))));
+    QVERIFY2(document.isObject(), "result JSON must be a top-level object");
+
+    const QJsonObject envelope = document.object();
+    QCOMPARE(envelope.value(QStringLiteral("schema_version")).toInt(), 1);
+    QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("preflight"));
+    QCOMPARE(envelope.value(QStringLiteral("exit_code")).toInt(), process.exitCode());
+    report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    QVERIFY2(!report.isEmpty(), "preflight result must contain data.report");
+    exitCode = process.exitCode();
+}
+
+/// See PreflightCorpusTest::normalizeReport(): strip the fields that legitimately
+/// vary between runs, checkouts and surfaces and are not part of the check
+/// behavior both surfaces must agree on.
+QJsonObject normalizePreflightReport(QJsonObject report)
+{
+    report.remove(QStringLiteral("engine_version"));
+    report.remove(QStringLiteral("pdf"));
+    report.remove(QStringLiteral("profile_resolution"));
+    report.remove(QStringLiteral("document_revision_digest"));
+    report.remove(QStringLiteral("effective_profile_digest"));
+    report.remove(QStringLiteral("profile_identity"));
+    report.remove(QStringLiteral("coverage_scope"));
+    report.remove(QStringLiteral("variable_bindings"));
+    report.remove(QStringLiteral("decisions"));
+    for (const QString& section : { QStringLiteral("errors"), QStringLiteral("warnings") })
+    {
+        QJsonArray findings = report.value(section).toArray();
+        for (int index = 0; index < findings.size(); ++index)
+        {
+            QJsonObject finding = findings.at(index).toObject();
+            finding.remove(QStringLiteral("id"));
+            finding.remove(QStringLiteral("evidence_ids"));
+            findings.replace(index, finding);
+        }
+        report.insert(section, findings);
+    }
+    return report;
+}
+
+void parsePreflightReport(const QByteArray& bytes, const QString& label, QJsonObject& report)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(bytes, &parseError);
+    QVERIFY2(parseError.error == QJsonParseError::NoError,
+             qPrintable(QStringLiteral("%1 is not valid JSON: %2").arg(label, parseError.errorString())));
+    QVERIFY2(document.isObject(), qPrintable(QStringLiteral("%1 must be a top-level JSON object").arg(label)));
+    report = document.object();
+}
+
+/// Names the first few differing lines so a divergence is readable in the log.
+/// The assertion stays whole-document equality; this only explains a failure.
+QString describePreflightReportDifference(const QString& guiText, const QString& cliText)
+{
+    const QStringList guiLines = guiText.split(QLatin1Char('\n'));
+    const QStringList cliLines = cliText.split(QLatin1Char('\n'));
+    const int lineCount = qMax(guiLines.size(), cliLines.size());
+    QStringList differences;
+    for (int line = 0; line < lineCount && differences.size() < 12; ++line)
+    {
+        const QString guiLine = line < guiLines.size() ? guiLines.at(line) : QStringLiteral("<missing>");
+        const QString cliLine = line < cliLines.size() ? cliLines.at(line) : QStringLiteral("<missing>");
+        if (guiLine != cliLine)
+        {
+            differences << QStringLiteral("line %1: GUI %2\nline %1: CLI %3").arg(line + 1).arg(guiLine.trimmed(), cliLine.trimmed());
+        }
+    }
+    return differences.join(QLatin1Char('\n'));
+}
+
 }   // namespace
 
 class EditorHostTest : public QObject
@@ -113,6 +235,7 @@ private slots:
     void sessionTeardownDrainsWorkersBeforeAdapters();
     void preflightRunsOffInteractiveThread();
     void preflightStateVisualIsNotCheckedBeforeARun();
+    void exportedPreflightReportMatchesPdfToolForTheSameInputs();
     void openLargeDocument();
 };
 
@@ -263,6 +386,105 @@ void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
              "the visual must carry the full canonical treatment for QML to render");
     QVERIFY(!after.value(QStringLiteral("kind")).toString().isEmpty());
     QVERIFY(host.preflightStateColor().isValid());
+}
+
+void EditorHostTest::exportedPreflightReportMatchesPdfToolForTheSameInputs()
+{
+    // #195 test strategy: "CLI/GUI parity ... assert the exported JSON is byte-identical to PdfTool
+    // preflight output. This is the core anti-divergence test." UnitTestsPreflightCorpus pins the CLI
+    // against the committed snapshots; this pins the GUI against the CLI, so the report the operator
+    // exports cannot drift from what the tool reports for the same document and profile.
+    //
+    // color-rgb is the fixture of choice because it is one of the loop-default.json cases that fails
+    // with findings, so the comparison covers populated errors and warnings instead of two empty
+    // arrays, and loop-default.json is the one profile both surfaces can be given: the Editor ships it
+    // as the bundled :/profiles/loop-default.json (LoopEditor/app.qrc aliases exactly the
+    // loop-preflight/profiles/loop-default.json the CLI reads from disk).
+    const QString fixtureId = QStringLiteral("color-rgb");
+    const QString documentPath = QDir(preflightFixturesDir()).filePath(fixtureId + QStringLiteral(".pdf"));
+    const QString profilePath = QDir(preflightSourceDir()).filePath(QStringLiteral("profiles/loop-default.json"));
+    const QString bundledProfileId = QStringLiteral(":/profiles/loop-default.json");
+
+    if (!QFile::exists(documentPath) || !QFile::exists(profilePath))
+    {
+        QSKIP("Corpus fixture not generated yet. Run LoopGenerateFixtures and commit the output (see "
+              "loop-preflight/README.md, 'Golden corpus & CI').");
+    }
+
+    // "The same profile" has to mean the same bytes, not the same name: the GUI can only select the
+    // BUNDLED profile while the CLI is handed the file on disk.
+    QFile bundledProfile(bundledProfileId);
+    QVERIFY2(bundledProfile.open(QIODevice::ReadOnly), "the bundled loop-default profile is missing from the Editor resources");
+    QFile diskProfile(profilePath);
+    QVERIFY(diskProfile.open(QIODevice::ReadOnly));
+    QCOMPARE(bundledProfile.readAll(), diskProfile.readAll());
+
+    // 1. The CLI's report, from the built PdfTool.
+    QJsonObject cliReport;
+    int cliExitCode = -1;
+    runPdfToolPreflight(documentPath, profilePath, cliReport, cliExitCode);
+    QVERIFY(!cliReport.isEmpty());
+
+    // 2. The GUI's report, through the export path the operator uses:
+    //    EditorHost::exportPreflightReportFileUrl -> PreflightController::serializedReport.
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(documentPath));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
+
+    if (host.selectedPreflightProfileId() != bundledProfileId)
+    {
+        QVERIFY2(host.selectPreflightProfile(bundledProfileId),
+                 qPrintable(QStringLiteral("the bundled loop-default profile must be selectable; selected '%1'")
+                                .arg(host.selectedPreflightProfileId())));
+    }
+    QCOMPARE(host.selectedPreflightProfileId(), bundledProfileId);
+
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+    QVERIFY2(host.hasPreflightReport(),
+             qPrintable(QStringLiteral("no report to export: state=%1 summary=%2").arg(host.preflightStateName(), host.preflightOperatorSummary())));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString guiReportPath = directory.filePath(QStringLiteral("gui-report.json"));
+    QVERIFY2(host.exportPreflightReportFileUrl(QUrl::fromLocalFile(guiReportPath)),
+             qPrintable(QStringLiteral("exporting the report failed: state=%1 summary=%2")
+                            .arg(host.preflightStateName(), host.preflightOperatorSummary())));
+
+    QFile guiFile(guiReportPath);
+    QVERIFY(guiFile.open(QIODevice::ReadOnly));
+    const QByteArray guiReport = guiFile.readAll();
+    QVERIFY2(!guiReport.isEmpty(), "the exported report is empty");
+
+    QJsonObject guiReportObject;
+    parsePreflightReport(guiReport, QStringLiteral("the exported GUI report"), guiReportObject);
+
+    // Both sides go through the corpus test's own normalisation and are then compared as whole
+    // documents, so a difference anywhere - a check status, a finding field, a section the other
+    // surface does not write - fails this row.
+    const QByteArray guiNormalized = QJsonDocument(normalizePreflightReport(guiReportObject)).toJson(QJsonDocument::Indented);
+    const QByteArray cliNormalized = QJsonDocument(normalizePreflightReport(cliReport)).toJson(QJsonDocument::Indented);
+
+    // Normalise EOLs so Windows checkouts (eol=crlf) match QJsonDocument's LF output, as the corpus
+    // test does for its snapshots.
+    const auto normalizeNewlines = [](QByteArray data)
+    {
+        data.replace("\r\n", "\n");
+        data.replace('\r', '\n');
+        return data;
+    };
+
+    const QString guiText = QString::fromUtf8(normalizeNewlines(guiNormalized));
+    const QString cliText = QString::fromUtf8(normalizeNewlines(cliNormalized));
+
+    qInfo("preflight parity: fixture=%s profile=%s cli_exit_code=%d", qPrintable(fixtureId), qPrintable(profilePath), cliExitCode);
+    if (guiText != cliText)
+    {
+        qWarning().noquote() << "GUI preflight report diverges from PdfTool preflight:\n"
+                             << describePreflightReportDifference(guiText, cliText);
+    }
+
+    QCOMPARE(guiText, cliText);
 }
 
 void EditorHostTest::openLargeDocument()
