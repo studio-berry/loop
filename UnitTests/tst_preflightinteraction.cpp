@@ -158,6 +158,7 @@ private slots:
     void modelSelectionAndOverlayAreRevisionBound();
     void controllerAcceptsCurrentResultAndBuildsNavigation();
     void controllerRejectsStaleAndCancelledResults();
+    void controllerRetainsCompletedResultAcrossCancellationAndStaleness();
     void controllerRepresentsIncompleteRun();
     void overlayAdapterMapsStableIdsAndSeverities();
     void dockSelectionSetsFocusedOverlayPrimitive();
@@ -227,6 +228,26 @@ void PreflightInteractionTest::controllerRejectsStaleAndCancelledResults()
     QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
     QCOMPARE(controller.state(), PreflightController::State::Cancelled);
     QVERIFY(!controller.acceptResult(QStringLiteral("job-2"), QStringLiteral("rev-2"), resultWith({})));
+}
+
+void PreflightInteractionTest::controllerRetainsCompletedResultAcrossCancellationAndStaleness()
+{
+    PreflightController controller;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QVERIFY(controller.hasResult());
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+    QCOMPARE(controller.findingsModel()->rowCount(), 1);
+
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(!controller.navigationFor(finding.stableId(), nullptr));
+    const QByteArray report = controller.serializedReport(QStringLiteral("fixture.pdf"));
+    QVERIFY(report.contains("preflight-report"));
 }
 
 void PreflightInteractionTest::controllerRepresentsIncompleteRun()

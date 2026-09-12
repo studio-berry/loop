@@ -608,8 +608,7 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     }
 
     const QByteArray& sourceData = inspection.sourceData;
-    const QString revisionDigest = QString::fromLatin1(QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256).toHex());
-    const QString profileDigest = QString::fromLatin1(resolved.effectiveHash);
+    const QByteArray revisionHash = QCryptographicHash::hash(sourceData, QCryptographicHash::Sha256);
 
     const bool cancelled = cancellationControl.isOperationCancelled();
     const bool jobSucceeded = !cancelled && inspection.inspectionRan;
@@ -638,13 +637,9 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
         }
     }
 
-    result.profileResolution = resolved.provenance();
-    result.documentRevisionDigest = revisionDigest;
-    result.effectiveProfileDigest = profileDigest;
     result.decisions = decisions;
-
+    pdf::finalizePreflightResult(result, revisionHash, resolved);
     const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
-    result.pass = verdict.isPass();
     PDFToolExitCode resultExitCode = static_cast<PDFToolExitCode>(pdf::preflightVerdictProcessExitCode(verdict.state));
     if (cancelled)
     {
@@ -678,8 +673,8 @@ PDFToolExitCode PDFToolPreflightApplication::execute(const PDFToolOptions& optio
     QString historyError;
     if (!appendPreflightProvenance(options.document,
                                    sourceData,
-                                   revisionDigest,
-                                   profileDigest,
+                                   result.documentRevisionDigest,
+                                   result.effectiveProfileDigest,
                                    historyStatus,
                                    result.toJson(options.document),
                                    &historyError))

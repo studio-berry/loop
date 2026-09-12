@@ -48,6 +48,7 @@
 
 #include <QObject>
 #include <QHash>
+#include <QJsonObject>
 #include <QPointer>
 #include <QStyleHints>
 #include <QVariantMap>
@@ -94,6 +95,10 @@ class EditorHost final : public QObject
     Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
     Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
     Q_PROPERTY(QString preflightOperatorSummary READ preflightOperatorSummary NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(QString selectedPreflightProfileId READ selectedPreflightProfileId NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(bool hasPreflightReport READ hasPreflightReport NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
     Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
@@ -149,6 +154,10 @@ public:
 
     QString preflightStateName() const;
     QString preflightOperatorSummary() const;
+    QVariantList preflightProfiles() const;
+    QVariantList preflightVariables() const;
+    QString selectedPreflightProfileId() const;
+    bool hasPreflightReport() const noexcept { return m_preflight.hasResult(); }
     QString previewSummary() const;
     QString inspectorTitle() const;
     bool preferReducedMotion() const;
@@ -179,6 +188,10 @@ public:
     Q_INVOKABLE void announceDocumentState(const QString& message);
     Q_INVOKABLE bool runPreflight();
     Q_INVOKABLE bool cancelPreflight();
+    Q_INVOKABLE bool selectPreflightProfile(const QString& id);
+    Q_INVOKABLE bool setPreflightVariable(const QString& name, const QVariant& value);
+    Q_INVOKABLE void requestPreflightReportExport();
+    Q_INVOKABLE bool exportPreflightReportFileUrl(const QUrl& url);
 
     /// Toggles the current page between the fast approximate render and the
     /// authoritative overprint-accurate one. Re-renders only that page;
@@ -226,6 +239,8 @@ signals:
     void presentationChanged();
     void commandEpochChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
+    void preflightProfilesChanged();
+    void preflightReportExportRequested();
 
 private:
     void connectFacade();
@@ -252,6 +267,8 @@ private:
                                const pdf::PreflightResult& result);
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
     void refreshCanvasTrace();
+    void reloadPreflightProfiles();
+    void updatePreflightProfileWatch();
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
@@ -275,6 +292,22 @@ private:
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
     struct PreflightWorkerOutcome;
     QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
+    struct PreflightProfileChoice
+    {
+        QString id;
+        QString name;
+        QString version;
+        QString source;
+        QString diagnostic;
+        QString digest;
+        QJsonObject profile;
+        QJsonObject variables;
+        bool valid = false;
+    };
+    QList<PreflightProfileChoice> m_preflightProfiles;
+    QJsonObject m_preflightBindings;
+    QString m_selectedPreflightProfileId;
+    class QFileSystemWatcher* m_preflightProfileWatcher = nullptr;
     bool m_acceptPreflightResults = true;
     int m_commandEpoch = 0;
     bool m_documentBound = false;

@@ -30,12 +30,15 @@
 #include "loopcanvasitem.h"
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
+#include "preflightclirun.h"
 #include "preflightengine.h"
+#include "preflightprofileresolver.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
 #include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
+#include "pdfsafefilewriter.h"
 
 #include "pdfblockingthreadguard.h"
 #include "pdfpage.h"
@@ -45,12 +48,16 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QUuid>
 #include <QUrl>
 
@@ -58,13 +65,12 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
-const QString DefaultPreflightProfileResource = QStringLiteral(":/profiles/loop-default.json");
-
 int rotationToDegrees(pdf::PageRotation rotation)
 {
     switch (rotation)
@@ -199,6 +205,13 @@ EditorHost::EditorHost(QObject* parent) :
     // (PreflightEngine::run, and future OCR/AI/file-I/O adapters) must
     // refuse to run on (issue #144).
     pdf::PDFBlockingThreadGuard::registerInteractiveThread();
+
+    m_preflightProfileWatcher = new QFileSystemWatcher(this);
+    connect(m_preflightProfileWatcher, &QFileSystemWatcher::directoryChanged, this, [this](const QString&)
+            { reloadPreflightProfiles(); });
+    connect(m_preflightProfileWatcher, &QFileSystemWatcher::fileChanged, this, [this](const QString&)
+            { reloadPreflightProfiles(); });
+    reloadPreflightProfiles();
 
     connectFacade();
     connectViewport();
@@ -425,6 +438,63 @@ QString EditorHost::preflightOperatorSummary() const
     return m_preflight.operatorSummary();
 }
 
+QVariantList EditorHost::preflightProfiles() const
+{
+    QVariantList profiles;
+    profiles.reserve(m_preflightProfiles.size());
+    for (const PreflightProfileChoice& profile : m_preflightProfiles)
+    {
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), profile.id);
+        item.insert(QStringLiteral("name"), profile.name);
+        item.insert(QStringLiteral("version"), profile.version);
+        item.insert(QStringLiteral("source"), profile.source.startsWith(QLatin1Char(':'))
+                                                  ? tr("Bundled")
+                                                  : tr("Local"));
+        item.insert(QStringLiteral("valid"), profile.valid);
+        item.insert(QStringLiteral("diagnostic"), profile.diagnostic);
+        profiles.append(item);
+    }
+    return profiles;
+}
+
+QVariantList EditorHost::preflightVariables() const
+{
+    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                 [this](const PreflightProfileChoice& profile)
+                                 { return profile.id == m_selectedPreflightProfileId; });
+    if (it == m_preflightProfiles.cend())
+    {
+        return {};
+    }
+
+    QVariantList variables;
+    const QStringList names = it->variables.keys();
+    for (const QString& name : names)
+    {
+        const QJsonObject declaration = it->variables.value(name).toObject();
+        QVariantMap item;
+        item.insert(QStringLiteral("name"), name);
+        item.insert(QStringLiteral("type"), declaration.value(QStringLiteral("type")).toString());
+        item.insert(QStringLiteral("required"), declaration.value(QStringLiteral("required")).toBool());
+        item.insert(QStringLiteral("description"), declaration.value(QStringLiteral("description")).toString());
+        item.insert(QStringLiteral("value"), m_preflightBindings.contains(name)
+                                                 ? m_preflightBindings.value(name).toVariant()
+                                                 : declaration.value(QStringLiteral("default")).toVariant());
+        if (declaration.contains(QStringLiteral("min")))
+            item.insert(QStringLiteral("min"), declaration.value(QStringLiteral("min")).toVariant());
+        if (declaration.contains(QStringLiteral("max")))
+            item.insert(QStringLiteral("max"), declaration.value(QStringLiteral("max")).toVariant());
+        variables.append(item);
+    }
+    return variables;
+}
+
+QString EditorHost::selectedPreflightProfileId() const
+{
+    return m_selectedPreflightProfileId;
+}
+
 QString EditorHost::previewSummary() const
 {
     return m_preview.summary();
@@ -552,6 +622,14 @@ bool EditorHost::runPreflight()
         return false;
     }
 
+    const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                        [this](const PreflightProfileChoice& profile)
+                                        { return profile.id == m_selectedPreflightProfileId; });
+    if (profileIt == m_preflightProfiles.cend() || !profileIt->valid)
+    {
+        return false;
+    }
+
     const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
     if (!document)
     {
@@ -568,45 +646,62 @@ bool EditorHost::runPreflight()
     spec.priority = pdf::PDFJobPriority::Operator;
     spec.documentKey = documentKey;
     spec.documentRevision = documentRevision;
-    spec.operationId = QStringLiteral("preflight.loop-default");
-    spec.checkId = QStringLiteral("loop-default");
+    spec.operationId = QStringLiteral("preflight.%1").arg(profileIt->id);
+    spec.checkId = profileIt->name;
     spec.progressModel = QStringLiteral("preflight-progress-v1");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
 
     m_preflight.beginRun(documentKey,
                          documentRevision,
-                         QStringLiteral("0c32cc54154186f2d92a02804e4b8ac8ebd226863cca15e9670bf12f1c84c1a1"),
+                         profileIt->digest,
                          jobId);
     auto outcome = std::make_shared<PreflightWorkerOutcome>();
     m_preflightOutcomes.insert(jobId, outcome);
+    const PreflightProfileChoice selectedProfile = *profileIt;
+    const QJsonObject bindings = m_preflightBindings;
+    const QByteArray sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
 
     const QString submittedId = m_session->scheduler().submit(
         spec,
-        [document, outcome](pdf::PDFJobContext& context)
+        [document, outcome, selectedProfile, bindings, sourceHash](pdf::PDFJobContext& context)
         {
             if (context.isCancellationRequested())
             {
                 return;
             }
 
-            QFile profileFile(DefaultPreflightProfileResource);
-            if (!profileFile.open(QIODevice::ReadOnly))
+            const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(selectedProfile.profile,
+                                                                                           selectedProfile.source);
+            if (!imported.ok)
             {
-                throw std::runtime_error("Loop Default preflight profile is unavailable.");
+                throw std::runtime_error(imported.errorMessage.toStdString());
             }
-            QJsonParseError parseError;
-            const QJsonDocument profileDocument = QJsonDocument::fromJson(profileFile.readAll(), &parseError);
-            if (parseError.error != QJsonParseError::NoError || !profileDocument.isObject())
+            const pdf::PreflightVariableBindResult bound =
+                pdf::bindPreflightProfileVariables(imported.profile, bindings);
+            if (!bound.ok)
             {
-                throw std::runtime_error("Loop Default preflight profile is invalid.");
+                throw std::runtime_error(bound.errorMessage.toStdString());
+            }
+            pdf::PreflightProfileResolver resolver;
+            const pdf::PreflightResolvedProfile resolved = resolver.resolveExplicitProfile(
+                bound.profile, selectedProfile.name,
+                imported.identity.version.isEmpty() ? QStringLiteral("explicit") : imported.identity.version);
+            if (!resolved.ok)
+            {
+                throw std::runtime_error(resolved.errorMessage.toStdString());
             }
 
             pdf::PreflightProfileData profile;
             QString profileError;
-            if (!pdf::PreflightEngine::parseProfile(profileDocument.object(), profile, profileError))
+            if (!pdf::PreflightEngine::parseProfile(bound.profile, profile, profileError))
             {
                 throw std::runtime_error(profileError.toStdString());
             }
+            profile.variableBindings = bound.bindings;
+            profile.fileDigest = imported.identity.digest;
+            profile.effectiveDigest = pdf::computeProfileDigest(bound.profile);
+            profile.profileIdentity = imported.identity.toJson();
+            profile.profileIdentity.insert(QStringLiteral("effective_digest"), profile.effectiveDigest);
             context.reportProgress(5);
 
             std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
@@ -615,12 +710,13 @@ bool EditorHost::runPreflight()
             engine.setOperationControl(context.operationControl());
             context.reportProgress(15);
             outcome->result = engine.run(profile);
+            pdf::finalizePreflightResult(outcome->result, sourceHash, resolved);
             if (context.isCancellationRequested())
             {
                 return;
             }
             context.reportProgress(95);
-            context.setResultSummary(QStringLiteral("Loop Default preflight completed."));
+            context.setResultSummary(QStringLiteral("Preflight completed."));
         });
     if (submittedId != jobId)
     {
@@ -636,6 +732,173 @@ bool EditorHost::runPreflight()
 bool EditorHost::cancelPreflight()
 {
     return m_preflight.cancelRun(m_preflight.jobId());
+}
+
+bool EditorHost::selectPreflightProfile(const QString& id)
+{
+    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                 [&id](const PreflightProfileChoice& profile)
+                                 { return profile.id == id; });
+    if (it == m_preflightProfiles.cend() || !it->valid || id == m_selectedPreflightProfileId)
+    {
+        return false;
+    }
+    m_selectedPreflightProfileId = id;
+    m_preflightBindings = QJsonObject();
+    m_preflight.markProfileStale();
+    Q_EMIT preflightProfilesChanged();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setPreflightVariable(const QString& name, const QVariant& value)
+{
+    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                 [this](const PreflightProfileChoice& profile)
+                                 { return profile.id == m_selectedPreflightProfileId; });
+    if (it == m_preflightProfiles.cend() || !it->variables.contains(name))
+    {
+        return false;
+    }
+    m_preflightBindings.insert(name, QJsonValue::fromVariant(value));
+    m_preflight.markProfileStale();
+    Q_EMIT preflightProfilesChanged();
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::requestPreflightReportExport()
+{
+    if (m_preflight.hasResult())
+    {
+        Q_EMIT preflightReportExportRequested();
+    }
+}
+
+bool EditorHost::exportPreflightReportFileUrl(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile() || !m_preflight.hasResult())
+    {
+        return false;
+    }
+    const QByteArray report = m_preflight.serializedReport(m_session->facade().source().path);
+    const pdf::PDFOperationResult result = pdf::PDFSafeFileWriter::writeData(
+        url.toLocalFile(), report, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!result)
+    {
+        announceDocumentState(tr("Could not export the preflight report: %1").arg(result.getErrorMessage()));
+        return false;
+    }
+    announceDocumentState(tr("Preflight report exported."));
+    return true;
+}
+
+void EditorHost::reloadPreflightProfiles()
+{
+    const QString priorId = m_selectedPreflightProfileId;
+    QString priorDigest;
+    for (const PreflightProfileChoice& profile : std::as_const(m_preflightProfiles))
+    {
+        if (profile.id == priorId)
+        {
+            priorDigest = profile.digest;
+            break;
+        }
+    }
+
+    QList<PreflightProfileChoice> profiles;
+    const auto addProfile = [&profiles](const QString& source, const QByteArray& data)
+    {
+        PreflightProfileChoice choice;
+        choice.id = source;
+        choice.source = source;
+        QJsonParseError parseError;
+        const QJsonDocument parsed = QJsonDocument::fromJson(data, &parseError);
+        if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
+        {
+            choice.name = QFileInfo(source).completeBaseName();
+            choice.diagnostic = QStringLiteral("Profile JSON is invalid.");
+            profiles.append(choice);
+            return;
+        }
+        const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(parsed.object(), source);
+        choice.name = imported.profile.value(QStringLiteral("name")).toString(QFileInfo(source).completeBaseName());
+        choice.version = imported.identity.version;
+        choice.digest = imported.identity.digest;
+        choice.profile = imported.profile;
+        choice.variables = imported.profile.value(QStringLiteral("variables")).toObject();
+        choice.valid = imported.ok;
+        choice.diagnostic = imported.ok ? QString() : imported.errorMessage;
+        profiles.append(choice);
+    };
+
+    const QDir bundled(QStringLiteral(":/profiles"));
+    for (const QFileInfo& file : bundled.entryInfoList({ QStringLiteral("*.json") }, QDir::Files, QDir::Name))
+    {
+        QFile input(file.filePath());
+        if (input.open(QIODevice::ReadOnly))
+        {
+            addProfile(file.filePath(), input.readAll());
+        }
+    }
+
+    const QString localDirectory = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                                       .filePath(QStringLiteral("profiles"));
+    const QDir local(localDirectory);
+    for (const QFileInfo& file : local.entryInfoList({ QStringLiteral("*.json") }, QDir::Files, QDir::Name))
+    {
+        QFile input(file.absoluteFilePath());
+        if (input.open(QIODevice::ReadOnly))
+        {
+            addProfile(file.absoluteFilePath(), input.readAll());
+        }
+    }
+
+    m_preflightProfiles = std::move(profiles);
+    if (m_selectedPreflightProfileId.isEmpty() ||
+        std::none_of(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                     [this](const PreflightProfileChoice& profile)
+                     { return profile.id == m_selectedPreflightProfileId && profile.valid; }))
+    {
+        const auto valid = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                        [](const PreflightProfileChoice& profile)
+                                        { return profile.valid; });
+        m_selectedPreflightProfileId = valid == m_preflightProfiles.cend() ? QString() : valid->id;
+        m_preflightBindings = QJsonObject();
+    }
+    const auto current = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
+                                      [this](const PreflightProfileChoice& profile)
+                                      { return profile.id == m_selectedPreflightProfileId; });
+    if (!priorId.isEmpty() && (priorId != m_selectedPreflightProfileId || current == m_preflightProfiles.cend() || current->digest != priorDigest))
+    {
+        m_preflight.markProfileStale();
+    }
+    updatePreflightProfileWatch();
+    Q_EMIT preflightProfilesChanged();
+    bumpPresentation();
+}
+
+void EditorHost::updatePreflightProfileWatch()
+{
+    if (!m_preflightProfileWatcher)
+    {
+        return;
+    }
+    m_preflightProfileWatcher->removePaths(m_preflightProfileWatcher->directories());
+    m_preflightProfileWatcher->removePaths(m_preflightProfileWatcher->files());
+    const QString localDirectory = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                                       .filePath(QStringLiteral("profiles"));
+    if (QFileInfo::exists(localDirectory))
+    {
+        m_preflightProfileWatcher->addPath(localDirectory);
+    }
+    for (const PreflightProfileChoice& profile : std::as_const(m_preflightProfiles))
+    {
+        if (!profile.source.startsWith(QLatin1Char(':')) && QFileInfo::exists(profile.source))
+        {
+            m_preflightProfileWatcher->addPath(profile.source);
+        }
+    }
 }
 
 QVariantList EditorHost::commandDescriptors() const
@@ -1049,7 +1312,7 @@ void EditorHost::onDocumentGone()
     cancelPreflight();
     unbindCanvas();
     m_session->clearDocumentView();
-    m_preflight.findingsModel()->clear();
+    m_preflight.clear();
     m_inspector.clearSelection();
     m_documentModel.clear();
     m_searchRow = -1;

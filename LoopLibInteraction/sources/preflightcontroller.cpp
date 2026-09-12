@@ -51,13 +51,13 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     const bool changed = documentKey != m_documentKey || documentRevision != m_documentRevision;
     m_documentKey = std::move(documentKey);
     m_documentRevision = std::move(documentRevision);
-    if (changed && m_state != State::NotChecked)
+    if (changed && (m_hasResult || m_state == State::Running))
     {
         // Assign before setState(): the state change is announced through
         // stateChanged, which is also this property's notifier, so an observer
         // reading the summary from that signal must not see the previous run's.
         m_operatorSummary = QStringLiteral("Preflight is stale for the current revision.");
-        setState(State::Stale);
+        setState(m_hasResult ? State::Stale : State::NotChecked);
     }
 }
 
@@ -89,7 +89,6 @@ void PreflightController::beginRun(QString documentKey,
     m_jobId = std::move(jobId);
     m_cancelRequested = false;
     m_progress = 0;
-    m_findings.clear();
     m_operatorSummary = QStringLiteral("Preflight is running.");
     setState(State::Running);
     Q_EMIT progressChanged(m_progress);
@@ -109,6 +108,8 @@ bool PreflightController::acceptResult(const QString& jobId,
     // has to know too, or the list and overlays keep showing them as blockers
     // while the operator is told the run passed.
     m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings, verdict.waivedFindingIds);
+    m_result = result;
+    m_hasResult = true;
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
     m_operatorSummary = pdf::preflightVerdictOperatorSummary(verdict);
@@ -127,6 +128,7 @@ bool PreflightController::acceptResult(const QString& jobId,
             setState(State::Error);
             break;
     }
+    m_retainedState = m_state;
     return true;
 }
 
@@ -138,7 +140,7 @@ bool PreflightController::failRun(const QString& jobId, const QString& documentR
     }
 
     m_operatorSummary = QStringLiteral("Preflight failed: %1").arg(std::move(errorMessage));
-    setState(State::Error);
+    restoreRetainedState();
     return true;
 }
 
@@ -159,8 +161,49 @@ bool PreflightController::cancelRun(const QString& jobId)
         }
     }
     m_operatorSummary = QStringLiteral("Preflight was cancelled.");
-    setState(State::Cancelled);
+    restoreRetainedState();
     return true;
+}
+
+void PreflightController::markProfileStale()
+{
+    if (m_state == State::Running)
+    {
+        cancelRun(m_jobId);
+    }
+    if (m_hasResult)
+    {
+        m_operatorSummary = QStringLiteral("Preflight is stale because the selected profile changed.");
+        setState(State::Stale);
+    }
+}
+
+void PreflightController::restoreRetainedState()
+{
+    setState(m_hasResult ? m_retainedState : State::NotChecked);
+}
+
+void PreflightController::clear()
+{
+    m_findings.clear();
+    m_result = pdf::PreflightResult();
+    m_hasResult = false;
+    m_retainedState = State::NotChecked;
+    m_operatorSummary.clear();
+    m_jobId.clear();
+    m_progress = 0;
+    m_cancelRequested = false;
+    setState(State::NotChecked);
+    Q_EMIT progressChanged(m_progress);
+}
+
+QByteArray PreflightController::serializedReport(const QString& documentPath) const
+{
+    if (!m_hasResult)
+    {
+        return {};
+    }
+    return QJsonDocument(m_result.toJson(documentPath)).toJson(QJsonDocument::Indented);
 }
 
 bool PreflightController::navigationFor(const QString& findingId,
