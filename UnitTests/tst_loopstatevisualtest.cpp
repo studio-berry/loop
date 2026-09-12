@@ -630,6 +630,7 @@ void LoopStateVisualTest::preflightStateVisualMapping_data()
     QTest::newRow("running") << QStringLiteral("running") << StateKind::Info;
     QTest::newRow("pass") << QStringLiteral("pass") << StateKind::Passed;
     QTest::newRow("findings") << QStringLiteral("findings") << StateKind::Error;
+    QTest::newRow("fail") << QStringLiteral("fail") << StateKind::Error;
     QTest::newRow("incomplete") << QStringLiteral("incomplete") << StateKind::Incomplete;
     QTest::newRow("stale") << QStringLiteral("stale") << StateKind::Incomplete;
     QTest::newRow("cancelled") << QStringLiteral("cancelled") << StateKind::NotChecked;
@@ -670,6 +671,7 @@ void LoopStateVisualTest::preflightStateVisualNeverPassesWithoutAPass_data()
     QTest::newRow("stale") << QStringLiteral("stale");
     QTest::newRow("cancelled") << QStringLiteral("cancelled");
     QTest::newRow("error") << QStringLiteral("error");
+    QTest::newRow("fail") << QStringLiteral("fail");
     QTest::newRow("empty") << QString();   // before any run / no accepted result
 }
 

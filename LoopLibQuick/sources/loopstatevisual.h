@@ -89,6 +89,11 @@ LOOPLIBQUICK_EXPORT LoopStateVisual resolveStateVisual(const pdf::PreflightFindi
 /// PreflightController::State rendered by EditorHost::preflightStateName()
 /// (not-checked/running/cancelled/pass/findings/stale/incomplete/error).
 ///
+/// Both name sets are accepted. `pass` is the only name that reaches Passed. `fail` (the
+/// reducer's blocking-findings verdict) and the controller's `findings` both take the Error
+/// treatment; `incomplete` and `stale` take Incomplete; `running` takes Info; and not-checked,
+/// cancelled and anything unrecognised take NotChecked.
+///
 /// This is a rendering of Core's own state, never a derivation: a caller may not reach Passed
 /// unless Core reported a pass. Incomplete, stale, cancelled and unknown states all decline to
 /// look like one - use the operator summary for the words.

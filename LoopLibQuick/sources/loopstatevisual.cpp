@@ -177,7 +177,7 @@ LoopStateVisual resolvePreflightStateVisual(const QString& stateName)
     {
         return makeVisual(StateKind::Passed, ColorRole::Success, StateIcon::Checkmark);
     }
-    if (normalized == QLatin1String("findings") || normalized == QLatin1String("error"))
+    if (normalized == QLatin1String("findings") || normalized == QLatin1String("error") || normalized == QLatin1String("fail"))
     {
         return makeVisual(StateKind::Error, ColorRole::SeverityError, StateIcon::FilledCircle);
     }
