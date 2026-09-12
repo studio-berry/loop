@@ -89,6 +89,12 @@ constexpr int64_t JBIG2_MAX_TOTAL_DECODE_WORK_ITEMS = 2LL * 1024 * 1024;
 // near-zero range length from looping toward htHigh billions of times.
 constexpr size_t JBIG2_MAX_HUFFMAN_TABLE_ENTRIES = 65536;
 
+// 7.2.4's extended retention field holds a 29-bit referred-segment count, and a
+// real symbol dictionary refers to at most a few hundred segments. Every referred
+// segment number costs at least one byte in the stream, so the count is also
+// bounded by the data that is left.
+constexpr uint32_t JBIG2_MAX_REFERRED_SEGMENTS = 65535;
+
 namespace
 {
 
@@ -1082,6 +1088,20 @@ PDFJBIG2SegmentHeader PDFJBIG2SegmentHeader::read(PDFBitReader* reader)
         if ((retentionField & 0xE0000000) != 0xE0000000)
         {
             throw PDFException(PDFTranslationContext::tr("JBIG2 invalid header - bad referred segments."));
+        }
+
+        // The count is attacker-controlled (up to 2^29-1) and is used to size this
+        // header's vector and to compute the retention skip, so it must be bounded
+        // here - the bitmap and decode-work ceilings elsewhere in this file never
+        // see this allocation. Every referred segment number costs at least one
+        // byte of the stream, so the count is also bounded by the data that is
+        // left. Fail closed before the skip and the reservation, not when the
+        // reads run out of data.
+        const qint64 remainingSegmentBytes = qMax<qint64>(0, qint64(reader->getStream()->size()) - qint64(reader->getPosition()));
+        if (referredSegmentsCount > JBIG2_MAX_REFERRED_SEGMENTS ||
+            qint64(referredSegmentsCount) > remainingSegmentBytes)
+        {
+            throw PDFException(PDFTranslationContext::tr("JBIG2 invalid header - referred segments exceed the remaining data."));
         }
 
         // According the specification, retention header is 4 + ceil( (R + 1) / 8) bytes long. We have already 4 bytes read,

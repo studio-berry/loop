@@ -41,6 +41,7 @@ private slots:
     void test_codeTables_rejectsOversizedRangeBitLength();
     void test_codeTables_acceptsValidSmallTable();
     void test_paint_boundsTheExpansionAllocation();
+    void test_segmentHeader_rejectsHostileReferredSegmentCount();
 };
 
 void Jbig2DecoderTest::test_codeTables_rejectsOversizedRangeBitLength()
@@ -141,6 +142,45 @@ void Jbig2DecoderTest::test_paint_boundsTheExpansionAllocation()
     pdf::PDFJBIG2Bitmap smallPage(16, 8);
     smallPage.paint(region, 0, 16, pdf::PDFJBIG2BitOperation::Or, true, 0x00);
     QCOMPARE(smallPage.getHeight(), 24);
+}
+
+void Jbig2DecoderTest::test_segmentHeader_rejectsHostileReferredSegmentCount()
+{
+    // Segment header (7.2) whose retention field signals "more than 4 referred
+    // segments" (bits 6-8 == 7) and then declares 1,000,000 of them in the 29-bit
+    // extension; the field itself accepts up to 536,870,911. The stream carries
+    // exactly the 125,001 bytes the retention skip asks for, so the old code
+    // really did reserve(1,000,000) - a 4 MiB vector - from a nine-byte header,
+    // and only noticed that the stream could not back the count when the read
+    // loop ran dry. The count is attacker-controlled and is used both to size
+    // that vector and to compute the skip, so it must be validated before either.
+    static const unsigned char data[] = {
+        0x00, 0x00, 0x00, 0x01,   // segment number = 1
+        0x35,   // flags: type = 53 (Tables), 1-byte page association
+        0xE0,   // retention field: bits 6-8 = 7 -> the 29-bit count follows
+        0x0F, 0x42, 0x40,   // 29-bit referred segment count = 1,000,000
+    };
+
+    QByteArray stream(reinterpret_cast<const char*>(data), sizeof(data));
+    stream.append(QByteArray(125001, '\0'));
+
+    pdf::PDFRenderErrorReporterDummy errorReporter;
+    pdf::PDFJBIG2Decoder decoder(stream, QByteArray(), &errorReporter);
+
+    bool threw = false;
+    QString message;
+    try
+    {
+        decoder.decode(pdf::PDFImageData::MaskingType::None);
+    }
+    catch (const pdf::PDFException& e)
+    {
+        threw = true;
+        message = e.getMessage();
+    }
+
+    QVERIFY2(threw, "a referred-segment count the stream cannot back must be refused, not reserved");
+    QVERIFY2(message.contains(QStringLiteral("referred")), qPrintable(message));
 }
 
 QTEST_GUILESS_MAIN(Jbig2DecoderTest)
