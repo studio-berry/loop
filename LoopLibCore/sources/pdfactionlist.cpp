@@ -43,9 +43,12 @@ QString failurePolicyName(PDFActionListFailurePolicy policy)
 {
     switch (policy)
     {
-        case PDFActionListFailurePolicy::Inherit: return QStringLiteral("inherit");
-        case PDFActionListFailurePolicy::Stop: return QStringLiteral("stop");
-        case PDFActionListFailurePolicy::Continue: return QStringLiteral("continue");
+        case PDFActionListFailurePolicy::Inherit:
+            return QStringLiteral("inherit");
+        case PDFActionListFailurePolicy::Stop:
+            return QStringLiteral("stop");
+        case PDFActionListFailurePolicy::Continue:
+            return QStringLiteral("continue");
     }
     return QStringLiteral("inherit");
 }
@@ -82,11 +85,16 @@ bool isJsonNumber(const QJsonValue& value)
 
 bool matchesType(const QJsonValue& value, const QString& type)
 {
-    if (type == QStringLiteral("object")) return value.isObject();
-    if (type == QStringLiteral("array")) return value.isArray();
-    if (type == QStringLiteral("string")) return value.isString();
-    if (type == QStringLiteral("boolean")) return value.isBool();
-    if (type == QStringLiteral("number")) return isJsonNumber(value);
+    if (type == QStringLiteral("object"))
+        return value.isObject();
+    if (type == QStringLiteral("array"))
+        return value.isArray();
+    if (type == QStringLiteral("string"))
+        return value.isString();
+    if (type == QStringLiteral("boolean"))
+        return value.isBool();
+    if (type == QStringLiteral("number"))
+        return isJsonNumber(value);
     if (type == QStringLiteral("integer"))
     {
         return isJsonNumber(value) && std::floor(value.toDouble()) == value.toDouble();
@@ -97,7 +105,8 @@ bool matchesType(const QJsonValue& value, const QString& type)
 bool valuesEqual(const QJsonValue& left, const QJsonValue& right)
 {
     return QJsonDocument(left.toObject()).toJson(QJsonDocument::Compact) ==
-           QJsonDocument(right.toObject()).toJson(QJsonDocument::Compact) || left == right;
+               QJsonDocument(right.toObject()).toJson(QJsonDocument::Compact) ||
+           left == right;
 }
 
 void appendError(QStringList* errors, const QString& error)
@@ -109,9 +118,9 @@ void appendError(QStringList* errors, const QString& error)
 }
 
 bool validateValue(const QJsonValue& value,
-                  const QJsonObject& schema,
-                  const QString& path,
-                  QStringList* errors)
+                   const QJsonObject& schema,
+                   const QString& path,
+                   QStringList* errors)
 {
     const QString type = schema.value(QStringLiteral("type")).toString();
     if (!type.isEmpty() && !matchesType(value, type))
@@ -303,8 +312,9 @@ PDFActionListFailurePolicy effectivePolicy(const PDFActionList& actionList, cons
 QString recipeHash(const PDFActionList& actionList)
 {
     return QString::fromLatin1(QCryptographicHash::hash(
-        QJsonDocument(actionList.toJson()).toJson(QJsonDocument::Compact),
-        QCryptographicHash::Sha256).toHex());
+                                   QJsonDocument(actionList.toJson()).toJson(QJsonDocument::Compact),
+                                   QCryptographicHash::Sha256)
+                                   .toHex());
 }
 
 void addDiagnostic(PDFActionListStepResult* step, const QString& code, const QString& message)
@@ -312,8 +322,7 @@ void addDiagnostic(PDFActionListStepResult* step, const QString& code, const QSt
     step->diagnostics.append(QJsonObject{
         { QStringLiteral("code"), code },
         { QStringLiteral("severity"), QStringLiteral("error") },
-        { QStringLiteral("message"), message }
-    });
+        { QStringLiteral("message"), message } });
 }
 
 void markRemaining(QVector<PDFActionListStepResult>* steps, int start, PDFActionListStepStatus status, const QString& code, const QString& message)
@@ -328,7 +337,7 @@ void markRemaining(QVector<PDFActionListStepResult>* steps, int start, PDFAction
     }
 }
 
-} // namespace
+}   // namespace
 
 void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const PreflightVerdict& verdict)
 {
@@ -343,8 +352,7 @@ void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const Preflig
         step->diagnostics.append(QJsonObject{
             { QStringLiteral("code"), QStringLiteral("action-list.postflight-verdict") },
             { QStringLiteral("severity"), QStringLiteral("error") },
-            { QStringLiteral("message"), preflightVerdictOperatorSummary(verdict) }
-        });
+            { QStringLiteral("message"), preflightVerdictOperatorSummary(verdict) } });
     }
 }
 
@@ -357,12 +365,18 @@ QString pdfActionListStepStatusName(PDFActionListStepStatus status)
 {
     switch (status)
     {
-        case PDFActionListStepStatus::Pending: return QStringLiteral("pending");
-        case PDFActionListStepStatus::Running: return QStringLiteral("running");
-        case PDFActionListStepStatus::Succeeded: return QStringLiteral("succeeded");
-        case PDFActionListStepStatus::Skipped: return QStringLiteral("skipped");
-        case PDFActionListStepStatus::Failed: return QStringLiteral("failed");
-        case PDFActionListStepStatus::Cancelled: return QStringLiteral("cancelled");
+        case PDFActionListStepStatus::Pending:
+            return QStringLiteral("pending");
+        case PDFActionListStepStatus::Running:
+            return QStringLiteral("running");
+        case PDFActionListStepStatus::Succeeded:
+            return QStringLiteral("succeeded");
+        case PDFActionListStepStatus::Skipped:
+            return QStringLiteral("skipped");
+        case PDFActionListStepStatus::Failed:
+            return QStringLiteral("failed");
+        case PDFActionListStepStatus::Cancelled:
+            return QStringLiteral("cancelled");
     }
     return QStringLiteral("failed");
 }
@@ -379,7 +393,8 @@ QJsonObject PDFActionListStep::toJson() const
         { QStringLiteral("operation"), operationId },
         { QStringLiteral("params"), parameters }
     };
-    if (!condition.isEmpty()) result.insert(QStringLiteral("when"), condition);
+    if (!condition.isEmpty())
+        result.insert(QStringLiteral("when"), condition);
     if (failurePolicy != PDFActionListFailurePolicy::Inherit)
     {
         result.insert(QStringLiteral("onFailure"), failurePolicyName(failurePolicy));
@@ -491,7 +506,8 @@ PDFOperationResult PDFActionListExecutor::validate(const PDFActionList& actionLi
                                                    const PDFActionListExecutionOptions& options,
                                                    QStringList* errors) const
 {
-    if (errors) errors->clear();
+    if (errors)
+        errors->clear();
     bool valid = true;
     if (actionList.schema != schemaVersion())
     {
@@ -588,8 +604,7 @@ PDFOperationResult PDFActionListExecutor::plan(const PDFActionList& actionList,
             result->diagnostics.append(QJsonObject{
                 { QStringLiteral("code"), QStringLiteral("action-list.validation-failed") },
                 { QStringLiteral("severity"), QStringLiteral("error") },
-                { QStringLiteral("message"), error }
-            });
+                { QStringLiteral("message"), error } });
         }
         result->durationMs = totalTimer.elapsed();
         return validation;
@@ -747,4 +762,4 @@ PDFOperationResult PDFActionListExecutor::execute(const PDFActionList& actionLis
     return PDFOperationResult(true);
 }
 
-} // namespace pdf
+}   // namespace pdf

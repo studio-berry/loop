@@ -152,6 +152,6 @@ private:
     const PDFRepairRegistry* m_registry = nullptr;
 };
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFACTIONLIST_H
+#endif   // PDFACTIONLIST_H

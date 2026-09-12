@@ -67,8 +67,8 @@ LOOPLIBCORESHARED_EXPORT QString preflightGateFailureMessage(const QString& file
 /// Reduces a normalized preflight result to the only operator-facing verdict.
 /// The result's legacy pass field is deliberately ignored.
 LOOPLIBCORESHARED_EXPORT PreflightVerdict reducePreflightVerdict(const PreflightResult& result,
-                                                                    const PreflightProfileData* effectiveProfile = nullptr);
+                                                                 const PreflightProfileData* effectiveProfile = nullptr);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFPREFLIGHTVERDICT_H
+#endif   // PDFPREFLIGHTVERDICT_H
