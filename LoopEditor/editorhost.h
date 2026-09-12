@@ -46,6 +46,7 @@
 #include "pdfdocumentcontext.h"
 #include "pdfjobscheduler.h"
 
+#include <QColor>
 #include <QObject>
 #include <QHash>
 #include <QJsonObject>
@@ -94,6 +95,8 @@ class EditorHost final : public QObject
     Q_PROPERTY(QObject* documentModel READ documentModel CONSTANT)
     Q_PROPERTY(QObject* focusRestoration READ focusRestoration CONSTANT)
     Q_PROPERTY(QString preflightStateName READ preflightStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantMap preflightStateVisual READ preflightStateVisual NOTIFY presentationChanged)
+    Q_PROPERTY(QColor preflightStateColor READ preflightStateColor NOTIFY presentationChanged)
     Q_PROPERTY(QString preflightOperatorSummary READ preflightOperatorSummary NOTIFY presentationChanged)
     Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
@@ -153,6 +156,16 @@ public:
     FocusRestoration* focusRestoration() { return &m_focusRestoration; }
 
     QString preflightStateName() const;
+
+    /// Canonical #194 treatment for the current document-level preflight state: the keys
+    /// `kind`, `colorRole`, `icon` and `accessibleName`, all computed by LoopLibQuick from Core's
+    /// own state name. QML renders it; it derives nothing and picks no roles.
+    QVariantMap preflightStateVisual() const;
+
+    /// The `colorRole` above, resolved to a colour for the current theme. QML must never map a role
+    /// name to a colour itself.
+    QColor preflightStateColor() const;
+
     QString preflightOperatorSummary() const;
     QVariantList preflightProfiles() const;
     QVariantList preflightVariables() const;

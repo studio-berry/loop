@@ -28,6 +28,8 @@
 #include "interactionstate.h"
 #include "interactiontarget.h"
 #include "loopcanvasitem.h"
+#include "loopstatevisual.h"
+#include "looptokens.h"
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
 #include "preflightclirun.h"
@@ -431,6 +433,26 @@ void EditorHost::acknowledgeSearchPanel()
 QString EditorHost::preflightStateName() const
 {
     return preflightStateToString(m_preflight.state());
+}
+
+QVariantMap EditorHost::preflightStateVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(preflightStateName());
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    result.insert(QStringLiteral("accessibleName"), visual.accessibleName);
+    return result;
+}
+
+QColor EditorHost::preflightStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(preflightStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
 }
 
 QString EditorHost::preflightOperatorSummary() const

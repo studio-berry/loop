@@ -37,6 +37,9 @@
 #include "documentviewsession.h"
 #include "editorhost.h"
 
+#include "loopstatevisual.h"
+#include "looptokens.h"
+
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
@@ -109,6 +112,7 @@ private slots:
     void navigationCommandsStayDisabledUntilOpen();
     void sessionTeardownDrainsWorkersBeforeAdapters();
     void preflightRunsOffInteractiveThread();
+    void preflightStateVisualIsNotCheckedBeforeARun();
     void openLargeDocument();
 };
 
@@ -213,6 +217,52 @@ void EditorHostTest::preflightRunsOffInteractiveThread()
     QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 30000);
     QVERIFY(host.preflightStateName() != QStringLiteral("error"));
     QCOMPARE(host.preflight()->property("progress").toInt(), 100);
+}
+
+void EditorHostTest::preflightStateVisualIsNotCheckedBeforeARun()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 612, 792));
+    const QString path = directory.filePath(QStringLiteral("preflight-visual.pdf"));
+    {
+        const pdf::PDFDocument document = builder.build();
+        pdf::PDFDocumentWriter writer(nullptr);
+        QVERIFY(writer.write(path, &document, true));
+    }
+
+    EditorHost host;
+    host.openFileUrl(QUrl::fromLocalFile(path));
+    QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 15000);
+
+    // Before any run the badge must say "not checked" and must not be a pass (#195 acceptance 1 and 7).
+    const QVariantMap before = host.preflightStateVisual();
+    QCOMPARE(before.value(QStringLiteral("kind")).toString(), QStringLiteral("NotChecked"));
+    QVERIFY2(before.contains(QStringLiteral("kind")) && before.contains(QStringLiteral("colorRole")) && before.contains(QStringLiteral("icon")) && before.contains(QStringLiteral("accessibleName")),
+             "the visual must carry the full canonical treatment for QML to render");
+    QCOMPARE(before.value(QStringLiteral("accessibleName")).toString(), QStringLiteral("Not checked"));
+
+    // The colour is resolved from the visual's own colour role, never chosen by the QML child. It must
+    // be a real colour and it must not be the pass colour.
+    const QColor stateColor = host.preflightStateColor();
+    QVERIFY2(stateColor.isValid(), "the state colour must be a resolved QColor, not an unset one");
+
+    const pdfquick::tokens::LoopTheme theme =
+        host.highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    QCOMPARE(stateColor, pdfquick::tokens::color(pdfquick::tokens::ColorRole::StateNotChecked, theme));
+    QVERIFY(stateColor != pdfquick::tokens::color(pdfquick::tokens::ColorRole::Success, theme));
+
+    // A completed run keeps the same shape, whatever Core decided.
+    QVERIFY(host.runPreflight());
+    QTRY_VERIFY_WITH_TIMEOUT(host.preflightStateName() != QStringLiteral("running"), 60000);
+
+    const QVariantMap after = host.preflightStateVisual();
+    QVERIFY2(after.contains(QStringLiteral("kind")) && after.contains(QStringLiteral("colorRole")) && after.contains(QStringLiteral("icon")) && after.contains(QStringLiteral("accessibleName")),
+             "the visual must carry the full canonical treatment for QML to render");
+    QVERIFY(!after.value(QStringLiteral("kind")).toString().isEmpty());
+    QVERIFY(host.preflightStateColor().isValid());
 }
 
 void EditorHostTest::openLargeDocument()
