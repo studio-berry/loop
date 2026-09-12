@@ -56,8 +56,15 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
         // Assign before setState(): the state change is announced through
         // stateChanged, which is also this property's notifier, so an observer
         // reading the summary from that signal must not see the previous run's.
+        //
+        // The state is Stale for both conditions this branch admits: a document
+        // whose revision moved on invalidates the retained result AND abandons a run
+        // that is still in flight. Reporting NotChecked when the run had produced no
+        // result yet left the pane showing "Preflight is stale for the current
+        // revision." under a NotChecked state, and made the stale transition
+        // unobservable from stateChanged.
         m_operatorSummary = QStringLiteral("Preflight is stale for the current revision.");
-        setState(m_hasResult ? State::Stale : State::NotChecked);
+        setState(State::Stale);
     }
 }
 
@@ -140,7 +147,7 @@ bool PreflightController::failRun(const QString& jobId, const QString& documentR
     }
 
     m_operatorSummary = QStringLiteral("Preflight failed: %1").arg(std::move(errorMessage));
-    restoreRetainedState();
+    restoreRetainedState(State::Error);
     return true;
 }
 
@@ -161,7 +168,7 @@ bool PreflightController::cancelRun(const QString& jobId)
         }
     }
     m_operatorSummary = QStringLiteral("Preflight was cancelled.");
-    restoreRetainedState();
+    restoreRetainedState(State::Cancelled);
     return true;
 }
 
@@ -178,9 +185,15 @@ void PreflightController::markProfileStale()
     }
 }
 
-void PreflightController::restoreRetainedState()
+void PreflightController::restoreRetainedState(State terminalState)
 {
-    setState(m_hasResult ? m_retainedState : State::NotChecked);
+    // With no retained result there is nothing to restore, and the terminal
+    // outcome is what the operator just got: reporting NotChecked ("never checked")
+    // contradicted the summary the caller had already assigned
+    // ("Preflight was cancelled." / "Preflight failed: ...") and made the
+    // transition unobservable from stateChanged, which is that summary's notifier.
+    // A retained result still wins, so the last good verdict stays on screen.
+    setState(m_hasResult ? m_retainedState : terminalState);
 }
 
 void PreflightController::clear()

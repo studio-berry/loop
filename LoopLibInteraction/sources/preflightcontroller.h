@@ -98,7 +98,7 @@ signals:
 
 private:
     void setState(State state);
-    void restoreRetainedState();
+    void restoreRetainedState(State terminalState);
 
     PreflightFindingsModel m_findings;
     State m_state = State::NotChecked;
