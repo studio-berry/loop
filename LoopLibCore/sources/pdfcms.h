@@ -82,13 +82,13 @@ struct PDFCMSSettings
     bool isGamutChecking = false;
     bool isSoftProofing = false;
     bool isConsiderOutputIntent = true;
-    QColor outOfGamutColor = Qt::red; ///< Color, which marks out-of-gamut when soft-proofing is proceeded
-    QString outputCS;               ///< Output (rendering) color space
-    QString deviceGray;             ///< Identifiers for color space (device gray)
-    QString deviceRGB;              ///< Identifiers for color space (device RGB)
-    QString deviceCMYK;             ///< Identifiers for color space (device CMYK)
-    QString softProofingProfile;    ///< Identifiers for soft proofing profile
-    QString profileDirectory;       ///< Directory containing color profiles
+    QColor outOfGamutColor = Qt::red;   ///< Color, which marks out-of-gamut when soft-proofing is proceeded
+    QString outputCS;   ///< Output (rendering) color space
+    QString deviceGray;   ///< Identifiers for color space (device gray)
+    QString deviceRGB;   ///< Identifiers for color space (device RGB)
+    QString deviceCMYK;   ///< Identifiers for color space (device CMYK)
+    QString softProofingProfile;   ///< Identifiers for soft proofing profile
+    QString profileDirectory;   ///< Directory containing color profiles
 
     // Postprocessing
     QColor foregroundColor = Qt::green;
@@ -281,7 +281,7 @@ public:
     virtual QColor getColorFromDeviceRGB(const PDFColor& color, RenderingIntent intent, PDFRenderErrorReporter* reporter) const override;
     virtual QColor getColorFromDeviceCMYK(const PDFColor& color, RenderingIntent intent, PDFRenderErrorReporter* reporter) const override;
     virtual QColor getColorFromXYZ(const PDFColor3& whitePoint, const PDFColor3& color, RenderingIntent intent, PDFRenderErrorReporter* reporter) const override;
-    virtual QColor getColorFromICC(const PDFColor& color, RenderingIntent renderingIntent,  const QByteArray& iccID, const QByteArray& iccData, PDFRenderErrorReporter* reporter) const override;
+    virtual QColor getColorFromICC(const PDFColor& color, RenderingIntent renderingIntent, const QByteArray& iccID, const QByteArray& iccData, PDFRenderErrorReporter* reporter) const override;
     virtual bool fillRGBBufferFromDeviceGray(const std::vector<float>& colors, RenderingIntent intent, unsigned char* outputBuffer, PDFRenderErrorReporter* reporter) const override;
     virtual bool fillRGBBufferFromDeviceRGB(const std::vector<float>& colors, RenderingIntent intent, unsigned char* outputBuffer, PDFRenderErrorReporter* reporter) const override;
     virtual bool fillRGBBufferFromDeviceCMYK(const std::vector<float>& colors, RenderingIntent intent, unsigned char* outputBuffer, PDFRenderErrorReporter* reporter) const override;
@@ -475,4 +475,4 @@ public:
 
 }   // namespace pdf
 
-#endif // PDFCMS_H
+#endif   // PDFCMS_H
