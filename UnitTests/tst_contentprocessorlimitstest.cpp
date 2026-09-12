@@ -204,6 +204,7 @@ private slots:
     void test_objectStreamWithHugeObjectCount_isRejected();
     void test_tilingPatternTileCountIsBounded();
     void test_hostileTilingPatternStepIsRefused();
+    void test_unfilteredInlineImageRowLengthIsNotRoundedTwice();
 };
 
 void ContentProcessorLimitsTest::test_selfReferencingFormXObject_isRejected()
@@ -513,6 +514,51 @@ void ContentProcessorLimitsTest::test_hostileTilingPatternStepIsRefused()
     QVERIFY2(std::any_of(errors.cbegin(), errors.cend(), [](const pdf::PDFRenderError& error)
                          { return error.message.contains(QStringLiteral("Tiling pattern is too complex")); }),
              "the refusal must be reported to the operator");
+}
+
+void ContentProcessorLimitsTest::test_unfilteredInlineImageRowLengthIsNotRoundedTwice()
+{
+    // An unfiltered, length-less 1 x 2 inline image: the double rounding made the
+    // probe measure each row one byte too long and the parser then resumed too far
+    // and looked for a *second* "EI" - rejecting the page or eating the rest of the
+    // content. (Verified by execution: pre-fix this fixture throws "Invalid inline
+    // image stream."; with the fix it parses and the trailing content is kept.)
+    // Two rows, 8 bits per sample, an explicit /ColorSpace, no /Filter and no
+    // /Length. Two rows and a color space are both required for this test to mean
+    // anything: without a color space the image never reaches the raw-data branch
+    // of PDFImage::createImage (pdfimage.cpp:1421) and the page reports "Can't
+    // decode the image." on ANY tree, and with a single row the one-byte overshoot
+    // lands exactly on the whitespace before the real "EI", so the terminator is
+    // still found and the defect stays invisible. Two rows move the bogus search
+    // two bytes past the data, i.e. onto the "I" of the real EI, so the terminator
+    // is missed and the parser looks for a second "EI" that never comes.
+    QByteArray pageContent = "q BI /W 1 /H 2 /CS /G /BPC 8 ID ";
+    pageContent.append(char(0x40));
+    pageContent.append(char(0x41));   // two sample bytes: one per row
+    pageContent.append(" EI Q 0 0 10 10 re f");
+
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+    setPageContent(builder, pageReference, pageContent,
+                   pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>()));
+
+    pdf::PDFDocument document = builder.build();
+
+    bool threw = false;
+    QList<pdf::PDFRenderError> errors;
+    try
+    {
+        errors = processPage(document);
+    }
+    catch (const pdf::PDFException& e)
+    {
+        threw = true;
+        qDebug() << "inline image rejected:" << e.getMessage();
+    }
+
+    QVERIFY2(!threw, "a byte-aligned unfiltered inline image row must be measured as one byte");
+    QVERIFY2(errors.isEmpty(), qPrintable(errors.isEmpty() ? QString() : errors.constFirst().message));
 }
 
 QTEST_GUILESS_MAIN(ContentProcessorLimitsTest)

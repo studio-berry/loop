@@ -783,7 +783,10 @@ void PDFPageContentProcessor::processContent(const QByteArray& content)
                             {
                                 throw PDFException(PDFTranslationContext::tr("Expected name in the inline image dictionary stream."));
                             }
-                            stride = (stride + 7) / 8;
+                            // The +7 above is the only rounding: adding it again here
+                            // measured every byte-aligned row as one byte too long,
+                            // which pushed the EI search past the real terminator.
+                            stride = stride / 8;
                             if (!pdfTryMultiply(stride, height, dataLengthProduct))
                             {
                                 throw PDFException(PDFTranslationContext::tr("Expected name in the inline image dictionary stream."));

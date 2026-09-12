@@ -252,7 +252,9 @@ QByteArray PDFInvisibleTextSanitizerHelper::sanitizeInvisibleTextInContent(const
                         {
                             continue;
                         }
-                        stride = (stride + 7) / 8;
+                        // The +7 above is the only rounding (see the inline-image
+                        // length computation in pdfpagecontentprocessor.cpp).
+                        stride = stride / 8;
                         if (!pdfTryMultiply(stride, height, dataLengthProduct))
                         {
                             continue;
