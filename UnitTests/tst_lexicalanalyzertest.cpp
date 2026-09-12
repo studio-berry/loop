@@ -73,6 +73,7 @@ private slots:
     void test_sampledFunctionRejectsMismatchedDomainAndEncodeArity();
     void test_sampledFunctionRejectsMoreSamplesThanItsStreamContains();
     void test_sampledFunctionRejectsTooManyDimensions();
+    void test_flateStreamDataLengthProbeIsBounded();
 
 private:
     void scanWholeStream(const char* stream);
@@ -370,6 +371,35 @@ void LexicalAnalyzerTest::test_lzw_filter()
     QByteArray valid = "-----A---B";
 
     QCOMPARE(decoded, valid);
+}
+
+void LexicalAnalyzerTest::test_flateStreamDataLengthProbeIsBounded()
+{
+    // The probe exists only to recover an inline image's length. 1 MiB of zeros
+    // compresses to ~1 KiB, i.e. a ~1000:1 expansion, far past the 256x ratio
+    // ceiling the decode path itself enforces - the probe used to inflate the
+    // whole thing anyway, unbounded and uncancellable.
+    //
+    // qCompress() prepends a four-byte uncompressed-size header, but the probe
+    // hands its input straight to inflate(), which expects the zlib header at
+    // offset 0; with the prefix left on, inflate() fails on the header and the
+    // probe returns -1 for the wrong reason (measured), so the fixture strips it.
+    QByteArray zeros(1024 * 1024, '\0');
+    const QByteArray bomb = qCompress(zeros, 9).mid(4);
+
+    pdf::PDFFlateDecodeFilter filter;
+
+    QElapsedTimer timer;
+    timer.start();
+    const pdf::PDFInteger probedLength = filter.getStreamDataLength(bomb, 0);
+    const qint64 elapsed = timer.elapsed();
+
+    QVERIFY2(probedLength == -1, qPrintable(QStringLiteral("the probe must refuse an over-ceiling stream, got %1").arg(probedLength)));
+    QVERIFY2(elapsed < 2000, "the probe must stop at its ceiling, not at the end of the stream");
+
+    // A stream inside the ratio ceiling still probes normally.
+    const QByteArray small = qCompress(QByteArray("0123456789"), 9).mid(4);
+    QVERIFY(filter.getStreamDataLength(small, 0) > 0);
 }
 
 void LexicalAnalyzerTest::test_sampled_function()

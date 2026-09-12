@@ -640,6 +640,11 @@ PDFInteger PDFFlateDecodeFilter::getStreamDataLength(const QByteArray& data, PDF
 
     std::array<Bytef, 1024> outputBuffer = {};
 
+    // The probe only recovers a length, so it must not be able to inflate further
+    // than the decode path would allow: the same ceiling (STREAM_FILTER_MAX_* via
+    // maxAllowedDecompressedSize), applied to the bytes that are actually left.
+    const int64_t maximalProbeLength = maxAllowedDecompressedSize(data.size() - offset);
+
     int error = inflateInit(&stream);
     if (error != Z_OK)
     {
@@ -652,6 +657,12 @@ PDFInteger PDFFlateDecodeFilter::getStreamDataLength(const QByteArray& data, PDF
         stream.avail_out = static_cast<uInt>(outputBuffer.size());
 
         error = inflate(&stream, Z_NO_FLUSH);
+
+        if (static_cast<int64_t>(stream.total_out) > maximalProbeLength)
+        {
+            inflateEnd(&stream);
+            return -1;
+        }
     } while (error == Z_OK);
 
     PDFInteger dataLength = stream.total_in;

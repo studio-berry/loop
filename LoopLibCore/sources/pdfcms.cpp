@@ -23,6 +23,7 @@
 #include "pdfcms.h"
 #include "pdfdocument.h"
 #include "pdfexecutionpolicy.h"
+#include "pdfprocessingbudget.h"
 
 #include <QDir>
 #include <QFile>
@@ -1715,6 +1716,11 @@ PDFCMSSettings PDFCMSManager::getDefaultSettings() const
 
 void PDFCMSManager::setDocument(const PDFDocument* document)
 {
+    setDocument(document, nullptr);
+}
+
+void PDFCMSManager::setDocument(const PDFDocument* document, PDFProcessingBudget* processingBudget)
+{
     std::optional<QMutexLocker<QRecursiveMutex>> lock;
     lock.emplace(&m_mutex);
 
@@ -1740,8 +1746,16 @@ void PDFCMSManager::setDocument(const PDFDocument* document)
                 PDFObject outputProfileObject = m_document->getObject(outputIntent.getOutputProfile());
                 if (outputProfileObject.isStream())
                 {
-                    content = m_document->getDecodedStream(outputProfileObject.getStream());
+                    content = m_document->getDecodedStream(outputProfileObject.getStream(), processingBudget);
                 }
+            }
+            catch (const PDFBudgetExceededException&)
+            {
+                // A budget failure is an incomplete operation, not a profile that
+                // failed to parse: it must reach the caller (see
+                // docs/RESOURCE_BUDGETS.md - "a budget failure is incomplete,
+                // never PASS").
+                throw;
             }
             catch (const PDFException&)
             {

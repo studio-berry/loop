@@ -37,6 +37,8 @@
 namespace pdf
 {
 
+class PDFProcessingBudget;
+
 /// This simple structure stores settings for color management system, and what
 /// color management system should be used. At default, two color management
 /// system are available - generic (which uses default imprecise color management),
@@ -408,6 +410,13 @@ public:
     /// rendering intents and they can be used when rendering.
     /// \param document Document
     void setDocument(const PDFDocument* document);
+
+    /// Same as setDocument(), but decodes output-intent profiles under the given
+    /// operation budget so a hostile /DestOutputProfile cannot bypass the
+    /// cumulative and elapsed decoded-stream accounting. The budget is a
+    /// parameter rather than a member: PDFCMSManager is an exported class and
+    /// growing it would break the Core ABI the Editor plugins link against.
+    void setDocument(const PDFDocument* document, PDFProcessingBudget* processingBudget);
 
     /// Get translated name for color management system
     /// \param system System

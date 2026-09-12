@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfdocumentsession.h"
+#include "pdfcms.h"
 #include "pdfdocumentcontext.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
@@ -52,7 +53,50 @@ private slots:
     void setDocument_ownedPointerBindsTheDocument();
     void test_readerBoundsDeclaredXrefEntriesByFileBytes();
     void test_readerBoundsObjectTableByObjectBudget();
+    void test_outputIntentProfileDecodeIsChargedToTheBudget();
 };
+
+namespace
+{
+
+/// Builds a document with a single output intent whose /DestOutputProfile stream
+/// carries `profileContent` compressed with /Filter /FlateDecode.
+///
+/// This duplicates the output-intent fixture of `tst_preflightenginetest.cpp`
+/// on purpose: sharing it between two test executables would need a common test
+/// target, which this change set deliberately avoids.
+pdf::PDFDocument buildDocumentWithOutputIntentProfile(const QByteArray& profileContent)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+
+    pdf::PDFDictionary profileDictionary;
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("N"), pdf::PDFObject::createInteger(3));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Filter"), pdf::PDFObject::createName("FlateDecode"));
+    profileDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"), pdf::PDFObject::createInteger(profileContent.size()));
+    const pdf::PDFObjectReference profileReference = builder.addObject(
+        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(std::move(profileDictionary), QByteArray(profileContent))));
+
+    pdf::PDFDictionary intentDictionary;
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("OutputIntent"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("S"), pdf::PDFObject::createName("GTS_PDFX"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("OutputConditionIdentifier"), pdf::PDFObject::createString("Loop-Test"));
+    intentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("DestOutputProfile"), pdf::PDFObject::createReference(profileReference));
+    const pdf::PDFObjectReference intentReference = builder.addObject(
+        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(intentDictionary))));
+
+    pdf::PDFArray outputIntents;
+    outputIntents.appendItem(pdf::PDFObject::createReference(intentReference));
+
+    pdf::PDFDictionary catalog;
+    catalog.addEntry(pdf::PDFInplaceOrMemoryString("OutputIntents"),
+                     pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(outputIntents))));
+    builder.mergeTo(builder.getCatalogReference(), pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(catalog))));
+
+    return builder.build();
+}
+
+}   // namespace
 
 void DocumentSessionTest::nullDocument_sessionIsInvalid()
 {
@@ -453,6 +497,49 @@ void DocumentSessionTest::test_readerBoundsObjectTableByObjectBudget()
     QVERIFY2(match.hasMatch(), qPrintable(message));
     QCOMPARE(match.captured(1).toLongLong(), qint64(DECLARED_OBJECT_COUNT));
     QCOMPARE(match.captured(2).toLongLong(), qint64(100));
+}
+
+void DocumentSessionTest::test_outputIntentProfileDecodeIsChargedToTheBudget()
+{
+    // 1 MiB of zeros compresses to ~1 KiB, so this is a legal-length stream that
+    // inflates past a tightened single-stream ceiling. Decoding it without the
+    // budget (the old PDFCMSManager::setDocument) bypassed the cumulative and
+    // elapsed accounting entirely.
+    //
+    // qCompress() prepends a four-byte uncompressed-size header, but the stream
+    // declares /Filter /FlateDecode, which needs the zlib stream itself - so the
+    // fixture strips the prefix (with it, the decode fails as a malformed stream
+    // instead of tripping the budget).
+    QByteArray zeros(1024 * 1024, '\0');
+    const QByteArray bomb = qCompress(zeros, 9).mid(4);
+
+    pdf::PDFDocument document = buildDocumentWithOutputIntentProfile(bomb);
+
+    pdf::PDFProcessingLimits limits = pdf::PDFProcessingLimits::conservativeDefaults();
+    limits.maxDecodedStreamBytes = 4096;
+    limits.maxDecompressionRatio = 4;
+
+    pdf::PDFProcessingBudget budget(limits);
+    pdf::PDFCMSManager manager(nullptr);
+
+    QVERIFY_THROWS_EXCEPTION(pdf::PDFBudgetExceededException, manager.setDocument(&document, &budget));
+    QVERIFY(budget.limits().maxDecodedStreamBytes == 4096);
+
+    // A caller that passes no budget still swallows the same bomb: the per-stream
+    // ceiling reports it as a profile that failed to parse, and the cumulative
+    // accounting never sees it. That residual gap is what docs/RESOURCE_BUDGETS.md
+    // records as deferred.
+    bool budgetFailurePropagated = false;
+    try
+    {
+        pdf::PDFCMSManager unbudgetedManager(nullptr);
+        unbudgetedManager.setDocument(&document);
+    }
+    catch (const pdf::PDFBudgetExceededException&)
+    {
+        budgetFailurePropagated = true;
+    }
+    QVERIFY2(!budgetFailurePropagated, "only the overload that receives a budget accounts for the decode");
 }
 
 QTEST_GUILESS_MAIN(DocumentSessionTest)
