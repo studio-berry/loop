@@ -22,6 +22,7 @@
 
 #include <QtTest>
 #include <QDataStream>
+#include <QElapsedTimer>
 
 #include "pdfcms.h"
 #include "pdfconstants.h"
@@ -35,6 +36,8 @@
 #include "pdfoptionalcontent.h"
 #include "pdfpagecontentprocessor.h"
 
+#include <algorithm>
+#include <limits>
 #include <vector>
 
 namespace
@@ -126,6 +129,67 @@ QList<pdf::PDFRenderError> processPage(pdf::PDFDocument& document)
     return processor.processContents();
 }
 
+/// isTilingPatternProcessingAllowed is the protected policy hook that decides
+/// whether a tiling pattern is painted. The test promotes it so the guard can be
+/// asserted directly - asserting it by painting a hostile pattern is exactly the
+/// unbounded work the guard exists to prevent.
+class TilingGuardProbeProcessor : public pdf::PDFPageContentProcessor
+{
+public:
+    TilingGuardProbeProcessor(const pdf::PDFPage* page,
+                              const pdf::PDFDocument* document,
+                              const pdf::PDFFontCache* fontCache,
+                              const pdf::PDFCMS* CMS,
+                              const pdf::PDFOptionalContentActivity* optionalContentActivity,
+                              const pdf::PDFMeshQualitySettings& meshQualitySettings) :
+        pdf::PDFPageContentProcessor(page, document, fontCache, CMS, optionalContentActivity, QTransform(), meshQualitySettings, nullptr)
+    {
+    }
+
+    using pdf::PDFPageContentProcessor::isTilingPatternProcessingAllowed;
+};
+
+/// Builds a colored tiling pattern stream whose step is `xStep` x `yStep` points.
+pdf::PDFObject makeTilingPatternObject(pdf::PDFReal xStep, pdf::PDFReal yStep)
+{
+    pdf::PDFDictionary patternDictionary;
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Pattern"));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("PatternType"), pdf::PDFObject::createInteger(1));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("PaintType"), pdf::PDFObject::createInteger(1));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("TilingType"), pdf::PDFObject::createInteger(1));
+
+    pdf::PDFArray bbox;
+    bbox.appendItem(pdf::PDFObject::createReal(0.0));
+    bbox.appendItem(pdf::PDFObject::createReal(0.0));
+    bbox.appendItem(pdf::PDFObject::createReal(100.0));
+    bbox.appendItem(pdf::PDFObject::createReal(100.0));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("BBox"), pdf::PDFObject::createArray(std::make_shared<pdf::PDFArray>(std::move(bbox))));
+
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("XStep"), pdf::PDFObject::createReal(xStep));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("YStep"), pdf::PDFObject::createReal(yStep));
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString("Resources"),
+                               pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>()));
+
+    const QByteArray patternContent = "0 0 1 rg 0 0 100 100 re f";
+    patternDictionary.setEntry(pdf::PDFInplaceOrMemoryString(pdf::PDF_STREAM_DICT_LENGTH),
+                               pdf::PDFObject::createInteger(patternContent.size()));
+
+    return pdf::PDFObject::createStream(
+        std::make_shared<pdf::PDFStream>(std::move(patternDictionary), QByteArray(patternContent)));
+}
+
+/// Page resources selecting the pattern from the /Pattern subdictionary.
+pdf::PDFObject makePatternResourcesDictionary(const pdf::PDFObjectReference& patternReference)
+{
+    pdf::PDFDictionary patterns;
+    patterns.addEntry(pdf::PDFInplaceOrMemoryString("P1"), pdf::PDFObject::createReference(patternReference));
+
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("Pattern"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(patterns))));
+    return pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources)));
+}
+
 }   // namespace
 
 class ContentProcessorLimitsTest : public QObject
@@ -138,6 +202,8 @@ private slots:
     void test_deeplyNestedForms_areBounded();
     void test_recursiveType3Font_isRejected();
     void test_objectStreamWithHugeObjectCount_isRejected();
+    void test_tilingPatternTileCountIsBounded();
+    void test_hostileTilingPatternStepIsRefused();
 };
 
 void ContentProcessorLimitsTest::test_selfReferencingFormXObject_isRejected()
@@ -390,6 +456,63 @@ void ContentProcessorLimitsTest::test_objectStreamWithHugeObjectCount_isRejected
     // failure is reported through the reader state, not via an exception.
     QCOMPARE(reader.getReadingResult(), pdf::PDFDocumentReader::Result::Failed);
     QVERIFY(reader.getErrorMessage().contains(QStringLiteral("Object stream")));
+}
+
+void ContentProcessorLimitsTest::test_tilingPatternTileCountIsBounded()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+    setPageContent(builder, pageReference, QByteArray(),
+                   pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>()));
+    pdf::PDFDocument document = builder.build();
+
+    const pdf::PDFPage* page = document.getCatalog()->getPage(0);
+    pdf::PDFFontCache fontCache(pdf::DEFAULT_FONT_CACHE_LIMIT, pdf::DEFAULT_REALIZED_FONT_CACHE_LIMIT);
+    pdf::PDFOptionalContentActivity optionalContentActivity(&document, pdf::OCUsage::Export, nullptr);
+    pdf::PDFCMSManager cmsManager(nullptr);
+    cmsManager.setDocument(&document);
+    pdf::PDFCMSPointer cms = cmsManager.getCurrentCMS();
+    pdf::PDFMeshQualitySettings meshQualitySettings;
+    fontCache.setDocument(pdf::PDFModifiedDocument(&document, &optionalContentActivity));
+    fontCache.setCacheShrinkEnabled(nullptr, false);
+
+    TilingGuardProbeProcessor probe(page, &document, &fontCache, cms.get(), &optionalContentActivity, meshQualitySettings);
+
+    // Ordinary patterns are still painted, including the largest real-world case
+    // (a 1 pt step over a full A4 page is ~500k tiles).
+    QVERIFY(probe.isTilingPatternProcessingAllowed(1));
+    QVERIFY(probe.isTilingPatternProcessingAllowed(4096));
+    QVERIFY(probe.isTilingPatternProcessingAllowed(pdf::PDFPageContentProcessor::MAXIMUM_TILING_PATTERN_TILES_PER_PAINT));
+
+    // A hostile /XStep of ~0 asks for an unbounded paint loop; the count is
+    // saturated by the caller and refused here.
+    QVERIFY(!probe.isTilingPatternProcessingAllowed(pdf::PDFPageContentProcessor::MAXIMUM_TILING_PATTERN_TILES_PER_PAINT + 1));
+    QVERIFY(!probe.isTilingPatternProcessingAllowed(std::numeric_limits<pdf::PDFInteger>::max()));
+}
+
+void ContentProcessorLimitsTest::test_hostileTilingPatternStepIsRefused()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+
+    // 10^-6 pt steps over an 80 x 40 pt rectangle: 3.2e9 tiles, i.e. an
+    // effectively unbounded paint loop before the guard existed.
+    const pdf::PDFObjectReference patternReference = builder.addObject(makeTilingPatternObject(0.000001, 0.000001));
+    setPageContent(builder, pageReference, "q /Pattern cs /P1 scn 10 30 80 40 re f Q",
+                   makePatternResourcesDictionary(patternReference));
+
+    pdf::PDFDocument document = builder.build();
+
+    QElapsedTimer timer;
+    timer.start();
+    const QList<pdf::PDFRenderError> errors = processPage(document);
+
+    QVERIFY2(timer.elapsed() < 5000, "a hostile tiling pattern must be refused, not painted");
+    QVERIFY2(std::any_of(errors.cbegin(), errors.cend(), [](const pdf::PDFRenderError& error)
+                         { return error.message.contains(QStringLiteral("Tiling pattern is too complex")); }),
+             "the refusal must be reported to the operator");
 }
 
 QTEST_GUILESS_MAIN(ContentProcessorLimitsTest)

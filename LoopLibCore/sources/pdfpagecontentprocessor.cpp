@@ -32,6 +32,8 @@
 #include <QPainterPathStroker>
 #include <QtMath>
 
+#include <cmath>
+
 #include "pdfdbgheap.h"
 
 namespace pdf
@@ -545,8 +547,10 @@ bool PDFPageContentProcessor::isContentKindSuppressed(ContentKind kind) const
 
 bool PDFPageContentProcessor::isTilingPatternProcessingAllowed(PDFInteger tileCount) const
 {
-    Q_UNUSED(tileCount);
-    return true;
+    // Tiling paint is unbounded by construction: tiny /XStep/ /YStep values with a
+    // normal page box ask for billions of tiles, and every tile runs the pattern
+    // content stream. See MAXIMUM_TILING_PATTERN_TILES_PER_PAINT.
+    return tileCount > 0 && tileCount <= MAXIMUM_TILING_PATTERN_TILES_PER_PAINT;
 }
 
 void PDFPageContentProcessor::setGraphicsState(const PDFPageContentProcessorState& state)
@@ -1225,15 +1229,34 @@ void PDFPageContentProcessor::processTillingPatternPainting(const PDFTilingPatte
     QPainterPath boundingPath;
     boundingPath.addRect(boundingBox);
 
-    // Draw the tiling
-    const PDFInteger columns = qMax<PDFInteger>(qCeil(tilingArea.width() / xStep), 1);
-    const PDFInteger rows = qMax<PDFInteger>(qCeil(tilingArea.height() / yStep), 1);
+    // Draw the tiling. The counts are computed in PDFReal: a hostile /XStep or
+    // /YStep (0, denormal, or ~1e-300) makes a width/xStep quotient overflow, and
+    // qCeil() returns int, so converting before the guard would be undefined
+    // behaviour and the columns * rows product could wrap to a small number the
+    // guard would then accept.
+    const PDFReal columnCount = qMax<PDFReal>(xStep > 0.0 ? std::ceil(tilingArea.width() / xStep) : 1.0, 1.0);
+    const PDFReal rowCount = qMax<PDFReal>(yStep > 0.0 ? std::ceil(tilingArea.height() / yStep) : 1.0, 1.0);
 
-    if (!isTilingPatternProcessingAllowed(columns * rows))
+    PDFReal requestedTileCount = columnCount * rowCount;
+    if (!std::isfinite(requestedTileCount) || requestedTileCount < 1.0)
     {
-        reportRenderError(RenderErrorType::Warning, PDFTranslationContext::tr("Tiling pattern is too complex (%1 tiles) and it was not painted.").arg(columns * rows));
+        // A non-finite product means "more tiles than can be counted", which the
+        // guard below must refuse rather than translate into an integer.
+        requestedTileCount = PDFReal(MAXIMUM_TILING_PATTERN_TILES_PER_PAINT) + 1.0;
+    }
+
+    if (!isTilingPatternProcessingAllowed(requestedTileCount > PDFReal(MAXIMUM_TILING_PATTERN_TILES_PER_PAINT)
+                                              ? MAXIMUM_TILING_PATTERN_TILES_PER_PAINT + 1
+                                              : static_cast<PDFInteger>(requestedTileCount)))
+    {
+        reportRenderError(RenderErrorType::Warning, PDFTranslationContext::tr("Tiling pattern is too complex (%1 tiles) and it was not painted.").arg(requestedTileCount));
         return;
     }
+
+    // The guard has bounded the product, so both counts fit and their product
+    // cannot overflow.
+    const PDFInteger columns = static_cast<PDFInteger>(columnCount);
+    const PDFInteger rows = static_cast<PDFInteger>(rowCount);
 
     QTransform baseTransformationMatrix = m_graphicState.getCurrentTransformationMatrix();
     for (PDFInteger column = 0; column < columns; ++column)
