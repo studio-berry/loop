@@ -27,6 +27,9 @@
 
 #include <QFont>
 #include <QFontMetrics>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QPainter>
 
 #include <algorithm>
