@@ -316,7 +316,7 @@ void PDFXRefTable::readXRefTable(PDFParsingContext* context, const QByteArray& b
                             m_entries.resize(currentDesiredSize);
                         }
 
-                        for (PDFInteger objectNumber = firstObjectNumber; objectNumber <= lastObjectIndex; ++ objectNumber)
+                        for (PDFInteger objectNumber = firstObjectNumber; objectNumber <= lastObjectIndex; ++objectNumber)
                         {
                             int itemType = readNumber(columnTypeBytes, 1);
                             int itemObjectNumberOfObjectStreamOrByteOffset = readNumber(columnObjectNumberOrByteOffsetBytes, 0);
@@ -380,7 +380,8 @@ std::vector<PDFXRefTable::Entry> PDFXRefTable::getOccupiedEntries() const
 
     // Suppose majority of items are occupied
     result.reserve(m_entries.size());
-    std::copy_if(m_entries.cbegin(), m_entries.cend(), std::back_inserter(result), [](const Entry& entry) { return entry.type == EntryType::Occupied; });
+    std::copy_if(m_entries.cbegin(), m_entries.cend(), std::back_inserter(result), [](const Entry& entry)
+                 { return entry.type == EntryType::Occupied; });
 
     return result;
 }
@@ -391,7 +392,8 @@ std::vector<PDFXRefTable::Entry> PDFXRefTable::getObjectStreamEntries() const
 
     // Suppose majority of items are occupied
     result.reserve(m_entries.size());
-    std::copy_if(m_entries.cbegin(), m_entries.cend(), std::back_inserter(result), [](const Entry& entry) { return entry.type == EntryType::InObjectStream; });
+    std::copy_if(m_entries.cbegin(), m_entries.cend(), std::back_inserter(result), [](const Entry& entry)
+                 { return entry.type == EntryType::InObjectStream; });
 
     return result;
 }
