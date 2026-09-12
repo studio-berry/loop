@@ -39,6 +39,13 @@
 namespace pdf
 {
 
+// PDFSampledFunction materialises a 2^m hypercube offset table in its constructor
+// and a 2^m sample buffer on every apply() call. The specification permits up to 32
+// input variables, but 2^32 four-byte offsets is a denial of service, and a real
+// sampled function uses a handful of dimensions at most. This ceiling also makes the
+// dimension count safe to shift and to index m_size with.
+constexpr uint32_t SAMPLED_FUNCTION_MAXIMUM_DIMENSIONS = 20;
+
 PDFFunction::PDFFunction(uint32_t m, uint32_t n, std::vector<PDFReal>&& domain, std::vector<PDFReal>&& range) :
     m_m(m),
     m_n(n),
@@ -118,6 +125,11 @@ PDFFunctionPtr PDFFunction::createFunctionImpl(const PDFDocument* document, cons
                 throw PDFException(PDFParsingContext::tr("Sampled function has invalid count of bits per sample."));
             }
 
+            if (size.size() > SAMPLED_FUNCTION_MAXIMUM_DIMENSIONS)
+            {
+                throw PDFException(PDFParsingContext::tr("Sampled function has invalid sample size."));
+            }
+
             if (encode.empty())
             {
                 // Construct default array according to the PDF 1.7 specification
@@ -173,6 +185,20 @@ PDFFunctionPtr PDFFunction::createFunctionImpl(const PDFDocument* document, cons
             {
                 throw PDFException(PDFParsingContext::tr("Sampled function has invalid sample size."));
             }
+
+            // The stream is the only source of samples, and each one costs
+            // `bitsPerSample` bits of it, so a declared count larger than the
+            // stream can carry must fail here - before resize() reserves memory
+            // proportional to a hostile number. This accepts exactly the documents
+            // the read loop below would have accepted (it throws "Not enough
+            // samples" at the same bit count); it only fails earlier.
+            const uint64_t availableSampleBits = static_cast<uint64_t>(streamData.size()) * 8;
+            const uint64_t requiredSampleBits = static_cast<uint64_t>(sampleCount) * static_cast<uint64_t>(bitsPerSample);
+            if (requiredSampleBits > availableSampleBits)
+            {
+                throw PDFException(PDFParsingContext::tr("Sampled function declares more samples than its stream contains (%1 samples need %2 bits, the stream has %3).").arg(sampleCount).arg(requiredSampleBits).arg(availableSampleBits));
+            }
+
             std::vector<PDFReal> samples;
             samples.resize(sampleCount, 0.0);
 
@@ -208,11 +234,6 @@ PDFFunctionPtr PDFFunction::createFunctionImpl(const PDFDocument* document, cons
             std::vector<uint32_t> sizeAsUint;
             std::transform(size.cbegin(), size.cend(), std::back_inserter(sizeAsUint), [](PDFInteger integer)
                            { return static_cast<uint32_t>(integer); });
-
-            if (m > 30)
-            {
-                throw PDFException(PDFParsingContext::tr("Sampled function has invalid sample size."));
-            }
 
             return std::make_shared<PDFSampledFunction>(static_cast<uint32_t>(m), static_cast<uint32_t>(n), std::move(domain), std::move(range), std::move(sizeAsUint), std::move(samples), std::move(encode), std::move(decode), sampleMaxValue, loader.readIntegerFromDictionary(dictionary, "Order", 1));
         }

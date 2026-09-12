@@ -71,6 +71,8 @@ private slots:
     void test_truncatedCMapRangeOperatorsFailClosed_data();
     void test_truncatedCMapRangeOperatorsFailClosed();
     void test_sampledFunctionRejectsMismatchedDomainAndEncodeArity();
+    void test_sampledFunctionRejectsMoreSamplesThanItsStreamContains();
+    void test_sampledFunctionRejectsTooManyDimensions();
 
 private:
     void scanWholeStream(const char* stream);
@@ -1228,6 +1230,77 @@ void LexicalAnalyzerTest::test_sampledFunctionRejectsMismatchedDomainAndEncodeAr
 
     pdf::PDFDocument document;
     pdf::PDFParser parser(data, data + std::size(data), nullptr, pdf::PDFParser::AllowStreams);
+
+    QVERIFY_THROWS_EXCEPTION(pdf::PDFException, pdf::PDFFunction::createFunction(&document, parser.getObject()));
+}
+
+void LexicalAnalyzerTest::test_sampledFunctionRejectsMoreSamplesThanItsStreamContains()
+{
+    // Four streamed bytes cannot satisfy /Size [ 1000000 1000000 ] with 8-bit
+    // samples. The old code called samples.resize(10^12) before reading a single
+    // sample, so a ~100-byte file asked for an 8 TB allocation; the failure must
+    // be decided from the declared count and the stream size, before resize().
+    const char data[] = " << "
+                        "     /FunctionType 0 "
+                        "     /Domain [ 0 1 0 1 ] "
+                        "     /Range [ 0 1 ] "
+                        "     /Size [ 1000000 1000000 ] "
+                        "     /BitsPerSample 8 "
+                        "     /Order 1 "
+                        "     /Length 4 "
+                        " >> "
+                        " stream\n\000\377\200\300 endstream ";
+
+    pdf::PDFDocument document;
+    pdf::PDFParser parser(data, data + std::size(data), nullptr, pdf::PDFParser::AllowStreams);
+
+    bool threw = false;
+    QString message;
+    try
+    {
+        pdf::PDFFunction::createFunction(&document, parser.getObject());
+    }
+    catch (const pdf::PDFException& e)
+    {
+        threw = true;
+        message = e.getMessage();
+    }
+
+    QVERIFY2(threw, "a sampled function must not size its sample vector from a hostile /Size");
+    QVERIFY2(message.contains(QStringLiteral("samples")), qPrintable(message));
+}
+
+void LexicalAnalyzerTest::test_sampledFunctionRejectsTooManyDimensions()
+{
+    // PDFSampledFunction allocates 1 << m hypercube offset entries and, per
+    // apply() call, a 1 << m sample buffer. The old code accepted up to m == 30
+    // (checked only after the samples were read), so 2^30 four-byte offsets - a
+    // multi-gigabyte allocation - came from a few hundred bytes of input. No
+    // real sampled function approaches 20 dimensions.
+    const auto repeatedInteger = [](int count, const char* value)
+    {
+        QByteArray text("[");
+        for (int i = 0; i < count; ++i)
+        {
+            text.append(' ');
+            text.append(value);
+        }
+        text.append(" ]");
+        return text;
+    };
+
+    // The stream bytes are appended separately: a QByteArray built from a string
+    // literal stops at the embedded NUL byte, which would truncate the document
+    // before its stream data and make the parser fail before the sampled function
+    // is ever constructed.
+    QByteArray data = QByteArray(" << /FunctionType 0 /Domain ") + repeatedInteger(21 * 2, "0") +
+                      QByteArray(" /Range [ 0 1 ] /Size ") + repeatedInteger(21, "1") +
+                      QByteArray(" /BitsPerSample 8 /Order 1 /Length 1 >> stream\n");
+    data.append('\0');
+    data.append(" endstream ");
+
+    pdf::PDFDocument document;
+    pdf::PDFParser parser(data.constData(), data.constData() + data.size(), nullptr, pdf::PDFParser::AllowStreams);
 
     QVERIFY_THROWS_EXCEPTION(pdf::PDFException, pdf::PDFFunction::createFunction(&document, parser.getObject()));
 }
