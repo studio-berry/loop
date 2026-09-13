@@ -401,6 +401,7 @@
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
     "UnitTestsDocumentFacade",
+    "UnitTestsDocumentSearch",
     "UnitTestsDocumentSession",
     "UnitTestsDocumentViewSession",
     "UnitTestsEditorHost",

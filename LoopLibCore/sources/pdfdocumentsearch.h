@@ -23,6 +23,11 @@ struct LOOPLIBCORESHARED_EXPORT PDFDocumentSearchResult
     QVector<PDFDocumentSearchMatch> matches;
     PDFRevisionIdentity revision;
     bool admitted = false;
+    /// False when the operation-scoped search budget was exhausted before every
+    /// page was scanned. Matches may be partial; callers must not treat this as
+    /// a successful exhaustive search.
+    bool complete = true;
+    bool budgetExceeded = false;
 };
 
 /// Extracts and searches the text flows for every page in the context's
