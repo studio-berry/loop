@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** S21 qualification target
-**Last-verified:** 2026-08-20 @ c58e2679aba02e8e8c13694dac0a57440e80a67b
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** none
 **Amended:** 2026-08-21 — see "Amendment" section below
 **Date:** 2026-08-20

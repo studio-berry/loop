@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** not implemented
-**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** [ADR-010: Quick-root admission and shell boundary](adr-010-quick-root-admission.md)
 **Date:** 2026-08-09
 **Deciders:** Loop #178 / 1.2 shell decision
