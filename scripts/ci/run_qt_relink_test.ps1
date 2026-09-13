@@ -40,6 +40,7 @@ $binDir = $InstallDir
 if (-not (Test-Path -LiteralPath (Join-Path $binDir "LoopEditor.exe")) -and
     (Test-Path -LiteralPath (Join-Path $binDir "usr/bin/LoopEditor.exe"))) {
     $binDir = Join-Path $binDir "usr/bin"
+    Write-Transcript "Resolved product binaries to $binDir"
 }
 $editor = Join-Path $binDir "LoopEditor.exe"
 if (-not (Test-Path -LiteralPath $editor)) {
