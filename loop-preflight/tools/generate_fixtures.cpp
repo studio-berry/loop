@@ -290,6 +290,11 @@ pdf::PDFDocument createOverprintDocument(bool enabled,
     builder.setDocumentCreator(QCoreApplication::applicationName());
 
     const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    // These pages are preflighted as well as rendered. With every box equal they had no
+    // bleed at all and failed loop-default.json's 9pt check, so the trim box is inset
+    // 10pt: BleedBox stays unset and falls back to MediaBox, which yields the 10pt
+    // margin without moving any mark - the render baselines stay valid.
+    builder.setPageTrimBox(page, QRectF(10, 10, 180, 180));
     const pdf::PDFObjectReference state = addExtGState(builder, enabled, enabled, overprintMode, blendMode);
     const pdf::PDFObjectReference tintFunction = addType2TintFunction(builder, { 0.0, 0.0, 1.0, 0.0 });
 
@@ -696,6 +701,28 @@ void generateThinStrokesHairlineFixture(const QDir& outputDir)
     writeFixture(outputDir, "thin-strokes-hairline.pdf", builder.build());
 }
 
+void generateThinPartsFillFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loop fixture - thin parts fill");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loop-preflight golden corpus: thin filled geometry");
+
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = contentBuilder.begin(page))
+    {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(Qt::black);
+        painter->drawRect(QRectF(20, 20, 120, 0.1));
+        contentBuilder.end(painter);
+    }
+
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "thin-parts-fill.pdf", builder.build());
+}
+
 }   // namespace
 
 int main(int argc, char* argv[])
@@ -724,6 +751,7 @@ int main(int argc, char* argv[])
     generateColorInventoryCmyRichNoKFixture(outputDir);
     generateColorInventorySpotFixture(outputDir);
     generateThinStrokesHairlineFixture(outputDir);
+    generateThinPartsFillFixture(outputDir);
 
     return 0;
 }

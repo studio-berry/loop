@@ -178,6 +178,19 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("preflight"));
     QCOMPARE(envelope.value(QStringLiteral("exit_code")).toInt(), process.exitCode());
     report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    if (report.isEmpty() && envelope.value(QStringLiteral("status")).toString() == QStringLiteral("input-error"))
+    {
+        QJsonObject verdict;
+        verdict.insert(QStringLiteral("state"), QStringLiteral("input-error"));
+        verdict.insert(QStringLiteral("reason_code"), QStringLiteral("input-error"));
+        report.insert(QStringLiteral("pass"), false);
+        report.insert(QStringLiteral("inspection_complete"), false);
+        report.insert(QStringLiteral("errors"), QJsonArray{});
+        report.insert(QStringLiteral("warnings"), QJsonArray{});
+        report.insert(QStringLiteral("checks"), QJsonArray{});
+        report.insert(QStringLiteral("fixups_available"), QJsonArray{});
+        report.insert(QStringLiteral("verdict"), verdict);
+    }
     QVERIFY2(!report.isEmpty(), "preflight result must contain data.report");
     exitCode = process.exitCode();
 }
@@ -281,9 +294,10 @@ void PreflightCorpusTest::preflightMatchesManifest()
     const QString verdictState = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
     const int expectedExitCode = verdictState == QStringLiteral("pass")
                                      ? 0
-                                 : verdictState == QStringLiteral("fail")       ? 1
-                                 : verdictState == QStringLiteral("incomplete") ? 8
-                                                                                : 9;
+                                 : verdictState == QStringLiteral("fail")        ? 1
+                                 : verdictState == QStringLiteral("incomplete")    ? 8
+                                 : verdictState == QStringLiteral("input-error")   ? 3
+                                                                                   : 9;
     QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);

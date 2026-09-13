@@ -426,6 +426,20 @@ def main() -> int:
         ROOT,
         args.dry_run,
     )
+    add_result(
+        evidence,
+        "search_budget_gate",
+        [python, "scripts/ci/check_search_budget_gate.py"],
+        ROOT,
+        args.dry_run,
+    )
+    add_result(
+        evidence,
+        "independent_validation_gate",
+        [python, "scripts/ci/check_independent_validation_gate.py"],
+        ROOT,
+        args.dry_run,
+    )
 
     if sources:
         add_format_checks(
