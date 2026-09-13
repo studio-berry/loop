@@ -651,10 +651,10 @@ PDFOperationResult convertRgbImage(PDFDocumentBuilder* builder,
                         PDFObject::createArray(std::make_shared<PDFArray>(qMove(decodeArray))));
     dictionary.setEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(encoded.size()));
     dictionary.setEntry(PDFInplaceOrMemoryString("Filter"), PDFObject::createName("FlateDecode"));
-    const QByteArray compressed = PDFFlateDecodeFilter::compress(encoded);
+    QByteArray compressed = PDFFlateDecodeFilter::compress(encoded);
     dictionary.setEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(compressed.size()));
     builder->setObject(imageReference,
-                       PDFObject::createStream(std::make_shared<PDFStream>(qMove(dictionary), compressed)));
+                       PDFObject::createStream(std::make_shared<PDFStream>(qMove(dictionary), qMove(compressed))));
     return true;
 }
 
