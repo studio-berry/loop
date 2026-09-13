@@ -1,0 +1,44 @@
+{
+    "checks": [
+        {
+            "id": "thin-parts",
+            "reason": "measurement-near-threshold",
+            "status": "skipped"
+        }
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "profile": "Loop Test - Thin Parts",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Required inspection evidence was not collected.",
+        "reason_code": "inspection-incomplete",
+        "state": "incomplete",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "check_id": "thin-parts",
+            "evidence": {
+                "class": "thin-fill",
+                "measuredWidthPt": 0.24,
+                "measurementPrecisionPt": 0.12,
+                "reason": "measurement-near-threshold",
+                "thresholdPt": 0.25
+            },
+            "message": "Thin-part measurement for thin-fill on page 1 is within one raster pixel of the 0.250000 pt threshold.",
+            "page": 1,
+            "scope": "object",
+            "severity": "info",
+            "type": "check-incomplete"
+        }
+    ]
+}
