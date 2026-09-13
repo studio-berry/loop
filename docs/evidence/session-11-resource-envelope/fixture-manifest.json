@@ -1,0 +1,29 @@
+{
+  "schema_kind": "loop-resource-envelope-fixtures",
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "office-2mb",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\office-2mb.pdf",
+      "sha256": "0f0a45ba88d63f6218f81467ea5a8713ca457c8cb7bcd8f619742d266bbe67c9",
+      "size_bytes": 2169858,
+      "provenance": "Session 11 synthetic office workload PDF"
+    },
+    {
+      "fixture_id": "pathological-vector",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\pathological-vector.pdf",
+      "sha256": "5517185518d353635366270ff41e3e2a56cf1d6d21187e84aba8fc6a44aa6c0f",
+      "size_bytes": 6369566,
+      "provenance": "pathological_workload.py --family pathological-vector",
+      "page_count": 256
+    },
+    {
+      "fixture_id": "transparency-spots",
+      "path": "C:\\.dev\\qualification\\session-11\\fixtures\\transparency-spots.pdf",
+      "sha256": "d4316776aaacb9f056da41925cea51fd68bf1b00ae7b53e1326306e1d85810b3",
+      "size_bytes": 3266105,
+      "provenance": "pathological_workload.py --family transparency-spots",
+      "page_count": 256
+    }
+  ]
+}

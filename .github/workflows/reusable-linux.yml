@@ -75,6 +75,15 @@ jobs:
       - name: Verify version policy
         working-directory: loop
         run: python3 scripts/ci/check_version_policy.py
+      - name: Verify resource-envelope contracts
+        working-directory: loop
+        run: |
+          python3 -m unittest scripts.resource_envelope.test_validate_envelope scripts.resource_envelope.test_pathological_workload scripts.resource_envelope.test_run_matrix scripts.resource_envelope.test_budget_exhaustion_corpus scripts.qualification.test_validate_resource_envelope_evidence -v
+          python3 scripts/resource_envelope/validate_envelope.py docs/generated/huge-document-envelope.json
+          python3 scripts/qualification/validate_resource_envelope_evidence.py
+          python3 scripts/resource_envelope/pathological_workload.py \
+            --output "${RUNNER_TEMP}/loop-pathological-vector.pdf" \
+            --page-count 256 --operations 256 --family pathological-vector
       - name: Verify processing-budget exhaustion corpus
         working-directory: loop
         run: python3 scripts/budget_exhaustion/generate_corpus.py --check

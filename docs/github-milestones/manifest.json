@@ -33,6 +33,12 @@
       "state": "open"
     },
     {
+      "title": "0.2.1",
+      "github_number": 17,
+      "description_file": "0.2.1.md",
+      "state": "open"
+    },
+    {
       "title": "0.3.0",
       "github_number": 9,
       "description_file": "0.3.0.md",
@@ -67,18 +73,6 @@
       "github_number": 14,
       "description_file": "0.8.0.md",
       "state": "open"
-    },
-    {
-      "title": "0.9.0",
-      "github_number": 15,
-      "description_file": "0.9.0.md",
-      "state": "open"
-    },
-    {
-      "title": "0.10.0",
-      "github_number": 16,
-      "description_file": "0.10.0.md",
-      "state": "open"
     }
   ],
   "retire": [
@@ -93,6 +87,14 @@
     {
       "title": "0.1.4",
       "description": "Retired milestone title. Living work moved to **0.4.0** per the canonical Notion Loop Roadmap."
+    },
+    {
+      "title": "0.9.0",
+      "description": "Retired milestone title. Consolidated into **0.7.0** (workflow memory, recommendations & verified repeat automation) per the 2026-09-06 roadmap amendment; see docs/ROADMAP_0.5.0-0.8.0.md."
+    },
+    {
+      "title": "0.10.0",
+      "description": "Retired milestone title. Renumbered to **0.8.0** (platform hardening, extension ecosystem & 1.0 readiness) per the 2026-09-06 roadmap amendment; see docs/ROADMAP_0.5.0-0.8.0.md."
     }
   ]
 }

@@ -1,0 +1,59 @@
+{
+  "schema_kind": "loop-lifecycle-corpus",
+  "schema_version": 1,
+  "max_commands": 64,
+  "initial_artifact_digest": "161a1beb41c008069762349ccae021ac2276deb2314aed2cdcb746a485f4dbcf",
+  "passing_traces": [
+    {
+      "seed": 539363361,
+      "trace_file": "seed-20260821.json",
+      "command_count": 64,
+      "sha256": "3e1f42af36600a36a81e67fa57fcd580db12bbfe99f7dd539d592a5cde1f70ed",
+      "observed_result": "invariants-held"
+    },
+    {
+      "seed": 539363585,
+      "trace_file": "seed-20260901.json",
+      "command_count": 64,
+      "sha256": "1a86d6679ee11d4bd8fd66aa2fb90ac41b0d6a70c1d0efa0d798158ca5488fb6",
+      "observed_result": "invariants-held"
+    },
+    {
+      "seed": 539363590,
+      "trace_file": "seed-20260906.json",
+      "command_count": 64,
+      "sha256": "d5d2ae6d4dbee887dd454cbe262938bbd78f8d286a5d802e784e1eecde436d19",
+      "observed_result": "invariants-held"
+    },
+    {
+      "seed": 539365889,
+      "trace_file": "seed-20261201.json",
+      "command_count": 64,
+      "sha256": "13c6207cfaea9553f3a62d59a91b6b1fe22c3fae2c46405cc6309e5d9bc3cd67",
+      "observed_result": "invariants-held"
+    }
+  ],
+  "failure_traces": [
+    {
+      "trace_file": "failure-stale-result-minimized.json",
+      "replay_profile": "inject-stale-acceptance",
+      "expected_violation": "stale-result-accepted",
+      "command_count": 1,
+      "sha256": "d4eb0ed9fc6819f98ba9b3361faf854e7a04e6b1bae510280659baaa20e508d9"
+    },
+    {
+      "trace_file": "failure-source-overwritten-minimized.json",
+      "replay_profile": "inject-source-overwrite",
+      "expected_violation": "source-overwritten",
+      "command_count": 1,
+      "sha256": "f0af352cb2c2587ee46dcbfe7adac9e880de124f62c65d06a5763ca087fde950"
+    },
+    {
+      "trace_file": "failure-rollback-history-minimized.json",
+      "replay_profile": "inject-history-mutation",
+      "expected_violation": "rollback-history-mutated",
+      "command_count": 2,
+      "sha256": "01d976d572d0b0be3f063085f45ec4bd6bc2536eb0502a54e5658fcf53c1664b"
+    }
+  ]
+}

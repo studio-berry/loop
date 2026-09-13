@@ -11,9 +11,9 @@ transfer.
 
 | Field | Value |
 | --- | --- |
-| Branch | `cursor/session-13-package-licensing` |
-| Session 09 baseline | `1c3f9d6d2312045264134f07b4d00e26de2058bf` on `cursor/session-09-ledger-closeout` |
-| Candidate SHA (branch HEAD) | `a505a80244b35244cf083872a4b88ea72e4cba1a` (Session 09 baseline + Session 13 scaffolding; uncommitted until PR) |
+| Branch | `dev` (merged PR #539) |
+| Qualification `candidate_sha` | `ebde8661bff037e5cae2d37e3c2e3eae8b2ca6b5` |
+| Package workflow dispatch | `source_sha=20f73c3a84bbbcb1d45fbcff8bddc90365f636b0` — [Linux run 34068347154](https://github.com/studio-berry/loop/actions/runs/34068347154), [Windows run 34068348127](https://github.com/studio-berry/loop/actions/runs/34068348127) |
 
 ## Implementation
 

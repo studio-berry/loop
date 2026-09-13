@@ -17,6 +17,7 @@ class RepairOperatorAcceptanceTest : public QObject
 private slots:
     void initTestCase();
     void repairOperation_addBleedIsFailClosedAndAtomic();
+    void repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange();
 
 private:
     QString m_defaultProfilePath;
@@ -90,6 +91,66 @@ void RepairOperatorAcceptanceTest::repairOperation_addBleedIsFailClosedAndAtomic
     QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
              0);
     QVERIFY(!report.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString().isEmpty());
+}
+
+void RepairOperatorAcceptanceTest::repairOperation_unicodeAndSpacePaths_addBleedPassesWithoutUnexpectedChange()
+{
+    const QString sourcePdf = operatoracceptance::fixturePath(QStringLiteral("bleed-missing.pdf"));
+    QVERIFY(QFile::exists(sourcePdf));
+
+    QTemporaryDir temporaryDirectory;
+    QVERIFY(temporaryDirectory.isValid());
+
+    const QString nestedDir = temporaryDirectory.path() + QStringLiteral("/shop files");
+    QVERIFY(QDir().mkpath(nestedDir));
+
+    const QString targetPdf = nestedDir + QStringLiteral("/café poster.pdf");
+    QVERIFY(QFile::copy(sourcePdf, targetPdf));
+    QVERIFY(QFile::exists(targetPdf));
+
+    const QString outputPath = nestedDir + QStringLiteral("/café poster_bleed.pdf");
+    const QString reportPath = nestedDir + QStringLiteral("/repair-report.json");
+
+    QByteArray stdOut;
+    QByteArray stdErr;
+    int exitCode = -1;
+    QVERIFY(operatoracceptance::runPdfTool(m_pdfToolPath,
+                                           { QStringLiteral("repair"),
+                                             targetPdf,
+                                             QStringLiteral("--operation"),
+                                             QStringLiteral("add-bleed"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("bleed_mm=3"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("mode=mirror"),
+                                             QStringLiteral("--param"),
+                                             QStringLiteral("force=true"),
+                                             QStringLiteral("--profile"),
+                                             m_defaultProfilePath,
+                                             QStringLiteral("--output"),
+                                             outputPath,
+                                             QStringLiteral("--report-file"),
+                                             reportPath,
+                                             QStringLiteral("--console-format"),
+                                             QStringLiteral("json") },
+                                           &stdOut,
+                                           &stdErr,
+                                           &exitCode));
+    QCOMPARE(exitCode, 0);
+    QVERIFY2(stdErr.trimmed().isEmpty(), qPrintable(QString::fromUtf8(stdErr)));
+    QVERIFY(QFile::exists(outputPath));
+    QVERIFY(QFile::exists(reportPath));
+
+    QFile reportFile(reportPath);
+    QVERIFY(reportFile.open(QIODevice::ReadOnly));
+    QJsonParseError parseError;
+    const QJsonDocument reportDocument = QJsonDocument::fromJson(reportFile.readAll(), &parseError);
+    QCOMPARE(parseError.error, QJsonParseError::NoError);
+    QVERIFY(reportDocument.isObject());
+    const QJsonObject report = reportDocument.object();
+    QCOMPARE(report.value(QStringLiteral("status")).toString(), QStringLiteral("passed"));
+    QCOMPARE(report.value(QStringLiteral("diff")).toObject().value(QStringLiteral("summary")).toObject().value(QStringLiteral("unexpected_structural_changes")).toInt(),
+             0);
 }
 
 QTEST_GUILESS_MAIN(RepairOperatorAcceptanceTest)

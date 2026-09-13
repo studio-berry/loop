@@ -20,6 +20,20 @@ permissions:
   contents: read
 
 jobs:
+  package_script_tests:
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test package lifecycle scripts with fake packages
+        run: python -m unittest scripts.ci.test_run_qt_relink_test -v
+      - name: Test Linux AppImage Qt relink script with fake AppImage
+        if: runner.os == 'Linux'
+        run: python -m unittest scripts.ci.test_run_qt_relink_linux -v
+
   source_integrity:
     runs-on: ubuntu-24.04
     steps:

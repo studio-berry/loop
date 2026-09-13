@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "session-12-lifecycle",
+  "session": 12,
+  "branch": "cursor/session-12-lifecycle-qualification",
+  "baseline_sha": "0c8947c114f5ab4abb256781aefa60b12a0d2da4",
+  "candidate_sha": "PENDING_COMMIT",
+  "max_commands": 64,
+  "corpus_seeds": [
+    "seed-20260821.json",
+    "seed-20260901.json",
+    "seed-20260906.json",
+    "seed-20261201.json"
+  ],
+  "promoted_failures": [
+    "failure-stale-result-minimized.json",
+    "failure-source-overwritten-minimized.json",
+    "failure-rollback-history-minimized.json"
+  ],
+  "platforms": {
+    "windows": {
+      "status": "corpus-static-verified",
+      "notes": "check_lifecycle_corpus.py pass; UnitTestsLifecycle build requires vcpkg sentry"
+    },
+    "linux": {
+      "status": "pending-hosted-ci"
+    }
+  },
+  "verifiers": [
+    {
+      "command": "python scripts/ci/check_lifecycle_corpus.py",
+      "result": "pass"
+    }
+  ],
+  "gate": {
+    "id": "L-01",
+    "disposition": "acceptance verified pending hosted Linux replay on candidate SHA"
+  }
+}

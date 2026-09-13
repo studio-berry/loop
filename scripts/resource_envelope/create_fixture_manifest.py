@@ -9,6 +9,10 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 from scripts.resource_envelope.run_matrix import FIXTURE_SPECS, _fixture_args, _sha256
 
 

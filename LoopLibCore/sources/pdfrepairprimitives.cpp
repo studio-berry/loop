@@ -136,6 +136,7 @@ public:
         plan->domains = domains();
         plan->expectedChanges.pageBoxes = true;
         plan->expectedChanges.pageContent = true;
+        plan->expectedChanges.images = true;
         plan->expectedChanges.metadata = true;
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::NormalPreflight };
@@ -465,6 +466,11 @@ PDFStandardConversionSettings standardConversionSettings(const QJsonObject& para
                                   ? parameters.value(QStringLiteral("normalize_color")).toBool()
                                   : (settings.target == PDFStandardTarget::PDFX1a2001 || settings.target == PDFStandardTarget::PDFX3_2002);
     settings.blackPointCompensation = parameters.value(QStringLiteral("black_point_compensation")).toBool(true);
+    settings.transparencyFlatten = parameters.contains(QStringLiteral("flatten_transparency"))
+                                       ? (parameters.value(QStringLiteral("flatten_transparency")).toBool()
+                                              ? PDFTransparencyFlattenPolicy::Always
+                                              : PDFTransparencyFlattenPolicy::Never)
+                                       : PDFTransparencyFlattenPolicy::Automatic;
     settings.independentValidatorProgram = parameters.value(QStringLiteral("validator_program")).toString();
     const QJsonValue validatorArguments = parameters.value(QStringLiteral("validator_arguments"));
     if (validatorArguments.isArray())
@@ -496,6 +502,7 @@ QJsonObject standardConversionParameterSchema()
                                             { QStringLiteral("target_profile_name"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
                                             { QStringLiteral("normalize_color"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
                                             { QStringLiteral("black_point_compensation"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
+                                            { QStringLiteral("flatten_transparency"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("boolean") } } },
                                             { QStringLiteral("validator_program"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } },
                                             { QStringLiteral("validator_arguments"), QJsonObject{ { QStringLiteral("oneOf"), QJsonArray{ QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } }, QJsonObject{ { QStringLiteral("type"), QStringLiteral("array") }, { QStringLiteral("items"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } } } } } } } },
                                             { QStringLiteral("validator_timeout_ms"), QJsonObject{ { QStringLiteral("type"), QStringLiteral("integer") }, { QStringLiteral("minimum"), 1000 }, { QStringLiteral("maximum"), 3600000 } } },
@@ -547,7 +554,8 @@ public:
         plan->expectedChanges.outputIntent = true;
         plan->expectedChanges.pageBoxes = true;
         plan->expectedChanges.colorSpaces = settings.normalizeColor;
-        plan->expectedChanges.pageContent = settings.normalizeColor;
+        plan->expectedChanges.pageContent = settings.normalizeColor || flattensTransparency(settings);
+        plan->expectedChanges.images = flattensTransparency(settings);
         plan->validators = { PDFRepairValidatorKind::StructuralIntegrity,
                              PDFRepairValidatorKind::OutputIntent,
                              PDFRepairValidatorKind::NormalPreflight,
@@ -592,6 +600,7 @@ public:
         validation.summary = conversionResult ? QStringLiteral("Independent validator and postflight passed.")
                                               : conversionResult.getErrorMessage();
         result->validations.append(validation);
+        result->verdict = report.postflightAfter.value(QStringLiteral("verdict")).toObject();
         return conversionResult;
     }
 };

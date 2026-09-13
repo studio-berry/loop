@@ -1,0 +1,24 @@
+{
+  "schema_kind": "loop-lifecycle-trace",
+  "schema_version": 1,
+  "seed": 539363361,
+  "initial_artifact_digest": "161a1beb41c008069762349ccae021ac2276deb2314aed2cdcb746a485f4dbcf",
+  "commands": [
+    {
+      "index": 0,
+      "kind": "open",
+      "argument": "9073021129658994722"
+    }
+  ],
+  "expected_invariants": [
+    "source-immutable",
+    "cancel-is-terminal",
+    "stale-results-rejected",
+    "history-append-only"
+  ],
+  "observed_result": "stale-result-accepted",
+  "shrink_history": [
+    64,
+    1
+  ]
+}

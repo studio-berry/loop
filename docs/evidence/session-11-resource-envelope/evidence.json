@@ -1,0 +1,40 @@
+{
+  "schema_kind": "loop-resource-envelope-qualification-evidence",
+  "schema_version": 1,
+  "session": 11,
+  "branch": "cursor/session-11-resource-envelope",
+  "candidate_sha": "6e65be48e261d14c64653694320c0185b84fc560",
+  "session_09_baseline_sha": "1c3f9d6d2312045264134f07b4d00e26de2058bf",
+  "disposition": "incomplete",
+  "disposition_reason": "Strict matrix fail-closed: stale PdfTool commit, missing image-heavy-500mb and ten-thousand-page fixtures, -1 preflight/cancel/recovery. Linux hosted matrix not run.",
+  "fixture_status": {
+    "office-2mb": {"status": "failed", "preflight_high_water_bytes": -1, "cancellation_latency_ms": -1, "recovery_ms": -1},
+    "image-heavy-500mb": {"status": "unavailable", "reason": "fixture-not-supplied"},
+    "ten-thousand-page": {"status": "unavailable", "reason": "DIV2K corpus absent locally"},
+    "pathological-vector": {"status": "failed", "preflight_high_water_bytes": -1, "cancellation_latency_ms": -1, "recovery_ms": -1},
+    "transparency-spots": {"status": "failed", "preflight_high_water_bytes": -1, "cancellation_latency_ms": -1, "recovery_ms": -1},
+    "multi-gb": {"status": "unavailable", "reason": "optional"}
+  },
+  "matrix_runs": [
+    {
+      "platform": "windows-local",
+      "path": "docs/evidence/session-11-resource-envelope/matrix-windows-local.json",
+      "candidate_sha": "6e65be48e261d14c64653694320c0185b84fc560",
+      "pdf_tool_commit": "2d95b4a6019504d4e1ffbf658a0e078ab38e34df",
+      "strict_exit_code": 1,
+      "summary": {"total": 6, "measured": 0, "flagged": 2, "failed": 3, "candidate_sha_verified": true}
+    }
+  ],
+  "hosted_gaps": [
+    "Rebuild PdfTool from candidate_sha on Windows and Linux",
+    "Supply image-heavy-500mb external fixture",
+    "Build ten-thousand-page PDF from DIV2K with --hash-all manifest",
+    "Run Linux hosted run_matrix.py --strict --repetitions 3",
+    "Cancellation probe on pathological-vector"
+  ],
+  "verifiers": [
+    {"command": "resource_envelope unit tests", "result": "pass"},
+    {"command": "validate_resource_envelope_evidence.py", "result": "pass"},
+    {"command": "run_matrix.py --strict windows-local", "result": "fail-closed"}
+  ]
+}
