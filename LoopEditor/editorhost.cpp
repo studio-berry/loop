@@ -55,6 +55,7 @@
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeySequence>
 #include <QMetaEnum>
@@ -200,6 +201,13 @@ struct EditorHost::PreflightWorkerOutcome
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
+    m_findingNavigator(std::make_unique<pdfinteraction::FindingCanvasNavigator>(
+        *m_session->revisionSource(),
+        m_session->viewport(),
+        *m_session->interaction(),
+        *m_session->overlays(),
+        pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry(),
+        this)),
     m_preflight(&m_session->scheduler(), this)
 {
     // Registers this constructing thread -- the one QML dispatches pointer
@@ -231,6 +239,19 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_preflight, &pdfinteraction::PreflightController::progressChanged, this, &EditorHost::bumpPresentation);
     connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::inspectionModeRequested,
+            this, [this](const pdfinteraction::FindingInspectionModeRequest& request)
+            { setInspectionMode(QString::fromLatin1(pdfinteraction::getFindingInspectionModeName(request.mode))); });
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::inspectionModeReset,
+            this, [this]
+            { setInspectionMode(QStringLiteral("page")); });
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::navigationApplied,
+            this, [this](const pdfinteraction::FindingNavigationResult& result)
+            {
+                if (result.inspectionMode == pdfinteraction::FindingInspectionMode::None)
+                {
+                    setInspectionMode(QStringLiteral("page"));
+                } });
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_production, &pdfinteraction::ProductionModel::stateChanged, this, &EditorHost::bumpPresentation);
@@ -360,7 +381,7 @@ void EditorHost::goToOutlinePage(int pageIndex)
 
 void EditorHost::setWorkspace(LoopWorkspace workspace)
 {
-    if (workspace == m_workspace)
+    if (!isWorkspaceEnabled(workspace) || workspace == m_workspace)
     {
         return;
     }
@@ -473,6 +494,7 @@ QVariantList EditorHost::preflightProfiles() const
         item.insert(QStringLiteral("source"), profile.source.startsWith(QLatin1Char(':'))
                                                   ? tr("Bundled")
                                                   : tr("Local"));
+        item.insert(QStringLiteral("digest"), profile.digest);
         item.insert(QStringLiteral("valid"), profile.valid);
         item.insert(QStringLiteral("diagnostic"), profile.diagnostic);
         profiles.append(item);
@@ -618,6 +640,7 @@ void EditorHost::selectFinding(const QString& findingId)
     pdfinteraction::PreflightController::EvidenceNavigationRequest request;
     if (!m_preflight.navigationFor(findingId, &request))
     {
+        setInspectionMode(QStringLiteral("page"));
         bumpPresentation();
         return;
     }
@@ -819,11 +842,13 @@ void EditorHost::reloadPreflightProfiles()
 {
     const QString priorId = m_selectedPreflightProfileId;
     QString priorDigest;
+    QJsonArray priorChecks;
     for (const PreflightProfileChoice& profile : std::as_const(m_preflightProfiles))
     {
         if (profile.id == priorId)
         {
             priorDigest = profile.digest;
+            priorChecks = profile.profile.value(QStringLiteral("checks")).toArray();
             break;
         }
     }
@@ -851,6 +876,35 @@ void EditorHost::reloadPreflightProfiles()
         choice.variables = imported.profile.value(QStringLiteral("variables")).toObject();
         choice.valid = imported.ok;
         choice.diagnostic = imported.ok ? QString() : imported.errorMessage;
+        if (choice.valid)
+        {
+            // importPreflightProfile validates identity and authored digest;
+            // the Core binder/parser is the authority for executable profile
+            // validity. Binding here is deliberately read-only, so a required
+            // operator variable remains selectable while its diagnostic is
+            // exposed before the first run.
+            const pdf::PreflightVariableBindResult bound =
+                pdf::bindPreflightProfileVariables(choice.profile);
+            if (bound.ok)
+            {
+                pdf::PreflightProfileData parsedProfile;
+                QString profileParseError;
+                if (!pdf::PreflightEngine::parseProfile(bound.profile, parsedProfile, profileParseError))
+                {
+                    choice.valid = false;
+                    choice.diagnostic = profileParseError;
+                }
+            }
+            else if (bound.errorCode != QStringLiteral("unresolved-variable"))
+            {
+                choice.valid = false;
+                choice.diagnostic = bound.errorMessage;
+            }
+            else
+            {
+                choice.diagnostic = bound.errorMessage;
+            }
+        }
         profiles.append(choice);
     };
 
@@ -891,9 +945,20 @@ void EditorHost::reloadPreflightProfiles()
     const auto current = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
                                       [this](const PreflightProfileChoice& profile)
                                       { return profile.id == m_selectedPreflightProfileId; });
-    if (!priorId.isEmpty() && (priorId != m_selectedPreflightProfileId || current == m_preflightProfiles.cend() || current->digest != priorDigest))
+    if (!priorId.isEmpty() && (priorId != m_selectedPreflightProfileId || current == m_preflightProfiles.cend()))
     {
         m_preflight.markProfileStale();
+    }
+    else if (!priorId.isEmpty() && current != m_preflightProfiles.cend() && current->digest != priorDigest)
+    {
+        if (priorChecks != current->profile.value(QStringLiteral("checks")).toArray())
+        {
+            m_preflight.markCheckSetStale();
+        }
+        else
+        {
+            m_preflight.markProfileStale();
+        }
     }
     updatePreflightProfileWatch();
     Q_EMIT preflightProfilesChanged();
@@ -1332,6 +1397,10 @@ void EditorHost::syncDocumentLifecycle()
 void EditorHost::onDocumentGone()
 {
     cancelPreflight();
+    if (m_findingNavigator)
+    {
+        m_findingNavigator->invalidate();
+    }
     unbindCanvas();
     m_session->clearDocumentView();
     m_preflight.clear();
@@ -1511,20 +1580,49 @@ void EditorHost::updateCanvasAccessibilitySummary()
 
 void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)
 {
-    if (!m_session->interaction() || request.page <= 0)
+    if (!m_session->revisionSource() ||
+        request.documentKey != m_session->revisionSource()->documentKey() ||
+        request.documentRevision != m_session->facade().currentRevision().toString())
     {
         return;
     }
 
-    m_session->commandBridge().goToPage(request.page - 1);
+    const pdfinteraction::PreflightFindingView* finding = m_preflight.findingsModel()->finding(request.findingId);
+    if (!finding || !m_findingNavigator)
+    {
+        return;
+    }
 
-    pdfinteraction::InteractionTarget target;
-    target.kind = pdfinteraction::InteractionTargetKind::Finding;
-    target.pageIndex = request.page - 1;
-    target.id = request.findingId;
-    target.pageBounds = request.bbox;
-    m_session->interaction()->selectTarget(target);
+    const pdfinteraction::FindingNavigationResult result =
+        m_findingNavigator->navigate(pdfinteraction::FindingNavigationRequest::fromFinding(*finding));
+    if (!result.accepted())
+    {
+        return;
+    }
     bumpPresentation();
+}
+
+bool EditorHost::isWorkspaceEnabled(LoopWorkspace workspace) const
+{
+    // QML supplies registered enum values, but the public invokable can also
+    // be reached through QVariant/int callers. Reject out-of-range values and
+    // the explicitly deferred Compare destination fail-closed.
+    if (workspace < LoopWorkspace::Document || workspace > LoopWorkspace::Compare)
+    {
+        return false;
+    }
+
+    return workspace != LoopWorkspace::Compare;
+}
+
+void EditorHost::setInspectionMode(QString mode)
+{
+    mode = mode.trimmed().isEmpty() ? QStringLiteral("page") : std::move(mode);
+    if (m_inspectionMode == mode)
+    {
+        return;
+    }
+    m_inspectionMode = std::move(mode);
 }
 
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
@@ -1544,6 +1642,7 @@ void EditorHost::onInteractionSelectionChanged(pdfinteraction::InteractionTarget
 
 void EditorHost::applyEmptyCanvasInspectorSelection()
 {
+    setInspectionMode(QStringLiteral("page"));
     if (!m_session->revisionSource() || !hasDocument())
     {
         m_inspector.clearSelection();

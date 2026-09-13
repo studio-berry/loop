@@ -406,6 +406,7 @@
     "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
+    "UnitTestsFindingNavigation",
     "UnitTestsFontEncoding",
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",

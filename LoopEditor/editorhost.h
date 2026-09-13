@@ -28,6 +28,7 @@
 #include "commandcatalog.h"
 #include "documentfacade.h"
 #include "documentloader.h"
+#include "findingnavigation.h"
 #include "hittestsource.h"
 #include "inspectormodel.h"
 #include "jobsubmitter.h"
@@ -104,6 +105,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool hasPreflightReport READ hasPreflightReport NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
+    Q_PROPERTY(QString inspectionMode READ inspectionMode NOTIFY presentationChanged)
     Q_PROPERTY(bool preferReducedMotion READ preferReducedMotion NOTIFY presentationChanged)
     Q_PROPERTY(bool highContrast READ highContrast NOTIFY presentationChanged)
     Q_PROPERTY(bool pageFidelityIsExact READ pageFidelityIsExact NOTIFY presentationChanged)
@@ -173,6 +175,7 @@ public:
     bool hasPreflightReport() const noexcept { return m_preflight.hasResult(); }
     QString previewSummary() const;
     QString inspectorTitle() const;
+    QString inspectionMode() const noexcept { return m_inspectionMode; }
     bool preferReducedMotion() const;
     bool highContrast() const;
     bool searchPanelVisible() const noexcept { return m_searchPanelVisible; }
@@ -213,6 +216,10 @@ public:
     Q_INVOKABLE void goToPage(int pageIndex);
     Q_INVOKABLE void goToOutlinePage(int pageIndex);
     Q_INVOKABLE void setWorkspace(LoopWorkspace workspace);
+    /// Compare remains a visible but disabled destination until its product
+    /// decision is approved. This check is shared by QML and C++ callers so a
+    /// non-QML caller cannot bypass the shell routing policy.
+    Q_INVOKABLE bool isWorkspaceEnabled(LoopWorkspace workspace) const;
     Q_INVOKABLE void acknowledgeWorkspaceRequest();
     Q_INVOKABLE void acknowledgeSearchPanel();
 
@@ -290,8 +297,10 @@ private:
     void syncProductionState();
     void applyInspectorSelection(const pdfinteraction::InteractionTarget& target);
     void applyEmptyCanvasInspectorSelection();
+    void setInspectionMode(QString mode);
 
     std::unique_ptr<DocumentViewSession> m_session;
+    std::unique_ptr<pdfinteraction::FindingCanvasNavigator> m_findingNavigator;
     pdfinteraction::PreflightController m_preflight;
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
@@ -329,6 +338,7 @@ private:
     int m_workspaceRequest = -1;
     LoopWorkspace m_workspace = LoopWorkspace::Document;
     int m_searchRow = -1;
+    QString m_inspectionMode = QStringLiteral("page");
 };
 
 #endif   // EDITORHOST_H

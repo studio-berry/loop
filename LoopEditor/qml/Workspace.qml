@@ -6,8 +6,12 @@ import Loop.Quick
 
 Item {
     id: root
+    objectName: "workspace"
 
     property var host: editorHost
+    property var window: null
+    property var openDialog: null
+    property var saveAsDialog: null
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     function workspaceIndex(workspaceValue) {
@@ -37,6 +41,9 @@ Item {
         ShellToolBar {
             Layout.fillWidth: true
             host: root.host
+            window: root.window
+            openDialog: root.openDialog
+            saveAsDialog: root.saveAsDialog
         }
 
         RowLayout {
@@ -46,13 +53,55 @@ Item {
 
             Pane {
                 id: workspaceRail
+                objectName: "workspaceRail"
                 Layout.preferredWidth: 132
                 Layout.fillHeight: true
                 padding: 8
 
                 focus: true
+                activeFocusOnTab: true
                 Accessible.role: Accessible.Grouping
                 Accessible.name: qsTr("Workspace rail")
+                Accessible.description: qsTr("Switch between document, production, preflight, inspection, and fix workspaces.")
+
+                Keys.onPressed: function(event) {
+                    if (!root.host) {
+                        return
+                    }
+
+                    var direction = 0
+                    if (event.key === Qt.Key_Up || event.key === Qt.Key_Left) {
+                        direction = -1
+                    } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Right) {
+                        direction = 1
+                    } else if (event.key === Qt.Key_Home) {
+                        root.host.setWorkspace(EditorHost.Document)
+                        event.accepted = true
+                        return
+                    } else if (event.key === Qt.Key_End) {
+                        root.host.setWorkspace(EditorHost.Fix)
+                        event.accepted = true
+                        return
+                    }
+
+                    if (direction === 0) {
+                        return
+                    }
+
+                    var current = root.workspaceIndex(root.host.workspace)
+                    var candidate = current + direction
+                    while (candidate >= 0 && candidate < 6) {
+                        var candidateWorkspace = [EditorHost.Document, EditorHost.Preflight,
+                                                  EditorHost.ProductionPreview, EditorHost.Pages,
+                                                  EditorHost.Inspect, EditorHost.Fix][candidate]
+                        if (root.host.isWorkspaceEnabled(candidateWorkspace)) {
+                            root.host.setWorkspace(candidateWorkspace)
+                            event.accepted = true
+                            return
+                        }
+                        candidate += direction
+                    }
+                }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -60,30 +109,31 @@ Item {
 
                     Repeater {
                         model: [
-                            { label: qsTr("Document"), workspace: EditorHost.Document, enabled: true },
-                            { label: qsTr("Preflight"), workspace: EditorHost.Preflight, enabled: true },
-                            { label: qsTr("Production Preview"), workspace: EditorHost.ProductionPreview, enabled: true },
-                            { label: qsTr("Pages / Production"), workspace: EditorHost.Pages, enabled: true },
-                            { label: qsTr("Inspect"), workspace: EditorHost.Inspect, enabled: true },
-                            { label: qsTr("Fix"), workspace: EditorHost.Fix, enabled: true },
-                            { label: qsTr("Compare"), workspace: EditorHost.Compare, enabled: false }
+                            { label: qsTr("Document"), workspace: EditorHost.Document },
+                            { label: qsTr("Preflight"), workspace: EditorHost.Preflight },
+                            { label: qsTr("Production Preview"), workspace: EditorHost.ProductionPreview },
+                            { label: qsTr("Pages / Production"), workspace: EditorHost.Pages },
+                            { label: qsTr("Inspect"), workspace: EditorHost.Inspect },
+                            { label: qsTr("Fix"), workspace: EditorHost.Fix },
+                            { label: qsTr("Compare"), workspace: EditorHost.Compare }
                         ]
 
                         delegate: ToolButton {
-                            required property string label
-                            required property int workspace
-                            required property bool enabled
+                            required property var modelData
 
                             Layout.fillWidth: true
-                            text: label
+                            objectName: "workspaceButton_" + modelData.workspace
+                            text: modelData.label
                             checkable: true
-                            enabled: enabled
-                            checked: host && host.workspace === workspace
-                            onClicked: root.setWorkspaceFromRail(workspace)
-                            Accessible.name: workspace === EditorHost.Compare
+                            enabled: host ? host.isWorkspaceEnabled(modelData.workspace) : false
+                            activeFocusOnTab: true
+                            checked: host && host.workspace === modelData.workspace
+                            onClicked: root.setWorkspaceFromRail(modelData.workspace)
+                            Accessible.role: Accessible.Button
+                            Accessible.name: modelData.workspace === EditorHost.Compare
                                 ? qsTr("Compare workspace (product decision pending)")
-                                : qsTr("%1 workspace").arg(label)
-                            Accessible.description: workspace === EditorHost.Compare
+                                : qsTr("%1 workspace").arg(modelData.label)
+                            Accessible.description: modelData.workspace === EditorHost.Compare
                                 ? qsTr("Compare is disabled until the product decision is approved.")
                                 : ""
                         }
@@ -95,9 +145,12 @@ Item {
 
             StackLayout {
                 id: workspaceStack
+                objectName: "workspaceStack"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 currentIndex: host ? root.workspaceIndex(host.workspace) : 0
+                Accessible.role: Accessible.Pane
+                Accessible.name: qsTr("Workspace content")
 
                 DocumentPane {
                     id: documentPane
@@ -147,6 +200,7 @@ Item {
     }
 
     KeyNavigation.tab: documentPane
+    KeyNavigation.backtab: workspaceRail
 
     Connections {
         target: root.host

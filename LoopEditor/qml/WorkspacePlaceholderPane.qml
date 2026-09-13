@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 Pane {
     id: root
+    objectName: "workspacePlaceholderPane"
 
     property var host: editorHost
     property string titleText: ""
@@ -13,6 +14,7 @@ Pane {
 
     Accessible.role: Accessible.Grouping
     Accessible.name: titleText
+    Accessible.description: descriptionText
 
     ColumnLayout {
         anchors.fill: parent

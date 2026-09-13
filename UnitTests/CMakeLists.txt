@@ -350,6 +350,22 @@ set_target_properties(UnitTestsPreflightInteraction PROPERTIES
 )
 add_test(UnitTestsPreflightInteraction "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPreflightInteraction")
 
+add_executable(UnitTestsFindingNavigation
+    tst_findingnavigationtest.cpp
+)
+
+target_link_libraries(UnitTestsFindingNavigation PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
+target_include_directories(UnitTestsFindingNavigation PRIVATE
+    ${CMAKE_SOURCE_DIR}/LoopLibInteraction/sources)
+
+set_target_properties(UnitTestsFindingNavigation PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsFindingNavigation "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsFindingNavigation")
+
 add_executable(UnitTestsSchemaEvolution
     tst_schemaevolutiontest.cpp
 )

@@ -8,6 +8,10 @@ import Loop.Quick
 
 ApplicationWindow {
     id: window
+    objectName: "loopMainWindow"
+
+    Accessible.role: Accessible.Application
+    Accessible.name: qsTr("Loop PDF editor")
 
     property var host: editorHost
     readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
@@ -15,6 +19,8 @@ ApplicationWindow {
     visible: true
     width: 1024
     height: 768
+    minimumWidth: 800
+    minimumHeight: 600
     title: host && host.displayTitle.length > 0 ? host.displayTitle : qsTr("Loop")
 
     Connections {
@@ -36,8 +42,11 @@ ApplicationWindow {
     }
 
     menuBar: ShellMenuBar {
+        objectName: "shellMenuBar"
         host: window.host
         window: window
+        openDialog: openDialog
+        saveAsDialog: saveAsDialog
     }
 
     FileDialog {
@@ -142,6 +151,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             host: window.host
+            window: window
+            openDialog: openDialog
+            saveAsDialog: saveAsDialog
         }
 
         Pane {

@@ -8,15 +8,150 @@
 #include "pdfworkloadenvelope.h"
 
 #include <QDir>
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QList>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QSysInfo>
 #include <QTemporaryDir>
+
+#include <functional>
+#include <utility>
 
 namespace operatoracceptance
 {
+
+/// A privacy-safe, symbolic operator trace.  The action names deliberately do
+/// not contain screen coordinates or document content, so the same trace can
+/// be replayed by a Qt host, a CLI adapter, or a future product smoke runner.
+struct OperatorLoopTraceStep
+{
+    QString action;
+    QString outcome;
+    QString detail;
+};
+
+class OperatorLoopTrace final
+{
+public:
+    explicit OperatorLoopTrace(QString scenario) :
+        m_scenario(std::move(scenario))
+    {
+    }
+
+    ~OperatorLoopTrace()
+    {
+        if (!m_complete && !m_failureArtifactWritten)
+        {
+            const QString failure = m_failure.isEmpty()
+                                        ? (m_steps.isEmpty()
+                                               ? QStringLiteral("test aborted")
+                                               : QStringLiteral("test aborted after action: %1").arg(m_steps.back().action))
+                                        : m_failure;
+            writeFailureArtifact(failure);
+        }
+    }
+
+    OperatorLoopTrace(const OperatorLoopTrace&) = delete;
+    OperatorLoopTrace& operator=(const OperatorLoopTrace&) = delete;
+
+    void note(const QString& action, const QString& detail = {})
+    {
+        m_steps.push_back({ action, QStringLiteral("observed"), detail.left(4096) });
+    }
+
+    bool expect(bool condition, const QString& action, const QString& failure)
+    {
+        m_steps.push_back({ action, condition ? QStringLiteral("passed") : QStringLiteral("failed"),
+                            condition ? QString() : failure.left(4096) });
+        if (!condition && m_failure.isEmpty())
+        {
+            m_failure = failure;
+            m_failureArtifactWritten = true;
+            writeFailureArtifact(m_failure);
+        }
+        return condition;
+    }
+
+    void complete() noexcept { m_complete = true; }
+
+    const QString& scenario() const noexcept { return m_scenario; }
+    const QString& failure() const noexcept { return m_failure; }
+    const QList<OperatorLoopTraceStep>& steps() const noexcept { return m_steps; }
+
+    /// Executes a symbolic trace step.  Test callers can supply a lambda for
+    /// whichever surface owns the operation, keeping the action sequence
+    /// reusable without teaching this helper product semantics.
+    bool replay(const QString& action, const std::function<bool()>& operation)
+    {
+        const bool passed = operation && operation();
+        return expect(passed, action, QStringLiteral("operator trace step failed: %1").arg(action));
+    }
+
+private:
+    static QString artifactDirectory()
+    {
+        const QString configured = qEnvironmentVariable("LOOP_OPERATOR_ARTIFACT_DIR");
+        if (!configured.trimmed().isEmpty())
+        {
+            return configured;
+        }
+        return QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+            .filePath(QStringLiteral("loop-operator-loop"));
+    }
+
+    void writeFailureArtifact(const QString& failure) const
+    {
+        const QString directory = artifactDirectory();
+        if (!QDir().mkpath(directory))
+        {
+            return;
+        }
+
+        QString safeScenario = m_scenario;
+        safeScenario.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9_.-]")), QStringLiteral("_"));
+        const QString timestamp = QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmsszzz"));
+        QSaveFile artifact(QDir(directory).filePath(QStringLiteral("%1-%2.json").arg(safeScenario, timestamp)));
+        if (!artifact.open(QIODevice::WriteOnly))
+        {
+            return;
+        }
+
+        QJsonArray steps;
+        for (const OperatorLoopTraceStep& step : m_steps)
+        {
+            steps.append(QJsonObject{ { QStringLiteral("action"), step.action },
+                                      { QStringLiteral("outcome"), step.outcome },
+                                      { QStringLiteral("detail"), step.detail } });
+        }
+        const QJsonObject document{
+            { QStringLiteral("schema"), QStringLiteral("loop.operator-loop-failure") },
+            { QStringLiteral("schema_version"), 1 },
+            { QStringLiteral("scenario"), m_scenario },
+            { QStringLiteral("failure"), failure.left(4096) },
+            { QStringLiteral("platform"), QSysInfo::prettyProductName() },
+            { QStringLiteral("timestamp_utc"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs) },
+            { QStringLiteral("steps"), steps }
+        };
+        artifact.write(QJsonDocument(document).toJson(QJsonDocument::Indented));
+        artifact.commit();
+    }
+
+    QString m_scenario;
+    QList<OperatorLoopTraceStep> m_steps;
+    QString m_failure;
+    bool m_complete = false;
+    bool m_failureArtifactWritten = false;
+};
 
 constexpr char DEFAULT_PROFILE_REL[] = "profiles/loop-default.json";
 
@@ -112,6 +247,10 @@ inline bool runPdfTool(const QString& pdfToolPath,
     process.start(QDir::toNativeSeparators(pdfToolPath), arguments);
     if (!process.waitForStarted(10000))
     {
+        if (stdErr)
+        {
+            *stdErr = process.errorString().toUtf8();
+        }
         return false;
     }
 
@@ -124,6 +263,10 @@ inline bool runPdfTool(const QString& pdfToolPath,
         {
             process.kill();
             process.waitForFinished(5000);
+            if (stdErr)
+            {
+                *stdErr = QByteArrayLiteral("process timed out after 120000 ms");
+            }
             return false;
         }
 

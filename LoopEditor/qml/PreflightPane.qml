@@ -9,6 +9,7 @@ Pane {
 
     property var host: editorHost
     property var findingsModel: host ? host.preflight.findingsModel : null
+    readonly property bool preferReducedMotion: host ? host.preferReducedMotion : false
 
     padding: 8
 
@@ -45,10 +46,12 @@ Pane {
         // StateIncomplete and StateNotChecked, #194).
         RowLayout {
             id: stateBadge
+            objectName: "preflightStateBadge"
             Layout.fillWidth: true
             spacing: 8
 
             Label {
+                objectName: "preflightStateLabel"
                 id: stateBadgeIcon
                 Layout.alignment: Qt.AlignTop
                 font.pixelSize: 14
@@ -73,6 +76,7 @@ Pane {
 
         ComboBox {
             id: profileSelector
+            objectName: "preflightProfileSelector"
             Layout.fillWidth: true
             model: root.host ? root.host.preflightProfiles : []
             textRole: "name"
@@ -106,14 +110,19 @@ Pane {
                     Accessible.name: modelData.description.length > 0 ? modelData.description : text
                 }
                 CheckBox {
+                    objectName: "preflightVariableBoolean_" + modelData.name
                     visible: modelData.type === "boolean"
+                    activeFocusOnTab: true
                     checked: Boolean(modelData.value)
                     text: modelData.description
+                    Accessible.name: qsTr("Preflight variable %1").arg(modelData.name)
                     onToggled: if (root.host) root.host.setPreflightVariable(modelData.name, checked)
                 }
                 TextField {
+                    objectName: "preflightVariableText_" + modelData.name
                     Layout.fillWidth: true
                     visible: modelData.type !== "boolean"
+                    activeFocusOnTab: true
                     text: modelData.value === undefined || modelData.value === null ? "" : String(modelData.value)
                     inputMethodHints: modelData.type === "string" ? Qt.ImhNone : Qt.ImhFormattedNumbersOnly
                     Accessible.name: qsTr("Preflight variable %1").arg(modelData.name)
@@ -126,56 +135,71 @@ Pane {
             Layout.fillWidth: true
 
             Button {
+                objectName: "runPreflightButton"
                 text: qsTr("Run Preflight")
                 enabled: root.host && root.host.hasDocument && root.host.preflightStateName !== "running"
                 Accessible.name: qsTr("Run preflight")
+                Accessible.role: Accessible.Button
                 Accessible.description: qsTr("Runs the selected validated preflight profile.")
                 onClicked: root.host.runPreflight()
             }
 
             Button {
+                objectName: "cancelPreflightButton"
                 text: qsTr("Cancel")
                 enabled: root.host && root.host.preflightStateName === "running"
                 Accessible.name: qsTr("Cancel preflight")
+                Accessible.role: Accessible.Button
                 Accessible.description: qsTr("Cancels the running preflight job.")
                 onClicked: root.host.cancelPreflight()
             }
 
             Button {
+                objectName: "exportPreflightReportButton"
                 text: qsTr("Export Report")
                 enabled: root.host && root.host.hasPreflightReport
                 Accessible.name: qsTr("Export preflight report")
+                Accessible.role: Accessible.Button
                 Accessible.description: qsTr("Exports the retained normalized preflight report as JSON.")
                 onClicked: root.host.requestPreflightReportExport()
             }
 
             ProgressBar {
+                objectName: "preflightProgress"
                 Layout.fillWidth: true
                 from: 0
                 to: 100
                 value: root.host ? root.host.preflight.progress : 0
                 enabled: root.host && root.host.preflightStateName === "running"
                 Accessible.name: qsTr("Preflight progress")
+                Accessible.description: qsTr("Progress reported by the active preflight job.")
             }
         }
 
         ListView {
             id: findingsView
+            objectName: "preflightFindingsView"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            focus: true
+            focus: visible
             activeFocusOnTab: true
+            keyNavigationEnabled: true
+            highlightFollowsCurrentItem: true
+            highlightMoveDuration: root.preferReducedMotion ? 0 : 120
             model: root.findingsModel
             currentIndex: -1
 
+            Accessible.role: Accessible.List
             Accessible.name: qsTr("Preflight findings list")
             Accessible.description: qsTr("Use arrow keys to move between findings and Enter to navigate to evidence.")
 
             delegate: ItemDelegate {
                 width: findingsView.width
+                activeFocusOnTab: true
                 text: "%1 — %2".arg(model.severity).arg(model.message)
                 highlighted: model.selected
+                Accessible.role: Accessible.ListItem
                 Accessible.name: model.message
                 Accessible.description: qsTr("Severity %1, scope %2, page %3, object %4, check %5, evidence %6")
                     .arg(model.severity).arg(model.scope).arg(model.page).arg(model.objectId).arg(model.checkId).arg(model.evidenceIds.join(", "))
@@ -184,6 +208,16 @@ Pane {
                     if (host) {
                         host.selectFinding(model.findingId)
                     }
+                }
+            }
+
+            // ListView owns keyboard traversal; selection remains a stable finding-id
+            // intent, so the host can reject stale or unsupported targets authoritatively.
+            onCurrentIndexChanged: {
+                if (currentIndex >= 0 && host && findingsModel) {
+                    const findingId = findingsModel.findingIdAt(currentIndex)
+                    if (findingId.length > 0)
+                        host.selectFinding(findingId)
                 }
             }
 

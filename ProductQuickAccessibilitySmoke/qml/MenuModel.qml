@@ -5,10 +5,47 @@ QtObject {
 
     property var host: null
     property var window: null
+    property var openDialog: null
+    property var saveAsDialog: null
 
-    readonly property var menuGroups: [
+    readonly property var menuGroupOrder: [
         "File", "Edit", "View", "Document", "Production", "Preflight", "Help", "Advanced"
     ]
+
+    // Membership comes from the manifest-backed command descriptors. The
+    // order is presentation policy; QML does not maintain a second action set.
+    function menuGroups() {
+        if (!host) {
+            return []
+        }
+
+        const present = ({})
+        const descriptors = host.commandDescriptors()
+        for (let index = 0; index < descriptors.length; ++index) {
+            const entry = descriptors[index]
+            const disposition = entry.disposition || ""
+            if (disposition === "HIDE" || disposition === "STOP-SHIPPING" ||
+                    (disposition === "ADVANCED" && !host.allowDeveloperDiagnostics)) {
+                continue
+            }
+            if (entry.menuGroup) {
+                present[entry.menuGroup] = true
+            }
+        }
+
+        const groups = []
+        for (let index = 0; index < menuGroupOrder.length; ++index) {
+            const group = menuGroupOrder[index]
+            if (present[group]) {
+                groups.push(group)
+                delete present[group]
+            }
+        }
+        for (const group in present) {
+            groups.push(group)
+        }
+        return groups
+    }
 
     function descriptorsForGroup(groupName) {
         if (!host) {
@@ -62,18 +99,18 @@ QtObject {
         if (!host) {
             return
         }
-        if (commandId === "actionOpen" && window && window.openDialog) {
+        if (commandId === "actionOpen" && openDialog) {
             if (host.focusRestoration) {
                 host.focusRestoration.remember(window.activeFocusItem)
             }
-            window.openDialog.open()
+            openDialog.open()
             return
         }
-        if (commandId === "actionSave_As" && window && window.saveAsDialog) {
+        if (commandId === "actionSave_As" && saveAsDialog) {
             if (host.focusRestoration) {
                 host.focusRestoration.remember(window.activeFocusItem)
             }
-            window.saveAsDialog.open()
+            saveAsDialog.open()
             return
         }
         host.invokeCommand(commandId)
