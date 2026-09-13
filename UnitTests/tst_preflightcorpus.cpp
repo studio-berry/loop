@@ -295,9 +295,9 @@ void PreflightCorpusTest::preflightMatchesManifest()
     const int expectedExitCode = verdictState == QStringLiteral("pass")
                                      ? 0
                                  : verdictState == QStringLiteral("fail")        ? 1
-                                 : verdictState == QStringLiteral("incomplete")    ? 8
-                                 : verdictState == QStringLiteral("input-error")   ? 3
-                                                                                   : 9;
+                                 : verdictState == QStringLiteral("incomplete")  ? 8
+                                 : verdictState == QStringLiteral("input-error") ? 3
+                                                                                 : 9;
     QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);
