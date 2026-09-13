@@ -83,7 +83,10 @@ void DocumentSearchTest::searchReportsIncompleteWhenOperationBudgetExhausted()
     session->setProcessingLimits(limits);
 
     const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("needle"));
-    QVERIFY(result.admitted);
+    // Core returns before the admission check when the budget stops the search, so
+    // the result is neither admitted nor completed; QuickDocumentModelTest covers
+    // the same contract from the Quick side.
+    QVERIFY(!result.admitted);
     QVERIFY(!result.completed);
     QVERIFY(result.budgetExceeded);
     QVERIFY(result.matches.isEmpty());
