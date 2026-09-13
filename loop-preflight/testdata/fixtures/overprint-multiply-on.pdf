@@ -1,5 +1,5 @@
 %PDF-1.7
-% PDF producer: PDF4QT 1.6.0.0
+% PDF producer: LOOP 0.2.0-alpha
 
 
 1 0 obj
@@ -7,9 +7,9 @@
 2 0 obj
 << /Type /Catalog /Pages 1 0 R >> endobj
 3 0 obj
-<< /Producer (PDF4QT 1.6.0.0) /CreationDate (D:20260809045239) /ModDate (D:20260809045239) /Title (Loop fixture - overprint render) /Creator (LoopGenerateFixtures) >> endobj
+<< /Producer (LOOP 0.2.0-alpha) /CreationDate (D:20260101000000) /ModDate (D:20260101000000) /Title (Loop fixture - overprint render) /Creator (LoopGenerateFixtures) >> endobj
 4 0 obj
-<< /Type /Page /Parent 1 0 R /MediaBox [ 0.00000 0.00000 200.00000 200.00000 ] /Resources << /ExtGState << /GS 5 0 R >> /ColorSpace << /SpotCS [ /Separation /Spot /DeviceCMYK 6 0 R ] >> >> /Contents 7 0 R >> endobj
+<< /Type /Page /Parent 1 0 R /MediaBox [ 0.00000 0.00000 200.00000 200.00000 ] /TrimBox [ 10.00000 10.00000 190.00000 190.00000 ] /Resources << /ExtGState << /GS 5 0 R >> /ColorSpace << /SpotCS [ /Separation /Spot /DeviceCMYK 6 0 R ] >> >> /Contents 7 0 R >> endobj
 5 0 obj
 << /Type /ExtGState /OP true /op true /OPM 0 /BM /Multiply >> endobj
 6 0 obj
@@ -22,15 +22,15 @@ endobj
 xref
 0 8
 0000000000 65535 f
-0000000046 00000 n
-0000000107 00000 n
-0000000158 00000 n
-0000000344 00000 n
-0000000569 00000 n
-0000000648 00000 n
-0000000806 00000 n
+0000000048 00000 n
+0000000109 00000 n
+0000000160 00000 n
+0000000346 00000 n
+0000000622 00000 n
+0000000701 00000 n
+0000000859 00000 n
 trailer
 << /Size 8 /Root 2 0 R /Info 3 0 R >> 
 startxref
-946
+999
 %%EOF
