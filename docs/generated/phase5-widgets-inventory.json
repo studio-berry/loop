@@ -89,6 +89,7 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loop-preflight/tools/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loop-shell.json",
@@ -3240,7 +3241,7 @@
     }
   ],
   "counts": {
-    "targets": 73,
+    "targets": 74,
     "installed_in_profile": 4,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,
