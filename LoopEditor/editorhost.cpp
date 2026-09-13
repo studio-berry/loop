@@ -665,23 +665,7 @@ bool EditorHost::moveFindingSelection(int direction)
     }
 
     pdfinteraction::PreflightFindingsModel* findings = m_preflight.findingsModel();
-    const int count = findings->rowCount();
-    if (count == 0)
-    {
-        return false;
-    }
-
-    int row = findings->rowForFindingId(findings->selectedFindingId());
-    if (row < 0)
-    {
-        row = direction > 0 ? 0 : count - 1;
-    }
-    else
-    {
-        row = (row + direction + count) % count;
-    }
-
-    const QString findingId = findings->findingIdAt(row);
+    const QString findingId = findings->adjacentFindingId(findings->selectedFindingId(), direction);
     if (findingId.isEmpty())
     {
         return false;

@@ -271,6 +271,26 @@ int PreflightFindingsModel::rowForFindingId(const QString& findingId) const
     return -1;
 }
 
+QString PreflightFindingsModel::adjacentFindingId(const QString& currentId, int direction) const
+{
+    if (direction == 0 || m_findings.isEmpty())
+    {
+        return QString();
+    }
+
+    int row = rowForFindingId(currentId);
+    if (row < 0)
+    {
+        row = direction > 0 ? 0 : m_findings.size() - 1;
+    }
+    else
+    {
+        row = (row + direction + m_findings.size()) % m_findings.size();
+    }
+
+    return findingIdAt(row);
+}
+
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
 {
     return documentRevision == m_documentRevision && finding(findingId) != nullptr;

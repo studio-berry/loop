@@ -129,6 +129,7 @@ public:
 
     Q_INVOKABLE QString findingIdAt(int row) const;
     Q_INVOKABLE int rowForFindingId(const QString& findingId) const;
+    Q_INVOKABLE QString adjacentFindingId(const QString& currentId, int direction) const;
 
     bool containsCurrent(const QString& findingId, const QString& documentRevision) const;
     const PreflightFindingView* finding(const QString& findingId) const;
