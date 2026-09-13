@@ -6,6 +6,7 @@
 #include "pdfexception.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfpage.h"
+#include "pdfprocessingbudget.h"
 #include "pdftextlayout.h"
 #include "pdftextlayoutgenerator.h"
 
@@ -54,6 +55,7 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
     catch (const PDFBudgetExceededException& exception)
     {
         result.matches.clear();
+        result.budgetExceeded = true;
         result.errorMessage = QString::fromUtf8(exception.what());
         return result;
     }
