@@ -35,6 +35,7 @@ class ShellWorkspaceTest : public QObject
 private slots:
     void workspaceTransitionsPreserveClosedDocumentState();
     void workspaceTransitionsPreserveOpenDocumentAndPreflightState();
+    void disabledCompareWorkspaceCannotBeSelected();
     void menuPolicyRoutesVisibleActions();
     void developerDiagnosticsFollowReleaseProfile();
 };
@@ -112,6 +113,21 @@ void ShellWorkspaceTest::workspaceTransitionsPreserveOpenDocumentAndPreflightSta
             QVERIFY(!host.productionStateName().isEmpty());
         }
     }
+}
+
+void ShellWorkspaceTest::disabledCompareWorkspaceCannotBeSelected()
+{
+    EditorHost host;
+    QCOMPARE(host.workspace(), EditorHost::Document);
+    QVERIFY(!host.isWorkspaceEnabled(EditorHost::Compare));
+
+    QSignalSpy workspaceSpy(&host, &EditorHost::workspaceChanged);
+    host.setWorkspace(EditorHost::Compare);
+
+    QCOMPARE(host.workspace(), EditorHost::Document);
+    QCOMPARE(workspaceSpy.size(), 0);
+    QVERIFY(host.isWorkspaceEnabled(EditorHost::Document));
+    QVERIFY(host.isWorkspaceEnabled(EditorHost::Inspect));
 }
 
 void ShellWorkspaceTest::menuPolicyRoutesVisibleActions()

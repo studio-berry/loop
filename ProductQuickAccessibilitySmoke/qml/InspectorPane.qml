@@ -4,6 +4,7 @@ import QtQuick.Layouts
 
 Pane {
     id: root
+    objectName: "inspectorPane"
 
     property var host: editorHost
     property var inspectorModel: host ? host.inspector : null
@@ -26,17 +27,54 @@ Pane {
             Accessible.name: qsTr("Inspector title")
         }
 
+        GroupBox {
+            objectName: "correctiveActionsGroup"
+            Layout.fillWidth: true
+            visible: root.inspectorModel && root.inspectorModel.hasCorrectiveOperation
+            title: qsTr("Available corrections")
+            Accessible.role: Accessible.Grouping
+            Accessible.name: qsTr("Available corrections")
+
+            ColumnLayout {
+                anchors.fill: parent
+                Repeater {
+                    model: root.inspectorModel ? root.inspectorModel.correctiveOperationIds : []
+                    delegate: Button {
+                        Layout.fillWidth: true
+                        text: modelData
+                        Accessible.name: qsTr("Apply correction %1").arg(modelData)
+                        Accessible.description: qsTr("Runs the report-advertised correction through the existing repair transaction.")
+                        onClicked: root.inspectorModel.requestCorrectiveOperation(modelData)
+                    }
+                }
+            }
+        }
+
         ListView {
             id: inspectorView
+            objectName: "inspectorView"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            focus: true
+            focus: visible
             activeFocusOnTab: true
             model: root.inspectorModel
 
+            Accessible.role: Accessible.List
             Accessible.name: qsTr("Inspector properties")
             Accessible.description: qsTr("Read-only properties for the current selection.")
+
+            section.property: "section"
+            section.criteria: ViewSection.FullString
+            section.delegate: Label {
+                width: inspectorView.width
+                topPadding: 8
+                bottomPadding: 2
+                font.bold: true
+                text: section
+                Accessible.role: Accessible.Heading
+                Accessible.name: text
+            }
 
             delegate: RowLayout {
                 width: inspectorView.width
@@ -64,7 +102,8 @@ Pane {
             Accessible.name: qsTr("Production preview status")
         }
 
-        GroupBox {
+            GroupBox {
+            objectName: "documentPropertiesGroup"
             Layout.fillWidth: true
             title: qsTr("Document properties")
             visible: host && host.hasDocument

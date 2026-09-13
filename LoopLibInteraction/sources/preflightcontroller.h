@@ -64,6 +64,11 @@ public:
         int page = 0;
         QRectF bbox;
         QStringList evidenceIds;
+        bool pageNavigationSupported = true;
+        bool objectTargetingSupported = false;
+        bool overlayEvidenceSupported = false;
+        QString inspectionMode = QStringLiteral("page");
+        bool hasPreciseTarget = false;
     };
 
     explicit PreflightController(pdf::PDFJobScheduler* scheduler = nullptr, QObject* parent = nullptr);
@@ -82,6 +87,7 @@ public:
 
     void setCurrentRevision(QString documentKey, QString documentRevision);
     void markProfileStale();
+    void markCheckSetStale();
     void beginRun(QString documentKey, QString documentRevision, QString profileDigest, QString jobId);
     bool updateProgress(const QString& jobId, const QString& documentRevision, int progress);
     bool acceptResult(const QString& jobId, const QString& documentRevision, const pdf::PreflightResult& result);
@@ -98,6 +104,8 @@ signals:
 
 private:
     void setState(State state);
+    void cancelSchedulerJob();
+    void markStale(QString summary);
     void restoreRetainedState(State terminalState);
 
     PreflightFindingsModel m_findings;
