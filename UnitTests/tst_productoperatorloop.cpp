@@ -114,6 +114,8 @@ void ProductOperatorLoopTest::findingNavigationMovesCanvasToTheFindingPage()
     host.openFileUrl(QUrl::fromLocalFile(path));
     QTRY_VERIFY_WITH_TIMEOUT(host.hasDocument(), 30000);
     QCOMPARE(host.pageCount(), 2);
+    // Without a viewport size no page can be revealed, so page navigation is a no-op.
+    host.setViewportGeometry(96.0 / 25.4, 1.0, 800, 600);
 
     auto* preflight = qobject_cast<PreflightController*>(host.preflight());
     auto* inspector = qobject_cast<InspectorModel*>(host.inspector());
