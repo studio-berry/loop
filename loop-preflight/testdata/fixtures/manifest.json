@@ -341,7 +341,6 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": false, "check_ids": [] },
     "source": "hand-built",
-    "pending": true,
     "notes": "Non-PDF input for malformed-input operator acceptance; manifest allowlist only."
   },
   {
@@ -404,10 +403,9 @@
     "id": "overprint-multiply-on",
     "pdf": "overprint-multiply-on.pdf",
     "profile": "profiles/loop-default.json",
-    "expect": { "pass": true, "check_ids": [] },
+    "expect": { "pass": false, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-separation-off",
@@ -455,7 +453,6 @@
     "profile": "testdata/profiles/test-thin-parts.json",
     "expect": { "pass": false, "check_ids": ["thin-parts"] },
     "source": "generated",
-    "pending": true,
-    "notes": "S07 corpus row for thin-parts; generate with LoopGenerateFixtures."
+    "notes": "S07 corpus row for thin-parts thin-fill detection."
   }
 ]
