@@ -35,9 +35,9 @@ def main() -> int:
         failures.append(f"{SEARCH_CPP.relative_to(ROOT)}: missing operation-scoped search budget")
     if "catch (const PDFBudgetExceededException" not in search_cpp:
         failures.append(f"{SEARCH_CPP.relative_to(ROOT)}: must catch PDFBudgetExceededException")
-    if "budgetExceeded" not in search_h or "complete" not in search_h:
-        failures.append(f"{SEARCH_H.relative_to(ROOT)}: PDFDocumentSearchResult must expose complete/budgetExceeded")
-    if "!searchResult.complete" not in quick_cpp:
+    if "budgetExceeded" not in search_h or "completed" not in search_h:
+        failures.append(f"{SEARCH_H.relative_to(ROOT)}: PDFDocumentSearchResult must expose completed/budgetExceeded")
+    if "!searchResult.completed" not in quick_cpp:
         failures.append(f"{QUICK_CPP.relative_to(ROOT)}: Quick search must treat incomplete results as failure")
 
     if not TEST_CPP.is_file():

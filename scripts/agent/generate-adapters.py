@@ -38,6 +38,8 @@ def load_policy() -> dict:
         "qt_minimum",
         "branches",
         "autonomy",
+        "engineering_contract",
+        "change_review",
         "module_boundaries",
         "global_checks",
         "changelog",
@@ -51,6 +53,11 @@ def load_policy() -> dict:
     if policy["changelog"].get("required_per_pr") != 1:
         raise ValueError("agent policy must require exactly one changelog fragment per PR")
     return policy
+
+
+def section(title: str, intro: str, bullets: list[str]) -> list[str]:
+    """One policy section: heading, framing sentence, then bullet items."""
+    return ["", f"## {title}", "", intro, "", *(f"- {bullet}" for bullet in bullets)]
 
 
 def render(policy: dict, adapter: str) -> str:
@@ -71,6 +78,8 @@ def render(policy: dict, adapter: str) -> str:
     branches = policy["branches"]
     autonomy = policy["autonomy"]
     changelog = policy["changelog"]
+    contract = policy["engineering_contract"]
+    change_review = policy["change_review"]
     version, prerelease = load_version_policy()
     display_version = format_product_version(version, prerelease)
     promotion = " → ".join(f"`{branch}`" for branch in branches["promotion_chain"])
@@ -101,6 +110,11 @@ def render(policy: dict, adapter: str) -> str:
         f"- Every PR adds exactly one `{changelog['directory']}/<sanitized-head-branch>.md` fragment. Required fields: {', '.join(changelog['required_fields'])}. Categories: {', '.join(changelog['categories'])}.",
         "- Use `internal` for tooling or documentation changes; it still requires a fragment.",
         "- Do not invent a public contract when a protected interface, schema, persistence format, central type, or root build contract must change; stop and report the contract change.",
+    ])
+    lines.extend(section("Engineering contract", contract["applies_to"], contract["rules"]))
+    lines.extend(section("Change review", change_review["applies_to"], change_review["anti_slop"]))
+    lines.extend(["", change_review["preserve"], *change_review["closing"]])
+    lines.extend([
         "",
         "## Module placement",
         "",

@@ -66,7 +66,7 @@ void DocumentSearchTest::searchUsesFreshBudgetAfterSessionElapsed()
 
     const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("needle"));
     QVERIFY(result.admitted);
-    QVERIFY(result.complete);
+    QVERIFY(result.completed);
     QVERIFY(!result.budgetExceeded);
     QCOMPARE(result.matches.size(), 1);
     QCOMPARE(result.matches.first().matched, QStringLiteral("needle"));
@@ -84,7 +84,7 @@ void DocumentSearchTest::searchReportsIncompleteWhenOperationBudgetExhausted()
 
     const pdf::PDFDocumentSearchResult result = pdf::searchDocumentText(context.get(), QStringLiteral("needle"));
     QVERIFY(result.admitted);
-    QVERIFY(!result.complete);
+    QVERIFY(!result.completed);
     QVERIFY(result.budgetExceeded);
     QVERIFY(result.matches.isEmpty());
 }

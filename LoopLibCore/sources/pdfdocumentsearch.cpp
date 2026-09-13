@@ -3,6 +3,7 @@
 
 #include "pdfcatalog.h"
 #include "pdfdocumentsession.h"
+#include "pdfexception.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfpage.h"
 #include "pdfprocessingbudget.h"
@@ -28,8 +29,8 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
     result.revision = context->getRevision();
     const PDFMeshQualitySettings meshQuality;
     const PDFRenderer::Features features = PDFRenderer::IgnoreOptionalContent;
-    const PDFCatalog* catalog = document->getCatalog();
     PDFProcessingBudget searchBudget(session->getProcessingLimits());
+    const PDFCatalog* catalog = document->getCatalog();
     try
     {
         for (size_t pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
@@ -51,18 +52,18 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
             }
         }
     }
-    catch (const PDFBudgetExceededException&)
-    {
-        result.complete = false;
-        result.budgetExceeded = true;
-    }
-
-    result.admitted = context->isCurrent(result.revision);
-    if (!result.admitted)
+    catch (const PDFBudgetExceededException& exception)
     {
         result.matches.clear();
-        result.complete = false;
+        result.budgetExceeded = true;
+        result.errorMessage = QString::fromUtf8(exception.what());
+        return result;
     }
+
+    result.completed = true;
+    result.admitted = context->isCurrent(result.revision);
+    if (!result.admitted)
+        result.matches.clear();
     return result;
 }
 
