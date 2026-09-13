@@ -5,6 +5,7 @@
 #include "pdfdocumentsession.h"
 #include "pdfmeshqualitysettings.h"
 #include "pdfpage.h"
+#include "pdfprocessingbudget.h"
 #include "pdftextlayout.h"
 #include "pdftextlayoutgenerator.h"
 
@@ -28,28 +29,40 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
     const PDFMeshQualitySettings meshQuality;
     const PDFRenderer::Features features = PDFRenderer::IgnoreOptionalContent;
     const PDFCatalog* catalog = document->getCatalog();
-    for (size_t pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
+    PDFProcessingBudget searchBudget(session->getProcessingLimits());
+    try
     {
-        const PDFPage* page = catalog->getPage(pageIndex);
-        PDFTextLayoutGenerator generator(features, page, document,
-                                         session->getFontCache(), session->getCMS(),
-                                         session->getOptionalContentActivity(), QTransform(), meshQuality,
-                                         session->getProcessingBudget());
-        generator.processContents();
-        const PDFTextFlows flows = PDFTextFlow::createTextFlows(
-            generator.createTextLayout(),
-            PDFTextFlow::FlowFlags(PDFTextFlow::RemoveSoftHyphen) | PDFTextFlow::AddLineBreaks,
-            static_cast<PDFInteger>(pageIndex));
-        for (const PDFTextFlow& flow : flows)
+        for (size_t pageIndex = 0; pageIndex < catalog->getPageCount(); ++pageIndex)
         {
-            for (const PDFFindResult& match : flow.find(query, sensitivity))
-                result.matches.push_back({ static_cast<PDFInteger>(pageIndex), match.matched, match.context });
+            const PDFPage* page = catalog->getPage(pageIndex);
+            PDFTextLayoutGenerator generator(features, page, document,
+                                             session->getFontCache(), session->getCMS(),
+                                             session->getOptionalContentActivity(), QTransform(), meshQuality,
+                                             &searchBudget);
+            generator.processContents();
+            const PDFTextFlows flows = PDFTextFlow::createTextFlows(
+                generator.createTextLayout(),
+                PDFTextFlow::FlowFlags(PDFTextFlow::RemoveSoftHyphen) | PDFTextFlow::AddLineBreaks,
+                static_cast<PDFInteger>(pageIndex));
+            for (const PDFTextFlow& flow : flows)
+            {
+                for (const PDFFindResult& match : flow.find(query, sensitivity))
+                    result.matches.push_back({ static_cast<PDFInteger>(pageIndex), match.matched, match.context });
+            }
         }
+    }
+    catch (const PDFBudgetExceededException&)
+    {
+        result.complete = false;
+        result.budgetExceeded = true;
     }
 
     result.admitted = context->isCurrent(result.revision);
     if (!result.admitted)
+    {
         result.matches.clear();
+        result.complete = false;
+    }
     return result;
 }
 
