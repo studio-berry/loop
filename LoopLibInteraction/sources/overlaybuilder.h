@@ -80,6 +80,11 @@ public:
     void setFindings(QList<InteractionTarget> findings);
     const QList<InteractionTarget>& findings() const noexcept { return m_findings; }
 
+    /// Evidence is independent presentation state, but it is painted by this
+    /// same builder and frame. Clearing evidence never clears finding markers.
+    void setEvidence(QList<InteractionTarget> evidence);
+    const QList<InteractionTarget>& evidence() const noexcept { return m_evidence; }
+
     /// Severity per finding id. A finding with no entry draws as Info; the
     /// builder does not invent severities it was not told.
     void setSeverities(QHash<QString, OverlaySeverity> severities);
@@ -123,6 +128,7 @@ private:
     OverlayBounds m_bounds;
 
     QList<InteractionTarget> m_findings;
+    QList<InteractionTarget> m_evidence;
     QList<InteractionTarget> m_guides;
     QList<InteractionTarget> m_handles;
     QHash<QString, OverlaySeverity> m_severities;

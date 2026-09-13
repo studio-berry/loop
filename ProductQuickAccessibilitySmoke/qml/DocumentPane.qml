@@ -6,6 +6,11 @@ import Loop.Quick
 
 Item {
     id: root
+    objectName: "documentPane"
+
+    Accessible.role: Accessible.Pane
+    Accessible.name: qsTr("Document workspace")
+    Accessible.description: qsTr("Page navigation, document outline, search, PDF canvas, and contextual inspection.")
 
     property var host: editorHost
     property var documentModel: host ? host.documentModel : null
@@ -30,16 +35,24 @@ Item {
 
                 TabBar {
                     id: tabBar
+                    objectName: "documentTabBar"
                     Layout.fillWidth: true
+                    activeFocusOnTab: true
 
                     TabButton {
+                        objectName: "pagesTabButton"
                         text: qsTr("Pages")
+                        Accessible.name: qsTr("Pages tab")
                     }
                     TabButton {
+                        objectName: "outlineTabButton"
                         text: qsTr("Outline")
+                        Accessible.name: qsTr("Outline tab")
                     }
                     TabButton {
+                        objectName: "searchTabButton"
                         text: qsTr("Search")
+                        Accessible.name: qsTr("Search tab")
                     }
                 }
 
@@ -50,16 +63,22 @@ Item {
 
                     ListView {
                         id: pagesView
+                        objectName: "pagesView"
                         clip: true
-                        focus: true
+                        focus: visible && tabBar.currentIndex === 0
                         activeFocusOnTab: true
+                        keyNavigationEnabled: true
+                        highlightFollowsCurrentItem: true
                         model: root.documentModel ? root.documentModel.pages : null
+                        Accessible.role: Accessible.List
                         Accessible.name: qsTr("Page thumbnails")
 
                         delegate: ItemDelegate {
                             width: pagesView.width
+                            activeFocusOnTab: true
                             text: qsTr("Page %1  %2 × %3").arg(pageNumber).arg(Math.round(pageWidth)).arg(Math.round(pageHeight))
                             highlighted: root.host && root.host.currentPage === index
+                            Accessible.role: Accessible.ListItem
                             Accessible.name: text
                             onClicked: if (root.host)
                                 root.host.goToPage(index)
@@ -68,15 +87,20 @@ Item {
 
                     TreeView {
                         id: outlineView
+                        objectName: "outlineView"
                         clip: true
-                        focus: true
+                        focus: visible && tabBar.currentIndex === 1
                         activeFocusOnTab: true
+                        keyNavigationEnabled: true
                         model: root.documentModel ? root.documentModel.outline : null
+                        Accessible.role: Accessible.Tree
                         Accessible.name: qsTr("Document outline")
 
                         delegate: ItemDelegate {
                             width: outlineView.width
+                            activeFocusOnTab: true
                             text: model.display !== undefined ? model.display : title
+                            Accessible.role: Accessible.TreeItem
                             Accessible.name: text
                             enabled: page >= 0
                             onClicked: if (root.host && page >= 0)
@@ -85,7 +109,7 @@ Item {
 
                         Label {
                             anchors.centerIn: parent
-                            visible: outlineView.count === 0
+                            visible: outlineView.rows === 0
                             text: qsTr("No outline")
                         }
                     }
@@ -97,16 +121,21 @@ Item {
                             Layout.fillWidth: true
                             TextField {
                                 id: searchField
+                                objectName: "searchField"
                                 Layout.fillWidth: true
                                 placeholderText: qsTr("Find in document")
-                                focus: true
+                                focus: visible && tabBar.currentIndex === 2
+                                activeFocusOnTab: true
                                 Accessible.name: qsTr("Search text")
                                 onAccepted: if (root.documentModel)
                                     root.documentModel.search(text)
                             }
                             Button {
+                                objectName: "searchButton"
                                 text: qsTr("Find")
                                 enabled: searchField.text.length > 0 && !!root.documentModel
+                                activeFocusOnTab: true
+                                Accessible.name: qsTr("Find in document")
                                 onClicked: root.documentModel.search(searchField.text)
                             }
                         }
@@ -131,17 +160,23 @@ Item {
                             }
                         }
 
-                        ListView {
-                            id: resultsView
+                            ListView {
+                                id: resultsView
+                                objectName: "searchResultsView"
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            clip: true
-                            model: root.documentModel ? root.documentModel.searchResults : null
+                                clip: true
+                                activeFocusOnTab: true
+                                keyNavigationEnabled: true
+                                model: root.documentModel ? root.documentModel.searchResults : null
+                                Accessible.role: Accessible.List
                             Accessible.name: qsTr("Search results")
 
                             delegate: ItemDelegate {
-                                width: resultsView.width
-                                text: qsTr("Page %1: %2").arg(page + 1).arg(context)
+                                    width: resultsView.width
+                                    activeFocusOnTab: true
+                                    text: qsTr("Page %1: %2").arg(page + 1).arg(context)
+                                    Accessible.role: Accessible.ListItem
                                 Accessible.name: text
                                 onClicked: if (root.host)
                                     root.host.goToPage(page)

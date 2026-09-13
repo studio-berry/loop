@@ -87,6 +87,8 @@ add_library(LoopLibInteraction STATIC
     sources/interactioncontroller.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
+    sources/findingnavigation.cpp
+    sources/findingnavigation.h
     sources/preflightfindingsmodel.cpp
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp

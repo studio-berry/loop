@@ -1,8 +1,8 @@
 # V1 operator acceptance (MIC-300)
 
-Phase C acceptance for the first sellable Loop operator loop: open a PDF, run the default profile, inspect findings, navigate visual regions, apply a confirmed bleed fix to a new file, and re-run preflight.
+Phase C acceptance for the first sellable Loop operator loop: open a PDF, run the default profile, inspect findings, navigate visual regions, apply a confirmed bleed fix to a new file, and re-run preflight. Issue #170 adds a bounded, headless replay of this sequence and its failure paths.
 
-Automated coverage lives in `UnitTests/tst_operatoracceptance.cpp` (`ctest -R UnitTestsOperatorAcceptance`). The manual checklist below covers Editor UI behavior that headless PdfTool tests cannot exercise.
+Automated coverage lives in `UnitTests/tst_operatoracceptance.cpp` (`ctest -R UnitTestsOperatorAcceptance`) and `UnitTests/tst_productoperatorloop.cpp` (`ctest -R UnitTestsProductOperatorLoop`). The product-loop test uses symbolic trace actions, so the same sequence can be replayed by a future GUI smoke runner without encoding screen coordinates.
 
 ## Representative corpus
 
@@ -30,6 +30,18 @@ Additional stress fixtures (`ai-art-*.pdf`) are exercised by `UnitTestsBleedStre
 - Visual vs non-visual finding classification (`bleed` page bbox vs `embedded-fonts` object without bbox)
 - Sidecar cancellation: start preflight, wait for I/O, kill process, verify non-success termination
 - Logs wall-time baseline for the corpus; on Linux also samples peak PdfTool child `VmHWM` (informational; not a perf gate)
+
+### Product operator-loop replay (issue #170)
+
+`UnitTestsProductOperatorLoop` runs a bounded offscreen trace for:
+
+`open → preflight → finding-selection → finding-navigation → corrective-intent → production-preview → repair-preview → save-as-new-output → reopen-output → revalidate`
+
+The trace uses the GUI `EditorHost` for document, finding, navigation, and preview state, then invokes the registered Core repair transaction through the built `PdfTool` for preview and save-as. It verifies that the original source digest is unchanged, the preview creates no output, the committed report is passed, and revalidation reaches `Pass`.
+
+The same target covers cancellation, close during preflight, missing `PdfTool`, corrupt input, and a blocked output path. Each failed assertion records the symbolic steps and actionable failure detail as a JSON artifact outside the repository. Set `LOOP_OPERATOR_ARTIFACT_DIR` to choose an artifact directory; otherwise artifacts go below the platform temporary directory in `loop-operator-loop`.
+
+All host waits are bounded (30 seconds for document/preflight work and 10 seconds for cancellation/close); the PdfTool helper has a separate 120-second child hard-stop. Expected negative cases must remain non-zero/fail-closed rather than being treated as skipped success.
 
 ## Manual operator checklist (Editor)
 

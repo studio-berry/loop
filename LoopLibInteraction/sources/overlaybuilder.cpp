@@ -63,6 +63,11 @@ void OverlayBuilder::setFindings(QList<InteractionTarget> findings)
     m_findings = std::move(findings);
 }
 
+void OverlayBuilder::setEvidence(QList<InteractionTarget> evidence)
+{
+    m_evidence = std::move(evidence);
+}
+
 void OverlayBuilder::setSeverities(QHash<QString, OverlaySeverity> severities)
 {
     m_severities = std::move(severities);
@@ -250,6 +255,24 @@ OverlayFrame OverlayBuilder::build(const InteractionState& state, const Revision
             // only ever this many findings.
             continue;
         }
+    }
+
+    // Evidence uses the existing findings paint band and frame. It has a
+    // separate input list so evidence selection can be cleared without
+    // replacing the report's finding markers or introducing another renderer.
+    for (const InteractionTarget& evidence : m_evidence)
+    {
+        if (suppressExtraGraphics || !isVisiblePage(evidence.pageIndex))
+        {
+            continue;
+        }
+
+        emitPrimitive(evidence,
+                      evidence.id,
+                      evidence.pageBounds,
+                      OverlayLayer::Findings,
+                      OverlayPrimitiveKind::Rectangle,
+                      OverlaySeverity::Info);
     }
 
     const InteractionTarget& hovered = state.hovered();

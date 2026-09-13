@@ -22,6 +22,7 @@
 
 #include "preflightcontroller.h"
 
+#include "findingnavigation.h"
 #include "pdfpreflightverdict.h"
 
 namespace pdfinteraction
@@ -53,18 +54,7 @@ void PreflightController::setCurrentRevision(QString documentKey, QString docume
     m_documentRevision = std::move(documentRevision);
     if (changed && (m_hasResult || m_state == State::Running))
     {
-        // Assign before setState(): the state change is announced through
-        // stateChanged, which is also this property's notifier, so an observer
-        // reading the summary from that signal must not see the previous run's.
-        //
-        // The state is Stale for both conditions this branch admits: a document
-        // whose revision moved on invalidates the retained result AND abandons a run
-        // that is still in flight. Reporting NotChecked when the run had produced no
-        // result yet left the pane showing "Preflight is stale for the current
-        // revision." under a NotChecked state, and made the stale transition
-        // unobservable from stateChanged.
-        m_operatorSummary = QStringLiteral("Preflight is stale for the current revision.");
-        setState(State::Stale);
+        markStale(QStringLiteral("Preflight is stale for the current revision."));
     }
 }
 
@@ -105,7 +95,7 @@ bool PreflightController::acceptResult(const QString& jobId,
                                        const QString& documentRevision,
                                        const pdf::PreflightResult& result)
 {
-    if (jobId != m_jobId || documentRevision != m_documentRevision || m_cancelRequested)
+    if (jobId != m_jobId || documentRevision != m_documentRevision || m_cancelRequested || m_state != State::Running)
     {
         return false;
     }
@@ -114,7 +104,7 @@ bool PreflightController::acceptResult(const QString& jobId,
     // The verdict knows which findings an active disposition covers; the model
     // has to know too, or the list and overlays keep showing them as blockers
     // while the operator is told the run passed.
-    m_findings.replace(m_documentKey, documentRevision, result.errors, result.warnings, verdict.waivedFindingIds);
+    m_findings.replace(m_documentKey, documentRevision, result, verdict.waivedFindingIds);
     m_result = result;
     m_hasResult = true;
     m_progress = 100;
@@ -158,15 +148,7 @@ bool PreflightController::cancelRun(const QString& jobId)
         return false;
     }
     m_cancelRequested = true;
-    if (m_scheduler)
-    {
-        const pdf::PDFJobSnapshot snapshot = m_scheduler->snapshot(m_jobId);
-        if (snapshot.jobId == m_jobId &&
-            (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running))
-        {
-            m_scheduler->cancel(m_jobId);
-        }
-    }
+    cancelSchedulerJob();
     m_operatorSummary = QStringLiteral("Preflight was cancelled.");
     restoreRetainedState(State::Cancelled);
     return true;
@@ -174,15 +156,48 @@ bool PreflightController::cancelRun(const QString& jobId)
 
 void PreflightController::markProfileStale()
 {
-    if (m_state == State::Running)
+    markStale(QStringLiteral("Preflight is stale because the selected profile changed."));
+}
+
+void PreflightController::markCheckSetStale()
+{
+    markStale(QStringLiteral("Preflight is stale because the selected check set changed."));
+}
+
+void PreflightController::cancelSchedulerJob()
+{
+    if (!m_scheduler || m_jobId.isEmpty())
     {
-        cancelRun(m_jobId);
+        return;
     }
-    if (m_hasResult)
+
+    const pdf::PDFJobSnapshot snapshot = m_scheduler->snapshot(m_jobId);
+    if (snapshot.jobId == m_jobId &&
+        (snapshot.status == pdf::PDFJobStatus::Queued || snapshot.status == pdf::PDFJobStatus::Running))
     {
-        m_operatorSummary = QStringLiteral("Preflight is stale because the selected profile changed.");
-        setState(State::Stale);
+        m_scheduler->cancel(m_jobId);
     }
+}
+
+void PreflightController::markStale(QString summary)
+{
+    const bool running = m_state == State::Running;
+    if (!running && !m_hasResult)
+    {
+        return;
+    }
+
+    if (running)
+    {
+        // A stale transition is a stronger terminal outcome than cancellation:
+        // the job must be fenced, but the operator must be told that its input
+        // changed rather than that they pressed Cancel.
+        m_cancelRequested = true;
+        cancelSchedulerJob();
+    }
+
+    m_operatorSummary = std::move(summary);
+    setState(State::Stale);
 }
 
 void PreflightController::restoreRetainedState(State terminalState)
@@ -198,6 +213,11 @@ void PreflightController::restoreRetainedState(State terminalState)
 
 void PreflightController::clear()
 {
+    if (m_state == State::Running)
+    {
+        m_cancelRequested = true;
+        cancelSchedulerJob();
+    }
     m_findings.clear();
     m_result = pdf::PreflightResult();
     m_hasResult = false;
@@ -222,12 +242,22 @@ QByteArray PreflightController::serializedReport(const QString& documentPath) co
 bool PreflightController::navigationFor(const QString& findingId,
                                         EvidenceNavigationRequest* request) const
 {
-    if (!request || m_state == State::Stale || !m_findings.containsCurrent(findingId, m_documentRevision))
+    if (!request || m_state == State::Stale || m_state == State::Cancelled ||
+        !m_findings.containsCurrent(findingId, m_documentRevision))
     {
         return false;
     }
     const PreflightFindingView* finding = m_findings.finding(findingId);
-    if (!finding || finding->page <= 0)
+    if (!finding)
+    {
+        return false;
+    }
+
+    const FindingTargetingCapabilityRegistry registry = FindingTargetingCapabilityRegistry::defaultRegistry();
+    const auto capability = registry.capabilityFor(finding->checkId);
+    const FindingTargetingCapability resolved = capability.value_or(
+        FindingTargetingCapabilityRegistry::fallbackCapability());
+    if (!resolved.supportsPageNavigation && finding->page <= 0)
     {
         return false;
     }
@@ -238,6 +268,12 @@ bool PreflightController::navigationFor(const QString& findingId,
     request->page = finding->page;
     request->bbox = finding->bbox;
     request->evidenceIds = finding->evidenceIds;
+    request->pageNavigationSupported = resolved.supportsPageNavigation;
+    request->objectTargetingSupported = resolved.supportsObjectTargeting;
+    request->overlayEvidenceSupported = resolved.supportsOverlayEvidence;
+    request->inspectionMode = resolved.inspectionMode;
+    request->hasPreciseTarget = finding->page > 0 && finding->bbox.isValid() && !finding->bbox.isEmpty() &&
+                                resolved.hasTarget();
     return true;
 }
 

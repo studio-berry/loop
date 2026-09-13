@@ -3,17 +3,25 @@ import QtQuick.Controls
 
 MenuBar {
     id: root
+    objectName: "shellMenuBar"
+
+    Accessible.role: Accessible.MenuBar
+    Accessible.name: qsTr("Application menu")
 
     property var host: editorHost
     property var window: null
+    property var openDialog: null
+    property var saveAsDialog: null
 
     readonly property var menuModel: MenuModel {
         host: root.host
         window: root.window
+        openDialog: root.openDialog
+        saveAsDialog: root.saveAsDialog
     }
 
     Repeater {
-        model: root.menuModel.menuGroups
+        model: root.menuModel.menuGroups()
 
         delegate: Menu {
             required property string modelData

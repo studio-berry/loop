@@ -259,6 +259,13 @@ void EditorHostTest::startsWithNoDocument()
     QCOMPARE(host.documentState(), QStringLiteral("empty"));
     QVERIFY(!host.hasDocument());
     QCOMPARE(host.pageCount(), 0);
+
+    const QVariantList profiles = host.preflightProfiles();
+    QVERIFY2(!profiles.isEmpty(), "the GUI must expose at least one bundled preflight profile");
+    const QVariantMap defaultProfile = profiles.constFirst().toMap();
+    QVERIFY(defaultProfile.value(QStringLiteral("valid")).toBool());
+    QVERIFY(!defaultProfile.value(QStringLiteral("digest")).toString().isEmpty());
+    QVERIFY(defaultProfile.value(QStringLiteral("diagnostic")).toString().isEmpty());
 }
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
