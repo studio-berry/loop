@@ -35,6 +35,14 @@
 .PARAMETER LogDir
     Directory for verbose Windows Installer logs.
 
+.PARAMETER SkipUninstall
+    Stop after install and smoke checks, leaving the MSI tree on disk. Used when
+    downstream evidence steps (for example Qt LGPL relink) must run before removal.
+
+.PARAMETER UninstallOnly
+    Skip install and smoke; uninstall $MsiPath and verify removal. Requires an
+    installed tree at $InstallDir.
+
 .EXAMPLE
     .\Invoke-MsiSmokeTest.ps1 -MsiPath .\mberrys.Loop-pdf_0.1.0.msi
 #>
@@ -47,7 +55,9 @@ param(
     [string]$QtRelinkTranscript = "",
     [string]$LogDir = "$env:TEMP\loop-msi-smoke",
     [switch]$SkipEditorLaunch,
-    [switch]$AllowOcrSidecar
+    [switch]$AllowOcrSidecar,
+    [switch]$SkipUninstall,
+    [switch]$UninstallOnly
 )
 
 Set-StrictMode -Version Latest
@@ -112,7 +122,15 @@ function Invoke-Smoke {
     Write-Host "--- Smoke test passed ($Stage) ---"
 }
 
-if (Test-Path -LiteralPath $InstallDir) {
+if ($SkipUninstall.IsPresent -and $UninstallOnly.IsPresent) {
+    throw "SkipUninstall and UninstallOnly cannot be used together."
+}
+
+if ($UninstallOnly.IsPresent) {
+    if (-not (Test-Path -LiteralPath $InstallDir)) {
+        throw "UninstallOnly requires an installed tree at $InstallDir"
+    }
+} elseif (Test-Path -LiteralPath $InstallDir) {
     throw ("$InstallDir already exists. This test must run on a clean machine so that " +
            "a stale tree cannot mask a packaging defect. Remove it or snapshot back first.")
 }
@@ -147,7 +165,7 @@ try {
 } catch {
     $qualificationFailure = $_
 } finally {
-    if ($null -ne $installedMsi) {
+    if ($null -ne $installedMsi -and -not $SkipUninstall.IsPresent) {
         try {
             Write-Host "=== Uninstalling ==="
             Invoke-Msi -Arguments "/x `"$installedMsi`"" -LogName "uninstall"
@@ -189,5 +207,9 @@ try {
 if ($null -ne $qualificationFailure) { throw $qualificationFailure }
 
 Write-Host ""
-Write-Host "MSI lifecycle smoke test passed. Attach this transcript to MIC-301."
+if ($SkipUninstall.IsPresent) {
+    Write-Host "MSI lifecycle smoke test passed (uninstall deferred; the installed tree remains)."
+} else {
+    Write-Host "MSI lifecycle smoke test passed. Attach this transcript to MIC-301."
+}
 exit 0
