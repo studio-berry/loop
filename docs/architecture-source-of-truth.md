@@ -12,15 +12,22 @@ implementation. When sources disagree, resolve the conflict in this order:
 7. Migrated Frisket historical text.
 
 ADRs under [`docs/adr/`](adr/) carry machine-checked `Status`,
-`Implemented-at`, `Last-verified`, and `Superseded-by` metadata. The
-verification header is checked by
+`Implemented-at`, `Last-verified`, and `Superseded-by` metadata. The index and
+status table live in [`docs/adr/README.md`](adr/README.md). The verification
+header is checked by
 [`scripts/generate-architecture-catalogs.py`](../scripts/generate-architecture-catalogs.py).
+
+Document revision authority and cache fencing are specified in
+[`REVISION_CONTEXT.md`](REVISION_CONTEXT.md); ADR-001 implements the session side
+of that contract.
 
 The generated
 [`architecture-catalog.json`](generated/architecture-catalog.json) is the
 current factual inventory of policy branches, workflow trigger branches,
-built-in preflight checks, registered repair operations, runtime/schema
-versions, numbered architecture invariants, and CMake test targets.
+built-in preflight check IDs, registered repair operations, runtime/schema
+versions, numbered architecture invariants, and CMake test targets. Per-check
+measures, limitations, and standards coverage live in
+[`preflight-check-catalog.json`](generated/preflight-check-catalog.json).
 Regenerate it after changing one of its source files:
 
 ```bash

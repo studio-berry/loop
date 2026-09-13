@@ -2,7 +2,7 @@
 
 **Status:** implemented
 **Implemented-at:** fed0e6a30b3e67e2f39ecd941dde728b4e72a561
-**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** none
 **Date:** 2026-07-20
 **Deciders:** MIC-309 / Cycle 2 sprint plan

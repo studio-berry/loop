@@ -2,7 +2,7 @@
 
 **Status:** accepted
 **Implemented-at:** not implemented
-**Last-verified:** 2026-08-12 @ b47d63e47bebfc1fdd74a75374fc9cecccddc325
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** none
 **Date:** 2026-08-12
 **Deciders:** repository versioning policy

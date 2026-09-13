@@ -102,7 +102,7 @@ transparency groups, blend modes, and blend-space crossings.
 Required top-level fields: `schema_version`, `inspection_complete`, `pass`,
 `profile`, `errors`, `warnings`, `fixups_available`, and `checks`.
 
-`schema_version` is currently **3**. Version 1 required `page` and `bbox` on every finding; version 3 adds explicit inspection completeness and per-check status reporting. The plugin still accepts older reports for backward compatibility.
+`schema_version` is currently **3**. Version 1 required `page` and `bbox` on every finding; version 3 adds explicit inspection completeness and per-check status reporting. The plugin still accepts older reports for backward compatibility. Files under `examples/` intentionally keep `schema_version` **2** to demonstrate backward-compatible consumption; `testdata/snapshots/` carries current v3 engine output.
 
 Every finding in `errors[]` / `warnings[]` **must** include:
 
