@@ -1,0 +1,76 @@
+{
+    "checks": [
+        {
+            "id": "embedded-fonts",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        },
+        {
+            "id": "image-resolution",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        },
+        {
+            "id": "bleed",
+            "status": "ok"
+        },
+        {
+            "id": "trim",
+            "status": "ok"
+        },
+        {
+            "id": "page-size",
+            "status": "ok"
+        },
+        {
+            "id": "color-mode",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        },
+        {
+            "id": "transparency-risk",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        },
+        {
+            "id": "color-inventory",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        },
+        {
+            "id": "white-overprint",
+            "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "status": "incomplete"
+        }
+    ],
+    "error": {
+        "code": "evidence-incomplete",
+        "message": "Overprint with Multiply blend mode uses a fallback; only Normal is exact."
+    },
+    "errors": [
+        {
+            "message": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+            "scope": "document",
+            "severity": "error",
+            "type": "evidence-incomplete"
+        }
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "profile": "Loop Default",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+        ],
+        "reason": "Overprint with Multiply blend mode uses a fallback; only Normal is exact.",
+        "reason_code": "evidence-incomplete",
+        "state": "incomplete",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+    ]
+}

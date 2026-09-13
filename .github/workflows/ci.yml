@@ -63,6 +63,14 @@ jobs:
           python3 scripts/ci/check_interaction_traces.py --corpus-only
       - name: Verify semantic-trust source boundaries
         run: python3 scripts/ci/test_check_trust_contract_sources.py && python3 scripts/ci/check_trust_contract_sources.py
+      - name: Verify search budget release gate (#520)
+        run: |
+          python3 -m unittest scripts.ci.test_check_search_budget_gate -q
+          python3 scripts/ci/check_search_budget_gate.py
+      - name: Verify independent validation release gate (#241)
+        run: |
+          python3 -m unittest scripts.ci.test_check_independent_validation_gate -q
+          python3 scripts/ci/check_independent_validation_gate.py
       - name: Verify generated dependency paths are untracked
         run: python3 scripts/ci/check_generated_dependency_paths.py
       - name: Verify Phase 5 Widgets evidence is current
