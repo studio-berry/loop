@@ -701,6 +701,28 @@ void generateThinStrokesHairlineFixture(const QDir& outputDir)
     writeFixture(outputDir, "thin-strokes-hairline.pdf", builder.build());
 }
 
+void generateThinPartsFillFixture(const QDir& outputDir)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.setDocumentTitle("Loop fixture - thin parts fill");
+    builder.setDocumentCreator(QCoreApplication::applicationName());
+    builder.setDocumentSubject("loop-preflight golden corpus: thin filled geometry");
+
+    const pdf::PDFObjectReference page = builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFPageContentStreamBuilder contentBuilder(&builder,
+                                                    pdf::PDFContentStreamBuilder::CoordinateSystem::PDF);
+    if (QPainter* painter = contentBuilder.begin(page))
+    {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(Qt::black);
+        painter->drawRect(QRectF(20, 20, 120, 0.1));
+        contentBuilder.end(painter);
+    }
+
+    setDeterministicMetadata(builder);
+    writeFixture(outputDir, "thin-parts-fill.pdf", builder.build());
+}
+
 }   // namespace
 
 int main(int argc, char* argv[])
@@ -729,6 +751,7 @@ int main(int argc, char* argv[])
     generateColorInventoryCmyRichNoKFixture(outputDir);
     generateColorInventorySpotFixture(outputDir);
     generateThinStrokesHairlineFixture(outputDir);
+    generateThinPartsFillFixture(outputDir);
 
     return 0;
 }
