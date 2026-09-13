@@ -176,6 +176,17 @@ Pane {
             }
         }
 
+        Connections {
+            target: root.findingsModel
+            function onSelectedFindingIdChanged(findingId) {
+                if (!root.findingsModel || findingId.length === 0)
+                    return
+                const row = root.findingsModel.rowForFindingId(findingId)
+                if (row >= 0 && findingsView.currentIndex !== row)
+                    findingsView.currentIndex = row
+            }
+        }
+
         ListView {
             id: findingsView
             objectName: "preflightFindingsView"

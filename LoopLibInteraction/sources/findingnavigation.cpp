@@ -117,6 +117,16 @@ FindingNavigationRequest FindingNavigationRequest::fromFinding(const PreflightFi
     request.objectId = finding.objectId;
     request.pageBounds = finding.bbox;
     request.evidenceIds = finding.evidenceIds;
+    if (finding.page > 0 && usableBounds(finding.bbox))
+    {
+        for (const QString& evidenceId : finding.evidenceIds)
+        {
+            if (!evidenceId.isEmpty())
+            {
+                request.evidenceTargets.push_back({ evidenceId, finding.page, finding.bbox });
+            }
+        }
+    }
     return request;
 }
 

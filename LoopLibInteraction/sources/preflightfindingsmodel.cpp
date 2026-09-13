@@ -259,6 +259,18 @@ QString PreflightFindingsModel::findingIdAt(int row) const
     return m_findings.at(row).id;
 }
 
+int PreflightFindingsModel::rowForFindingId(const QString& findingId) const
+{
+    for (int row = 0; row < m_findings.size(); ++row)
+    {
+        if (m_findings.at(row).id == findingId)
+        {
+            return row;
+        }
+    }
+    return -1;
+}
+
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
 {
     return documentRevision == m_documentRevision && finding(findingId) != nullptr;

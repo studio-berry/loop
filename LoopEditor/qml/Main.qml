@@ -97,6 +97,18 @@ ApplicationWindow {
         }
     }
 
+    Shortcut {
+        sequence: "Alt+Up"
+        enabled: host && host.hasDocument && host.preflight && host.preflight.findingsModel.rowCount() > 0
+        onActivated: host.selectPreviousFinding()
+    }
+
+    Shortcut {
+        sequence: "Alt+Down"
+        enabled: host && host.hasDocument && host.preflight && host.preflight.findingsModel.rowCount() > 0
+        onActivated: host.selectNextFinding()
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

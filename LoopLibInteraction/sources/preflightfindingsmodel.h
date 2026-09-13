@@ -128,6 +128,7 @@ public:
     void setSelectedFinding(const QString& findingId);
 
     Q_INVOKABLE QString findingIdAt(int row) const;
+    Q_INVOKABLE int rowForFindingId(const QString& findingId) const;
 
     bool containsCurrent(const QString& findingId, const QString& documentRevision) const;
     const PreflightFindingView* finding(const QString& findingId) const;

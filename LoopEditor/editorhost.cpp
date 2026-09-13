@@ -632,7 +632,6 @@ void EditorHost::selectFinding(const QString& findingId)
         return;
     }
 
-    const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.findingsModel()->setSelectedFinding(findingId);
     m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision);
@@ -646,6 +645,50 @@ void EditorHost::selectFinding(const QString& findingId)
     }
 
     onPreflightNavigation(request);
+}
+
+bool EditorHost::selectNextFinding()
+{
+    return moveFindingSelection(1);
+}
+
+bool EditorHost::selectPreviousFinding()
+{
+    return moveFindingSelection(-1);
+}
+
+bool EditorHost::moveFindingSelection(int direction)
+{
+    if (!hasDocument() || direction == 0)
+    {
+        return false;
+    }
+
+    pdfinteraction::PreflightFindingsModel* findings = m_preflight.findingsModel();
+    const int count = findings->rowCount();
+    if (count == 0)
+    {
+        return false;
+    }
+
+    int row = findings->rowForFindingId(findings->selectedFindingId());
+    if (row < 0)
+    {
+        row = direction > 0 ? 0 : count - 1;
+    }
+    else
+    {
+        row = (row + direction + count) % count;
+    }
+
+    const QString findingId = findings->findingIdAt(row);
+    if (findingId.isEmpty())
+    {
+        return false;
+    }
+
+    selectFinding(findingId);
+    return true;
 }
 
 void EditorHost::announceDocumentState(const QString& message)
@@ -1513,6 +1556,11 @@ void EditorHost::syncRevisionModels()
         return;
     }
 
+    if (m_findingNavigator)
+    {
+        m_findingNavigator->invalidate();
+    }
+
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
@@ -1684,7 +1732,7 @@ void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget
 
     if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
     {
-        m_inspector.setFindingSelection(*m_preflight.findingsModel(), target.id, documentRevision);
+        selectFinding(target.id);
         return;
     }
 

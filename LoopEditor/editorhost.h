@@ -201,6 +201,8 @@ public:
     bool pageFidelityIsAuthoritative() const;
 
     Q_INVOKABLE void selectFinding(const QString& findingId);
+    Q_INVOKABLE bool selectNextFinding();
+    Q_INVOKABLE bool selectPreviousFinding();
     Q_INVOKABLE void announceDocumentState(const QString& message);
     Q_INVOKABLE bool runPreflight();
     Q_INVOKABLE bool cancelPreflight();
@@ -272,6 +274,7 @@ private:
     void registerFeatureHandlers();
     void refreshFeatureAvailability();
     void moveSearch(int direction);
+    bool moveFindingSelection(int direction);
     void refreshHitTestSources();
     void bumpPresentation();
     void bumpCommandEpoch();
