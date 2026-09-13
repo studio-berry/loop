@@ -350,8 +350,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-cmyk-mode0-on",
@@ -359,8 +358,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-cmyk-mode1-off",
@@ -368,8 +366,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-cmyk-mode1-on",
@@ -377,8 +374,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-group-stroke-off",
@@ -386,8 +382,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-group-stroke-on",
@@ -395,8 +390,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-multiply-off",
@@ -404,8 +398,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-multiply-on",
@@ -422,8 +415,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-separation-on",
@@ -431,8 +423,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-white-off",
@@ -440,8 +431,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "overprint-white-on",
@@ -449,8 +439,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": true, "check_ids": [] },
     "source": "generated",
-    "pending": true,
-    "notes": "Overprint render fixture pair; corpus snapshots pending."
+    "notes": "Overprint render fixture pair; preflight report pinned for this page."
   },
   {
     "id": "thin-strokes-hairline",
