@@ -75,6 +75,7 @@ private slots:
     void policyStrengthRejectsWeakerRequests();
     void fileOverloadReportsWhatItDid();
     void signedFixtureIncrementalEditPreservesTheSignedByteRange();
+    void appendCostScalesWithChangedDataNotFileSize();
 };
 
 namespace
@@ -507,6 +508,37 @@ void IncrementalSaveTest::signedFixtureIncrementalEditPreservesTheSignedByteRang
     // 3. The append really is an append: new xref pointing at the old one.
     QVERIFY(output.data().mid(originalData.size()).contains("/Prev"));
     QVERIFY(output.data().size() > originalData.size());
+}
+
+void IncrementalSaveTest::appendCostScalesWithChangedDataNotFileSize()
+{
+    const auto appendedBytesForPages = [](int pages)
+    {
+        pdf::PDFDocumentBuilder builder;
+        for (int index = 0; index < pages; ++index)
+        {
+            builder.appendPage(QRectF(0, 0, 595, 842));
+        }
+        const pdf::PDFDocument original = builder.build();
+        const QByteArray originalData = writeDocument(original);
+        const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+        pdf::PDFDocumentWriter writer(nullptr);
+        QBuffer output;
+        output.open(QIODevice::WriteOnly);
+        if (!writer.writeIncremental(&output, originalData, &original, modified.data()))
+        {
+            return QPair<qint64, qint64>{ -1, -1 };
+        }
+        return QPair<qint64, qint64>{ output.data().size() - originalData.size(), originalData.size() };
+    };
+
+    const QPair<qint64, qint64> small = appendedBytesForPages(1);
+    const QPair<qint64, qint64> large = appendedBytesForPages(60);
+    QVERIFY(small.first > 0);
+    QVERIFY(large.first > 0);
+    QVERIFY(large.second > small.second * 5);   // the file really is much bigger
+    QVERIFY(large.first < large.second / 10);   // the append is not proportional to size
+    QVERIFY(large.first < small.first * 4);   // and it stays in the same order of magnitude
 }
 
 QTEST_MAIN(IncrementalSaveTest)
