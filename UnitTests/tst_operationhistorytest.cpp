@@ -26,6 +26,7 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -45,6 +46,7 @@ class OperationHistoryTest final : public QObject
 private slots:
     void canonicalJsonIsStableAndRedacted();
     void artifactStoreStreamsAndDetectsTampering();
+    void importedInputIsReadOnlyAndDigestAddressed();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
@@ -811,6 +813,39 @@ void OperationHistoryTest::schemaMigratedEventAppendedOnRewrite()
     QCOMPARE(events.first().kind, pdf::PDFOperationHistoryEventKind::SchemaMigrated);
     QCOMPARE(events.first().resultSummary.value(QStringLiteral("from_version")).toString(), QStringLiteral("2.0"));
     QCOMPARE(events.first().resultSummary.value(QStringLiteral("to_version")).toString(), QStringLiteral("3.0"));
+}
+
+void OperationHistoryTest::importedInputIsReadOnlyAndDigestAddressed()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QByteArray inboxBytes = QByteArrayLiteral("%PDF-1.7\n%%EOF\n");
+    const QString inboxPath = directory.filePath(QStringLiteral("received.pdf"));
+    QFile inbox(inboxPath);
+    QVERIFY(inbox.open(QIODevice::WriteOnly));
+    QVERIFY(inbox.write(inboxBytes) > 0);
+    inbox.close();
+    const QByteArray digest = QCryptographicHash::hash(inboxBytes, QCryptographicHash::Sha256);
+
+    pdf::PDFArtifactStore store(directory.filePath(QStringLiteral("store")));
+    const pdf::PDFArtifactStoreResult imported = store.importFile(inboxPath, {});
+    QVERIFY(imported.success);
+    QVERIFY(imported.artifact.sha256 == QString::fromLatin1(digest.toHex()));
+    QVERIFY(store.contains(imported.artifact));
+    QVERIFY(store.verify(imported.artifact));
+
+    const QString stored = store.pathFor(imported.artifact);
+    // QFileInfo::isReadOnly() was removed in Qt 6; !isWritable() is its
+    // documented replacement.
+    QVERIFY(!QFileInfo(stored).isWritable());
+    QFile::Permissions permissions = QFile::permissions(stored);
+    QVERIFY(permissions.testFlag(QFile::ReadOwner));
+    QVERIFY(!permissions.testFlag(QFile::WriteOwner));
+
+    // The imported input is a separate identity from the received file.
+    QVERIFY(QFileInfo(stored).canonicalFilePath() != QFileInfo(inboxPath).canonicalFilePath());
+    // Importing is a read: the received file itself is neither moved nor truncated.
+    QCOMPARE(QFile(inboxPath).size(), qint64(inboxBytes.size()));
 }
 
 QTEST_MAIN(OperationHistoryTest)
