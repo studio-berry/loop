@@ -29,6 +29,8 @@
 #include <QJsonValue>
 #include <QString>
 
+#include <array>
+
 namespace pdf
 {
 
@@ -50,6 +52,26 @@ enum class PDFSchemaKind
     HistoryDb,
     PageMasterManifest,
     PreflightDecisions
+};
+
+/// Every kind the compatibility matrix must describe. Extend this with
+/// PDFSchemaKind; the coverage test fails when the two disagree.
+inline constexpr std::array<PDFSchemaKind, 15> AllSchemaKinds{
+    PDFSchemaKind::PreflightReport,
+    PDFSchemaKind::PreflightProfile,
+    PDFSchemaKind::EvidenceGraph,
+    PDFSchemaKind::OperationPlan,
+    PDFSchemaKind::OperationResult,
+    PDFSchemaKind::ProvenanceEvent,
+    PDFSchemaKind::Certificate,
+    PDFSchemaKind::CapabilityDiscovery,
+    PDFSchemaKind::PackageManifest,
+    PDFSchemaKind::ActionList,
+    PDFSchemaKind::PdfToolEnvelope,
+    PDFSchemaKind::OcrReport,
+    PDFSchemaKind::HistoryDb,
+    PDFSchemaKind::PageMasterManifest,
+    PDFSchemaKind::PreflightDecisions,
 };
 
 enum class PDFSchemaCompatibility

@@ -384,7 +384,10 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
     }
     if (envelope.kind == PDFSchemaKind::Unknown)
     {
-        envelope.kind = PDFSchemaKind::PreflightReport;
+        // Neither the document nor the caller identifies the contract. Guessing
+        // a kind would interpret unknown bytes as a preflight report.
+        result.document = {};
+        return result;
     }
 
     if (!envelope.version.isValid())
