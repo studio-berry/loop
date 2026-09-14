@@ -84,8 +84,8 @@ LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSche
 /// fails closed for known schema kinds; the resource-backed overload below is
 /// the production entry point.
 LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
-                                                                                    PDFSchemaVersion version,
-                                                                                    const QJsonObject& matrix);
+                                                                                   PDFSchemaVersion version,
+                                                                                   const QJsonObject& matrix);
 LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
 LOOPLIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
 LOOPLIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
