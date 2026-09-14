@@ -25,6 +25,8 @@
 #include "pdfrepairoperation.h"
 #include "pdfstandardconversion.h"
 
+#include <algorithm>
+
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QFile>
@@ -78,6 +80,7 @@ private slots:
     void builtInOperations_areRegistered();
     void builtInOperations_declareSavePolicies();
     void everyRegisteredOperationDeclaresItsSavePolicy();
+    void noNonIncrementalOperationCanBeAppendedToASignedSource();
     void transactionRejectsAWeakenedSavePolicyBeforeMutation();
     void saveRequestRefusesToWriteOverTheTrustedSource();
     void candidateSaveRefusesToOverwriteTheSourceOnDisk();
@@ -163,6 +166,53 @@ void RepairOperationTest::everyRegisteredOperationDeclaresItsSavePolicy()
     QCOMPARE(QString::fromLatin1(pdf::getPDFSaveModeName(undeclared.mode)), QStringLiteral("save-as-new-artifact"));
     QVERIFY(undeclared.invalidatesSignatures);
     QVERIFY(!pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit")).isUndeclared());
+}
+void RepairOperationTest::noNonIncrementalOperationCanBeAppendedToASignedSource()
+{
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    const QStringList ids = registry.operationIds();
+    // Guards that keep the loop below from passing on an empty or
+    // one-sided registry.
+    QVERIFY2(ids.size() >= 7, qPrintable(QString::number(ids.size())));
+    QVERIFY2(std::any_of(ids.cbegin(), ids.cend(),
+                         [&registry](const QString& id)
+                         {
+                             return registry.find(id)->savePolicy().mode != pdf::PDFSaveMode::IncrementalAppend;
+                         }),
+             "no registered operation declines the append path");
+
+    // A signature dictionary is enough to make the writer's incremental path
+    // eligible; whether the *operation* may use it is the policy's decision.
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 200, 200));
+    pdf::PDFDictionary signature;
+    signature.addEntry(pdf::PDFInplaceOrMemoryString("Type"), pdf::PDFObject::createName("Sig"));
+    builder.addObject(pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(signature))));
+    const pdf::PDFDocument signedSource = builder.build();
+
+    QCOMPARE(pdf::PDFDocumentWriter::getRecommendedWriteMode(&signedSource,
+                                                             pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit")),
+                                                             false),
+             pdf::PDFDocumentWriter::WriteMode::Incremental);
+
+    for (const QString& id : ids)
+    {
+        const pdf::PDFOperationSavePolicy declared = registry.find(id)->savePolicy();
+        const pdf::PDFDocumentWriter::WriteMode mode =
+            pdf::PDFDocumentWriter::getRecommendedWriteMode(&signedSource, declared, false);
+        if (declared.mode == pdf::PDFSaveMode::IncrementalAppend)
+        {
+            QCOMPARE(mode, pdf::PDFDocumentWriter::WriteMode::Incremental);
+        }
+        else
+        {
+            QVERIFY2(mode == pdf::PDFDocumentWriter::WriteMode::FullRewrite, qPrintable(id));
+        }
+    }
+
+    // The only destructive registered operation declares full rewrite.
+    QCOMPARE(registry.find(QStringLiteral("downsample-images"))->savePolicy().mode,
+             pdf::PDFSaveMode::FullRewrite);
 }
 
 void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
