@@ -56,7 +56,7 @@ PDFDocumentSearchResult searchDocumentText(PDFDocumentContext* context,
     {
         result.matches.clear();
         result.budgetExceeded = true;
-        result.errorMessage = QString::fromUtf8(exception.what());
+        result.errorMessage = exception.getMessage();
         return result;
     }
 

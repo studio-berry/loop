@@ -57,19 +57,7 @@ void QuickDocumentModelTest::searchResultsExposeOnlyValueRoles()
 void QuickDocumentModelTest::searchesUseAnIndependentProcessingBudget()
 {
     pdf::PDFDocumentBuilder builder;
-    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
-    QByteArray content("q\nQ\n");
-    pdf::PDFDictionary streamDictionary;
-    streamDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
-                              pdf::PDFObject::createInteger(content.size()));
-    const pdf::PDFObjectReference streamReference = builder.addObject(
-        pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), std::move(content))));
-    pdf::PDFDictionary pageUpdate;
-    pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
-    builder.mergeTo(pageReference,
-                    pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(
-                        std::move(pageUpdate))));
+    builder.appendPage(QRectF(0, 0, 100, 100));
 
     pdf::PDFDocumentContext context(pdf::PDFDocumentPointer(new pdf::PDFDocument(builder.build())));
     pdf::PDFProcessingLimits limits = context.getSession()->getProcessingLimits();

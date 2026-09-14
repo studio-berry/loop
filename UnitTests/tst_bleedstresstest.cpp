@@ -146,7 +146,14 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 {
     const QString profilePath = QDir(sourceDir()).filePath(QString::fromLatin1(STRESS_PROFILE));
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath }, &stdOut, exitCode))
+    if (!runPdfTool({ QStringLiteral("preflight"),
+                      pdfPath,
+                      QStringLiteral("--profile"),
+                      profilePath,
+                      QStringLiteral("--console-format"),
+                      QStringLiteral("json") },
+                    &stdOut,
+                    exitCode))
     {
         return false;
     }
@@ -160,7 +167,8 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 
     if (report)
     {
-        *report = document.object();
+        const QJsonObject envelope = document.object();
+        *report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
     }
 
     return true;
