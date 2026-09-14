@@ -29,8 +29,7 @@ struct PreflightRunRequest
 /// Builds the scheduler worker for an in-memory preflight run. Keeps Core
 /// orchestration out of EditorHost while reusing the same import/bind/parse/run
 /// path as the CLI adapter.
-std::function<void(pdf::PDFJobContext&)> makePreflightRunWorker(const PreflightRunRequest& request,
-                                                                 const std::shared_ptr<PreflightRunOutcome>& outcome);
+std::function<void(pdf::PDFJobContext&)> makePreflightRunWorker(const PreflightRunRequest& request, const std::shared_ptr<PreflightRunOutcome>& outcome);
 
 }   // namespace pdfinteraction
 

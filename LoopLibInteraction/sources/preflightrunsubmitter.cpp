@@ -11,8 +11,7 @@
 namespace pdfinteraction
 {
 
-std::function<void(pdf::PDFJobContext&)> makePreflightRunWorker(const PreflightRunRequest& request,
-                                                                 const std::shared_ptr<PreflightRunOutcome>& outcome)
+std::function<void(pdf::PDFJobContext&)> makePreflightRunWorker(const PreflightRunRequest& request, const std::shared_ptr<PreflightRunOutcome>& outcome)
 {
     return [document = request.document, outcome, profile = request.profile, bindings = request.bindings,
             sourceHash = request.sourceHash](pdf::PDFJobContext& context)
