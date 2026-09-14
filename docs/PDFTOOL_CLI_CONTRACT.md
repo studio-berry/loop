@@ -234,12 +234,12 @@ Exit `0` when `compatibility` is `compatible`, exit `1` (`findings`) otherwise,
 exit `3` (`input-error`) when the file cannot be read or is not a JSON object.
 `migration.required` is true when a supported older major would need a migration,
 `migration.applied` is true when one was produced, and `migration.document_ready`
-is false whenever the artifact could not be prepared (unsupported major, or a
-supported major with no migrator yet). `migration.from` and `migration.to` are the
-version the document was at and the version it is at after preparation — empty
-strings when preparation aborted before it assigned them, which is why
-`schema_version` above (not `migration.from`) is the field that carries the
-artifact's own version.
+is false whenever the artifact could not be prepared (an unreadable or absent
+`schema_version`, an unsupported major, or a supported major with no migrator
+yet). `migration.from` and `migration.to` are the version the document was at and
+the version it is at after preparation — empty strings when preparation aborted
+before it assigned them, which is why `schema_version` above (not
+`migration.from`) is the field that carries the artifact's own version.
 
 ## Schema
 

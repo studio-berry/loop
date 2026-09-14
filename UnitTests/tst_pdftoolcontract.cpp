@@ -23,13 +23,16 @@
 #include "processoutputcapture.h"
 
 #include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QPair>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QVector>
 
 namespace
 {
@@ -112,6 +115,7 @@ private slots:
     void schemaRejectsNonJsonOutput();
     void schemaReportsTheMatrixForEveryKind();
     void schemaReportsUnsupportedMajorIdenticallyToCore();
+    void schemaReportsUnreadyForAnUnusableVersion();
     void schemaAcceptsCurrentAndPreviousGoldens();
     void capabilitiesReportMatrixVersions();
 };
@@ -366,6 +370,42 @@ void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
                             "this build supports major(s) 1, 2, 3."));
     QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
              false);
+}
+
+void PdfToolContractTest::schemaReportsUnreadyForAnUnusableVersion()
+{
+    // An artifact whose version cannot be read was never prepared: nothing
+    // validated it, so it must not be advertised as a ready document just
+    // because `prepareSchemaDocument` leaves the original bytes in place when
+    // it aborts. The exit code alone does not catch this - the doc is
+    // incompatible and exits 1 either way.
+    QTemporaryDir artifactDirectory;
+    QVERIFY(artifactDirectory.isValid());
+
+    const QVector<QPair<QString, QByteArray>> artifacts{
+        { QStringLiteral("malformed-version.json"),
+          QByteArrayLiteral("{\"schema_kind\":\"preflight-report\",\"schema_version\":\"abc\"}") },
+        { QStringLiteral("missing-version.json"), QByteArrayLiteral("{\"schema_kind\":\"preflight-report\"}") },
+    };
+
+    for (const auto& artifact : artifacts)
+    {
+        const QString path = artifactDirectory.filePath(artifact.first);
+        QFile file(path);
+        QVERIFY2(file.open(QIODevice::WriteOnly), qPrintable(path));
+        QCOMPARE(file.write(artifact.second), qint64(artifact.second.size()));
+        file.close();
+
+        const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), path });
+        verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+        const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+        QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+        QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("invalid"));
+        QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.invalid-version"));
+        QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+                 false);
+    }
 }
 
 void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()

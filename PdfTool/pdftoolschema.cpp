@@ -124,7 +124,12 @@ PDFToolExitCode PDFToolSchemaApplication::execute(const PDFToolOptions& options)
         { QStringLiteral("migration"),
           QJsonObject{ { QStringLiteral("required"), migrationRequired },
                        { QStringLiteral("applied"), prepared.migrated },
-                       { QStringLiteral("document_ready"), !prepared.document.isEmpty() },
+                       // Readiness needs both facts: a document that survived
+                       // preparation and a version the build actually validated.
+                       // A document with an unreadable version is left in place
+                       // by prepareSchemaDocument, so its presence alone would
+                       // claim readiness for bytes nothing checked.
+                       { QStringLiteral("document_ready"), diagnostic.isCompatible() && !prepared.document.isEmpty() },
                        { QStringLiteral("from"), prepared.fromVersion.isValid() ? prepared.fromVersion.toString() : QString() },
                        { QStringLiteral("to"), prepared.toVersion.isValid() ? prepared.toVersion.toString() : QString() } } }
     };
