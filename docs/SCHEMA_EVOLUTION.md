@@ -24,8 +24,9 @@ result. Compatible additive minors preserve unknown fields (`passthrough`).
 
 `migrateSchemaDocument()` is pure and deterministic. History database
 migrations already live in `PDFOperationHistoryStore` (v1→v2→v3) and must not
-be rewritten here. JSON migrations that change bytes append a provenance
-`SchemaMigrated` event; they never rewrite old events.
+be rewritten here. Any migration that changes bytes must append a provenance
+`SchemaMigrated` event and never rewrite old events; the history database
+upgrade path is the only migration implemented today that changes bytes.
 
 ## Goldens
 
