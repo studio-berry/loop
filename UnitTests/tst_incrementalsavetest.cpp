@@ -29,7 +29,9 @@
 #include <QBuffer>
 #include <QDateTime>
 #include <QFile>
+#include <QPair>
 #include <QTemporaryDir>
+#include <QVector>
 
 namespace
 {
@@ -72,6 +74,7 @@ private slots:
     void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
     void policyStrengthRejectsWeakerRequests();
     void fileOverloadReportsWhatItDid();
+    void signedFixtureIncrementalEditPreservesTheSignedByteRange();
 };
 
 namespace
@@ -119,6 +122,48 @@ QByteArray writeDocument(const pdf::PDFDocument& document)
     const pdf::PDFOperationResult writeResult = writer.write(&buffer, &document);
     Q_ASSERT(static_cast<bool>(writeResult));
     return buffer.data();
+}
+
+/// The committed signed fixture, located relative to LOOP_FIXTURE_DATA_DIR when
+/// it is set (the CMake test definition sets it to the source tree) and
+/// relative to the working directory otherwise.
+QByteArray readFixtureBytes(const QString& fileName)
+{
+    const QString root = QString::fromUtf8(qgetenv("LOOP_FIXTURE_DATA_DIR"));
+    const QString path = root.isEmpty()
+                             ? QStringLiteral("testdata/signatures/%1").arg(fileName)
+                             : QStringLiteral("%1/signatures/%2").arg(root, fileName);
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return {};
+    }
+    const QByteArray data = file.readAll();
+    file.close();
+    return data;
+}
+
+/// The two intervals a /ByteRange covers, as (start, length) pairs.
+QVector<QPair<qsizetype, qsizetype>> parseByteRange(const QByteArray& data)
+{
+    QVector<QPair<qsizetype, qsizetype>> result;
+    const qsizetype marker = data.indexOf("/ByteRange");
+    if (marker < 0)
+    {
+        return result;
+    }
+    const qsizetype open = data.indexOf('[', marker);
+    const qsizetype close = data.indexOf(']', open);
+    if (open < 0 || close < 0)
+    {
+        return result;
+    }
+    const QList<QByteArray> numbers = data.mid(open + 1, close - open - 1).simplified().split(' ');
+    for (qsizetype index = 0; index + 1 < numbers.size(); index += 2)
+    {
+        result.append({ numbers.at(index).toLongLong(), numbers.at(index + 1).toLongLong() });
+    }
+    return result;
 }
 
 }   // namespace
@@ -420,6 +465,48 @@ void IncrementalSaveTest::fileOverloadReportsWhatItDid()
         QVERIFY(writer.writeIncremental(path, &original, &original, true, &outcome));
         QCOMPARE(outcome, pdf::PDFDocumentWriter::IncrementalWriteOutcome::CopiedUnchanged);
     }
+}
+
+void IncrementalSaveTest::signedFixtureIncrementalEditPreservesTheSignedByteRange()
+{
+    const QByteArray originalData = readFixtureBytes(QStringLiteral("signed-incremental-base.pdf"));
+    QVERIFY2(!originalData.isEmpty(), "signed fixture missing; see UnitTests/testdata/signatures/manifest.json");
+    QVERIFY(originalData.contains("/ByteRange"));
+    QVERIFY(originalData.contains("/Contents"));
+
+    const pdf::PDFDocument original = readDocument(originalData);
+    const pdf::PDFDocumentPointer modified = createModifiedDocument(original);
+    QVERIFY(modified);
+
+    pdf::PDFDocumentWriter writer(nullptr);
+    QBuffer output;
+    output.open(QIODevice::WriteOnly);
+    QVERIFY(writer.writeIncremental(&output, originalData, &original, modified.data()));
+
+    // 1. The original bytes, and therefore the signed byte range, are intact.
+    QCOMPARE(output.data().left(originalData.size()), originalData);
+
+    // 2. The signature dictionary is untouched: same /ByteRange intervals and
+    //    the same /Contents payload, which is what a verifier digests.
+    const auto originalRanges = parseByteRange(originalData);
+    const auto outputRanges = parseByteRange(output.data());
+    QCOMPARE(outputRanges.size(), originalRanges.size());
+    for (qsizetype index = 0; index < originalRanges.size(); ++index)
+    {
+        QCOMPARE(outputRanges.at(index), originalRanges.at(index));
+    }
+    const auto contentsOf = [](const QByteArray& data)
+    {
+        const qsizetype marker = data.indexOf("/Contents");
+        const qsizetype open = data.indexOf('<', marker);
+        const qsizetype close = data.indexOf('>', open);
+        return data.mid(open, close - open + 1);
+    };
+    QCOMPARE(contentsOf(output.data()), contentsOf(originalData));
+
+    // 3. The append really is an append: new xref pointing at the old one.
+    QVERIFY(output.data().mid(originalData.size()).contains("/Prev"));
+    QVERIFY(output.data().size() > originalData.size());
 }
 
 QTEST_MAIN(IncrementalSaveTest)
