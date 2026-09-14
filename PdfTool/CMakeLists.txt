@@ -27,6 +27,8 @@ set(_loop_pdftool_sources
     pdftoolcapabilities.cpp
     pdftoolcapabilities.h
     pdftoolresult.cpp
+    pdftoolschema.cpp
+    pdftoolschema.h
     pdftoolattachments.cpp
     pdftoolcertstore.cpp
     pdftoolcolorprofiles.cpp

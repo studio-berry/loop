@@ -274,6 +274,9 @@ struct PDFToolOptions
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
 
+    // For option 'SchemaDiagnostics'
+    QString schemaInputPath;
+
     // For option 'OcrOptions'
     QString ocrSidecarPath;
     int ocrDpi = 300;
@@ -406,6 +409,7 @@ public:
         ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
         RenderPage = 0x4000000000ULL,   ///< Settings for render-page STCH contract
         EmptyResultPolicy = 0x8000000000ULL,   ///< Shared --fail-if-empty for extraction commands
+        SchemaDiagnostics = 0x10000000000ULL,   ///< Schema kind/version compatibility diagnostics
     };
     Q_DECLARE_FLAGS(Options, Option)
 

@@ -109,6 +109,9 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void schemaReportsTheMatrixForEveryKind();
+    void schemaReportsUnsupportedMajorIdenticallyToCore();
+    void schemaAcceptsCurrentAndPreviousGoldens();
 };
 
 void PdfToolContractTest::helpIsWrapped()
@@ -314,6 +317,65 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::schemaReportsTheMatrixForEveryKind()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(run, 0, QStringLiteral("schema"));
+
+    const QJsonObject kinds = run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+    QVERIFY2(!kinds.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    for (const QString& expected : { QStringLiteral("preflight-report"), QStringLiteral("preflight-profile"),
+                                     QStringLiteral("evidence-graph"), QStringLiteral("operation-plan"),
+                                     QStringLiteral("operation-result"), QStringLiteral("provenance-event"),
+                                     QStringLiteral("certificate"), QStringLiteral("capability-discovery"),
+                                     QStringLiteral("package-manifest") })
+    {
+        QVERIFY2(kinds.contains(expected), qPrintable(expected));
+    }
+    QCOMPARE(kinds.value(QStringLiteral("preflight-report")).toObject().value(QStringLiteral("current")).toString(),
+             QStringLiteral("3.0"));
+}
+
+void PdfToolContractTest::schemaReportsUnsupportedMajorIdenticallyToCore()
+{
+    const QString fixture = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/unsupported-major.json");
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), fixture });
+    verifyEnvelope(run, 1, QStringLiteral("schema"));
+
+    const QJsonObject data = run.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(data.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("preflight-report"));
+    QCOMPARE(data.value(QStringLiteral("compatibility")).toString(), QStringLiteral("unsupported-major"));
+    // These two strings are pinned verbatim in UnitTestsSchemaEvolution too. The
+    // duplication is deliberate: a shared constant would let the Core message
+    // change without any test noticing the CLI drifted from it.
+    QCOMPARE(data.value(QStringLiteral("code")).toString(), QStringLiteral("schema.unsupported-major"));
+    QCOMPARE(data.value(QStringLiteral("message")).toString(),
+             QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
+                            "this build supports major(s) 1, 2, 3."));
+    QCOMPARE(data.value(QStringLiteral("migration")).toObject().value(QStringLiteral("document_ready")).toBool(),
+             false);
+}
+
+void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
+{
+    const QString current = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v3.json");
+    const ToolRun currentRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), current });
+    verifyEnvelope(currentRun, 0, QStringLiteral("schema"));
+    const QJsonObject currentData = currentRun.json.value(QStringLiteral("data")).toObject();
+    QCOMPARE(currentData.value(QStringLiteral("compatibility")).toString(), QStringLiteral("compatible"));
+    QCOMPARE(currentData.value(QStringLiteral("migration")).toObject().value(QStringLiteral("applied")).toBool(),
+             false);
+
+    const QString previous = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/preflight-report-v2.json");
+    const ToolRun previousRun = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--input"), previous });
+    verifyEnvelope(previousRun, 0, QStringLiteral("schema"));
+    const QJsonObject migration = previousRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("migration")).toObject();
+    QCOMPARE(migration.value(QStringLiteral("required")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("applied")).toBool(), true);
+    QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("2.0"));
+    QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("3.0"));
 }
 
 }   // namespace
