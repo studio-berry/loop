@@ -21,9 +21,14 @@
 // SOFTWARE.
 
 #include "pdfdocumentbuilder.h"
+#include "pdfdocumentwriter.h"
 #include "pdfrepairoperation.h"
 #include "pdfstandardconversion.h"
 
+#include <QBuffer>
+#include <QCryptographicHash>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QJsonValue>
@@ -52,6 +57,17 @@ public:
     }
 };
 
+/// Serializes \p document into the bytes a candidate write would produce, so a
+/// slot can assert on what a save path did or did not touch.
+QByteArray writeSerializedBytes(const pdf::PDFDocument& document)
+{
+    pdf::PDFDocumentWriter writer(nullptr);
+    QBuffer buffer;
+    buffer.open(QIODevice::WriteOnly);
+    const pdf::PDFOperationResult result = writer.write(&buffer, &document);
+    return result ? buffer.data() : QByteArray();
+}
+
 }   // namespace
 
 class RepairOperationTest : public QObject
@@ -63,6 +79,8 @@ private slots:
     void builtInOperations_declareSavePolicies();
     void everyRegisteredOperationDeclaresItsSavePolicy();
     void transactionRejectsAWeakenedSavePolicyBeforeMutation();
+    void saveRequestRefusesToWriteOverTheTrustedSource();
+    void candidateSaveRefusesToOverwriteTheSourceOnDisk();
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
@@ -190,6 +208,96 @@ void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
     QVERIFY(!serialized);
     QCOMPARE(serialized.getErrorMessage(),
              QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'save-as-new-artifact'."));
+}
+
+void RepairOperationTest::saveRequestRefusesToWriteOverTheTrustedSource()
+{
+    // The guard compares real files: create both paths so the check has
+    // something to resolve.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString candidatePath = directory.filePath(QStringLiteral("received-candidate.pdf"));
+    for (const QString& path : { sourcePath, candidatePath })
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QVERIFY(file.write(QByteArrayLiteral("%PDF-1.7\n%%EOF\n")) > 0);
+        file.close();
+    }
+
+    const pdf::PDFOperationSavePolicy required = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("production correction"));
+    pdf::PDFSaveRequest request;
+    request.sourcePath = sourcePath;
+    request.outputPath = sourcePath;
+    request.required = required;
+    request.requested = required;
+    request.requestedExplicitly = true;
+    const pdf::PDFOperationResult refused = pdf::validateSaveRequest(request);
+    QVERIFY(!refused);
+    QCOMPARE(refused.getErrorMessage(),
+             QStringLiteral("Refused save: 'received.pdf' is the trusted input artifact; write the candidate to a new path."));
+
+    // A distinct output path is fine, and an in-place append is the point of
+    // that mode.
+    request.outputPath = candidatePath;
+    QVERIFY(pdf::validateSaveRequest(request));
+
+    pdf::PDFSaveRequest append;
+    append.sourcePath = sourcePath;
+    append.outputPath = sourcePath;
+    append.required = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("annotation edit"));
+    append.requested = append.required;
+    append.requestedExplicitly = true;
+    append.appendInPlace = true;
+    QVERIFY(pdf::validateSaveRequest(append));
+
+    // A weakened request is refused by the same call.
+    pdf::PDFSaveRequest weakened = request;
+    weakened.requested = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("caller wants an append"));
+    QCOMPARE(pdf::validateSaveRequest(weakened).getErrorMessage(),
+             QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'save-as-new-artifact'."));
+}
+
+void RepairOperationTest::candidateSaveRefusesToOverwriteTheSourceOnDisk()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = directory.filePath(QStringLiteral("received.pdf"));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    const QByteArray sourceBytes = writeSerializedBytes(source);
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    QCOMPARE(sourceFile.write(sourceBytes), qint64(sourceBytes.size()));
+    sourceFile.close();
+    const QByteArray digestBefore = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256);
+
+    pdf::PDFRepairTransactionOptions options;
+    options.sourcePath = sourcePath;
+    pdf::PDFRepairTransaction transaction(source, options);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                         { QStringLiteral("force"), true } }));
+    QVERIFY(transaction.analyze());
+    QVERIFY(transaction.apply());
+
+    // The reopened candidate is a required out-parameter of the write API, and
+    // passing none would fail the call for an unrelated reason: this has to be
+    // a real refusal to write over the source, not a failed call.
+    pdf::PDFDocument reopenedCandidate;
+    const pdf::PDFOperationResult refusedWrite = transaction.serializeCandidate(sourcePath, &reopenedCandidate);
+    QVERIFY(!refusedWrite);
+    QCOMPARE(refusedWrite.getErrorMessage(),
+             QStringLiteral("Refused save: 'received.pdf' is the trusted input artifact; write the candidate to a new path."));
+    QFile untouched(sourcePath);
+    QVERIFY(untouched.open(QIODevice::ReadOnly));
+    const QByteArray digestAfter = QCryptographicHash::hash(untouched.readAll(), QCryptographicHash::Sha256);
+    untouched.close();
+    QCOMPARE(digestAfter, digestBefore);
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()

@@ -80,6 +80,19 @@ LOOPLIBCORESHARED_EXPORT bool savePolicyIsWeaker(const PDFOperationSavePolicy& c
 LOOPLIBCORESHARED_EXPORT QString savePolicyWeakenedMessage(const PDFOperationSavePolicy& candidate,
                                                            const PDFOperationSavePolicy& required);
 
+/// Everything a save path needs to check before it touches the filesystem.
+struct LOOPLIBCORESHARED_EXPORT PDFSaveRequest
+{
+    QString sourcePath;
+    QString outputPath;
+    PDFOperationSavePolicy required;
+    PDFOperationSavePolicy requested;
+    bool requestedExplicitly = false;
+    /// True only when the caller asked for an in-place incremental append, the
+    /// single case where writing over the source path is the intent.
+    bool appendInPlace = false;
+};
+
 }   // namespace pdf
 
 #endif   // PDFSAVEPOLICY_H

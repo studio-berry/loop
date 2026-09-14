@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfrepairoperation.h"
+#include "pdfdocumentwriter.h"
 
 #include <algorithm>
 #include <utility>
@@ -505,6 +506,22 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     {
         return savePolicyRefusal;
     }
+
+    const PDFOperationSavePolicy effective =
+        m_hasRequestedSavePolicy ? m_requestedSavePolicy : savePolicy();
+    PDFSaveRequest request;
+    request.sourcePath = m_options.sourcePath;
+    request.outputPath = candidatePath;
+    request.required = savePolicy();
+    request.requested = effective;
+    request.requestedExplicitly = m_hasRequestedSavePolicy;
+    request.appendInPlace = effective.mode == PDFSaveMode::IncrementalAppend;
+    const PDFOperationResult saveRequestRefusal = validateSaveRequest(request);
+    if (!saveRequestRefusal)
+    {
+        return saveRequestRefusal;
+    }
+
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
         [](PDFDocument*)

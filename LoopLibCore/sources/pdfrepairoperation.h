@@ -263,6 +263,10 @@ struct LOOPLIBCORESHARED_EXPORT PDFRepairTransactionOptions
     bool failOnIncompleteValidation = true;
     int maxOperations = 100;
     const PDFOperationControl* operationControl = nullptr;
+    /// The trusted input the caller received. When set, a candidate write to
+    /// this path is refused; an empty value only disables that path check, not
+    /// the policy check.
+    QString sourcePath;
 };
 
 class LOOPLIBCORESHARED_EXPORT PDFRepairTransaction
