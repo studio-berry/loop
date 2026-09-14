@@ -4,6 +4,10 @@
 
 <!-- One paragraph: the problem, the change, and the issue. `dev` is not the default branch, so close the issue explicitly with `gh issue close`. -->
 
+## Release changelog
+
+<!-- Promotion and release PRs (`dev` -> `unstable` -> `stable`) only: the full changelog goes here, shaped by `docs/CHANGELOG_FORMAT.md` - measured scope line, Added/Changed/Fixed/Security/Internal, one `Closes #<n>` line per issue whose acceptance criteria the release meets, `Refs #<n>` plus the outstanding criterion otherwise, verification naming workflows and SHAs, and a stated breaking-change answer. Topic PRs answer with their `changes/<branch>.md` fragment and leave this comment in place. -->
+
 ## Proof
 
 - [ ] `python scripts/agent/check-change.py --base origin/dev --build-dir build-local` reports `pass`, or the report and the failing check are quoted here
