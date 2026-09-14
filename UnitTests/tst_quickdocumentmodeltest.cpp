@@ -58,13 +58,13 @@ void QuickDocumentModelTest::searchesUseAnIndependentProcessingBudget()
 {
     pdf::PDFDocumentBuilder builder;
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
-    const QByteArray content("q\nQ\n");
+    QByteArray content("q\nQ\n");
     pdf::PDFDictionary streamDictionary;
     streamDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference streamReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), content)));
+            std::move(streamDictionary), std::move(content))));
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
     builder.mergeTo(pageReference,
@@ -89,13 +89,13 @@ void QuickDocumentModelTest::exhaustedSearchReturnsAnIncompleteResult()
 {
     pdf::PDFDocumentBuilder builder;
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 100, 100));
-    const QByteArray content("q\n");
+    QByteArray content("q\n");
     pdf::PDFDictionary streamDictionary;
     streamDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference streamReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), content)));
+            std::move(streamDictionary), std::move(content))));
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(streamReference));
     builder.mergeTo(pageReference,
