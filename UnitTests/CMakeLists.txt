@@ -437,6 +437,8 @@ add_executable(UnitTestsDocumentSearch
     tst_documentsearchtest.cpp
 )
 target_link_libraries(UnitTestsDocumentSearch PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsDocumentSearch PRIVATE
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight")
 set_target_properties(UnitTestsDocumentSearch PROPERTIES
     WIN32_EXECUTABLE OFF
     MACOSX_BUNDLE OFF

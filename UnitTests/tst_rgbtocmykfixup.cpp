@@ -68,12 +68,12 @@ pdf::PDFDocument buildRgbDocument()
     const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 200, 200));
 
     pdf::PDFDictionary streamDictionary;
-    const QByteArray content("1 0 0 rg\n0 0 200 200 re\nf\n");
+    QByteArray content("1 0 0 rg\n0 0 200 200 re\nf\n");
     streamDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
                               pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference streamReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(streamDictionary), QByteArray(content))));
+            std::move(streamDictionary), std::move(content))));
 
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"),
@@ -104,13 +104,13 @@ pdf::PDFDocument buildRgbImageDocument()
     pdf::PDFDictionary resources;
     resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
-    const QByteArray content("q 200 0 0 200 0 0 cm /Im1 Do Q\n");
+    QByteArray content("q 200 0 0 200 0 0 cm /Im1 Do Q\n");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
                                pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(contentDictionary), content)));
+            std::move(contentDictionary), std::move(content))));
 
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));
