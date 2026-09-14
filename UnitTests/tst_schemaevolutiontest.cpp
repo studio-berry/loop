@@ -293,6 +293,24 @@ void SchemaEvolutionTest::currentVersionFailsClosedWithoutAMatrixEntry()
     QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, matrix).toString(),
              QStringLiteral("3.0"));
     QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::Certificate, matrix).isValid());
+
+    // An entry that exists but states no readable `current` is no more usable
+    // than an absent entry: deriving a major from `supported_majors` would
+    // invent the version the matrix declined to declare. A listed major is a
+    // compatibility statement, not the version the document should be at.
+    const QJsonObject majorsOnly{
+        { QStringLiteral("kinds"),
+          QJsonObject{ { QStringLiteral("preflight-report"),
+                         QJsonObject{ { QStringLiteral("supported_majors"), QJsonArray{ 1, 2, 3 } } } } } }
+    };
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, majorsOnly).isValid());
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, majorsOnly),
+             pdf::PDFSchemaVersion{});
+
+    // The same entry with a readable `current` still yields it: failing closed
+    // must not stop the matrix from being read.
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, matrix).toString(),
+             QStringLiteral("3.0"));
 }
 
 void SchemaEvolutionTest::everySchemaKindIsCoveredByTheCompatibilityMatrix()
@@ -302,7 +320,21 @@ void SchemaEvolutionTest::everySchemaKindIsCoveredByTheCompatibilityMatrix()
     const QJsonObject matrix = QJsonDocument::fromJson(resource.readAll()).object();
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
 
-    QCOMPARE(kinds.keys().size(), int(pdf::AllSchemaKinds.size()));
+    // Compare the two key SETS, not their cardinality. A same-size swap of one
+    // kind for another keeps the counts equal, so a cardinality comparison
+    // passes while the matrix and the enumerator no longer describe the same
+    // kinds. Sorting both lists makes the comparison a set equality that still
+    // reports a readable diff on failure.
+    QStringList matrixKinds = kinds.keys();
+    QStringList enumeratedKinds;
+    for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
+    {
+        enumeratedKinds.append(pdf::pdfSchemaKindToString(kind));
+    }
+    matrixKinds.sort();
+    enumeratedKinds.sort();
+    QCOMPARE(matrixKinds, enumeratedKinds);
+
     for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
     {
         const QString name = pdf::pdfSchemaKindToString(kind);

@@ -59,12 +59,14 @@ QJsonObject loadCompatibilityMatrix()
 PDFSchemaVersion parseCurrentVersion(const QJsonObject& entry)
 {
     bool ok = false;
-    PDFSchemaVersion version = PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("current")), &ok);
+    const PDFSchemaVersion version = PDFSchemaVersion::fromJsonValue(entry.value(QStringLiteral("current")), &ok);
     if (!ok)
     {
-        const int major = entry.value(QStringLiteral("supported_majors")).toArray().last().toInt(1);
-        version.major = static_cast<quint16>(major);
-        version.minor = 0;
+        // No readable `current` means no known current version. Deriving a major
+        // from `supported_majors` would invent the version the matrix declined
+        // to declare and relabel documents as current on its strength, so fail
+        // closed with the same invalid version an absent entry yields.
+        return {};
     }
     return version;
 }
