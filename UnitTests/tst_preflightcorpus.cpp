@@ -28,12 +28,11 @@
 //    check's output is caught in CI instead of silently changing behavior
 //
 // PDFTOOL_EXECUTABLE_PATH and LOOP_PREFLIGHT_SOURCE_DIR are injected by
-// UnitTests/CMakeLists.txt. Fixture PDFs and snapshots are generated, not
-// hand-written (see loop-preflight/README.md); rows whose fixture hasn't been
-// generated yet are skipped rather than failed, so this test stays green until
-// its corpus is populated. Set LOOP_UPDATE_SNAPSHOTS=1 to (re)write the
-// snapshot files instead of comparing against them, e.g. after generating new
-// fixtures or an intentional rule change:
+// UnitTests/CMakeLists.txt. Fixture PDFs and snapshots are generated or
+// hand-written (see loop-preflight/README.md). Tracked corpus rows and pending
+// rows fail closed when they cannot be compared. Set LOOP_UPDATE_SNAPSHOTS=1 to
+// (re)write the snapshot files instead of comparing against them, e.g. after
+// generating new fixtures or an intentional rule change:
 //   LOOP_UPDATE_SNAPSHOTS=1 ctest -R UnitTestsPreflightCorpus
 
 #include "processoutputcapture.h"
@@ -179,6 +178,19 @@ void PreflightCorpusTest::runPreflight(const QString& pdfPath, const QString& pr
     QCOMPARE(envelope.value(QStringLiteral("command")).toString(), QStringLiteral("preflight"));
     QCOMPARE(envelope.value(QStringLiteral("exit_code")).toInt(), process.exitCode());
     report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    if (report.isEmpty() && envelope.value(QStringLiteral("status")).toString() == QStringLiteral("input-error"))
+    {
+        QJsonObject verdict;
+        verdict.insert(QStringLiteral("state"), QStringLiteral("input-error"));
+        verdict.insert(QStringLiteral("reason_code"), QStringLiteral("input-error"));
+        report.insert(QStringLiteral("pass"), false);
+        report.insert(QStringLiteral("inspection_complete"), false);
+        report.insert(QStringLiteral("errors"), QJsonArray{});
+        report.insert(QStringLiteral("warnings"), QJsonArray{});
+        report.insert(QStringLiteral("checks"), QJsonArray{});
+        report.insert(QStringLiteral("fixups_available"), QJsonArray{});
+        report.insert(QStringLiteral("verdict"), verdict);
+    }
     QVERIFY2(!report.isEmpty(), "preflight result must contain data.report");
     exitCode = process.exitCode();
 }
@@ -264,14 +276,14 @@ void PreflightCorpusTest::preflightMatchesManifest()
 
     if (pending)
     {
-        QSKIP(s_pendingHint);
+        QFAIL(s_pendingHint);
     }
 
     QString pdfPath;
     QString profilePath;
     if (!resolveFixture(pdf, profile, pdfPath, profilePath))
     {
-        QSKIP(s_regenerateHint);
+        QFAIL(s_regenerateHint);
     }
 
     QJsonObject report;
@@ -282,9 +294,10 @@ void PreflightCorpusTest::preflightMatchesManifest()
     const QString verdictState = report.value(QStringLiteral("verdict")).toObject().value(QStringLiteral("state")).toString();
     const int expectedExitCode = verdictState == QStringLiteral("pass")
                                      ? 0
-                                 : verdictState == QStringLiteral("fail")       ? 1
-                                 : verdictState == QStringLiteral("incomplete") ? 8
-                                                                                : 9;
+                                 : verdictState == QStringLiteral("fail")        ? 1
+                                 : verdictState == QStringLiteral("incomplete")  ? 8
+                                 : verdictState == QStringLiteral("input-error") ? 3
+                                                                                 : 9;
     QCOMPARE(exitCode, expectedExitCode);
 
     const QStringList actualCheckIds = checkIdsOf(report);
@@ -309,14 +322,14 @@ void PreflightCorpusTest::preflightMatchesSnapshot()
 
     if (pending)
     {
-        QSKIP(s_pendingHint);
+        QFAIL(s_pendingHint);
     }
 
     QString pdfPath;
     QString profilePath;
     if (!resolveFixture(pdf, profile, pdfPath, profilePath))
     {
-        QSKIP(s_regenerateHint);
+        QFAIL(s_regenerateHint);
     }
 
     QJsonObject report;

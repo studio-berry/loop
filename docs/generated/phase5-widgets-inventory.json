@@ -85,6 +85,11 @@
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
       "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
+      "UnitTests/CMakeLists.txt",
       "loop-preflight/tools/CMakeLists.txt"
     ],
     "shell_ledger": "docs/loop-shell.json",
@@ -375,15 +380,18 @@
         "UnitTestsBenchmarkIdentity",
         "UnitTestsBleedFixup",
         "UnitTestsBleedMarginProbe",
+        "UnitTestsBlockingThreadGuard",
         "UnitTestsBudgetCorpus",
         "UnitTestsBudgetExhaustion",
         "UnitTestsContentEditor",
         "UnitTestsContentProcessorLimits",
         "UnitTestsConversionOracle",
         "UnitTestsDiagnostics",
+        "UnitTestsDocumentSearch",
         "UnitTestsDocumentSession",
         "UnitTestsEvidenceGraph",
         "UnitTestsFilenameSanitizer",
+        "UnitTestsFindingNavigation",
         "UnitTestsFontEncoding",
         "UnitTestsHugeDocumentEnvelope",
         "UnitTestsIdentitySeparation",
@@ -393,6 +401,7 @@
         "UnitTestsJbig2Decoder",
         "UnitTestsJobScheduler",
         "UnitTestsLifecycle",
+        "UnitTestsLoopStateVisual",
         "UnitTestsOcrPageGate",
         "UnitTestsOperationHistory",
         "UnitTestsOperationImpact",
@@ -402,6 +411,7 @@
         "UnitTestsPageMasterExport",
         "UnitTestsPluginAbi",
         "UnitTestsPreflightEngine",
+        "UnitTestsPreflightInteraction",
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
@@ -459,7 +469,10 @@
       "consumers": [
         "LoopEditor",
         "LoopLibQuick",
-        "ProductQuickAccessibilitySmoke"
+        "ProductQuickAccessibilitySmoke",
+        "UnitTestsFindingNavigation",
+        "UnitTestsPreflightInteraction",
+        "UnitTestsPreflightVerdict"
       ]
     },
     {
@@ -1001,6 +1014,46 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsBlockingThreadGuard",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsBudgetCorpus",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -1241,6 +1294,46 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsDocumentSearch",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsDocumentSession",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -1343,6 +1436,48 @@
       ],
       "transitive_qt_modules": [
         "Gui",
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsFindingNavigation",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore",
+        "LoopLibInteraction"
+      ],
+      "transitive_qt_modules": [
         "Sql",
         "Svg",
         "Xml"
@@ -1705,6 +1840,46 @@
         "LoopLibCore"
       ],
       "transitive_qt_modules": [
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
+      "id": "UnitTestsLoopStateVisual",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
         "Svg",
         "Xml"
       ],
@@ -2223,6 +2398,48 @@
       "consumers": []
     },
     {
+      "id": "UnitTestsPreflightInteraction",
+      "kind": "executable",
+      "cmake": "UnitTests/CMakeLists.txt",
+      "profile_enabled": false,
+      "profile_condition": "qualification target excluded from the product-surface manifest",
+      "install_rule": false,
+      "installed_in_profile": false,
+      "build_only_in_profile": false,
+      "direct_links": [
+        "LoopLibCore",
+        "LoopLibInteraction",
+        "Qt6::Core",
+        "Qt6::Gui",
+        "Qt6::Test"
+      ],
+      "direct_qt_modules": [
+        "Core",
+        "Gui",
+        "Test"
+      ],
+      "transitive_targets": [
+        "LoopLibCore",
+        "LoopLibInteraction"
+      ],
+      "transitive_qt_modules": [
+        "Sql",
+        "Svg",
+        "Xml"
+      ],
+      "qt_modules": [
+        "Core",
+        "Gui",
+        "Sql",
+        "Svg",
+        "Test",
+        "Xml"
+      ],
+      "widgets_linkage": "none",
+      "widgets_paths": [],
+      "consumers": []
+    },
+    {
       "id": "UnitTestsPreflightProfileResolver",
       "kind": "executable",
       "cmake": "UnitTests/CMakeLists.txt",
@@ -2273,6 +2490,7 @@
       "build_only_in_profile": false,
       "direct_links": [
         "LoopLibCore",
+        "LoopLibInteraction",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -2283,7 +2501,8 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoopLibCore"
+        "LoopLibCore",
+        "LoopLibInteraction"
       ],
       "transitive_qt_modules": [
         "Sql",
@@ -3022,7 +3241,7 @@
     }
   ],
   "counts": {
-    "targets": 69,
+    "targets": 74,
     "installed_in_profile": 4,
     "build_only_in_profile": 2,
     "widgets_surfaces": 4,

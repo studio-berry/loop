@@ -68,6 +68,10 @@ add_library(LoopLibCore SHARED
     sources/pdfimagedownsamplefixup.h
     sources/pdfrgbtocmykfixup.cpp
     sources/pdfrgbtocmykfixup.h
+    sources/pdfrgbtocmykhelpers.cpp
+    sources/pdfrgbtocmykhelpers.h
+    sources/pdfrgbtocmykimagefixup.cpp
+    sources/pdfrgbtocmykimagefixup.h
     sources/pdfpagemasterexport.cpp
     sources/pdfpagemasterexport.h
     sources/pdfbleedmarginprobe.cpp
@@ -96,6 +100,8 @@ add_library(LoopLibCore SHARED
     sources/pdfprocessingbudget.h
     sources/pdfjobscheduler.cpp
     sources/pdfjobscheduler.h
+    sources/pdfblockingthreadguard.cpp
+    sources/pdfblockingthreadguard.h
     sources/pdfschemaversion.cpp
     sources/pdfschemaversion.h
     sources/pdfevidencegraph.cpp

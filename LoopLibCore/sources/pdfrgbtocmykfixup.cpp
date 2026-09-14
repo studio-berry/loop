@@ -22,9 +22,13 @@
 
 #include "pdfrgbtocmykfixup.h"
 
+#include "pdfrgbtocmykhelpers.h"
+#include "pdfrgbtocmykimagefixup.h"
+
 #include "pdfcms.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfexception.h"
+#include "pdfimage.h"
 #include "pdfparser.h"
 #include "pdfstreamfilters.h"
 
@@ -33,6 +37,7 @@
 #include <lcms2.h>
 
 #include <cmath>
+#include <limits>
 #include <set>
 #include <utility>
 #include <vector>
@@ -58,15 +63,14 @@ struct Token
 
 bool isNumber(const Token& token)
 {
-    return token.type == PDFLexicalAnalyzer::TokenType::Integer
-        || token.type == PDFLexicalAnalyzer::TokenType::Real;
+    return token.type == PDFLexicalAnalyzer::TokenType::Integer || token.type == PDFLexicalAnalyzer::TokenType::Real;
 }
 
 PDFReal numberValue(const Token& token)
 {
     return token.type == PDFLexicalAnalyzer::TokenType::Integer
-        ? PDFReal(token.data.toLongLong())
-        : token.data.toDouble();
+               ? PDFReal(token.data.toLongLong())
+               : token.data.toDouble();
 }
 
 QByteArray formatNumber(PDFReal value)
@@ -160,15 +164,6 @@ PDFOperationResult validateTargetProfile(const PDFRgbToCmykSettings& settings)
     return true;
 }
 
-QByteArray targetProfileId(const PDFRgbToCmykSettings& settings)
-{
-    if (!settings.targetIccId.isEmpty())
-    {
-        return settings.targetIccId;
-    }
-    return QCryptographicHash::hash(settings.targetIccData, QCryptographicHash::Sha256);
-}
-
 void appendContentReferences(const PDFObject& contentObject,
                              const PDFObjectStorage* storage,
                              std::vector<PDFObjectReference>& references,
@@ -205,11 +200,6 @@ void appendContentReferences(const PDFObject& contentObject,
             directStreams->push_back(dereferenced);
         }
     }
-}
-
-bool isRgbColorSpaceName(const QByteArray& name)
-{
-    return name == QByteArrayLiteral("DeviceRGB") || name == QByteArrayLiteral("RGB");
 }
 
 struct RewriteResult
@@ -278,9 +268,7 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
         const bool stroke = command == QByteArrayLiteral("RG") || command == QByteArrayLiteral("CS");
         const bool fill = command == QByteArrayLiteral("rg") || command == QByteArrayLiteral("cs");
 
-        if ((command == QByteArrayLiteral("rg") || command == QByteArrayLiteral("RG"))
-            && output.size() >= 3 && isNumber(output[output.size() - 1])
-            && isNumber(output[output.size() - 2]) && isNumber(output[output.size() - 3]))
+        if ((command == QByteArrayLiteral("rg") || command == QByteArrayLiteral("RG")) && output.size() >= 3 && isNumber(output[output.size() - 1]) && isNumber(output[output.size() - 2]) && isNumber(output[output.size() - 3]))
         {
             std::vector<PDFColorComponent> source = {
                 PDFColorComponent(numberValue(output[output.size() - 3])),
@@ -290,7 +278,8 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
             std::vector<PDFColorComponent> target(4);
             PDFCMS::ColorSpaceTransformParams params;
             params.sourceType = settings.fallbackRgbIccData.isEmpty()
-                ? PDFCMS::ColorSpaceType::DeviceRGB : PDFCMS::ColorSpaceType::ICC;
+                                    ? PDFCMS::ColorSpaceType::DeviceRGB
+                                    : PDFCMS::ColorSpaceType::ICC;
             params.targetType = PDFCMS::ColorSpaceType::ICC;
             params.sourceIccId = settings.fallbackRgbIccId;
             params.sourceIccData = settings.fallbackRgbIccData;
@@ -325,11 +314,7 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
             continue;
         }
 
-        if ((command == QByteArrayLiteral("sc") || command == QByteArrayLiteral("SC"))
-            && output.size() >= 3 && isNumber(output[output.size() - 1])
-            && isNumber(output[output.size() - 2]) && isNumber(output[output.size() - 3])
-            && ((command == QByteArrayLiteral("sc") && fillRgb)
-                || (command == QByteArrayLiteral("SC") && strokeRgb)))
+        if ((command == QByteArrayLiteral("sc") || command == QByteArrayLiteral("SC")) && output.size() >= 3 && isNumber(output[output.size() - 1]) && isNumber(output[output.size() - 2]) && isNumber(output[output.size() - 3]) && ((command == QByteArrayLiteral("sc") && fillRgb) || (command == QByteArrayLiteral("SC") && strokeRgb)))
         {
             std::vector<PDFColorComponent> source = {
                 PDFColorComponent(numberValue(output[output.size() - 3])),
@@ -339,7 +324,8 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
             std::vector<PDFColorComponent> target(4);
             PDFCMS::ColorSpaceTransformParams params;
             params.sourceType = settings.fallbackRgbIccData.isEmpty()
-                ? PDFCMS::ColorSpaceType::DeviceRGB : PDFCMS::ColorSpaceType::ICC;
+                                    ? PDFCMS::ColorSpaceType::DeviceRGB
+                                    : PDFCMS::ColorSpaceType::ICC;
             params.targetType = PDFCMS::ColorSpaceType::ICC;
             params.sourceIccId = settings.fallbackRgbIccId;
             params.sourceIccData = settings.fallbackRgbIccData;
@@ -365,8 +351,7 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
             continue;
         }
 
-        if ((command == QByteArrayLiteral("cs") || command == QByteArrayLiteral("CS"))
-            && !output.empty() && output.back().type == PDFLexicalAnalyzer::TokenType::Name)
+        if ((command == QByteArrayLiteral("cs") || command == QByteArrayLiteral("CS")) && !output.empty() && output.back().type == PDFLexicalAnalyzer::TokenType::Name)
         {
             const QByteArray name = output.back().data.toByteArray();
             if (isRgbColorSpaceName(name))
@@ -397,9 +382,7 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
             }
         }
 
-        if ((command == QByteArrayLiteral("scn") || command == QByteArrayLiteral("SCN"))
-            && ((command == QByteArrayLiteral("scn") && fillRgb)
-                || (command == QByteArrayLiteral("SCN") && strokeRgb)))
+        if ((command == QByteArrayLiteral("scn") || command == QByteArrayLiteral("SCN")) && ((command == QByteArrayLiteral("scn") && fillRgb) || (command == QByteArrayLiteral("SCN") && strokeRgb)))
         {
             addUnsupported(PDFRgbToCmykObjectKind::VectorPaint,
                            PDFTranslationContext::tr("RGB pattern or extended color paint is not supported."));
@@ -434,52 +417,6 @@ PDFOperationResult rewriteRgbOperators(const QByteArray& input,
     return true;
 }
 
-void scanImageResources(const PDFObject& resourcesObject,
-                        const PDFObjectStorage* storage,
-                        PDFInteger pageIndex,
-                        PDFRgbToCmykReport* report)
-{
-    const PDFObject resources = storage->getObject(resourcesObject);
-    if (!resources.isDictionary())
-    {
-        return;
-    }
-
-    const PDFObject xObject = storage->getObject(resources.getDictionary()->get("XObject"));
-    if (!xObject.isDictionary())
-    {
-        return;
-    }
-
-    for (size_t i = 0; i < xObject.getDictionary()->getCount(); ++i)
-    {
-        const PDFObject object = storage->getObject(xObject.getDictionary()->getValue(i));
-        if (!object.isStream())
-        {
-            continue;
-        }
-
-        const PDFDictionary* dictionary = object.getStream()->getDictionary();
-        if (dictionary->get("Subtype").isName()
-            && dictionary->get("Subtype").getString() == QByteArrayLiteral("Image"))
-        {
-            const PDFObject colorSpace = storage->getObject(dictionary->get("ColorSpace"));
-            if (colorSpace.isName() && isRgbColorSpaceName(colorSpace.getString()) && report)
-            {
-                PDFRgbToCmykUnsupportedItem item;
-                item.pageIndex = pageIndex;
-                item.kind = PDFRgbToCmykObjectKind::Image;
-                item.reason = PDFTranslationContext::tr("RGB image XObjects require image-sample conversion.");
-                if (xObject.getDictionary()->getValue(i).isReference())
-                {
-                    item.objectReference = xObject.getDictionary()->getValue(i).getReference();
-                }
-                report->unsupported.append(item);
-            }
-        }
-    }
-}
-
 std::vector<StreamReference> collectPageStreams(const PDFDocument* document,
                                                 PDFInteger pageIndex,
                                                 const PDFPage* page)
@@ -493,8 +430,8 @@ std::vector<StreamReference> collectPageStreams(const PDFDocument* document,
     // actually be found and later rewritten via its PDFObjectReference.
     const PDFObject pageDictionaryObject = document->getStorage().getObjectByReference(page->getPageReference());
     const PDFObject rawContents = pageDictionaryObject.isDictionary()
-        ? pageDictionaryObject.getDictionary()->get("Contents")
-        : PDFObject();
+                                      ? pageDictionaryObject.getDictionary()->get("Contents")
+                                      : PDFObject();
     appendContentReferences(rawContents, &document->getStorage(), references);
     for (const PDFObjectReference reference : references)
     {
@@ -530,9 +467,7 @@ void collectFormStreamsFromResources(const PDFObject& resourcesObject,
             continue;
         }
         const PDFDictionary* dictionary = object.getStream()->getDictionary();
-        if (!dictionary->get("Subtype").isName()
-            || dictionary->get("Subtype").getString() != QByteArrayLiteral("Form")
-            || !referenceObject.isReference())
+        if (!dictionary->get("Subtype").isName() || dictionary->get("Subtype").getString() != QByteArrayLiteral("Form") || !referenceObject.isReference())
         {
             continue;
         }
@@ -575,9 +510,7 @@ void collectFormStreamsFromAnnotations(const PDFDocument* document,
                 continue;
             }
             const PDFDictionary* dictionary = appearanceStream.getStream()->getDictionary();
-            if (dictionary->get("Subtype").isName()
-                && dictionary->get("Subtype").getString() == QByteArrayLiteral("Form")
-                && visited.insert(value.getReference()).second)
+            if (dictionary->get("Subtype").isName() && dictionary->get("Subtype").getString() == QByteArrayLiteral("Form") && visited.insert(value.getReference()).second)
             {
                 result.push_back(StreamReference{ value.getReference(), pageIndex,
                                                   PDFRgbToCmykObjectKind::AnnotationAppearance });
@@ -635,6 +568,7 @@ std::vector<PDFInteger> selectPageIndices(const PDFDocument* document,
 
 PDFOperationResult embedOutputIntent(PDFDocumentBuilder* builder,
                                      const PDFRgbToCmykSettings& settings,
+                                     PDFObjectReference profileReference,
                                      PDFRgbToCmykReport* report)
 {
     if (!settings.embedOutputIntent)
@@ -642,21 +576,14 @@ PDFOperationResult embedOutputIntent(PDFDocumentBuilder* builder,
         return true;
     }
 
-    QByteArray compressed = PDFFlateDecodeFilter::compress(settings.targetIccData);
-    PDFDictionary profileDictionary;
-    profileDictionary.addEntry(PDFInplaceOrMemoryString("N"), PDFObject::createInteger(4));
-    profileDictionary.addEntry(PDFInplaceOrMemoryString("Length"), PDFObject::createInteger(compressed.size()));
-    profileDictionary.addEntry(PDFInplaceOrMemoryString("Filter"), PDFObject::createName("FlateDecode"));
-    const PDFObjectReference profileReference = builder->addObject(
-        PDFObject::createStream(std::make_shared<PDFStream>(qMove(profileDictionary), qMove(compressed))));
-
     PDFDictionary intentDictionary;
     intentDictionary.addEntry(PDFInplaceOrMemoryString("Type"), PDFObject::createName("OutputIntent"));
     intentDictionary.addEntry(PDFInplaceOrMemoryString("S"), PDFObject::createName("GTS_PDFX"));
     intentDictionary.addEntry(PDFInplaceOrMemoryString("OutputConditionIdentifier"),
                               PDFObject::createString((settings.targetProfileName.isEmpty()
-                                  ? QString::fromLatin1(targetProfileId(settings).toHex())
-                                  : settings.targetProfileName).toUtf8()));
+                                                           ? QString::fromLatin1(targetProfileId(settings).toHex())
+                                                           : settings.targetProfileName)
+                                                          .toUtf8()));
     intentDictionary.addEntry(PDFInplaceOrMemoryString("OutputCondition"),
                               PDFObject::createString(settings.targetProfileName.toUtf8()));
     intentDictionary.addEntry(PDFInplaceOrMemoryString("DestOutputProfile"),
@@ -700,7 +627,7 @@ PDFOperationResult analyzeImpl(const PDFDocument* document,
             continue;
         }
 
-        scanImageResources(page->getResources(), storage, pageIndex, report);
+        scanImageResources(page->getResources(), document, pageIndex, report);
         std::vector<StreamReference> streams = collectPageStreams(document, pageIndex, page);
         std::set<PDFObjectReference> formReferences;
         collectFormStreamsFromResources(page->getResources(), &document->getStorage(), pageIndex, streams, formReferences);
@@ -741,11 +668,11 @@ PDFOperationResult analyzeImpl(const PDFDocument* document,
     return true;
 }
 
-} // namespace
+}   // namespace
 
 PDFOperationResult PDFRgbToCmykFixup::previewRgbToCmyk(const PDFDocument* document,
-                                             const PDFRgbToCmykSettings& settings,
-                                             PDFRgbToCmykReport* report)
+                                                       const PDFRgbToCmykSettings& settings,
+                                                       PDFRgbToCmykReport* report)
 {
     if (report)
     {
@@ -777,8 +704,8 @@ PDFOperationResult PDFRgbToCmykFixup::previewRgbToCmyk(const PDFDocument* docume
 }
 
 PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
-                                           const PDFRgbToCmykSettings& settings,
-                                           PDFRgbToCmykReport* report)
+                                                     const PDFRgbToCmykSettings& settings,
+                                                     PDFRgbToCmykReport* report)
 {
     if (report)
     {
@@ -794,7 +721,7 @@ PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
     if (!localReport.unsupported.isEmpty())
     {
         return PDFTranslationContext::tr(
-            "RGB-to-CMYK conversion cannot be completed safely: %1 unsupported RGB object(s) were found.")
+                   "RGB-to-CMYK conversion cannot be completed safely: %1 unsupported RGB object(s) were found.")
             .arg(localReport.unsupported.size());
     }
     if (settings.dryRunOnly)
@@ -809,6 +736,7 @@ PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
 
     PDFDocumentModifier modifier(document);
     PDFDocumentBuilder* builder = modifier.getBuilder();
+    const PDFObjectReference profileReference = addIccProfileObject(builder, settings);
     std::set<PDFObjectReference> visited;
     PDFCMSManager cmsManager(nullptr);
     cmsManager.setDocument(document);
@@ -838,6 +766,18 @@ PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
         if (!page)
         {
             continue;
+        }
+
+        const PDFOperationResult imageResult = convertRgbImages(page->getResources(),
+                                                                document,
+                                                                builder,
+                                                                settings,
+                                                                cms.data(),
+                                                                profileReference,
+                                                                &localReport);
+        if (!imageResult)
+        {
+            return imageResult;
         }
 
         std::vector<StreamReference> streams = collectPageStreams(document, pageIndex, page);
@@ -877,7 +817,10 @@ PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
         }
     }
 
-    const PDFOperationResult outputIntentResult = embedOutputIntent(builder, settings, &localReport);
+    const PDFOperationResult outputIntentResult = embedOutputIntent(builder,
+                                                                    settings,
+                                                                    profileReference,
+                                                                    &localReport);
     if (!outputIntentResult)
     {
         return outputIntentResult;
@@ -914,4 +857,4 @@ PDFOperationResult PDFRgbToCmykFixup::writeRgbToCmyk(PDFDocument* document,
     return true;
 }
 
-} // namespace pdf
+}   // namespace pdf

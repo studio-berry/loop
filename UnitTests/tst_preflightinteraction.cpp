@@ -22,22 +22,22 @@
 
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
-#include "preflightreportmodel.h"
 
 #include <QSignalSpy>
 #include <QtTest>
 
+#include <atomic>
 #include <memory>
+#include <thread>
 
 #include "documentcontextsource.h"
+#include "findingnavigation.h"
 #include "hittestsource.h"
 #include "interactioncontroller.h"
 #include "interactionstate.h"
 #include "overlaybuilder.h"
 #include "overlayframe.h"
 #include "viewportcontroller.h"
-
-#include "pdfdocumentcontext.h"
 
 using pdfinteraction::PreflightController;
 using pdfinteraction::PreflightFindingsModel;
@@ -158,11 +158,14 @@ private slots:
     void modelSelectionAndOverlayAreRevisionBound();
     void controllerAcceptsCurrentResultAndBuildsNavigation();
     void controllerRejectsStaleAndCancelledResults();
+    void controllerRetainsCompletedResultAcrossCancellationAndStaleness();
     void controllerRepresentsIncompleteRun();
+    void controllerMarksAnInFlightRunStaleAndCancelsIt();
+    void controllerRejectsDuplicateTerminalResults();
     void overlayAdapterMapsStableIdsAndSeverities();
     void dockSelectionSetsFocusedOverlayPrimitive();
-    void reportModelParsesIdAndObjectId();
-    void reportModelStableIdFallback();
+    void controllerMarksStaleWhenTheProfileChanges();
+    void targetingCapabilitiesAreConservativeAndStable();
 };
 
 void PreflightInteractionTest::modelRetainsStableIdentityAndFilters()
@@ -229,6 +232,26 @@ void PreflightInteractionTest::controllerRejectsStaleAndCancelledResults()
     QVERIFY(!controller.acceptResult(QStringLiteral("job-2"), QStringLiteral("rev-2"), resultWith({})));
 }
 
+void PreflightInteractionTest::controllerRetainsCompletedResultAcrossCancellationAndStaleness()
+{
+    PreflightController controller;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QVERIFY(controller.hasResult());
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-2"));
+    QVERIFY(controller.cancelRun(QStringLiteral("job-2")));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
+    QCOMPARE(controller.findingsModel()->rowCount(), 1);
+
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(!controller.navigationFor(finding.stableId(), nullptr));
+    const QByteArray report = controller.serializedReport(QStringLiteral("fixture.pdf"));
+    QVERIFY(report.contains("preflight-report"));
+}
+
 void PreflightInteractionTest::controllerRepresentsIncompleteRun()
 {
     PreflightController controller;
@@ -237,6 +260,49 @@ void PreflightInteractionTest::controllerRepresentsIncompleteRun()
     result.inspectionComplete = false;
     QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), result));
     QCOMPARE(controller.state(), PreflightController::State::Incomplete);
+}
+
+void PreflightInteractionTest::controllerMarksAnInFlightRunStaleAndCancelsIt()
+{
+    pdf::PDFJobScheduler scheduler(1);
+    PreflightController controller(&scheduler);
+    std::atomic_bool started = false;
+
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), QStringLiteral("profile"), QStringLiteral("job-1"));
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = QStringLiteral("job-1");
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.documentKey = QStringLiteral("doc");
+    spec.documentRevision = QStringLiteral("rev-1");
+    const QString submitted = scheduler.submit(spec, [&started](pdf::PDFJobContext& context)
+                                               {
+                                                   started.store(true, std::memory_order_release);
+                                                   while (!context.isCancellationRequested())
+                                                   {
+                                                       std::this_thread::yield();
+                                                   } });
+    QCOMPARE(submitted, QStringLiteral("job-1"));
+    QTRY_VERIFY_WITH_TIMEOUT(started.load(std::memory_order_acquire), 1000);
+
+    controller.markProfileStale();
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("profile")));
+    QTRY_COMPARE_WITH_TIMEOUT(scheduler.snapshot(QStringLiteral("job-1")).status, pdf::PDFJobStatus::Cancelled, 2000);
+    QVERIFY(!controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({})));
+}
+
+void PreflightInteractionTest::controllerRejectsDuplicateTerminalResults()
+{
+    PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), QStringLiteral("profile"), QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({})));
+    QCOMPARE(controller.state(), PreflightController::State::Pass);
+    QVERIFY(!controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({})));
+
+    controller.markCheckSetStale();
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("check set")));
 }
 
 void PreflightInteractionTest::overlayAdapterMapsStableIdsAndSeverities()
@@ -294,63 +360,49 @@ void PreflightInteractionTest::dockSelectionSetsFocusedOverlayPrimitive()
     QCOMPARE(controller.state().selected().id, findingId);
 }
 
-void PreflightInteractionTest::reportModelParsesIdAndObjectId()
+void PreflightInteractionTest::controllerMarksStaleWhenTheProfileChanges()
 {
-    pdfplugin::PreflightReportModel model;
-    QJsonObject findingObject;
-    findingObject.insert(QStringLiteral("id"), QStringLiteral("0123456789abcdef"));
-    findingObject.insert(QStringLiteral("object_id"), QStringLiteral("42 0 R"));
-    findingObject.insert(QStringLiteral("scope"), QStringLiteral("object"));
-    findingObject.insert(QStringLiteral("page"), 1);
-    findingObject.insert(QStringLiteral("severity"), QStringLiteral("error"));
-    findingObject.insert(QStringLiteral("type"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("message"), QStringLiteral("Bleed missing"));
-    findingObject.insert(QStringLiteral("check_id"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("bbox"), QJsonArray{ 0.0, 0.0, 10.0, 10.0 });
+    // #195: "Changing the document, profile, or check set marks findings stale and shows them as
+    // stale." The revision trigger is covered above; this is the profile trigger, which goes
+    // through markProfileStale() rather than setCurrentRevision().
+    PreflightController controller;
+    const pdf::PreflightFinding finding = makeFinding(QStringLiteral("bleed"), 1, QStringLiteral("error"), QRectF(1, 2, 3, 4));
 
-    QJsonObject report;
-    report.insert(QStringLiteral("schema_version"), 3);
-    report.insert(QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("fail") } });
-    report.insert(QStringLiteral("errors"), QJsonArray{ findingObject });
-    report.insert(QStringLiteral("warnings"), QJsonArray());
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    QCOMPARE(controller.state(), PreflightController::State::Findings);
 
-    model.setReport(report);
-    QCOMPARE(model.findings().size(), 1);
-    QCOMPARE(model.findings().constFirst().id, QStringLiteral("0123456789abcdef"));
-    QCOMPARE(model.findings().constFirst().objectId, QStringLiteral("42 0 R"));
-    QCOMPARE(model.stableFindingId(model.findings().constFirst()), QStringLiteral("0123456789abcdef"));
+    controller.markProfileStale();
+    QCOMPARE(controller.state(), PreflightController::State::Stale);
+
+    // The prior result is retained and shown as stale, not discarded (#195 step 4).
+    QVERIFY(controller.hasResult());
+    QCOMPARE(controller.findingsModel()->rowCount(), 1);
+    QVERIFY(controller.operatorSummary().contains(QStringLiteral("stale")));
 }
 
-void PreflightInteractionTest::reportModelStableIdFallback()
+void PreflightInteractionTest::targetingCapabilitiesAreConservativeAndStable()
 {
-    pdfplugin::PreflightReportModel model;
-    QJsonObject findingObject;
-    findingObject.insert(QStringLiteral("scope"), QStringLiteral("page"));
-    findingObject.insert(QStringLiteral("page"), 2);
-    findingObject.insert(QStringLiteral("severity"), QStringLiteral("error"));
-    findingObject.insert(QStringLiteral("type"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("message"), QStringLiteral("Bleed missing"));
-    findingObject.insert(QStringLiteral("check_id"), QStringLiteral("bleed"));
-    findingObject.insert(QStringLiteral("bbox"), QJsonArray{ 1.0, 2.0, 11.0, 12.0 });
+    const auto registry = pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry();
+    const auto image = registry.capabilityFor(QStringLiteral("image-resolution"));
+    QVERIFY(image.has_value());
+    QVERIFY(image->supportsPageNavigation);
+    QVERIFY(image->supportsObjectTargeting);
+    QVERIFY(image->supportsOverlayEvidence);
+    QCOMPARE(image->inspectionMode, QStringLiteral("probe"));
 
-    QJsonObject report;
-    report.insert(QStringLiteral("schema_version"), 3);
-    report.insert(QStringLiteral("verdict"), QJsonObject{ { QStringLiteral("state"), QStringLiteral("fail") } });
-    report.insert(QStringLiteral("errors"), QJsonArray{ findingObject });
-    report.insert(QStringLiteral("warnings"), QJsonArray());
+    QVERIFY(!registry.contains(QStringLiteral("future-check")));
+    QVERIFY(registry.capabilityFor(QStringLiteral("future-check"))->supportsPageNavigation);
 
-    model.setReport(report);
-
-    pdf::PreflightFinding coreFinding;
-    coreFinding.scope = QStringLiteral("page");
-    coreFinding.page = 2;
-    coreFinding.severity = QStringLiteral("error");
-    coreFinding.type = QStringLiteral("bleed");
-    coreFinding.message = QStringLiteral("Bleed missing");
-    coreFinding.checkId = QStringLiteral("bleed");
-    coreFinding.bbox = QRectF(1.0, 2.0, 10.0, 10.0);
-
-    QCOMPARE(model.stableFindingId(model.findings().constFirst()), coreFinding.stableId());
+    PreflightController controller;
+    controller.beginRun(QStringLiteral("doc"), QStringLiteral("rev-1"), {}, QStringLiteral("job-1"));
+    pdf::PreflightFinding finding = makeFinding(QStringLiteral("future-check"), 2, QStringLiteral("error"), QRectF(1, 2, 3, 4));
+    QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), resultWith({ finding })));
+    PreflightController::EvidenceNavigationRequest request;
+    QVERIFY(controller.navigationFor(finding.stableId(), &request));
+    QCOMPARE(request.page, 2);
+    QVERIFY(!request.hasPreciseTarget);
+    QCOMPARE(request.inspectionMode, QStringLiteral("page"));
 }
 
 QTEST_GUILESS_MAIN(PreflightInteractionTest)

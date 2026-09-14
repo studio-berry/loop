@@ -2,7 +2,7 @@
 
 **Status:** implemented
 **Implemented-at:** 24e9ba8bc88d85c7ddc59a7320faba94d382d76b
-**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** none
 **Date:** 2026-08-09
 **Deciders:** gh-15 (mirrors upstream mberrys/Frisket-pdf, issue 81)

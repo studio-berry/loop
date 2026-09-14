@@ -69,6 +69,20 @@ QStringList bleedFixupModes()
     };
 }
 
+bool requireStressFixtures()
+{
+    return qEnvironmentVariableIntValue("LOOP_REQUIRE_BLEED_STRESS_FIXTURES") == 1;
+}
+
+QString missingStressFixtureMessage(const QString& pdfPath)
+{
+    return QStringLiteral("AI artwork fixture is missing: '%1'. Generate it with "
+                          "loop-preflight/tools/generate_fixtures.py. Set "
+                          "LOOP_REQUIRE_BLEED_STRESS_FIXTURES=1 when CI expects the "
+                          "generated stress corpus to be present.")
+        .arg(pdfPath);
+}
+
 QStringList checkIdsOf(const QJsonObject& report)
 {
     QStringList ids;
@@ -132,7 +146,14 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 {
     const QString profilePath = QDir(sourceDir()).filePath(QString::fromLatin1(STRESS_PROFILE));
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath }, &stdOut, exitCode))
+    if (!runPdfTool({ QStringLiteral("preflight"),
+                      pdfPath,
+                      QStringLiteral("--profile"),
+                      profilePath,
+                      QStringLiteral("--console-format"),
+                      QStringLiteral("json") },
+                    &stdOut,
+                    exitCode))
     {
         return false;
     }
@@ -146,7 +167,8 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 
     if (report)
     {
-        *report = document.object();
+        const QJsonObject envelope = document.object();
+        *report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
     }
 
     return true;
@@ -185,7 +207,12 @@ void BleedStressTest::aiArtFixtures_failBleedPreflight()
     const QString pdfPath = QDir(fixturesDir()).filePath(pdf);
     if (!QFile::exists(pdfPath))
     {
-        QSKIP("AI artwork fixture not generated yet. Run loop-preflight/tools/generate_fixtures.py.");
+        const QString message = missingStressFixtureMessage(pdfPath);
+        if (requireStressFixtures())
+        {
+            QFAIL(qPrintable(message));
+        }
+        QSKIP(qPrintable(message));
     }
 
     QJsonObject report;
@@ -218,7 +245,12 @@ void BleedStressTest::aiArtFixtures_repairClearsBleed()
     const QString pdfPath = QDir(fixturesDir()).filePath(pdf);
     if (!QFile::exists(pdfPath))
     {
-        QSKIP("AI artwork fixture not generated yet. Run loop-preflight/tools/generate_fixtures.py.");
+        const QString message = missingStressFixtureMessage(pdfPath);
+        if (requireStressFixtures())
+        {
+            QFAIL(qPrintable(message));
+        }
+        QSKIP(qPrintable(message));
     }
 
     QTemporaryDir temporaryDirectory;

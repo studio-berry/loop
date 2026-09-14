@@ -1,0 +1,126 @@
+{
+    "checks": [
+        {
+            "id": "bleed",
+            "status": "failed"
+        },
+        {
+            "id": "content-bleed",
+            "status": "warning"
+        }
+    ],
+    "errors": [
+        {
+            "bbox": [
+                0,
+                0,
+                380,
+                380
+            ],
+            "check_id": "bleed",
+            "message": "BleedBox is missing or less than 9 pt on one or more edges",
+            "page": 1,
+            "scope": "page",
+            "severity": "error",
+            "type": "bleed"
+        }
+    ],
+    "fixups_available": [
+        {
+            "description": "Extend page boxes / artwork to provide bleed",
+            "id": "add-bleed",
+            "params": {
+                "amount_pt": 9,
+                "mode": "mirror"
+            },
+            "safe": false
+        }
+    ],
+    "inspection_complete": true,
+    "pass": false,
+    "profile": "Sinalite Tiered Bleed (Raster Confirm)",
+    "schema_kind": "preflight-report",
+    "schema_version": 3,
+    "verdict": {
+        "blocking_finding_ids": [
+            "3a4460522d49cd5b"
+        ],
+        "reason": "One or more blocking findings require resolution or an active disposition.",
+        "reason_code": "blocking-findings",
+        "state": "fail",
+        "waived_finding_ids": [
+        ]
+    },
+    "warnings": [
+        {
+            "bbox": [
+                11,
+                20,
+                20,
+                380
+            ],
+            "check_id": "content-bleed",
+            "message": "Bleed margin empty on left edge",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "bleed-margin-empty"
+        },
+        {
+            "bbox": [
+                380,
+                20,
+                389,
+                380
+            ],
+            "check_id": "content-bleed",
+            "message": "Bleed margin empty on right edge",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "bleed-margin-empty"
+        },
+        {
+            "bbox": [
+                20,
+                380,
+                380,
+                389
+            ],
+            "check_id": "content-bleed",
+            "message": "Bleed margin empty on top edge",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "bleed-margin-empty"
+        },
+        {
+            "bbox": [
+                20,
+                11,
+                380,
+                20
+            ],
+            "check_id": "content-bleed",
+            "message": "Bleed margin empty on bottom edge",
+            "page": 1,
+            "scope": "object",
+            "severity": "warning",
+            "type": "bleed-margin-empty"
+        },
+        {
+            "bbox": [
+                20,
+                20,
+                380,
+                380
+            ],
+            "check_id": "content-bleed",
+            "message": "Page is a candidate for the add-bleed fixup",
+            "page": 1,
+            "scope": "page",
+            "severity": "info",
+            "type": "needs-auto-bleed"
+        }
+    ]
+}

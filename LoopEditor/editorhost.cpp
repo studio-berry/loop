@@ -28,10 +28,20 @@
 #include "interactionstate.h"
 #include "interactiontarget.h"
 #include "loopcanvasitem.h"
+#include "loopstatevisual.h"
+#include "looptokens.h"
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
+#include "preflightclirun.h"
+#include "preflightrunsubmitter.h"
+#include "shellinspectordispatch.h"
 #include "previewstatemodel.h"
+#include "productionmodel.h"
 
+#include "pdfdocumentsession.h"
+#include "pdfsafefilewriter.h"
+
+#include "pdfblockingthreadguard.h"
 #include "pdfpage.h"
 #include "pdftransparencyrenderer.h"
 
@@ -39,19 +49,27 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QCoreApplication>
+#include <QFile>
 #include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QKeySequence>
 #include <QMetaEnum>
 #include <QScreen>
+#include <QStandardPaths>
+#include <QUuid>
 #include <QUrl>
 
+#include <algorithm>
+#include <memory>
 #include <optional>
+#include <stdexcept>
+#include <utility>
 
 namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
-
 int rotationToDegrees(pdf::PageRotation rotation)
 {
     switch (rotation)
@@ -87,8 +105,15 @@ QString preflightStateToString(pdfinteraction::PreflightController::State state)
             return QStringLiteral("stale");
         case pdfinteraction::PreflightController::State::Incomplete:
             return QStringLiteral("incomplete");
+        case pdfinteraction::PreflightController::State::Error:
+            return QStringLiteral("error");
     }
     return QStringLiteral("not-checked");
+}
+
+pdfquick::tokens::LoopStateVisual resolvedPreflightVisual(const QString& stateName)
+{
+    return pdfquick::tokens::resolvePreflightStateVisual(stateName);
 }
 
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
@@ -98,6 +123,9 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     entry.insert(QStringLiteral("labelKey"), descriptor.labelKey);
     entry.insert(QStringLiteral("implemented"), descriptor.isImplemented());
     entry.insert(QStringLiteral("enabled"), enabled);
+    entry.insert(QStringLiteral("target"), descriptor.target);
+    entry.insert(QStringLiteral("disposition"), descriptor.disposition);
+    entry.insert(QStringLiteral("menuGroup"), descriptor.menuGroup);
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
@@ -113,8 +141,30 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
     m_session(std::make_unique<DocumentViewSession>(this)),
+    m_findingNavigator(std::make_unique<pdfinteraction::FindingCanvasNavigator>(
+        *m_session->revisionSource(),
+        m_session->viewport(),
+        *m_session->interaction(),
+        *m_session->overlays(),
+        pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry(),
+        this)),
     m_preflight(&m_session->scheduler(), this)
 {
+    pdf::PDFBlockingThreadGuard::registerInteractiveThread();
+
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::changed, this,
+            [this]
+            {
+                Q_EMIT preflightProfilesChanged();
+                bumpPresentation();
+            });
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::profileStaleRequested, this,
+            [this]
+            { m_preflight.markProfileStale(); });
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::checkSetStaleRequested, this,
+            [this]
+            { m_preflight.markCheckSetStale(); });
+
     connectFacade();
     connectViewport();
     connectCatalog();
@@ -128,20 +178,59 @@ EditorHost::EditorHost(QObject* parent) :
     m_preflightOverlayBridge.setInteractionController(m_session->interaction());
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_preflight, &pdfinteraction::PreflightController::progressChanged, this, &EditorHost::bumpPresentation);
     connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::inspectionModeRequested,
+            this, [this](const pdfinteraction::FindingInspectionModeRequest& request)
+            { setInspectionMode(QString::fromLatin1(pdfinteraction::getFindingInspectionModeName(request.mode))); });
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::inspectionModeReset,
+            this, [this]
+            { setInspectionMode(QStringLiteral("page")); });
+    connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::navigationApplied,
+            this, [this](const pdfinteraction::FindingNavigationResult& result)
+            {
+                if (result.inspectionMode == pdfinteraction::FindingInspectionMode::None)
+                {
+                    setInspectionMode(QStringLiteral("page"));
+                } });
     connect(&m_inspector, &pdfinteraction::InspectorModel::selectionChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preview, &pdfinteraction::PreviewStateModel::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_production, &pdfinteraction::ProductionModel::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_documentModel, &QuickDocumentModel::searchChanged, this, [this]
             {
                 refreshFeatureAvailability();
                 bumpPresentation();
                 bumpCommandEpoch(); });
+
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobQueued, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            {
+                m_activeAsyncJobs.insert(snapshot.jobId, snapshot.kind);
+                refreshCanvasTrace(); });
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobProgress, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            { m_preflight.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress); });
+    connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
+            {
+                m_activeAsyncJobs.remove(snapshot.jobId);
+                finishPreflightJob(snapshot);
+                refreshCanvasTrace(); });
 }
 
 EditorHost::~EditorHost()
 {
+    m_acceptPreflightResults = false;
+    cancelPreflight();
+    QObject::disconnect(&m_session->scheduler(), nullptr, this, nullptr);
     unbindCanvas();
+
+    // The guard registration is global process state owned by the thread that
+    // built this host, so pair it with the host's lifetime: a host destroyed and
+    // recreated in one process must not leave a registration behind that keeps
+    // refusing synchronous blocking work on that thread.
+    if (pdf::PDFBlockingThreadGuard::isCurrentThreadInteractive())
+    {
+        pdf::PDFBlockingThreadGuard::clearInteractiveThread();
+    }
 }
 
 QString EditorHost::documentState() const
@@ -232,6 +321,20 @@ void EditorHost::goToOutlinePage(int pageIndex)
     goToPage(pageIndex);
 }
 
+void EditorHost::setWorkspace(LoopWorkspace workspace)
+{
+    if (!isWorkspaceEnabled(workspace) || workspace == m_workspace)
+    {
+        return;
+    }
+
+    const LoopWorkspace previous = m_workspace;
+    m_workspace = workspace;
+    m_workspaceRequest = -1;
+    Q_EMIT workspaceChanged(previous, workspace);
+    bumpPresentation();
+}
+
 void EditorHost::acknowledgeWorkspaceRequest()
 {
     if (m_workspaceRequest < 0)
@@ -239,8 +342,44 @@ void EditorHost::acknowledgeWorkspaceRequest()
         return;
     }
 
+    const LoopWorkspace requested = static_cast<LoopWorkspace>(m_workspaceRequest);
     m_workspaceRequest = -1;
-    Q_EMIT presentationChanged();
+    setWorkspace(requested);
+}
+
+QString EditorHost::documentShellStatus() const
+{
+    return QString::fromLatin1(
+        pdfinteraction::getShellDocumentStatusName(m_session->facade().shellDocumentStatus()));
+}
+
+QString EditorHost::productionStateName() const
+{
+    if (!hasDocument())
+    {
+        return QStringLiteral("NOT_READY");
+    }
+
+    switch (m_session->facade().outputState())
+    {
+        case pdfinteraction::DocumentOutputState::Pending:
+            return QStringLiteral("OPERATION_PENDING");
+        case pdfinteraction::DocumentOutputState::Saved:
+            return QStringLiteral("OUTPUT_WRITTEN");
+        case pdfinteraction::DocumentOutputState::None:
+            break;
+    }
+
+    return pdfinteraction::ProductionModel::stateName(m_production.state());
+}
+
+bool EditorHost::allowDeveloperDiagnostics() const
+{
+#ifdef LOOP_LOOP_DISTRIBUTION_BUILD
+    return false;
+#else
+    return true;
+#endif
 }
 
 void EditorHost::acknowledgeSearchPanel()
@@ -257,6 +396,88 @@ void EditorHost::acknowledgeSearchPanel()
 QString EditorHost::preflightStateName() const
 {
     return preflightStateToString(m_preflight.state());
+}
+
+QVariantMap EditorHost::preflightStateVisual() const
+{
+    const pdfquick::tokens::LoopStateVisual visual = resolvedPreflightVisual(preflightStateName());
+
+    QVariantMap result;
+    result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
+    result.insert(QStringLiteral("colorRole"), pdfquick::tokens::colorRoleName(visual.colorRole));
+    result.insert(QStringLiteral("icon"), pdfquick::tokens::stateIconName(visual.icon));
+    result.insert(QStringLiteral("accessibleName"), visual.accessibleName);
+    return result;
+}
+
+QColor EditorHost::preflightStateColor() const
+{
+    const pdfquick::tokens::LoopStateVisual visual = resolvedPreflightVisual(preflightStateName());
+    const pdfquick::tokens::LoopTheme theme =
+        highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
+    return pdfquick::tokens::color(visual.colorRole, theme);
+}
+
+QString EditorHost::preflightOperatorSummary() const
+{
+    return m_preflight.operatorSummary();
+}
+
+QVariantList EditorHost::preflightProfiles() const
+{
+    QVariantList profiles;
+    profiles.reserve(m_preflightProfileCatalog.profiles().size());
+    for (const pdfinteraction::PreflightProfileChoice& profile : m_preflightProfileCatalog.profiles())
+    {
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), profile.id);
+        item.insert(QStringLiteral("name"), profile.name);
+        item.insert(QStringLiteral("version"), profile.version);
+        item.insert(QStringLiteral("source"), profile.source.startsWith(QLatin1Char(':'))
+                                                  ? tr("Bundled")
+                                                  : tr("Local"));
+        item.insert(QStringLiteral("digest"), profile.digest);
+        item.insert(QStringLiteral("valid"), profile.valid);
+        item.insert(QStringLiteral("diagnostic"), profile.diagnostic);
+        profiles.append(item);
+    }
+    return profiles;
+}
+
+QVariantList EditorHost::preflightVariables() const
+{
+    const pdfinteraction::PreflightProfileChoice* selected = m_preflightProfileCatalog.selectedProfile();
+    if (selected == nullptr)
+    {
+        return {};
+    }
+
+    QVariantList variables;
+    const QStringList names = selected->variables.keys();
+    const QJsonObject bindings = m_preflightProfileCatalog.bindings();
+    for (const QString& name : names)
+    {
+        const QJsonObject declaration = selected->variables.value(name).toObject();
+        QVariantMap item;
+        item.insert(QStringLiteral("name"), name);
+        item.insert(QStringLiteral("type"), declaration.value(QStringLiteral("type")).toString());
+        item.insert(QStringLiteral("required"), declaration.value(QStringLiteral("required")).toBool());
+        item.insert(QStringLiteral("description"), declaration.value(QStringLiteral("description")).toString());
+        item.insert(QStringLiteral("value"), bindings.contains(name)
+                                                 ? bindings.value(name).toVariant()
+                                                 : declaration.value(QStringLiteral("default")).toVariant());
+        if (declaration.contains(QStringLiteral("min")))
+            item.insert(QStringLiteral("min"), declaration.value(QStringLiteral("min")).toVariant());
+        if (declaration.contains(QStringLiteral("max")))
+            item.insert(QStringLiteral("max"), declaration.value(QStringLiteral("max")).toVariant());
+        variables.append(item);
+    }
+    return variables;
+}
+
+QString EditorHost::selectedPreflightProfileId() const
+{
+    return m_preflightProfileCatalog.selectedProfileId();
 }
 
 QString EditorHost::previewSummary() const
@@ -352,7 +573,6 @@ void EditorHost::selectFinding(const QString& findingId)
         return;
     }
 
-    const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.findingsModel()->setSelectedFinding(findingId);
     m_inspector.setFindingSelection(*m_preflight.findingsModel(), findingId, documentRevision);
@@ -360,11 +580,40 @@ void EditorHost::selectFinding(const QString& findingId)
     pdfinteraction::PreflightController::EvidenceNavigationRequest request;
     if (!m_preflight.navigationFor(findingId, &request))
     {
+        setInspectionMode(QStringLiteral("page"));
         bumpPresentation();
         return;
     }
 
     onPreflightNavigation(request);
+}
+
+bool EditorHost::selectNextFinding()
+{
+    return moveFindingSelection(1);
+}
+
+bool EditorHost::selectPreviousFinding()
+{
+    return moveFindingSelection(-1);
+}
+
+bool EditorHost::moveFindingSelection(int direction)
+{
+    if (!hasDocument() || direction == 0)
+    {
+        return false;
+    }
+
+    pdfinteraction::PreflightFindingsModel* findings = m_preflight.findingsModel();
+    const QString findingId = findings->adjacentFindingId(findings->selectedFindingId(), direction);
+    if (findingId.isEmpty())
+    {
+        return false;
+    }
+
+    selectFinding(findingId);
+    return true;
 }
 
 void EditorHost::announceDocumentState(const QString& message)
@@ -376,6 +625,117 @@ void EditorHost::announceDocumentState(const QString& message)
 
     QAccessibleAnnouncementEvent event(this, message);
     QAccessible::updateAccessibility(&event);
+}
+
+bool EditorHost::runPreflight()
+{
+    if (!hasDocument() || m_preflight.state() == pdfinteraction::PreflightController::State::Running ||
+        !m_session->revisionSource())
+    {
+        return false;
+    }
+
+    const pdfinteraction::PreflightProfileChoice* profile = m_preflightProfileCatalog.selectedProfile();
+    if (profile == nullptr || !profile->valid)
+    {
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document)
+    {
+        return false;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Preflight;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = documentKey;
+    spec.documentRevision = documentRevision;
+    spec.operationId = QStringLiteral("preflight.%1").arg(profile->id);
+    spec.checkId = profile->name;
+    spec.progressModel = QStringLiteral("preflight-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    m_preflight.beginRun(documentKey,
+                         documentRevision,
+                         profile->digest,
+                         jobId);
+    auto outcome = std::make_shared<pdfinteraction::PreflightRunOutcome>();
+    m_preflightOutcomes.insert(jobId, outcome);
+
+    pdfinteraction::PreflightRunRequest request;
+    request.document = document;
+    request.profile = *profile;
+    request.bindings = m_preflightProfileCatalog.bindings();
+    request.sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
+
+    const QString submittedId = m_session->scheduler().submit(spec, pdfinteraction::makePreflightRunWorker(request, outcome));
+    if (submittedId != jobId)
+    {
+        m_preflightOutcomes.remove(jobId);
+        m_preflight.failRun(jobId, documentRevision, tr("Unable to submit preflight work."));
+        return false;
+    }
+
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::cancelPreflight()
+{
+    return m_preflight.cancelRun(m_preflight.jobId());
+}
+
+bool EditorHost::selectPreflightProfile(const QString& id)
+{
+    if (!m_preflightProfileCatalog.selectProfile(id))
+    {
+        return false;
+    }
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setPreflightVariable(const QString& name, const QVariant& value)
+{
+    if (!m_preflightProfileCatalog.setVariable(name, value))
+    {
+        return false;
+    }
+    bumpPresentation();
+    return true;
+}
+
+void EditorHost::requestPreflightReportExport()
+{
+    if (m_preflight.hasResult())
+    {
+        Q_EMIT preflightReportExportRequested();
+    }
+}
+
+bool EditorHost::exportPreflightReportFileUrl(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile() || !m_preflight.hasResult())
+    {
+        return false;
+    }
+    const QByteArray report = m_preflight.serializedReport(m_session->facade().source().path);
+    const pdf::PDFOperationResult result = pdf::PDFSafeFileWriter::writeData(
+        url.toLocalFile(), report, pdf::PDFSafeFileWriter::OverwritePolicy::Overwrite);
+    if (!result)
+    {
+        announceDocumentState(tr("Could not export the preflight report: %1").arg(result.getErrorMessage()));
+        return false;
+    }
+    announceDocumentState(tr("Preflight report exported."));
+    return true;
 }
 
 QVariantList EditorHost::commandDescriptors() const
@@ -452,6 +812,13 @@ void EditorHost::cancelPendingOperation()
 void EditorHost::attachCanvas(QObject* canvasObject)
 {
     m_canvas = qobject_cast<pdfquick::LoopCanvasItem*>(canvasObject);
+    if (m_canvas)
+    {
+        m_canvas->ensureTraceRecorder();
+        m_canvas->setAsyncWorkKindsProvider([this]
+                                            { return activeAsyncWorkKinds(); });
+        refreshCanvasTrace();
+    }
     if (m_documentBound)
     {
         bindCanvas();
@@ -461,6 +828,10 @@ void EditorHost::attachCanvas(QObject* canvasObject)
 void EditorHost::detachCanvas()
 {
     unbindCanvas();
+    if (m_canvas)
+    {
+        m_canvas->setAsyncWorkKindsProvider({});
+    }
     m_canvas.clear();
 }
 
@@ -547,6 +918,8 @@ void EditorHost::connectFacade()
             this,
             [this](const pdf::PDFRevisionIdentity&, const pdf::PDFRevisionIdentity&)
             {
+                cancelPreflight();
+                syncRevisionModels();
                 if (m_documentBound)
                 {
                     m_documentModel.setDocument(&m_session->context());
@@ -570,6 +943,7 @@ void EditorHost::connectFacade()
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::facetsChanged, this, [this](pdfinteraction::DocumentFacets)
             {
                 syncDocumentLifecycle();
+                syncProductionState();
                 bumpPresentation(); });
 
     connect(&m_session->facade(), &pdfinteraction::DocumentFacade::documentReplaced, this, [this](quint64)
@@ -596,6 +970,10 @@ void EditorHost::connectViewport()
 
 void EditorHost::connectInteraction()
 {
+    connect(m_session->interaction(),
+            &pdfinteraction::InteractionController::selectionChanged,
+            this,
+            &EditorHost::onInteractionSelectionChanged);
     connect(m_session->interaction(),
             &pdfinteraction::InteractionController::dragCompleted,
             this,
@@ -654,13 +1032,13 @@ void EditorHost::registerFeatureHandlers()
     bind(QStringLiteral("actionFind"), [this]
          {
              m_searchPanelVisible = true;
-             m_workspaceRequest = 0; });
+             setWorkspace(LoopWorkspace::Document); });
     bind(QStringLiteral("actionFindNext"), [this]
          { moveSearch(1); });
     bind(QStringLiteral("actionFindPrevious"), [this]
          { moveSearch(-1); });
     bind(QStringLiteral("actionProperties"), [this]
-         { m_workspaceRequest = 2; });
+         { setWorkspace(LoopWorkspace::Inspect); });
     refreshFeatureAvailability();
 }
 
@@ -739,6 +1117,7 @@ void EditorHost::onDocumentReady()
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
+    onInteractionSelectionChanged({});
     announceDocumentState(tr("Document ready."));
 }
 
@@ -767,13 +1146,19 @@ void EditorHost::syncDocumentLifecycle()
 
 void EditorHost::onDocumentGone()
 {
+    cancelPreflight();
+    if (m_findingNavigator)
+    {
+        m_findingNavigator->invalidate();
+    }
     unbindCanvas();
     m_session->clearDocumentView();
-    m_preflight.findingsModel()->clear();
+    m_preflight.clear();
     m_inspector.clearSelection();
     m_documentModel.clear();
     m_searchRow = -1;
     m_preview.clear();
+    m_production.clear();
     m_session->hitTest()->clearSources();
     m_documentBound = false;
     updateCanvasAccessibilitySummary();
@@ -804,6 +1189,73 @@ void EditorHost::unbindCanvas()
     m_canvas->bind(nullptr, nullptr, nullptr);
 }
 
+QStringList EditorHost::activeAsyncWorkKinds() const
+{
+    QStringList kinds;
+    kinds.reserve(m_activeAsyncJobs.size());
+    for (auto it = m_activeAsyncJobs.cbegin(); it != m_activeAsyncJobs.cend(); ++it)
+    {
+        kinds.append(QString::fromLatin1(pdf::getPDFJobKindName(it.value())));
+    }
+    kinds.removeDuplicates();
+    std::sort(kinds.begin(), kinds.end());
+    return kinds;
+}
+
+void EditorHost::acceptPreflightResult(const QString& jobId,
+                                       const QString& documentRevision,
+                                       const pdf::PreflightResult& result)
+{
+    if (m_acceptPreflightResults && m_preflight.acceptResult(jobId, documentRevision, result))
+    {
+        refreshCanvasTrace();
+        bumpPresentation();
+    }
+}
+
+void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const std::shared_ptr<pdfinteraction::PreflightRunOutcome> outcome = m_preflightOutcomes.take(snapshot.jobId);
+    if (snapshot.jobId != m_preflight.jobId() || m_preflight.state() != pdfinteraction::PreflightController::State::Running)
+    {
+        return;
+    }
+
+    switch (snapshot.status)
+    {
+        case pdf::PDFJobStatus::Succeeded:
+            if (outcome)
+            {
+                acceptPreflightResult(snapshot.jobId, snapshot.documentRevision, outcome->result);
+            }
+            else
+            {
+                m_preflight.failRun(snapshot.jobId, snapshot.documentRevision, tr("Preflight result was unavailable."));
+            }
+            break;
+        case pdf::PDFJobStatus::Failed:
+            m_preflight.failRun(snapshot.jobId, snapshot.documentRevision, snapshot.errorMessage);
+            break;
+        case pdf::PDFJobStatus::Cancelled:
+            m_preflight.cancelRun(snapshot.jobId);
+            break;
+        case pdf::PDFJobStatus::Stale:
+            syncRevisionModels();
+            break;
+        case pdf::PDFJobStatus::Queued:
+        case pdf::PDFJobStatus::Running:
+            break;
+    }
+}
+
+void EditorHost::refreshCanvasTrace()
+{
+    if (m_canvas)
+    {
+        m_canvas->update();
+    }
+}
+
 void EditorHost::syncRevisionModels()
 {
     if (!m_session->revisionSource())
@@ -811,11 +1263,17 @@ void EditorHost::syncRevisionModels()
         return;
     }
 
+    if (m_findingNavigator)
+    {
+        m_findingNavigator->invalidate();
+    }
+
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
+    m_production.setCurrentRevision(documentKey, documentRevision);
 
     if (hasDocument())
     {
@@ -825,7 +1283,34 @@ void EditorHost::syncRevisionModels()
                            tr("Production preview is approximate until proof mode is active."),
                            tr("The current view uses the standard render path."),
                            QString());
+        syncProductionState();
     }
+}
+
+void EditorHost::syncProductionState()
+{
+    if (!m_session->revisionSource() || !hasDocument())
+    {
+        return;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    pdfinteraction::ProductionModel::State state = pdfinteraction::ProductionModel::State::Ready;
+    if (m_session->facade().outputState() == pdfinteraction::DocumentOutputState::Pending)
+    {
+        state = pdfinteraction::ProductionModel::State::OperationPending;
+    }
+    else if (m_session->facade().outputState() == pdfinteraction::DocumentOutputState::Saved)
+    {
+        state = pdfinteraction::ProductionModel::State::OutputWritten;
+    }
+    else if (m_preview.status() == pdfinteraction::PreviewStateModel::Status::Unavailable)
+    {
+        state = pdfinteraction::ProductionModel::State::NotReady;
+    }
+
+    m_production.setState(documentKey, documentRevision, state);
 }
 
 void EditorHost::updateCanvasAccessibilitySummary()
@@ -850,20 +1335,49 @@ void EditorHost::updateCanvasAccessibilitySummary()
 
 void EditorHost::onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request)
 {
-    if (!m_session->interaction() || request.page <= 0)
+    if (!m_session->revisionSource() ||
+        request.documentKey != m_session->revisionSource()->documentKey() ||
+        request.documentRevision != m_session->facade().currentRevision().toString())
     {
         return;
     }
 
-    m_session->commandBridge().goToPage(request.page - 1);
+    const pdfinteraction::PreflightFindingView* finding = m_preflight.findingsModel()->finding(request.findingId);
+    if (!finding || !m_findingNavigator)
+    {
+        return;
+    }
 
-    pdfinteraction::InteractionTarget target;
-    target.kind = pdfinteraction::InteractionTargetKind::Finding;
-    target.pageIndex = request.page - 1;
-    target.id = request.findingId;
-    target.pageBounds = request.bbox;
-    m_session->interaction()->selectTarget(target);
+    const pdfinteraction::FindingNavigationResult result =
+        m_findingNavigator->navigate(pdfinteraction::FindingNavigationRequest::fromFinding(*finding));
+    if (!result.accepted())
+    {
+        return;
+    }
     bumpPresentation();
+}
+
+bool EditorHost::isWorkspaceEnabled(LoopWorkspace workspace) const
+{
+    // QML supplies registered enum values, but the public invokable can also
+    // be reached through QVariant/int callers. Reject out-of-range values and
+    // the explicitly deferred Compare destination fail-closed.
+    if (workspace < LoopWorkspace::Document || workspace > LoopWorkspace::Compare)
+    {
+        return false;
+    }
+
+    return workspace != LoopWorkspace::Compare;
+}
+
+void EditorHost::setInspectionMode(QString mode)
+{
+    mode = mode.trimmed().isEmpty() ? QStringLiteral("page") : std::move(mode);
+    if (m_inspectionMode == mode)
+    {
+        return;
+    }
+    m_inspectionMode = std::move(mode);
 }
 
 void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
@@ -873,4 +1387,50 @@ void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
     {
         m_session->interaction()->refreshOverlay();
     }
+}
+
+void EditorHost::onInteractionSelectionChanged(pdfinteraction::InteractionTarget target)
+{
+    if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
+    {
+        selectFinding(target.id);
+        bumpPresentation();
+        return;
+    }
+
+    setInspectionMode(QStringLiteral("page"));
+    if (!m_session->revisionSource() || !hasDocument())
+    {
+        m_inspector.clearSelection();
+        bumpPresentation();
+        return;
+    }
+
+    m_inspector.setSelection(pdfinteraction::buildInspectorSelection(target, inspectorContext()));
+    bumpPresentation();
+}
+
+pdfinteraction::ShellInspectorContext EditorHost::inspectorContext() const
+{
+    pdfinteraction::ShellInspectorContext context;
+    if (m_session->revisionSource())
+    {
+        context.documentKey = m_session->revisionSource()->documentKey();
+        context.documentRevision = m_session->facade().currentRevision().toString();
+    }
+    context.displayTitle = displayTitle();
+    context.pageCount = pageCount();
+    context.documentShellStatus = documentShellStatus();
+    context.preflightStateName = preflightStateName();
+    context.productionStateName = productionStateName();
+    context.rotationDegrees = rotationDegrees();
+    context.hasOptionalContent = m_documentModel.hasOptionalContent();
+    context.canvasTitle = tr("Document canvas");
+    context.imageTitle = tr("Image");
+    context.separationTitle = tr("Separation");
+    context.pageTitlePrefix = tr("Page %1");
+    context.pageBoxTitlePrefix = tr("Page box: %1");
+    context.optionalContentPresent = tr("present");
+    context.optionalContentNone = tr("none");
+    return context;
 }

@@ -22,6 +22,7 @@
 
 #include "preflightfindingsmodel.h"
 
+#include <QSet>
 #include <QVariant>
 
 namespace pdfinteraction
@@ -101,6 +102,10 @@ QVariant PreflightFindingsModel::data(const QModelIndex& index, int role) const
             return finding.evidenceIds;
         case SelectedRole:
             return finding.selected;
+        case WaivedRole:
+            return finding.waived;
+        case EvidenceRole:
+            return finding.evidence;
     }
     return {};
 }
@@ -120,19 +125,33 @@ QHash<int, QByteArray> PreflightFindingsModel::roleNames() const
         { CheckIdRole, "checkId" },
         { BoundingBoxRole, "boundingBox" },
         { EvidenceIdsRole, "evidenceIds" },
-        { SelectedRole, "selected" }
+        { SelectedRole, "selected" },
+        { WaivedRole, "waived" },
+        { EvidenceRole, "evidence" }
     };
 }
 
 PreflightFindingView PreflightFindingsModel::makeView(const QString& documentKey,
                                                       const QString& documentRevision,
-                                                      const pdf::PreflightFinding& finding)
+                                                      const pdf::PreflightFinding& finding,
+                                                      bool waived)
 {
-    return {
-        finding.stableId(), documentKey, documentRevision, finding.scope, finding.page,
-        finding.objectId, finding.severity, finding.type, finding.message, finding.checkId,
-        finding.bbox, finding.evidenceIds, false
-    };
+    PreflightFindingView view;
+    view.id = finding.stableId();
+    view.documentKey = documentKey;
+    view.documentRevision = documentRevision;
+    view.scope = finding.scope;
+    view.page = finding.page;
+    view.objectId = finding.objectId;
+    view.severity = finding.severity;
+    view.type = finding.type;
+    view.message = finding.message;
+    view.checkId = finding.checkId;
+    view.bbox = finding.bbox;
+    view.evidenceIds = finding.evidenceIds;
+    view.waived = waived;
+    view.evidence = finding.evidence;
+    return view;
 }
 
 void PreflightFindingsModel::replace(QString documentKey,
@@ -140,24 +159,55 @@ void PreflightFindingsModel::replace(QString documentKey,
                                      const QList<pdf::PreflightFinding>& errors,
                                      const QList<pdf::PreflightFinding>& warnings)
 {
+    replace(std::move(documentKey), std::move(documentRevision), errors, warnings, {});
+}
+
+void PreflightFindingsModel::replace(QString documentKey,
+                                     QString documentRevision,
+                                     const QList<pdf::PreflightFinding>& errors,
+                                     const QList<pdf::PreflightFinding>& warnings,
+                                     const QStringList& waivedFindingIds)
+{
+    const QSet<QString> waived(waivedFindingIds.cbegin(), waivedFindingIds.cend());
+
     QVector<PreflightFindingView> next;
     next.reserve(errors.size() + warnings.size());
     for (const pdf::PreflightFinding& finding : errors)
     {
-        next.push_back(makeView(documentKey, documentRevision, finding));
+        next.push_back(makeView(documentKey, documentRevision, finding, waived.contains(finding.stableId())));
     }
     for (const pdf::PreflightFinding& finding : warnings)
     {
-        next.push_back(makeView(documentKey, documentRevision, finding));
+        next.push_back(makeView(documentKey, documentRevision, finding, waived.contains(finding.stableId())));
     }
 
     beginResetModel();
     m_documentKey = std::move(documentKey);
     m_documentRevision = std::move(documentRevision);
     m_findings = std::move(next);
+    m_checkStatuses.clear();
+    m_fixupsAvailable.clear();
     m_selectedFindingId.clear();
     endResetModel();
     Q_EMIT findingsReplaced();
+    Q_EMIT reportChanged();
+}
+
+void PreflightFindingsModel::replace(QString documentKey,
+                                     QString documentRevision,
+                                     const pdf::PreflightResult& report,
+                                     const QStringList& waivedFindingIds)
+{
+    replace(std::move(documentKey), std::move(documentRevision),
+            report.errors, report.warnings, waivedFindingIds);
+    setReport(report);
+}
+
+void PreflightFindingsModel::setReport(const pdf::PreflightResult& report)
+{
+    m_checkStatuses = report.checkStatuses;
+    m_fixupsAvailable = report.fixupsAvailable;
+    Q_EMIT reportChanged();
 }
 
 void PreflightFindingsModel::clear()
@@ -166,9 +216,12 @@ void PreflightFindingsModel::clear()
     m_findings.clear();
     m_documentKey.clear();
     m_documentRevision.clear();
+    m_checkStatuses.clear();
+    m_fixupsAvailable.clear();
     m_selectedFindingId.clear();
     endResetModel();
     Q_EMIT findingsReplaced();
+    Q_EMIT reportChanged();
 }
 
 void PreflightFindingsModel::setSelectedFinding(const QString& findingId)
@@ -206,6 +259,38 @@ QString PreflightFindingsModel::findingIdAt(int row) const
     return m_findings.at(row).id;
 }
 
+int PreflightFindingsModel::rowForFindingId(const QString& findingId) const
+{
+    for (int row = 0; row < m_findings.size(); ++row)
+    {
+        if (m_findings.at(row).id == findingId)
+        {
+            return row;
+        }
+    }
+    return -1;
+}
+
+QString PreflightFindingsModel::adjacentFindingId(const QString& currentId, int direction) const
+{
+    if (direction == 0 || m_findings.isEmpty())
+    {
+        return QString();
+    }
+
+    int row = rowForFindingId(currentId);
+    if (row < 0)
+    {
+        row = direction > 0 ? 0 : m_findings.size() - 1;
+    }
+    else
+    {
+        row = (row + direction + m_findings.size()) % m_findings.size();
+    }
+
+    return findingIdAt(row);
+}
+
 bool PreflightFindingsModel::containsCurrent(const QString& findingId, const QString& documentRevision) const
 {
     return documentRevision == m_documentRevision && finding(findingId) != nullptr;
@@ -218,6 +303,18 @@ const PreflightFindingView* PreflightFindingsModel::finding(const QString& findi
         if (item.id == findingId)
         {
             return &item;
+        }
+    }
+    return nullptr;
+}
+
+const pdf::PreflightCheckStatus* PreflightFindingsModel::checkStatus(const QString& checkId) const
+{
+    for (const pdf::PreflightCheckStatus& status : m_checkStatuses)
+    {
+        if (status.id == checkId)
+        {
+            return &status;
         }
     }
     return nullptr;
@@ -302,7 +399,13 @@ QHash<QString, OverlaySeverity> PreflightFindingsModel::severityMap() const
     QHash<QString, OverlaySeverity> severities;
     for (const PreflightFindingView& finding : m_findings)
     {
-        severities.insert(finding.id, severityFromString(finding.severity));
+        // An actively waived finding is a recorded disposition, not a blocker:
+        // painting it as an error would contradict the PASS verdict the same
+        // controller just announced. The overlay vocabulary has no Waived
+        // severity of its own (adding one ripples through CanvasPalette and the
+        // Quick token set), so the non-blocking treatment is what it maps to.
+        severities.insert(finding.id,
+                          finding.waived ? OverlaySeverity::Info : severityFromString(finding.severity));
     }
     return severities;
 }

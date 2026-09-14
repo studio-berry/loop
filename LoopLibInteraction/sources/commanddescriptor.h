@@ -130,6 +130,10 @@ struct CommandDescriptor
     QString disposition;
     QString target;
 
+    /// Menu bar group from docs/loop-shell-actions.json. Replaces host-side
+    /// prefix/id routing tables; MenuModel.qml consumes this through EditorHost.
+    QString menuGroup;
+
     bool isImplemented() const { return availability == CommandAvailability::Implemented; }
     bool operator==(const CommandDescriptor&) const = default;
 };

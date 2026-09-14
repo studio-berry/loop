@@ -2,7 +2,7 @@
 
 **Status:** implemented
 **Implemented-at:** d7f517f8dd397e50131b896fba34d243950a9779
-**Last-verified:** 2026-08-10 @ 589133449398f029d8b6624b01b49aa4b3343591
+**Last-verified:** 2026-09-13 @ e65cdd19e0fb876adf367f0387c63996efcfebfa
 **Superseded-by:** none
 **Date:** 2026-07-12
 **Deciders:** MIC-151 epic review
@@ -23,11 +23,18 @@ CLI), the Editor sidecar integration, and PageMaster's batch preflight gate.
   emits normalized report schema version 3, including inspection completeness,
   per-check statuses, findings, evidence, decisions, and optional PDF/X results.
 - **Check registry:** Checks are registered by string ID → callable. The built-in
-  catalog is generated from `registerBuiltInChecks()` and includes bleed, trim,
-  page-size, processing-steps/dieline, content-bleed, ink-coverage, color-mode,
-  transparency-risk, thin-strokes, color-inventory, output-intent,
-  embedded-fonts, font-integrity, hidden-content variants, image-resolution,
-  and white-overprint. Callers can replace or add checks with `registerCheck()`.
+  catalog is emitted from `registerBuiltInChecks()` into
+  [`docs/generated/architecture-catalog.json`](../generated/architecture-catalog.json)
+  and [`docs/generated/preflight-check-catalog.json`](../generated/preflight-check-catalog.json).
+  Current built-ins include bleed, trim, page-size, processing-steps (alias
+  `dieline`), content-bleed, ink-coverage, color-mode, transparency-risk,
+  thin-strokes, thin-parts, color-inventory, output-intent, embedded-fonts,
+  font-integrity, hidden-content variants (`invisible-content`, `hidden-layers`,
+  `off-page-content`, `obscured-content`), image-resolution, and white-overprint.
+  Several checks evaluate from the shared Evidence Graph (`color-mode`,
+  `transparency-risk`, `thin-strokes`, `color-inventory`, `embedded-fonts`,
+  `image-resolution`, `white-overprint`) so one traversal feeds multiple rules.
+  Callers can replace or add checks with `registerCheck()`.
 - **Execution:** Profile checks run in declared order. Disabled checks become
   `skipped`; unknown checks become `unsupported`; contained failures and budget
   exhaustion remain visible in the normalized result. PDF/X policy reduction is
@@ -48,3 +55,5 @@ CLI), the Editor sidecar integration, and PageMaster's batch preflight gate.
 - The plugin's QProcess path consumes the normalized report and does not own a
   second check registry. Any future in-process integration must respect the
   session and renderer's synchronous, non-thread-safe boundary.
+- The generated preflight check catalog is the authoritative ID list; narrative
+  docs must not hand-maintain a parallel inventory.

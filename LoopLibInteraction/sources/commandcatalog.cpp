@@ -143,6 +143,12 @@ void CommandCatalog::load(const QByteArray& contract)
         descriptor.id = action.value(QStringLiteral("id")).toString();
         descriptor.disposition = action.value(QStringLiteral("disposition")).toString();
         descriptor.target = action.value(QStringLiteral("target")).toString();
+        descriptor.menuGroup = action.value(QStringLiteral("menu_group")).toString();
+        if (descriptor.menuGroup.isEmpty())
+        {
+            m_loadError = QStringLiteral("command-catalog/missing-menu-group");
+            return;
+        }
 
         if (descriptor.id.isEmpty() || !commandValue.isObject())
         {
