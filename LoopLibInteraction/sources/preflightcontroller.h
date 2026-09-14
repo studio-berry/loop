@@ -29,6 +29,7 @@
 #include "preflightengine.h"
 
 #include <QObject>
+#include <QJsonDocument>
 
 namespace pdfinteraction
 {
@@ -38,6 +39,8 @@ class PreflightController final : public QObject
     Q_OBJECT
 
     Q_PROPERTY(PreflightFindingsModel* findingsModel READ findingsModel CONSTANT)
+    Q_PROPERTY(QString operatorSummary READ operatorSummary NOTIFY stateChanged)
+    Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
 
 public:
     enum class State
@@ -48,7 +51,8 @@ public:
         Pass,
         Findings,
         Stale,
-        Incomplete
+        Incomplete,
+        Error
     };
     Q_ENUM(State)
 
@@ -60,6 +64,11 @@ public:
         int page = 0;
         QRectF bbox;
         QStringList evidenceIds;
+        bool pageNavigationSupported = true;
+        bool objectTargetingSupported = false;
+        bool overlayEvidenceSupported = false;
+        QString inspectionMode = QStringLiteral("page");
+        bool hasPreciseTarget = false;
     };
 
     explicit PreflightController(pdf::PDFJobScheduler* scheduler = nullptr, QObject* parent = nullptr);
@@ -67,16 +76,24 @@ public:
     PreflightFindingsModel* findingsModel() { return &m_findings; }
     const PreflightFindingsModel* findingsModel() const { return &m_findings; }
     State state() const { return m_state; }
+    QString operatorSummary() const { return m_operatorSummary; }
     QString documentKey() const { return m_documentKey; }
     QString documentRevision() const { return m_documentRevision; }
     QString profileDigest() const { return m_profileDigest; }
     QString jobId() const { return m_jobId; }
+    int progress() const noexcept { return m_progress; }
+    bool hasResult() const noexcept { return m_hasResult; }
+    QByteArray serializedReport(const QString& documentPath) const;
 
     void setCurrentRevision(QString documentKey, QString documentRevision);
+    void markProfileStale();
+    void markCheckSetStale();
     void beginRun(QString documentKey, QString documentRevision, QString profileDigest, QString jobId);
     bool updateProgress(const QString& jobId, const QString& documentRevision, int progress);
     bool acceptResult(const QString& jobId, const QString& documentRevision, const pdf::PreflightResult& result);
+    bool failRun(const QString& jobId, const QString& documentRevision, QString errorMessage);
     bool cancelRun(const QString& jobId);
+    void clear();
     bool navigationFor(const QString& findingId, EvidenceNavigationRequest* request) const;
     QVector<FindingOverlay> overlaysForPage(int page) const;
 
@@ -87,14 +104,22 @@ signals:
 
 private:
     void setState(State state);
+    void cancelSchedulerJob();
+    void markStale(QString summary);
+    void restoreRetainedState(State terminalState);
 
     PreflightFindingsModel m_findings;
     State m_state = State::NotChecked;
+    QString m_operatorSummary;
     QString m_documentKey;
     QString m_documentRevision;
     QString m_profileDigest;
     QString m_jobId;
+    int m_progress = 0;
     bool m_cancelRequested = false;
+    bool m_hasResult = false;
+    State m_retainedState = State::NotChecked;
+    pdf::PreflightResult m_result;
     pdf::PDFJobScheduler* m_scheduler = nullptr;
 };
 

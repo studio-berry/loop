@@ -205,6 +205,13 @@
         "UnitTestsQuickAccessibility"
       ],
       "title": "The Quick canvas accessible tree has one privacy-safe canvas node and no tile-level children"
+    },
+    {
+      "id": "I28",
+      "test_targets": [
+        "UnitTestsLoopStateVisual"
+      ],
+      "title": "Incomplete inspection and waived findings never render as passed"
     }
   ],
   "branch_policy": {
@@ -385,6 +392,7 @@
     "UnitTestsBleedFixup",
     "UnitTestsBleedMarginProbe",
     "UnitTestsBleedStress",
+    "UnitTestsBlockingThreadGuard",
     "UnitTestsBudgetCorpus",
     "UnitTestsBudgetExhaustion",
     "UnitTestsCanvasParity",
@@ -393,11 +401,13 @@
     "UnitTestsConversionOracle",
     "UnitTestsDiagnostics",
     "UnitTestsDocumentFacade",
+    "UnitTestsDocumentSearch",
     "UnitTestsDocumentSession",
     "UnitTestsDocumentViewSession",
     "UnitTestsEditorHost",
     "UnitTestsEvidenceGraph",
     "UnitTestsFilenameSanitizer",
+    "UnitTestsFindingNavigation",
     "UnitTestsFontEncoding",
     "UnitTestsHitTestSource",
     "UnitTestsHugeDocumentEnvelope",
@@ -407,9 +417,11 @@
     "UnitTestsIncrementalSave",
     "UnitTestsInteractionBoundary",
     "UnitTestsInteractionController",
+    "UnitTestsInteractionTraceContract",
     "UnitTestsJbig2Decoder",
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
+    "UnitTestsLoopStateVisual",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
@@ -428,6 +440,7 @@
     "UnitTestsPreflightChecks",
     "UnitTestsPreflightCorpus",
     "UnitTestsPreflightEngine",
+    "UnitTestsPreflightInteraction",
     "UnitTestsPreflightProfileResolver",
     "UnitTestsPreflightVerdict",
     "UnitTestsProcessingBudget",
@@ -446,7 +459,9 @@
     "UnitTestsRgbToCmyk",
     "UnitTestsSafeFileWriter",
     "UnitTestsSchemaEvolution",
+    "UnitTestsShellInspectorDispatch",
     "UnitTestsShellKeyboard",
+    "UnitTestsShellWorkspace",
     "UnitTestsStandardOracle",
     "UnitTestsTransparencyFlattener",
     "UnitTestsViewportCommands",

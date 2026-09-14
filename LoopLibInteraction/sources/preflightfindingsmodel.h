@@ -52,6 +52,10 @@ struct PreflightFindingView
     QRectF bbox;
     QStringList evidenceIds;
     bool selected = false;
+    /// True when an active operator disposition covers this finding, so it no
+    /// longer counts as blocking in the document's verdict.
+    bool waived = false;
+    QJsonObject evidence;
 };
 
 struct FindingOverlay
@@ -83,7 +87,9 @@ public:
         CheckIdRole,
         BoundingBoxRole,
         EvidenceIdsRole,
-        SelectedRole
+        SelectedRole,
+        WaivedRole,
+        EvidenceRole
     };
     Q_ENUM(Role)
 
@@ -97,13 +103,38 @@ public:
                  QString documentRevision,
                  const QList<pdf::PreflightFinding>& errors,
                  const QList<pdf::PreflightFinding>& warnings);
+
+    /// As above, and marks the findings named by \p waivedFindingIds as covered
+    /// by an active disposition. An overload rather than a defaulted parameter:
+    /// a default argument changes the exported symbol and this library's
+    /// callers link against it directly.
+    void replace(QString documentKey,
+                 QString documentRevision,
+                 const QList<pdf::PreflightFinding>& errors,
+                 const QList<pdf::PreflightFinding>& warnings,
+                 const QStringList& waivedFindingIds);
+    /// Replaces the findings and carries the matching report context into the
+    /// neutral interaction layer. The report remains the sole source for
+    /// check status, budget, and corrective-operation presentation.
+    void replace(QString documentKey,
+                 QString documentRevision,
+                 const pdf::PreflightResult& report,
+                 const QStringList& waivedFindingIds = {});
+    /// Updates report-owned context without re-reading the document or
+    /// changing the finding list. A controller can use this when it already
+    /// performed the finding replacement through the legacy overload.
+    void setReport(const pdf::PreflightResult& report);
     void clear();
     void setSelectedFinding(const QString& findingId);
 
     Q_INVOKABLE QString findingIdAt(int row) const;
+    Q_INVOKABLE int rowForFindingId(const QString& findingId) const;
+    Q_INVOKABLE QString adjacentFindingId(const QString& currentId, int direction) const;
 
     bool containsCurrent(const QString& findingId, const QString& documentRevision) const;
     const PreflightFindingView* finding(const QString& findingId) const;
+    const pdf::PreflightCheckStatus* checkStatus(const QString& checkId) const;
+    const QList<pdf::PreflightFixupConfig>& fixupsAvailable() const { return m_fixupsAvailable; }
     QVector<FindingOverlay> overlays(const QString& documentRevision, int page) const;
     QVector<PreflightFindingView> filtered(QString severity = {}, QString checkId = {}, int page = 0) const;
     QHash<QString, int> groupCounts(QString severity = {}) const;
@@ -118,13 +149,17 @@ public:
 signals:
     void selectedFindingIdChanged(const QString& findingId);
     void findingsReplaced();
+    void reportChanged();
 
 private:
     static PreflightFindingView makeView(const QString& documentKey,
                                          const QString& documentRevision,
-                                         const pdf::PreflightFinding& finding);
+                                         const pdf::PreflightFinding& finding,
+                                         bool waived);
 
     QVector<PreflightFindingView> m_findings;
+    QList<pdf::PreflightCheckStatus> m_checkStatuses;
+    QList<pdf::PreflightFixupConfig> m_fixupsAvailable;
     QString m_documentKey;
     QString m_documentRevision;
     QString m_selectedFindingId;

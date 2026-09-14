@@ -91,6 +91,6 @@ targeted Core tests before merging an authorized sync.
 | Editor plugins | `LoopEditorPlugins/` | Editor-only capabilities |
 | Tests | `UnitTests/` | Qt Test targets declared in `UnitTests/CMakeLists.txt` |
 | Preflight contract | `loop-preflight/` | Profiles, schemas, examples, and report documentation |
-| Architecture records | `docs/adr/`, `docs/` | Decisions, policy, plans, and generated factual catalogs |
+| Architecture records | `docs/adr/` ([index](adr/README.md)), `docs/` | Decisions, policy, plans, and generated factual catalogs |
 
 For module placement and build constraints, see [`AGENTS.md`](../AGENTS.md).

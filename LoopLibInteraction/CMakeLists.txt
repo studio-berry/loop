@@ -81,10 +81,14 @@ add_library(LoopLibInteraction STATIC
     sources/overlaybuilder.h
     sources/interactiontrace.cpp
     sources/interactiontrace.h
+    sources/interactiontracecontract.cpp
+    sources/interactiontracecontract.h
     sources/interactioncontroller.cpp
     sources/interactioncontroller.h
     sources/preflightcontroller.cpp
     sources/preflightcontroller.h
+    sources/findingnavigation.cpp
+    sources/findingnavigation.h
     sources/preflightfindingsmodel.cpp
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
