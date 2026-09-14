@@ -1,7 +1,7 @@
 <!-- GENERATED FILE: edit agent-policy.json and run scripts/agent/generate-adapters.py --write -->
 # Loop agent policy adapter
 
-Repository: `studio-berry/loop`; version: `0.2.0-alpha`; language: `C++20`; minimum Qt: `6.11.1`.
+Repository: `studio-berry/loop`; version: `0.2.1-alpha`; language: `C++20`; minimum Qt: `6.11.1`.
 
 ## Branches and safety
 

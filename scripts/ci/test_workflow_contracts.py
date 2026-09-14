@@ -224,7 +224,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn('--arg title "Linux_AppImage (${EXPECTED_SOURCE_SHA})"', workflow)
         self.assertIn('--arg title "Windows_MSI (${EXPECTED_SOURCE_SHA})"', workflow)
         self.assertNotIn('--commit "$EXPECTED_SOURCE_SHA"', workflow)
-        self.assertIn("Exclude CI evidence from release assets", workflow)
+        self.assertIn("verify_release_assets.py", workflow)
         self.assertIn("source_sha", workflow)
 
     def test_windows_relink_runs_before_msi_uninstall(self):
