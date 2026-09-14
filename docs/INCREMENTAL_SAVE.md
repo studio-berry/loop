@@ -31,13 +31,39 @@ operation defaults to new-artifact rather than being silently appended.
 - Redaction, sanitization, and other destructive operations must use the full
   writer. The redaction verifier continues to reject a redacted output that
   contains `/Prev`.
-- A new-artifact policy cannot overwrite the trusted source; the Editor routes
-  it to Save As and rejects an attempt to use the source path as the output.
+- A new-artifact policy cannot overwrite the trusted source: Core refuses a candidate
+  write whose output resolves to the transaction's `sourcePath`, and PdfTool refuses
+  the same path for the corrective commands it drives.
 - If the source cannot be read again, the interactive save is refused rather
   than risking a full rewrite of a signed or revisioned source.
 - A changed signature dictionary, removed object slot, source-byte mismatch, or
   encryption-mode change causes incremental save to fail and requires a full
   rewrite or an explicit user-facing recovery path.
+
+### Policy strength
+
+The declared policy is a floor, not a hint. `savePolicyIsWeaker()` compares a
+caller's request with the operation's declaration: a weaker mode, an unstated
+signature loss, or a claimed reversibility the operation does not have. A
+strictly stronger mode is never weaker, so asking for more safety is always
+allowed. `PDFRepairTransaction::setRequestedSavePolicy()` accepts a stricter
+request and refuses a weaker one before `analyze()`, `apply()` or
+`serializeCandidate()` do any work, and the refusal is remembered so a caller
+cannot retry past it. `pdf::validateSaveRequest()` applies the same rule at the
+save boundary and additionally refuses a candidate whose output resolves to
+`PDFRepairTransactionOptions::sourcePath`. PdfTool reports the refusal as
+diagnostic `save-policy.refused` with exit code 4.
+
+These guarantees are pinned by name, not by convention:
+`everyRegisteredOperationDeclaresItsSavePolicy` (no registered operation may
+rely on the undeclared default),
+`transactionRejectsAWeakenedSavePolicyBeforeMutation`,
+`saveRequestRefusesToWriteOverTheTrustedSource`,
+`candidateSaveRefusesToOverwriteTheSourceOnDisk`,
+`sourceBytesSurviveSuccessCancelAndFailure`,
+`noNonIncrementalOperationCanBeAppendedToASignedSource`, and, for the
+corrective CLI commands, `addBleedRefusesToWriteOverItsOwnInput` and
+`rgbToCmykRefusesToWriteOverItsOwnInput`.
 
 The editor content-save path preserves object numbers and does not run the
 storage-shrinking optimizer before the controller chooses its write mode. This
