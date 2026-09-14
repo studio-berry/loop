@@ -62,6 +62,7 @@ private slots:
     void builtInOperations_areRegistered();
     void builtInOperations_declareSavePolicies();
     void everyRegisteredOperationDeclaresItsSavePolicy();
+    void transactionRejectsAWeakenedSavePolicyBeforeMutation();
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
@@ -143,6 +144,33 @@ void RepairOperationTest::everyRegisteredOperationDeclaresItsSavePolicy()
     QCOMPARE(QString::fromLatin1(pdf::getPDFSaveModeName(undeclared.mode)), QStringLiteral("save-as-new-artifact"));
     QVERIFY(undeclared.invalidatesSignatures);
     QVERIFY(!pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit")).isUndeclared());
+}
+
+void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+
+    pdf::PDFRepairTransaction transaction(source);
+    QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                            QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                         { QStringLiteral("force"), true } }));
+    // add-bleed declares save-as-new-artifact; asking for an append is weaker.
+    const pdf::PDFOperationResult weakened = transaction.setRequestedSavePolicy(
+        pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("caller wants an append")));
+    QVERIFY(!weakened);
+    QCOMPARE(weakened.getErrorMessage(),
+             QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'save-as-new-artifact'."));
+    QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Failed);
+    QVERIFY(!transaction.analyze());
+    QVERIFY(!transaction.apply());
+
+    // Stricter than declared is accepted and does not change the declared policy.
+    pdf::PDFRepairTransaction stricter(source);
+    QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")), QJsonObject{}));
+    QVERIFY(stricter.setRequestedSavePolicy(pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller wants a rewrite"))));
+    QCOMPARE(stricter.savePolicy().mode, pdf::PDFSaveMode::IncrementalAppend);
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()

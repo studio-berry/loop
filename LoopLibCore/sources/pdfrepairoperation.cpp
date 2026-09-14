@@ -373,6 +373,13 @@ PDFOperationResult PDFRepairTransaction::add(const PDFRepairOperation* operation
 
 PDFOperationResult PDFRepairTransaction::analyze()
 {
+    const PDFOperationResult savePolicyRefusal = refuseWeakenedSavePolicy();
+    if (!savePolicyRefusal)
+    {
+        m_status = PDFRepairStatus::Failed;
+        return savePolicyRefusal;
+    }
+
     m_plans.clear();
     m_results.clear();
     m_analyzed = true;
@@ -416,6 +423,13 @@ PDFOperationResult PDFRepairTransaction::analyze()
 
 PDFOperationResult PDFRepairTransaction::apply()
 {
+    const PDFOperationResult savePolicyRefusal = refuseWeakenedSavePolicy();
+    if (!savePolicyRefusal)
+    {
+        m_status = PDFRepairStatus::Failed;
+        return savePolicyRefusal;
+    }
+
     if (!m_analyzed)
     {
         const PDFOperationResult analysisResult = analyze();
@@ -503,6 +517,33 @@ PDFOperationSavePolicy PDFRepairTransaction::savePolicy() const
         result = mergePDFSavePolicies(result, entry.operation->savePolicy());
     }
     return result;
+}
+
+PDFOperationResult PDFRepairTransaction::refuseWeakenedSavePolicy() const
+{
+    if (m_savePolicyRefused ||
+        (m_hasRequestedSavePolicy && savePolicyIsWeaker(m_requestedSavePolicy, savePolicy())))
+    {
+        return PDFOperationResult(savePolicyWeakenedMessage(m_requestedSavePolicy, savePolicy()));
+    }
+    return PDFOperationResult(true);
+}
+
+PDFOperationResult PDFRepairTransaction::setRequestedSavePolicy(const PDFOperationSavePolicy& policy)
+{
+    const PDFOperationSavePolicy required = savePolicy();
+    if (savePolicyIsWeaker(policy, required))
+    {
+        // The refused request is kept only so every later refusal names the
+        // same request; the effective policy stays the declared one.
+        m_requestedSavePolicy = policy;
+        m_savePolicyRefused = true;
+        m_status = PDFRepairStatus::Failed;
+        return PDFOperationResult(savePolicyWeakenedMessage(policy, required));
+    }
+    m_requestedSavePolicy = policy;
+    m_hasRequestedSavePolicy = true;
+    return PDFOperationResult(true);
 }
 
 PDFRepairExpectedChanges PDFRepairTransaction::expectedChanges() const
