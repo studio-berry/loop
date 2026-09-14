@@ -195,8 +195,7 @@ valid JSON error envelope when JSON was requested. The `preflight`, `ocr`,
 `capabilities`, and `schema` commands default to JSON because their contracts
 are machine-readable; malformed invocations of those commands therefore also
 return the envelope. Supplying a different console format to `preflight`,
-`ocr`, or `capabilities` is an invalid invocation; `schema` accepts an explicit
-non-JSON console format and writes the same JSON payload as text.
+`ocr`, `capabilities`, or `schema` is an invalid invocation.
 
 ## Unknown command
 

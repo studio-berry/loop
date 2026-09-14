@@ -57,20 +57,23 @@ QString PDFToolSchemaApplication::getStandardString(StandardString standardStrin
 
 PDFToolExitCode PDFToolSchemaApplication::execute(const PDFToolOptions& options)
 {
+    if (options.outputStyle != PDFOutputFormatter::Style::Json)
+    {
+        reportDiagnostic(options,
+                         PDFToolDiagnosticSeverity::Error,
+                         QStringLiteral("cli.invalid-arguments"),
+                         PDFToolTranslationContext::tr("The schema command only supports JSON output."));
+        return PDFToolExitCode::InvalidInvocation;
+    }
+
     const QString inputPath = options.schemaInputPath.trimmed();
 
     if (inputPath.isEmpty())
     {
-        if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+        if (options.executionContext)
         {
             options.executionContext->setData(
                 QJsonObject{ { QStringLiteral("matrix"), pdf::schemaCompatibilityMatrix() } });
-        }
-        else
-        {
-            PDFConsole::writeText(
-                QString::fromUtf8(QJsonDocument(pdf::schemaCompatibilityMatrix()).toJson(QJsonDocument::Indented)),
-                options.outputCodec);
         }
         return PDFToolExitCode::Success;
     }
@@ -126,13 +129,9 @@ PDFToolExitCode PDFToolSchemaApplication::execute(const PDFToolOptions& options)
                        { QStringLiteral("to"), prepared.toVersion.isValid() ? prepared.toVersion.toString() : QString() } } }
     };
 
-    if (options.outputStyle == PDFOutputFormatter::Style::Json && options.executionContext)
+    if (options.executionContext)
     {
         options.executionContext->setData(data);
-    }
-    else
-    {
-        PDFConsole::writeText(QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Indented)), options.outputCodec);
     }
 
     if (!diagnostic.isCompatible())

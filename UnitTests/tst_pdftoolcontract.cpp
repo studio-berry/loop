@@ -109,6 +109,7 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void schemaRejectsNonJsonOutput();
     void schemaReportsTheMatrixForEveryKind();
     void schemaReportsUnsupportedMajorIdenticallyToCore();
     void schemaAcceptsCurrentAndPreviousGoldens();
@@ -318,6 +319,14 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::schemaRejectsNonJsonOutput()
+{
+    const ToolRun run = runPdfTool({ QStringLiteral("schema"), QStringLiteral("--console-format"), QStringLiteral("text") });
+    QCOMPARE(run.exitCode, 2);
+    QVERIFY(run.json.isEmpty());
+    QVERIFY2(!run.stderrData.isEmpty(), qPrintable(QStringLiteral("text-mode rejection did not write stderr")));
 }
 
 void PdfToolContractTest::schemaReportsTheMatrixForEveryKind()
