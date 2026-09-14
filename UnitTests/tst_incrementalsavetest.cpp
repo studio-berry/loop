@@ -23,6 +23,7 @@
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentreader.h"
 #include "pdfdocumentwriter.h"
+#include "pdfrepairoperation.h"
 
 #include <QtTest>
 #include <QBuffer>
@@ -69,6 +70,7 @@ private slots:
     void signedPdfIncrementalSave_preservesSignedPrefix();
     void explicitPoliciesCannotBeDowngradedToIncremental();
     void unclassifiedAndRedactionPoliciesCannotSilentIncrementalAppend();
+    void policyStrengthRejectsWeakerRequests();
     void fileOverloadReportsWhatItDid();
 };
 
@@ -333,6 +335,46 @@ void IncrementalSaveTest::unclassifiedAndRedactionPoliciesCannotSilentIncrementa
 
     const pdf::PDFOperationSavePolicy mergedUnclassified = pdf::mergePDFSavePolicies(incremental, unclassified);
     QCOMPARE(mergedUnclassified.mode, pdf::PDFSaveMode::SaveAsNewArtifact);
+}
+
+void IncrementalSaveTest::policyStrengthRejectsWeakerRequests()
+{
+    const pdf::PDFOperationSavePolicy incremental = pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit"));
+    const pdf::PDFOperationSavePolicy full = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction"));
+    const pdf::PDFOperationSavePolicy newArtifact = pdf::PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("production correction"));
+
+    QVERIFY(pdf::savePolicyIsWeaker(incremental, full));
+    QVERIFY(pdf::savePolicyIsWeaker(full, newArtifact));
+    QVERIFY(!pdf::savePolicyIsWeaker(newArtifact, full));
+    QVERIFY(!pdf::savePolicyIsWeaker(full, full));
+    QVERIFY(!pdf::savePolicyIsWeaker(incremental, incremental));
+
+    // Same mode, hidden consequence: a caller may not claim less impact than
+    // the operation declares.
+    pdf::PDFOperationSavePolicy hidesSignatureLoss = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller copy"));
+    hidesSignatureLoss.invalidatesSignatures = false;
+    QVERIFY(pdf::savePolicyIsWeaker(hidesSignatureLoss, full));
+    pdf::PDFOperationSavePolicy claimsReversible = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller copy"));
+    claimsReversible.reversibleInSession = true;
+    QVERIFY(pdf::savePolicyIsWeaker(claimsReversible, full));
+
+    // Stricter than required is allowed.
+    QVERIFY(!pdf::savePolicyIsWeaker(newArtifact, incremental));
+
+    // The undeclared default is never weaker than any declared policy, so it
+    // can stay the transaction default without changing behaviour.
+    for (const QString& id : pdf::PDFRepairRegistry::instance().operationIds())
+    {
+        QVERIFY2(!pdf::savePolicyIsWeaker(pdf::PDFOperationSavePolicy::undeclared(),
+                                          pdf::PDFRepairRegistry::instance().find(id)->savePolicy()),
+                 qPrintable(id));
+    }
+
+    QCOMPARE(pdf::savePolicyWeakenedMessage(incremental, full),
+             QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'full-rewrite'."));
+    QCOMPARE(pdf::savePolicyWeakenedMessage(hidesSignatureLoss, full),
+             QStringLiteral("Refused save policy: signature invalidation is not declared but the operation invalidates signatures."));
+    QVERIFY(pdf::savePolicyWeakenedMessage(newArtifact, incremental).isEmpty());
 }
 
 void IncrementalSaveTest::fileOverloadReportsWhatItDid()

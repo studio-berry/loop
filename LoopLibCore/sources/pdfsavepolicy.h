@@ -67,6 +67,19 @@ LOOPLIBCORESHARED_EXPORT const char* getPDFSaveModeName(PDFSaveMode mode);
 LOOPLIBCORESHARED_EXPORT PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
                                                                      const PDFOperationSavePolicy& second);
 
+/// True when \p candidate asks for less persistence safety than \p required:
+/// a weaker mode, or - at the same mode - an unstated signature loss or a
+/// claimed reversibility the operation does not have. Stricter policies are
+/// allowed.
+LOOPLIBCORESHARED_EXPORT bool savePolicyIsWeaker(const PDFOperationSavePolicy& candidate,
+                                                 const PDFOperationSavePolicy& required);
+
+/// The single refusal message for a weakened request, naming every weakening
+/// reason the predicate finds. Empty when the request is not weaker, so
+/// callers can use it as both the reason and the predicate.
+LOOPLIBCORESHARED_EXPORT QString savePolicyWeakenedMessage(const PDFOperationSavePolicy& candidate,
+                                                           const PDFOperationSavePolicy& required);
+
 }   // namespace pdf
 
 #endif   // PDFSAVEPOLICY_H
