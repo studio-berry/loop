@@ -81,6 +81,7 @@ private slots:
     void transactionRejectsAWeakenedSavePolicyBeforeMutation();
     void saveRequestRefusesToWriteOverTheTrustedSource();
     void candidateSaveRefusesToOverwriteTheSourceOnDisk();
+    void sourceBytesSurviveSuccessCancelAndFailure();
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
@@ -298,6 +299,75 @@ void RepairOperationTest::candidateSaveRefusesToOverwriteTheSourceOnDisk()
     const QByteArray digestAfter = QCryptographicHash::hash(untouched.readAll(), QCryptographicHash::Sha256);
     untouched.close();
     QCOMPARE(digestAfter, digestBefore);
+}
+
+void RepairOperationTest::sourceBytesSurviveSuccessCancelAndFailure()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString sourcePath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString candidatePath = directory.filePath(QStringLiteral("candidate.pdf"));
+
+    pdf::PDFDocumentBuilder builder;
+    builder.appendPage(QRectF(0, 0, 100, 100));
+    const pdf::PDFDocument source = builder.build();
+    const QByteArray sourceBytes = writeSerializedBytes(source);
+    QFile sourceFile(sourcePath);
+    QVERIFY(sourceFile.open(QIODevice::WriteOnly));
+    QCOMPARE(sourceFile.write(sourceBytes), qint64(sourceBytes.size()));
+    sourceFile.close();
+    const QByteArray digest = QCryptographicHash::hash(sourceBytes, QCryptographicHash::Sha256);
+
+    const auto sourceDigestNow = [&sourcePath]()
+    {
+        QFile file(sourcePath);
+        if (!file.open(QIODevice::ReadOnly))
+        {
+            return QByteArray();
+        }
+        const QByteArray digest = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256);
+        file.close();
+        return digest;
+    };
+
+    pdf::PDFRepairTransactionOptions options;
+    options.sourcePath = sourcePath;
+    const QJsonObject parameters{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } };
+
+    // success
+    {
+        pdf::PDFRepairTransaction transaction(source, options);
+        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), parameters));
+        QVERIFY(transaction.analyze());
+        QVERIFY(transaction.apply());
+        pdf::PDFDocument reopenedCandidate;
+        const pdf::PDFOperationResult serialized = transaction.serializeCandidate(candidatePath, &reopenedCandidate);
+        QVERIFY2(serialized, qPrintable(serialized.getErrorMessage()));
+        QCOMPARE(sourceDigestNow(), digest);
+    }
+
+    // cancel: analyze, then stop without applying
+    {
+        pdf::PDFRepairTransaction transaction(source, options);
+        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")), parameters));
+        QVERIFY(transaction.analyze());
+        QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Planned);
+        QCOMPARE(sourceDigestNow(), digest);
+    }
+
+    // failure: an operation whose precondition is unsupported (rgb-to-cmyk
+    // needs a document with color images) is refused before any mutation. A
+    // failing operation is reported as Unsupported rather than as a failed
+    // analyze(), so the failure leg pins the status as well as the bytes.
+    {
+        pdf::PDFRepairTransaction transaction(source, options);
+        QVERIFY(transaction.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("rgb-to-cmyk")), QJsonObject()));
+        QVERIFY(transaction.analyze());
+        QCOMPARE(transaction.status(), pdf::PDFRepairStatus::Unsupported);
+        QVERIFY(!transaction.apply());
+        QVERIFY(transaction.status() != pdf::PDFRepairStatus::Applied);
+        QCOMPARE(sourceDigestNow(), digest);
+    }
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()
