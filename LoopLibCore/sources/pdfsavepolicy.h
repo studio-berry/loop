@@ -50,12 +50,23 @@ struct LOOPLIBCORESHARED_EXPORT PDFOperationSavePolicy
     static PDFOperationSavePolicy saveAsNewArtifact(QString rationale = {});
 
     QJsonObject toJson() const;
+
+    /// True when nobody declared this policy. The conservative default keeps
+    /// an unclassified operation from being appended, but it is not a
+    /// declaration: the registry-wide test rejects it, so a forgotten override
+    /// is a visible defect instead of a silent fallback.
+    bool isUndeclared() const;
+
+    /// The conservative, explicitly-undeclared policy. Single source of the
+    /// default; `PDFRepairOperation::savePolicy()` and `isUndeclared()` both
+    /// resolve to it.
+    static PDFOperationSavePolicy undeclared();
 };
 
 LOOPLIBCORESHARED_EXPORT const char* getPDFSaveModeName(PDFSaveMode mode);
 LOOPLIBCORESHARED_EXPORT PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
-                                                                         const PDFOperationSavePolicy& second);
+                                                                     const PDFOperationSavePolicy& second);
 
-} // namespace pdf
+}   // namespace pdf
 
-#endif // PDFSAVEPOLICY_H
+#endif   // PDFSAVEPOLICY_H

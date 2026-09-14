@@ -192,10 +192,11 @@ public:
     virtual PDFRepairDomains domains() const = 0;
     /// Declares the serialization and signature consequences of this operation.
     /// The conservative default prevents an unclassified operation from being
-    /// appended to a signed or revisioned source.
+    /// appended to a signed or revisioned source. A registered operation must
+    /// override this; the registry-wide test rejects the undeclared default.
     virtual PDFOperationSavePolicy savePolicy() const
     {
-        return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+        return PDFOperationSavePolicy::undeclared();
     }
     /// Unknown or incomplete impact forces full revalidation.
     virtual PDFOperationImpact impact() const

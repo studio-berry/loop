@@ -31,9 +31,12 @@ const char* getPDFSaveModeName(PDFSaveMode mode)
 {
     switch (mode)
     {
-        case PDFSaveMode::IncrementalAppend: return "incremental-append";
-        case PDFSaveMode::FullRewrite: return "full-rewrite";
-        case PDFSaveMode::SaveAsNewArtifact: return "save-as-new-artifact";
+        case PDFSaveMode::IncrementalAppend:
+            return "incremental-append";
+        case PDFSaveMode::FullRewrite:
+            return "full-rewrite";
+        case PDFSaveMode::SaveAsNewArtifact:
+            return "save-as-new-artifact";
     }
     return "unknown";
 }
@@ -64,6 +67,16 @@ PDFOperationSavePolicy PDFOperationSavePolicy::saveAsNewArtifact(QString rationa
     policy.reversibleInSession = true;
     policy.rationale = std::move(rationale);
     return policy;
+}
+
+PDFOperationSavePolicy PDFOperationSavePolicy::undeclared()
+{
+    return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+}
+
+bool PDFOperationSavePolicy::isUndeclared() const
+{
+    return rationale == undeclared().rationale;
 }
 
 QJsonObject PDFOperationSavePolicy::toJson() const
@@ -97,4 +110,4 @@ PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
     return result;
 }
 
-} // namespace pdf
+}   // namespace pdf

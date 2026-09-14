@@ -61,6 +61,7 @@ class RepairOperationTest : public QObject
 private slots:
     void builtInOperations_areRegistered();
     void builtInOperations_declareSavePolicies();
+    void everyRegisteredOperationDeclaresItsSavePolicy();
     void analyze_doesNotMutateSource();
     void unsupportedPrecondition_preventsApply();
     void failedOperation_discardsCandidate();
@@ -116,6 +117,32 @@ void RepairOperationTest::builtInOperations_declareSavePolicies()
                                                                             { QStringLiteral("force"), true } }));
     QCOMPARE(transaction.savePolicy().mode, pdf::PDFSaveMode::SaveAsNewArtifact);
     QVERIFY(transaction.savePolicy().invalidatesSignatures);
+}
+
+void RepairOperationTest::everyRegisteredOperationDeclaresItsSavePolicy()
+{
+    const pdf::PDFRepairRegistry& registry = pdf::PDFRepairRegistry::instance();
+    const QStringList ids = registry.operationIds();
+    QVERIFY2(ids.size() >= 7, qPrintable(QString::number(ids.size())));
+    for (const QString& id : ids)
+    {
+        const pdf::PDFRepairOperation* operation = registry.find(id);
+        QVERIFY2(operation != nullptr, qPrintable(id));
+        const pdf::PDFOperationSavePolicy policy = operation->savePolicy();
+        QVERIFY2(!policy.isUndeclared(), qPrintable(id));
+        QVERIFY2(!policy.rationale.isEmpty(), qPrintable(id));
+        const QJsonObject descriptor = operation->descriptor();
+        QCOMPARE(descriptor.value(QStringLiteral("save_policy")).toObject().value(QStringLiteral("mode")).toString(),
+                 QString::fromLatin1(pdf::getPDFSaveModeName(policy.mode)));
+    }
+
+    // The conservative default is safe for the writer but it is not a
+    // declaration, and it must never be reported as one.
+    const pdf::PDFOperationSavePolicy undeclared = pdf::PDFOperationSavePolicy::undeclared();
+    QVERIFY(undeclared.isUndeclared());
+    QCOMPARE(QString::fromLatin1(pdf::getPDFSaveModeName(undeclared.mode)), QStringLiteral("save-as-new-artifact"));
+    QVERIFY(undeclared.invalidatesSignatures);
+    QVERIFY(!pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("ordinary edit")).isUndeclared());
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()
