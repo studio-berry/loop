@@ -87,6 +87,10 @@ LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatr
                                                                                    PDFSchemaVersion version,
                                                                                    const QJsonObject& matrix);
 LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
+/// Reads the current version of one kind out of an explicit matrix. An absent
+/// entry yields an invalid version; callers must fail closed, never guess.
+LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersionWithMatrix(PDFSchemaKind kind,
+                                                                         const QJsonObject& matrix);
 LOOPLIBCORESHARED_EXPORT QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document);
 LOOPLIBCORESHARED_EXPORT PDFSchemaEnvelope readSchemaEnvelope(const QJsonObject& document);
 LOOPLIBCORESHARED_EXPORT void writeSchemaEnvelope(QJsonObject& document, PDFSchemaKind kind, PDFSchemaVersion version);

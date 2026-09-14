@@ -41,6 +41,7 @@ private slots:
     void unsupportedMajorFailsClosed();
     void compatibilityResourceIsCwdIndependentAndMatchesEveryKind();
     void unavailableCompatibilityMatrixFailsClosed();
+    void currentVersionFailsClosedWithoutAMatrixEntry();
     void currentAndPreviousReportGoldensRoundTrip();
     void migrateIsPure();
     void v2GoldenMigratesToV3Deterministically();
@@ -270,6 +271,22 @@ void SchemaEvolutionTest::unknownFieldsSurviveOnCompatibleMinor()
     const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, document);
     QVERIFY(prepared.migrated);
     QCOMPARE(prepared.document.value(QStringLiteral("future_field")).toString(), QStringLiteral("preserved"));
+}
+
+void SchemaEvolutionTest::currentVersionFailsClosedWithoutAMatrixEntry()
+{
+    // No matrix entry means no known current version. A guessed default would
+    // silently relabel a document as current.
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, {}).isValid());
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, {}), pdf::PDFSchemaVersion{});
+
+    const QJsonObject matrix{ { QStringLiteral("kinds"),
+                                QJsonObject{ { QStringLiteral("preflight-report"),
+                                               QJsonObject{ { QStringLiteral("current"), QStringLiteral("3.0") },
+                                                            { QStringLiteral("supported_majors"), QJsonArray{ 3 } } } } } } };
+    QCOMPARE(pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::PreflightReport, matrix).toString(),
+             QStringLiteral("3.0"));
+    QVERIFY(!pdf::currentSchemaVersionWithMatrix(pdf::PDFSchemaKind::Certificate, matrix).isValid());
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)

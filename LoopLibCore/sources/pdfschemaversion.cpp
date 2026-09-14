@@ -338,27 +338,18 @@ PDFSchemaCompatibility checkSchemaCompatibility(PDFSchemaKind kind, PDFSchemaVer
 
 PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind)
 {
-    const QJsonObject matrix = loadCompatibilityMatrix();
+    return currentSchemaVersionWithMatrix(kind, loadCompatibilityMatrix());
+}
+
+PDFSchemaVersion currentSchemaVersionWithMatrix(PDFSchemaKind kind, const QJsonObject& matrix)
+{
     const QJsonObject kinds = matrix.value(QStringLiteral("kinds")).toObject();
     const QJsonObject entry = kinds.value(pdfSchemaKindToString(kind)).toObject();
-    if (!entry.isEmpty())
+    if (entry.isEmpty())
     {
-        return parseCurrentVersion(entry);
+        return {};
     }
-
-    switch (kind)
-    {
-        case PDFSchemaKind::PreflightReport:
-            return { 3, 0 };
-        case PDFSchemaKind::HistoryDb:
-        case PDFSchemaKind::PageMasterManifest:
-            return { 3, 0 };
-        default:
-            return { 1, 0 };
-        case PDFSchemaKind::Unknown:
-            break;
-    }
-    return {};
+    return parseCurrentVersion(entry);
 }
 
 QJsonObject migrateSchemaDocument(PDFSchemaKind kind, PDFSchemaVersion from, QJsonObject document)
