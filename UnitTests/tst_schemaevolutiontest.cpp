@@ -51,6 +51,7 @@ private slots:
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
     void everyJsonKindRoundTripsItsCurrentAndPreviousGolden();
+    void newerMinorPassesThroughAndReportsTheDocumentVersion();
 };
 
 void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
@@ -233,10 +234,11 @@ void SchemaEvolutionTest::compatibleSchemaWithoutMigratorFailsClosed()
         pdf::prepareSchemaDocument(pdf::PDFSchemaKind::HistoryDb, document);
     QVERIFY(prepared.document.isEmpty());
     QVERIFY(!prepared.migrated);
-    const pdf::PDFSchemaVersion expectedFrom{ 2, 0 };
-    const pdf::PDFSchemaVersion expectedTo{ 3, 0 };
-    QCOMPARE(prepared.fromVersion, expectedFrom);
-    QCOMPARE(prepared.toVersion, expectedTo);
+    const pdf::PDFSchemaVersion expectedVersion{ 2, 0 };
+    QCOMPARE(prepared.fromVersion, expectedVersion);
+    // The document was not migrated, so it is still a 2.0 document -- the point
+    // of the slot: it must not be relabelled to the matrix target.
+    QCOMPARE(prepared.toVersion, expectedVersion);
 }
 
 void SchemaEvolutionTest::incompleteV2MigrationPreservesInspectionIncomplete()
@@ -428,6 +430,32 @@ void SchemaEvolutionTest::everyJsonKindRoundTripsItsCurrentAndPreviousGolden()
                      QJsonDocument(prepared.document).toJson(QJsonDocument::Compact));
         }
     }
+}
+
+void SchemaEvolutionTest::newerMinorPassesThroughAndReportsTheDocumentVersion()
+{
+    QJsonObject document{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-report") },
+        { QStringLiteral("schema_version"), QStringLiteral("3.1") },
+        { QStringLiteral("pass"), true },
+        { QStringLiteral("profile"), QStringLiteral("golden") },
+        { QStringLiteral("errors"), QJsonArray{} },
+        { QStringLiteral("warnings"), QJsonArray{} },
+        { QStringLiteral("fixups_available"), QJsonArray{} },
+        { QStringLiteral("future_additive_field"), QStringLiteral("preserved") },
+    };
+
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 3, 1 }),
+             pdf::PDFSchemaCompatibility::Compatible);
+
+    const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::PreflightReport, document);
+    QVERIFY(!prepared.document.isEmpty());
+    QVERIFY(!prepared.migrated);
+    QCOMPARE(prepared.document.value(QStringLiteral("schema_version")).toString(), QStringLiteral("3.1"));
+    QCOMPARE(prepared.document.value(QStringLiteral("future_additive_field")).toString(), QStringLiteral("preserved"));
+    QCOMPARE(prepared.fromVersion.toString(), QStringLiteral("3.1"));
+    // A caller that is told "3.0" would believe it holds a target-version payload.
+    QCOMPARE(prepared.toVersion.toString(), QStringLiteral("3.1"));
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)

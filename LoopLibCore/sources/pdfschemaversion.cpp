@@ -408,7 +408,10 @@ PDFSchemaMigrationResult prepareSchemaDocument(PDFSchemaKind kind, QJsonObject d
 
     const PDFSchemaVersion target = currentSchemaVersion(envelope.kind);
     result.fromVersion = envelope.version;
-    result.toVersion = target;
+    // toVersion is the version the document is at when this returns; only a
+    // migration moves it. Reporting the matrix target here would tell a caller
+    // it holds current bytes while it holds a newer minor payload.
+    result.toVersion = envelope.version;
 
     while (envelope.version.major < target.major)
     {
