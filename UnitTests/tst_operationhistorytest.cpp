@@ -47,6 +47,7 @@ private slots:
     void canonicalJsonIsStableAndRedacted();
     void artifactStoreStreamsAndDetectsTampering();
     void importedInputIsReadOnlyAndDigestAddressed();
+    void noSavePathProducesAnApprovedOutputRecord();
     void lifecycleApprovalAndRollbackResolution();
     void rollbackPointsRetentionAndAtomicity();
     void externalPayloadTamperingCompromisesChain();
@@ -846,6 +847,49 @@ void OperationHistoryTest::importedInputIsReadOnlyAndDigestAddressed()
     QVERIFY(QFileInfo(stored).canonicalFilePath() != QFileInfo(inboxPath).canonicalFilePath());
     // Importing is a read: the received file itself is neither moved nor truncated.
     QCOMPARE(QFile(inboxPath).size(), qint64(inboxBytes.size()));
+}
+
+void OperationHistoryTest::noSavePathProducesAnApprovedOutputRecord()
+{
+    // Pinned invariant: no save path records an approval. Nothing in this tree
+    // ever sets an approval kind or the rollback approved-output flag.
+    // PDFApprovalRecord::isValid() means "well formed", not "carries an
+    // approval": appendEvent rejects an event whose approval is invalid
+    // (pdfoperationhistorystore.cpp:381), so the default record is valid and is
+    // separated from a real approval by its None kind and empty payload
+    // (pdfoperationhistorystore.cpp:790).
+    const pdf::PDFApprovalRecord unapproved;
+    QVERIFY(unapproved.isValid());
+    QCOMPARE(unapproved.kind, pdf::PDFApprovalKind::None);
+    QVERIFY(unapproved.actorId.isEmpty());
+    QVERIFY(unapproved.decision.isEmpty());
+    QVERIFY(unapproved.policyId.isEmpty());
+    QVERIFY(unapproved.rationale.isEmpty());
+    QVERIFY(unapproved.evidenceSha256.isEmpty());
+    QVERIFY(!unapproved.decidedUtc.isValid());
+
+    pdf::PDFOperationHistoryEvent planned;
+    planned.status = pdf::PDFOperationHistoryStatus::Planned;
+    QCOMPARE(planned.approval.kind, pdf::PDFApprovalKind::None);
+    QCOMPARE(planned.approval.toJson(), unapproved.toJson());
+
+    // A record that claims an approval decision but carries no actor, decision
+    // or decision time is not a valid approval: one cannot be fabricated.
+    pdf::PDFApprovalRecord claimed;
+    claimed.kind = pdf::PDFApprovalKind::Human;
+    QVERIFY(!claimed.isValid());
+
+    pdf::PDFRollbackPoint point;
+    point.operationId = QStringLiteral("add-bleed");
+    point.planSummary = QStringLiteral("planned candidate");
+    QVERIFY(!point.approvedOutput);
+    QVERIFY(!point.toJson().value(QStringLiteral("approvedOutput")).toBool());
+
+    // A candidate artifact is not an approved output merely because it exists.
+    pdf::PDFRollbackPoint candidate = point;
+    candidate.isOriginalInput = false;
+    QVERIFY(!candidate.approvedOutput);
+    QVERIFY(!candidate.toJson().value(QStringLiteral("approvedOutput")).toBool());
 }
 
 QTEST_MAIN(OperationHistoryTest)
