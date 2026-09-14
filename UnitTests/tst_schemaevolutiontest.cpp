@@ -50,6 +50,7 @@ private slots:
     void compatibleSchemaWithoutMigratorFailsClosed();
     void incompleteV2MigrationPreservesInspectionIncomplete();
     void unknownFieldsSurviveOnCompatibleMinor();
+    void everyJsonKindRoundTripsItsCurrentAndPreviousGolden();
 };
 
 void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
@@ -337,6 +338,96 @@ void SchemaEvolutionTest::prepareFailsClosedWhenNeitherDocumentNorCallerIdentifi
     const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(pdf::PDFSchemaKind::Unknown, document);
     QVERIFY(prepared.document.isEmpty());
     QVERIFY(!prepared.migrated);
+}
+
+namespace
+{
+
+/// SQLite carries its own migrations in PDFOperationHistoryStore and has no JSON
+/// golden; it is covered by UnitTestsOperationHistory instead.
+const QStringList& nonJsonSchemaKinds()
+{
+    static const QStringList kinds{ QStringLiteral("history-db") };
+    return kinds;
+}
+
+QString schemaGoldenPath(const QString& kindName, const QString& versionText)
+{
+    return QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/testdata/schemas/") + kindName +
+           QStringLiteral("-v%1.json").arg(versionText.section(QLatin1Char('.'), 0, 0));
+}
+
+QJsonObject loadSchemaGolden(const QString& path, bool* opened)
+{
+    QFile file(path);
+    *opened = file.open(QIODevice::ReadOnly);
+    if (!*opened)
+    {
+        return QJsonObject();
+    }
+    return QJsonDocument::fromJson(file.readAll()).object();
+}
+
+}   // namespace
+
+void SchemaEvolutionTest::everyJsonKindRoundTripsItsCurrentAndPreviousGolden()
+{
+    QFile resource(QStringLiteral(":/loop/schema-compatibility.json"));
+    QVERIFY(resource.open(QIODevice::ReadOnly));
+    const QJsonObject kinds = QJsonDocument::fromJson(resource.readAll()).object().value(QStringLiteral("kinds")).toObject();
+
+    for (const pdf::PDFSchemaKind kind : pdf::AllSchemaKinds)
+    {
+        const QString name = pdf::pdfSchemaKindToString(kind);
+        if (nonJsonSchemaKinds().contains(name))
+        {
+            continue;
+        }
+
+        const QJsonObject entry = kinds.value(name).toObject();
+        QVERIFY2(!entry.isEmpty(), qPrintable(name));
+
+        QStringList versions{ entry.value(QStringLiteral("current")).toString() };
+        const QString previous = entry.value(QStringLiteral("previous")).toString();
+        if (!previous.isEmpty() && !versions.contains(previous))
+        {
+            versions.append(previous);
+        }
+
+        for (const QString& versionText : versions)
+        {
+            const QString path = schemaGoldenPath(name, versionText);
+            bool opened = false;
+            const QJsonObject golden = loadSchemaGolden(path, &opened);
+            QVERIFY2(opened, qPrintable(QStringLiteral("missing golden %1").arg(path)));
+
+            const pdf::PDFSchemaEnvelope envelope = pdf::readSchemaEnvelope(golden);
+            QCOMPARE(envelope.kind, kind);
+            QVERIFY2(envelope.version.isValid(), qPrintable(path));
+            QCOMPARE(envelope.version.toString(), versionText);
+            QCOMPARE(pdf::checkSchemaCompatibility(envelope.kind, envelope.version),
+                     pdf::PDFSchemaCompatibility::Compatible);
+
+            // A golden at the current major is already at the target; an older
+            // golden migrates deterministically and keeps its own fields.
+            const pdf::PDFSchemaMigrationResult prepared = pdf::prepareSchemaDocument(kind, golden);
+            QVERIFY2(!prepared.document.isEmpty(), qPrintable(path));
+            if (envelope.version.major == pdf::currentSchemaVersion(kind).major)
+            {
+                QVERIFY2(!prepared.migrated, qPrintable(path));
+                QCOMPARE(prepared.document, golden);
+            }
+            else
+            {
+                QVERIFY2(prepared.migrated, qPrintable(path));
+                QCOMPARE(prepared.toVersion.toString(), pdf::currentSchemaVersion(kind).toString());
+            }
+
+            const pdf::PDFSchemaMigrationResult again = pdf::prepareSchemaDocument(kind, golden);
+            QCOMPARE(QJsonDocument(again.document).toJson(QJsonDocument::Compact),
+                     QJsonDocument(prepared.document).toJson(QJsonDocument::Compact));
+        }
+    }
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)

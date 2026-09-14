@@ -1,0 +1,9 @@
+{
+  "schema_kind": "ocr-report",
+  "schema_version": 1,
+  "pass": true,
+  "pdf": "",
+  "pages": [],
+  "skipped_pages": [],
+  "errors": []
+}
