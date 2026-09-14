@@ -1,8 +1,22 @@
 # Editor crash/session recovery
 
-Loop protects unsaved Editor work with a private, bounded recovery store. The
-store is owned by `PDFRecoveryManager` in the Editor/Core recovery boundary and is attached to the
-single-document Editor session.
+**The recovery service described below does not exist in this tree.** It was
+deleted by `2a19e2c1` ("delete Widgets libraries and plugin pack for Session 05
+Issue 17"), which removed `LoupeLibGui/pdfrecoverymanager.{h,cpp}`. Everything
+below is the contract to restore, not a description of shipped code.
+
+`UnitTests/tst_recoverytest.cpp` is kept as the specification of the
+source-identity and policy-clamp behaviour, but it includes
+`pdfrecoverymanager.h`, a header that exists nowhere in the tree, and it is
+registered in no CMake target. It therefore is not compiled and does not run.
+
+The 0.3.0-A requirement ("crash recovery restores workspace/revision state
+without presenting the recovered file as an approved production artifact") is
+only half reachable today: the approval half is pinned by
+`UnitTestsOperationHistory::noSavePathProducesAnApprovedOutputRecord` (no save
+path records an approval or an approved output, so a recovered file cannot be
+presented as approved), and the restore half is tracked by
+[#575](https://github.com/studio-berry/loop/issues/575).
 
 ## Safety contract
 
@@ -40,7 +54,10 @@ Retention defaults to 14 days, 20 sessions, and 2 GiB. Cleanup runs after
 classification and excludes active sessions. Invalid/stale candidates can be
 discarded from the startup dialog without being opened.
 
-`UnitTestsRecovery` covers source replacement/missing classification and policy
-clamping. The service boundaries are deterministic and ready for injected fake
-clock/filesystem crash-point tests; process-kill GUI coverage belongs with the
-GUI/E2E harness tracked separately.
+No running test covers recovery: the `RecoveryTest` slots
+`sourceIdentityDetectsReplacement` and `policyClampsUnsafeValues` are the
+specification for source replacement/missing classification and policy clamping,
+but their file is in no CMake target and does not compile against the current
+tree. Restoring the service means restoring the manager and wiring that test up
+in the same change, including the process-kill GUI coverage that belongs with
+the GUI/E2E harness.
