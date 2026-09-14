@@ -1,0 +1,19 @@
+{
+  "fixture": "signed-incremental-base.pdf",
+  "purpose": "prove that an incremental append preserves a real signature byte range",
+  "provenance": "generated in-repo by scripts/qualification/make_signed_fixture.py; not third-party",
+  "license": "same as the repository (MIT)",
+  "generator": "pyhanko 0.37.0 + cryptography",
+  "signature_field": "LoopSignature",
+  "certificate_subject": "O=Studio Berry,CN=Loop Save Policy Fixture",
+  "certificate_sha256_fingerprint": "829d7fe116133bbf2e282ee780f145517a9aac42a79b68d9abec74c17e0811c8",
+  "private_key": "ephemeral, created in a temporary directory, never committed",
+  "byte_reproducible": false,
+  "sha256": "b5bb03596f88ffdc3503b8ebf60a3d6d6ffa2936dab91db07935ad522245101d",
+  "bytes": 7219,
+  "regenerated_utc": "2026-09-14T07:42:27.907123+00:00",
+  "expected_validator_result": {
+    "structural": "passed",
+    "signature": "passed"
+  }
+}
