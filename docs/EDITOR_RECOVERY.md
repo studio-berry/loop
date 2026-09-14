@@ -2,7 +2,10 @@
 
 **The recovery service described below does not exist in this tree.** It was
 deleted by `2a19e2c1` ("delete Widgets libraries and plugin pack for Session 05
-Issue 17"), which removed `LoupeLibGui/pdfrecoverymanager.{h,cpp}`. Everything
+Issue 17"), which removed `pdfrecoverymanager.{h,cpp}` along with the GUI library
+that hosted it; the branch name in that commit records the old library name. The
+historical path is recoverable without depending on this page:
+`git log --all --diff-filter=D --name-only -- '*pdfrecoverymanager*'`. Everything
 below is the contract to restore, not a description of shipped code.
 
 `UnitTests/tst_recoverytest.cpp` is kept as the specification of the
