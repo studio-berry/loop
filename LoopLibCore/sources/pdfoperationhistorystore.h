@@ -111,6 +111,15 @@ private:
     std::unique_ptr<Impl> m_impl;
     QString m_databasePath;
     PDFOperationHistoryStoreOptions m_options;
+
+    /// Records the schema upgrade that this open performed: the database file as
+    /// it was before SQLite rewrote it, from the previous version to the current
+    /// one. Joins the caller's transaction; open() rolls it back on failure.
+    bool appendSchemaUpgradeProvenance(bool upgraded,
+                                       int previousSchemaVersion,
+                                       const QString& databaseDigest,
+                                       qint64 databaseSize,
+                                       QString* error);
 };
 
 }   // namespace pdf
