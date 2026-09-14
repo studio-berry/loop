@@ -126,6 +126,8 @@
         "UnitTestsPreflightProfileResolver",
         "UnitTestsPreflightVerdict",
         "UnitTestsProcessingBudget",
+        "UnitTestsRedactVerifier",
+        "UnitTestsRepairOperation",
         "UnitTestsRevisionStress",
         "UnitTestsSafeFileWriter",
         "UnitTestsSchemaEvolution",
