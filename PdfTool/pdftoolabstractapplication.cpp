@@ -22,6 +22,7 @@
 
 #include "pdftoolabstractapplication.h"
 #include "pdfdocumentreader.h"
+#include "pdfdocumentwriter.h"
 #include "pdfsafefilewriter.h"
 #include "pdfutils.h"
 #include "ocrsidecarprotocol.h"
@@ -2669,6 +2670,34 @@ PDFToolExitCode PDFToolAbstractApplication::validateDestructiveOutputs(const PDF
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, conflict.code, message,
                          QJsonObject{ { QStringLiteral("path"), conflict.path } });
         return PDFToolExitCode::InvalidInvocation;
+    }
+
+    return PDFToolExitCode::Success;
+}
+
+PDFToolExitCode PDFToolAbstractApplication::validateOperationSaveRequest(const PDFToolOptions& options,
+                                                                         const QString& sourcePath,
+                                                                         const QString& outputPath,
+                                                                         const pdf::PDFOperationSavePolicy& required,
+                                                                         bool appendInPlace) const
+{
+    pdf::PDFSaveRequest request;
+    request.sourcePath = sourcePath;
+    request.outputPath = outputPath;
+    request.required = required;
+    request.requested = required;
+    request.requestedExplicitly = true;
+    request.appendInPlace = appendInPlace;
+
+    const pdf::PDFOperationResult validation = pdf::validateSaveRequest(request);
+    if (!validation)
+    {
+        // The Core message is the pinned contract text; translating it would
+        // break the contract, so it is reported verbatim.
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("save-policy.refused"),
+                         validation.getErrorMessage(),
+                         QJsonObject{ { QStringLiteral("path"), outputPath } });
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     return PDFToolExitCode::Success;

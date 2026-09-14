@@ -144,16 +144,29 @@ human-facing stderr behavior is preserved.
 
 A command that declares a save mode also declares what that mode has to
 guarantee. `redact` removes prior content, so its result is always a full
-rewrite and never an append: the guard runs before the document is read, so an
-incompatible request is rejected before any content is touched.
+rewrite and never an append. `add-bleed` and `rgb-to-cmyk` are corrective
+commands: they take the policy from their own operation registration
+(`PDFRepairRegistry::instance().find(<id>)->savePolicy()`) instead of repeating
+the rationale in the CLI, so the declaration is the single authority and the
+command cannot talk the operation out of it. The guard runs before the document
+is read, so an incompatible request is rejected before any content is touched.
 
 | Command | `code` | Exit | Guard | `message` |
 |---|---|---|---|---|
 | `redact` | `save-policy.refused` | `4 processing-failure` | Redaction removes prior content, so the output must be a full rewrite written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+| `add-bleed` | `save-policy.refused` | `4 processing-failure` | The operation declares `saveAsNewArtifact` ("bleed correction must preserve the trusted source"), so the candidate must be written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+| `rgb-to-cmyk` | `save-policy.refused` | `4 processing-failure` | The operation declares `saveAsNewArtifact` ("color conversion creates a production candidate"), so the candidate must be written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
 
 `context` carries the refused output path as `path`. The diagnostic is an
 `error`, the run records no output, and the input file is left byte-identical:
-`PdfTool redact received.pdf received.pdf` is never a successful invocation.
+`PdfTool redact received.pdf received.pdf`,
+`PdfTool add-bleed received.pdf --output received.pdf`, and
+`PdfTool rgb-to-cmyk received.pdf --output received.pdf --target-profile <icc>`
+are never successful invocations.
+
+The refusal is not conditional on `--overwrite`, which only authorises replacing
+an existing candidate, and it applies in `--dry-run` and `--report` mode too: an
+invocation that can never succeed must not be reported as a plan.
 
 ### Empty results
 

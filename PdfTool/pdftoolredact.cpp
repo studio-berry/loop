@@ -64,20 +64,13 @@ PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
     // Redaction removes prior content, so it declares a full rewrite and never
     // persists over the input it was handed. Rejected before the document is
     // read: the refusal cannot depend on how much work the redaction would do.
-    pdf::PDFSaveRequest saveRequest;
-    saveRequest.sourcePath = options.document;
-    saveRequest.outputPath = options.redactedDocument;
-    saveRequest.required = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction removes prior content"));
-    saveRequest.requested = saveRequest.required;
-    saveRequest.requestedExplicitly = true;
-    saveRequest.appendInPlace = false;
-    const pdf::PDFOperationResult saveValidation = pdf::validateSaveRequest(saveRequest);
-    if (!saveValidation)
+    if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                     options.document,
+                                                                     options.redactedDocument,
+                                                                     pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction removes prior content")));
+        refused != PDFToolExitCode::Success)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("save-policy.refused"),
-                         saveValidation.getErrorMessage(),
-                         QJsonObject{ { QStringLiteral("path"), options.redactedDocument } });
-        return PDFToolExitCode::ProcessingFailure;
+        return refused;
     }
 
     pdf::PDFDocument document;
