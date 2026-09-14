@@ -93,6 +93,12 @@ add_library(LoopLibInteraction STATIC
     sources/preflightfindingsmodel.h
     sources/preflightoverlaybridge.cpp
     sources/preflightoverlaybridge.h
+    sources/preflightprofilecatalog.cpp
+    sources/preflightprofilecatalog.h
+    sources/preflightrunsubmitter.cpp
+    sources/preflightrunsubmitter.h
+    sources/shellinspectordispatch.cpp
+    sources/shellinspectordispatch.h
     sources/inspectormodel.cpp
     sources/inspectormodel.h
     sources/previewstatemodel.cpp

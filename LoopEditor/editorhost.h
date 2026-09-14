@@ -35,6 +35,9 @@
 #include "pagesurfacerenderer.h"
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
+#include "preflightprofilecatalog.h"
+#include "preflightrunsubmitter.h"
+#include "shellinspectordispatch.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
 #include "viewportcommandbridge.h"
@@ -290,17 +293,14 @@ private:
                                const pdf::PreflightResult& result);
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
     void refreshCanvasTrace();
-    void reloadPreflightProfiles();
-    void updatePreflightProfileWatch();
     void syncRevisionModels();
     void updateCanvasAccessibilitySummary();
     void onPreflightNavigation(pdfinteraction::PreflightController::EvidenceNavigationRequest request);
     void onDragCompleted(pdfinteraction::DragSession session);
     void onInteractionSelectionChanged(pdfinteraction::InteractionTarget target);
     void syncProductionState();
-    void applyInspectorSelection(const pdfinteraction::InteractionTarget& target);
-    void applyEmptyCanvasInspectorSelection();
     void setInspectionMode(QString mode);
+    pdfinteraction::ShellInspectorContext inspectorContext() const;
 
     std::unique_ptr<DocumentViewSession> m_session;
     std::unique_ptr<pdfinteraction::FindingCanvasNavigator> m_findingNavigator;
@@ -315,24 +315,8 @@ private:
 
     QPointer<pdfquick::LoopCanvasItem> m_canvas;
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
-    struct PreflightWorkerOutcome;
-    QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
-    struct PreflightProfileChoice
-    {
-        QString id;
-        QString name;
-        QString version;
-        QString source;
-        QString diagnostic;
-        QString digest;
-        QJsonObject profile;
-        QJsonObject variables;
-        bool valid = false;
-    };
-    QList<PreflightProfileChoice> m_preflightProfiles;
-    QJsonObject m_preflightBindings;
-    QString m_selectedPreflightProfileId;
-    class QFileSystemWatcher* m_preflightProfileWatcher = nullptr;
+    QHash<QString, std::shared_ptr<pdfinteraction::PreflightRunOutcome>> m_preflightOutcomes;
+    pdfinteraction::PreflightProfileCatalog m_preflightProfileCatalog;
     bool m_acceptPreflightResults = true;
     int m_commandEpoch = 0;
     bool m_documentBound = false;

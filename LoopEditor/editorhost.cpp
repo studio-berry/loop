@@ -33,11 +33,10 @@
 #include "pagesurfacecoordinator.h"
 #include "preflightcontroller.h"
 #include "preflightclirun.h"
-#include "preflightengine.h"
-#include "preflightprofileresolver.h"
+#include "preflightrunsubmitter.h"
+#include "shellinspectordispatch.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
-#include "interactiontarget.h"
 
 #include "pdfdocumentsession.h"
 #include "pdfsafefilewriter.h"
@@ -50,10 +49,7 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QCoreApplication>
-#include <QDir>
 #include <QFile>
-#include <QFileInfo>
-#include <QFileSystemWatcher>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -115,60 +111,9 @@ QString preflightStateToString(pdfinteraction::PreflightController::State state)
     return QStringLiteral("not-checked");
 }
 
-QString shellMenuGroupForAction(const QString& id, const QString& target)
+pdfquick::tokens::LoopStateVisual resolvedPreflightVisual(const QString& stateName)
 {
-    static const QStringList fileActions = {
-        QStringLiteral("actionOpen"),
-        QStringLiteral("actionClose"),
-        QStringLiteral("actionSave"),
-        QStringLiteral("actionSave_As"),
-        QStringLiteral("actionQuit"),
-        QStringLiteral("actionPrint"),
-        QStringLiteral("actionSendByEmail"),
-        QStringLiteral("actionRenderToImages"),
-        QStringLiteral("actionClearRecentFileHistory"),
-        QStringLiteral("actionAutomaticDocumentRefresh"),
-    };
-    if (fileActions.contains(id))
-    {
-        return QStringLiteral("File");
-    }
-
-    if (id.startsWith(QStringLiteral("actionCopy")) || id.startsWith(QStringLiteral("actionCut")) ||
-        id.startsWith(QStringLiteral("actionPaste")) || id == QStringLiteral("actionUndo") ||
-        id == QStringLiteral("actionRedo"))
-    {
-        return QStringLiteral("Edit");
-    }
-
-    if (id.startsWith(QStringLiteral("actionZoom")) || id.startsWith(QStringLiteral("actionFit")) ||
-        id.startsWith(QStringLiteral("actionRotate")) || id.startsWith(QStringLiteral("actionPageLayout")) ||
-        id.startsWith(QStringLiteral("actionGoTo")) || id.startsWith(QStringLiteral("actionFind")) ||
-        id == QStringLiteral("actionFullscreenMode"))
-    {
-        return QStringLiteral("View");
-    }
-
-    if (id == QStringLiteral("actionAbout") || id == QStringLiteral("actionBecomeASponsor") ||
-        id == QStringLiteral("actionGet_Source"))
-    {
-        return QStringLiteral("Help");
-    }
-
-    if (target == QStringLiteral("Preflight"))
-    {
-        return QStringLiteral("Preflight");
-    }
-    if (target == QStringLiteral("Production") || target == QStringLiteral("Pages") || target == QStringLiteral("Fix"))
-    {
-        return QStringLiteral("Production");
-    }
-    if (target == QStringLiteral("Document") || target == QStringLiteral("Inspect"))
-    {
-        return QStringLiteral("Document");
-    }
-
-    return QStringLiteral("Document");
+    return pdfquick::tokens::resolvePreflightStateVisual(stateName);
 }
 
 QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descriptor, bool enabled)
@@ -180,7 +125,7 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
     entry.insert(QStringLiteral("enabled"), enabled);
     entry.insert(QStringLiteral("target"), descriptor.target);
     entry.insert(QStringLiteral("disposition"), descriptor.disposition);
-    entry.insert(QStringLiteral("menuGroup"), shellMenuGroupForAction(descriptor.id, descriptor.target));
+    entry.insert(QStringLiteral("menuGroup"), descriptor.menuGroup);
 
     QVariantMap shortcut;
     shortcut.insert(QStringLiteral("standardKey"), descriptor.shortcut.standardKey);
@@ -192,11 +137,6 @@ QVariantMap descriptorToVariant(const pdfinteraction::CommandDescriptor& descrip
 }
 
 }   // namespace
-
-struct EditorHost::PreflightWorkerOutcome
-{
-    pdf::PreflightResult result;
-};
 
 EditorHost::EditorHost(QObject* parent) :
     QObject(parent),
@@ -210,18 +150,20 @@ EditorHost::EditorHost(QObject* parent) :
         this)),
     m_preflight(&m_session->scheduler(), this)
 {
-    // Registers this constructing thread -- the one QML dispatches pointer
-    // and frame callbacks on -- as the thread blocking service adapters
-    // (PreflightEngine::run, and future OCR/AI/file-I/O adapters) must
-    // refuse to run on (issue #144).
     pdf::PDFBlockingThreadGuard::registerInteractiveThread();
 
-    m_preflightProfileWatcher = new QFileSystemWatcher(this);
-    connect(m_preflightProfileWatcher, &QFileSystemWatcher::directoryChanged, this, [this](const QString&)
-            { reloadPreflightProfiles(); });
-    connect(m_preflightProfileWatcher, &QFileSystemWatcher::fileChanged, this, [this](const QString&)
-            { reloadPreflightProfiles(); });
-    reloadPreflightProfiles();
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::changed, this,
+            [this]
+            {
+                Q_EMIT preflightProfilesChanged();
+                bumpPresentation();
+            });
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::profileStaleRequested, this,
+            [this]
+            { m_preflight.markProfileStale(); });
+    connect(&m_preflightProfileCatalog, &pdfinteraction::PreflightProfileCatalog::checkSetStaleRequested, this,
+            [this]
+            { m_preflight.markCheckSetStale(); });
 
     connectFacade();
     connectViewport();
@@ -458,7 +400,7 @@ QString EditorHost::preflightStateName() const
 
 QVariantMap EditorHost::preflightStateVisual() const
 {
-    const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(preflightStateName());
+    const pdfquick::tokens::LoopStateVisual visual = resolvedPreflightVisual(preflightStateName());
 
     QVariantMap result;
     result.insert(QStringLiteral("kind"), pdfquick::tokens::stateKindName(visual.kind));
@@ -470,7 +412,7 @@ QVariantMap EditorHost::preflightStateVisual() const
 
 QColor EditorHost::preflightStateColor() const
 {
-    const pdfquick::tokens::LoopStateVisual visual = pdfquick::tokens::resolvePreflightStateVisual(preflightStateName());
+    const pdfquick::tokens::LoopStateVisual visual = resolvedPreflightVisual(preflightStateName());
     const pdfquick::tokens::LoopTheme theme =
         highContrast() ? pdfquick::tokens::LoopTheme::HighContrast : pdfquick::tokens::LoopTheme::Dark;
     return pdfquick::tokens::color(visual.colorRole, theme);
@@ -484,8 +426,8 @@ QString EditorHost::preflightOperatorSummary() const
 QVariantList EditorHost::preflightProfiles() const
 {
     QVariantList profiles;
-    profiles.reserve(m_preflightProfiles.size());
-    for (const PreflightProfileChoice& profile : m_preflightProfiles)
+    profiles.reserve(m_preflightProfileCatalog.profiles().size());
+    for (const pdfinteraction::PreflightProfileChoice& profile : m_preflightProfileCatalog.profiles())
     {
         QVariantMap item;
         item.insert(QStringLiteral("id"), profile.id);
@@ -504,26 +446,25 @@ QVariantList EditorHost::preflightProfiles() const
 
 QVariantList EditorHost::preflightVariables() const
 {
-    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                 [this](const PreflightProfileChoice& profile)
-                                 { return profile.id == m_selectedPreflightProfileId; });
-    if (it == m_preflightProfiles.cend())
+    const pdfinteraction::PreflightProfileChoice* selected = m_preflightProfileCatalog.selectedProfile();
+    if (selected == nullptr)
     {
         return {};
     }
 
     QVariantList variables;
-    const QStringList names = it->variables.keys();
+    const QStringList names = selected->variables.keys();
+    const QJsonObject bindings = m_preflightProfileCatalog.bindings();
     for (const QString& name : names)
     {
-        const QJsonObject declaration = it->variables.value(name).toObject();
+        const QJsonObject declaration = selected->variables.value(name).toObject();
         QVariantMap item;
         item.insert(QStringLiteral("name"), name);
         item.insert(QStringLiteral("type"), declaration.value(QStringLiteral("type")).toString());
         item.insert(QStringLiteral("required"), declaration.value(QStringLiteral("required")).toBool());
         item.insert(QStringLiteral("description"), declaration.value(QStringLiteral("description")).toString());
-        item.insert(QStringLiteral("value"), m_preflightBindings.contains(name)
-                                                 ? m_preflightBindings.value(name).toVariant()
+        item.insert(QStringLiteral("value"), bindings.contains(name)
+                                                 ? bindings.value(name).toVariant()
                                                  : declaration.value(QStringLiteral("default")).toVariant());
         if (declaration.contains(QStringLiteral("min")))
             item.insert(QStringLiteral("min"), declaration.value(QStringLiteral("min")).toVariant());
@@ -536,7 +477,7 @@ QVariantList EditorHost::preflightVariables() const
 
 QString EditorHost::selectedPreflightProfileId() const
 {
-    return m_selectedPreflightProfileId;
+    return m_preflightProfileCatalog.selectedProfileId();
 }
 
 QString EditorHost::previewSummary() const
@@ -694,10 +635,8 @@ bool EditorHost::runPreflight()
         return false;
     }
 
-    const auto profileIt = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                        [this](const PreflightProfileChoice& profile)
-                                        { return profile.id == m_selectedPreflightProfileId; });
-    if (profileIt == m_preflightProfiles.cend() || !profileIt->valid)
+    const pdfinteraction::PreflightProfileChoice* profile = m_preflightProfileCatalog.selectedProfile();
+    if (profile == nullptr || !profile->valid)
     {
         return false;
     }
@@ -718,78 +657,25 @@ bool EditorHost::runPreflight()
     spec.priority = pdf::PDFJobPriority::Operator;
     spec.documentKey = documentKey;
     spec.documentRevision = documentRevision;
-    spec.operationId = QStringLiteral("preflight.%1").arg(profileIt->id);
-    spec.checkId = profileIt->name;
+    spec.operationId = QStringLiteral("preflight.%1").arg(profile->id);
+    spec.checkId = profile->name;
     spec.progressModel = QStringLiteral("preflight-progress-v1");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
 
     m_preflight.beginRun(documentKey,
                          documentRevision,
-                         profileIt->digest,
+                         profile->digest,
                          jobId);
-    auto outcome = std::make_shared<PreflightWorkerOutcome>();
+    auto outcome = std::make_shared<pdfinteraction::PreflightRunOutcome>();
     m_preflightOutcomes.insert(jobId, outcome);
-    const PreflightProfileChoice selectedProfile = *profileIt;
-    const QJsonObject bindings = m_preflightBindings;
-    const QByteArray sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
 
-    const QString submittedId = m_session->scheduler().submit(
-        spec,
-        [document, outcome, selectedProfile, bindings, sourceHash](pdf::PDFJobContext& context)
-        {
-            if (context.isCancellationRequested())
-            {
-                return;
-            }
+    pdfinteraction::PreflightRunRequest request;
+    request.document = document;
+    request.profile = *profile;
+    request.bindings = m_preflightProfileCatalog.bindings();
+    request.sourceHash = m_session->context().getDocumentIdentity().sourceDataHash;
 
-            const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(selectedProfile.profile,
-                                                                                           selectedProfile.source);
-            if (!imported.ok)
-            {
-                throw std::runtime_error(imported.errorMessage.toStdString());
-            }
-            const pdf::PreflightVariableBindResult bound =
-                pdf::bindPreflightProfileVariables(imported.profile, bindings);
-            if (!bound.ok)
-            {
-                throw std::runtime_error(bound.errorMessage.toStdString());
-            }
-            pdf::PreflightProfileResolver resolver;
-            const pdf::PreflightResolvedProfile resolved = resolver.resolveExplicitProfile(
-                bound.profile, selectedProfile.name,
-                imported.identity.version.isEmpty() ? QStringLiteral("explicit") : imported.identity.version);
-            if (!resolved.ok)
-            {
-                throw std::runtime_error(resolved.errorMessage.toStdString());
-            }
-
-            pdf::PreflightProfileData profile;
-            QString profileError;
-            if (!pdf::PreflightEngine::parseProfile(bound.profile, profile, profileError))
-            {
-                throw std::runtime_error(profileError.toStdString());
-            }
-            profile.variableBindings = bound.bindings;
-            profile.fileDigest = imported.identity.digest;
-            profile.effectiveDigest = pdf::computeProfileDigest(bound.profile);
-            profile.profileIdentity = imported.identity.toJson();
-            profile.profileIdentity.insert(QStringLiteral("effective_digest"), profile.effectiveDigest);
-            context.reportProgress(5);
-
-            std::unique_ptr<pdf::PDFDocumentSession, void (*)(pdf::PDFDocumentSession*)> session(
-                pdf::PDFDocumentSession::createForInspection(document.data()), &pdf::PDFDocumentSession::destroy);
-            pdf::PreflightEngine engine(session.get());
-            engine.setOperationControl(context.operationControl());
-            context.reportProgress(15);
-            outcome->result = engine.run(profile);
-            pdf::finalizePreflightResult(outcome->result, sourceHash, resolved);
-            if (context.isCancellationRequested())
-            {
-                return;
-            }
-            context.reportProgress(95);
-            context.setResultSummary(QStringLiteral("Preflight completed."));
-        });
+    const QString submittedId = m_session->scheduler().submit(spec, pdfinteraction::makePreflightRunWorker(request, outcome));
     if (submittedId != jobId)
     {
         m_preflightOutcomes.remove(jobId);
@@ -808,33 +694,20 @@ bool EditorHost::cancelPreflight()
 
 bool EditorHost::selectPreflightProfile(const QString& id)
 {
-    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                 [&id](const PreflightProfileChoice& profile)
-                                 { return profile.id == id; });
-    if (it == m_preflightProfiles.cend() || !it->valid || id == m_selectedPreflightProfileId)
+    if (!m_preflightProfileCatalog.selectProfile(id))
     {
         return false;
     }
-    m_selectedPreflightProfileId = id;
-    m_preflightBindings = QJsonObject();
-    m_preflight.markProfileStale();
-    Q_EMIT preflightProfilesChanged();
     bumpPresentation();
     return true;
 }
 
 bool EditorHost::setPreflightVariable(const QString& name, const QVariant& value)
 {
-    const auto it = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                 [this](const PreflightProfileChoice& profile)
-                                 { return profile.id == m_selectedPreflightProfileId; });
-    if (it == m_preflightProfiles.cend() || !it->variables.contains(name))
+    if (!m_preflightProfileCatalog.setVariable(name, value))
     {
         return false;
     }
-    m_preflightBindings.insert(name, QJsonValue::fromVariant(value));
-    m_preflight.markProfileStale();
-    Q_EMIT preflightProfilesChanged();
     bumpPresentation();
     return true;
 }
@@ -863,156 +736,6 @@ bool EditorHost::exportPreflightReportFileUrl(const QUrl& url)
     }
     announceDocumentState(tr("Preflight report exported."));
     return true;
-}
-
-void EditorHost::reloadPreflightProfiles()
-{
-    const QString priorId = m_selectedPreflightProfileId;
-    QString priorDigest;
-    QJsonArray priorChecks;
-    for (const PreflightProfileChoice& profile : std::as_const(m_preflightProfiles))
-    {
-        if (profile.id == priorId)
-        {
-            priorDigest = profile.digest;
-            priorChecks = profile.profile.value(QStringLiteral("checks")).toArray();
-            break;
-        }
-    }
-
-    QList<PreflightProfileChoice> profiles;
-    const auto addProfile = [&profiles](const QString& source, const QByteArray& data)
-    {
-        PreflightProfileChoice choice;
-        choice.id = source;
-        choice.source = source;
-        QJsonParseError parseError;
-        const QJsonDocument parsed = QJsonDocument::fromJson(data, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !parsed.isObject())
-        {
-            choice.name = QFileInfo(source).completeBaseName();
-            choice.diagnostic = QStringLiteral("Profile JSON is invalid.");
-            profiles.append(choice);
-            return;
-        }
-        const pdf::PreflightProfileImportResult imported = pdf::importPreflightProfile(parsed.object(), source);
-        choice.name = imported.profile.value(QStringLiteral("name")).toString(QFileInfo(source).completeBaseName());
-        choice.version = imported.identity.version;
-        choice.digest = imported.identity.digest;
-        choice.profile = imported.profile;
-        choice.variables = imported.profile.value(QStringLiteral("variables")).toObject();
-        choice.valid = imported.ok;
-        choice.diagnostic = imported.ok ? QString() : imported.errorMessage;
-        if (choice.valid)
-        {
-            // importPreflightProfile validates identity and authored digest;
-            // the Core binder/parser is the authority for executable profile
-            // validity. Binding here is deliberately read-only, so a required
-            // operator variable remains selectable while its diagnostic is
-            // exposed before the first run.
-            const pdf::PreflightVariableBindResult bound =
-                pdf::bindPreflightProfileVariables(choice.profile);
-            if (bound.ok)
-            {
-                pdf::PreflightProfileData parsedProfile;
-                QString profileParseError;
-                if (!pdf::PreflightEngine::parseProfile(bound.profile, parsedProfile, profileParseError))
-                {
-                    choice.valid = false;
-                    choice.diagnostic = profileParseError;
-                }
-            }
-            else if (bound.errorCode != QStringLiteral("unresolved-variable"))
-            {
-                choice.valid = false;
-                choice.diagnostic = bound.errorMessage;
-            }
-            else
-            {
-                choice.diagnostic = bound.errorMessage;
-            }
-        }
-        profiles.append(choice);
-    };
-
-    const QDir bundled(QStringLiteral(":/profiles"));
-    for (const QFileInfo& file : bundled.entryInfoList({ QStringLiteral("*.json") }, QDir::Files, QDir::Name))
-    {
-        QFile input(file.filePath());
-        if (input.open(QIODevice::ReadOnly))
-        {
-            addProfile(file.filePath(), input.readAll());
-        }
-    }
-
-    const QString localDirectory = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
-                                       .filePath(QStringLiteral("profiles"));
-    const QDir local(localDirectory);
-    for (const QFileInfo& file : local.entryInfoList({ QStringLiteral("*.json") }, QDir::Files, QDir::Name))
-    {
-        QFile input(file.absoluteFilePath());
-        if (input.open(QIODevice::ReadOnly))
-        {
-            addProfile(file.absoluteFilePath(), input.readAll());
-        }
-    }
-
-    m_preflightProfiles = std::move(profiles);
-    if (m_selectedPreflightProfileId.isEmpty() ||
-        std::none_of(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                     [this](const PreflightProfileChoice& profile)
-                     { return profile.id == m_selectedPreflightProfileId && profile.valid; }))
-    {
-        const auto valid = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                        [](const PreflightProfileChoice& profile)
-                                        { return profile.valid; });
-        m_selectedPreflightProfileId = valid == m_preflightProfiles.cend() ? QString() : valid->id;
-        m_preflightBindings = QJsonObject();
-    }
-    const auto current = std::find_if(m_preflightProfiles.cbegin(), m_preflightProfiles.cend(),
-                                      [this](const PreflightProfileChoice& profile)
-                                      { return profile.id == m_selectedPreflightProfileId; });
-    if (!priorId.isEmpty() && (priorId != m_selectedPreflightProfileId || current == m_preflightProfiles.cend()))
-    {
-        m_preflight.markProfileStale();
-    }
-    else if (!priorId.isEmpty() && current != m_preflightProfiles.cend() && current->digest != priorDigest)
-    {
-        if (priorChecks != current->profile.value(QStringLiteral("checks")).toArray())
-        {
-            m_preflight.markCheckSetStale();
-        }
-        else
-        {
-            m_preflight.markProfileStale();
-        }
-    }
-    updatePreflightProfileWatch();
-    Q_EMIT preflightProfilesChanged();
-    bumpPresentation();
-}
-
-void EditorHost::updatePreflightProfileWatch()
-{
-    if (!m_preflightProfileWatcher)
-    {
-        return;
-    }
-    m_preflightProfileWatcher->removePaths(m_preflightProfileWatcher->directories());
-    m_preflightProfileWatcher->removePaths(m_preflightProfileWatcher->files());
-    const QString localDirectory = QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
-                                       .filePath(QStringLiteral("profiles"));
-    if (QFileInfo::exists(localDirectory))
-    {
-        m_preflightProfileWatcher->addPath(localDirectory);
-    }
-    for (const PreflightProfileChoice& profile : std::as_const(m_preflightProfiles))
-    {
-        if (!profile.source.startsWith(QLatin1Char(':')) && QFileInfo::exists(profile.source))
-        {
-            m_preflightProfileWatcher->addPath(profile.source);
-        }
-    }
 }
 
 QVariantList EditorHost::commandDescriptors() const
@@ -1394,7 +1117,7 @@ void EditorHost::onDocumentReady()
     m_documentBound = true;
     bindCanvas();
     updateCanvasAccessibilitySummary();
-    applyEmptyCanvasInspectorSelection();
+    onInteractionSelectionChanged({});
     announceDocumentState(tr("Document ready."));
 }
 
@@ -1492,7 +1215,7 @@ void EditorHost::acceptPreflightResult(const QString& jobId,
 
 void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
 {
-    const std::shared_ptr<PreflightWorkerOutcome> outcome = m_preflightOutcomes.take(snapshot.jobId);
+    const std::shared_ptr<pdfinteraction::PreflightRunOutcome> outcome = m_preflightOutcomes.take(snapshot.jobId);
     if (snapshot.jobId != m_preflight.jobId() || m_preflight.state() != pdfinteraction::PreflightController::State::Running)
     {
         return;
@@ -1668,125 +1391,46 @@ void EditorHost::onDragCompleted(pdfinteraction::DragSession session)
 
 void EditorHost::onInteractionSelectionChanged(pdfinteraction::InteractionTarget target)
 {
-    applyInspectorSelection(target);
-    bumpPresentation();
-}
+    if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
+    {
+        selectFinding(target.id);
+        bumpPresentation();
+        return;
+    }
 
-void EditorHost::applyEmptyCanvasInspectorSelection()
-{
     setInspectionMode(QStringLiteral("page"));
     if (!m_session->revisionSource() || !hasDocument())
     {
         m_inspector.clearSelection();
+        bumpPresentation();
         return;
     }
 
-    pdfinteraction::InspectorModel::Selection selection;
-    selection.documentKey = m_session->revisionSource()->documentKey();
-    selection.documentRevision = m_session->facade().currentRevision().toString();
-    selection.selectionId = QStringLiteral("canvas");
-    selection.title = tr("Document canvas");
-    selection.kind = pdfinteraction::InspectorModel::SelectionKind::EmptyCanvas;
-    selection.properties = {
-        { QStringLiteral("document"), QStringLiteral("Document"), displayTitle() },
-        { QStringLiteral("pages"), QStringLiteral("Pages"), QString::number(pageCount()) },
-        { QStringLiteral("document-status"), QStringLiteral("Document status"), documentShellStatus() },
-        { QStringLiteral("preflight"), QStringLiteral("Preflight"), preflightStateName() },
-        { QStringLiteral("production"), QStringLiteral("Production"), productionStateName() },
-    };
-    m_inspector.setSelection(selection);
+    m_inspector.setSelection(pdfinteraction::buildInspectorSelection(target, inspectorContext()));
+    bumpPresentation();
 }
 
-void EditorHost::applyInspectorSelection(const pdfinteraction::InteractionTarget& target)
+pdfinteraction::ShellInspectorContext EditorHost::inspectorContext() const
 {
-    if (!m_session->revisionSource() || !hasDocument())
+    pdfinteraction::ShellInspectorContext context;
+    if (m_session->revisionSource())
     {
-        applyEmptyCanvasInspectorSelection();
-        return;
+        context.documentKey = m_session->revisionSource()->documentKey();
+        context.documentRevision = m_session->facade().currentRevision().toString();
     }
-
-    if (!target.isValid())
-    {
-        applyEmptyCanvasInspectorSelection();
-        return;
-    }
-
-    const QString documentKey = m_session->revisionSource()->documentKey();
-    const QString documentRevision = m_session->facade().currentRevision().toString();
-
-    if (target.kind == pdfinteraction::InteractionTargetKind::Finding)
-    {
-        selectFinding(target.id);
-        return;
-    }
-
-    if (target.id.startsWith(QStringLiteral("image:")))
-    {
-        pdfinteraction::InspectorModel::Selection selection;
-        selection.documentKey = documentKey;
-        selection.documentRevision = documentRevision;
-        selection.selectionId = target.id;
-        selection.title = tr("Image");
-        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Image;
-        selection.properties = {
-            { QStringLiteral("id"), QStringLiteral("Image"), target.id.mid(6) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("bounds"), QStringLiteral("Bounds"),
-              QStringLiteral("%1,%2 %3x%4")
-                  .arg(QString::number(target.pageBounds.x()),
-                       QString::number(target.pageBounds.y()),
-                       QString::number(target.pageBounds.width()),
-                       QString::number(target.pageBounds.height())) },
-            { QStringLiteral("dpi"), QStringLiteral("Effective DPI"), tr("pending") },
-            { QStringLiteral("colour-space"), QStringLiteral("Colour space"), tr("pending") },
-            { QStringLiteral("compression"), QStringLiteral("Compression"), tr("pending") },
-            { QStringLiteral("mask"), QStringLiteral("Mask"), tr("pending") },
-        };
-        m_inspector.setSelection(selection);
-        return;
-    }
-
-    if (target.id.startsWith(QStringLiteral("separation:")))
-    {
-        pdfinteraction::InspectorModel::Selection selection;
-        selection.documentKey = documentKey;
-        selection.documentRevision = documentRevision;
-        selection.selectionId = target.id;
-        selection.title = tr("Separation");
-        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Separation;
-        selection.properties = {
-            { QStringLiteral("name"), QStringLiteral("Ink"), target.id.mid(11) },
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("coverage"), QStringLiteral("Ink coverage"), tr("pending") },
-            { QStringLiteral("kind"), QStringLiteral("Process / spot"), tr("pending") },
-        };
-        m_inspector.setSelection(selection);
-        return;
-    }
-
-    if (target.kind == pdfinteraction::InteractionTargetKind::Page ||
-        target.kind == pdfinteraction::InteractionTargetKind::PageBox)
-    {
-        pdfinteraction::InspectorModel::Selection selection;
-        selection.documentKey = documentKey;
-        selection.documentRevision = documentRevision;
-        selection.selectionId = target.id.isEmpty() ? QStringLiteral("page") : target.id;
-        selection.title = target.kind == pdfinteraction::InteractionTargetKind::PageBox
-                              ? tr("Page box: %1").arg(target.id)
-                              : tr("Page %1").arg(target.pageIndex + 1);
-        selection.kind = pdfinteraction::InspectorModel::SelectionKind::Page;
-        selection.properties = {
-            { QStringLiteral("page"), QStringLiteral("Page"), QString::number(target.pageIndex + 1) },
-            { QStringLiteral("box"), QStringLiteral("Box"), target.id },
-            { QStringLiteral("size"), QStringLiteral("Size"),
-              QStringLiteral("%1 x %2")
-                  .arg(QString::number(target.pageBounds.width()), QString::number(target.pageBounds.height())) },
-            { QStringLiteral("rotation"), QStringLiteral("Rotation"), QStringLiteral("%1°").arg(rotationDegrees()) },
-            { QStringLiteral("ocg"), QStringLiteral("Optional content"), m_documentModel.hasOptionalContent() ? tr("present") : tr("none") },
-        };
-        m_inspector.setSelection(selection);
-        return;
-    }
-
-    applyEmptyCanvasInspectorSelection();
+    context.displayTitle = displayTitle();
+    context.pageCount = pageCount();
+    context.documentShellStatus = documentShellStatus();
+    context.preflightStateName = preflightStateName();
+    context.productionStateName = productionStateName();
+    context.rotationDegrees = rotationDegrees();
+    context.hasOptionalContent = m_documentModel.hasOptionalContent();
+    context.canvasTitle = tr("Document canvas");
+    context.imageTitle = tr("Image");
+    context.separationTitle = tr("Separation");
+    context.pageTitlePrefix = tr("Page %1");
+    context.pageBoxTitlePrefix = tr("Page box: %1");
+    context.optionalContentPresent = tr("present");
+    context.optionalContentNone = tr("none");
+    return context;
 }
