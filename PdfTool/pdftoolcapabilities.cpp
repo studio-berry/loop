@@ -40,13 +40,20 @@ QString valueTypeName(PDFToolValueType valueType)
 {
     switch (valueType)
     {
-        case PDFToolValueType::Boolean: return QStringLiteral("boolean");
-        case PDFToolValueType::Integer: return QStringLiteral("integer");
-        case PDFToolValueType::Number: return QStringLiteral("number");
-        case PDFToolValueType::String: return QStringLiteral("string");
-        case PDFToolValueType::Path: return QStringLiteral("path");
-        case PDFToolValueType::Enum: return QStringLiteral("enum");
-        case PDFToolValueType::Csv: return QStringLiteral("csv");
+        case PDFToolValueType::Boolean:
+            return QStringLiteral("boolean");
+        case PDFToolValueType::Integer:
+            return QStringLiteral("integer");
+        case PDFToolValueType::Number:
+            return QStringLiteral("number");
+        case PDFToolValueType::String:
+            return QStringLiteral("string");
+        case PDFToolValueType::Path:
+            return QStringLiteral("path");
+        case PDFToolValueType::Enum:
+            return QStringLiteral("enum");
+        case PDFToolValueType::Csv:
+            return QStringLiteral("csv");
     }
     return QStringLiteral("string");
 }
@@ -136,7 +143,8 @@ QJsonArray buildCapabilities()
 QJsonArray fixupCapabilities()
 {
     QList<pdf::PDFFixupCapability> fixups = pdf::getImplementedFixupCapabilities();
-    std::sort(fixups.begin(), fixups.end(), [](const auto& left, const auto& right) { return left.id < right.id; });
+    std::sort(fixups.begin(), fixups.end(), [](const auto& left, const auto& right)
+              { return left.id < right.id; });
 
     QJsonArray result;
     for (const pdf::PDFFixupCapability& fixup : fixups)
@@ -146,8 +154,7 @@ QJsonArray fixupCapabilities()
             { QStringLiteral("implemented"), fixup.implemented },
             { QStringLiteral("destructive"), fixup.destructive },
             { QStringLiteral("supports_dry_run"), fixup.supportsDryRun },
-            { QStringLiteral("supports_report"), fixup.supportsReport }
-        });
+            { QStringLiteral("supports_report"), fixup.supportsReport } });
     }
     return result;
 }
@@ -155,14 +162,14 @@ QJsonArray fixupCapabilities()
 QJsonArray schemaCapabilities()
 {
     return {
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loop-preflight-profile") }, { QStringLiteral("version"), 1 }},
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("loop-preflight-report") }, { QStringLiteral("version"), 3 }},
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("pdftool-discovery") }, { QStringLiteral("version"), 1 }},
-        QJsonObject{{ QStringLiteral("id"), QStringLiteral("pdftool-envelope") }, { QStringLiteral("version"), 1 }}
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-profile") }, { QStringLiteral("version"), 1 } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-report") }, { QStringLiteral("version"), 3 } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-discovery") }, { QStringLiteral("version"), 1 } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-envelope") }, { QStringLiteral("version"), 1 } }
     };
 }
 
-} // namespace
+}   // namespace
 
 PDFToolCapabilitiesApplication::PDFToolCapabilitiesApplication() :
     PDFToolAbstractApplication()
@@ -173,9 +180,12 @@ QString PDFToolCapabilitiesApplication::getStandardString(StandardString standar
 {
     switch (standardString)
     {
-        case Command: return QStringLiteral("capabilities");
-        case Name: return PDFToolTranslationContext::tr("Capabilities");
-        case Description: return PDFToolTranslationContext::tr("Describe the commands, options, schemas, fixups, and build capabilities in this PdfTool binary.");
+        case Command:
+            return QStringLiteral("capabilities");
+        case Name:
+            return PDFToolTranslationContext::tr("Capabilities");
+        case Description:
+            return PDFToolTranslationContext::tr("Describe the commands, options, schemas, fixups, and build capabilities in this PdfTool binary.");
     }
     return QString();
 }
@@ -196,21 +206,21 @@ PDFToolExitCode PDFToolCapabilitiesApplication::execute(const PDFToolOptions& op
     {
         descriptors.append(application->describe());
     }
-    std::sort(descriptors.begin(), descriptors.end(), [](const auto& left, const auto& right) { return left.id < right.id; });
+    std::sort(descriptors.begin(), descriptors.end(), [](const auto& left, const auto& right)
+              { return left.id < right.id; });
 
     const QString requestedCommand = options.capabilitiesCommand;
     if (!requestedCommand.isEmpty())
     {
-        const auto found = std::find_if(descriptors.cbegin(), descriptors.cend(), [&](const auto& descriptor) {
-            return descriptor.id == requestedCommand;
-        });
+        const auto found = std::find_if(descriptors.cbegin(), descriptors.cend(), [&](const auto& descriptor)
+                                        { return descriptor.id == requestedCommand; });
         if (found == descriptors.cend())
         {
             reportDiagnostic(options,
                              PDFToolDiagnosticSeverity::Error,
                              QStringLiteral("cli.unknown-discovery-command"),
                              PDFToolTranslationContext::tr("Unknown command requested for discovery: '%1'.").arg(requestedCommand),
-                             QJsonObject{{ QStringLiteral("command"), requestedCommand }});
+                             QJsonObject{ { QStringLiteral("command"), requestedCommand } });
             return PDFToolExitCode::InvalidInvocation;
         }
         descriptors = { *found };
@@ -227,18 +237,13 @@ PDFToolExitCode PDFToolCapabilitiesApplication::execute(const PDFToolOptions& op
         options.executionContext->setData(QJsonObject{
             { QStringLiteral("discovery_schema_version"), 1 },
             { QStringLiteral("product"), QJsonObject{
-                { QStringLiteral("name"), QCoreApplication::applicationName() },
-                { QStringLiteral("version"), QCoreApplication::applicationVersion() }
-            } },
-            { QStringLiteral("output_contract"), QJsonObject{
-                { QStringLiteral("schema_version"), 1 },
-                { QStringLiteral("console_formats"), QJsonArray{ QStringLiteral("html"), QStringLiteral("json"), QStringLiteral("text"), QStringLiteral("xml") } }
-            } },
+                                             { QStringLiteral("name"), QCoreApplication::applicationName() },
+                                             { QStringLiteral("version"), QCoreApplication::applicationVersion() } } },
+            { QStringLiteral("output_contract"), QJsonObject{ { QStringLiteral("schema_version"), 1 }, { QStringLiteral("console_formats"), QJsonArray{ QStringLiteral("html"), QStringLiteral("json"), QStringLiteral("text"), QStringLiteral("xml") } } } },
             { QStringLiteral("build_capabilities"), buildCapabilities() },
             { QStringLiteral("fixups"), fixupCapabilities() },
             { QStringLiteral("schemas"), schemaCapabilities() },
-            { QStringLiteral("commands"), commands }
-        });
+            { QStringLiteral("commands"), commands } });
     }
 
     return PDFToolExitCode::Success;
@@ -251,4 +256,4 @@ PDFToolAbstractApplication::Options PDFToolCapabilitiesApplication::getOptionsFl
 
 static PDFToolCapabilitiesApplication s_capabilitiesApplication;
 
-} // namespace pdftool
+}   // namespace pdftool
