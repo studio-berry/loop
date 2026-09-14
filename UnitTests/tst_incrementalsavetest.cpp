@@ -27,8 +27,12 @@
 
 #include <QtTest>
 #include <QBuffer>
+#include <QCryptographicHash>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPair>
 #include <QTemporaryDir>
 #include <QVector>
@@ -504,6 +508,33 @@ void IncrementalSaveTest::signedFixtureIncrementalEditPreservesTheSignedByteRang
         return data.mid(open, close - open + 1);
     };
     QCOMPARE(contentsOf(output.data()), contentsOf(originalData));
+
+    const QString evidenceDirectory = QString::fromUtf8(qgetenv("LOOP_SAVE_POLICY_EVIDENCE_DIR"));
+    if (!evidenceDirectory.isEmpty())
+    {
+        QDir().mkpath(evidenceDirectory);
+        QFile artifact(QStringLiteral("%1/incremental-with-signature.pdf").arg(evidenceDirectory));
+        QVERIFY(artifact.open(QIODevice::WriteOnly));
+        QCOMPARE(artifact.write(output.data()), qint64(output.data().size()));
+        artifact.close();
+
+        QJsonObject evidence{
+            { QStringLiteral("schema"), QStringLiteral("loop.save-policy-incremental-evidence") },
+            { QStringLiteral("schema_version"), 1 },
+            { QStringLiteral("source_fixture"), QStringLiteral("UnitTests/testdata/signatures/signed-incremental-base.pdf") },
+            { QStringLiteral("source_sha256"), QString::fromLatin1(QCryptographicHash::hash(originalData, QCryptographicHash::Sha256).toHex()) },
+            { QStringLiteral("artifact_sha256"), QString::fromLatin1(QCryptographicHash::hash(output.data(), QCryptographicHash::Sha256).toHex()) },
+            { QStringLiteral("source_bytes"), qint64(originalData.size()) },
+            { QStringLiteral("artifact_bytes"), qint64(output.data().size()) },
+            { QStringLiteral("appended_bytes"), qint64(output.data().size() - originalData.size()) },
+            { QStringLiteral("original_prefix_preserved"), output.data().left(originalData.size()) == originalData },
+            { QStringLiteral("byte_range_preserved"), true }
+        };
+        QFile evidenceFile(QStringLiteral("%1/incremental-with-signature.json").arg(evidenceDirectory));
+        QVERIFY(evidenceFile.open(QIODevice::WriteOnly));
+        QCOMPARE(evidenceFile.write(QJsonDocument(evidence).toJson(QJsonDocument::Indented)), qint64(QJsonDocument(evidence).toJson(QJsonDocument::Indented).size()));
+        evidenceFile.close();
+    }
 
     // 3. The append really is an append: new xref pointing at the old one.
     QVERIFY(output.data().mid(originalData.size()).contains("/Prev"));
