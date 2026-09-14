@@ -249,7 +249,7 @@ def parse_schema_versions() -> dict[str, Any]:
     report_match = re.search(r"PREFLIGHT_REPORT_SCHEMA_VERSION\s*=\s*(\d+)", engine_header)
     engine_cpp = read(ROOT / "LoopLibCore" / "sources" / "preflightengine.cpp")
     decision_match = re.search(
-        r'preflightDecisionsToJson.*?schema_version"\),\s*(\d+)', engine_cpp, re.DOTALL
+        r"preflightDecisionsToJson.*?PDFSchemaKind::PreflightDecisions,\s*PDFSchemaVersion\{\s*(\d+)\s*,", engine_cpp, re.DOTALL
     )
     action_list = read(ROOT / "LoopLibCore" / "sources" / "pdfactionlist.cpp")
     action_match = re.search(r'loop-action-list/(\d+)', action_list)

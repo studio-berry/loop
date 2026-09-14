@@ -281,10 +281,11 @@ QJsonObject preflightDecisionsToJson(const QList<PreflightDecision>& decisions)
     {
         array.append(decision.toJson());
     }
-    return QJsonObject{
-        { QStringLiteral("schema_version"), 1 },
-        { QStringLiteral("decisions"), array }
-    };
+
+    QJsonObject root;
+    writeSchemaEnvelope(root, PDFSchemaKind::PreflightDecisions, PDFSchemaVersion{ 1, 0 });
+    root.insert(QStringLiteral("decisions"), array);
+    return root;
 }
 
 bool preflightDecisionsFromJson(const QJsonObject& object,
@@ -293,13 +294,36 @@ bool preflightDecisionsFromJson(const QJsonObject& object,
 {
     decisions.clear();
     errorMessage.clear();
-    if (object.value(QStringLiteral("schema_version")).toInt() != 1)
+
+    const PDFSchemaEnvelope envelope = readSchemaEnvelope(object);
+    PDFSchemaKind kind = envelope.kind;
+    if (kind == PDFSchemaKind::Unknown)
     {
-        errorMessage = QStringLiteral("Decision file schema_version must be 1.");
+        // Version 1 predates schema_kind; the caller asked for a decisions file.
+        kind = PDFSchemaKind::PreflightDecisions;
+    }
+
+    PDFSchemaVersion version = envelope.version;
+    if (!version.isValid())
+    {
+        version = PDFSchemaVersion::fromJsonValue(object.value(QStringLiteral("schema_version")));
+    }
+
+    const PDFSchemaCompatibilityDiagnostic diagnostic = schemaCompatibilityDiagnostic(kind, version);
+    if (!diagnostic.isCompatible())
+    {
+        errorMessage = diagnostic.message;
         return false;
     }
 
-    const QJsonValue value = object.value(QStringLiteral("decisions"));
+    const PDFSchemaMigrationResult prepared = prepareSchemaDocument(kind, object);
+    if (prepared.document.isEmpty())
+    {
+        errorMessage = diagnostic.message;
+        return false;
+    }
+
+    const QJsonValue value = prepared.document.value(QStringLiteral("decisions"));
     if (!value.isArray())
     {
         errorMessage = QStringLiteral("Decision file decisions must be an array.");
