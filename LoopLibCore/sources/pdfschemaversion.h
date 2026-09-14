@@ -78,7 +78,8 @@ enum class PDFSchemaCompatibility
 {
     Compatible,
     UnsupportedMajor,
-    UnknownKind
+    UnknownKind,
+    Invalid
 };
 
 struct LOOPLIBCORESHARED_EXPORT PDFSchemaVersion
@@ -108,6 +109,25 @@ LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibility(PDFSche
 LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibility checkSchemaCompatibilityWithMatrix(PDFSchemaKind kind,
                                                                                    PDFSchemaVersion version,
                                                                                    const QJsonObject& matrix);
+/// One stable, machine-readable compatibility diagnostic. `code` is the
+/// contract machine consumers branch on; `message` is human-oriented.
+struct LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibilityDiagnostic
+{
+    PDFSchemaCompatibility compatibility = PDFSchemaCompatibility::Invalid;
+    QString code;
+    QString message;
+    PDFSchemaKind kind = PDFSchemaKind::Unknown;
+    PDFSchemaVersion version;
+
+    bool isCompatible() const { return compatibility == PDFSchemaCompatibility::Compatible; }
+};
+
+LOOPLIBCORESHARED_EXPORT QString pdfSchemaCompatibilityToString(PDFSchemaCompatibility compatibility);
+LOOPLIBCORESHARED_EXPORT PDFSchemaCompatibilityDiagnostic schemaCompatibilityDiagnostic(PDFSchemaKind kind,
+                                                                                        PDFSchemaVersion version);
+/// The compiled-in compatibility matrix. The CLI reports it verbatim so an
+/// operator can read the same authority Core enforces.
+LOOPLIBCORESHARED_EXPORT QJsonObject schemaCompatibilityMatrix();
 LOOPLIBCORESHARED_EXPORT PDFSchemaVersion currentSchemaVersion(PDFSchemaKind kind);
 /// Reads the current version of one kind out of an explicit matrix. An absent
 /// entry yields an invalid version; callers must fail closed, never guess.

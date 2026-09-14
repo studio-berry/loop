@@ -52,6 +52,7 @@ private slots:
     void unknownFieldsSurviveOnCompatibleMinor();
     void everyJsonKindRoundTripsItsCurrentAndPreviousGolden();
     void newerMinorPassesThroughAndReportsTheDocumentVersion();
+    void compatibilityDiagnosticsAreStableAndDistinct();
 };
 
 void SchemaEvolutionTest::integerSchemaVersionIsMajorWithZeroMinor()
@@ -456,6 +457,47 @@ void SchemaEvolutionTest::newerMinorPassesThroughAndReportsTheDocumentVersion()
     QCOMPARE(prepared.fromVersion.toString(), QStringLiteral("3.1"));
     // A caller that is told "3.0" would believe it holds a target-version payload.
     QCOMPARE(prepared.toVersion.toString(), QStringLiteral("3.1"));
+}
+
+void SchemaEvolutionTest::compatibilityDiagnosticsAreStableAndDistinct()
+{
+    const pdf::PDFSchemaCompatibilityDiagnostic compatible =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 3, 0 });
+    QCOMPARE(compatible.compatibility, pdf::PDFSchemaCompatibility::Compatible);
+    QCOMPARE(compatible.code, QStringLiteral("schema.compatible"));
+    QCOMPARE(compatible.message, QStringLiteral("Schema kind 'preflight-report' version 3.0 is supported."));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic unsupported =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, { 99, 0 });
+    QCOMPARE(unsupported.compatibility, pdf::PDFSchemaCompatibility::UnsupportedMajor);
+    QCOMPARE(unsupported.code, QStringLiteral("schema.unsupported-major"));
+    // Pinned verbatim: UnitTestsPdfToolContract asserts the same strings reach the CLI.
+    QCOMPARE(unsupported.message,
+             QStringLiteral("Unsupported schema major: kind 'preflight-report' version 99; "
+                            "this build supports major(s) 1, 2, 3."));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic unknownKind =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::Unknown, { 1, 0 });
+    QCOMPARE(unknownKind.compatibility, pdf::PDFSchemaCompatibility::UnknownKind);
+    QCOMPARE(unknownKind.code, QStringLiteral("schema.unknown-kind"));
+
+    const pdf::PDFSchemaCompatibilityDiagnostic invalid =
+        pdf::schemaCompatibilityDiagnostic(pdf::PDFSchemaKind::PreflightReport, {});
+    QCOMPARE(invalid.compatibility, pdf::PDFSchemaCompatibility::Invalid);
+    QCOMPARE(invalid.code, QStringLiteral("schema.invalid-version"));
+
+    // The compatibility check itself, not only the diagnostic wrapper: a
+    // malformed version is its own result, distinct from an unsupported major.
+    // (Moved here from Phase 1, which could not compile an Invalid expectation.)
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 0, 0 }),
+             pdf::PDFSchemaCompatibility::Invalid);
+    QCOMPARE(pdf::checkSchemaCompatibility(pdf::PDFSchemaKind::PreflightReport, { 99, 0 }),
+             pdf::PDFSchemaCompatibility::UnsupportedMajor);
+
+    QCOMPARE(pdf::pdfSchemaCompatibilityToString(pdf::PDFSchemaCompatibility::UnsupportedMajor),
+             QStringLiteral("unsupported-major"));
+    QCOMPARE(pdf::pdfSchemaCompatibilityToString(pdf::PDFSchemaCompatibility::Invalid),
+             QStringLiteral("invalid"));
 }
 
 QTEST_APPLESS_MAIN(SchemaEvolutionTest)
