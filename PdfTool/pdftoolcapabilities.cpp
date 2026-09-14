@@ -23,6 +23,7 @@
 #include "pdftoolcapabilities.h"
 
 #include "pdffixupregistry.h"
+#include "pdfschemaversion.h"
 
 #include <QCoreApplication>
 #include <QJsonArray>
@@ -161,11 +162,18 @@ QJsonArray fixupCapabilities()
 
 QJsonArray schemaCapabilities()
 {
+    // Versions come from the compiled compatibility matrix so discovery cannot
+    // drift from the authority Core enforces.
+    const auto currentMajor = [](pdf::PDFSchemaKind kind)
+    {
+        return int(pdf::currentSchemaVersion(kind).major);
+    };
+
     return {
-        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-profile") }, { QStringLiteral("version"), 1 } },
-        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-report") }, { QStringLiteral("version"), 3 } },
-        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-discovery") }, { QStringLiteral("version"), 1 } },
-        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-envelope") }, { QStringLiteral("version"), 1 } }
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-profile") }, { QStringLiteral("version"), currentMajor(pdf::PDFSchemaKind::PreflightProfile) } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("loop-preflight-report") }, { QStringLiteral("version"), currentMajor(pdf::PDFSchemaKind::PreflightReport) } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-discovery") }, { QStringLiteral("version"), currentMajor(pdf::PDFSchemaKind::CapabilityDiscovery) } },
+        QJsonObject{ { QStringLiteral("id"), QStringLiteral("pdftool-envelope") }, { QStringLiteral("version"), currentMajor(pdf::PDFSchemaKind::PdfToolEnvelope) } }
     };
 }
 

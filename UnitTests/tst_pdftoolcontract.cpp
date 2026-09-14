@@ -112,6 +112,7 @@ private slots:
     void schemaReportsTheMatrixForEveryKind();
     void schemaReportsUnsupportedMajorIdenticallyToCore();
     void schemaAcceptsCurrentAndPreviousGoldens();
+    void capabilitiesReportMatrixVersions();
 };
 
 void PdfToolContractTest::helpIsWrapped()
@@ -376,6 +377,37 @@ void PdfToolContractTest::schemaAcceptsCurrentAndPreviousGoldens()
     QCOMPARE(migration.value(QStringLiteral("applied")).toBool(), true);
     QCOMPARE(migration.value(QStringLiteral("from")).toString(), QStringLiteral("2.0"));
     QCOMPARE(migration.value(QStringLiteral("to")).toString(), QStringLiteral("3.0"));
+}
+
+void PdfToolContractTest::capabilitiesReportMatrixVersions()
+{
+    const ToolRun capabilities = runPdfTool({ QStringLiteral("capabilities") });
+    verifyEnvelope(capabilities, 0, QStringLiteral("capabilities"));
+    const QJsonArray schemas = capabilities.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("schemas")).toArray();
+    QCOMPARE(schemas.size(), 4);
+
+    const ToolRun matrixRun = runPdfTool({ QStringLiteral("schema") });
+    verifyEnvelope(matrixRun, 0, QStringLiteral("schema"));
+    const QJsonObject kinds = matrixRun.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("matrix")).toObject().value(QStringLiteral("kinds")).toObject();
+
+    const QHash<QString, QString> publishedToKind{
+        { QStringLiteral("loop-preflight-profile"), QStringLiteral("preflight-profile") },
+        { QStringLiteral("loop-preflight-report"), QStringLiteral("preflight-report") },
+        { QStringLiteral("pdftool-discovery"), QStringLiteral("capability-discovery") },
+        { QStringLiteral("pdftool-envelope"), QStringLiteral("pdftool-envelope") },
+    };
+
+    QCOMPARE(schemas.size(), publishedToKind.size());
+    for (const QJsonValue& schema : schemas)
+    {
+        const QJsonObject entry = schema.toObject();
+        const QString id = entry.value(QStringLiteral("id")).toString();
+        QVERIFY2(publishedToKind.contains(id), qPrintable(id));
+        const QJsonObject matrixEntry = kinds.value(publishedToKind.value(id)).toObject();
+        QVERIFY2(!matrixEntry.isEmpty(), qPrintable(id));
+        const QString current = matrixEntry.value(QStringLiteral("current")).toString();
+        QCOMPARE(entry.value(QStringLiteral("version")).toInt(), current.section(QLatin1Char('.'), 0, 0).toInt());
+    }
 }
 
 }   // namespace
