@@ -36,18 +36,18 @@ QString PDFToolRedact::getStandardString(PDFToolAbstractApplication::StandardStr
 {
     switch (standardString)
     {
-    case Command:
-        return "redact";
+        case Command:
+            return "redact";
 
-    case Name:
-        return PDFToolTranslationContext::tr("Redact");
+        case Name:
+            return PDFToolTranslationContext::tr("Redact");
 
-    case Description:
-        return PDFToolTranslationContext::tr("Create a redacted document from the original document.");
+        case Description:
+            return PDFToolTranslationContext::tr("Create a redacted document from the original document.");
 
-    default:
-        Q_ASSERT(false);
-        break;
+        default:
+            Q_ASSERT(false);
+            break;
     }
 
     return QString();
@@ -59,6 +59,25 @@ PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
     {
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("cli.invalid-arguments"), PDFToolTranslationContext::tr("Redacted document file name is not set."));
         return PDFToolExitCode::InvalidInvocation;
+    }
+
+    // Redaction removes prior content, so it declares a full rewrite and never
+    // persists over the input it was handed. Rejected before the document is
+    // read: the refusal cannot depend on how much work the redaction would do.
+    pdf::PDFSaveRequest saveRequest;
+    saveRequest.sourcePath = options.document;
+    saveRequest.outputPath = options.redactedDocument;
+    saveRequest.required = pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("redaction removes prior content"));
+    saveRequest.requested = saveRequest.required;
+    saveRequest.requestedExplicitly = true;
+    saveRequest.appendInPlace = false;
+    const pdf::PDFOperationResult saveValidation = pdf::validateSaveRequest(saveRequest);
+    if (!saveValidation)
+    {
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("save-policy.refused"),
+                         saveValidation.getErrorMessage(),
+                         QJsonObject{ { QStringLiteral("path"), options.redactedDocument } });
+        return PDFToolExitCode::ProcessingFailure;
     }
 
     pdf::PDFDocument document;
@@ -77,21 +96,21 @@ PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
     {
         if (options.executionContext)
         {
-            options.executionContext->setData(QJsonObject{{QStringLiteral("operation"), QStringLiteral("redact")}, {QStringLiteral("dry_run"), options.destructiveDryRun}});
+            options.executionContext->setData(QJsonObject{ { QStringLiteral("operation"), QStringLiteral("redact") }, { QStringLiteral("dry_run"), options.destructiveDryRun } });
         }
     }
     else if (options.destructiveReport)
     {
         PDFConsole::writeText(PDFToolTranslationContext::tr("Would redact '%1' to '%2'.")
-                                .arg(options.document, options.redactedDocument),
-                            options.outputCodec);
+                                  .arg(options.document, options.redactedDocument),
+                              options.outputCodec);
     }
 
     if (options.destructiveDryRun)
     {
         if (options.executionContext)
         {
-            options.executionContext->addOutput({QStringLiteral("file"), QStringLiteral("primary"), options.redactedDocument, QStringLiteral("planned")});
+            options.executionContext->addOutput({ QStringLiteral("file"), QStringLiteral("primary"), options.redactedDocument, QStringLiteral("planned") });
         }
         return PDFToolExitCode::Success;
     }
@@ -125,18 +144,16 @@ PDFToolExitCode PDFToolRedact::execute(const PDFToolOptions& options)
     pdf::PDFOperationResult result = writer.write(options.redactedDocument, &redactedDocument, true);
     if (!result)
     {
-        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write redacted document. %1").arg(result.getErrorMessage()), QJsonObject{{QStringLiteral("path"), options.redactedDocument}});
+        reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("output.write-failed"), PDFToolTranslationContext::tr("Failed to write redacted document. %1").arg(result.getErrorMessage()), QJsonObject{ { QStringLiteral("path"), options.redactedDocument } });
         return PDFToolExitCode::ProcessingFailure;
     }
 
     if (options.executionContext)
     {
-        options.executionContext->addOutput({
-            QStringLiteral("file"),
-            QStringLiteral("primary"),
-            options.redactedDocument,
-            QStringLiteral("written")
-        });
+        options.executionContext->addOutput({ QStringLiteral("file"),
+                                              QStringLiteral("primary"),
+                                              options.redactedDocument,
+                                              QStringLiteral("written") });
     }
 
     return PDFToolExitCode::Success;

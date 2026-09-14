@@ -140,6 +140,21 @@ In JSON mode, handled errors and warnings are captured in `diagnostics` and are
 **not** additionally written to stderr. In text/XML/HTML mode the existing
 human-facing stderr behavior is preserved.
 
+### Save-policy refusals
+
+A command that declares a save mode also declares what that mode has to
+guarantee. `redact` removes prior content, so its result is always a full
+rewrite and never an append: the guard runs before the document is read, so an
+incompatible request is rejected before any content is touched.
+
+| Command | `code` | Exit | Guard | `message` |
+|---|---|---|---|---|
+| `redact` | `save-policy.refused` | `4 processing-failure` | Redaction removes prior content, so the output must be a full rewrite written to a path other than the trusted input. | `Refused save: '<name>' is the trusted input artifact; write the candidate to a new path.` |
+
+`context` carries the refused output path as `path`. The diagnostic is an
+`error`, the run records no output, and the input file is left byte-identical:
+`PdfTool redact received.pdf received.pdf` is never a successful invocation.
+
 ### Empty results
 
 Extraction commands (`fetch-images`, `fetch-text`, `attachments`) complete

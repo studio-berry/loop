@@ -23,6 +23,7 @@
 #include "processoutputcapture.h"
 
 #include <QDir>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -109,6 +110,7 @@ private slots:
     void fetchTextFailIfEmptyKeepsSuccessWhenTextExists();
     void preflightRejectsNonJsonOutput();
     void preflightKeepsNestedReportBoundary();
+    void redactRefusesToWriteOverItsOwnInput();
 };
 
 void PdfToolContractTest::helpIsWrapped()
@@ -314,6 +316,40 @@ void PdfToolContractTest::preflightKeepsNestedReportBoundary()
     const ToolRun run = runPdfTool({ QStringLiteral("preflight"), QStringLiteral("--console-format"), QStringLiteral("json") });
     verifyEnvelope(run, 3, QStringLiteral("preflight"));
     QVERIFY(run.json.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).isUndefined());
+}
+
+void PdfToolContractTest::redactRefusesToWriteOverItsOwnInput()
+{
+    // Redaction removes prior content, so the command must refuse to persist
+    // its result over the trusted input the caller handed it.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString inputPath = directory.filePath(QStringLiteral("received.pdf"));
+    const QString fixture =
+        QDir(QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR)).filePath(QStringLiteral("testdata/fixtures/color-rgb.pdf"));
+    QVERIFY2(QFile::copy(fixture, inputPath), qPrintable(fixture));
+
+    const ToolRun run = runPdfTool({ QStringLiteral("redact"),
+                                     QStringLiteral("--console-format"), QStringLiteral("json"),
+                                     inputPath, inputPath });
+
+    verifyEnvelope(run, 4, QStringLiteral("redact"));
+    const QJsonObject diagnostic = findDiagnostic(run, QStringLiteral("save-policy.refused"));
+    QVERIFY2(!diagnostic.isEmpty(), qPrintable(QString::fromUtf8(run.stdoutData)));
+    QCOMPARE(diagnostic.value(QStringLiteral("severity")).toString(), QStringLiteral("error"));
+    QVERIFY(diagnostic.value(QStringLiteral("message")).toString().contains(QStringLiteral("trusted input artifact")));
+    QCOMPARE(diagnostic.value(QStringLiteral("context")).toObject().value(QStringLiteral("path")).toString(), inputPath);
+    QVERIFY(run.json.value(QStringLiteral("outputs")).toArray().isEmpty());
+    QVERIFY(QFile(inputPath).exists());
+
+    // The refusal must be about writing over the input, not about redaction:
+    // the same document and the same caller still produce the artifact when
+    // the output is a different path.
+    const ToolRun legitimate = runPdfTool({ QStringLiteral("redact"),
+                                            QStringLiteral("--console-format"), QStringLiteral("json"),
+                                            inputPath, directory.filePath(QStringLiteral("redacted.pdf")) });
+    QCOMPARE(legitimate.exitCode, 0);
+    QVERIFY(findDiagnostic(legitimate, QStringLiteral("save-policy.refused")).isEmpty());
 }
 
 }   // namespace
