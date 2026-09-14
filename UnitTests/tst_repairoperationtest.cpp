@@ -171,6 +171,25 @@ void RepairOperationTest::transactionRejectsAWeakenedSavePolicyBeforeMutation()
     QVERIFY(stricter.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("production.validate-wide-format")), QJsonObject{}));
     QVERIFY(stricter.setRequestedSavePolicy(pdf::PDFOperationSavePolicy::fullRewrite(QStringLiteral("caller wants a rewrite"))));
     QCOMPARE(stricter.savePolicy().mode, pdf::PDFSaveMode::IncrementalAppend);
+
+    // The candidate write path applies the same rule: a request refused after
+    // the mutation still cannot produce a candidate artifact.
+    pdf::PDFRepairTransaction written(source);
+    QVERIFY(written.add(pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed")),
+                        QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 },
+                                     { QStringLiteral("force"), true } }));
+    QVERIFY(written.analyze());
+    QVERIFY(written.apply());
+    QVERIFY(!written.setRequestedSavePolicy(pdf::PDFOperationSavePolicy::incrementalAppend(QStringLiteral("caller wants an append"))));
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    pdf::PDFDocument reopenedCandidate;
+    const pdf::PDFOperationResult serialized = written.serializeCandidate(
+        directory.filePath(QStringLiteral("candidate.pdf")), &reopenedCandidate);
+    QVERIFY(!serialized);
+    QCOMPARE(serialized.getErrorMessage(),
+             QStringLiteral("Refused save policy: mode 'incremental-append' is weaker than the operation-declared 'save-as-new-artifact'."));
 }
 
 void RepairOperationTest::analyze_doesNotMutateSource()

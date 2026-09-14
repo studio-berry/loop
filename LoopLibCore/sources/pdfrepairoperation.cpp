@@ -500,6 +500,11 @@ PDFOperationResult PDFRepairTransaction::serializeCandidate(const QString& candi
     {
         return PDFOperationResult(QStringLiteral("Repair transaction has no candidate."));
     }
+    const PDFOperationResult savePolicyRefusal = refuseWeakenedSavePolicy();
+    if (!savePolicyRefusal)
+    {
+        return savePolicyRefusal;
+    }
     return PDFRepairDiffEngine::buildSerializedCandidate(
         m_candidate,
         [](PDFDocument*)
