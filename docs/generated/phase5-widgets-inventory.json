@@ -470,6 +470,7 @@
         "LoopEditor",
         "LoopLibQuick",
         "ProductQuickAccessibilitySmoke",
+        "UnitTestsActionList",
         "UnitTestsFindingNavigation",
         "UnitTestsPreflightInteraction",
         "UnitTestsPreflightVerdict"
@@ -758,6 +759,7 @@
       "build_only_in_profile": false,
       "direct_links": [
         "LoopLibCore",
+        "LoopLibInteraction",
         "Qt6::Core",
         "Qt6::Gui",
         "Qt6::Test"
@@ -768,7 +770,8 @@
         "Test"
       ],
       "transitive_targets": [
-        "LoopLibCore"
+        "LoopLibCore",
+        "LoopLibInteraction"
       ],
       "transitive_qt_modules": [
         "Sql",

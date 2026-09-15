@@ -47,15 +47,14 @@ pdf::PDFActionList bleedRecipe(const QString& id)
 {
     pdf::PDFActionList actionList;
     const pdf::PDFOperationResult parsed = pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), id },
-        { QStringLiteral("name"), id },
-        { QStringLiteral("steps"), QJsonArray{QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("bleed") },
-            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-            { QStringLiteral("params"), QJsonObject{{QStringLiteral("bleed_mm"), 3.0}, {QStringLiteral("force"), true}}}
-        }} }
-    }, &actionList);
+                                                                            { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                                                            { QStringLiteral("id"), id },
+                                                                            { QStringLiteral("name"), id },
+                                                                            { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                                                           { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                                           { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                                           { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } } },
+                                                                        &actionList);
     Q_ASSERT(parsed);
     return actionList;
 }
@@ -85,15 +84,12 @@ void ActionListTest::parsesAndRoundTripsRecipe()
         { QStringLiteral("name"), QStringLiteral("Press ready") },
         { QStringLiteral("onFailure"), QStringLiteral("stop") },
         { QStringLiteral("steps"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("bleed") },
-                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-                { QStringLiteral("params"), QJsonObject{
-                    { QStringLiteral("bleed_mm"), QStringLiteral("${job.bleed}") },
-                    { QStringLiteral("force"), true }
-                } }
-            }
-        } }
+                                       QJsonObject{
+                                           { QStringLiteral("id"), QStringLiteral("bleed") },
+                                           { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                           { QStringLiteral("params"), QJsonObject{
+                                                                           { QStringLiteral("bleed_mm"), QStringLiteral("${job.bleed}") },
+                                                                           { QStringLiteral("force"), true } } } } } }
     };
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(json, &actionList));
@@ -106,22 +102,19 @@ void ActionListTest::rejectsUnknownOperationAndWrongParameterType()
 {
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), QStringLiteral("bad") },
-        { QStringLiteral("name"), QStringLiteral("Bad") },
-        { QStringLiteral("steps"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("one") },
-                { QStringLiteral("operation"), QStringLiteral("missing") },
-                { QStringLiteral("params"), QJsonObject() }
-            },
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("two") },
-                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-                { QStringLiteral("params"), QJsonObject{{QStringLiteral("force"), QStringLiteral("yes")}} }
-            }
-        } }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("bad") },
+                                             { QStringLiteral("name"), QStringLiteral("Bad") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("one") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("missing") },
+                                                                                { QStringLiteral("params"), QJsonObject() } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("two") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("force"), QStringLiteral("yes") } } } } } } },
+                                         &actionList));
     QStringList errors;
     QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("Unknown operation")));
@@ -135,15 +128,14 @@ void ActionListTest::dryRunDoesNotMutateSource()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), QStringLiteral("dry") },
-        { QStringLiteral("name"), QStringLiteral("Dry") },
-        { QStringLiteral("steps"), QJsonArray{QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("bleed") },
-            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-            { QStringLiteral("params"), QJsonObject{{QStringLiteral("bleed_mm"), 3.0}, {QStringLiteral("force"), true}}}
-        }} }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("dry") },
+                                             { QStringLiteral("name"), QStringLiteral("Dry") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } } },
+                                         &actionList));
     pdf::PDFActionListExecutionOptions options;
     options.dryRun = true;
     pdf::PDFActionListExecutionResult result;
@@ -161,15 +153,14 @@ void ActionListTest::executesRegisteredOperationOnCandidate()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), QStringLiteral("execute") },
-        { QStringLiteral("name"), QStringLiteral("Execute") },
-        { QStringLiteral("steps"), QJsonArray{QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("bleed") },
-            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-            { QStringLiteral("params"), QJsonObject{{QStringLiteral("bleed_mm"), 3.0}, {QStringLiteral("force"), true}}}
-        }} }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("execute") },
+                                             { QStringLiteral("name"), QStringLiteral("Execute") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } } },
+                                         &actionList));
     pdf::PDFActionListExecutionResult result;
     pdf::PDFDocument candidate;
     QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, {}, &candidate, &result));
@@ -277,9 +268,11 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     pdf::PDFDocument reopenedCli;
     pdf::PDFDocument reopenedAdapter;
     QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-        cliCandidate, [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); }, outputPath, &reopenedCli, &cliData));
+        cliCandidate, [](pdf::PDFDocument*)
+        { return pdf::PDFOperationResult(true); }, outputPath, &reopenedCli, &cliData));
     QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-        *adapterOutcome->candidate, [](pdf::PDFDocument*) { return pdf::PDFOperationResult(true); },
+        *adapterOutcome->candidate, [](pdf::PDFDocument*)
+        { return pdf::PDFOperationResult(true); },
         tempDir.filePath(QStringLiteral("adapter.pdf")), &reopenedAdapter, &adapterData));
     QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(cliData, QCryptographicHash::Sha256).toHex()),
              QString::fromLatin1(QCryptographicHash::hash(adapterData, QCryptographicHash::Sha256).toHex()));
@@ -289,22 +282,19 @@ void ActionListTest::surfacesPerStepValidationErrors()
 {
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), QStringLiteral("bad-steps") },
-        { QStringLiteral("name"), QStringLiteral("Bad steps") },
-        { QStringLiteral("steps"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("one") },
-                { QStringLiteral("operation"), QStringLiteral("missing") },
-                { QStringLiteral("params"), QJsonObject() }
-            },
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("two") },
-                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-                { QStringLiteral("params"), QJsonObject{{QStringLiteral("force"), QStringLiteral("yes")}} }
-            }
-        } }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("bad-steps") },
+                                             { QStringLiteral("name"), QStringLiteral("Bad steps") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("one") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("missing") },
+                                                                                { QStringLiteral("params"), QJsonObject() } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("two") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("force"), QStringLiteral("yes") } } } } } } },
+                                         &actionList));
 
     QStringList errors;
     QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
@@ -319,15 +309,14 @@ void ActionListTest::cancellationLeavesSourceUntouched()
     const pdf::PDFDocument source = builder.build();
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
-        { QStringLiteral("id"), QStringLiteral("cancel") },
-        { QStringLiteral("name"), QStringLiteral("Cancel") },
-        { QStringLiteral("steps"), QJsonArray{QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("bleed") },
-            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-            { QStringLiteral("params"), QJsonObject{{QStringLiteral("bleed_mm"), 3.0}, {QStringLiteral("force"), true}}}
-        }} }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+                                             { QStringLiteral("id"), QStringLiteral("cancel") },
+                                             { QStringLiteral("name"), QStringLiteral("Cancel") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } } } } },
+                                         &actionList));
 
     CancelActionListControl control;
     pdf::PDFActionListExecutionOptions options;

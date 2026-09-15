@@ -306,8 +306,7 @@ EditorHost::EditorHost(QObject* parent) :
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobProgress, this, [this](const pdf::PDFJobSnapshot& snapshot)
             {
                 m_preflight.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress);
-                m_actionListController.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress);
-            });
+                m_actionListController.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress); });
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
             {
                 m_activeAsyncJobs.remove(snapshot.jobId);
@@ -1905,8 +1904,8 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
             break;
         case pdf::PDFJobStatus::Failed:
             m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
-                                          snapshot.errorMessage.isEmpty() ? tr("Action List failed.")
-                                                                          : snapshot.errorMessage);
+                                           snapshot.errorMessage.isEmpty() ? tr("Action List failed.")
+                                                                           : snapshot.errorMessage);
             bumpPresentation();
             break;
         case pdf::PDFJobStatus::Cancelled:
