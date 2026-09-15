@@ -1,0 +1,33 @@
+name: Dispatch_Packaging
+
+on:
+  repository_dispatch:
+    types: [package-release]
+
+# Proxy for agents or automation that can send repository_dispatch but not
+# workflow_dispatch. Dispatches the exact-SHA packaging workflows unchanged.
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source SHA
+        env:
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+        run: |
+          if ! [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::client_payload.source_sha must be a full 40-character Git SHA"
+            exit 1
+          fi
+
+      - name: Dispatch Linux and Windows package workflows
+        env:
+          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
+        run: |
+          gh workflow run LinuxInstall.yml --repo studio-berry/loop --ref stable \
+            -f "source_sha=${SOURCE_SHA}"
+          gh workflow run WindowsInstall.yml --repo studio-berry/loop --ref stable \
+            -f "source_sha=${SOURCE_SHA}"
