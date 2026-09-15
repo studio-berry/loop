@@ -31,3 +31,10 @@ source document.
 The current implementation intentionally reports the entire page as the
 rasterized region. A later vector-preserving balance mode can use the existing
 settings and report contract without introducing a second pipeline.
+
+Paint proof is `UnitTestsOverprintRender::flattenThenRender`, which flattens
+`transparency-normal-cmyk.pdf` and compares the re-rendered page to
+`loop-preflight/testdata/renders/flatten-transparency-normal-cmyk.png`. Refresh
+that golden with `LOOP_UPDATE_SNAPSHOTS=1` as documented in
+`docs/RENDERER_DIFFERENTIALS.md`. A flatten that still reports a full-page
+region and `fullyOpaque` but writes a blank raster fails that slot.

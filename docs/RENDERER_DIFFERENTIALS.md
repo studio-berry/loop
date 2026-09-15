@@ -13,7 +13,20 @@ measurements in sibling `*.measurements.json` files:
 - declared budgets (max channel delta 2, 64 differing pixels)
 
 A drift beyond those budgets fails the named test. Refresh goldens only with
-`LOOP_UPDATE_SNAPSHOTS=1`.
+`LOOP_UPDATE_SNAPSHOTS=1` (Linux is the source of truth; Windows uses the same
+PNGs with those budgets):
+
+```bash
+LOOP_UPDATE_SNAPSHOTS=1 ctest --test-dir build -R UnitTestsOverprintRender
+```
+
+The same target also flattens `transparency-normal-cmyk.pdf` through
+`PDFTransparencyFlattener::apply()` at 72 DPI, re-renders the opaque page at
+128×128, and compares it to `flatten-transparency-normal-cmyk.png`. The slot
+fails closed if flatten reports success but the raster is blank (fewer than
+256 non-white pixels) or drifts beyond the shared budgets. Structural flatten
+tests in `UnitTestsTransparencyFlattener` only check region reports and dry-run
+identity; they cannot catch a silent blank paint.
 
 **Disclosed limitation:** page-view overprint (the ordinary viewer paint path)
 is not this measurement renderer and must not be cited as proof of separation
