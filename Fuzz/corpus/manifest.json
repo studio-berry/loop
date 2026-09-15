@@ -20,6 +20,215 @@
       "sha256": "f1a4da02f8010927a81512a95fbfe007b0bfe9e3357d50d4e573a2f6b16cbb15",
       "expected": "terminates-without-crash",
       "minimized": true
+    },
+    {
+      "id": "minimal-one-page",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/minimal-one-page.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "7d5371d3d9d5588cdb4c7851773488380aa8e9644001ad32ba5dad8084272746",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Tiny valid one-page PDF so mutation starts from a parseable document rather than empty input."
+    },
+    {
+      "id": "truncated-xref",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/truncated-xref.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "80f923f2942e28fcc70e7c90e64d24c360ec45abe3f6044cfa377c93dcae1e67",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Header and objects with the xref/trailer cut off; reader must fail closed instead of hanging on a missing startxref."
+    },
+    {
+      "id": "cyclic-kids",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/cyclic-kids.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "a6064012c9fc3ba84a7ea5fbc090ba25b924a3c8f0d665e042df6e6c4e561600",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Pages tree /Kids array that references itself; catalog parse already throws on page-tree cycles."
+    },
+    {
+      "id": "wrong-generation",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/wrong-generation.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "bb65a712378dda49885fe384757abc3fff9ffc3338065bf2e4afe699d3d7ea0e",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Xref generation for the catalog is 1 while the object header and /Root are generation 0."
+    },
+    {
+      "id": "bad-object-stream",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/bad-object-stream.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "1e44a341740f690a19232927211617523ac477850acf38914c71584e767b9c22",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "ObjStm with /N 1000000000 plus a compressed xref entry; object-stream budget must refuse it."
+    },
+    {
+      "id": "encrypted-without-password",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/encrypted-without-password.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "c107e8013447f43d7045c81c69093873731150b13d6b00da85ba0de76fce327e",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Standard-handler /Encrypt dict with dummy O/U; empty password must cancel rather than retry forever."
+    },
+    {
+      "id": "unknown-encrypt-filter",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/unknown-encrypt-filter.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "f61f1aa3eda15214e11e64be1fe31809a12160ff36d6115133f63a13b9bf22d6",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Trailer /Encrypt names a Filter the reader does not implement; must throw, not hang."
+    },
+    {
+      "id": "not-pdf",
+      "path": "Fuzz/corpus/fuzz_pdf_parser/not-pdf.bin",
+      "harness": "fuzz_pdf_parser",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "9e67370e5d4000310a444bb02bc324cb68c4f58536b558603f9d8d5f308a70e1",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Non-PDF bytes so the parser corpus covers the same fail-closed path as malformed-not-pdf.pdf."
+    },
+    {
+      "id": "path-ops",
+      "path": "Fuzz/corpus/fuzz_content_stream/path-ops.bin",
+      "harness": "fuzz_content_stream",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "486902521e5a52e18ee452752e4975be4a5c88f208295f78016f070451e47c5c",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Graphics-state and path operators for PDFPageContentProcessor::processForm."
+    },
+    {
+      "id": "text-ops",
+      "path": "Fuzz/corpus/fuzz_content_stream/text-ops.bin",
+      "harness": "fuzz_content_stream",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "2e3fcec9e1530e391d662429366fe4f43616f833c38379f044f17ec7740e78fa",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Text-object operators without a font resource; processor must tolerate missing fonts."
+    },
+    {
+      "id": "unbalanced-q",
+      "path": "Fuzz/corpus/fuzz_content_stream/unbalanced-q.bin",
+      "harness": "fuzz_content_stream",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "3869b03df19ccbd551dc512ea9021af8a7013946fa6e6a675ac4eb8b54401e50",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Nested q without matching Q to exercise graphics-state nesting."
+    },
+    {
+      "id": "unknown-operator",
+      "path": "Fuzz/corpus/fuzz_content_stream/unknown-operator.bin",
+      "harness": "fuzz_content_stream",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "15739194e2eab7cc693a465afb744d0487ea95d1597178331dde2b04f942b73d",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Unknown operator mixed with a legal path so the tokenizer cannot skip the whole stream."
+    },
+    {
+      "id": "empty-whitespace",
+      "path": "Fuzz/corpus/fuzz_content_stream/empty-whitespace.bin",
+      "harness": "fuzz_content_stream",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "01f99895c51c5c8c34e193dc93f742e059fe25bbdb1b240d062c41c47a5f1ba1",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Whitespace-only content stream."
+    },
+    {
+      "id": "flate-hello",
+      "path": "Fuzz/corpus/fuzz_stream_filters/flate-hello.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "529495a527b0304cb854d0c64323142630aae37ccf61011c4efe5c5f5494523a",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 0 (FlateDecode) plus a valid zlib payload."
+    },
+    {
+      "id": "flate-truncated",
+      "path": "Fuzz/corpus/fuzz_stream_filters/flate-truncated.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "b4c81cc52ac5638f010b89360c795e94dd2e3d6b8a655df06674087b98031dca",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 0 plus a truncated zlib stream."
+    },
+    {
+      "id": "lzw-truncated",
+      "path": "Fuzz/corpus/fuzz_stream_filters/lzw-truncated.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "ccbe8b97cafaa6525ed5d67b5b0eab41d7f4a1e0424e73eac5df2b02e15ae34d",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 1 (LZWDecode) plus a short incomplete payload."
+    },
+    {
+      "id": "ascii85-hello",
+      "path": "Fuzz/corpus/fuzz_stream_filters/ascii85-hello.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "afb89fa1e1c651f97443650d8bb1e6efc8d25c39cbc61d20b06868d70d63e606",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 2 (ASCII85Decode) plus a short ASCII85 payload."
+    },
+    {
+      "id": "asciihex-truncated",
+      "path": "Fuzz/corpus/fuzz_stream_filters/asciihex-truncated.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "252758b82b396f15f44d3d354d19bbb9c9dcb2ed1b15f480ded8dea2b1d68119",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 3 (ASCIIHexDecode) plus odd-length hex without EOD."
+    },
+    {
+      "id": "runlength-eod",
+      "path": "Fuzz/corpus/fuzz_stream_filters/runlength-eod.bin",
+      "harness": "fuzz_stream_filters",
+      "origin": "synthetic",
+      "issue": 0,
+      "sha256": "474faade882292c4efe6c9b84873857cc289d7f8f1671932e77883719548909f",
+      "expected": "terminates-without-crash",
+      "minimized": true,
+      "notes": "Selector 4 (RunLengthDecode) plus one literal byte and EOD."
     }
   ]
 }

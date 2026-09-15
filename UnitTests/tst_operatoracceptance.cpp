@@ -65,6 +65,11 @@ constexpr OperatorCorpusEntry OPERATOR_CORPUS[] = {
     { "live-text-not-embedded", "font-not-embedded.pdf", false, "embedded-fonts", false },
     { "image-only-raster", "image-dpi-ok.pdf", true, nullptr, false },
     { "malformed-input", "malformed-not-pdf.pdf", false, nullptr, true },
+    { "malformed-truncated-xref", "truncated-xref.pdf", false, nullptr, true },
+    { "malformed-cyclic-kids", "cyclic-kids.pdf", false, nullptr, true },
+    { "malformed-wrong-generation", "wrong-generation.pdf", false, nullptr, true },
+    { "malformed-bad-object-stream", "bad-object-stream.pdf", false, nullptr, true },
+    { "malformed-encrypted-without-password", "encrypted-without-password.pdf", false, nullptr, true },
 };
 
 QStringList checkIdsOf(const QJsonObject& report)
@@ -421,10 +426,16 @@ void OperatorAcceptanceTest::assertMalformedPreflightFailure(const QString& pdfP
 {
     int exitCode = -1;
     QByteArray stdErr;
+    QElapsedTimer timer;
+    timer.start();
     QVERIFY(runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), m_defaultProfilePath },
                        nullptr,
                        &stdErr,
                        &exitCode));
+    QVERIFY2(timer.elapsed() < 15000,
+             qPrintable(QStringLiteral("Malformed input must fail closed without hanging (%1, %2 ms)")
+                            .arg(pdfPath)
+                            .arg(timer.elapsed())));
     QVERIFY2(exitCode != 0, "Malformed input must not report a successful preflight run.");
     QVERIFY2(exitCode != 1, "Malformed input must not masquerade as a findings exit code.");
 }

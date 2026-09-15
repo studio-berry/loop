@@ -21,7 +21,50 @@ fuzzer-generated against Loop and redistributable under `LICENSE`.
 | `Fuzz/corpus/fuzz_images/` | `fuzz_images` |
 
 `scripts/ci/check_fuzz_corpus.py` enforces that every tracked seed has a
-manifest entry and that checksums, harness ownership, and paths stay in sync.
+manifest entry, that checksums, harness ownership, and paths stay in sync, and
+that each harness owns at least one manifested seed. Empty `.gitkeep` directories
+are not a corpus. Harness seed files (`*.bin`) are marked `binary` in
+`.gitattributes` so ASCII PDFs are not rewritten with CRLF.
+
+Synthetic coverage seeds use `origin: synthetic` and `issue: 0`. They are not
+crash reproductions; they exist so `fuzz_pdf_parser`, `fuzz_content_stream`, and
+`fuzz_stream_filters` do not start mutation from an empty directory.
+
+## Synthetic coverage seeds
+
+These files are hand-built, tiny, and redistributable. They were chosen to hit
+the harness entry points deterministically instead of waiting for libFuzzer to
+invent a `%PDF` header or a filter payload.
+
+### `fuzz_pdf_parser`
+
+| File | Why it is here |
+|------|----------------|
+| `minimal-one-page.bin` | Valid one-page PDF so mutation starts from a parseable document. |
+| `truncated-xref.bin` | Objects present, xref/trailer cut off. |
+| `cyclic-kids.bin` | `/Kids` array that references its own Pages node. |
+| `wrong-generation.bin` | Xref generation 1 vs object header / `/Root` generation 0. |
+| `bad-object-stream.bin` | `/ObjStm` with `/N 1000000000` and a compressed xref entry. |
+| `encrypted-without-password.bin` | Standard `/Encrypt` with dummy `O`/`U`; empty password must cancel. |
+| `unknown-encrypt-filter.bin` | `/Encrypt` names a Filter the reader does not implement. |
+| `not-pdf.bin` | Non-PDF bytes (same class as `malformed-not-pdf.pdf`). |
+
+The parser harness password callback allows one empty attempt and then cancels.
+A callback that always reports success would hang on encrypted seeds.
+
+The same malformed PDFs (except the valid page and the unknown-filter blob) are
+also preflight goldens under `loop-preflight/testdata/fixtures/`.
+
+### `fuzz_content_stream`
+
+Raw page-content operators for `PDFPageContentProcessor::processForm`: path
+ops, text ops, unbalanced `q`, an unknown operator, and whitespace.
+
+### `fuzz_stream_filters`
+
+First byte selects the filter (`FlateDecode`, `LZWDecode`, `ASCII85Decode`,
+`ASCIIHexDecode`, `RunLengthDecode`). Payloads are a valid zlib "hello",
+truncated Flate/LZW/ASCIIHex, a short ASCII85 string, and a RunLength EOD.
 
 ## MIC-326 / R-003 (JBIG2, `fuzz_images`)
 

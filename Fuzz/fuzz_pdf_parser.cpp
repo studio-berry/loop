@@ -32,7 +32,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     }
 
     const QByteArray buffer(reinterpret_cast<const char*>(data), int(size));
-    pdf::PDFDocumentReader reader(nullptr, [](bool* ok) -> QString { *ok = true; return QString(); }, true, false);
+    bool passwordAttempted = false;
+    auto passwordCallback = [&passwordAttempted](bool* ok) -> QString
+    {
+        *ok = !passwordAttempted;
+        passwordAttempted = true;
+        return QString();
+    };
+    pdf::PDFDocumentReader reader(nullptr, passwordCallback, true, false);
     (void)reader.readFromBuffer(buffer);
     return 0;
 }
