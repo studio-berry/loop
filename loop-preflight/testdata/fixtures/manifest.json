@@ -365,7 +365,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": false, "check_ids": [] },
     "source": "hand-built",
-    "notes": "Xref generation for the catalog is 1 while the object header and /Root are generation 0."
+    "notes": "Xref and /Root use generation 1; object header is 1 0 obj so permissive recovery cannot bind the catalog."
   },
   {
     "id": "bad-object-stream",

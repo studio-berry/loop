@@ -43,7 +43,7 @@ invent a `%PDF` header or a filter payload.
 | `minimal-one-page.bin` | Valid one-page PDF so mutation starts from a parseable document. |
 | `truncated-xref.bin` | Objects present, xref/trailer cut off. |
 | `cyclic-kids.bin` | `/Kids` array that references its own Pages node. |
-| `wrong-generation.bin` | Xref generation 1 vs object header / `/Root` generation 0. |
+| `wrong-generation.bin` | Xref and `/Root` generation 1 vs object header generation 0. |
 | `bad-object-stream.bin` | `/ObjStm` with `/N 1000000000` and a compressed xref entry. |
 | `encrypted-without-password.bin` | Standard `/Encrypt` with dummy `O`/`U`; empty password must cancel. |
 | `unknown-encrypt-filter.bin` | `/Encrypt` names a Filter the reader does not implement. |

@@ -495,7 +495,7 @@ Parser fail-closed cases live next to the rest of the corpus so
 | `malformed-not-pdf` | Non-PDF bytes | `input-error` |
 | `truncated-xref` | Header and objects, xref/trailer cut off | `input-error` |
 | `cyclic-kids` | `/Kids` array that references its own Pages node | `input-error` |
-| `wrong-generation` | Xref generation disagrees with the object header | `input-error` |
+| `wrong-generation` | Xref/`Root` generation 1 vs object header generation 0 | `input-error` |
 | `bad-object-stream` | `/ObjStm` with an absurd `/N` | `input-error` |
 | `encrypted-without-password` | Standard `/Encrypt`, empty password | `input-error` |
 

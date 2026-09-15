@@ -60,10 +60,10 @@
       "harness": "fuzz_pdf_parser",
       "origin": "synthetic",
       "issue": 0,
-      "sha256": "bb65a712378dda49885fe384757abc3fff9ffc3338065bf2e4afe699d3d7ea0e",
+      "sha256": "8e7f5df3a3855ea1a3bb8fde4f646ff86832b86495b16d9777e9ea351760ca29",
       "expected": "terminates-without-crash",
       "minimized": true,
-      "notes": "Xref generation for the catalog is 1 while the object header and /Root are generation 0."
+      "notes": "Xref and /Root use generation 1; object header is 1 0 obj so permissive recovery cannot bind the catalog."
     },
     {
       "id": "bad-object-stream",
