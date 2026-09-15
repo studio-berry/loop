@@ -21,7 +21,7 @@
   },
   "windowsSdk": {
     "version": "10.0.26100.0",
-    "makeAppxSha256": "00fff202b71c1266b8c3899701e42b5468ea153b2b33a0a47215fe27695f16d0"
+    "makeAppxSha256": "3d4ddda72a1e396e4242d115437e99a8bd3e00aecc7d77b0d71b481d5bfd57dc"
   },
   "digicertKeylocker": {
     "version": null,
