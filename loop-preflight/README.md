@@ -516,6 +516,11 @@ passes, and only the target check is exercised.
 | `transparency-cmyk-group-spot.pdf` | test-transparency-risk | warning | `transparency-blend-space` |
 | `transparency-annotation-appearance.pdf` | test-transparency-risk | warning | annotation `/AP` `transparency-blend-space` |
 
+Flatten-then-render paint proof for `transparency-normal-cmyk.pdf` lives beside the
+overprint PNG goldens in `testdata/renders/flatten-transparency-normal-cmyk.png`
+and is executed by `UnitTestsOverprintRender`. Refresh it with
+`LOOP_UPDATE_SNAPSHOTS=1` as documented in `docs/RENDERER_DIFFERENTIALS.md`.
+
 The `bleed-*` pair above covers the `bleed` check, so every Loop Default custom check has
 at least one known-pass and one known-fail (or warning) case.
 

@@ -24,12 +24,20 @@
 // intentionally tolerant of small Qt/platform rasterization differences while
 // still requiring a bounded number of differing pixels. Mismatch images are
 // written beside the committed baselines for CI artifact inspection.
+//
+// Flatten-then-render goldens (`flatten-*.png`) run the real
+// PDFTransparencyFlattener::apply() path before the same 128x128 measurement
+// renderer. Structural flatten tests can report a full-page region and
+// fullyOpaque while the replacement raster is blank; these goldens fail that
+// case. Linux CI is the source of truth; Windows uses the same PNGs with the
+// shared channel-delta / differing-pixel budgets.
 
 #include "pdfcms.h"
 #include "pdfdocument.h"
 #include "pdfdocumentreader.h"
 #include "pdfoptionalcontent.h"
 #include "pdfrenderer.h"
+#include "pdftransparencyflattener.h"
 #include "pdftransparencyrenderer.h"
 
 #include <QFile>
@@ -72,12 +80,21 @@ bool updateSnapshotsRequested()
     return qEnvironmentVariableIntValue("LOOP_UPDATE_SNAPSHOTS") == 1;
 }
 
-QImage renderFixture(const QString& fixturePath, bool separationSimulation)
+pdf::PDFDocument loadFixtureDocument(const QString& fixturePath)
 {
     pdf::PDFDocumentReader reader(nullptr, [](bool*)
                                   { return QString(); }, true, false);
     pdf::PDFDocument document = reader.readFromFile(fixturePath);
     if (reader.getReadingResult() != pdf::PDFDocumentReader::Result::OK)
+    {
+        return pdf::PDFDocument();
+    }
+    return document;
+}
+
+QImage renderDocumentPage(pdf::PDFDocument& document, bool separationSimulation)
+{
+    if (!document.getCatalog())
     {
         return QImage();
     }
@@ -113,6 +130,31 @@ QImage renderFixture(const QString& fixturePath, bool separationSimulation)
     }
     renderer.endPaint();
     return renderer.toImage(false, true, pdf::PDFRGB{ 1.0f, 1.0f, 1.0f });
+}
+
+QImage renderFixture(const QString& fixturePath, bool separationSimulation)
+{
+    pdf::PDFDocument document = loadFixtureDocument(fixturePath);
+    return renderDocumentPage(document, separationSimulation);
+}
+
+int nonWhitePixelCount(const QImage& image)
+{
+    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    int count = 0;
+    for (int y = 0; y < rgba.height(); ++y)
+    {
+        const uchar* line = rgba.constScanLine(y);
+        for (int x = 0; x < rgba.width(); ++x)
+        {
+            const int offset = x * 4;
+            if (line[offset] < 250 || line[offset + 1] < 250 || line[offset + 2] < 250)
+            {
+                ++count;
+            }
+        }
+    }
+    return count;
 }
 
 void compareRender(const QString& name, const QImage& actual, const QImage& expected)
@@ -206,6 +248,8 @@ private slots:
     void render_data();
     void render();
     void rendererDifferentialDoesNotDriftBeyondTolerance();
+    void flattenThenRender_data();
+    void flattenThenRender();
 };
 
 void OverprintRenderTest::render_data()
@@ -241,6 +285,49 @@ void OverprintRenderTest::rendererDifferentialDoesNotDriftBeyondTolerance()
     const QImage actual = renderFixture(fixturesDirectory() + QLatin1Char('/') + name + QStringLiteral(".pdf"), false);
     const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + name + QStringLiteral(".png"));
     compareRender(name + QStringLiteral(".png"), actual, expected);
+}
+
+void OverprintRenderTest::flattenThenRender_data()
+{
+    QTest::addColumn<QString>("fixture");
+    QTest::addColumn<QString>("baseline");
+
+    QTest::newRow("transparency-normal-cmyk") << QStringLiteral("transparency-normal-cmyk.pdf")
+                                              << QStringLiteral("flatten-transparency-normal-cmyk.png");
+}
+
+void OverprintRenderTest::flattenThenRender()
+{
+    QFETCH(QString, fixture);
+    QFETCH(QString, baseline);
+
+    pdf::PDFDocument document = loadFixtureDocument(fixturesDirectory() + QLatin1Char('/') + fixture);
+    QVERIFY2(document.getCatalog()->getPage(0), qPrintable(QStringLiteral("Could not load flatten fixture %1").arg(fixture)));
+
+    // Flatten rasterizes every selected page even when the structural live-transparency
+    // walk misses a nested Normal group. The pixel golden is the paint proof.
+
+    pdf::PDFTransparencyFlattenSettings settings;
+    settings.rasterizationDpi = 72;
+    settings.maxRasterPixels = 100000;
+    pdf::PDFTransparencyFlattenReport report;
+    const pdf::PDFOperationResult result = pdf::PDFTransparencyFlattener::apply(&document, settings, &report);
+    QVERIFY2(result, qPrintable(result.getErrorMessage()));
+    QVERIFY(report.changed);
+    QVERIFY(report.fullyOpaque);
+    QVERIFY(!pdf::PDFTransparencyFlattener::hasLiveTransparency(&document));
+
+    const QImage actual = renderDocumentPage(document, false);
+    QVERIFY2(!actual.isNull(), qPrintable(QStringLiteral("Flattened renderer returned no image for %1").arg(fixture)));
+    constexpr int minNonWhitePixels = 256;
+    const int paintedPixels = nonWhitePixelCount(actual);
+    QVERIFY2(paintedPixels >= minNonWhitePixels,
+             qPrintable(QStringLiteral("%1 flattened to a blank raster (%2 non-white pixels); structural flatten success is not paint proof")
+                            .arg(fixture)
+                            .arg(paintedPixels)));
+
+    const QImage expected = QImage(rendersDirectory() + QLatin1Char('/') + baseline);
+    compareRender(baseline, actual, expected);
 }
 
 QTEST_APPLESS_MAIN(OverprintRenderTest)
