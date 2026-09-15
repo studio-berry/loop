@@ -14,6 +14,11 @@ Automated coverage lives in `UnitTests/tst_operatoracceptance.cpp` (`ctest -R Un
 | Live text (not embedded) | `font-not-embedded.pdf` | Fail (`embedded-fonts`) |
 | Image-only raster | `image-dpi-ok.pdf` | Pass |
 | Malformed / unsupported | `malformed-not-pdf.pdf` | Non-zero exit (not findings exit code 1); no `%PDF` header |
+| Truncated xref | `truncated-xref.pdf` | input-error; no hang |
+| Cyclic `/Kids` | `cyclic-kids.pdf` | input-error; page-tree cycle refused |
+| Wrong generation | `wrong-generation.pdf` | input-error |
+| Hostile object stream | `bad-object-stream.pdf` | input-error |
+| Encrypted, no password | `encrypted-without-password.pdf` | input-error (cancelled auth), not findings |
 
 Additional stress fixtures (`ai-art-*.pdf`) are exercised by `UnitTestsBleedStress`.
 

@@ -77,7 +77,8 @@ index (`git ls-files`) and fails when tracked content includes:
 - tracked files over 5 MB without an explicit allowlist entry
 - whitespace problems reported by `git diff --check` over the full tree
 - fuzz regression seeds or preflight fixture PDFs that are not listed in their
-  corpus manifests
+  corpus manifests. `check_fuzz_corpus.py` also requires every libFuzzer harness
+  to own at least one manifested seed.
 
 Negative fixtures live in `scripts/ci/test_check_source_integrity.py`.
 

@@ -87,6 +87,37 @@ class FuzzCorpusValidationTests(unittest.TestCase):
             violations = validate_manifest(manifest, root)
             self.assertTrue(any("missing from manifest" in reason for _, reason in violations))
 
+    def test_rejects_harness_without_seeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            for harness in HARNESS_TARGETS:
+                (root / "Fuzz" / "corpus" / harness).mkdir(parents=True)
+
+            seed = root / "Fuzz" / "corpus" / "fuzz_images" / "sample.bin"
+            seed.write_bytes(b"seed")
+            digest = "19b25856e1c150ca834cffc8b59b23adbd0ec0389e58eb22b3b64768098d002b"
+            manifest = {
+                "schema_version": 1,
+                "cases": [
+                    {
+                        "id": "sample",
+                        "path": "Fuzz/corpus/fuzz_images/sample.bin",
+                        "harness": "fuzz_images",
+                        "origin": "synthetic",
+                        "issue": 0,
+                        "sha256": digest,
+                        "expected": "terminates-without-crash",
+                        "minimized": True,
+                    }
+                ],
+            }
+            violations = validate_manifest(manifest, root)
+            missing = {subject for subject, reason in violations if "no manifested seeds" in reason}
+            self.assertIn("Fuzz/corpus/fuzz_pdf_parser", missing)
+            self.assertIn("Fuzz/corpus/fuzz_content_stream", missing)
+            self.assertIn("Fuzz/corpus/fuzz_stream_filters", missing)
+            self.assertNotIn("Fuzz/corpus/fuzz_images", missing)
+
     def test_rejects_duplicate_ids(self):
         manifest = {
             "schema_version": 1,

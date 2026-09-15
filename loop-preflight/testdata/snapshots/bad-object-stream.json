@@ -1,0 +1,16 @@
+{
+    "checks": [
+    ],
+    "errors": [
+    ],
+    "fixups_available": [
+    ],
+    "inspection_complete": false,
+    "pass": false,
+    "verdict": {
+        "reason_code": "input-error",
+        "state": "input-error"
+    },
+    "warnings": [
+    ]
+}
