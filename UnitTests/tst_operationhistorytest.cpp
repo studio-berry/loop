@@ -35,6 +35,7 @@
 #include <QUuid>
 #include <QtTest>
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 
@@ -56,6 +57,7 @@ private slots:
     void livePreflightRunCarriesRevisionAndProfileDigests();
     void cancelledPreflightRunIsNotAccepted();
     void schemaMigratedEventAppendedOnRewrite();
+    void historyDatabaseUpgradeRecordsSchemaMigratedEvent();
 };
 
 void OperationHistoryTest::canonicalJsonIsStableAndRedacted()
@@ -615,10 +617,14 @@ void OperationHistoryTest::schemaV2MigratesOnceAndPreservesChain()
         QVERIFY(historyEventsTableHasColumn(databasePath, QStringLiteral("event_kind")));
         QVERIFY(migrated.verify().verified);
         const auto rows = migrated.events();
-        QCOMPARE(rows.size(), 1);
+        QCOMPARE(rows.size(), 2);
         QCOMPARE(rows.front().entryId, entryId);
         QCOMPARE(rows.front().eventHash, eventHash);
         QCOMPARE(rows.front().approval.rationale, QStringLiteral("keep after migrate"));
+        // The upgrade records its own provenance in the same transaction, after
+        // the rows that were already there.
+        QCOMPARE(rows.back().kind, pdf::PDFOperationHistoryEventKind::SchemaMigrated);
+        QCOMPARE(rows.back().resultSummary.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("history-db"));
         QCOMPARE(migrated.rollbackPoints().size(), 2);
         migrated.close();
     }
@@ -811,6 +817,89 @@ void OperationHistoryTest::schemaMigratedEventAppendedOnRewrite()
     QCOMPARE(events.first().kind, pdf::PDFOperationHistoryEventKind::SchemaMigrated);
     QCOMPARE(events.first().resultSummary.value(QStringLiteral("from_version")).toString(), QStringLiteral("2.0"));
     QCOMPARE(events.first().resultSummary.value(QStringLiteral("to_version")).toString(), QStringLiteral("3.0"));
+}
+
+void OperationHistoryTest::historyDatabaseUpgradeRecordsSchemaMigratedEvent()
+{
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const QString databasePath = QDir(temporary.path()).filePath(QStringLiteral("history.sqlite3"));
+
+    {
+        pdf::PDFOperationHistoryStore history(databasePath);
+        QVERIFY(history.open());
+
+        // A database written by an older application version already holds
+        // history. The upgrade has to record its own provenance without
+        // disturbing what is already in the chain.
+        const pdf::PDFArtifactIdentity seed{ QString(64, QLatin1Char('b')), 1, QStringLiteral("application/json"),
+                                             QStringLiteral("seed.json"), QString() };
+        QVERIFY(history.registerArtifact(seed));
+        pdf::PDFOperationHistoryExecution execution;
+        execution.operationId = QStringLiteral("seed");
+        execution.input = seed;
+        QUuid executionId;
+        QVERIFY(history.beginExecution(execution, &executionId));
+        pdf::PDFOperationHistoryEvent seeded;
+        seeded.executionId = executionId;
+        seeded.status = pdf::PDFOperationHistoryStatus::Running;
+        QVERIFY(history.appendEvent(seeded));
+
+        QVERIFY(history.verify().verified);
+        history.close();
+    }
+
+    // Simulate a database written by an older application version.
+    {
+        const QString connectionName = QStringLiteral("schema-upgrade-test");
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(databasePath);
+        QVERIFY(database.open());
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral("UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'")));
+        QVERIFY(query.exec(QStringLiteral("PRAGMA journal_mode = DELETE")));   // checkpoint the WAL so the file is complete
+        database.close();
+        database = QSqlDatabase();
+        QSqlDatabase::removeDatabase(connectionName);
+    }
+
+    // The digest the store must record is the bytes it read before migrating.
+    QFile databaseFile(databasePath);
+    QVERIFY(databaseFile.open(QIODevice::ReadOnly));
+    const QByteArray beforeBytes = databaseFile.readAll();
+    databaseFile.close();
+    const QString expectedDigest =
+        QString::fromLatin1(QCryptographicHash::hash(beforeBytes, QCryptographicHash::Sha256).toHex());
+
+    bool firstOpenRecorded = false;
+    {
+        pdf::PDFOperationHistoryStore history(databasePath);
+        QVERIFY(history.open());
+        const QList<pdf::PDFOperationHistoryEvent> events = history.events();
+        const auto migrated = std::find_if(events.cbegin(), events.cend(), [](const pdf::PDFOperationHistoryEvent& event)
+                                           { return event.kind == pdf::PDFOperationHistoryEventKind::SchemaMigrated; });
+        QVERIFY(migrated != events.cend());
+        QCOMPARE(migrated->resultSummary.value(QStringLiteral("schema_kind")).toString(), QStringLiteral("history-db"));
+        QCOMPARE(migrated->resultSummary.value(QStringLiteral("from_version")).toString(), QStringLiteral("2.0"));
+        QCOMPARE(migrated->resultSummary.value(QStringLiteral("to_version")).toString(), QStringLiteral("3.0"));
+        QCOMPARE(migrated->documentRevisionDigest, expectedDigest);
+        QCOMPARE(migrated->operatorIdentity, QStringLiteral("system:schema"));
+        QVERIFY(history.verify().verified);
+        firstOpenRecorded = true;
+        history.close();
+    }
+    QVERIFY(firstOpenRecorded);
+
+    // The upgrade is recorded exactly once; reopening does not append again.
+    pdf::PDFOperationHistoryStore reopened(databasePath);
+    QVERIFY(reopened.open());
+    int migrations = 0;
+    for (const pdf::PDFOperationHistoryEvent& event : reopened.events())
+    {
+        migrations += event.kind == pdf::PDFOperationHistoryEventKind::SchemaMigrated ? 1 : 0;
+    }
+    QCOMPARE(migrations, 1);
+    reopened.close();
 }
 
 QTEST_MAIN(OperationHistoryTest)

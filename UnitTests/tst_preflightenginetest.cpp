@@ -93,6 +93,8 @@ private slots:
     void decisionRejectsMissingJustification();
     void decisionRoundTripAndStalenessAreDeterministic();
     void decisionReopenDoesNotCountForSignoff();
+    void unsupportedDecisionsVersionFailsClosedWithTheCoreDiagnostic();
+    void legacyDecisionsWithoutSchemaKindStillLoad();
     void run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed();
     void run_contentBleedRasterConfirm_emitsBleedMarginEmptyAndNeedsAutoBleed();
     void run_whiteOverprint_emitsWarningForWhitePaintWithOverprint();
@@ -1409,6 +1411,36 @@ void PreflightEngineTest::decisionReopenDoesNotCountForSignoff()
     decision.documentRevisionDigest = documentDigest;
     decision.effectiveProfileDigest = profileDigest;
     QVERIFY(!decision.countsForSignoff(documentDigest, profileDigest));
+}
+
+void PreflightEngineTest::unsupportedDecisionsVersionFailsClosedWithTheCoreDiagnostic()
+{
+    const QJsonObject document{
+        { QStringLiteral("schema_kind"), QStringLiteral("preflight-decisions") },
+        { QStringLiteral("schema_version"), 2 },
+        { QStringLiteral("decisions"), QJsonArray{} },
+    };
+
+    QList<pdf::PreflightDecision> decisions;
+    QString errorMessage;
+    QVERIFY(!pdf::preflightDecisionsFromJson(document, decisions, errorMessage));
+    QVERIFY(decisions.isEmpty());
+    QCOMPARE(errorMessage,
+             QStringLiteral("Unsupported schema major: kind 'preflight-decisions' version 2; "
+                            "this build supports major(s) 1."));
+}
+
+void PreflightEngineTest::legacyDecisionsWithoutSchemaKindStillLoad()
+{
+    const QJsonObject legacy{
+        { QStringLiteral("schema_version"), 1 },
+        { QStringLiteral("decisions"), QJsonArray{} },
+    };
+
+    QList<pdf::PreflightDecision> decisions;
+    QString errorMessage;
+    QVERIFY2(pdf::preflightDecisionsFromJson(legacy, decisions, errorMessage), qPrintable(errorMessage));
+    QVERIFY(decisions.isEmpty());
 }
 
 void PreflightEngineTest::run_contentBleedWithoutRaster_emitsContentBleedAndNeedsAutoBleed()
