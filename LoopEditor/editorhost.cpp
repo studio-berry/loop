@@ -31,6 +31,9 @@
 #include "loopstatevisual.h"
 #include "looptokens.h"
 #include "pagesurfacecoordinator.h"
+#include "actionlistcontroller.h"
+#include "actionlistrunsubmitter.h"
+#include "repairparameterschema.h"
 #include "preflightcontroller.h"
 #include "preflightclirun.h"
 #include "preflightengine.h"
@@ -89,6 +92,30 @@ int rotationToDegrees(pdf::PageRotation rotation)
     }
 
     return 0;
+}
+
+QString actionListStateToString(pdfinteraction::ActionListController::State state)
+{
+    switch (state)
+    {
+        case pdfinteraction::ActionListController::State::Idle:
+            return QStringLiteral("idle");
+        case pdfinteraction::ActionListController::State::Validating:
+            return QStringLiteral("validating");
+        case pdfinteraction::ActionListController::State::Planning:
+            return QStringLiteral("planning");
+        case pdfinteraction::ActionListController::State::Running:
+            return QStringLiteral("running");
+        case pdfinteraction::ActionListController::State::Planned:
+            return QStringLiteral("planned");
+        case pdfinteraction::ActionListController::State::Succeeded:
+            return QStringLiteral("succeeded");
+        case pdfinteraction::ActionListController::State::Failed:
+            return QStringLiteral("failed");
+        case pdfinteraction::ActionListController::State::Cancelled:
+            return QStringLiteral("cancelled");
+    }
+    return QStringLiteral("idle");
 }
 
 QString preflightStateToString(pdfinteraction::PreflightController::State state)
@@ -208,7 +235,8 @@ EditorHost::EditorHost(QObject* parent) :
         *m_session->overlays(),
         pdfinteraction::FindingTargetingCapabilityRegistry::defaultRegistry(),
         this)),
-    m_preflight(&m_session->scheduler(), this)
+    m_preflight(&m_session->scheduler(), this),
+    m_actionListController(&m_session->scheduler(), this)
 {
     // Registers this constructing thread -- the one QML dispatches pointer
     // and frame callbacks on -- as the thread blocking service adapters
@@ -222,6 +250,13 @@ EditorHost::EditorHost(QObject* parent) :
     connect(m_preflightProfileWatcher, &QFileSystemWatcher::fileChanged, this, [this](const QString&)
             { reloadPreflightProfiles(); });
     reloadPreflightProfiles();
+
+    m_actionListRecipeWatcher = new QFileSystemWatcher(this);
+    connect(m_actionListRecipeWatcher, &QFileSystemWatcher::directoryChanged, this, [this](const QString&)
+            { reloadActionListRecipes(); });
+    connect(m_actionListRecipeWatcher, &QFileSystemWatcher::fileChanged, this, [this](const QString&)
+            { reloadActionListRecipes(); });
+    reloadActionListRecipes();
 
     connectFacade();
     connectViewport();
@@ -237,6 +272,9 @@ EditorHost::EditorHost(QObject* parent) :
 
     connect(&m_preflight, &pdfinteraction::PreflightController::stateChanged, this, &EditorHost::bumpPresentation);
     connect(&m_preflight, &pdfinteraction::PreflightController::progressChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_actionListController, &pdfinteraction::ActionListController::stateChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_actionListController, &pdfinteraction::ActionListController::progressChanged, this, &EditorHost::bumpPresentation);
+    connect(&m_actionListController, &pdfinteraction::ActionListController::resultChanged, this, &EditorHost::bumpPresentation);
     connect(m_preflight.findingsModel(), &pdfinteraction::PreflightFindingsModel::findingsReplaced, this, &EditorHost::refreshHitTestSources);
     connect(&m_preflight, &pdfinteraction::PreflightController::navigationRequested, this, &EditorHost::onPreflightNavigation);
     connect(m_findingNavigator.get(), &pdfinteraction::FindingCanvasNavigator::inspectionModeRequested,
@@ -266,18 +304,23 @@ EditorHost::EditorHost(QObject* parent) :
                 m_activeAsyncJobs.insert(snapshot.jobId, snapshot.kind);
                 refreshCanvasTrace(); });
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobProgress, this, [this](const pdf::PDFJobSnapshot& snapshot)
-            { m_preflight.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress); });
+            {
+                m_preflight.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress);
+                m_actionListController.updateProgress(snapshot.jobId, snapshot.documentRevision, snapshot.progress); });
     connect(&m_session->scheduler(), &pdf::PDFJobScheduler::jobFinished, this, [this](const pdf::PDFJobSnapshot& snapshot)
             {
                 m_activeAsyncJobs.remove(snapshot.jobId);
                 finishPreflightJob(snapshot);
+                finishActionListJob(snapshot);
                 refreshCanvasTrace(); });
 }
 
 EditorHost::~EditorHost()
 {
     m_acceptPreflightResults = false;
+    m_acceptActionListResults = false;
     cancelPreflight();
+    cancelActionList();
     QObject::disconnect(&m_session->scheduler(), nullptr, this, nullptr);
     unbindCanvas();
 
@@ -349,6 +392,11 @@ bool EditorHost::unsupported() const
 QObject* EditorHost::preflight()
 {
     return &m_preflight;
+}
+
+QObject* EditorHost::actionList()
+{
+    return &m_actionListController;
 }
 
 QObject* EditorHost::inspector()
@@ -863,6 +911,279 @@ bool EditorHost::exportPreflightReportFileUrl(const QUrl& url)
     }
     announceDocumentState(tr("Preflight report exported."));
     return true;
+}
+
+QVariantList EditorHost::actionListRecipes() const
+{
+    QVariantList recipes;
+    recipes.reserve(m_actionListCatalog.recipes().size());
+    for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
+    {
+        QVariantMap item;
+        item.insert(QStringLiteral("id"), recipe.id);
+        item.insert(QStringLiteral("name"), recipe.name);
+        item.insert(QStringLiteral("source"), recipe.source);
+        item.insert(QStringLiteral("valid"), recipe.valid);
+        item.insert(QStringLiteral("diagnostic"), recipe.diagnostic);
+        item.insert(QStringLiteral("recipeHash"), recipe.recipeHash);
+        item.insert(QStringLiteral("stepCount"), recipe.actionList.steps.size());
+        recipes.append(item);
+    }
+    return recipes;
+}
+
+QString EditorHost::selectedActionListRecipeId() const
+{
+    return m_selectedActionListRecipeId;
+}
+
+QVariantList EditorHost::actionListBindings() const
+{
+    QVariantList bindings;
+    for (auto it = m_actionListBindings.begin(); it != m_actionListBindings.end(); ++it)
+    {
+        QVariantMap item;
+        item.insert(QStringLiteral("name"), it.key());
+        item.insert(QStringLiteral("value"), it.value().toVariant());
+        bindings.append(item);
+    }
+    return bindings;
+}
+
+QString EditorHost::actionListStateName() const
+{
+    return actionListStateToString(m_actionListController.state());
+}
+
+QVariantList EditorHost::repairOperations() const
+{
+    const QJsonArray descriptors = pdfinteraction::repairOperationDescriptors();
+    QVariantList operations;
+    operations.reserve(descriptors.size());
+    for (const QJsonValue& value : descriptors)
+    {
+        operations.append(value.toObject().toVariantMap());
+    }
+    return operations;
+}
+
+QVariantMap EditorHost::repairParameterSchemaForOperation(const QString& operationId) const
+{
+    return pdfinteraction::repairParameterSchema(operationId).toVariantMap();
+}
+
+bool EditorHost::importActionListRecipe(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile())
+    {
+        return false;
+    }
+    QString importedId;
+    QString error;
+    if (!m_actionListCatalog.importRecipe(url.toLocalFile(), &importedId, &error))
+    {
+        announceDocumentState(error);
+        return false;
+    }
+    m_selectedActionListRecipeId = importedId;
+    m_actionListBindings = QJsonObject();
+    m_actionListController.markRecipeStale();
+    updateActionListRecipeWatch();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    announceDocumentState(tr("Action List recipe imported."));
+    return true;
+}
+
+bool EditorHost::exportActionListRecipe(const QUrl& url)
+{
+    if (!url.isValid() || !url.isLocalFile() || m_selectedActionListRecipeId.isEmpty())
+    {
+        return false;
+    }
+    QString error;
+    if (!m_actionListCatalog.exportRecipe(m_selectedActionListRecipeId, url.toLocalFile(), &error))
+    {
+        announceDocumentState(error);
+        return false;
+    }
+    announceDocumentState(tr("Action List recipe exported."));
+    return true;
+}
+
+bool EditorHost::selectActionListRecipe(const QString& id)
+{
+    const pdfinteraction::ActionListRecipeEntry* recipe = m_actionListCatalog.recipe(id);
+    if (!recipe || !recipe->valid || id == m_selectedActionListRecipeId)
+    {
+        return false;
+    }
+    m_selectedActionListRecipeId = id;
+    m_actionListBindings = QJsonObject();
+    m_actionListController.markRecipeStale();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setActionListBinding(const QString& name, const QVariant& value)
+{
+    if (name.trimmed().isEmpty())
+    {
+        return false;
+    }
+    m_actionListBindings.insert(name, QJsonValue::fromVariant(value));
+    m_actionListController.markRecipeStale();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
+                                     pdfinteraction::ActionListController::State controllerState)
+{
+    if (!hasDocument() || m_selectedActionListRecipeId.isEmpty() || !m_session->revisionSource())
+    {
+        return false;
+    }
+
+    const pdfinteraction::ActionListController::State currentState = m_actionListController.state();
+    if (currentState == pdfinteraction::ActionListController::State::Validating ||
+        currentState == pdfinteraction::ActionListController::State::Planning ||
+        currentState == pdfinteraction::ActionListController::State::Running)
+    {
+        return false;
+    }
+
+    const pdfinteraction::ActionListRecipeEntry* recipe = m_actionListCatalog.recipe(m_selectedActionListRecipeId);
+    if (!recipe || !recipe->valid)
+    {
+        return false;
+    }
+
+    const pdf::PDFDocumentPointer document = m_session->context().getDocumentPointer();
+    if (!document)
+    {
+        return false;
+    }
+
+    const QString documentKey = m_session->revisionSource()->documentKey();
+    const QString documentRevision = m_session->facade().currentRevision().toString();
+    const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pdf::PDFJobSpec spec;
+    spec.jobId = jobId;
+    spec.kind = pdf::PDFJobKind::Other;
+    spec.priority = pdf::PDFJobPriority::Operator;
+    spec.documentKey = documentKey;
+    spec.documentRevision = documentRevision;
+    spec.operationId = QStringLiteral("action-list.%1").arg(recipe->actionList.id);
+    spec.checkId = recipe->actionList.name;
+    spec.progressModel = QStringLiteral("action-list-progress-v1");
+    spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
+
+    m_actionListController.beginRun(controllerState, documentKey, documentRevision, recipe->id, jobId);
+    auto outcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
+    m_actionListOutcomes.insert(jobId, outcome);
+    const pdf::PDFActionList actionList = recipe->actionList;
+    const QJsonObject bindings = m_actionListBindings;
+
+    const QString submittedId = m_session->scheduler().submit(
+        spec,
+        pdfinteraction::makeActionListRunWorker(phase, actionList, document, bindings, outcome));
+    if (submittedId != jobId)
+    {
+        m_actionListOutcomes.remove(jobId);
+        m_actionListController.failRun(jobId, documentRevision, tr("Unable to submit Action List work."));
+        return false;
+    }
+
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::validateActionListRecipe()
+{
+    return submitActionListJob(pdfinteraction::ActionListRunPhase::Validate,
+                               pdfinteraction::ActionListController::State::Validating);
+}
+
+bool EditorHost::planActionList()
+{
+    return submitActionListJob(pdfinteraction::ActionListRunPhase::Plan,
+                               pdfinteraction::ActionListController::State::Planning);
+}
+
+bool EditorHost::runActionList()
+{
+    if (m_actionListController.state() != pdfinteraction::ActionListController::State::Planned)
+    {
+        return false;
+    }
+    return submitActionListJob(pdfinteraction::ActionListRunPhase::Execute,
+                               pdfinteraction::ActionListController::State::Running);
+}
+
+bool EditorHost::cancelActionList()
+{
+    return m_actionListController.cancelRun(m_actionListController.jobId());
+}
+
+bool EditorHost::confirmActionListPlan()
+{
+    return runActionList();
+}
+
+void EditorHost::discardActionListPlan()
+{
+    m_actionListController.discardPlan();
+    bumpPresentation();
+}
+
+void EditorHost::reloadActionListRecipes()
+{
+    const QString priorId = m_selectedActionListRecipeId;
+    m_actionListCatalog.reload();
+    if (m_selectedActionListRecipeId.isEmpty() ||
+        !m_actionListCatalog.recipe(m_selectedActionListRecipeId) ||
+        !m_actionListCatalog.recipe(m_selectedActionListRecipeId)->valid)
+    {
+        const QList<pdfinteraction::ActionListRecipeEntry>& recipes = m_actionListCatalog.recipes();
+        const auto valid = std::find_if(recipes.cbegin(), recipes.cend(),
+                                        [](const pdfinteraction::ActionListRecipeEntry& recipe)
+                                        { return recipe.valid; });
+        m_selectedActionListRecipeId = valid == recipes.cend() ? QString() : valid->id;
+        m_actionListBindings = QJsonObject();
+    }
+    if (!priorId.isEmpty() && priorId != m_selectedActionListRecipeId)
+    {
+        m_actionListController.markRecipeStale();
+    }
+    updateActionListRecipeWatch();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+}
+
+void EditorHost::updateActionListRecipeWatch()
+{
+    if (!m_actionListRecipeWatcher)
+    {
+        return;
+    }
+    m_actionListRecipeWatcher->removePaths(m_actionListRecipeWatcher->directories());
+    m_actionListRecipeWatcher->removePaths(m_actionListRecipeWatcher->files());
+    const QString localDirectory = m_actionListCatalog.recipesDirectory();
+    if (QFileInfo::exists(localDirectory))
+    {
+        m_actionListRecipeWatcher->addPath(localDirectory);
+    }
+    for (const pdfinteraction::ActionListRecipeEntry& recipe : m_actionListCatalog.recipes())
+    {
+        if (QFileInfo::exists(recipe.source))
+        {
+            m_actionListRecipeWatcher->addPath(recipe.source);
+        }
+    }
 }
 
 void EditorHost::reloadPreflightProfiles()
@@ -1424,6 +1745,7 @@ void EditorHost::syncDocumentLifecycle()
 void EditorHost::onDocumentGone()
 {
     cancelPreflight();
+    cancelActionList();
     if (m_findingNavigator)
     {
         m_findingNavigator->invalidate();
@@ -1431,6 +1753,7 @@ void EditorHost::onDocumentGone()
     unbindCanvas();
     m_session->clearDocumentView();
     m_preflight.clear();
+    m_actionListController.clear();
     m_inspector.clearSelection();
     m_documentModel.clear();
     m_searchRow = -1;
@@ -1525,6 +1848,79 @@ void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
     }
 }
 
+void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
+{
+    const std::shared_ptr<pdfinteraction::ActionListWorkerOutcome> outcome = m_actionListOutcomes.take(snapshot.jobId);
+    if (snapshot.jobId != m_actionListController.jobId())
+    {
+        return;
+    }
+
+    const pdfinteraction::ActionListController::State state = m_actionListController.state();
+    if (state != pdfinteraction::ActionListController::State::Validating &&
+        state != pdfinteraction::ActionListController::State::Planning &&
+        state != pdfinteraction::ActionListController::State::Running)
+    {
+        return;
+    }
+
+    switch (snapshot.status)
+    {
+        case pdf::PDFJobStatus::Succeeded:
+            if (!outcome)
+            {
+                m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
+                                               tr("Action List result was unavailable."));
+                break;
+            }
+            if (state == pdfinteraction::ActionListController::State::Validating)
+            {
+                if (m_acceptActionListResults)
+                {
+                    m_actionListController.acceptValidation(snapshot.jobId, snapshot.documentRevision,
+                                                            outcome->validationErrors);
+                }
+            }
+            else if (state == pdfinteraction::ActionListController::State::Planning)
+            {
+                if (m_acceptActionListResults)
+                {
+                    m_actionListController.acceptPlan(snapshot.jobId, snapshot.documentRevision, outcome->executionResult);
+                }
+            }
+            else if (state == pdfinteraction::ActionListController::State::Running)
+            {
+                if (m_acceptActionListResults &&
+                    m_actionListController.acceptExecution(snapshot.jobId, snapshot.documentRevision, outcome->executionResult) &&
+                    outcome->candidate)
+                {
+                    m_session->context().setDocument(outcome->candidate);
+                    m_preflight.markProfileStale();
+                    syncRevisionModels();
+                    announceDocumentState(tr("Action List applied to the open document."));
+                }
+            }
+            bumpPresentation();
+            break;
+        case pdf::PDFJobStatus::Failed:
+            m_actionListController.failRun(snapshot.jobId, snapshot.documentRevision,
+                                           snapshot.errorMessage.isEmpty() ? tr("Action List failed.")
+                                                                           : snapshot.errorMessage);
+            bumpPresentation();
+            break;
+        case pdf::PDFJobStatus::Cancelled:
+            m_actionListController.cancelRun(snapshot.jobId);
+            bumpPresentation();
+            break;
+        case pdf::PDFJobStatus::Stale:
+            syncRevisionModels();
+            break;
+        case pdf::PDFJobStatus::Queued:
+        case pdf::PDFJobStatus::Running:
+            break;
+    }
+}
+
 void EditorHost::refreshCanvasTrace()
 {
     if (m_canvas)
@@ -1548,6 +1944,7 @@ void EditorHost::syncRevisionModels()
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
     m_preflight.setCurrentRevision(documentKey, documentRevision);
+    m_actionListController.setCurrentRevision(documentKey, documentRevision);
     m_inspector.setCurrentRevision(documentKey, documentRevision);
     m_preview.setCurrentRevision(documentKey, documentRevision);
     m_production.setCurrentRevision(documentKey, documentRevision);
