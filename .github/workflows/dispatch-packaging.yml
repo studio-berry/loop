@@ -8,6 +8,7 @@ on:
 # workflow_dispatch. Dispatches the exact-SHA packaging workflows unchanged.
 permissions:
   contents: read
+  actions: write
 
 jobs:
   dispatch:
@@ -24,7 +25,7 @@ jobs:
 
       - name: Dispatch Linux and Windows package workflows
         env:
-          GH_TOKEN: ${{ secrets.MY_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.event.client_payload.source_sha }}
         run: |
           gh workflow run LinuxInstall.yml --repo studio-berry/loop --ref stable \
