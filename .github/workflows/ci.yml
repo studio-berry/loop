@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Test release assets against paired package evidence
+        run: python -m unittest scripts.ci.test_verify_release_assets -v
       - name: Test package lifecycle scripts with fake packages
         run: python -m unittest scripts.ci.test_run_qt_relink_test -v
       - name: Test Linux AppImage Qt relink script with fake AppImage

@@ -432,6 +432,7 @@
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
     "UnitTestsP4S9Interaction",
+    "UnitTestsPageBoxCorpus",
     "UnitTestsPageMasterExport",
     "UnitTestsPageSurface",
     "UnitTestsPageSurfaceBudget",
@@ -470,7 +471,7 @@
   ],
   "version_policy": {
     "cmake_format": "MAJOR.MINOR.PATCH",
-    "current": "0.2.0",
+    "current": "0.2.1",
     "prerelease": "alpha",
     "scheme": "semver",
     "tag_prefix": "v"
