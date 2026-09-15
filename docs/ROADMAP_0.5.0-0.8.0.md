@@ -18,6 +18,17 @@
 > dropped. Session maps below retain their original numbering as the scope decomposition;
 > the executable GitHub issues carry the folded, resequenced numbering noted per chapter.
 
+> **Scope amendment (2026-09-15).** The verified capability gaps from the 2026-09-15
+> independent architecture review are placed as executable issues without changing the
+> four-release numbering, sequencing, or boundaries: 0.5.0 gains intent preflight (#591),
+> job-package lifecycle (#592) and the production queue workspace (#593); 0.6.0 gains the
+> quarantined watch-folder intake adapter (#594); 0.7.0 gains historical replay (#595),
+> canary and budget limits with a global kill switch (#596), and production trigger
+> adapters (#597); 0.8.0 gains upgrade/rollback/corrupted-store recovery qualification
+> (#598) and the #155 1.0/deferral split (#599). The 0.3.0 and 0.4.0 additions (#584,
+> #586-#590) are recorded in their milestone documents. No milestone gains authority it
+> did not already own.
+
 ## 1. Position in the release train
 
 The accepted critical path through 0.4.0 is:
@@ -245,6 +256,22 @@ a job binding; repeat-job open rate on the same spine.
 collaboration/sync, live e-mail or API intake (0.6.0 owns intake; importers stay
 file-based), any recommendation or automation behavior.
 
+**Scope additions (amendment 2026-09-15).** Three capabilities joined 0.5.0; the session map, the
+entry gate, and the boundaries are unchanged.
+
+- **Intent preflight** (GitHub #591) — validate the supplied artwork against *confirmed* JobSpec
+  expectations: finished size, page count, expected separations and spot inks, bleed, declared
+  stock/press condition, and finishing. A mismatch becomes an evidence-backed finding whose source is
+  the confirmed JobSpec field; an unconfirmed field produces a visible gap, never a default. Consumes
+  the JobSpec contract (S01) and extends the job-context ownership (S06/S10).
+- **Job package lifecycle** (GitHub #592) — export, import, archive, retention, and restore for the
+  encrypted spine as one integrity-manifested package, extending the `PDFHistoryRetentionPolicy`
+  discipline to jobs and restoring on a clean machine with a verifiable chain. Adds no authority:
+  import produces job records only, never approvals, executions, or outcomes.
+- **Production queue workspace** (GitHub #593) — the operator surface over the job scheduler (#238):
+  running/waiting/cancelled work, resource pressure, cancellation, and budget states. A surface over
+  the existing scheduler, not a second scheduler.
+
 **Session map.**
 
 | Session | Type | Delivers | Depends on | Exit evidence |
@@ -330,6 +357,14 @@ bundled sidecar" product decision that this milestone supersedes deliberately.
 
 **Out of scope.** Everything in "will not create," plus batch OCR in PageMaster and any
 learning behavior.
+
+**Scope addition (amendment 2026-09-15).**
+
+- **Quarantined watch-folder intake adapter** (GitHub #594) — the shop's practical entry point: watch
+  local folders, copy arrivals into quarantine, dedupe by digest, import idempotently, record
+  provenance, retry within bounds, and fail closed on hostile input. File-based only (live inbox/API
+  intake stays out of scope), and it creates *candidates* only: the review workspace (S07) remains the
+  sole confirmation path.
 
 **Session map.**
 
@@ -584,6 +619,20 @@ from the platform vision).
 **Out of scope.** Cross-site/multi-tenant automation, unattended operation without a
 reachable operator, agent-initiated promotion.
 
+**Scope additions (amendment 2026-09-15).** Three blast-radius and evidence controls joined the
+automation arc; they consume the trusted-workflow contract and the governed gateway and create no new
+authority.
+
+- **Historical replay and shadow mode** (GitHub #595) — replay a candidate workflow against historical
+  matching jobs with zero writes and report `would execute` / `would pause (reason)` / `would fail`
+  plus the material-input diff that drove the decision; the replay report becomes promotion evidence.
+- **Canary limits, execution budgets, and a global kill switch** (GitHub #596) — a per-workflow canary
+  phase, run/time/resource budgets, client/product scope limits, and one operator action that suspends
+  pre-authorised execution everywhere. Every breach, suspension, and resume is provenance.
+- **Production trigger adapters** (GitHub #597) — the declared trigger inventory (job created, artwork
+  attached, new revision, confirmed intake, watch-folder arrival) and the adapters that emit it from
+  the job event log. Acquisition only: evaluation stays S03, execution authority stays S04.
+
 **Session map.**
 
 | Session | Type | Delivers | Depends on | Exit evidence |
@@ -664,6 +713,17 @@ post-V1), overprint-simulation limitation disclosure posture.
   second language runtime.
 
 **Out of scope.** New capability families; anything that widens authority boundaries.
+
+**Scope additions (amendment 2026-09-15).**
+
+- **Upgrade, rollback, and corrupted-store recovery qualification** (GitHub #598) — the destructive
+  path proven as evidence: a pre-migration snapshot of every persisted store, migration verification by
+  kind, safe-mode startup on an unreadable store, recovery from the last verified snapshot with the
+  corrupt store quarantined, explicit downgrade refusal, and rollback after a failed application
+  update.
+- **Resolve #155 into 1.0-required gates and 1.x deferrals** (GitHub #599) — turns the deferred
+  application-quality register into a measurable exit gate: every live child and parked relative is
+  classified as 1.0-required (with testable criteria) or 1.x-deferred (with an umbrella membership).
 
 **Session map.**
 
