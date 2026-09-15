@@ -45,12 +45,13 @@ invent a `%PDF` header or a filter payload.
 | `cyclic-kids.bin` | `/Kids` array that references its own Pages node. |
 | `wrong-generation.bin` | Xref and `/Root` generation 1 vs object header generation 0. |
 | `bad-object-stream.bin` | `/ObjStm` with `/N 1000000000` and a compressed xref entry. |
-| `encrypted-without-password.bin` | Standard `/Encrypt` with dummy `O`/`U`; empty password must cancel. |
 | `unknown-encrypt-filter.bin` | `/Encrypt` names a Filter the reader does not implement. |
 | `not-pdf.bin` | Non-PDF bytes (same class as `malformed-not-pdf.pdf`). |
 
-The parser harness password callback allows one empty attempt and then cancels.
-A callback that always reports success would hang on encrypted seeds.
+`encrypted-without-password.pdf` is a preflight/operator golden only. It is not a
+fuzz seed: `fuzz_pdf_parser`'s password callback always reports success, so an
+encrypted corpus file would hang `-runs=0`. Changing that harness is deferred
+until a `LOOP_BUILD_FUZZERS` compile-commands entry exists for clang-tidy.
 
 The same malformed PDFs (except the valid page and the unknown-filter blob) are
 also preflight goldens under `loop-preflight/testdata/fixtures/`.
