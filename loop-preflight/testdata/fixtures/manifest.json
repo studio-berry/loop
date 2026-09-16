@@ -357,7 +357,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": false, "check_ids": [] },
     "source": "hand-built",
-    "notes": "Pages tree /Kids references itself; catalog parse must fail closed on the cycle."
+    "notes": "Pages tree with a self-referencing /Kids entry; must fail closed as input-error."
   },
   {
     "id": "wrong-generation",
@@ -365,7 +365,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": false, "check_ids": [] },
     "source": "hand-built",
-    "notes": "Xref and /Root use generation 1; object header is 1 0 obj so permissive recovery cannot bind the catalog."
+    "notes": "Catalog xref generation mismatched against object headers; must fail closed as input-error."
   },
   {
     "id": "bad-object-stream",
@@ -373,7 +373,7 @@
     "profile": "profiles/loop-default.json",
     "expect": { "pass": false, "check_ids": [] },
     "source": "hand-built",
-    "notes": "Object stream declaring /N 1000000000; reader must refuse rather than allocate unbounded object-stream state."
+    "notes": "Object stream declaring an absurd /N; must fail closed as input-error."
   },
   {
     "id": "encrypted-without-password",

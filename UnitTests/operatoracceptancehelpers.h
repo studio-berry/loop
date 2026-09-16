@@ -212,7 +212,8 @@ inline bool runPdfTool(const QString& pdfToolPath,
                        QByteArray* stdOut,
                        QByteArray* stdErr,
                        int* exitCode,
-                       qint64* peakChildMemoryKb = nullptr)
+                       qint64* peakChildMemoryKb = nullptr,
+                       int timeoutMs = 120000)
 {
     QProcess process;
     QTemporaryDir captureDirectory;
@@ -259,13 +260,14 @@ inline bool runPdfTool(const QString& pdfToolPath,
     runTimer.start();
     while (!process.waitForFinished(250))
     {
-        if (runTimer.elapsed() > 120000)
+        if (runTimer.elapsed() > timeoutMs)
         {
             process.kill();
             process.waitForFinished(5000);
             if (stdErr)
             {
-                *stdErr = QByteArrayLiteral("process timed out after 120000 ms");
+                *stdErr = QByteArrayLiteral("process timed out after ")
+                          + QByteArray::number(timeoutMs) + QByteArrayLiteral(" ms");
             }
             return false;
         }

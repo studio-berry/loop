@@ -103,8 +103,6 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
         harness = case["harness"]
         if harness not in HARNESS_TARGETS:
             violations.append((label, f"unknown harness {harness!r}"))
-        else:
-            harnesses_with_seeds.add(harness)
 
         origin = case["origin"]
         if origin not in ALLOWED_ORIGINS:
@@ -140,8 +138,12 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
             )
 
         basename = parts[-1]
+        if basename in IGNORED_BASENAMES:
+            violations.append((rel_path, "ignored basename cannot be a manifest seed"))
+            continue
         if HASH_NAME.match(basename):
             violations.append((rel_path, "hash-named seed files are not allowed"))
+            continue
 
         absolute = root / rel_path
         if not absolute.is_file():
@@ -158,6 +160,9 @@ def validate_manifest(manifest: dict, root: Path = ROOT) -> list[tuple[str, str]
             violations.append(
                 (rel_path, f"sha256 mismatch (manifest {digest}, actual {actual})")
             )
+            continue
+
+        harnesses_with_seeds.add(harness)
 
     for harness in sorted(HARNESS_TARGETS):
         if harness not in harnesses_with_seeds:

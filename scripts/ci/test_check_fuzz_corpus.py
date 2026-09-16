@@ -118,6 +118,39 @@ class FuzzCorpusValidationTests(unittest.TestCase):
             self.assertIn("Fuzz/corpus/fuzz_stream_filters", missing)
             self.assertNotIn("Fuzz/corpus/fuzz_images", missing)
 
+    def test_rejects_manifested_gitkeep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            for harness in HARNESS_TARGETS:
+                harness_dir = root / "Fuzz" / "corpus" / harness
+                harness_dir.mkdir(parents=True)
+                gitkeep = harness_dir / ".gitkeep"
+                gitkeep.write_text("", encoding="utf-8")
+
+            gitkeep = root / "Fuzz" / "corpus" / "fuzz_images" / ".gitkeep"
+            digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            manifest = {
+                "schema_version": 1,
+                "cases": [
+                    {
+                        "id": "gitkeep-only",
+                        "path": "Fuzz/corpus/fuzz_images/.gitkeep",
+                        "harness": "fuzz_images",
+                        "origin": "synthetic",
+                        "issue": 0,
+                        "sha256": digest,
+                        "expected": "terminates-without-crash",
+                        "minimized": True,
+                    }
+                ],
+            }
+            violations = validate_manifest(manifest, root)
+            self.assertTrue(
+                any("ignored basename cannot be a manifest seed" in reason for _, reason in violations)
+            )
+            missing = {subject for subject, reason in violations if "no manifested seeds" in reason}
+            self.assertIn("Fuzz/corpus/fuzz_images", missing)
+
     def test_rejects_duplicate_ids(self):
         manifest = {
             "schema_version": 1,
