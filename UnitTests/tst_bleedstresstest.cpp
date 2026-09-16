@@ -22,6 +22,7 @@
 
 // Stress-tests bleed preflight + add-bleed repair on AI-artwork-like fixtures (MIC-316).
 
+#include "pdftoolenvelopeutils.h"
 #include "processoutputcapture.h"
 
 #include <QtTest>
@@ -146,7 +147,14 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 {
     const QString profilePath = QDir(sourceDir()).filePath(QString::fromLatin1(STRESS_PROFILE));
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath }, &stdOut, exitCode))
+    if (!runPdfTool({ QStringLiteral("preflight"),
+                      pdfPath,
+                      QStringLiteral("--profile"),
+                      profilePath,
+                      QStringLiteral("--console-format"),
+                      QStringLiteral("json") },
+                    &stdOut,
+                    exitCode))
     {
         return false;
     }
@@ -158,12 +166,18 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
         return false;
     }
 
-    if (report)
+    const QJsonObject envelope = document.object();
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")))
     {
-        *report = document.object();
+        return false;
     }
 
-    return true;
+    if (report)
+    {
+        *report = pdfplugin::pdftool::reportFromEnvelope(envelope);
+    }
+
+    return !report || !report->isEmpty();
 }
 
 bool BleedStressTest::runAddBleed(const QString& inputPath, const QString& outputPath, const QString& mode, int* exitCode) const

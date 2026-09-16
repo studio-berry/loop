@@ -856,6 +856,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
         LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
     )
+    target_include_directories(UnitTestsBleedStress PRIVATE
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight)
 
     set_target_properties(UnitTestsBleedStress PROPERTIES
         WIN32_EXECUTABLE OFF
