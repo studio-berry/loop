@@ -7,4 +7,5 @@ weaker one before analysis or mutation, and `pdf::validateSaveRequest()` refuses
 whose output resolves to the trusted input file. `redact`, `add-bleed` and `rgb-to-cmyk` therefore
 exit 4 with `save-policy.refused` when the output path is the input path — those in-place invocations
 previously succeeded with `--overwrite`, so write the candidate to a new path. Redaction also
-declares a full rewrite, so it can never produce an incremental update.
+declares a full rewrite, so it can never produce an incremental update. Bleed stress tests now
+unwrap PdfTool's structured `data.report` envelope so bleed preflight findings are asserted again.
