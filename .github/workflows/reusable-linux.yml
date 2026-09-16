@@ -408,6 +408,44 @@ jobs:
         run: |
           ctest --output-on-failure
 
+      - name: Install independent validators
+        if: ${{ !inputs.fast }}
+        run: |
+          sudo apt update
+          sudo apt install -y qpdf poppler-utils
+
+      - name: Prove signed incremental save with independent validators
+        if: ${{ !inputs.fast }}
+        working-directory: loop
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -euo pipefail
+          export LOOP_SAVE_POLICY_EVIDENCE_DIR="$PWD/evidence/save-policy"
+          rm -rf "$LOOP_SAVE_POLICY_EVIDENCE_DIR"
+          ctest --test-dir build -R '^UnitTestsIncrementalSave$' --output-on-failure
+          mkdir -p docs/evidence/session-15-save-policy
+          python3 scripts/qualification/run_independent_validators.py \
+            --input "$LOOP_SAVE_POLICY_EVIDENCE_DIR/incremental-with-signature.pdf" \
+            --output docs/evidence/session-15-save-policy/independent-validation-linux.json \
+            --candidate-sha "$(git rev-parse HEAD)" \
+            --claim structural --claim signature
+          python3 - <<'PY'
+          import json
+          data = json.load(open("docs/evidence/session-15-save-policy/independent-validation-linux.json"))
+          assert data["status"] == "passed", data["status"]
+          assert all(v["status"] == "passed" for v in data["validators"]), data["validators"]
+          print("independent validation evidence: passed", [v["claim"] for v in data["validators"]])
+          PY
+
+      - name: Upload save-policy independent validation evidence
+        if: ${{ !inputs.fast }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: save-policy-independent-validation
+          path: loop/docs/evidence/session-15-save-policy/independent-validation-linux.json
+          if-no-files-found: error
+
       - name: Run preflight corpus gate
         if: ${{ !inputs.fast }}
         working-directory: loop/build

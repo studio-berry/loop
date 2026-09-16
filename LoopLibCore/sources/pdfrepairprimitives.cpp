@@ -521,6 +521,7 @@ public:
     {
         return PDFRepairDomain::Color | PDFRepairDomain::Fonts | PDFRepairDomain::Images | PDFRepairDomain::Metadata | PDFRepairDomain::PageGeometry | PDFRepairDomain::Structure;
     }
+    PDFOperationSavePolicy savePolicy() const override { return PDFOperationSavePolicy::fullRewrite(QStringLiteral("standard conversion removes prior content")); }
     PDFOperationImpact impact(const PDFDocument*, const QJsonObject&) const override
     {
         PDFOperationImpact declared;

@@ -46,7 +46,11 @@ set_target_properties(UnitTestsIncrementalSave PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
-add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
+add_test(NAME UnitTestsIncrementalSave COMMAND UnitTestsIncrementalSave)
+# The signed fixture lives in the source tree, not the ctest working directory.
+set_tests_properties(UnitTestsIncrementalSave PROPERTIES
+    ENVIRONMENT "LOOP_FIXTURE_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+)
 
 add_executable(UnitTestsProcessingBudget
     tst_processingbudgettest.cpp
