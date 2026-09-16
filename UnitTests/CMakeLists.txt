@@ -975,6 +975,22 @@ set_target_properties(UnitTestsBudgetCorpus PROPERTIES
 )
 add_test(UnitTestsBudgetCorpus "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsBudgetCorpus")
 
+add_executable(UnitTestsPageBoxCorpus
+    tst_pageboxcorpustest.cpp
+)
+target_link_libraries(UnitTestsPageBoxCorpus PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_compile_definitions(UnitTestsPageBoxCorpus PRIVATE
+    PAGE_BOX_CORPUS_DIR="${CMAKE_SOURCE_DIR}/loop-preflight/testdata/page-box-corpus"
+    LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
+)
+set_target_properties(UnitTestsPageBoxCorpus PROPERTIES
+    WIN32_EXECUTABLE OFF
+    MACOSX_BUNDLE OFF
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
+)
+add_test(UnitTestsPageBoxCorpus "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsPageBoxCorpus")
+
 add_executable(UnitTestsResourceBudget
     tst_resourcebudgettest.cpp
 )

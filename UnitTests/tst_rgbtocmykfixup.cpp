@@ -104,13 +104,13 @@ pdf::PDFDocument buildRgbImageDocument()
     pdf::PDFDictionary resources;
     resources.addEntry(pdf::PDFInplaceOrMemoryString("XObject"),
                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(xObjects))));
-    const QByteArray content("q 200 0 0 200 0 0 cm /Im1 Do Q\n");
+    QByteArray content("q 200 0 0 200 0 0 cm /Im1 Do Q\n");
     pdf::PDFDictionary contentDictionary;
     contentDictionary.addEntry(pdf::PDFInplaceOrMemoryString("Length"),
                                pdf::PDFObject::createInteger(content.size()));
     const pdf::PDFObjectReference contentReference = builder.addObject(
         pdf::PDFObject::createStream(std::make_shared<pdf::PDFStream>(
-            std::move(contentDictionary), content)));
+            std::move(contentDictionary), std::move(content))));
 
     pdf::PDFDictionary pageUpdate;
     pageUpdate.addEntry(pdf::PDFInplaceOrMemoryString("Contents"), pdf::PDFObject::createReference(contentReference));

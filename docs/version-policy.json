@@ -3,7 +3,7 @@
   "spec": "https://semver.org/spec/v2.0.0.html",
   "cmake_variable": "LOOP_VERSION",
   "cmake_format": "MAJOR.MINOR.PATCH",
-  "current": "0.2.0",
+  "current": "0.2.1",
   "prerelease": "alpha",
   "tag_prefix": "v",
   "windows_variable": "LOOP_WINDOWS_VERSION",
