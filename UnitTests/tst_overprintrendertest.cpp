@@ -302,7 +302,9 @@ void OverprintRenderTest::flattenThenRender()
     QFETCH(QString, baseline);
 
     pdf::PDFDocument document = loadFixtureDocument(fixturesDirectory() + QLatin1Char('/') + fixture);
-    QVERIFY2(document.getCatalog()->getPage(0), qPrintable(QStringLiteral("Could not load flatten fixture %1").arg(fixture)));
+    QVERIFY2(document.getCatalog(), qPrintable(QStringLiteral("Could not load flatten fixture %1").arg(fixture)));
+    QVERIFY2(document.getCatalog()->getPage(0),
+             qPrintable(QStringLiteral("Flatten fixture %1 has no first page").arg(fixture)));
 
     // Flatten rasterizes every selected page even when the structural live-transparency
     // walk misses a nested Normal group. The pixel golden is the paint proof.

@@ -92,6 +92,7 @@
         "UnitTests/tst_jbig2decodertest.cpp",
         "UnitTests/tst_lifecycletest.cpp",
         "UnitTests/tst_overprinttest.cpp",
+        "UnitTests/tst_overprintrendertest.cpp",
         "UnitTests/tst_revisionstresstest.cpp",
         "UnitTests/tst_safefilewritertest.cpp"
       ],
