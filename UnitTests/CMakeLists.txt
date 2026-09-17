@@ -46,7 +46,11 @@ set_target_properties(UnitTestsIncrementalSave PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_LIB_DIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}
 )
-add_test(UnitTestsIncrementalSave "${CMAKE_BINARY_DIR}/${LOOP_INSTALL_BIN_DIR}/UnitTestsIncrementalSave")
+add_test(NAME UnitTestsIncrementalSave COMMAND UnitTestsIncrementalSave)
+# The signed fixture lives in the source tree, not the ctest working directory.
+set_tests_properties(UnitTestsIncrementalSave PROPERTIES
+    ENVIRONMENT "LOOP_FIXTURE_DATA_DIR=${CMAKE_CURRENT_SOURCE_DIR}/testdata"
+)
 
 add_executable(UnitTestsProcessingBudget
     tst_processingbudgettest.cpp
@@ -852,6 +856,8 @@ if(NOT LOOP_BUILD_ONLY_CORE_LIBRARY)
         PDFTOOL_EXECUTABLE_PATH="$<TARGET_FILE:PdfTool>"
         LOOP_PREFLIGHT_SOURCE_DIR="${CMAKE_SOURCE_DIR}/loop-preflight"
     )
+    target_include_directories(UnitTestsBleedStress PRIVATE
+        ${CMAKE_SOURCE_DIR}/UnitTests/support/preflight)
 
     set_target_properties(UnitTestsBleedStress PROPERTIES
         WIN32_EXECUTABLE OFF

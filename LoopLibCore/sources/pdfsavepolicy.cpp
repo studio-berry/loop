@@ -24,6 +24,8 @@
 
 #include <utility>
 
+#include <QStringList>
+
 namespace pdf
 {
 
@@ -31,9 +33,12 @@ const char* getPDFSaveModeName(PDFSaveMode mode)
 {
     switch (mode)
     {
-        case PDFSaveMode::IncrementalAppend: return "incremental-append";
-        case PDFSaveMode::FullRewrite: return "full-rewrite";
-        case PDFSaveMode::SaveAsNewArtifact: return "save-as-new-artifact";
+        case PDFSaveMode::IncrementalAppend:
+            return "incremental-append";
+        case PDFSaveMode::FullRewrite:
+            return "full-rewrite";
+        case PDFSaveMode::SaveAsNewArtifact:
+            return "save-as-new-artifact";
     }
     return "unknown";
 }
@@ -64,6 +69,16 @@ PDFOperationSavePolicy PDFOperationSavePolicy::saveAsNewArtifact(QString rationa
     policy.reversibleInSession = true;
     policy.rationale = std::move(rationale);
     return policy;
+}
+
+PDFOperationSavePolicy PDFOperationSavePolicy::undeclared()
+{
+    return PDFOperationSavePolicy::saveAsNewArtifact(QStringLiteral("operation did not declare a save policy"));
+}
+
+bool PDFOperationSavePolicy::isUndeclared() const
+{
+    return rationale == undeclared().rationale;
 }
 
 QJsonObject PDFOperationSavePolicy::toJson() const
@@ -97,4 +112,49 @@ PDFOperationSavePolicy mergePDFSavePolicies(const PDFOperationSavePolicy& first,
     return result;
 }
 
-} // namespace pdf
+bool savePolicyIsWeaker(const PDFOperationSavePolicy& candidate, const PDFOperationSavePolicy& required)
+{
+    if (static_cast<int>(candidate.mode) < static_cast<int>(required.mode))
+    {
+        return true;
+    }
+    // A stronger mode is never weaker, whatever it claims about signatures and
+    // reversibility: only a same-mode request can understate those.
+    if (candidate.mode != required.mode)
+    {
+        return false;
+    }
+    if (required.invalidatesSignatures && !candidate.invalidatesSignatures)
+    {
+        return true;
+    }
+    return !required.reversibleInSession && candidate.reversibleInSession;
+}
+
+QString savePolicyWeakenedMessage(const PDFOperationSavePolicy& candidate,
+                                  const PDFOperationSavePolicy& required)
+{
+    const bool sameMode = candidate.mode == required.mode;
+    QStringList reasons;
+    if (static_cast<int>(candidate.mode) < static_cast<int>(required.mode))
+    {
+        reasons.append(QStringLiteral("mode '%1' is weaker than the operation-declared '%2'")
+                           .arg(QString::fromLatin1(getPDFSaveModeName(candidate.mode)),
+                                QString::fromLatin1(getPDFSaveModeName(required.mode))));
+    }
+    if (sameMode && required.invalidatesSignatures && !candidate.invalidatesSignatures)
+    {
+        reasons.append(QStringLiteral("signature invalidation is not declared but the operation invalidates signatures"));
+    }
+    if (sameMode && !required.reversibleInSession && candidate.reversibleInSession)
+    {
+        reasons.append(QStringLiteral("session reversibility is claimed but the operation is not reversible"));
+    }
+    if (reasons.isEmpty())
+    {
+        return {};
+    }
+    return QStringLiteral("Refused save policy: %1.").arg(reasons.join(QStringLiteral("; ")));
+}
+
+}   // namespace pdf

@@ -262,6 +262,20 @@ PDFToolExitCode PDFToolAddBleed::execute(const PDFToolOptions& options)
         return PDFToolExitCode::InvalidInvocation;
     }
 
+    // The operation, not the command, declares what may happen to the trusted
+    // input. A missing declaration must not delete the command, so the
+    // explicitly-undeclared policy still protects the input path.
+    const pdf::PDFRepairOperation* const declaredOperation = pdf::PDFRepairRegistry::instance().find(QStringLiteral("add-bleed"));
+    const pdf::PDFOperationSavePolicy declaredPolicy = declaredOperation ? declaredOperation->savePolicy() : pdf::PDFOperationSavePolicy::undeclared();
+    if (const PDFToolExitCode refused = validateOperationSaveRequest(options,
+                                                                     options.document,
+                                                                     options.addBleedOutputDocument,
+                                                                     declaredPolicy);
+        refused != PDFToolExitCode::Success)
+    {
+        return refused;
+    }
+
     pdf::PDFDocument document;
     QByteArray sourceData;
     if (!readDocument(options, document, &sourceData, false))

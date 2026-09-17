@@ -169,6 +169,12 @@ private:
     const PDFOperationControl* m_operationControl = nullptr;
 };
 
+/// Refuses a save request that would weaken the operation-declared policy or
+/// overwrite the trusted input artifact. Declared here because the writer is
+/// the save boundary; implemented once so the transaction and every CLI write
+/// path share the same rule.
+LOOPLIBCORESHARED_EXPORT PDFOperationResult validateSaveRequest(const PDFSaveRequest& request);
+
 }   // namespace pdf
 
 #endif   // PDFDOCUMENTWRITER_H
