@@ -133,7 +133,7 @@ QVariantList PreflightProfileDraft::editableChecks() const
     }
 
     const QJsonArray checkArray = m_draftProfile.value(QStringLiteral("checks")).toArray();
-    for (const QJsonValue& item : checkArray)
+    for (const QJsonValueConstRef item : checkArray)
     {
         const QJsonObject check = item.toObject();
         const QString checkId = check.value(QStringLiteral("id")).toString();
