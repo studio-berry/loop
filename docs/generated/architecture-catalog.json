@@ -350,7 +350,9 @@
   ],
   "schema_versions": {
     "json_schemas": {
+      "loop-preflight/schemas/action-list-v2.schema.json": [],
       "loop-preflight/schemas/action-list.schema.json": [],
+      "loop-preflight/schemas/object-selector.schema.json": [],
       "loop-preflight/schemas/profile.schema.json": [
         1
       ],
@@ -361,7 +363,7 @@
       ]
     },
     "runtime": {
-      "action_list": 1,
+      "action_list": 2,
       "preflight_decisions": 1,
       "preflight_report": 3
     }
@@ -422,6 +424,7 @@
     "UnitTestsJobScheduler",
     "UnitTestsLifecycle",
     "UnitTestsLoopStateVisual",
+    "UnitTestsObjectSelector",
     "UnitTestsOcrCli",
     "UnitTestsOcrContract",
     "UnitTestsOcrPageGate",
