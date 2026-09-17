@@ -406,12 +406,8 @@ pdf::PDFDocument createVectorAndTextDocument()
     return builder.build();
 }
 
-pdf::PDFDocument createSpotColorPathDocument()
+pdf::PDFObjectReference addTintFunction(pdf::PDFDocumentBuilder& builder)
 {
-    pdf::PDFDocumentBuilder builder;
-    builder.createDocument();
-    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
-
     pdf::PDFObjectFactory tintFactory;
     tintFactory.beginDictionary();
     tintFactory.beginDictionaryItem("FunctionType");
@@ -436,12 +432,20 @@ pdf::PDFDocument createSpotColorPathDocument()
     tintFactory << pdf::PDFInteger(1);
     tintFactory.endDictionaryItem();
     tintFactory.endDictionary();
-    const pdf::PDFObjectReference tintReference = builder.addObject(tintFactory.takeObject());
+    return builder.addObject(tintFactory.takeObject());
+}
+
+pdf::PDFDocument createSpotColorPathDocument(const QByteArray& spotName)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+    const pdf::PDFObjectReference tintReference = addTintFunction(builder);
 
     pdf::PDFObjectFactory separationFactory;
     separationFactory.beginArray();
     separationFactory << pdf::WrapName("Separation");
-    separationFactory << pdf::WrapName("CutGreen");
+    separationFactory << pdf::WrapName(spotName);
     separationFactory << pdf::WrapName("DeviceCMYK");
     separationFactory << tintReference;
     separationFactory.endArray();
@@ -449,6 +453,40 @@ pdf::PDFDocument createSpotColorPathDocument()
 
     pdf::PDFDictionary colorSpaces;
     colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("CS0"), pdf::PDFObject::createReference(separationReference));
+    pdf::PDFDictionary resources;
+    resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"),
+                       pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(colorSpaces))));
+    setPageContent(builder,
+                   pageReference,
+                   QByteArray("/CS0 cs 1 scn 20 20 120 120 re f"),
+                   pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(resources))));
+    return builder.build();
+}
+
+pdf::PDFDocument createDeviceNColorPathDocument(const QByteArray& colorantName)
+{
+    pdf::PDFDocumentBuilder builder;
+    builder.createDocument();
+    const pdf::PDFObjectReference pageReference = builder.appendPage(QRectF(0, 0, 400, 400));
+    const pdf::PDFObjectReference tintReference = addTintFunction(builder);
+
+    pdf::PDFObjectFactory colorantsFactory;
+    colorantsFactory.beginArray();
+    colorantsFactory << pdf::WrapName(colorantName);
+    colorantsFactory.endArray();
+    const pdf::PDFObjectReference colorantsReference = builder.addObject(colorantsFactory.takeObject());
+
+    pdf::PDFObjectFactory deviceNFactory;
+    deviceNFactory.beginArray();
+    deviceNFactory << pdf::WrapName("DeviceN");
+    deviceNFactory << colorantsReference;
+    deviceNFactory << pdf::WrapName("DeviceCMYK");
+    deviceNFactory << tintReference;
+    deviceNFactory.endArray();
+    const pdf::PDFObjectReference deviceNReference = builder.addObject(deviceNFactory.takeObject());
+
+    pdf::PDFDictionary colorSpaces;
+    colorSpaces.addEntry(pdf::PDFInplaceOrMemoryString("CS0"), pdf::PDFObject::createReference(deviceNReference));
     pdf::PDFDictionary resources;
     resources.addEntry(pdf::PDFInplaceOrMemoryString("ColorSpace"),
                        pdf::PDFObject::createDictionary(std::make_shared<pdf::PDFDictionary>(std::move(colorSpaces))));
@@ -503,6 +541,7 @@ private slots:
     void pagesPredicateLimitsCandidates();
     void objectClassAndColorSpacePredicates();
     void layerFontSpotColorAndDpiPredicates();
+    void spotColorMatchesNamedSeparationOnly();
     void isVectorObjectRefAndRegionPredicates();
     void compositionAndNamedSet();
     void notCompositionExcludesMatches();
@@ -583,14 +622,15 @@ void ObjectSelectorTest::layerFontSpotColorAndDpiPredicates()
     QVERIFY(!fontResult.empty);
     QVERIFY(fontResult.candidates.front().fontName.contains(QStringLiteral("LoopSelector"), Qt::CaseInsensitive));
 
-    const pdf::PDFDocument spotDocument = createSpotColorPathDocument();
+    const pdf::PDFDocument spotDocument = createSpotColorPathDocument(QByteArray("CutGreen"));
     pdf::PDFObjectSelectionResult spotResult;
     QVERIFY(resolveSelector(spotDocument,
                             selectorJson(QJsonObject{ { QStringLiteral("spotColor"), QStringLiteral("CutGreen") } }),
                             &spotResult));
     QVERIFY(spotResult.ok);
     QVERIFY(!spotResult.empty);
-    QCOMPARE(spotResult.candidates.front().colorSpaceName, QStringLiteral("Spot"));
+    QCOMPARE(spotResult.candidates.front().colorSpaceName, QStringLiteral("Separation"));
+    QCOMPARE(spotResult.candidates.front().spotColorName, QStringLiteral("CutGreen"));
 
     const pdf::PDFDocument highDpiDocument = createSinglePageImageDocument(600);
     pdf::PDFObjectSelectionResult minDpiResult;
@@ -606,6 +646,44 @@ void ObjectSelectorTest::layerFontSpotColorAndDpiPredicates()
                             &maxDpiResult));
     QVERIFY(maxDpiResult.ok);
     QVERIFY(maxDpiResult.empty);
+}
+
+void ObjectSelectorTest::spotColorMatchesNamedSeparationOnly()
+{
+    const pdf::PDFDocument separationDocument = createSpotColorPathDocument(QByteArray("CutGreen"));
+    pdf::PDFObjectSelectionResult matchingResult;
+    QVERIFY(resolveSelector(separationDocument,
+                            selectorJson(QJsonObject{ { QStringLiteral("spotColor"), QStringLiteral("CutGreen") } }),
+                            &matchingResult));
+    QVERIFY(matchingResult.ok);
+    QVERIFY(!matchingResult.empty);
+    QCOMPARE(matchingResult.candidates.front().colorSpaceName, QStringLiteral("Separation"));
+    QCOMPARE(matchingResult.candidates.front().spotColorName, QStringLiteral("CutGreen"));
+
+    pdf::PDFObjectSelectionResult mismatchedNameResult;
+    QVERIFY(resolveSelector(separationDocument,
+                            selectorJson(QJsonObject{ { QStringLiteral("spotColor"), QStringLiteral("DieLine") } }),
+                            &mismatchedNameResult));
+    QVERIFY(mismatchedNameResult.ok);
+    QVERIFY(mismatchedNameResult.empty);
+
+    const pdf::PDFDocument deviceNDocument = createDeviceNColorPathDocument(QByteArray("Spot"));
+    pdf::PDFObjectSelectionResult deviceNResult;
+    QVERIFY(resolveSelector(deviceNDocument,
+                            selectorJson(QJsonObject{ { QStringLiteral("spotColor"), QStringLiteral("Spot") } }),
+                            &deviceNResult));
+    QVERIFY(deviceNResult.ok);
+    QVERIFY(deviceNResult.empty);
+    QCOMPARE(deviceNResult.candidates.size(), 0);
+
+    pdf::PDFObjectSelectionResult deviceNColorSpaceResult;
+    QVERIFY(resolveSelector(deviceNDocument,
+                            selectorJson(QJsonObject{ { QStringLiteral("colorSpace"), QStringLiteral("DeviceN") } }),
+                            &deviceNColorSpaceResult));
+    QVERIFY(deviceNColorSpaceResult.ok);
+    QVERIFY(!deviceNColorSpaceResult.empty);
+    QCOMPARE(deviceNColorSpaceResult.candidates.front().colorSpaceName, QStringLiteral("DeviceN"));
+    QVERIFY(deviceNColorSpaceResult.candidates.front().spotColorName.isEmpty());
 }
 
 void ObjectSelectorTest::isVectorObjectRefAndRegionPredicates()

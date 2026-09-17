@@ -49,6 +49,7 @@ struct LOOPLIBCORESHARED_EXPORT PDFObjectSelectorCandidate
     PDFObjectReference objectReference;
     QString objectClass;
     QString colorSpaceName;
+    QString spotColorName;
     QString fontName;
     QString layerName;
     double effectiveDpi = 0.0;

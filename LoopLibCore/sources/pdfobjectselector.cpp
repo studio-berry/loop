@@ -30,6 +30,7 @@
 #include "pdfmeshqualitysettings.h"
 #include "pdfoptionalcontent.h"
 #include "pdfpage.h"
+#include "pdfcolorspaces.h"
 #include "pdfpagecontentprocessor.h"
 #include "pdffont.h"
 #include "pdfrenderer.h"
@@ -72,11 +73,11 @@ QString revisionDigestForIdentity(const PDFRevisionIdentity& revision)
     return QString::fromLatin1(QCryptographicHash::hash(revision.toString().toUtf8(), QCryptographicHash::Sha256).toHex());
 }
 
-QString classifyColorSpace(const PDFAbstractColorSpace* colorSpace)
+const PDFAbstractColorSpace* resolveIndexedBaseColorSpace(const PDFAbstractColorSpace* colorSpace)
 {
     if (!colorSpace)
     {
-        return QString();
+        return nullptr;
     }
 
     const PDFAbstractColorSpace* base = colorSpace;
@@ -84,6 +85,12 @@ QString classifyColorSpace(const PDFAbstractColorSpace* colorSpace)
     {
         base = static_cast<const PDFIndexedColorSpace*>(base)->getBaseColorSpace().get();
     }
+    return base;
+}
+
+QString classifyColorSpace(const PDFAbstractColorSpace* colorSpace)
+{
+    const PDFAbstractColorSpace* base = resolveIndexedBaseColorSpace(colorSpace);
     if (!base)
     {
         return QString();
@@ -100,8 +107,9 @@ QString classifyColorSpace(const PDFAbstractColorSpace* colorSpace)
         case PDFAbstractColorSpace::ColorSpace::CalGray:
             return QStringLiteral("DeviceGray");
         case PDFAbstractColorSpace::ColorSpace::Separation:
+            return QStringLiteral("Separation");
         case PDFAbstractColorSpace::ColorSpace::DeviceN:
-            return QStringLiteral("Spot");
+            return QStringLiteral("DeviceN");
         case PDFAbstractColorSpace::ColorSpace::ICCBased:
             return QStringLiteral("ICCBased");
         case PDFAbstractColorSpace::ColorSpace::Pattern:
@@ -109,6 +117,29 @@ QString classifyColorSpace(const PDFAbstractColorSpace* colorSpace)
         default:
             return QStringLiteral("Unknown");
     }
+}
+
+QString separationColorName(const PDFAbstractColorSpace* colorSpace)
+{
+    const PDFAbstractColorSpace* base = resolveIndexedBaseColorSpace(colorSpace);
+    if (!base || base->getColorSpace() != PDFAbstractColorSpace::ColorSpace::Separation)
+    {
+        return QString();
+    }
+
+    const PDFSeparationColorSpace* separationColorSpace = static_cast<const PDFSeparationColorSpace*>(base);
+    return QString::fromLatin1(separationColorSpace->getColorName());
+}
+
+void assignColorSpaceMetadata(PDFObjectSelectorCandidate* candidate, const PDFAbstractColorSpace* colorSpace)
+{
+    if (!candidate)
+    {
+        return;
+    }
+
+    candidate->colorSpaceName = classifyColorSpace(colorSpace);
+    candidate->spotColorName = separationColorName(colorSpace);
 }
 
 double axisDpi(qreal axisLengthPoints, int pixels)
@@ -217,11 +248,11 @@ protected:
                                  .normalized();
         if (const PDFAbstractColorSpace* imageColorSpace = image.getColorSpace().data())
         {
-            candidate.colorSpaceName = classifyColorSpace(imageColorSpace);
+            assignColorSpaceMetadata(&candidate, imageColorSpace);
         }
         else
         {
-            candidate.colorSpaceName = classifyColorSpace(getGraphicState()->getFillColorSpace());
+            assignColorSpaceMetadata(&candidate, getGraphicState()->getFillColorSpace());
         }
         candidate.layerName = currentLayerName();
         candidate.fontName.clear();
@@ -244,7 +275,7 @@ protected:
         candidate.boundsPt = path.boundingRect();
         const PDFAbstractColorSpace* colorSpace = stroke ? getGraphicState()->getStrokeColorSpace()
                                                          : getGraphicState()->getFillColorSpace();
-        candidate.colorSpaceName = classifyColorSpace(colorSpace);
+        assignColorSpaceMetadata(&candidate, colorSpace);
         candidate.layerName = currentLayerName();
         candidate.effectiveDpi = 0.0;
         upsertCandidate(candidate);
@@ -262,7 +293,7 @@ protected:
         candidate.objectClass = QStringLiteral("text");
         candidate.isVector = false;
         candidate.boundsPt = info.matrix.mapRect(info.outline.boundingRect());
-        candidate.colorSpaceName = classifyColorSpace(getGraphicState()->getFillColorSpace());
+        assignColorSpaceMetadata(&candidate, getGraphicState()->getFillColorSpace());
         candidate.layerName = currentLayerName();
         const PDFFontPointer& font = getGraphicState()->getTextFont();
         if (font)
@@ -346,6 +377,10 @@ private:
         if (it->second.colorSpaceName.isEmpty())
         {
             it->second.colorSpaceName = candidate.colorSpaceName;
+        }
+        if (it->second.spotColorName.isEmpty())
+        {
+            it->second.spotColorName = candidate.spotColorName;
         }
         if (it->second.fontName.isEmpty())
         {
@@ -551,7 +586,8 @@ bool candidateMatchesLeaf(const PDFObjectSelectorCandidate& candidate,
     }
     if (key == QStringLiteral("spotColor"))
     {
-        return candidate.colorSpaceName.compare(QStringLiteral("Spot"), Qt::CaseInsensitive) == 0;
+        return candidate.colorSpaceName.compare(QStringLiteral("Separation"), Qt::CaseInsensitive) == 0 &&
+               candidate.spotColorName.compare(value.toString(), Qt::CaseInsensitive) == 0;
     }
     if (key == QStringLiteral("minEffectiveDpi"))
     {
@@ -688,6 +724,10 @@ QJsonObject PDFObjectSelectorCandidate::toJson() const
     if (!colorSpaceName.isEmpty())
     {
         result.insert(QStringLiteral("color_space"), colorSpaceName);
+    }
+    if (!spotColorName.isEmpty())
+    {
+        result.insert(QStringLiteral("spot_color"), spotColorName);
     }
     if (!layerName.isEmpty())
     {
