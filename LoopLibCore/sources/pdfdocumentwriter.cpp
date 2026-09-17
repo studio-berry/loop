@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QBuffer>
 #include <QCryptographicHash>
+#include <QFileInfo>
 #include <QSaveFile>
 
 #include "pdfdbgheap.h"
@@ -863,6 +864,30 @@ QByteArray PDFDocumentWriter::getSerializedObject(const PDFObject& object)
     }
 
     return buffer.data();
+}
+
+PDFOperationResult validateSaveRequest(const PDFSaveRequest& request)
+{
+    if (request.requestedExplicitly && savePolicyIsWeaker(request.requested, request.required))
+    {
+        return PDFOperationResult(savePolicyWeakenedMessage(request.requested, request.required));
+    }
+
+    if (request.appendInPlace || request.sourcePath.isEmpty() || request.outputPath.isEmpty())
+    {
+        return PDFOperationResult(true);
+    }
+
+    const QFileInfo sourceInfo(request.sourcePath);
+    const QFileInfo outputInfo(request.outputPath);
+    if (sourceInfo.exists() && outputInfo.exists() &&
+        sourceInfo.canonicalFilePath() == outputInfo.canonicalFilePath())
+    {
+        return PDFOperationResult(
+            QStringLiteral("Refused save: '%1' is the trusted input artifact; write the candidate to a new path.")
+                .arg(sourceInfo.fileName()));
+    }
+    return PDFOperationResult(true);
 }
 
 }   // namespace pdf

@@ -1,0 +1,39 @@
+{
+  "schema": "loop.independent-validation-evidence",
+  "schema_version": 1,
+  "status": "incomplete",
+  "input": {
+    "path": "C:\\Users\\micha\\AppData\\Local\\Temp\\save-policy-evidence\\incremental-with-signature.pdf",
+    "bytes": 7624,
+    "sha256": "fc573865e74766af2fac4d24fd053ea7232fbfa42d784ea6e81ac09d62917ff5"
+  },
+  "validators": [
+    {
+      "claim": "structural",
+      "program": "qpdf",
+      "program_path": null,
+      "configured_arguments": [
+        "--check",
+        "{input}"
+      ],
+      "status": "incomplete",
+      "reason_code": "validator-not-installed"
+    },
+    {
+      "claim": "signature",
+      "program": "pdfsig",
+      "program_path": null,
+      "configured_arguments": [
+        "{input}"
+      ],
+      "status": "incomplete",
+      "reason_code": "validator-not-installed"
+    }
+  ],
+  "platform": {
+    "system": "Windows",
+    "release": "10",
+    "machine": "AMD64"
+  },
+  "candidate_sha": "c99475550bbdf6c43f902bae8739bdc90753338b"
+}

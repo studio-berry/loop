@@ -22,6 +22,7 @@
 
 // Stress-tests bleed preflight + add-bleed repair on AI-artwork-like fixtures (MIC-316).
 
+#include "pdftoolenvelopeutils.h"
 #include "processoutputcapture.h"
 
 #include <QtTest>
@@ -166,15 +167,14 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
     }
 
     const QJsonObject envelope = document.object();
-    if (envelope.value(QStringLiteral("schema_version")).toInt() != 1 ||
-        envelope.value(QStringLiteral("command")).toString() != QStringLiteral("preflight"))
+    if (!pdfplugin::pdftool::isResultEnvelope(envelope, QStringLiteral("preflight")))
     {
         return false;
     }
 
     if (report)
     {
-        *report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+        *report = pdfplugin::pdftool::reportFromEnvelope(envelope);
     }
 
     return !report || !report->isEmpty();

@@ -273,6 +273,10 @@ void EditorHostTest::startsWithNoDocument()
     QVERIFY(defaultProfile.value(QStringLiteral("valid")).toBool());
     QVERIFY(!defaultProfile.value(QStringLiteral("digest")).toString().isEmpty());
     QVERIFY(defaultProfile.value(QStringLiteral("diagnostic")).toString().isEmpty());
+    QVERIFY(host.actionList());
+    QCOMPARE(host.actionListStateName(), QStringLiteral("idle"));
+    QVERIFY(!host.repairOperations().isEmpty());
+    QVERIFY(!host.planActionList());
 }
 
 void EditorHostTest::exposesCatalogDescriptorsWithoutMutating()
