@@ -576,8 +576,7 @@ void EditorHostTest::importDigestMismatchProfileIsRejected()
         { QStringLiteral("name"), QStringLiteral("Bad") },
         { QStringLiteral("checks"), QJsonArray{ QJsonObject{
                                         { QStringLiteral("id"), QStringLiteral("image-resolution") },
-                                        { QStringLiteral("min_dpi"), 300 } } } }
-    });
+                                        { QStringLiteral("min_dpi"), 300 } } } } });
     profile.insert(QStringLiteral("digest"), QString(64, QLatin1Char('a')));
     const QString sourcePath = temp.filePath(QStringLiteral("bad-profile.json"));
     QFile sourceFile(sourcePath);

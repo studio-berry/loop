@@ -1377,9 +1377,9 @@ QJsonObject commitPreflightProfileEdit(const QJsonObject& parent,
     QJsonObject committed = edited;
     committed.insert(QStringLiteral("version"), newVersion);
     committed.insert(QStringLiteral("derived_from"), QJsonObject{
-                                                          { QStringLiteral("id"), parentIdentity.id },
-                                                          { QStringLiteral("version"), parentIdentity.version },
-                                                          { QStringLiteral("digest"), parentIdentity.digest } });
+                                                         { QStringLiteral("id"), parentIdentity.id },
+                                                         { QStringLiteral("version"), parentIdentity.version },
+                                                         { QStringLiteral("digest"), parentIdentity.digest } });
     committed.remove(QStringLiteral("digest"));
     return exportPreflightProfile(committed);
 }

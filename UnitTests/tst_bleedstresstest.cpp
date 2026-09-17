@@ -146,7 +146,14 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
 {
     const QString profilePath = QDir(sourceDir()).filePath(QString::fromLatin1(STRESS_PROFILE));
     QByteArray stdOut;
-    if (!runPdfTool({ QStringLiteral("preflight"), pdfPath, QStringLiteral("--profile"), profilePath }, &stdOut, exitCode))
+    if (!runPdfTool({ QStringLiteral("preflight"),
+                      pdfPath,
+                      QStringLiteral("--profile"),
+                      profilePath,
+                      QStringLiteral("--console-format"),
+                      QStringLiteral("json") },
+                    &stdOut,
+                    exitCode))
     {
         return false;
     }
@@ -158,12 +165,19 @@ bool BleedStressTest::runPreflight(const QString& pdfPath, QJsonObject* report, 
         return false;
     }
 
-    if (report)
+    const QJsonObject envelope = document.object();
+    if (envelope.value(QStringLiteral("schema_version")).toInt() != 1 ||
+        envelope.value(QStringLiteral("command")).toString() != QStringLiteral("preflight"))
     {
-        *report = document.object();
+        return false;
     }
 
-    return true;
+    if (report)
+    {
+        *report = envelope.value(QStringLiteral("data")).toObject().value(QStringLiteral("report")).toObject();
+    }
+
+    return !report || !report->isEmpty();
 }
 
 bool BleedStressTest::runAddBleed(const QString& inputPath, const QString& outputPath, const QString& mode, int* exitCode) const
