@@ -49,9 +49,11 @@
 #include "loopstatevisual.h"
 #include "looptokens.h"
 
+#include "pdfapplicationidentity.h"
 #include "pdfblockingthreadguard.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfdocumentwriter.h"
+#include "pdfsettings.h"
 #include "pdfworkloadenvelope.h"
 #include "preflightprofileresolver.h"
 
@@ -532,9 +534,9 @@ void EditorHostTest::importValidProfileAddsDigest()
 {
     QTemporaryDir temp;
     QVERIFY(temp.isValid());
-    qputenv("XDG_CONFIG_HOME", temp.path().toUtf8());
-    QCoreApplication::setOrganizationName(QStringLiteral("studio-berry"));
-    QCoreApplication::setApplicationName(QStringLiteral("Loop"));
+    QStandardPaths::setTestModeEnabled(true);
+    pdf::PDFSettings::setSettingsPath(temp.path());
+    pdf::initializeApplicationIdentity(pdf::PDFApplicationSurface::LoopEditor);
 
     const QString sourcePath = QStringLiteral(LOOP_PREFLIGHT_SOURCE_DIR "/profiles/loop-default.json");
     QFile bundled(sourcePath);
