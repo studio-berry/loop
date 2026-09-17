@@ -266,8 +266,7 @@ inline bool runPdfTool(const QString& pdfToolPath,
             process.waitForFinished(5000);
             if (stdErr)
             {
-                *stdErr = QByteArrayLiteral("process timed out after ")
-                          + QByteArray::number(timeoutMs) + QByteArrayLiteral(" ms");
+                *stdErr = QByteArrayLiteral("process timed out after ") + QByteArray::number(timeoutMs) + QByteArrayLiteral(" ms");
             }
             return false;
         }
