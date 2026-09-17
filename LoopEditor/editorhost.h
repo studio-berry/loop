@@ -33,6 +33,9 @@
 #include "inspectormodel.h"
 #include "jobsubmitter.h"
 #include "pagesurfacerenderer.h"
+#include "actionlistcatalog.h"
+#include "actionlistcontroller.h"
+#include "actionlistrunsubmitter.h"
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
 #include "previewstatemodel.h"
@@ -91,6 +94,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(bool unsupported READ unsupported NOTIFY presentationChanged)
     Q_PROPERTY(int commandEpoch READ commandEpoch NOTIFY commandEpochChanged)
     Q_PROPERTY(QObject* preflight READ preflight CONSTANT)
+    Q_PROPERTY(QObject* actionList READ actionList CONSTANT)
     Q_PROPERTY(QObject* inspector READ inspector CONSTANT)
     Q_PROPERTY(QObject* preview READ preview CONSTANT)
     Q_PROPERTY(QObject* documentModel READ documentModel CONSTANT)
@@ -102,6 +106,12 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QString selectedPreflightProfileId READ selectedPreflightProfileId NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(QVariantList actionListRecipes READ actionListRecipes NOTIFY actionListRecipesChanged)
+    Q_PROPERTY(QString selectedActionListRecipeId READ selectedActionListRecipeId NOTIFY actionListRecipesChanged)
+    Q_PROPERTY(QVariantList actionListBindings READ actionListBindings NOTIFY actionListRecipesChanged)
+    Q_PROPERTY(QVariantList actionListSteps READ actionListSteps NOTIFY actionListRecipesChanged)
+    Q_PROPERTY(QString actionListStateName READ actionListStateName NOTIFY presentationChanged)
+    Q_PROPERTY(QVariantList repairOperations READ repairOperations CONSTANT)
     Q_PROPERTY(bool hasPreflightReport READ hasPreflightReport NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
@@ -152,6 +162,7 @@ public:
     int commandEpoch() const noexcept { return m_commandEpoch; }
 
     QObject* preflight();
+    QObject* actionList();
     QObject* inspector();
     QObject* preview();
     QObject* documentModel() { return &m_documentModel; }
@@ -172,6 +183,12 @@ public:
     QVariantList preflightProfiles() const;
     QVariantList preflightVariables() const;
     QString selectedPreflightProfileId() const;
+    QVariantList actionListRecipes() const;
+    QString selectedActionListRecipeId() const;
+    QVariantList actionListBindings() const;
+    QVariantList actionListSteps() const;
+    QString actionListStateName() const;
+    QVariantList repairOperations() const;
     bool hasPreflightReport() const noexcept { return m_preflight.hasResult(); }
     QString previewSummary() const;
     QString inspectorTitle() const;
@@ -210,6 +227,19 @@ public:
     Q_INVOKABLE bool setPreflightVariable(const QString& name, const QVariant& value);
     Q_INVOKABLE void requestPreflightReportExport();
     Q_INVOKABLE bool exportPreflightReportFileUrl(const QUrl& url);
+    Q_INVOKABLE bool importActionListRecipe(const QUrl& url);
+    Q_INVOKABLE bool exportActionListRecipe(const QUrl& url);
+    Q_INVOKABLE bool selectActionListRecipe(const QString& id);
+    Q_INVOKABLE bool setActionListBinding(const QString& name, const QVariant& value);
+    Q_INVOKABLE bool setActionListStepParameter(int stepIndex, const QString& name, const QVariant& value);
+    Q_INVOKABLE bool saveActionListRecipe();
+    Q_INVOKABLE bool validateActionListRecipe();
+    Q_INVOKABLE bool planActionList();
+    Q_INVOKABLE bool runActionList();
+    Q_INVOKABLE bool cancelActionList();
+    Q_INVOKABLE bool confirmActionListPlan();
+    Q_INVOKABLE void discardActionListPlan();
+    Q_INVOKABLE QVariantMap repairParameterSchemaForOperation(const QString& operationId) const;
 
     /// Toggles the current page between the fast approximate render and the
     /// authoritative overprint-accurate one. Re-renders only that page;
@@ -262,6 +292,7 @@ signals:
     void commandEpochChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
     void preflightProfilesChanged();
+    void actionListRecipesChanged();
     void preflightReportExportRequested();
 
 private:
@@ -289,6 +320,12 @@ private:
                                const QString& documentRevision,
                                const pdf::PreflightResult& result);
     void finishPreflightJob(const pdf::PDFJobSnapshot& snapshot);
+    void finishActionListJob(const pdf::PDFJobSnapshot& snapshot);
+    bool submitActionListJob(pdfinteraction::ActionListRunPhase phase,
+                             pdfinteraction::ActionListController::State controllerState);
+    void reloadActionListRecipes();
+    void updateActionListRecipeWatch();
+    void syncActionListDraft();
     void refreshCanvasTrace();
     void reloadPreflightProfiles();
     void updatePreflightProfileWatch();
@@ -305,6 +342,8 @@ private:
     std::unique_ptr<DocumentViewSession> m_session;
     std::unique_ptr<pdfinteraction::FindingCanvasNavigator> m_findingNavigator;
     pdfinteraction::PreflightController m_preflight;
+    pdfinteraction::ActionListCatalog m_actionListCatalog;
+    pdfinteraction::ActionListController m_actionListController;
     pdfinteraction::PreflightOverlayBridge m_preflightOverlayBridge;
     pdfinteraction::InspectorModel m_inspector;
     pdfinteraction::PreviewStateModel m_preview;
@@ -317,6 +356,7 @@ private:
     QHash<QString, pdf::PDFJobKind> m_activeAsyncJobs;
     struct PreflightWorkerOutcome;
     QHash<QString, std::shared_ptr<PreflightWorkerOutcome>> m_preflightOutcomes;
+    QHash<QString, std::shared_ptr<pdfinteraction::ActionListWorkerOutcome>> m_actionListOutcomes;
     struct PreflightProfileChoice
     {
         QString id;
@@ -333,7 +373,13 @@ private:
     QJsonObject m_preflightBindings;
     QString m_selectedPreflightProfileId;
     class QFileSystemWatcher* m_preflightProfileWatcher = nullptr;
+    class QFileSystemWatcher* m_actionListRecipeWatcher = nullptr;
     bool m_acceptPreflightResults = true;
+    bool m_acceptActionListResults = true;
+    QString m_selectedActionListRecipeId;
+    QJsonObject m_actionListBindings;
+    pdf::PDFActionList m_actionListDraft;
+    bool m_actionListDraftValid = false;
     int m_commandEpoch = 0;
     bool m_documentBound = false;
     bool m_searchPanelVisible = false;

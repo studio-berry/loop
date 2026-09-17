@@ -48,6 +48,7 @@ SMOKE_MAIN = "ProductQuickAccessibilitySmoke/main.cpp"
 EXPECTED_GUI_SOURCES = frozenset(
     {
         "LoopEditor/editorhost.cpp",
+        "LoopEditor/qml/ActionListPane.qml",
         "LoopEditor/qml/CanvasPane.qml",
         "LoopEditor/qml/DocumentPane.qml",
         "LoopEditor/qml/InspectorPane.qml",
@@ -59,6 +60,7 @@ EXPECTED_GUI_SOURCES = frozenset(
         "LoopEditor/qml/Workspace.qml",
         "LoopEditor/qml/WorkspacePlaceholderPane.qml",
         "ProductQuickAccessibilitySmoke/main.cpp",
+        "ProductQuickAccessibilitySmoke/qml/ActionListPane.qml",
         "ProductQuickAccessibilitySmoke/qml/CanvasPane.qml",
         "ProductQuickAccessibilitySmoke/qml/DocumentPane.qml",
         "ProductQuickAccessibilitySmoke/qml/InspectorPane.qml",

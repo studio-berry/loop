@@ -182,11 +182,8 @@ Item {
                     Accessible.name: qsTr("Inspect workspace")
                 }
 
-                WorkspacePlaceholderPane {
+                ActionListPane {
                     host: root.host
-                    titleText: qsTr("Fix")
-                    descriptionText: qsTr("Bounded corrective operations will appear here.")
-                    Accessible.name: qsTr("Fix workspace")
                 }
 
                 WorkspacePlaceholderPane {

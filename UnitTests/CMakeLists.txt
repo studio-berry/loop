@@ -266,7 +266,7 @@ add_executable(UnitTestsActionList
     tst_actionlisttest.cpp
 )
 
-target_link_libraries(UnitTestsActionList PRIVATE LoopLibCore Qt6::Core Qt6::Gui Qt6::Test)
+target_link_libraries(UnitTestsActionList PRIVATE LoopLibCore LoopLibInteraction Qt6::Core Qt6::Gui Qt6::Test)
 
 set_target_properties(UnitTestsActionList PROPERTIES
     WIN32_EXECUTABLE OFF
