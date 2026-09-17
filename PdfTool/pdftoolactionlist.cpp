@@ -302,7 +302,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
                 aggregateCode = PDFToolExitCode::InputError;
                 continue;
             }
-            executionOptions.revision = pdf::revisionIdentityForDocument(source);
+            executionOptions = pdf::makeActionListExecutionOptions(source, bindings, &cancelControl);
+            executionOptions.dryRun = options.destructiveDryRun;
             const QString output = QDir(options.actionListOutputDirectory).filePath(QFileInfo(input).completeBaseName() + QStringLiteral(".pdf"));
             pdf::PDFActionListExecutionResult executionResult;
             pdf::PDFDocument candidate;
@@ -366,7 +367,8 @@ PDFToolExitCode PDFToolActionList::execute(const PDFToolOptions& options)
         reportDiagnostic(options, PDFToolDiagnosticSeverity::Error, QStringLiteral("pdf.document-unreadable"), error);
         return PDFToolExitCode::InputError;
     }
-    executionOptions.revision = pdf::revisionIdentityForDocument(source);
+    executionOptions = pdf::makeActionListExecutionOptions(source, bindings, &cancelControl);
+    executionOptions.dryRun = options.destructiveDryRun;
 
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocument candidate;

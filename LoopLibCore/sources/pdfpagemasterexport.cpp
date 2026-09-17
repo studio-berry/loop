@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "pdfpagemasterexport.h"
+#include "pdfobjectselector.h"
 #include "pdfartifactidentity.h"
 #include "pdfdocumentwriter.h"
 #include "pdfsafefilewriter.h"
@@ -1433,10 +1434,8 @@ PDFPageMasterExportResult PDFPageMasterExport::run(PDFPageMasterExportJob job)
 
         if (job.hasActionList)
         {
-            PDFActionListExecutionOptions actionListOptions;
-            actionListOptions.bindings = job.actionListBindings;
-            actionListOptions.operationControl = &actionListOperationControl;
-            actionListOptions.revision = revisionIdentityForDocument(assembledDocument);
+            PDFActionListExecutionOptions actionListOptions =
+                makeActionListExecutionOptions(assembledDocument, job.actionListBindings, &actionListOperationControl);
             PDFActionListExecutionResult actionListResult;
             PDFDocument candidate;
             const PDFOperationResult actionListExecution = PDFActionListExecutor().execute(

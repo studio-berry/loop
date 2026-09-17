@@ -125,6 +125,12 @@ struct PDFActionListExecutionOptions
     PDFRevisionIdentity revision;
 };
 
+/// Surface adapters call this to bind the shared object-selector revision fence.
+LOOPLIBCORESHARED_EXPORT PDFActionListExecutionOptions makeActionListExecutionOptions(
+    const PDFDocument& document,
+    const QJsonObject& bindings = {},
+    const PDFOperationControl* operationControl = nullptr);
+
 /// Shared, deterministic orchestration for registered repair operations.
 /// Surface adapters supply presentation and input collection; they do not
 /// duplicate recipe validation or operation semantics.

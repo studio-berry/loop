@@ -420,6 +420,17 @@ void populateAffectedScope(PDFActionListStepResult* stepResult, const PDFObjectS
 
 }   // namespace
 
+PDFActionListExecutionOptions makeActionListExecutionOptions(const PDFDocument& document,
+                                                               const QJsonObject& bindings,
+                                                               const PDFOperationControl* operationControl)
+{
+    PDFActionListExecutionOptions options;
+    options.bindings = bindings;
+    options.operationControl = operationControl;
+    options.revision = revisionIdentityForDocument(document);
+    return options;
+}
+
 void applyCanonicalPreflightVerdict(PDFActionListStepResult* step, const PreflightVerdict& verdict)
 {
     if (!step)
