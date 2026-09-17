@@ -460,8 +460,13 @@ bool parsePredicateObject(const QJsonObject& object,
             appendPredicateError(errors, QStringLiteral("%1.not must be an object.").arg(path));
             return false;
         }
-        *predicate = child.toObject();
-        return parsePredicateObject(*predicate, namedSets, predicate, errors, path + QStringLiteral(".not"));
+        QJsonObject innerPredicate;
+        if (!parsePredicateObject(child.toObject(), namedSets, &innerPredicate, errors, path + QStringLiteral(".not")))
+        {
+            return false;
+        }
+        *predicate = QJsonObject{ { QStringLiteral("not"), innerPredicate } };
+        return true;
     }
 
     if (matchedKey == QStringLiteral("and") || matchedKey == QStringLiteral("or"))
