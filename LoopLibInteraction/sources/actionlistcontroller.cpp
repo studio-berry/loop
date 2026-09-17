@@ -62,8 +62,8 @@ void ActionListController::setCurrentRevision(QString documentKey, QString docum
     const bool changed = documentKey != m_documentKey || documentRevision != m_documentRevision;
     m_documentKey = std::move(documentKey);
     m_documentRevision = std::move(documentRevision);
-    if (changed && m_state != State::Idle && m_state != State::Validating && m_state != State::Planning &&
-        m_state != State::Running)
+    if (changed && (m_state == State::Validating || m_state == State::Planning || m_state == State::Running ||
+                    m_state == State::Planned))
     {
         markRecipeStale();
     }
@@ -71,14 +71,24 @@ void ActionListController::setCurrentRevision(QString documentKey, QString docum
 
 void ActionListController::markRecipeStale()
 {
-    if (m_state == State::Idle)
+    if (m_state == State::Idle && m_validatedRecipeHash.isEmpty())
     {
         return;
     }
-    m_operatorSummary = QStringLiteral("Action List results are stale for the current document revision.");
+    cancelSchedulerJob();
+    m_cancelRequested = true;
+    m_operatorSummary = QStringLiteral("Action List results are stale for the current document or recipe inputs.");
     setState(State::Idle);
     m_steps.clear();
     m_result = pdf::PDFActionListExecutionResult();
+    m_validatedDocumentKey.clear();
+    m_validatedDocumentRevision.clear();
+    m_validatedRecipeHash.clear();
+    m_validatedBindingsHash.clear();
+    m_plannedDocumentKey.clear();
+    m_plannedDocumentRevision.clear();
+    m_plannedRecipeHash.clear();
+    m_plannedBindingsHash.clear();
     Q_EMIT resultChanged();
 }
 
@@ -86,11 +96,15 @@ void ActionListController::beginRun(State phase,
                                     QString documentKey,
                                     QString documentRevision,
                                     QString recipeId,
+                                    QString recipeHash,
+                                    QString bindingsHash,
                                     QString jobId)
 {
     m_documentKey = std::move(documentKey);
     m_documentRevision = std::move(documentRevision);
     m_recipeId = std::move(recipeId);
+    m_runRecipeHash = std::move(recipeHash);
+    m_runBindingsHash = std::move(bindingsHash);
     m_jobId = std::move(jobId);
     m_cancelRequested = false;
     m_progress = 0;
@@ -100,6 +114,26 @@ void ActionListController::beginRun(State phase,
     setState(phase);
     Q_EMIT progressChanged(0);
     Q_EMIT resultChanged();
+}
+
+bool ActionListController::validationMatches(const QString& documentKey,
+                                             const QString& documentRevision,
+                                             const QString& recipeHash,
+                                             const QString& bindingsHash) const
+{
+    return !m_validatedRecipeHash.isEmpty() && m_state == State::Idle &&
+           documentKey == m_validatedDocumentKey && documentRevision == m_validatedDocumentRevision &&
+           recipeHash == m_validatedRecipeHash && bindingsHash == m_validatedBindingsHash;
+}
+
+bool ActionListController::planMatches(const QString& documentKey,
+                                       const QString& documentRevision,
+                                       const QString& recipeHash,
+                                       const QString& bindingsHash) const
+{
+    return m_state == State::Planned && documentKey == m_plannedDocumentKey &&
+           documentRevision == m_plannedDocumentRevision && recipeHash == m_plannedRecipeHash &&
+           bindingsHash == m_plannedBindingsHash;
 }
 
 bool ActionListController::updateProgress(const QString& jobId, const QString& documentRevision, int progress)
@@ -116,7 +150,8 @@ bool ActionListController::updateProgress(const QString& jobId, const QString& d
 
 bool ActionListController::acceptValidation(const QString& jobId,
                                             const QString& documentRevision,
-                                            const QStringList& errors)
+                                            const QStringList& errors,
+                                            const QVector<pdf::PDFActionListStepResult>& validationSteps)
 {
     if (jobId != m_jobId || documentRevision != m_documentRevision || m_state != State::Validating || m_cancelRequested)
     {
@@ -127,13 +162,27 @@ bool ActionListController::acceptValidation(const QString& jobId,
     Q_EMIT progressChanged(m_progress);
     if (!errors.isEmpty())
     {
+        m_validatedDocumentKey.clear();
+        m_validatedDocumentRevision.clear();
+        m_validatedRecipeHash.clear();
+        m_validatedBindingsHash.clear();
+        m_plannedDocumentKey.clear();
+        m_plannedDocumentRevision.clear();
+        m_plannedRecipeHash.clear();
+        m_plannedBindingsHash.clear();
+        m_steps.replace(validationSteps);
         m_operatorSummary = errors.join(QLatin1Char('\n'));
         setState(State::Failed);
         return true;
     }
 
+    m_validatedDocumentKey = m_documentKey;
+    m_validatedDocumentRevision = documentRevision;
+    m_validatedRecipeHash = m_runRecipeHash;
+    m_validatedBindingsHash = m_runBindingsHash;
     m_operatorSummary = QStringLiteral("Action List recipe validated.");
     setState(State::Idle);
+    Q_EMIT resultChanged();
     return true;
 }
 
@@ -147,6 +196,10 @@ bool ActionListController::acceptPlan(const QString& jobId,
     }
 
     m_result = result;
+    m_plannedDocumentKey = m_documentKey;
+    m_plannedDocumentRevision = documentRevision;
+    m_plannedRecipeHash = m_runRecipeHash;
+    m_plannedBindingsHash = m_runBindingsHash;
     m_steps.replace(result.steps);
     m_progress = 100;
     Q_EMIT progressChanged(m_progress);
@@ -193,6 +246,10 @@ bool ActionListController::acceptExecution(const QString& jobId,
         m_operatorSummary = QStringLiteral("Action List execution failed.");
         setState(State::Failed);
     }
+    m_plannedDocumentKey.clear();
+    m_plannedDocumentRevision.clear();
+    m_plannedRecipeHash.clear();
+    m_plannedBindingsHash.clear();
     return true;
 }
 
@@ -240,6 +297,16 @@ void ActionListController::clear()
 {
     m_jobId.clear();
     m_recipeId.clear();
+    m_runRecipeHash.clear();
+    m_runBindingsHash.clear();
+    m_validatedDocumentKey.clear();
+    m_validatedDocumentRevision.clear();
+    m_validatedRecipeHash.clear();
+    m_validatedBindingsHash.clear();
+    m_plannedDocumentKey.clear();
+    m_plannedDocumentRevision.clear();
+    m_plannedRecipeHash.clear();
+    m_plannedBindingsHash.clear();
     m_progress = 0;
     m_cancelRequested = false;
     m_operatorSummary.clear();

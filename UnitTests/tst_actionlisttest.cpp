@@ -21,13 +21,19 @@
 // SOFTWARE.
 
 #include "actionlistrunsubmitter.h"
+#include "actionlistcontroller.h"
 #include "pdfactionlist.h"
 #include "pdfdocumentbuilder.h"
 #include "pdfjobscheduler.h"
 #include "pdfrepairdiff.h"
 
 #include <QCryptographicHash>
+#include <QCoreApplication>
+#include <QDir>
 #include <QJsonDocument>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -74,6 +80,7 @@ private slots:
     void adapterContractValidatePlanExecute();
     void cliParityRecipeHashAndOutputSha256();
     void surfacesPerStepValidationErrors();
+    void controllerFencesValidationPlanAndStaleCompletion();
 };
 
 void ActionListTest::parsesAndRoundTripsRecipe()
@@ -238,11 +245,38 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
     builder.appendPage(QRectF(0, 0, 100, 100));
     const pdf::PDFDocument source = builder.build();
     const pdf::PDFDocumentPointer document(new pdf::PDFDocument(source));
-    const pdf::PDFActionList actionList = bleedRecipe(QStringLiteral("parity"));
+    const QJsonObject recipeJson{
+        { QStringLiteral("schema"), QStringLiteral("loop-action-list/1") },
+        { QStringLiteral("id"), QStringLiteral("parity") },
+        { QStringLiteral("name"), QStringLiteral("Parity") },
+        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                       { QStringLiteral("id"), QStringLiteral("bleed") },
+                                       { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), QStringLiteral("${job.bleed}") }, { QStringLiteral("force"), true } } } } } }
+    };
+    pdf::PDFActionList actionList;
+    QVERIFY(pdf::PDFActionList::fromJson(recipeJson, &actionList));
+    const QJsonObject bindings{ { QStringLiteral("bleed"), 3 } };
+
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString inputPath = tempDir.filePath(QStringLiteral("input.pdf"));
+    const QString recipePath = tempDir.filePath(QStringLiteral("recipe.json"));
+    const QString outputPath = tempDir.filePath(QStringLiteral("output.pdf"));
+    QFile recipeFile(recipePath);
+    QVERIFY(recipeFile.open(QIODevice::WriteOnly));
+    QVERIFY(recipeFile.write(QJsonDocument(recipeJson).toJson(QJsonDocument::Indented)) > 0);
+    recipeFile.close();
+    pdf::PDFDocument reopenedInput;
+    QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
+        source, [](pdf::PDFDocument*)
+        { return pdf::PDFOperationResult(true); }, inputPath, &reopenedInput, nullptr));
 
     pdf::PDFActionListExecutionResult cliResult;
     pdf::PDFDocument cliCandidate;
-    QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, {}, &cliCandidate, &cliResult));
+    pdf::PDFActionListExecutionOptions adapterOptions;
+    adapterOptions.bindings = bindings;
+    QVERIFY(pdf::PDFActionListExecutor().execute(actionList, source, adapterOptions, &cliCandidate, &cliResult));
 
     auto adapterOutcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
     {
@@ -254,27 +288,42 @@ void ActionListTest::cliParityRecipeHashAndOutputSha256()
         pdfinteraction::makeActionListRunWorker(pdfinteraction::ActionListRunPhase::Execute,
                                                 actionList,
                                                 document,
-                                                QJsonObject(),
+                                                bindings,
                                                 adapterOutcome)(local.context);
     }
     QVERIFY(adapterOutcome->ok);
     QCOMPARE(adapterOutcome->executionResult.recipeHash, cliResult.recipeHash);
 
-    QTemporaryDir tempDir;
-    QVERIFY(tempDir.isValid());
-    const QString outputPath = tempDir.filePath(QStringLiteral("parity.pdf"));
-    QByteArray cliData;
+    QProcess process;
+    const QString pdfTool = QDir(QCoreApplication::applicationDirPath()).filePath(
+#ifdef Q_OS_WIN
+        QStringLiteral("PdfTool.exe")
+#else
+        QStringLiteral("PdfTool")
+#endif
+    );
+    QVERIFY2(QFileInfo::exists(pdfTool), qPrintable(QStringLiteral("PdfTool was not found at %1").arg(pdfTool)));
+    process.start(pdfTool,
+                  { QStringLiteral("action-list"), QStringLiteral("run"), recipePath, inputPath,
+                    QStringLiteral("--param"), QStringLiteral("bleed=3"), QStringLiteral("--output"), outputPath,
+                    QStringLiteral("--console-format"), QStringLiteral("json") });
+    QVERIFY(process.waitForFinished(30000));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+    QCOMPARE(process.exitCode(), 0);
+    const QJsonDocument cliOutput = QJsonDocument::fromJson(process.readAllStandardOutput());
+    QVERIFY2(cliOutput.isObject(), qPrintable(QString::fromLocal8Bit(process.readAllStandardError())));
+    const QJsonObject cliData = cliOutput.object().value(QStringLiteral("data")).toObject();
+    QCOMPARE(cliData.value(QStringLiteral("recipe_hash")).toString(), cliResult.recipeHash);
+    const QString cliOutputHash = cliData.value(QStringLiteral("output")).toObject().value(QStringLiteral("sha256")).toString();
+    QVERIFY(!cliOutputHash.isEmpty());
+
     QByteArray adapterData;
-    pdf::PDFDocument reopenedCli;
     pdf::PDFDocument reopenedAdapter;
-    QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
-        cliCandidate, [](pdf::PDFDocument*)
-        { return pdf::PDFOperationResult(true); }, outputPath, &reopenedCli, &cliData));
     QVERIFY(pdf::PDFRepairDiffEngine::buildSerializedCandidate(
         *adapterOutcome->candidate, [](pdf::PDFDocument*)
         { return pdf::PDFOperationResult(true); },
         tempDir.filePath(QStringLiteral("adapter.pdf")), &reopenedAdapter, &adapterData));
-    QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(cliData, QCryptographicHash::Sha256).toHex()),
+    QCOMPARE(cliOutputHash,
              QString::fromLatin1(QCryptographicHash::hash(adapterData, QCryptographicHash::Sha256).toHex()));
 }
 
@@ -300,6 +349,53 @@ void ActionListTest::surfacesPerStepValidationErrors()
     QVERIFY(!pdf::PDFActionListExecutor().validate(actionList, {}, &errors));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("step 'one'")));
     QVERIFY(errors.join(QLatin1Char('\n')).contains(QStringLiteral("step.two.params")));
+}
+
+void ActionListTest::controllerFencesValidationPlanAndStaleCompletion()
+{
+    pdfinteraction::ActionListController controller;
+    controller.beginRun(pdfinteraction::ActionListController::State::Validating,
+                        QStringLiteral("doc"),
+                        QStringLiteral("rev-1"),
+                        QStringLiteral("recipe"),
+                        QStringLiteral("recipe-hash-a"),
+                        QStringLiteral("bindings-hash-a"),
+                        QStringLiteral("validate-job"));
+    QVERIFY(controller.acceptValidation(QStringLiteral("validate-job"), QStringLiteral("rev-1"), {}, {}));
+    QVERIFY(controller.validationReady());
+    QVERIFY(controller.validationMatches(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                                         QStringLiteral("recipe-hash-a"), QStringLiteral("bindings-hash-a")));
+
+    controller.beginRun(pdfinteraction::ActionListController::State::Planning,
+                        QStringLiteral("doc"),
+                        QStringLiteral("rev-1"),
+                        QStringLiteral("recipe"),
+                        QStringLiteral("recipe-hash-a"),
+                        QStringLiteral("bindings-hash-a"),
+                        QStringLiteral("plan-job"));
+    pdf::PDFActionListExecutionResult plan;
+    plan.recipeHash = QStringLiteral("recipe-hash-a");
+    plan.status = QStringLiteral("planned");
+    QVERIFY(controller.acceptPlan(QStringLiteral("plan-job"), QStringLiteral("rev-1"), plan));
+    QVERIFY(controller.planMatches(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                                   QStringLiteral("recipe-hash-a"), QStringLiteral("bindings-hash-a")));
+    QVERIFY(!controller.planMatches(QStringLiteral("doc"), QStringLiteral("rev-1"),
+                                    QStringLiteral("recipe-hash-b"), QStringLiteral("bindings-hash-a")));
+
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-2"));
+    QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Idle);
+    QVERIFY(!controller.validationReady());
+
+    controller.beginRun(pdfinteraction::ActionListController::State::Running,
+                        QStringLiteral("doc"),
+                        QStringLiteral("rev-2"),
+                        QStringLiteral("recipe"),
+                        QStringLiteral("recipe-hash-a"),
+                        QStringLiteral("bindings-hash-a"),
+                        QStringLiteral("run-job"));
+    controller.setCurrentRevision(QStringLiteral("doc"), QStringLiteral("rev-3"));
+    QCOMPARE(controller.state(), pdfinteraction::ActionListController::State::Idle);
+    QVERIFY(!controller.validationReady());
 }
 
 void ActionListTest::cancellationLeavesSourceUntouched()

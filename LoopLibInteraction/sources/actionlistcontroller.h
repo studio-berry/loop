@@ -43,6 +43,7 @@ class ActionListController final : public QObject
     Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
     Q_PROPERTY(QString recipeHash READ recipeHash NOTIFY resultChanged)
     Q_PROPERTY(QString resultStatus READ resultStatus NOTIFY resultChanged)
+    Q_PROPERTY(bool validationReady READ validationReady NOTIFY resultChanged)
 
 public:
     enum class State
@@ -71,14 +72,32 @@ public:
     int progress() const noexcept { return m_progress; }
     QString recipeHash() const { return m_result.recipeHash; }
     QString resultStatus() const { return m_result.status; }
+    bool validationReady() const noexcept { return !m_validatedRecipeHash.isEmpty() && m_state == State::Idle; }
     const pdf::PDFActionListExecutionResult& result() const noexcept { return m_result; }
     bool hasPlannedResult() const noexcept { return m_state == State::Planned; }
 
     void setCurrentRevision(QString documentKey, QString documentRevision);
     void markRecipeStale();
-    void beginRun(State phase, QString documentKey, QString documentRevision, QString recipeId, QString jobId);
+    void beginRun(State phase,
+                  QString documentKey,
+                  QString documentRevision,
+                  QString recipeId,
+                  QString recipeHash,
+                  QString bindingsHash,
+                  QString jobId);
+    bool validationMatches(const QString& documentKey,
+                           const QString& documentRevision,
+                           const QString& recipeHash,
+                           const QString& bindingsHash) const;
+    bool planMatches(const QString& documentKey,
+                     const QString& documentRevision,
+                     const QString& recipeHash,
+                     const QString& bindingsHash) const;
     bool updateProgress(const QString& jobId, const QString& documentRevision, int progress);
-    bool acceptValidation(const QString& jobId, const QString& documentRevision, const QStringList& errors);
+    bool acceptValidation(const QString& jobId,
+                          const QString& documentRevision,
+                          const QStringList& errors,
+                          const QVector<pdf::PDFActionListStepResult>& validationSteps);
     bool acceptPlan(const QString& jobId, const QString& documentRevision, const pdf::PDFActionListExecutionResult& result);
     bool acceptExecution(const QString& jobId, const QString& documentRevision, const pdf::PDFActionListExecutionResult& result);
     bool failRun(const QString& jobId, const QString& documentRevision, QString errorMessage);
@@ -102,6 +121,16 @@ private:
     QString m_documentRevision;
     QString m_recipeId;
     QString m_jobId;
+    QString m_runRecipeHash;
+    QString m_runBindingsHash;
+    QString m_validatedDocumentKey;
+    QString m_validatedDocumentRevision;
+    QString m_validatedRecipeHash;
+    QString m_validatedBindingsHash;
+    QString m_plannedDocumentKey;
+    QString m_plannedDocumentRevision;
+    QString m_plannedRecipeHash;
+    QString m_plannedBindingsHash;
     int m_progress = 0;
     bool m_cancelRequested = false;
     pdf::PDFActionListExecutionResult m_result;

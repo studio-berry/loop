@@ -109,6 +109,7 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantList actionListRecipes READ actionListRecipes NOTIFY actionListRecipesChanged)
     Q_PROPERTY(QString selectedActionListRecipeId READ selectedActionListRecipeId NOTIFY actionListRecipesChanged)
     Q_PROPERTY(QVariantList actionListBindings READ actionListBindings NOTIFY actionListRecipesChanged)
+    Q_PROPERTY(QVariantList actionListSteps READ actionListSteps NOTIFY actionListRecipesChanged)
     Q_PROPERTY(QString actionListStateName READ actionListStateName NOTIFY presentationChanged)
     Q_PROPERTY(QVariantList repairOperations READ repairOperations CONSTANT)
     Q_PROPERTY(bool hasPreflightReport READ hasPreflightReport NOTIFY presentationChanged)
@@ -185,6 +186,7 @@ public:
     QVariantList actionListRecipes() const;
     QString selectedActionListRecipeId() const;
     QVariantList actionListBindings() const;
+    QVariantList actionListSteps() const;
     QString actionListStateName() const;
     QVariantList repairOperations() const;
     bool hasPreflightReport() const noexcept { return m_preflight.hasResult(); }
@@ -229,6 +231,8 @@ public:
     Q_INVOKABLE bool exportActionListRecipe(const QUrl& url);
     Q_INVOKABLE bool selectActionListRecipe(const QString& id);
     Q_INVOKABLE bool setActionListBinding(const QString& name, const QVariant& value);
+    Q_INVOKABLE bool setActionListStepParameter(int stepIndex, const QString& name, const QVariant& value);
+    Q_INVOKABLE bool saveActionListRecipe();
     Q_INVOKABLE bool validateActionListRecipe();
     Q_INVOKABLE bool planActionList();
     Q_INVOKABLE bool runActionList();
@@ -321,6 +325,7 @@ private:
                              pdfinteraction::ActionListController::State controllerState);
     void reloadActionListRecipes();
     void updateActionListRecipeWatch();
+    void syncActionListDraft();
     void refreshCanvasTrace();
     void reloadPreflightProfiles();
     void updatePreflightProfileWatch();
@@ -373,6 +378,8 @@ private:
     bool m_acceptActionListResults = true;
     QString m_selectedActionListRecipeId;
     QJsonObject m_actionListBindings;
+    pdf::PDFActionList m_actionListDraft;
+    bool m_actionListDraftValid = false;
     int m_commandEpoch = 0;
     bool m_documentBound = false;
     bool m_searchPanelVisible = false;

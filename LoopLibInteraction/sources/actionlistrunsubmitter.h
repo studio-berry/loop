@@ -50,6 +50,7 @@ struct ActionListWorkerOutcome
     bool ok = false;
     QString errorMessage;
     QStringList validationErrors;
+    QVector<pdf::PDFActionListStepResult> validationSteps;
     pdf::PDFActionListExecutionResult executionResult;
     pdf::PDFDocumentPointer candidate;
 };

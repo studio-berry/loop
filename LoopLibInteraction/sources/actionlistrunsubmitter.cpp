@@ -24,6 +24,44 @@
 
 #include <stdexcept>
 
+namespace
+{
+
+void appendValidationDiagnostic(pdf::PDFActionListStepResult* step, const QString& message)
+{
+    step->status = pdf::PDFActionListStepStatus::Failed;
+    step->diagnostics.append(QJsonObject{
+        { QStringLiteral("code"), QStringLiteral("action-list.validation-failed") },
+        { QStringLiteral("severity"), QStringLiteral("error") },
+        { QStringLiteral("message"), message } });
+}
+
+QVector<pdf::PDFActionListStepResult> validationSteps(const pdf::PDFActionList& actionList,
+                                                      const QStringList& errors)
+{
+    QVector<pdf::PDFActionListStepResult> steps;
+    steps.reserve(actionList.steps.size());
+    for (const pdf::PDFActionListStep& actionStep : actionList.steps)
+    {
+        pdf::PDFActionListStepResult step;
+        step.stepId = actionStep.id;
+        step.operationId = actionStep.operationId;
+        step.status = pdf::PDFActionListStepStatus::Pending;
+        for (const QString& error : errors)
+        {
+            if (error.contains(QStringLiteral("step '%1'").arg(actionStep.id), Qt::CaseInsensitive) ||
+                error.contains(QStringLiteral("step.%1.").arg(actionStep.id), Qt::CaseSensitive))
+            {
+                appendValidationDiagnostic(&step, error);
+            }
+        }
+        steps.append(std::move(step));
+    }
+    return steps;
+}
+
+}   // namespace
+
 namespace pdfinteraction
 {
 
@@ -55,6 +93,10 @@ ActionListRunWorker makeActionListRunWorker(ActionListRunPhase phase,
         {
             const pdf::PDFOperationResult validation = executor.validate(actionList, options, &outcome->validationErrors);
             outcome->ok = bool(validation);
+            if (!outcome->ok)
+            {
+                outcome->validationSteps = ::validationSteps(actionList, outcome->validationErrors);
+            }
             context.reportProgress(95);
             context.setResultSummary(outcome->ok ? QStringLiteral("Action List validated.")
                                                  : QStringLiteral("Action List validation failed."));

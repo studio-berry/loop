@@ -110,6 +110,75 @@ Pane {
             }
         }
 
+        GroupBox {
+            Layout.fillWidth: true
+            title: qsTr("Recipe steps")
+            visible: root.host && root.host.actionListSteps.length > 0
+            Accessible.name: qsTr("Schema-driven Action List recipe editor")
+
+            ScrollView {
+                anchors.fill: parent
+                clip: true
+
+                Column {
+                    width: parent.width
+                    spacing: 6
+
+                    Repeater {
+                        model: root.host ? root.host.actionListSteps : []
+
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            property var stepData: modelData
+                            Layout.fillWidth: true
+                            spacing: 3
+
+                            Label {
+                                Layout.fillWidth: true
+                                text: qsTr("Step %1 — %2").arg(stepData.id).arg(stepData.operation)
+                                font.bold: true
+                            }
+
+                            Repeater {
+                                model: stepData.parameterSchema && stepData.parameterSchema.properties
+                                    ? Object.keys(stepData.parameterSchema.properties) : []
+
+                                delegate: RowLayout {
+                                    required property string modelData
+                                    Layout.fillWidth: true
+                                    property string parameterName: modelData
+                                    property var parameterSchema: stepData.parameterSchema.properties[parameterName]
+
+                                    Label {
+                                        Layout.preferredWidth: 150
+                                        text: qsTr("%1 (%2)").arg(parameterName).arg(parameterSchema.type || qsTr("value"))
+                                        elide: Text.ElideRight
+                                    }
+
+                                    CheckBox {
+                                        visible: parameterSchema.type === "boolean"
+                                        checked: Boolean(stepData.parameters[parameterName])
+                                        text: qsTr("Enabled")
+                                        onToggled: if (root.host) root.host.setActionListStepParameter(stepData.index, parameterName, checked)
+                                    }
+
+                                    TextField {
+                                        Layout.fillWidth: true
+                                        visible: parameterSchema.type !== "boolean"
+                                        text: stepData.parameters[parameterName] === undefined
+                                            ? "" : String(stepData.parameters[parameterName])
+                                        placeholderText: parameterSchema.enum ? parameterSchema.enum.join(" | ") : ""
+                                        onEditingFinished: if (root.host)
+                                            root.host.setActionListStepParameter(stepData.index, parameterName, text)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
 
@@ -124,9 +193,17 @@ Pane {
             Button {
                 objectName: "planActionListButton"
                 text: qsTr("Plan")
-                enabled: root.host && root.host.hasDocument && !root.busy
+                enabled: root.host && root.host.hasDocument && root.host.actionList.validationReady && !root.busy
                 onClicked: root.host.planActionList()
                 Accessible.name: qsTr("Plan Action List")
+            }
+
+            Button {
+                objectName: "saveActionListRecipeButton"
+                text: qsTr("Save recipe")
+                enabled: root.host && root.host.selectedActionListRecipeId.length > 0 && !root.busy
+                onClicked: root.host.saveActionListRecipe()
+                Accessible.name: qsTr("Save edited Action List recipe")
             }
 
             Button {

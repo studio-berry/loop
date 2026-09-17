@@ -59,6 +59,7 @@ public:
     bool reload();
     bool importRecipe(const QString& sourcePath, QString* importedId = nullptr, QString* error = nullptr);
     bool exportRecipe(const QString& recipeId, const QString& destinationPath, QString* error = nullptr);
+    bool saveRecipe(const QString& recipeId, const pdf::PDFActionList& actionList, QString* error = nullptr);
     const ActionListRecipeEntry* recipe(const QString& recipeId) const;
 
 signals:

@@ -53,6 +53,7 @@
 #include <QAccessibleAnnouncementEvent>
 #include <QAccessibilityHints>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -77,6 +78,67 @@ namespace
 {
 
 const QString QuitCommandId = QStringLiteral("actionQuit");
+
+QString actionListBindingsHash(const QJsonObject& bindings)
+{
+    return QString::fromLatin1(QCryptographicHash::hash(QJsonDocument(bindings).toJson(QJsonDocument::Compact),
+                                                        QCryptographicHash::Sha256)
+                                   .toHex());
+}
+
+QJsonValue actionListEditorValue(const QVariant& value, const QJsonObject& schema, bool* omit)
+{
+    if (omit)
+    {
+        *omit = false;
+    }
+    const QString type = schema.value(QStringLiteral("type")).toString();
+    const QString text = value.toString().trimmed();
+    if (type == QStringLiteral("boolean"))
+    {
+        if (value.metaType().id() == QMetaType::Bool)
+        {
+            return value.toBool();
+        }
+        if (text.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0)
+        {
+            return true;
+        }
+        if (text.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0)
+        {
+            return false;
+        }
+    }
+    else if (type == QStringLiteral("integer"))
+    {
+        bool ok = false;
+        const qlonglong integer = text.toLongLong(&ok);
+        if (ok)
+        {
+            return integer;
+        }
+    }
+    else if (type == QStringLiteral("number"))
+    {
+        bool ok = false;
+        const double number = text.toDouble(&ok);
+        if (ok)
+        {
+            return number;
+        }
+    }
+    else if (type == QStringLiteral("string"))
+    {
+        return value.toString();
+    }
+
+    if (text.isEmpty() && omit)
+    {
+        *omit = true;
+    }
+    return QJsonValue::fromVariant(value);
+}
+
 int rotationToDegrees(pdf::PageRotation rotation)
 {
     switch (rotation)
@@ -950,6 +1012,29 @@ QVariantList EditorHost::actionListBindings() const
     return bindings;
 }
 
+QVariantList EditorHost::actionListSteps() const
+{
+    QVariantList steps;
+    if (!m_actionListDraftValid)
+    {
+        return steps;
+    }
+    steps.reserve(m_actionListDraft.steps.size());
+    for (int index = 0; index < m_actionListDraft.steps.size(); ++index)
+    {
+        const pdf::PDFActionListStep& step = m_actionListDraft.steps.at(index);
+        QVariantMap item;
+        item.insert(QStringLiteral("index"), index);
+        item.insert(QStringLiteral("id"), step.id);
+        item.insert(QStringLiteral("operation"), step.operationId);
+        item.insert(QStringLiteral("parameters"), step.parameters.toVariantMap());
+        item.insert(QStringLiteral("parameterSchema"),
+                    pdfinteraction::repairParameterSchema(step.operationId).toVariantMap());
+        steps.append(item);
+    }
+    return steps;
+}
+
 QString EditorHost::actionListStateName() const
 {
     return actionListStateToString(m_actionListController.state());
@@ -987,6 +1072,7 @@ bool EditorHost::importActionListRecipe(const QUrl& url)
     }
     m_selectedActionListRecipeId = importedId;
     m_actionListBindings = QJsonObject();
+    syncActionListDraft();
     m_actionListController.markRecipeStale();
     updateActionListRecipeWatch();
     Q_EMIT actionListRecipesChanged();
@@ -1020,6 +1106,7 @@ bool EditorHost::selectActionListRecipe(const QString& id)
     }
     m_selectedActionListRecipeId = id;
     m_actionListBindings = QJsonObject();
+    syncActionListDraft();
     m_actionListController.markRecipeStale();
     Q_EMIT actionListRecipesChanged();
     bumpPresentation();
@@ -1032,10 +1119,93 @@ bool EditorHost::setActionListBinding(const QString& name, const QVariant& value
     {
         return false;
     }
-    m_actionListBindings.insert(name, QJsonValue::fromVariant(value));
+    const QJsonValue parsed = actionListEditorValue(value, QJsonObject{ { QStringLiteral("type"), QStringLiteral("string") } }, nullptr);
+    const QString text = value.toString().trimmed();
+    if (value.metaType().id() == QMetaType::QString)
+    {
+        if (text.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0)
+        {
+            m_actionListBindings.insert(name, true);
+        }
+        else if (text.compare(QStringLiteral("false"), Qt::CaseInsensitive) == 0)
+        {
+            m_actionListBindings.insert(name, false);
+        }
+        else
+        {
+            bool integerOk = false;
+            const qlonglong integer = text.toLongLong(&integerOk);
+            if (integerOk)
+            {
+                m_actionListBindings.insert(name, integer);
+            }
+            else
+            {
+                bool numberOk = false;
+                const double number = text.toDouble(&numberOk);
+                m_actionListBindings.insert(name, numberOk ? QJsonValue(number) : parsed);
+            }
+        }
+    }
+    else
+    {
+        m_actionListBindings.insert(name, parsed);
+    }
     m_actionListController.markRecipeStale();
     Q_EMIT actionListRecipesChanged();
     bumpPresentation();
+    return true;
+}
+
+bool EditorHost::setActionListStepParameter(int stepIndex, const QString& name, const QVariant& value)
+{
+    if (!m_actionListDraftValid || stepIndex < 0 || stepIndex >= m_actionListDraft.steps.size() || name.trimmed().isEmpty())
+    {
+        return false;
+    }
+    pdf::PDFActionListStep& step = m_actionListDraft.steps[stepIndex];
+    const QJsonObject operationSchema = pdfinteraction::repairParameterSchema(step.operationId);
+    const QJsonObject schema = operationSchema.value(QStringLiteral("properties")).toObject().value(name).toObject();
+    if (schema.isEmpty())
+    {
+        return false;
+    }
+    bool omit = false;
+    const QJsonValue converted = actionListEditorValue(value, schema, &omit);
+    bool required = false;
+    for (const QJsonValue& requiredValue : operationSchema.value(QStringLiteral("required")).toArray())
+    {
+        required = required || requiredValue.toString() == name;
+    }
+    if (omit && !required)
+    {
+        step.parameters.remove(name);
+    }
+    else
+    {
+        step.parameters.insert(name, converted);
+    }
+    m_actionListController.markRecipeStale();
+    Q_EMIT actionListRecipesChanged();
+    bumpPresentation();
+    return true;
+}
+
+bool EditorHost::saveActionListRecipe()
+{
+    if (!m_actionListDraftValid || m_selectedActionListRecipeId.isEmpty())
+    {
+        return false;
+    }
+    QString error;
+    if (!m_actionListCatalog.saveRecipe(m_selectedActionListRecipeId, m_actionListDraft, &error))
+    {
+        announceDocumentState(error);
+        return false;
+    }
+    m_actionListController.markRecipeStale();
+    reloadActionListRecipes();
+    announceDocumentState(tr("Action List recipe saved."));
     return true;
 }
 
@@ -1069,6 +1239,21 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
 
     const QString documentKey = m_session->revisionSource()->documentKey();
     const QString documentRevision = m_session->facade().currentRevision().toString();
+    const QString bindingsHash = actionListBindingsHash(m_actionListBindings);
+    if (phase == pdfinteraction::ActionListRunPhase::Plan &&
+        !m_actionListController.validationMatches(documentKey, documentRevision, recipe->recipeHash, bindingsHash))
+    {
+        announceDocumentState(tr("Validate the current Action List recipe and bindings before planning."));
+        return false;
+    }
+    if (phase == pdfinteraction::ActionListRunPhase::Execute &&
+        !m_actionListController.planMatches(documentKey, documentRevision, recipe->recipeHash, bindingsHash))
+    {
+        m_actionListController.markRecipeStale();
+        announceDocumentState(tr("The Action List plan is stale; validate and plan again."));
+        bumpPresentation();
+        return false;
+    }
     const QString jobId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     pdf::PDFJobSpec spec;
@@ -1082,7 +1267,13 @@ bool EditorHost::submitActionListJob(pdfinteraction::ActionListRunPhase phase,
     spec.progressModel = QStringLiteral("action-list-progress-v1");
     spec.staleResultPolicy = pdf::PDFJobStaleResultPolicy::Discard;
 
-    m_actionListController.beginRun(controllerState, documentKey, documentRevision, recipe->id, jobId);
+    m_actionListController.beginRun(controllerState,
+                                    documentKey,
+                                    documentRevision,
+                                    recipe->id,
+                                    recipe->recipeHash,
+                                    bindingsHash,
+                                    jobId);
     auto outcome = std::make_shared<pdfinteraction::ActionListWorkerOutcome>();
     m_actionListOutcomes.insert(jobId, outcome);
     const pdf::PDFActionList actionList = recipe->actionList;
@@ -1143,6 +1334,9 @@ void EditorHost::discardActionListPlan()
 void EditorHost::reloadActionListRecipes()
 {
     const QString priorId = m_selectedActionListRecipeId;
+    const QString priorHash = priorId.isEmpty() || !m_actionListCatalog.recipe(priorId)
+                                  ? QString()
+                                  : m_actionListCatalog.recipe(priorId)->recipeHash;
     m_actionListCatalog.reload();
     if (m_selectedActionListRecipeId.isEmpty() ||
         !m_actionListCatalog.recipe(m_selectedActionListRecipeId) ||
@@ -1155,13 +1349,29 @@ void EditorHost::reloadActionListRecipes()
         m_selectedActionListRecipeId = valid == recipes.cend() ? QString() : valid->id;
         m_actionListBindings = QJsonObject();
     }
-    if (!priorId.isEmpty() && priorId != m_selectedActionListRecipeId)
+    syncActionListDraft();
+    const pdfinteraction::ActionListRecipeEntry* currentRecipe = m_actionListCatalog.recipe(m_selectedActionListRecipeId);
+    if (!priorId.isEmpty() &&
+        (priorId != m_selectedActionListRecipeId || !currentRecipe || priorHash != currentRecipe->recipeHash))
     {
         m_actionListController.markRecipeStale();
     }
     updateActionListRecipeWatch();
     Q_EMIT actionListRecipesChanged();
     bumpPresentation();
+}
+
+void EditorHost::syncActionListDraft()
+{
+    const pdfinteraction::ActionListRecipeEntry* recipe = m_actionListCatalog.recipe(m_selectedActionListRecipeId);
+    if (!recipe || !recipe->valid)
+    {
+        m_actionListDraft = pdf::PDFActionList();
+        m_actionListDraftValid = false;
+        return;
+    }
+    m_actionListDraft = recipe->actionList;
+    m_actionListDraftValid = true;
 }
 
 void EditorHost::updateActionListRecipeWatch()
@@ -1840,7 +2050,9 @@ void EditorHost::finishPreflightJob(const pdf::PDFJobSnapshot& snapshot)
             m_preflight.cancelRun(snapshot.jobId);
             break;
         case pdf::PDFJobStatus::Stale:
+            m_actionListController.markRecipeStale();
             syncRevisionModels();
+            bumpPresentation();
             break;
         case pdf::PDFJobStatus::Queued:
         case pdf::PDFJobStatus::Running:
@@ -1878,7 +2090,8 @@ void EditorHost::finishActionListJob(const pdf::PDFJobSnapshot& snapshot)
                 if (m_acceptActionListResults)
                 {
                     m_actionListController.acceptValidation(snapshot.jobId, snapshot.documentRevision,
-                                                            outcome->validationErrors);
+                                                            outcome->validationErrors,
+                                                            outcome->validationSteps);
                 }
             }
             else if (state == pdfinteraction::ActionListController::State::Planning)

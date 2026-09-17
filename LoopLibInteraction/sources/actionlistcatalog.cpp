@@ -29,6 +29,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 namespace pdfinteraction
@@ -215,6 +216,38 @@ bool ActionListCatalog::exportRecipe(const QString& recipeId, const QString& des
         if (error)
         {
             *error = QStringLiteral("Unable to serialize Action List recipe.");
+        }
+        return false;
+    }
+    return true;
+}
+
+bool ActionListCatalog::saveRecipe(const QString& recipeId, const pdf::PDFActionList& actionList, QString* error)
+{
+    const ActionListRecipeEntry* entry = recipe(recipeId);
+    if (!entry)
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Action List recipe '%1' was not found.").arg(recipeId);
+        }
+        return false;
+    }
+
+    QSaveFile output(entry->source);
+    if (!output.open(QIODevice::WriteOnly))
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Unable to write Action List recipe to '%1'.").arg(entry->source);
+        }
+        return false;
+    }
+    if (output.write(QJsonDocument(actionList.toJson()).toJson(QJsonDocument::Indented)) < 0 || !output.commit())
+    {
+        if (error)
+        {
+            *error = QStringLiteral("Unable to save Action List recipe '%1'.").arg(entry->source);
         }
         return false;
     }
