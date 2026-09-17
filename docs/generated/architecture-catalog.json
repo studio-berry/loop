@@ -432,6 +432,7 @@
     "UnitTestsOverprint",
     "UnitTestsOverprintRender",
     "UnitTestsP4S9Interaction",
+    "UnitTestsPageBoxCorpus",
     "UnitTestsPageMasterExport",
     "UnitTestsPageSurface",
     "UnitTestsPageSurfaceBudget",
