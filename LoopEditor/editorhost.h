@@ -35,6 +35,7 @@
 #include "pagesurfacerenderer.h"
 #include "preflightcontroller.h"
 #include "preflightoverlaybridge.h"
+#include "preflightprofiledraft.h"
 #include "previewstatemodel.h"
 #include "productionmodel.h"
 #include "viewportcommandbridge.h"
@@ -102,6 +103,9 @@ class EditorHost final : public QObject
     Q_PROPERTY(QVariantList preflightProfiles READ preflightProfiles NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QVariantList preflightVariables READ preflightVariables NOTIFY preflightProfilesChanged)
     Q_PROPERTY(QString selectedPreflightProfileId READ selectedPreflightProfileId NOTIFY preflightProfilesChanged)
+    Q_PROPERTY(bool preflightProfileEditing READ preflightProfileEditing NOTIFY preflightProfileDraftChanged)
+    Q_PROPERTY(QVariantList preflightEditableChecks READ preflightEditableChecks NOTIFY preflightProfileDraftChanged)
+    Q_PROPERTY(QString preflightProfileDraftVersion READ preflightProfileDraftVersion NOTIFY preflightProfileDraftChanged)
     Q_PROPERTY(bool hasPreflightReport READ hasPreflightReport NOTIFY presentationChanged)
     Q_PROPERTY(QString previewSummary READ previewSummary NOTIFY presentationChanged)
     Q_PROPERTY(QString inspectorTitle READ inspectorTitle NOTIFY presentationChanged)
@@ -172,6 +176,9 @@ public:
     QVariantList preflightProfiles() const;
     QVariantList preflightVariables() const;
     QString selectedPreflightProfileId() const;
+    bool preflightProfileEditing() const;
+    QVariantList preflightEditableChecks() const;
+    QString preflightProfileDraftVersion() const;
     bool hasPreflightReport() const noexcept { return m_preflight.hasResult(); }
     QString previewSummary() const;
     QString inspectorTitle() const;
@@ -210,6 +217,15 @@ public:
     Q_INVOKABLE bool setPreflightVariable(const QString& name, const QVariant& value);
     Q_INVOKABLE void requestPreflightReportExport();
     Q_INVOKABLE bool exportPreflightReportFileUrl(const QUrl& url);
+    Q_INVOKABLE void requestPreflightProfileImport();
+    Q_INVOKABLE void requestPreflightProfileExport();
+    Q_INVOKABLE void requestPreflightProfileSave();
+    Q_INVOKABLE bool importPreflightProfileFileUrl(const QUrl& url);
+    Q_INVOKABLE bool beginPreflightProfileEdit();
+    Q_INVOKABLE bool setPreflightCheckField(const QString& checkId, const QString& field, const QVariant& value);
+    Q_INVOKABLE bool savePreflightProfileEdit(const QString& newVersion, const QUrl& url);
+    Q_INVOKABLE bool exportPreflightProfileFileUrl(const QUrl& url);
+    Q_INVOKABLE void cancelPreflightProfileEdit();
 
     /// Toggles the current page between the fast approximate render and the
     /// authoritative overprint-accurate one. Re-renders only that page;
@@ -262,7 +278,11 @@ signals:
     void commandEpochChanged();
     void workspaceChanged(LoopWorkspace from, LoopWorkspace to);
     void preflightProfilesChanged();
+    void preflightProfileDraftChanged();
     void preflightReportExportRequested();
+    void preflightProfileImportRequested();
+    void preflightProfileExportRequested();
+    void preflightProfileSaveRequested();
 
 private:
     void connectFacade();
@@ -332,6 +352,7 @@ private:
     QList<PreflightProfileChoice> m_preflightProfiles;
     QJsonObject m_preflightBindings;
     QString m_selectedPreflightProfileId;
+    pdfinteraction::PreflightProfileDraft m_preflightProfileDraft;
     class QFileSystemWatcher* m_preflightProfileWatcher = nullptr;
     bool m_acceptPreflightResults = true;
     int m_commandEpoch = 0;

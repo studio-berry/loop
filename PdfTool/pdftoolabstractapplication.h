@@ -270,6 +270,9 @@ struct PDFToolOptions
     QString preflightFinishingId;
     QStringList preflightParameterAssignments;
     QStringList preflightCheckFilter;
+    QString preflightProfileOutputPath;
+    QString preflightProfileForkId;
+    QString preflightProfileForkVersion;
 
     // For option 'CapabilityDiscovery'
     QString capabilitiesCommand;
@@ -406,6 +409,7 @@ public:
         ActionList = 0x1000000000ULL,   ///< Reusable declarative Action List execution
         RenderPage = 0x4000000000ULL,   ///< Settings for render-page STCH contract
         EmptyResultPolicy = 0x8000000000ULL,   ///< Shared --fail-if-empty for extraction commands
+        PreflightProfileManage = 0x10000000000ULL,   ///< Loop preflight profile import/export/fork
     };
     Q_DECLARE_FLAGS(Options, Option)
 

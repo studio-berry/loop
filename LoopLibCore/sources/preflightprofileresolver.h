@@ -184,6 +184,15 @@ LOOPLIBCORESHARED_EXPORT QJsonObject forkPreflightProfile(const QJsonObject& par
                                                             const QString& newId,
                                                             const QString& newVersion);
 
+/// Canonical on-disk bytes for export/import round-trip stability.
+LOOPLIBCORESHARED_EXPORT QByteArray serializePreflightProfileBytes(const QJsonObject& profile);
+
+/// Applies fork semantics to an edited profile: bumps version, records
+/// derived_from against the parent digest, and recomputes the content digest.
+LOOPLIBCORESHARED_EXPORT QJsonObject commitPreflightProfileEdit(const QJsonObject& parent,
+                                                                  const QJsonObject& edited,
+                                                                  const QString& newVersion);
+
 struct LOOPLIBCORESHARED_EXPORT PreflightVariableBindResult
 {
     bool ok = false;

@@ -1364,6 +1364,26 @@ QJsonObject forkPreflightProfile(const QJsonObject& parent, const QString& newId
     return exportPreflightProfile(forked);
 }
 
+QByteArray serializePreflightProfileBytes(const QJsonObject& profile)
+{
+    return canonicalPreflightJson(exportPreflightProfile(profile));
+}
+
+QJsonObject commitPreflightProfileEdit(const QJsonObject& parent,
+                                       const QJsonObject& edited,
+                                       const QString& newVersion)
+{
+    const PreflightProfileIdentity parentIdentity = identifyPreflightProfile(parent);
+    QJsonObject committed = edited;
+    committed.insert(QStringLiteral("version"), newVersion);
+    committed.insert(QStringLiteral("derived_from"), QJsonObject{
+                                                          { QStringLiteral("id"), parentIdentity.id },
+                                                          { QStringLiteral("version"), parentIdentity.version },
+                                                          { QStringLiteral("digest"), parentIdentity.digest } });
+    committed.remove(QStringLiteral("digest"));
+    return exportPreflightProfile(committed);
+}
+
 PreflightVariableBindResult bindPreflightProfileVariables(const QJsonObject& profile,
                                                           const QJsonObject& jobSpecBindings,
                                                           const QJsonObject& cliBindings)

@@ -60,6 +60,7 @@ private slots:
     void operatorSummaryIsTranslatable();
     void operatorSummaryIsCurrentWhenTheStateSignalFires();
     void editorWaivedBlockingIsPresentedAsWaived();
+    void provisionalPass_doesNotAllowCertification();
 };
 
 namespace
@@ -373,6 +374,16 @@ void PreflightVerdictTest::editorBudgetExceeded_isIncompleteNeverPass()
     QVERIFY(controller.acceptResult(QStringLiteral("job-1"), QStringLiteral("rev-1"), budgetExceededResult()));
     QCOMPARE(controller.state(), pdfinteraction::PreflightController::State::Incomplete);
     QVERIFY(controller.operatorSummary().startsWith(QStringLiteral("Could not finish inspecting.")));
+}
+
+void PreflightVerdictTest::provisionalPass_doesNotAllowCertification()
+{
+    pdf::PreflightResult result;
+    result.inspectionComplete = true;
+    result.profileIdentity.insert(QStringLiteral("provisional"), true);
+    const pdf::PreflightVerdict verdict = pdf::reducePreflightVerdict(result);
+    QVERIFY(verdict.allowsCertificateIssuance());
+    QVERIFY(!pdf::preflightAllowsCertification(result));
 }
 
 void PreflightVerdictTest::editorWaivedBlocking_isPass()
