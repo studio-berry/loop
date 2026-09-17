@@ -468,19 +468,15 @@ void ActionListTest::selectStepValidatesAndPlansWithScopedSelection()
         { QStringLiteral("id"), QStringLiteral("select-plan") },
         { QStringLiteral("name"), QStringLiteral("Select plan") },
         { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("downsample") },
-            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
-            { QStringLiteral("select"), QJsonObject{
-                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
-                { QStringLiteral("predicate"), QJsonObject{
-                    { QStringLiteral("and"), QJsonArray{
-                        QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
-                        QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } }
-                    } }
-                } }
-            } }
-        } } }
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QJsonObject{
+                                                                       { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                       { QStringLiteral("predicate"), QJsonObject{
+                                                                                                          { QStringLiteral("and"), QJsonArray{
+                                                                                                                                       QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                                                                                                       QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } } } }
     };
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(recipeJson, &actionList));
@@ -504,24 +500,20 @@ void ActionListTest::selectScopedExecuteFailsClosedOnScopeViolation()
 
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
-        { QStringLiteral("id"), QStringLiteral("select-fence") },
-        { QStringLiteral("name"), QStringLiteral("Select fence") },
-        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("downsample") },
-            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
-            { QStringLiteral("select"), QJsonObject{
-                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
-                { QStringLiteral("predicate"), QJsonObject{
-                    { QStringLiteral("and"), QJsonArray{
-                        QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
-                        QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } }
-                    } }
-                } }
-            } }
-        } } }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("select-fence") },
+                                             { QStringLiteral("name"), QStringLiteral("Select fence") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                            { QStringLiteral("select"), QJsonObject{
+                                                                                                            { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                            { QStringLiteral("predicate"), QJsonObject{
+                                                                                                                                               { QStringLiteral("and"), QJsonArray{
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("pages"), QStringLiteral("1") } },
+                                                                                                                                                                            QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } } } } },
+                                         &actionList));
 
     pdf::PDFActionListExecutionOptions options;
     options.revision = pdf::revisionIdentityForDocument(source);
@@ -551,26 +543,23 @@ void ActionListTest::selectExecuteFailsClosedWhenRevisionDigestStaleAtExecute()
 
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
-        { QStringLiteral("id"), QStringLiteral("select-stale") },
-        { QStringLiteral("name"), QStringLiteral("Select stale") },
-        { QStringLiteral("steps"), QJsonArray{
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("bleed") },
-                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
-                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
-            QJsonObject{
-                { QStringLiteral("id"), QStringLiteral("downsample") },
-                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
-                { QStringLiteral("select"), QJsonObject{
-                    { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
-                    { QStringLiteral("revisionDigest"), originalDigest },
-                    { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } }
-                } }
-            }
-        } }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("select-stale") },
+                                             { QStringLiteral("name"), QStringLiteral("Select stale") },
+                                             { QStringLiteral("steps"), QJsonArray{
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("bleed") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("add-bleed") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("bleed_mm"), 3.0 }, { QStringLiteral("force"), true } } } },
+                                                                            QJsonObject{
+                                                                                { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                                { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                                { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                                { QStringLiteral("select"), QJsonObject{
+                                                                                                                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                                { QStringLiteral("revisionDigest"), originalDigest },
+                                                                                                                { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } } },
+                                         &actionList));
 
     pdf::PDFActionListExecutionResult planResult;
     QVERIFY(pdf::PDFActionListExecutor().plan(actionList, source, {}, &planResult));

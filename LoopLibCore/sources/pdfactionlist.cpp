@@ -406,8 +406,7 @@ void populateAffectedScope(PDFActionListStepResult* stepResult, const PDFObjectS
         {
             stepResult->affectedScope.append(QJsonObject{
                 { QStringLiteral("path"), QStringLiteral("selection/empty") },
-                { QStringLiteral("page"), -1 }
-            });
+                { QStringLiteral("page"), -1 } });
         }
         return;
     }
@@ -421,8 +420,8 @@ void populateAffectedScope(PDFActionListStepResult* stepResult, const PDFObjectS
 }   // namespace
 
 PDFActionListExecutionOptions makeActionListExecutionOptions(const PDFDocument& document,
-                                                               const QJsonObject& bindings,
-                                                               const PDFOperationControl* operationControl)
+                                                             const QJsonObject& bindings,
+                                                             const PDFOperationControl* operationControl)
 {
     PDFActionListExecutionOptions options;
     options.bindings = bindings;

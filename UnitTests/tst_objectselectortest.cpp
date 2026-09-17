@@ -591,10 +591,8 @@ void ObjectSelectorTest::objectClassAndColorSpacePredicates()
     QVERIFY(resolveSelector(document,
                             selectorJson(QJsonObject{
                                 { QStringLiteral("and"), QJsonArray{
-                                    QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } },
-                                    QJsonObject{ { QStringLiteral("colorSpace"), QStringLiteral("DeviceRGB") } }
-                                } }
-                            }),
+                                                             QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } },
+                                                             QJsonObject{ { QStringLiteral("colorSpace"), QStringLiteral("DeviceRGB") } } } } }),
                             &result));
     QVERIFY(result.ok);
     QVERIFY(!result.empty);
@@ -707,10 +705,8 @@ void ObjectSelectorTest::isVectorObjectRefAndRegionPredicates()
     QVERIFY(resolveSelector(imageDocument,
                             selectorJson(QJsonObject{
                                 { QStringLiteral("objectRef"), QJsonObject{
-                                    { QStringLiteral("object"), static_cast<int>(imageReference.objectNumber) },
-                                    { QStringLiteral("generation"), static_cast<int>(imageReference.generation) }
-                                } }
-                            }),
+                                                                   { QStringLiteral("object"), static_cast<int>(imageReference.objectNumber) },
+                                                                   { QStringLiteral("generation"), static_cast<int>(imageReference.generation) } } } }),
                             &objectRefResult));
     QVERIFY(objectRefResult.ok);
     QCOMPARE(objectRefResult.candidates.size(), 1);
@@ -720,11 +716,9 @@ void ObjectSelectorTest::isVectorObjectRefAndRegionPredicates()
     QVERIFY(resolveSelector(imageDocument,
                             selectorJson(QJsonObject{
                                 { QStringLiteral("region"), QJsonObject{
-                                    { QStringLiteral("rect_pt"), QJsonArray{ 0.0, 0.0, 72.0, 72.0 } },
-                                    { QStringLiteral("anchor"), QStringLiteral("media") },
-                                    { QStringLiteral("mode"), QStringLiteral("include") }
-                                } }
-                            }),
+                                                                { QStringLiteral("rect_pt"), QJsonArray{ 0.0, 0.0, 72.0, 72.0 } },
+                                                                { QStringLiteral("anchor"), QStringLiteral("media") },
+                                                                { QStringLiteral("mode"), QStringLiteral("include") } } } }),
                             &includeRegionResult));
     QVERIFY(includeRegionResult.ok);
     QVERIFY(!includeRegionResult.empty);
@@ -733,11 +727,9 @@ void ObjectSelectorTest::isVectorObjectRefAndRegionPredicates()
     QVERIFY(resolveSelector(imageDocument,
                             selectorJson(QJsonObject{
                                 { QStringLiteral("region"), QJsonObject{
-                                    { QStringLiteral("rect_pt"), QJsonArray{ 200.0, 200.0, 20.0, 20.0 } },
-                                    { QStringLiteral("anchor"), QStringLiteral("media") },
-                                    { QStringLiteral("mode"), QStringLiteral("exclude") }
-                                } }
-                            }),
+                                                                { QStringLiteral("rect_pt"), QJsonArray{ 200.0, 200.0, 20.0, 20.0 } },
+                                                                { QStringLiteral("anchor"), QStringLiteral("media") },
+                                                                { QStringLiteral("mode"), QStringLiteral("exclude") } } } }),
                             &excludeRegionResult));
     QVERIFY(excludeRegionResult.ok);
     QVERIFY(!excludeRegionResult.empty);
@@ -749,16 +741,10 @@ void ObjectSelectorTest::compositionAndNamedSet()
     pdf::PDFObjectSelectionResult result;
     QVERIFY(resolveSelector(document,
                             selectorJson(QJsonObject{
-                                { QStringLiteral("or"), QJsonArray{
-                                    QJsonObject{ { QStringLiteral("set"), QStringLiteral("rgbOnly") } },
-                                    QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("vector") } }
-                                } }
-                            },
-                            QJsonObject{
-                                { QStringLiteral("sets"), QJsonObject{
-                                    { QStringLiteral("rgbOnly"), QJsonObject{ { QStringLiteral("colorSpace"), QStringLiteral("DeviceRGB") } } }
-                                } }
-                            }),
+                                             { QStringLiteral("or"), QJsonArray{
+                                                                         QJsonObject{ { QStringLiteral("set"), QStringLiteral("rgbOnly") } },
+                                                                         QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("vector") } } } } },
+                                         QJsonObject{ { QStringLiteral("sets"), QJsonObject{ { QStringLiteral("rgbOnly"), QJsonObject{ { QStringLiteral("colorSpace"), QStringLiteral("DeviceRGB") } } } } } }),
                             &result));
     QVERIFY(result.ok);
     QVERIFY(!result.empty);
@@ -770,8 +756,7 @@ void ObjectSelectorTest::notCompositionExcludesMatches()
     pdf::PDFObjectSelectionResult result;
     QVERIFY(resolveSelector(document,
                             selectorJson(QJsonObject{
-                                { QStringLiteral("not"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } }
-                            }),
+                                { QStringLiteral("not"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } }),
                             &result));
     QVERIFY(result.ok);
     QVERIFY(result.empty);
@@ -805,7 +790,7 @@ void ObjectSelectorTest::staleRevisionFailsClosed()
     const QString staleDigest = QString::fromLatin1(QCryptographicHash::hash(QByteArrayLiteral("stale"), QCryptographicHash::Sha256).toHex());
     pdf::PDFObjectSelector selector;
     QVERIFY(pdf::PDFObjectSelector::fromJson(selectorJson(QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } },
-                                                           QJsonObject{ { QStringLiteral("revisionDigest"), staleDigest } }),
+                                                          QJsonObject{ { QStringLiteral("revisionDigest"), staleDigest } }),
                                              &selector));
     pdf::PDFObjectSelectionResult result;
     QVERIFY(!pdf::PDFObjectSelector::resolve(selector, document, revision, &result));
@@ -836,8 +821,7 @@ void ObjectSelectorTest::adversarialMalformedSelectorInputsFailParse()
         QStringList errors;
         const QJsonObject json = selectorJson(QJsonObject{
             { QStringLiteral("and"), QJsonArray{} },
-            { QStringLiteral("objectClass"), QStringLiteral("image") }
-        });
+            { QStringLiteral("objectClass"), QStringLiteral("image") } });
         QVERIFY(!pdf::PDFObjectSelector::fromJson(json, &selector, &errors));
         QVERIFY(!errors.isEmpty());
     }
@@ -880,14 +864,12 @@ void ObjectSelectorTest::actionListV2RoundTripsWithSelect()
         { QStringLiteral("id"), QStringLiteral("select-recipe") },
         { QStringLiteral("name"), QStringLiteral("Select recipe") },
         { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("downsample") },
-            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
-            { QStringLiteral("select"), QJsonObject{
-                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
-                { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } }
-            } }
-        } } }
+                                       { QStringLiteral("id"), QStringLiteral("downsample") },
+                                       { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                       { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 150 } } },
+                                       { QStringLiteral("select"), QJsonObject{
+                                                                       { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                       { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("image") } } } } } } } }
     };
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(json, &actionList));
@@ -902,19 +884,17 @@ void ObjectSelectorTest::executorPreviewNeverMutatesOutsideSelection()
     const pdf::PDFDocument source = createDocumentWithImage(600);
     pdf::PDFActionList actionList;
     QVERIFY(pdf::PDFActionList::fromJson(QJsonObject{
-        { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
-        { QStringLiteral("id"), QStringLiteral("scope") },
-        { QStringLiteral("name"), QStringLiteral("Scope") },
-        { QStringLiteral("steps"), QJsonArray{ QJsonObject{
-            { QStringLiteral("id"), QStringLiteral("downsample") },
-            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
-            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
-            { QStringLiteral("select"), QJsonObject{
-                { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
-                { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("annotation") } } }
-            } }
-        } } }
-    }, &actionList));
+                                             { QStringLiteral("schema"), QStringLiteral("loop-action-list/2") },
+                                             { QStringLiteral("id"), QStringLiteral("scope") },
+                                             { QStringLiteral("name"), QStringLiteral("Scope") },
+                                             { QStringLiteral("steps"), QJsonArray{ QJsonObject{
+                                                                            { QStringLiteral("id"), QStringLiteral("downsample") },
+                                                                            { QStringLiteral("operation"), QStringLiteral("downsample-images") },
+                                                                            { QStringLiteral("params"), QJsonObject{ { QStringLiteral("target_dpi"), 72 } } },
+                                                                            { QStringLiteral("select"), QJsonObject{
+                                                                                                            { QStringLiteral("schema"), pdf::PDFObjectSelector::schemaVersion() },
+                                                                                                            { QStringLiteral("predicate"), QJsonObject{ { QStringLiteral("objectClass"), QStringLiteral("annotation") } } } } } } } } },
+                                         &actionList));
 
     pdf::PDFActionListExecutionOptions options;
     options.revision = pdf::revisionIdentityForDocument(source);

@@ -64,7 +64,7 @@ void appendPredicateError(QStringList* errors, const QString& message)
 bool isSha256Digest(const QString& value)
 {
     static const QRegularExpression pattern(QStringLiteral("^[0-9a-f]{64}$"),
-                                          QRegularExpression::CaseInsensitiveOption);
+                                            QRegularExpression::CaseInsensitiveOption);
     return pattern.match(value.trimmed()).hasMatch();
 }
 
@@ -243,9 +243,7 @@ protected:
         candidate.objectClass = QStringLiteral("image");
         candidate.isVector = false;
         candidate.effectiveDpi = effectiveDpiFromImage(image, getGraphicState()->getCurrentTransformationMatrix());
-        candidate.boundsPt = getGraphicState()->getCurrentTransformationMatrix()
-                                 .mapRect(QRectF(0, 0, 1, 1))
-                                 .normalized();
+        candidate.boundsPt = getGraphicState()->getCurrentTransformationMatrix().mapRect(QRectF(0, 0, 1, 1)).normalized();
         if (const PDFAbstractColorSpace* imageColorSpace = image.getColorSpace().data())
         {
             assignColorSpaceMetadata(&candidate, imageColorSpace);
@@ -718,8 +716,8 @@ QJsonObject PDFObjectSelectorCandidate::toJson() const
     if (objectReference.isValid())
     {
         result.insert(QStringLiteral("object"), QStringLiteral("%1 %2 R")
-                                                   .arg(objectReference.objectNumber)
-                                                   .arg(objectReference.generation));
+                                                    .arg(objectReference.objectNumber)
+                                                    .arg(objectReference.generation));
     }
     if (!colorSpaceName.isEmpty())
     {

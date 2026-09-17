@@ -103,8 +103,8 @@ private:
 };
 
 LOOPLIBCORESHARED_EXPORT PDFRevisionIdentity revisionIdentityForDocument(const PDFDocument& document,
-                                                                           DocumentRevision documentRevision = 0,
-                                                                           quint64 cacheGeneration = 0);
+                                                                         DocumentRevision documentRevision = 0,
+                                                                         quint64 cacheGeneration = 0);
 
 LOOPLIBCORESHARED_EXPORT QString selectionDigestForCandidates(const QVector<PDFObjectSelectorCandidate>& candidates);
 
